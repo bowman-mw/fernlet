@@ -77,6 +77,8 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 | `thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage` | Any package dependency other than CryptoSwift, in `FernletKit/Package.swift` **or** the pbxproj's `XCRemoteSwiftPackageReference` / `packageProductDependencies`. | Adding *any* new SPM dependency, named or not — the rule is an exact-set match, not a blocklist. |
 | `hardcodedNetworkDestinationsAreExactlyTheAllowlist` | Any hardcoded host in shipping code outside the §3 allowlist — **and** any stale allowlist entry the code no longer uses. | `URL(string: "https://telemetry.fernlet.com/v1/events")`. |
 | `onlyThePinnedWebImportersMayHoldAnHTTPClient` | A raw HTTP/socket client (`URLSession`, `URLRequest`, `NWConnection`, `WKWebView`, …) anywhere in shipping code except the two pinned web importers and the session factory they share. | A new `URLSession` in a "TelemetryUploader.swift" — *even if its hostname is assembled at runtime*, which is the gap the host allowlist alone cannot close. |
+| `onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI` | Network.framework's **local-link** surface (`NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord`) anywhere in shipping code except the QUIC mesh transport and the DEBUG feasibility probe. A **second marker family with its own permit set** — see §4c. | A new `NetworkListener` in a feature that "just needs to see nearby devices" — a new local-network capability nobody reviewed. |
+| `theTwoNetworkPermitSetsAreDisjoint` | Any file holding **both** network permissions, and any marker on both families' lists. | Fixing the marker gap by appending the TN3213 names to `httpClientMarkers`, which would have handed the mesh transport a `URLSession` too. |
 | `everyOutboundFetchUsesTheEphemeralPrivateTabSession` | `URLSession.shared`, `URLSessionConfiguration.default`, or `.background` **anywhere** in shipping code; a `URLSession(configuration:)` built outside the one reviewed factory or without `.ephemeral`; a factory that has quietly stopped setting one of its seven privacy knobs; an importer that no longer routes through it. See §2a. | Someone "just quickly" fetching something with `URLSession.shared`, which silently re-attaches the process-wide cookie jar. |
 | `noPersistentWebViewExistsAndInAppBrowsersArePinned` | Any `WKWebView` / `WKWebViewConfiguration` / `WKProcessPool` / `WKHTTPCookieStore` in shipping code (there are none), and, forward-compatibly, any that appears without `WKWebsiteDataStore.nonPersistent()`. Plus an exact-set pin on which file may present an out-of-process browser. | Adding a `WKWebView` for an OAuth flow or a help page — its default data store is an on-disk cookie/localStorage jar shared app-wide. |
 | `privacyManifestsDeclareNoTrackingOrAdvertising` | `NSPrivacyTracking: true`, a non-empty `NSPrivacyTrackingDomains`, or a collected data type flagged for tracking / third-party advertising / developer advertising / analytics, in any of the three `PrivacyInfo.xcprivacy` files. | Flipping the manifest to match a newly added SDK — which is what an SDK's own integration guide tells you to do. |
@@ -223,31 +225,53 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 |---|---|---|
 | **MultipeerConnectivity** — the four shipping radios (friend mesh, presence, recipe share, coach) | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-near`, `_fernlet-recipe`, `_fernlet-coach`, each `._tcp` and `._udp` |
 | **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | `ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
-| **Network.framework / QUIC** — the DEBUG-only feasibility spike for the [ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
+| **Network.framework / QUIC** — the friend mesh's second transport, being migrated onto per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | `ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
+| **Network.framework / QUIC** — the DEBUG-only feasibility spike for the same migration | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
 
 All service types are declared in `App/Fernlet/Info.plist` under `NSBonjourServices`; a type missing
 from that list fails discovery silently on device, which is why the list is exhaustive rather than
 grown as needed.
 
-**Three Info.plist keys ship in Release for a probe that does not.** This is deliberate and worth
-stating plainly, because the asymmetry looks like a mistake:
+**Three Info.plist keys, and what each one now backs.** Two of the three were added ahead of the code
+that uses them; that asymmetry is closing as the migration lands, so the state is stated plainly:
 
-| Key | Value | Why it ships anyway |
+| Key | Value | What backs it today |
 |---|---|---|
-| `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the four shipping MC radios already do. Not new with the probe. |
-| `NSBonjourServices` → `_fernlet-mesh2._udp` | One added entry | Inert without code that browses or advertises it. Declaring a service type advertises nothing; the Release binary contains no `NetworkListener`/`NetworkBrowser` at all, because the probe compiles out. P2 needs it, and adding it now keeps the plist and the plan in one reviewed state. |
-| `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) | Same: a permitted identifier grants nothing until a task is registered and submitted. Runtime registration uses the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. P8 needs it. |
+| `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the four shipping MC radios already do. Not new with the QUIC work. |
+| `NSBonjourServices` → `_fernlet-mesh2._udp` | One added entry | Now genuinely used: `NetworkMeshSession` advertises and browses this type in Release (the DEBUG probe uses the same one). A service type is a name, not a destination — declaring it grants no reach beyond the local link. |
+| `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) | Still inert: a permitted identifier grants nothing until a task is registered and submitted, which only the DEBUG probe does. Runtime registration uses the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. P8 needs it. |
 
 None of the three carries data anywhere. They widen what the app is *permitted* to do on the local
 link, not what it does, and the wall's §3 host allowlist is unchanged by all of it — a Bonjour service
 type is not a destination.
 
-**A gap that is closed deliberately, not accidentally.** `NoTrackingBoundaryTests` bans the marker
-names `NWConnection` and `NWBrowser`, and TN3213's replacement API is spelled `NetworkConnection` /
-`NetworkListener` / `NetworkBrowser` — so the probe's networking passes through a hole in the marker
-list. That hole is named here rather than left to be discovered: plan §7.4 extends the marker list and
-permits exactly the ProximityKit transport files plus the DEBUG probe, in the same commit as P2's
-transport. Until then, no shipping code uses the new API.
+**The marker gap is now closed — with a second family, not a longer list.** `NoTrackingBoundaryTests`
+banned the marker names `NWConnection` and `NWBrowser`; TN3213 renamed the API to `NetworkConnection` /
+`NetworkListener` / `NetworkBrowser`, so every line of the new one passed straight through the wall.
+The obvious fix — appending the new names to `httpClientMarkers` — would have been the wrong one:
+that list's permit set is the three internet-egress files, so permitting a ProximityKit transport
+there would have silently permitted it a `URLSession` in the same breath.
+
+So the wall now carries **two independent network marker families, each with its own permit set**,
+and a test (`theTwoNetworkPermitSetsAreDisjoint`) asserting that no file and no marker is on both:
+
+| Family | Markers | Permitted files | Capability granted |
+|---|---|---|---|
+| `httpClientMarkers` | `URLSession`, `URLRequest`, `NSURLConnection`, `NWConnection`, `NWBrowser`, `CFURLRequest`, `WKWebView` | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `EphemeralWebSession.swift` | Outbound HTTP to the internet, under §3's host allowlist and §2a's private-tab rule |
+| `localLinkMarkers` | `NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord` | `NetworkMeshSession.swift`, `NetworkMeshFeasibilityProbe.swift` | Bonjour advertise/browse and QUIC tunnels **on the local link only** |
+
+The legacy `NWConnection` / `NWBrowser` spellings deliberately stay on the *first* list: nothing in
+this repo may use them, and moving them across would hand them the mesh transport's permission.
+`NWListener` and `NWParameters` match nothing today and are listed anyway, in the same spirit as the
+WebKit markers — the rule is written while the answer is "there are none".
+
+**Why the local-link permission is not an egress permission.** Neither permitted file contains a host
+literal (so `hardcodedNetworkDestinationsAreExactlyTheAllowlist` sees nothing in them, and would fail
+if one appeared), neither constructs a `URLSession` (so the private-tab rule holds), and the QUIC
+parameters set `prohibitedInterfaceTypes = [.cellular]` on every listener, browser and connection —
+which turns the serverless claim from an aspiration into something the OS enforces. The transport's
+TLS identity is a self-signed P-256 key pair minted per session and never persisted, so it links no
+two sessions to one device, and its Bonjour instance name is random per session for the same reason.
 
 ---
 
@@ -276,6 +300,13 @@ unpleasant enough that someone routes around it.
 4. **A new SPM dependency** additionally needs a `allowedPackageURLs` entry. Adding *any* package
    fails the wall, not just a recognised tracker — the blocklist can only catch SDKs someone thought
    to name, so the dependency rule is an exact-set match instead.
+5. **A new *local-link* API — Bonjour, QUIC, a listener — is a different permission and a different
+   list.** It fails `onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI`, not the HTTP rule, and
+   it is fixed by adding the file to `permittedLocalLinkFiles` plus a row in §4c — never by adding
+   it to `permittedHTTPClientFiles`, which would grant it internet egress it does not need. The two
+   permit sets must stay disjoint; a test enforces that. Say in §4c what the new path advertises,
+   what it carries, and how it is constrained to the link (`prohibitedInterfaceTypes = [.cellular]`
+   at minimum), the way the mesh transport's row does.
 
 If the PR touches the allowlist, the reviewer's job is the `reason` string, not the diff.
 
@@ -362,6 +393,7 @@ Coverage at the time of writing (2026-08-09):
 | All Swift, all targets | 536 | 400 | 0 banned SDKs, 0 banned symbols |
 | Shipping Swift (app + package + extensions) | 345 | 250 | 5 hardcoded hosts, all allowlisted |
 | Raw HTTP clients in shipping code | 3 | pinned by name | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `EphemeralWebSession.swift` |
+| Local-link Network.framework APIs in shipping code | 2 | pinned by name | `NetworkMeshSession.swift`, `NetworkMeshFeasibilityProbe.swift` — disjoint from the row above |
 | `URLSession.shared` / `.default` / `.background` in shipping code | 0 | banned outright | every fetch goes through `EphemeralWebSession.shared` |
 | Files constructing a `URLSession` | 1 | exact set | `EphemeralWebSession.swift`, on `.ephemeral`, with all 7 privacy settings present |
 | WebKit web views in shipping code | 0 | forward rule | none exist; the first one must use `WKWebsiteDataStore.nonPersistent()` |

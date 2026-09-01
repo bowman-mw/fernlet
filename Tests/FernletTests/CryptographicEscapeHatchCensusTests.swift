@@ -67,10 +67,19 @@ struct CryptographicEscapeHatch: Sendable {
 struct CryptographicEscapeHatchCensusTests {
 
     /// The label → count pin. The sum is the number §Escape-hatch abuse quotes.
+    ///
+    /// `x509-self-signature` (added with the QUIC mesh transport, plan §7.2) is a NEW category and
+    /// not a count change, so it is named here rather than folded into a neighbour. It covers the
+    /// one place a raw ECDSA signature is produced over a transcript Fernlet does not define: the
+    /// ephemeral per-session TLS certificate's own self-signature, whose bytes X.509 fixes exactly.
+    /// A domain prefix there would produce a certificate no TLS stack can parse. It is the only
+    /// non-`legacy-read` category whose justification is "the format is somebody else's", which is
+    /// why it reads differently from the other three.
     private static let pinnedByLabel: [String: Int] = [
         "purpose-derived salt": 2,
         "key-derived": 2,
-        "authenticatedData-bound aad": 2
+        "authenticatedData-bound aad": 2,
+        "x509-self-signature": 1
     ]
 
     /// The number of distinct files holding a hatch. §Escape-hatch abuse said 11; the tree has only
@@ -95,7 +104,12 @@ struct CryptographicEscapeHatchCensusTests {
     /// and `HeartDropSidecarKey.swift` each held only the hatches that were deleted, so all three
     /// left the set. What remains is `SealedBackupService.swift`, `SealedPhotoBackupService.swift`
     /// and `HeartDropSealer.swift` — no file in the tree carries a reader hatch any more.
-    private static let pinnedFileCount = 3
+    ///
+    /// Moved 3 → **4** by the QUIC mesh transport: `EphemeralMeshTLSIdentity.swift` mints a
+    /// self-signed P-256 certificate per session, and X.509 fixes the bytes it signs. This is the
+    /// first hatch added since the standardization round closed, and it is a genuinely new kind —
+    /// not a reader kept alive, but a signature over a format Fernlet does not own.
+    private static let pinnedFileCount = 4
 
     /// Prose that merely names the marker, by repo-relative path. Not hatches — but not free either,
     /// which is what ``proseMentionsCannotSilenceTheWall`` checks.

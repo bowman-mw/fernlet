@@ -31,11 +31,16 @@ import Testing
 /// the tree, no outbound network destination outside the reviewed allowlist, and privacy manifests
 /// that keep declaring zero tracking.
 ///
-/// Eight enforcement tests plus five pure-matcher fixtures:
+/// Ten enforcement tests plus six pure-matcher fixtures:
 /// - ``noAdvertisingOrTrackingSDKIsReferencedAnywhere()`` — banned frameworks/symbols in any Swift file.
 /// - ``thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage()`` — the SPM/pbxproj dependency sets.
 /// - ``hardcodedNetworkDestinationsAreExactlyTheAllowlist()`` — every hardcoded host in shipping code.
 /// - ``onlyThePinnedWebImportersMayHoldAnHTTPClient()`` — where an HTTP client may exist at all.
+/// - ``onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI()`` — where Network.framework's
+///   peer-to-peer surface may exist at all. A SECOND marker family with its OWN permit set, because
+///   TN3213's renamed API (`NetworkConnection`/`NetworkListener`/`NetworkBrowser`) passed through a
+///   list that only knew `NWConnection`/`NWBrowser`.
+/// - ``theTwoNetworkPermitSetsAreDisjoint()`` — no file holds both network permissions.
 /// - ``everyOutboundFetchUsesTheEphemeralPrivateTabSession()`` — HOW those clients fetch: no shared
 ///   cookie jar, cache, or credential store.
 /// - ``noPersistentWebViewExistsAndInAppBrowsersArePinned()`` — the WebKit/Safari surface.
@@ -245,9 +250,49 @@ struct NoTrackingBoundaryTests {
 
     /// Markers naming a raw HTTP/socket client API. Matched at identifier boundaries with comment
     /// lines stripped, so a file that merely DISCUSSES `URLSession` in prose is not pinned.
+    ///
+    /// `NWConnection` and `NWBrowser` are the LEGACY Network.framework spellings and stay here, on
+    /// the internet-egress list, deliberately: nothing in this repo may use them, and moving them
+    /// to the local-link family below would hand them the mesh transport's permission.
     private static let httpClientMarkers = [
         "URLSession", "URLRequest", "NSURLConnection", "NWConnection", "NWBrowser",
         "CFURLRequest", "WKWebView"
+    ]
+
+    // MARK: - Local-link API allowlist
+
+    /// Markers naming Network.framework's **local-link** surface — the TN3213 API the ProximityKit
+    /// mesh transport is built on (`NetworkConnection` / `NetworkListener` / `NetworkBrowser`), plus
+    /// the parameter and TXT-record types that come with it.
+    ///
+    /// A SECOND, SEPARATE family from ``httpClientMarkers``, with its own permit set, and the
+    /// separation is the whole design. These names passed straight through the wall: the HTTP list
+    /// bans the legacy `NWConnection`/`NWBrowser` spellings, and TN3213 renamed the API, so every
+    /// shipping line of the new one was unmatched by anything. The fix is *not* to append these to
+    /// the HTTP list — that list's permit set is three internet-egress files, and permitting a
+    /// ProximityKit transport file there would silently also permit it a `URLSession`. Two families,
+    /// two permit sets, no file holding both permissions.
+    ///
+    /// `NWListener` and `NWParameters` match nothing today and are listed anyway, in the same spirit
+    /// as ``webViewMarkers``: the rule is written while the answer is "there are none", so the first
+    /// one to appear is a deliberate edit here rather than a diff nobody questions.
+    private static let localLinkMarkers = [
+        "NetworkConnection", "NetworkListener", "NetworkBrowser",
+        "NWListener", "NWParameters", "NWParametersBuilder", "NWTXTRecord"
+    ]
+
+    /// The two files in shipping code that may name a local-link Network.framework API.
+    ///
+    /// Both are link-local by construction and cannot reach a host at all: they advertise and browse
+    /// a Bonjour service type over QUIC with `prohibitedInterfaceTypes = [.cellular]`, and every byte
+    /// they carry is a signed/sealed Fernlet envelope between two phones in the same room. Neither
+    /// appears in ``permittedHTTPClientFiles``, and neither may — see
+    /// ``theTwoNetworkPermitSetsAreDisjoint()``.
+    private static let permittedLocalLinkFiles: Set<String> = [
+        // ProximityKit's QUIC mesh transport (plan §7): listener, browser, per-peer connections.
+        "NetworkMeshSession.swift",
+        // The DEBUG-only feasibility spike, compiled out of Release entirely.
+        "NetworkMeshFeasibilityProbe.swift"
     ]
 
     // MARK: - Private-tab session policy
@@ -516,6 +561,76 @@ struct NoTrackingBoundaryTests {
         #expect(
             hostsInClients == ["duckduckgo.com", "html.duckduckgo.com"],
             "The hosts hardcoded inside the web importers are \(hostsInClients.sorted()), expected the DuckDuckGo search endpoint and its redirect base only."
+        )
+    }
+
+    /// Network.framework's local-link API lives in exactly the two mesh files, and nowhere else.
+    ///
+    /// The second marker family, and the reason it is a family of its own: TN3213 renamed the API
+    /// this repo's peer-to-peer mesh is being migrated onto, so `NetworkConnection` /
+    /// `NetworkListener` / `NetworkBrowser` passed through a wall that only knew the old
+    /// `NWConnection` / `NWBrowser` spellings. Appending them to ``httpClientMarkers`` would have
+    /// closed the hole and opened a worse one — that list's permit set is the three internet-egress
+    /// files, so a ProximityKit transport permitted there would have been permitted a `URLSession`
+    /// in the same breath.
+    ///
+    /// Pinned in BOTH directions, for the two different failure modes: a NEW file naming this API is
+    /// a new local-network capability and a review moment; a MISSING one means the scan stopped
+    /// working, not that the code got cleaner.
+    ///
+    /// What this does not claim: that these two files cannot reach the internet *at all*. That is
+    /// argued in Docs/No-Tracking-Wall.md §4c from what the code does — Bonjour advertise/browse over
+    /// QUIC with `prohibitedInterfaceTypes = [.cellular]` and no host anywhere in the source — and
+    /// enforced from the other side by ``hardcodedNetworkDestinationsAreExactlyTheAllowlist()``,
+    /// which would catch a host literal appearing in either of them.
+    @Test func onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI() throws {
+        let repoRoot = Self.repoRoot()
+        let selfName = URL(fileURLWithPath: #filePath).lastPathComponent
+
+        var holders: Set<String> = []
+        var scanned = 0
+        for root in Self.shippingSwiftRoots {
+            for url in Self.swiftFiles(under: root, repoRoot: repoRoot) {
+                guard url.lastPathComponent != selfName else { continue }
+                let source = try String(contentsOf: url, encoding: .utf8)
+                scanned += 1
+                guard Self.namesLocalLinkAPI(in: source) else { continue }
+                holders.insert(url.lastPathComponent)
+            }
+        }
+        #expect(
+            scanned >= Self.minimumShippingFilesScanned,
+            "Scanned only \(scanned) shipping Swift files (floor \(Self.minimumShippingFilesScanned)) — discovery is broken; the local-link rule would pass vacuously."
+        )
+
+        let unexpected = holders.subtracting(Self.permittedLocalLinkFiles).sorted()
+        #expect(
+            unexpected.isEmpty,
+            "\(unexpected) name(s) a local-link Network.framework API. That surface lives in exactly \(Self.permittedLocalLinkFiles.sorted()) — the mesh transport and the DEBUG probe. A new one needs an entry here AND a row in Docs/No-Tracking-Wall.md §4c, in the same commit."
+        )
+        let missing = Self.permittedLocalLinkFiles.subtracting(holders).sorted()
+        #expect(
+            missing.isEmpty,
+            "Pinned local-link file(s) \(missing) no longer match the markers — renamed/moved, or the markers went stale. Coverage dropped."
+        )
+    }
+
+    /// The two network permit sets share no file, and the two marker families share no marker.
+    ///
+    /// The invariant that makes two families worth having. If one file were on both lists it would
+    /// hold both permissions, and the whole point of splitting them is that a mesh transport must
+    /// never inherit permission to open an HTTP client — nor a web importer permission to open a
+    /// listener on the local network.
+    @Test func theTwoNetworkPermitSetsAreDisjoint() {
+        let sharedFiles = Self.permittedHTTPClientFiles.intersection(Self.permittedLocalLinkFiles)
+        #expect(
+            sharedFiles.isEmpty,
+            "\(sharedFiles.sorted()) hold(s) BOTH the HTTP-client and the local-link permission. Each permit set exists to grant exactly one capability; a file on both lists has silently been granted the other."
+        )
+        let sharedMarkers = Set(Self.httpClientMarkers).intersection(Set(Self.localLinkMarkers))
+        #expect(
+            sharedMarkers.isEmpty,
+            "Marker(s) \(sharedMarkers.sorted()) are on both families' lists, so a file permitted by one is judged by the other's rule too. Keep the legacy NWConnection/NWBrowser spellings on the HTTP list only."
         )
     }
 
@@ -946,6 +1061,43 @@ struct NoTrackingBoundaryTests {
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: "let x = 1").isEmpty)
     }
 
+    /// Fixture: the local-link marker fires on the TN3213 spellings that used to pass straight
+    /// through this wall, and on nothing else.
+    ///
+    /// The first three assertions are the whole reason the family exists — before it, each of these
+    /// lines was invisible to every check in this file, in every target, forever.
+    @Test func localLinkMarkerSeesTheTN3213SpellingsAndNotProse() {
+        #expect(NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: #"let listener = try NetworkListener(for: .bonjour(name: n, type: t), using: p)"#))
+        #expect(NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: "let browser = NetworkBrowser(for: .bonjour(serviceType, includeTxtRecord: true))"))
+        #expect(NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: "let connection = NetworkConnection(to: endpoint, using: parameters).start()"))
+        #expect(NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: "let record = NWTXTRecord(advertisedFields)"))
+        #expect(NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: "func parameters() -> NWParametersBuilder<QUIC> { .parameters { QUIC(alpn: a) } }"))
+
+        // Prose about the API is not the API — the two permitted files document it at length, and a
+        // rule that indicted them for saying so would be disabled within a week.
+        #expect(!NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: "/// A second conformer over a NetworkConnection slots in beside the MC one."))
+        #expect(!NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: " * NetworkListener replaces MCNearbyServiceAdvertiser."))
+        // Identifier-boundary discipline: a longer, unrelated name is not the API.
+        #expect(!NoTrackingBoundaryTests.namesLocalLinkAPI(in: "struct NetworkListenerFake {}"))
+        #expect(!NoTrackingBoundaryTests.namesLocalLinkAPI(in: "let x = NetworkConnectionInspector()"))
+        // A real call followed by a comment is still a real call.
+        #expect(NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: "let l = try NetworkListener(for: p, using: q) // just for diagnostics"))
+        // And the family really is separate: an HTTP client is not a local-link API, and the
+        // legacy Network spellings stay judged by the HTTP rule alone.
+        #expect(!NoTrackingBoundaryTests.namesLocalLinkAPI(
+            in: "let (d, _) = try await EphemeralWebSession.shared.data(for: URLRequest(url: u))"))
+        #expect(!NoTrackingBoundaryTests.namesLocalLinkAPI(in: "let c = NWConnection(to: e, using: p)"))
+        #expect(NoTrackingBoundaryTests.namesHTTPClientAPI(in: "let c = NWConnection(to: e, using: p)"))
+    }
+
     // MARK: - Pure matchers
 
     /// The banned SDK modules `source` actually IMPORTS — as an `import` declaration or a
@@ -1092,6 +1244,14 @@ struct NoTrackingBoundaryTests {
     static func namesHTTPClientAPI(in source: String) -> Bool {
         let code = codeOnly(source)
         return httpClientMarkers.contains { namesSymbol(code, $0) }
+    }
+
+    /// Whether `source` uses Network.framework's local-link API in CODE. Same comment handling and
+    /// same identifier-boundary rule as ``namesHTTPClientAPI(in:)``, over the other family's
+    /// markers. Pure + testable.
+    static func namesLocalLinkAPI(in source: String) -> Bool {
+        let code = codeOnly(source)
+        return localLinkMarkers.contains { namesSymbol(code, $0) }
     }
 
     /// The package repository URLs declared in a manifest — SwiftPM's `.package(url: "…")` and the

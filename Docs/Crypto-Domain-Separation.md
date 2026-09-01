@@ -314,9 +314,9 @@ reviewer would have to remember the policy.
   A root that stops resolving to Swift now throws `CryptographicWallScan.MissingRoot` rather than
   scanning an empty directory and reporting green — the one failure a grep-wall cannot survive. A
   sixth shipping target is still invisible until someone adds it to `CryptographicWallScan.roots`.
-- **Escape-hatch abuse — now counted, and now ALL annotation.** `// cryptographic-domain: …`
-  silences the wall by design, for the paths that genuinely have no domain to name. **There are 6
-  of them, across 3 files.** This document used to add that "nothing tracks the number, so a
+- **Escape-hatch abuse — now counted, and no longer any debt.** `// cryptographic-domain: …`
+  silences the wall by design, for the paths that genuinely have no domain to name. **There are 7
+  of them, across 4 files.** This document used to add that "nothing tracks the number, so a
   nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and the next one
   added fails CI. It pins four things, not one: the total, the count **per label**, the number of
   files, and the set of labels that exist at all — so a hatch added while another is removed, a
@@ -330,11 +330,29 @@ reviewer would have to remember the policy.
   | `purpose-derived salt` | 2 | The domain reached the primitive through the KDF salt, not as a visible argument |
   | `key-derived` | 2 | The domain is bound in the key rather than at this call |
   | `authenticatedData-bound aad` | 2 | The domain is inside the `aad` local, built above the window |
+  | `x509-self-signature` | 1 | The transcript is a DER TBSCertificate, whose bytes X.509 fixes — a Fernlet prefix would make the certificate unparseable |
 
-  **Every remaining hatch is an annotation, and none of them is debt.** The domain IS bound at all
-  six; the marker only silences a grep that cannot see three lines up, and re-reading them is the
+  **Six of the seven are annotations, and none of them is debt.** The domain IS bound at all six of
+  those; the marker only silences a grep that cannot see three lines up, and re-reading them is the
   only way to tell an annotation from an exemption. There is no reader hatch left in the tree and
   no write-side one either.
+
+  **The seventh is a different kind, which is why it has its own label.** `x509-self-signature`
+  (`FernletKit/Sources/ProximityKit/Transport/EphemeralMeshTLSIdentity.swift`, added with the QUIC
+  mesh transport — [Plan-ProximityKit-Network-Migration-2026-08-27.md](Plan-ProximityKit-Network-Migration-2026-08-27.md)
+  §7.2) is not an annotation over a domain bound elsewhere: there is genuinely no Fernlet domain to
+  bind, because the signature is over a format Fernlet does not own. QUIC's listener must present a
+  certificate, X.509 defines exactly what a certificate's self-signature covers, and prefixing that
+  transcript would produce bytes no TLS stack can parse.
+
+  What makes it safe is not a domain but a scope: the key is a P-256 pair minted at session start,
+  used for this one signature and nothing else, never persisted, and thrown away with the session —
+  so there is no second use for the first to be confused with, which is what domain separation buys.
+  It is also not a trust decision. Nothing in Fernlet verifies this signature; the certificate
+  validator accepts anything, and peer authentication is the signed identity introduction exchanged
+  over the connection (and, from P2 item 7, the TLS-exporter-bound channel introduction on top of
+  it). A future hatch claiming this label would have to be another foreign signature format, not
+  another Fernlet transcript that skipped its purpose.
 
   **How the count got here, and why `legacy-read` is not a row at 0.**
 
