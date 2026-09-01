@@ -285,6 +285,91 @@ logging `…[device]` and dialing it — a dial the *pre-existing* policy would 
 did not recur in the control run. Two consequences: a Simulator-origin check that must be reliable
 cannot be built on TXT presence alone, and the old sim→sim refusal was never quite airtight.
 
+### Lane C — simulator ↔ simulator, the PRODUCTION mesh over QUIC (answered 2026-09-01)
+
+Lane A2 proved the *spike* handshakes between two Simulators. Lane C is the same two Simulators
+running the **shipping** transport — `NetworkMeshSession` selected by `FERNLET_MESH_TRANSPORT=quic`,
+with `MeshNetworkManager` as its `MeshIntroductionAuthority` — and it answers a different question:
+not "does a tunnel come up", but **"is the tunnel selective"**. Every named rejection in
+`MeshIntroductionRejection` that P2 can reach was produced deliberately and read out of a console
+transcript, alongside an accepted baseline. A matrix of refusals with no accept proves only that the
+radio is broken; a baseline with no refusals proves only that it is open.
+
+How to run it — no UI navigation, no Start button, nothing persisted:
+
+```
+xcrun simctl install <udid> <path>/Fernlet.app
+SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
+SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=<run-name> \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=<uuid> \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<base64-key,base64-key> \
+xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
+```
+
+The harness variables are DEBUG-only, read once per process, and **each is off when absent** — off
+being today's behaviour exactly, not a near-equivalent:
+
+| Variable | Read by | Behaviour when absent |
+| --- | --- | --- |
+| `FERNLET_MESH_MATRIX` | `MeshMatrixDebugOptions` (app target) | Nothing is seeded and no radio is started. |
+| `FERNLET_MESH_MATRIX_LABEL` | same | The run is named `unlabelled` in the transcript. |
+| `FERNLET_MESH_MATRIX_MESH_ID` / `_MEMBERS` | same | No descriptor: the roster is empty, which is the state a device with no mesh is genuinely in. |
+| `FERNLET_MESH_CONSOLE_LOG` | `MeshTransportConsoleLog` (ProximityKit) | The radio's `Logger` lines are not mirrored to stdout. Nothing else changes. |
+| `FERNLET_MESH_CHAOS` | `MeshIntroductionChaos` (ProximityKit) | Fresh nonce every hello, signature goes out as signed. |
+| `FERNLET_MESH_CHAOS_BARRED` | same | The roster's barred set is empty — the production answer. |
+
+`FERNLET_MESH_CHAOS` is the only misbehaviour switch. It takes frozen tokens (`frozenNonce`,
+`tamperSignature`) and **damages this side's own outbound introduction**, so it can only ever cause
+the *peer* to refuse us. `FERNLET_MESH_CHAOS_BARRED` only ever adds keys to the roster's barred set,
+and barred wins over member, so it too can only turn an accept into a refusal. Neither direction can
+admit a peer that would otherwise be refused. In a Release build the whole environment-reading half
+is compiled out — the members are constants a compiler can fold — so no launch environment a shipped
+app could see can reach any of it.
+
+#### The rejection matrix
+
+Two Simulators on one Mac (iPhone 17 + iPhone 17 Pro), one 60-second run per row, both instances
+launched with `FERNLET_MESH_TRANSPORT=quic`. The `sid` tie-break picks the dialer at random per
+launch, so each run seeds **both** sides symmetrically; the refusal is logged by whichever side ends
+up the responder (and, because hellos are exchanged before either is judged, usually by both).
+
+| Row | Result | Evidence |
+| --- | --- | --- |
+| **Accepted baseline** | **Observed** — both devices rostered in one mesh complete the introduction and activate a tunnel, in both directions | `[mesh-quic] accepted fb795f343c2954da sid=5894C3A5-…: tunnel activated` on A, and `accepted 0a676d9bbfcbbced sid=9ABA2D76-…` on B |
+| 1. Unknown identity (no roster at all) | **Observed** — neither device holds a descriptor, so every peer verdicts stranger | `refused unknownIdentity as responder: mesh=00000000-…-000000000000 epoch="" rosterMembers=0 rosterBarred=0` → `A QUIC tunnel was refused: The peer is not a member of this mesh.` |
+| 2. Non-roster member (valid identity, absent from THIS roster) | **Observed** — same mesh id on both sides, each roster holds two members and neither holds the peer | `refused unknownIdentity as responder: mesh=11111111-…-555555555555 epoch="" rosterMembers=2 rosterBarred=0`. Row 1 and row 2 are the same *rejection* and different *situations*; `rosterMembers` is what tells them apart, which is why the console line carries it. |
+| 3. Hard-departed / removed member | **Observed as `barredMember`, with a caveat that matters** | `refused barredMember as responder: … rosterMembers=2 rosterBarred=1` → `The peer has departed, been removed, or been blocked.` **The shipping authority never produces this.** `MeshNetworkManager.roster` keeps `barred` empty on purpose: it records removals by *fingerprint* and holds no signing key for a member it dropped, so a genuinely removed member falls out of `members` and refuses as `unknownIdentity` — row 2's evidence is also the real removal path's evidence. The `barred` branch needed `FERNLET_MESH_CHAOS_BARRED` to be reachable on a radio at all. |
+| 4. Ended / foreign meshID | **Observed, both sub-cases** | *Ended*: the device that left names the unbound all-zero mesh id and still refuses for the mesh reason, not the roster reason — `refused foreignMesh as responder: mesh=00000000-…-000000000000 … rosterMembers=0` — which is the mesh gate firing ahead of the roster gate, live. *Foreign*: two real, different mesh ids — `refused foreignMesh as responder: mesh=11111111-…` against a peer naming `99999999-…`. |
+| 5. Introduction failure (tampered signature) | **Observed** | `refused signatureInvalid as responder at the signed introduction` → `The peer's channel-introduction signature did not verify.` The initiator saw only `A QUIC channel introduction did not complete: … MeshTransportError error 2` — **the responder never signed for a peer it had already refused**, so there was no second frame to read. The ordering property, observed rather than asserted. |
+| 6. Replayed nonce | **Observed** | With `FERNLET_MESH_CHAOS=frozenNonce` and empty rosters, attempt 1 logs `refused unknownIdentity` (the nonce is admitted to the cache before the roster is consulted) and attempts 2–3 log `refused replayedNonce as responder: …` → `The peer replayed a channel-introduction nonce.` The three-attempt dial budget is what supplies the second introduction. |
+
+Rows not in the matrix — `malformedHello`, `unsupportedProtocolVersion`, `divergentEpoch`,
+`selfIntroduction`, `malformedIntroduction`, `channelBindingMismatch`, `missingPeerHello` — are
+covered at tier 1 by the item-7 suite and were not driven over the radio here. Three of them
+(`divergentEpoch`, `channelBindingMismatch`, `missingPeerHello`) are **unreachable at P2 by
+construction rather than by omission**: there is no membership-epoch machinery to diverge yet (plan
+§8.4), the channel binding is derived from the live tunnel at both ends and cannot be made to differ
+without editing the transport, and `missingPeerHello` names a caller-order fault no peer can cause.
+
+#### Two observations to carry forward
+
+**A verified pair activated two tunnels, not one.** In the accepted baseline each device logged
+`accepted` twice — once as initiator, once as responder — meaning *both* sides dialed and
+duplicate-tunnel suppression did not collapse the pair. The `sid` tie-break is symmetric, so the
+likely cause is the documented `shouldInitiateInvite` fallback: a peer discovered before its Bonjour
+TXT record resolves has no `sid`, and "deadlock is worse than a redundant invite" makes both sides
+dial. The inbound tunnel then keys off `connection.id` rather than the browsed key when
+`links.key(advertisingSessionID:)` cannot resolve it, so the two never collide. Nothing about
+selectivity is affected — both tunnels are between two verified roster members — but "at most one
+connection per peer pair" is a Lane B row that this lane can now test cheaply, and today it would
+not pass.
+
+**The refusal is charged to the dial budget, and the budget holds.** Every refused row ended with
+`The QUIC tunnel gave up after 3 attempts` on the dialing side and silence thereafter. A peer that
+refuses us is re-offered exactly three times, not forever.
+
 ### Lane B — physical multi-device and background (deferred to P8; see plan §15)
 
 These rows do not gate P1 or P2. They gate **shipping background continuation**, and they are
@@ -307,7 +392,7 @@ carried out on 2–4 physical devices per plan §15.1–15.4.
 
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |
-| Security | No untrusted peer reaches the post-introduction state. | **Partly proven** — the introduction's rejection rules hold off-radio (Lane A); an on-radio hostile-peer walk is deferred to P8 | 2026-08-29 (off-radio only) |
+| Security | No untrusted peer reaches the post-introduction state. | **Partly proven** — the introduction's rejection rules hold off-radio (Lane A), and six of them now hold **on-radio** between two Simulators running the production transport, against an accepted baseline (Lane C). What is still deferred to P8 is the hostile-peer walk on *physical* radios and anything riding QUIC datagrams | 2026-09-01 (Lane C; physical deferred) |
 
 ## Decision
 

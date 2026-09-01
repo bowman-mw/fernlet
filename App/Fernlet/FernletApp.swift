@@ -277,6 +277,10 @@ struct FernletApp: App {
             case .ready(let store):
                 readyContent(store: store)
                     .transition(.opacity)
+                    // P2 rejection-matrix lane (runbook Lane C). Absent FERNLET_MESH_MATRIX=1 this
+                    // does nothing — the mesh manager is not even built — and in release it is a
+                    // compiled-out no-op.
+                    .task { MeshRejectionMatrixHarness.install(manager: store.meshNetworkManager) }
             case .failed(let error):
                 LaunchFailureView(error: error) {
                     Task { await loader.retry(healthKitService: healthKitService) }
