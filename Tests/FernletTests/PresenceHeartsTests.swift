@@ -356,4 +356,89 @@ struct PresenceHeartsTests {
 
         #expect(ledger.receivedHearts.count == 1, "The receive-rate mirror keeps only the first heart per sender per 5 min")
     }
+
+    // MARK: - Identity asymmetry (plan §6.4, presence half)
+
+    /// One device seen twice under different discovery handles.
+    ///
+    /// Plan §6.5 made `PeerHandle.id` stable for the life of a transport session, so the transport
+    /// no longer produces this pair casually — but it still produces it: the identity map is
+    /// bounded (a very old endpoint ages out), a `stop()`/`start()` re-mints deliberately, and the
+    /// next transport is free to key identity differently. Mirrors `MeshNetworkManagerTests`.
+    private func returningDevice() -> (first: PeerHandle, again: PeerHandle) {
+        let endpoint = PeerEndpointKey(UUID())
+        let make = {
+            PeerHandle(
+                id: UUID(),
+                displayHint: "peer-\(UUID().uuidString.prefix(8))",
+                discoveryInfo: ["v": "1", "t": "tag"],
+                advertisedFingerprint: nil,
+                endpoint: endpoint)
+        }
+        return (make(), make())
+    }
+
+    /// Seats a heart connection for `peer` without a radio or a handshake. The coordinator stays
+    /// `.idle`, so the trust gate this runs neither verifies nor tears it down — which is why the
+    /// accept signal is `false` while the record stays held.
+    private func seedHeartConnection(
+        on manager: PresenceManager,
+        peer: PeerHandle,
+        host: MockPresenceHeartsHost,
+        identity: IdentityService
+    ) {
+        let policy = FriendSessionTrustPolicy(vault: host.proximityTrustVault)
+        let coordinator = ProximityCoordinator(
+            identity: identity,
+            transport: MockMultipeerTransport(),
+            ranging: MockRangingProvider(),
+            trustPolicy: policy,
+            replayCache: ReplayCache(),
+            timeoutSeconds: 0)
+        let accepted = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
+        #expect(!accepted, "seeding only: an idle coordinator is never verified, and the record stays held")
+    }
+
+    /// The ready path must recognize a returning device exactly as the invitation gate does.
+    ///
+    /// `shouldAcceptHeartInvitation` has always matched by endpoint — a re-invite from a device we
+    /// already hold is let through before any cap. `handleHeartChannelReady`'s duplicate guard
+    /// compared `id`, so a held device whose handle churned was read as a stranger by the ready
+    /// path the invitation gate had just waved through, and a SECOND coordinator, ranging session
+    /// and Live Activity anchor opened for one peer.
+    @Test func returningDeviceIsRecognizedAsAlreadyConnected() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHeartsHost()
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        let robin = returningDevice()
+        seedHeartConnection(on: manager, peer: robin.first, host: host, identity: identity)
+
+        #expect(manager.heartChannelAdmission(for: robin.again) == .alreadyConnected,
+                "a device that already holds a heart connection must never open a second one")
+        #expect(manager.heartChannelAdmission(for: peer(tokens: ["stranger"])) == .admit,
+                "control: a genuinely new device is still admitted")
+    }
+
+    /// The cap arm, and the ordering that makes the fix load-bearing there. At
+    /// `maxHeartConnections` a returning device used to fall past the id-only duplicate guard onto
+    /// the cap guard, whose refusal is a `disconnectPeer` — so the ready path killed the live
+    /// connection that device already held. A stranger at the cap is still turned away.
+    @Test func atTheCapAReturningDeviceIsHeldAndAStrangerIsTurnedAway() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHeartsHost()
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        let robin = returningDevice()
+        seedHeartConnection(on: manager, peer: robin.first, host: host, identity: identity)
+        for _ in 1..<PresenceManager.maxHeartConnections {
+            seedHeartConnection(on: manager, peer: peer(tokens: ["other"]), host: host, identity: identity)
+        }
+        #expect(manager.heartConnectionCountForTesting == PresenceManager.maxHeartConnections)
+
+        #expect(manager.heartChannelAdmission(for: robin.again) == .alreadyConnected,
+                "the cap must never be spent disconnecting a device we are already connected to")
+        #expect(manager.heartChannelAdmission(for: peer(tokens: ["stranger"])) == .turnAway,
+                "control: a new device at the cap is refused")
+    }
 }

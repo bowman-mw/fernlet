@@ -38,13 +38,28 @@ private final class RecipeCapTestHost: ProximityHost {
 @MainActor
 struct ProximityRecipeShareCapTests {
 
-    private func makePeer(named name: String) -> PeerHandle {
+    /// `endpoint` defaults to a fresh key, so two calls are two devices. Passing the same key
+    /// twice is the only way to express "one device, two discovery handles" — see
+    /// `makeReturningDevice`.
+    private func makePeer(named name: String, endpoint: PeerEndpointKey = PeerEndpointKey()) -> PeerHandle {
         PeerHandle(
             id: UUID(),
             displayHint: name,
             discoveryInfo: nil,
-            advertisedFingerprint: nil
+            advertisedFingerprint: nil,
+            endpoint: endpoint
         )
+    }
+
+    /// One device seen twice under different discovery handles.
+    ///
+    /// Plan §6.5 made `PeerHandle.id` stable for the life of a transport session, so the transport
+    /// no longer produces this pair casually — but it still produces it: the identity map is
+    /// bounded (a very old endpoint ages out), a `stop()`/`start()` re-mints deliberately, and the
+    /// next transport is free to key identity differently. Mirrors `MeshNetworkManagerTests`.
+    private func makeReturningDevice(named name: String) -> (first: PeerHandle, again: PeerHandle) {
+        let endpoint = PeerEndpointKey(UUID())
+        return (makePeer(named: name, endpoint: endpoint), makePeer(named: name, endpoint: endpoint))
     }
 
     private func makePayload() -> ProximityRecipeSharePayload {
@@ -674,5 +689,41 @@ struct ProximityRecipeShareCapTests {
 
         #expect(!manager.shouldAdmitChannel(for: makePeer(named: "Blair")))
         #expect(manager.shouldAdmitChannel(for: paired))
+    }
+
+    // MARK: - Identity asymmetry (plan §6.4, recipe-share half)
+
+    /// The ready path must recognize a returning device exactly as the admission path does.
+    ///
+    /// `shouldAdmitChannel` has always matched by endpoint; the duplicate guard ahead of it
+    /// compared `id`. So a paired device whose handle churned (a bounded identity-map eviction, a
+    /// transport `stop()`/restart) missed the duplicate guard, was recognized by
+    /// `shouldAdmitChannel`, and was admitted a SECOND time — two connection records, two
+    /// coordinators and two ranging sessions for one device, on a radio capped at two devices.
+    @Test func returningDeviceIsRecognizedAsAlreadyConnected() {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+        let alex = makeReturningDevice(named: "Alex")
+        registerConnection(on: manager, peer: alex.first)
+
+        #expect(manager.channelAdmission(for: alex.again) == .alreadyConnected,
+                "a device that already holds the pairing must never be admitted twice")
+        #expect(manager.channelAdmission(for: alex.first) == .alreadyConnected,
+                "and the same handle it connected under is answered the same way")
+    }
+
+    /// The other two arms of the same decision, pinned so the extraction cannot quietly lose them:
+    /// a third device is turned away while paired (best-effort kick, existing pairing untouched),
+    /// and an idle radio still admits.
+    @Test func channelAdmissionTurnsAwayAThirdDeviceAndAdmitsWhenIdle() {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+
+        #expect(manager.channelAdmission(for: makePeer(named: "Alex")) == .admit,
+                "with no pairing held, a channel is admitted")
+
+        registerConnection(on: manager, peer: makePeer(named: "Alex"))
+        #expect(manager.channelAdmission(for: makePeer(named: "Blair")) == .turnAway,
+                "recipe sharing links two Fernlets at a time — the third is turned away")
     }
 }
