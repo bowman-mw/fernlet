@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 7 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `80b088d`
+**Started:** 2026-08-31 · **Iteration:** 8 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `dabe9b8`
 
 ## Items
 
@@ -25,7 +25,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | done | `ce91f5d` | Policy sound, 18 tests both-sides-exhaustive. Late TXT only ever WITHDRAWS dial permission (double-dial possible pre-TXT, deadlock impossible) |
 | 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | done | `5835b52` | Full duty list in one slice; 47 tier-1 tests, no `.discovered`, TXT carries `sid`/no `fp`, cellular prohibited, TLS identity ephemeral. Residuals live in items 7/8/10 + P9 |
 | 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | done | `5835b52` | `localLinkMarkers` + `permittedLocalLinkFiles` (2 files), disjoint-by-test from the HTTP family, planted-marker proven |
-| 7 | Signed channel introduction productionized | 1 | 5 | todo | | Serializer + registry framing together |
+| 7 | Signed channel introduction productionized | 1 | 5 | done | `48b0c5c` | 12 named rejections, each a teardown; inbound now ranked by verified `sid`; `MeshIntroductionAuthority` is the item-8 seam (nil ⇒ refuse all) |
 | 8 | Transport selection in `MeshNetworkManager`; QUIC NOT default | 1 | 5, 7 | todo | | |
 | 9 | Rejection matrix at tier 2 | 2 | 8 | todo | | Drive by making the Simulator misbehave |
 | 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | Needs per-transfer photo streams in `NetworkPeerChannel` (named residual from item 5) |
@@ -40,6 +40,10 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   standardization round (`x509-self-signature` — an X.509 self-signature has no Fernlet domain to
   name; census 3→4 files / 6→7 hatches, `Crypto-Domain-Separation.md` updated same commit).
   Review as a policy act.
+- **Non-blocking, wants owner eyes (item 7):** the `sid` that drives duplicate-tunnel suppression
+  rides an UNSIGNED hello field — §7.2's transcript doesn't include it, and binding it means a
+  transcript v2 (moves signed bytes). Impact bounded: a verified roster member can only misdirect
+  its own link; admit-both stays safe. Documented on `MeshChannelHello.sessionID`.
 
 ## Decisions taken (defaults from prompt §3 unless the owner overrides)
 
@@ -92,6 +96,9 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   FRESH log path per xcodebuild run, and `pgrep xcodebuild` before believing a failure — one
   crossed log showed ~20 phantom `FernletLock*`/`SecureEnclaveWrap*` failures that vanished
   uncontended. Boot the destination sim + ~20 s settle remains the hang cure.
+- Epoch gate at introduction is deliberately soft (item 7): equal **or one side empty** — a joining
+  peer holds no group key yet, so strict equality would make admission impossible. Two different
+  non-empty epochs ⇒ `.divergentEpoch`. P3 §8.4's merge relaxes further; flagged in source.
 
 ## Known-red gates that are NOT this phase's fault
 
@@ -100,7 +107,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**7** — signed channel introduction productionized (serializer + registry framing together; the
-introduction also supplies the inbound peer `sid` that un-unranks `acceptInbound`). Bundle **item
-12** (the polled-wait flake fix) into whichever upcoming iteration is smallest. Item 1 waits on a
+**8** — transport selection in `MeshNetworkManager` (both conformers selectable; QUIC NOT default;
+wire `MeshIntroductionAuthority`; this introduces the long-missing injection seam), **bundled with
+item 12** (the polled-wait flake fix — tiny, file-disjoint, its own commit). Item 1 waits on a
 device; item 2 stays skip-gated while `Localizable.xcstrings` is held by another session.
