@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 9 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `3dfc75d`
+**Started:** 2026-08-31 · **Iteration:** 10 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `8b75261`
 
 ## Items
 
@@ -27,10 +27,12 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | done | `5835b52` | `localLinkMarkers` + `permittedLocalLinkFiles` (2 files), disjoint-by-test from the HTTP family, planted-marker proven |
 | 7 | Signed channel introduction productionized | 1 | 5 | done | `48b0c5c` | 12 named rejections, each a teardown; inbound now ranked by verified `sid`; `MeshIntroductionAuthority` is the item-8 seam (nil ⇒ refuse all) |
 | 8 | Transport selection in `MeshNetworkManager`; QUIC NOT default | 1 | 5, 7 | done | `099727d` | `MeshTransportSession` seam; Release can only answer MC; `FERNLET_MESH_TRANSPORT=quic` (DEBUG, one launch); manager IS the introduction authority; manager invite path finally tier-1-tested |
-| 9 | Rejection matrix at tier 2 | 2 | 8 | todo | | Drive by making the Simulator misbehave. **Item-0 re-tier applies: run sim↔sim on one Mac** (production tie-break never consults TXT/sim marking; `FERNLET_MESH_TRANSPORT=quic` + DEBUG hooks) — no device needed |
+| 9 | Rejection matrix at tier 2 | 2 | 8 | done | `7357110` | 6/6 rows + baseline observed sim↔sim over real QUIC; Lane C in runbook. Shipping removals refuse as `unknownIdentity` (barred stays empty by design) |
 | 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | Needs per-transfer photo streams in `NetworkPeerChannel` (item-5 residual). **Empty roster ⇒ QUIC refuses every peer** — first-meeting stranger admission is a P3 membership question (plan §8); flows need membership established first (MC or fixture) then transport switched |
 | 11 | Tier-3, and only this: AWDL path + Local Network permission prompt | 3 | 10 | todo | | Justify any addition to this row |
 | 12 | Convert the heartbeat flake test to a polled wait | 1 | — | done | `3ca3ddb` | Reused suite's `waitUntil` (2 s deadline, 200-poll floor); 3 isolated passes + suite |
+| 13 | **Verified pair converges to ONE tunnel.** Observed on-radio (item 9, both baseline runs): nil-`sid` window ⇒ both dial; inbound keys off `connection.id`, never colliding with the browsed key ⇒ suppression never fires. After introduction both sides KNOW the verified `sid` — collapse there by deterministic rule (dial preference), close the loser. Tier-1 repro on fakes + Lane C re-run as proof | 1 | 9 | todo | | Blocks item 10 — flows shouldn't run over ambiguous pairs |
+| 14 | Widen `TestHookBoundaryTests` `hookTokens` to the `FERNLET_MESH_*` / `FERNLET_PROBE_*` env family (items 0/8/9 hooks are outside its grep-wall; `#if DEBUG` is currently the only guard) | 1 | — | todo | | Cheap; bundle with 13, own commit |
 
 ## Blocked on owner
 
@@ -101,6 +103,9 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   non-empty epochs ⇒ `.divergentEpoch`. P3 §8.4's merge relaxes further; flagged in source.
 - Flake protocol, refined again (iteration 9): if the sim is already Booted, `simctl boot` is a
   no-op — budget a plain retry, not a boot. Boot+settle only cures the not-yet-booted case.
+- Dial budget observed live (item 9): a refusing peer is re-offered exactly 3 times, then silence.
+- Lane C exists: `FERNLET_MESH_MATRIX` harness + `FERNLET_MESH_CONSOLE_LOG` + chaos hooks make the
+  production mesh drivable on two sims — items 10/13 reuse this, don't rebuild it.
 - `MeshMultipeerSession.onDisconnectPeerRequestedForTesting` was deleted (item 8 seam replaced it);
   `Docs/Memory-Leak-Review-2026-08-17.md` lines 82/84 name it as a dated historical record — fine.
 
@@ -111,7 +116,6 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**9** — the rejection matrix over the real QUIC radio, sim↔sim on one Mac (item-0 re-tier; no
-device needed). The tier-1 halves are already pinned by item 7's tests — item 9 proves them over
-real Bonjour/TLS with runbook evidence. Item 1 waits on a device; item 2 stays skip-gated while
-`Localizable.xcstrings` is held by another session.
+**13** (tunnel convergence — blocks item 10) bundled with **14** (hook-wall widening, own commit).
+Item 1 waits on a device; item 2 stays skip-gated while `Localizable.xcstrings` is held by another
+session.
