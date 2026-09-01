@@ -418,9 +418,23 @@ adapter; no wire change (byte-identical frames verified by a golden test).
 
 ---
 
-## 7. Phase P2 — NetworkMeshSession (the TN3213 mapping)
+## 7. Phase P2 — NetworkMeshSession (the TN3213 mapping) — **BUILT** (2026-09-01)
 
 A second `PeerTransport` conformer used only by `MeshNetworkManager`. The other radios stay on MC until P9.
+
+**Result:** `NetworkMeshSession` ships beside `MeshMultipeerSession` — Bonjour listener and browser
+over `_fernlet-mesh2._udp`, one authenticated QUIC tunnel per peer, an exporter-bound signed channel
+introduction with twelve named rejections, and per-transfer streams beside the long-lived control
+stream. `MeshNetworkManager` picks its radio through a `MeshTransportSession` seam; **a Release build
+can only answer MC**. Two Simulators on one Mac now run the *shipping* mesh over real QUIC (runbook
+Lane C): the rejection matrix was driven 6/6 against an accepted baseline, six app flows crossed in
+both directions, and a verified pair holds one tunnel for a 170-second run with heartbeats flowing
+over datagrams both ways. `NetworkMeshSession.swift` names no MultipeerConnectivity type, so P1's
+containment permit list did not widen by one entry.
+
+§§7.1–7.4 below are the sketch, kept as the specification. §7.5 records what landed, §7.6 where
+reality moved the design and why, §7.7 what was deliberately left undone, and §7.8 what the phase
+proved about the testing lanes — which is the largest thing P2 changed about the phases after it.
 
 ### 7.1 Concept mapping (TN3213)
 
@@ -475,9 +489,202 @@ Acceptance: mesh flows (admission, QR ceremony, photos, chat, hearts, shop, mode
 age gates) pass on the QUIC transport on the device↔simulator lane and on 2 physical devices;
 `spm-wall-selftest.sh` and the extended no-tracking tests green.
 
+**Acceptance as judged, 2026-09-01.** Met on a lane the sketch did not know existed and did not
+predict: **simulator↔simulator**, two instances of the shipping app on one Mac (§7.8). Six flows —
+slot commit, capabilities, chat, photos, shop, and both halves of the 13+ chat age gate — were
+observed crossing in both directions, and the whole rejection matrix P2 can reach was driven against
+an accepted baseline. Three named flows were **not** met and are recorded rather than papered over:
+hearts and moderation (app-state preconditions, §7.7 finding 2) and stranger admission (P3's
+question, finding 3). The two-physical-device half is item 11 and is still owed; the walls
+(`spm-wall-selftest.sh`, the extended no-tracking family, Power of 10, doc coverage) were green at
+every landing below, and so was the `FernletTests` suite.
+
+### 7.5 What landed
+
+| # | Work | SHA |
+|---|---|---|
+| 0 | **Sim↔sim experiment: CONNECTED.** Two Simulators complete Bonjour discovery, QUIC/TLS and the signed introduction on one Mac — multi-node testing needs no hardware | `926a791` |
+| 3 | **§6.5 root fix taken.** `SessionPeerIdentity` minted once per peer, session-scoped, cleared at teardown; §6.4 findings 1–3 closed with it | `b8d7a5a` |
+| 3b | RecipeShare + Presence ready paths recognize a peer the way their own gates do | `2a03800` |
+| 3c | `sendHeart`'s outbound gate recognizes an existing connection by endpoint, not `id` | `8c258b5` |
+| 3d | **The id-vs-endpoint family CLOSED** — 14 sites, with the exhaustive per-site audit table in the commit message. Do not re-audit it | `2f273a9` |
+| 4 | Dial tie-breaker pinned exhaustively before any QUIC code — 18 tests, both sides of every pair; a late TXT only ever *withdraws* dial permission, so double-dial is possible pre-TXT and deadlock is not | `ce91f5d` |
+| 5 + 6 | `NetworkMeshSession` skeleton — the whole §7.3 duty list in one slice, 47 tier-1 tests — and the no-tracking wall's **second** marker family (`localLinkMarkers` + `permittedLocalLinkFiles`, disjoint from the HTTP family by test) | `5835b52` |
+| 7 | Signed channel introduction productionized: 12 named rejections, each a teardown; exporter label `KeyDerivation.meshTLSExporterV1`; `MeshIntroductionAuthority` seam minted | `48b0c5c` |
+| 8 | Transport selection in the manager. `FERNLET_MESH_TRANSPORT=quic` is DEBUG-only and read once per launch; Release can only answer MC; the manager *is* the introduction authority; the manager's invite path finally reachable at tier 1 | `099727d` |
+| 9 | Rejection matrix **6/6 plus an accepted baseline, observed on the real radio** (runbook Lane C) | `7357110` |
+| 13 | A verified pair converges to one tunnel — tier-1 repro red before the fix, and item 9's "two tunnels" reading corrected to churn (Lane C cannot form the duplicate) | `96337a3` |
+| 14 | The test-hook wall learns the `FERNLET_MESH*` / `FERNLET_PROBE*` families, per-family floors; a planted Release-reachable read trips it by name | `7ff49fc` |
+| 15 | Churn root-caused: QUIC's `max_idle_timeout` ≈ the heartbeat interval. **And the datagram record inverted — datagrams work; the recorded zero was a wrong-object accessor** | `a9597d3` |
+| 10 | Six app flows observed over QUIC; per-transfer photo streams; the **contiguous-write fix** for control-stream desync | `596bcf8` |
+| — | Hygiene: the heartbeat flake test observes its condition instead of racing it | `3ca3ddb` |
+
+| | |
+|---|---|
+| New (ProximityKit) | `Transport/NetworkMeshSession.swift`, `MeshChannelIntroduction.swift`, `MeshLinkTable.swift`, `MeshLinkAdvertisement.swift`, `MeshHeartbeatSchedule.swift`, `MeshTransferStreamTable.swift`, `EphemeralMeshTLSIdentity.swift`, `MeshTransportSelection.swift`, `MeshTransportDebugHooks.swift` |
+| New (app target, DEBUG) | `Proximity/Feasibility/MeshRejectionMatrixHarness.swift`, `MeshFlowDriver.swift` — the Lane C drive mechanism |
+| Changed | `MeshNetworkManager` owns a `MeshTransportSession` rather than a concrete `MeshMultipeerSession`, and conforms to `MeshIntroductionAuthority`; `MeshMultipeerSession` gained the two forwarding methods and one deliberately empty one |
+| Tests | `NetworkMeshTransportTests` (the skeleton, the introduction, advertisement, heartbeat schedule and convergence suites), `MeshDialPolicyTests`, `MeshTransportSelectionTests`, `Mocks/FakeMeshTransportSession.swift` |
+
+### 7.6 Deviations from the sketch, and why
+
+- **The §6.5 root fix was taken first, before any QUIC code** (§19.4's first decision, answered yes).
+  `SessionPeerIdentity` mints one identity per peer for the life of a session, so `id` is a true
+  identity test and §6.4 findings 1–3 closed together. It **inverted a documented design intent**:
+  the old `stop()` deliberately preserved the endpoint map ("an owner would stop recognizing a
+  device"), but all three owners now drop every peer-keyed record in the same teardown, so
+  preserving identity across `stop()` protected nothing.
+- **`startRadios(discoveryInfo:)`, not `start`.** `MeshMultipeerSession` already owns
+  `start(serviceType:discoveryInfo:)` with a defaulted service type, so a same-named protocol
+  requirement would have read as direct recursion (Power of 10 rule 1) for no gain. The service type
+  became each radio's own affair — which is also what a second radio on a *different* Bonjour type
+  needs: the owner never picks one.
+- **One `MeshTransportHandlers` value, not five settable protocol properties.** The two radios keep
+  their hooks under their own names and types (MC's channel hook is typed to `PeerChannelTransport`,
+  QUIC's to `NetworkPeerChannel`), so a settable protocol property would have needed a getter no
+  conformer could honestly answer. `wire(_:)` takes the whole set and each conformer forwards it to
+  whatever it actually keeps. The invitation gate defaults **closed**: a radio with no
+  `shouldAcceptInvitation` refuses, exactly as MC's advertiser does today (`?? false`).
+- **Inbound tunnels park as *pending* until a verified `sid` ranks them.** §7.3 said "connection set,
+  cap 8"; an inbound QUIC connection arrives with no advertisement and therefore no key to file it
+  under. It is booked against a separate `maxPendingInboundTunnels` bound, swept at a ten-second
+  introduction deadline, holds **no roster slot**, and is promoted by
+  `admitVerifiedInbound(_:pendingKey:)` onto the key its verified `sid` resolves to — or onto its own
+  connection key when nothing resolves. A peer that connects and then says nothing costs a pending
+  seat for ten seconds, never a seat against the roster cap.
+- **The manager itself is the `MeshIntroductionAuthority`.** The sketch left the roster lookup
+  unhomed. `MeshNetworkManager` conforms directly — it is already the holder of mesh id, epoch,
+  roster and signing key — and the radio receives it through
+  `MeshTransportSession.attachIntroductionAuthority(_:)`. **A nil authority refuses every tunnel**,
+  the only fail-closed default available. MC's conformance is deliberately an *empty* method: that
+  radio authenticates inside `ProximityCoordinator`'s signed identity introduction over an
+  already-established link, and holding a reference it never reads would be the misleading half.
+- **The QUIC idle timeout is declared, at 3× the heartbeat, on both parameter sets.** Left at the
+  framework default it sat near 30 s — the same number as `MeshHeartbeatSchedule.intervalSeconds` —
+  so QUIC reaped every tunnel a moment before its first beat was due, silently, with nothing refused
+  and no budget spent (item 15). `idleTimeoutMilliseconds` is now
+  `intervalSeconds × missedBeatsBeforeIdleReap`, and it is set on **the listener as well as the
+  connection**, because QUIC negotiates the minimum of the two advertised values and a defaulted
+  listener would pull it straight back under the interval. Dead-peer detection did not weaken, it
+  moved to where it belonged: the app's heartbeat detects, QUIC's timer backstops three beats later.
+  The same commit stopped a failed heartbeat *write* from ending a tunnel — a datagram that will not
+  go now latches the beat onto the control stream, and only a beat the reliable stream also refuses
+  ends anything.
+- **Every frame is one contiguous write.** `sendFramed` originally wrote the length prefix and the
+  payload as two awaited sends. Every frame on a tunnel shares one control stream and
+  `MeshNetworkManager` fires its envelopes as independent tasks, so two of them suspending at the gap
+  between the sends left the peer reading one frame's header followed by another frame's first four
+  bytes — `invalidFrameLength`, tunnel dead, within a second of a slot committing. One buffer per
+  frame closes it: concurrent sends may be ordered either way but never interleaved. Latent since
+  item 5, and invisible until item 10, because item 15's stable tunnel never sent an app frame.
+- **The TXT record carries `sid` and withholds `fp`** (§19.4's other two decisions). `sid` is what
+  `shouldInitiateInvite` ranks, and the DEBUG probe's TXT carries none — it ranks Bonjour service
+  names — so copying the probe's advertisement verbatim would have degraded the production tie-break
+  to *both sides dial*: one duplicate tunnel per pair, every pair, with nothing failing. `fp` is
+  neither published **nor believed inbound**, because accepting a fingerprint claim this build does
+  not make itself would turn an unverified peer-supplied string into a fatal-mismatch lever;
+  publishing it activates §6.4 finding 4's vacuous gates and moves signed bytes, so it stays a wire
+  decision with a golden vector attached. `MeshLinkAdvertisement` is deliberately **one** bounded
+  function serving both directions — asymmetry between publish and believe is exactly how a peer gets
+  a field into a handle this build would never advertise.
+- **The conformer never emits `.discovered`.** Discovery reaches the manager through
+  `onPeerDiscovered` and the invite decision stays `MeshNetworkManager.shouldInitiateInvite`, exactly
+  as on MC. So §6.4 finding 6 is *unchanged*, not closed: the coordinator's five discovery branches
+  remain mock-driven, and §7.7 finding 4 is the live consequence of leaving them that way.
+- **Two things the sketch did not ask for.** Photos got their own per-transfer QUIC streams beside
+  the control stream (§7.1 named them; item 10 built them and observed both directions through both
+  acceptors — an odd stream id is server-initiated, an even one client-initiated). And every tunnel
+  end now names a cause: `MeshTunnelEndReason`, six frozen tokens, permanent `os.log` rather than a
+  debug hook. A live tunnel that ended used to log **nothing**, and that silence is what let churn
+  masquerade as duplication for an entire investigation — on a device, where there is no console to
+  mirror, the disconnect path is exactly where silence costs most.
+
+### 7.7 Findings for the owner — real, and deliberately NOT fixed here
+
+1. **The `sid` that drives duplicate-tunnel suppression rides an unsigned hello field.** §7.2's
+   transcript covers purpose ‖ version ‖ meshID ‖ epochRef ‖ both signing keys ‖ both nonces ‖
+   exporter hash — it does not cover `MeshChannelHello.sessionID`. Binding it means a transcript v2,
+   which moves signed bytes: an owner call, not a port detail. **Cost:** a peer that is *already a
+   verified roster member* can misdirect the dedup of its own link by claiming a `sid` that ranks
+   against a different browsed advertisement. It cannot reach another pair's links, and the fallback
+   when a claim resolves to nothing is admit-both, which is safe. Documented on the field itself.
+2. **Hearts and moderation were never exercised over QUIC.** Both gate on *mutual*
+   `ProximityTrustVault` rows — app state written by completing `pendingFriendReview` on both devices
+   in an **earlier** session — and the flow driver drives one session. This is an app-state
+   precondition, not a transport limit; the `moderation` capability itself crossed in every
+   capability list observed. They land in P6. **Cost:** two flow types ride an app path over QUIC
+   that nothing has exercised until then.
+3. **Stranger admission over QUIC is deferred to P3 membership (§8).** An empty roster makes every
+   peer a stranger and the introduction refuses the tunnel before any app frame — matrix row 1,
+   working as designed. MC remains the admission path meanwhile. **Cost:** the QUIC radio can only
+   reconnect existing members; first meetings stay on MC until P3 gives the transport something to
+   admit a stranger *into*.
+4. **`ProximityCoordinator.shouldInviteDiscoveredPeer` still points the opposite way to the
+   manager.** The coordinator returns `sessionID < remoteSID`; `MeshNetworkManager.shouldInitiateInvite`
+   returns `localSessionID > peerSessionID`. It is dormant for one reason only: **no conformer emits
+   `.discovered`**, so nothing drives the coordinator's discovery arm in production (§6.4 finding 6).
+   **Cost:** nothing today — and a mutual deadlock the instant any conformer ever does emit it, which
+   is precisely the failure that cost this mesh once already. Align the two **before** wiring any
+   transport's discovery to the coordinator, not after.
+5. **The epoch gate at introduction is deliberately soft.** Equal **or one side empty** — a joining
+   peer holds no group key yet, so strict equality would make admission impossible; two different
+   non-empty epochs are `.divergentEpoch`. **Cost:** an empty-epoch claim is evidence of nothing, so
+   the gate contributes nothing on a first connection. P3 §8.4's merge rules are what make it
+   strict-able; flagged in source at the comparison.
+6. **The cross-key double-dial collapse is proven at tier 1 only.** Reaching the double-dial window
+   needs a peer discovered **before** its TXT resolves; two Simulators browsing over infrastructure
+   Wi-Fi receive the TXT with the browse result, so the `sid` ranks immediately and only one side
+   dials. **Cost:** `MeshTunnelConvergence` is held by 14 tier-1 tests and an on-radio *control* run,
+   but never exercised on a radio. Producing a late TXT is physical-radio behaviour, so this is a
+   **Lane B (hardware) row** — the one P2 residual that genuinely needs physics.
+7. **The `x509-self-signature` escape hatch is the first crypto hatch since the standardization
+   round.** An X.509 self-signature has no Fernlet domain to name: the transcript is a DER
+   TBSCertificate whose bytes the format fixes, so a Fernlet prefix would make the certificate
+   unparseable. The census moved 3→4 files and 6→7 hatches, and `Crypto-Domain-Separation.md` was
+   updated in the same commit. **Cost:** none technically — but the value of that census is that
+   every entry was looked at by a person, so it wants the owner's eyes **as a policy act**.
+8. **QUIC is not the default, and MC still ships.** `FERNLET_MESH_TRANSPORT=quic` is DEBUG-only and
+   read once per launch; a Release build can only answer MC. **Cost:** none — this is the P2 boundary
+   working exactly as designed (§18: "P9 after P2 is proven"). The cost arrives later, as the field
+   evidence P9 needs and P2 could not produce.
+
+### 7.8 What P2 proved about the testing lanes
+
+The largest thing this phase changed is not in the transport. **Multi-node testing (3, 4, 6 nodes)
+runs on one Mac, with no hardware and no human at all.**
+
+- **Item 0 (`926a791`).** `MeshProbeDiscoveryPolicy` refused a Simulator→Simulator dial on a
+  rationale that only ever justified the *device→Simulator* refusal. Relaxed behind a DEBUG toggle,
+  two Simulators complete Bonjour discovery, QUIC/TLS and the signed, exporter-bound introduction in
+  both directions — they share the host's network stack, so the peer resolves to a routable address
+  rather than the host-only link-local one.
+- **Lane C is the drive mechanism, and it exists.** `FERNLET_MESH_TRANSPORT`, `FERNLET_MESH_MATRIX`
+  (+ `_LABEL` / `_MESH_ID` / `_MEMBERS`), `FERNLET_MESH_FLOWS`, `FERNLET_MESH_CONSOLE_LOG` and the
+  `FERNLET_MESH_CHAOS*` hooks drive the **shipping** mesh across Simulators from `simctl` alone.
+  Every variable is DEBUG-only, read once per process, **off when absent**, and compiled out of
+  Release; the chaos hooks can only ever damage this side's own introduction or add to this side's
+  own barred set, so neither can admit a peer that would otherwise be refused. Do not rebuild it.
+- **Datagram-borne work is back on this lane (item 15, `a9597d3`).** The earlier "datagrams do not
+  negotiate" reading was a wrong-object accessor — `usableDatagramFrameSize` read off the parent
+  connection rather than the flow's metadata — and the probe threw on it *before ever sending one*.
+  Heartbeats now demonstrably ride datagrams in both directions with that number still reporting
+  zero. The assumption that datagram features need hardware is **struck**. The lesson generalizes:
+  a negative read off an accessor is not a negative observed on the wire.
+- **P8 is explicitly unaffected.** §14/§15 are background, lock, radio physics, battery, thermal and
+  OS policy; a Simulator answers none of it (`BGTaskScheduler` returns error 1 there at all). This
+  lane pulled work **down** out of P3–P6, not out of P8 — those gates stand exactly as written.
+
 ---
 
 ## 8. Phase P3 — durable session context, roster, and membership events
+
+**Testing lane (re-tiered 2026-09-01, §7.8).** This phase does **not** need a drawer of phones.
+Records, derived roster and the state machine are tier 1 on `FakePeerNetwork` with a virtual clock;
+everything that wants ≥ 3 *real* nodes — a departure gossiped by a third member, admission across a
+live roster, a rotation crossing two tunnels — runs 3–6 Simulators on one Mac through the Lane C
+harness (`FERNLET_MESH_TRANSPORT` / `_MATRIX` / `_FLOWS` / `_CONSOLE_LOG` plus the chaos hooks).
+Datagram-borne behaviour is on this lane too: item 15 struck the "datagrams need hardware"
+assumption. Physical devices are owed only what §15 lists.
 
 ### 8.1 MeshSessionContext (persisted, sealed)
 
@@ -619,6 +826,13 @@ The scenario driving this phase (owner, 2026-08-27): four devices split into two
 groups keep sharing photos and messages, keys may rotate while split, then everyone reunites — and the
 same must generalize to larger meshes with more (and nested) splits.
 
+**Testing lane (re-tiered 2026-09-01, §7.8).** The §16.2 scenario matrix stays tier 1 on the fake
+fabric — randomized bounded schedules under a fixed seed belong nowhere else. What changed is the
+corroboration: the shapes worth watching over *real* QUIC (2/2, 3/1, and one nested re-split
+mid-merge) now run **3–6 Simulators on one Mac** through the Lane C harness, driven from `simctl`,
+rather than waiting on four phones. §15.2's physical partition walks stay on the list, but as the
+last confirmation rather than the only evidence.
+
 ### 10.1 Why splits are safe by construction
 
 Because of invariants 2 and 3, a partition is not an error state — it is normal operation with fewer
@@ -730,6 +944,13 @@ examples above encoded verbatim as tests.
 
 ## 11. Phase P5 — encrypted store-and-forward routing
 
+**Testing lane (re-tiered 2026-09-01, §7.8).** Custody, receipts, dedup, backpressure and the drain
+are tier 1. The questions that are genuinely about a real radio — chunk pacing at 256 KiB, whether a
+large transfer starves the control stream, and therefore whether relay increment 2 is needed at all —
+run over **real QUIC between 3–6 Simulators on one Mac** via the Lane C harness, including datagram
+traffic (item 15 struck the assumption that datagrams need hardware). P2 already moved photo chunks
+on per-transfer streams across that lane in both directions.
+
 Carried from v1 with partition duties added. Structures (all bounded, all signed by the **origin**;
 relays forward the origin's exact signed objects, never re-sign):
 
@@ -759,6 +980,14 @@ is actually needed at roster ≤ 8 on shared Wi-Fi.
 ---
 
 ## 12. Phase P6 — feature routing
+
+**Testing lane (re-tiered 2026-09-01, §7.8).** Photos already crossed on per-transfer QUIC streams,
+in both directions, between two Simulators on one Mac (P2 item 10) — so this phase's observation lane
+is that one, at 3–6 nodes, through the Lane C harness. **Hearts and moderation did not cross**, for
+an app-state reason rather than a transport one (§7.7 finding 2): both need mutual trust-vault rows,
+which need a *second* session — commit, end, complete `pendingFriendReview` on both sides, reconnect.
+Scripting two sequential sessions across two Simulators is this phase's first real job, and it is
+still a sim-lane job; no hardware is implied by it.
 
 - **Photos**: existing `resizedForFriendSharing()` (1400 px / q0.82) → content-key encrypt → chunk →
   manifest to full roster → reassemble + hash-check → existing review flow. Unfinished ciphertext
@@ -823,6 +1052,14 @@ Degraded ladder (pre-decided, per §15.3 results): full background mesh → back
 ## 15. Hardware gates (P8 entry criteria — the honest successors to the spike)
 
 The device↔simulator lane proved the transport (P0 closes it). These remain, on 2–4 physical devices:
+
+**Unaffected by the 2026-09-01 re-tier (§7.8).** The simulator↔simulator lane pulled multi-node work
+*down* out of P3–P6; it takes nothing out of here. Every gate below is background, lock, radio
+physics, battery, thermal or OS policy, and a Simulator answers none of it — `BGTaskScheduler`
+returns error 1 there at all, so the sim lane can never speak to P8's rows. These entry criteria
+stand exactly as written. Two P2 residuals join them: **item 11** (AWDL path, Local Network
+permission prompt) and the Lane B row "at most one connection per peer pair", which needs a late TXT
+and therefore a physical radio (§7.7 finding 6).
 
 **15.1 Radio matrix:** established QUIC connection surviving background+lock; re-dial via cached
 endpoint while backgrounded; fresh Bonjour browse while backgrounded (expected to fail — record it);
@@ -932,10 +1169,20 @@ settled first. P7 can start once P3's states exist. P10 and P0 can interleave an
 4. Coach radio disposition in P9 (retire with the rest vs hold for the Coach-app decision).
 5. Wi-Fi Aware evaluation (§15.4): run it during P2, or only if §15.1's AWDL rows fail?
 6. Plist keys shipping in Release now (P0.3 recommendation: yes, documented).
+7. Bind the introduction's `sid` into the signed transcript — a transcript v2, which moves signed
+   bytes (§7.7 finding 1). P3 is where `epochRef` becomes real, so if the transcript moves it should
+   move once.
+8. The `x509-self-signature` escape hatch — the first crypto hatch since the standardization round,
+   technically sound and wanting review **as a policy act** (§7.7 finding 7).
 
 ---
 
 ## 19. P2 handoff — written at the P1 boundary, 2026-08-29
+
+**Spent at the P2 boundary, 2026-09-01.** Kept as the record of what P2 was handed and what it was
+told to decide — every decision §19.4 poses was taken, and §7.6 says which way and why. **§20 is the
+live handoff.** §19.5 is the exception: it was always a P3/P5 constraint, and it is carried forward
+verbatim into §20.2 rather than left here to be found by accident.
 
 P0 and P1 are **BUILT** (§5, §6). This section is what a fresh session needs to start P2 and nothing
 more; the sections above are the authority for *what* to build.
@@ -1013,3 +1260,105 @@ before first unlock.** The four-state sidecar model in invariant 7 needs a fifth
 "seal refused" is distinct from "deferred because protected data is unavailable" — and background
 custody must never assume it can seal. This meets the durable-before-acknowledged rule (§3.6) head
 on: **if you cannot seal, you must not acknowledge.**
+
+---
+
+## 20. P3 handoff — written at the P2 boundary, 2026-09-01
+
+P0, P1 and P2 are **BUILT** (§5, §6, §7). This section is what a fresh session needs to start P3 and
+nothing more; the sections above are the authority for *what* to build. §8 is the specification.
+
+### 20.1 What P3 inherits
+
+- **`MeshIntroductionAuthority` — the seam P3 is supposed to fill.** The QUIC radio asks its
+  authority who this peer is, and `MeshNetworkManager` answers with mesh id, epoch reference, roster
+  and signing key. **A nil authority refuses every tunnel**, so the fail-closed direction is already
+  the default and P3 cannot accidentally open it by omission. Today the manager answers from live
+  session state; P3's job is to answer from the *derived* roster of §8.1 — `admitted − departed −
+  removed` — which is the same question with a durable answer.
+- **A soft epoch rule waiting for §8.4 to make it strict.** The introduction accepts equal epochs
+  **or one side empty**, because a joining peer holds no group key yet and strict equality would make
+  admission impossible; two different non-empty epochs are already `.divergentEpoch`. §8.4's
+  Lamport-style `MeshEpochRef` and its merge rule are what let this tighten. It is flagged in source
+  at the comparison — tighten it there, deliberately, rather than discovering it later.
+- **Membership events unlock two things P2 could not reach.**
+  - **The hard-departed rejection row.** `MeshIntroductionRejection.barredMember` exists and was
+    driven on the radio, but only under a chaos hook: `MeshNetworkManager.roster` keeps `barred`
+    empty on purpose, because it records removals by *fingerprint* and holds no signing key for a
+    member it has dropped — so a genuinely removed member falls out of `members` and refuses as
+    `unknownIdentity`. P3's `SignedRemovalRecord`s are what give `barred` real contents and make the
+    branch the shipping authority's own answer instead of a test's.
+  - **The hearts and moderation ceremonies.** Both gate on *mutual* trust-vault rows written by
+    completing `pendingFriendReview` on both devices in an earlier session (§7.7 finding 2). P3's
+    durable context is the first thing in this plan that makes "an earlier session" a concept the
+    code can hold across a process death.
+- **A sim↔sim multi-node lane for roster and membership tests.** 3–6 Simulators on one Mac, driven
+  from `simctl` through the Lane C harness (§7.8) — roster convergence, departure gossip via a third
+  member, and rotation across two tunnels are all reachable without hardware.
+- **A selectable transport.** `MeshTransportSession` + `FakeMeshTransportSession` mean the manager
+  itself is now drivable at tier 1; the state machine of §8.2 should be pinned there, not on a radio.
+
+### 20.2 The constraint that decides §8.1's shape — D4 sealing (carried from §19.5, verbatim in force)
+
+`ColumnCrypto` is a single generation (V3) and **refuses to seal** without a `DeviceBindingID`
+(`SealedColumnStrictSealError.bindingUnavailable`, owner decision D4); the V2 and unprefixed read
+paths are deleted and survive only as classification cases so a refusal can name what it refused.
+
+Consequences P3 must design *into* the store rather than discover in it:
+
+- **A sealed `MeshSessionContext` cannot be written before first unlock.** Not "is slower", not
+  "retries" — refused.
+- **"Seal refused" is not "deferred because protected data is unavailable."** Invariant 7's four
+  states (loaded / absent / deferred / corrupt) need the fifth consideration spelled out, and a
+  refusal must name what it refused rather than collapsing into `absent` — an `absent` that is
+  really a refusal is the shape that overwrites live data.
+- **Durable before acknowledged (§3.6) meets it head on: if you cannot seal, you must not
+  acknowledge.** Every custody receipt, every membership record accepted, every "joined" the UI
+  shows must be behind a successful seal, because force-quit gives no expiration callback to save
+  you afterwards.
+
+### 20.3 The paperwork is part of this phase, not a follow-up
+
+§17's bold line **"Documented policy reversal (owner-approved) — same-commit paperwork"** (item 17.3)
+lists what P3 owes *in the commits that reverse the invariant*, not after them: the "deliberately NOT
+Codable" / "memory-only, never persisted" doc guards on `MeshSessionTypes` and `SessionMessageStore`
+(and the `MeshGroupKey` doc, which stays "never persisted" and becomes load-bearing by contrast);
+wipe-wall disposition rows and delete-all writer wiring for `MeshSessionContext`, `MeshRoutedStore`,
+the endpoint cache and any new `UserDefaults` key; the `PrivacyInfo` and privacy copy; and the
+ProximityKit DocC landing page's invariants, with `doc-coverage-scan.py` still at zero. P3 is the
+commit that reverses a documented design intent — the paperwork is the half that makes it a reversal
+rather than a drift.
+
+### 20.4 Do these first, in this order
+
+1. **Records and derived roster, pure and tier 1.** `admitted − departed − removed`, union-merge,
+   the bounds from §9. No storage, no transport, no clock. Everything later is a consumer of this.
+2. **Then the sealed store**, with the five-state load of §20.2, a **per-instance disk root** and a
+   grep-wall test à la `PhotoDirectoryIsolationTests` — the shared-disk-root flake family must not
+   grow a new member — plus the §17.3 rows in the same commit.
+3. **Then membership-driven rotation** (§8.3), which is what closes the confirmed gap where a
+   voted-out member keeps the group key for up to 15 minutes.
+4. **Then point the introduction authority at the derived roster**, which is what makes matrix row 3
+   the shipping answer (§20.1) and what lets the sim lane prove a removal ejects a peer at its next
+   connection attempt.
+
+### 20.5 Decide before writing the store
+
+- **Whether the transcript takes `sid`** (§7.7 finding 1, §18 open decision 7). P3 is where
+  `epochRef` stops being a placeholder, so if the signed transcript is going to move, moving it once
+  — with the golden vectors updated deliberately — is much cheaper than twice.
+- **Whether the epoch gate goes strict** once §8.4's merge rule exists (§7.7 finding 5).
+- **Whether the QUIC TXT publishes `fp`** — still open, still moves signed bytes, still a wire
+  decision with a golden vector attached (§19.4, unchanged by P2).
+
+### 20.6 Still owed, and not blocking P3
+
+- **Hardware:** the Lane A diagnostic report (loop item 1), AWDL + the Local Network permission
+  prompt (item 11), and the double-dial collapse's Lane B row (§7.7 finding 6). None of them gate
+  membership work.
+- **A known-red gate that is nobody's current fault:** `sync-string-catalogs.sh --check` fails on
+  nine stale keys that are present in the file as committed (§5 item 4). It is one write-mode run on
+  a quiet tree. **Do not bisect it.**
+- **`MeshTunnelConvergence` and the id-vs-endpoint family are closed** (`96337a3`, `2f273a9`). The
+  second has an exhaustive per-site audit table in its commit message — re-auditing it is wasted
+  time.
