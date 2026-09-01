@@ -365,13 +365,16 @@ struct PresenceHeartsTests {
     /// no longer produces this pair casually — but it still produces it: the identity map is
     /// bounded (a very old endpoint ages out), a `stop()`/`start()` re-mints deliberately, and the
     /// next transport is free to key identity differently. Mirrors `MeshNetworkManagerTests`.
-    private func returningDevice() -> (first: PeerHandle, again: PeerHandle) {
+    ///
+    /// `tokens` carries the advertised presence tags, for the one test that must also be
+    /// *discovered* under the second handle; the default is inert filler for the gate tests.
+    private func returningDevice(tokens: [String] = ["tag"]) -> (first: PeerHandle, again: PeerHandle) {
         let endpoint = PeerEndpointKey(UUID())
         let make = {
             PeerHandle(
                 id: UUID(),
                 displayHint: "peer-\(UUID().uuidString.prefix(8))",
-                discoveryInfo: ["v": "1", "t": "tag"],
+                discoveryInfo: ["v": "1", "t": tokens.joined(separator: ",")],
                 advertisedFingerprint: nil,
                 endpoint: endpoint)
         }
@@ -440,5 +443,45 @@ struct PresenceHeartsTests {
                 "the cap must never be spent disconnecting a device we are already connected to")
         #expect(manager.heartChannelAdmission(for: peer(tokens: ["stranger"])) == .turnAway,
                 "control: a new device at the cap is refused")
+    }
+
+    /// The OUTBOUND send gate must recognize a returning device the way the inbound gates do.
+    ///
+    /// `sendHeart`'s duplicate check compared `peer.id`, so a friend whose handle churned while we
+    /// held their (not yet verified, so not reusable) heart connection was read as a stranger: the
+    /// send invited a device we are already connected to and stranded `pendingHeartSends` until the
+    /// connect timeout failed it. Under the endpoint test the send is refused at once, and the
+    /// connection we hold is left alone.
+    @Test func sendHeartDoesNotReInviteADeviceItAlreadyHoldsAConnectionTo() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHeartsHost()
+        let friendKA = kaPublic()
+        let friend = makeFriend(fingerprint: "f00df00df00df00d", keyAgreementPublicKey: friendKA)
+        host.proximityTrustVault.apply(peers: [friend], audit: [])
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { self.baseDate }
+        manager.activateForTesting()
+
+        // One device: connected under the first handle, re-advertising under the second. The second
+        // token keeps the ad out of the self/ghost exclusion (a subset of our own tags).
+        let epoch = IdentityService.presenceEpoch(at: baseDate)
+        let token = try identity.presenceTag(for: friendKA, epoch: epoch).base64EncodedString()
+        let theirOtherFriendTag = Data((0..<8).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
+        let robin = returningDevice(tokens: [token, theirOtherFriendTag])
+        seedHeartConnection(on: manager, peer: robin.first, host: host, identity: identity)
+        manager.handleDiscoveredPeerForTesting(robin.again)
+        #expect(manager.hasSendablePeerForTesting(fingerprint: friend.fingerprint),
+                "precondition: the send finds a peer to invite — the churned handle is the only one discovery holds")
+
+        manager.sendHeart(to: friend)
+
+        guard case .failed(let message) = manager.heartSendState else {
+            Issue.record("Expected the send to be refused, got \(manager.heartSendState)")
+            return
+        }
+        #expect(message.contains("Already sending"))
+        #expect(manager.heartConnectionCountForTesting == 1,
+                "and the connection the device already holds is neither doubled nor dropped")
     }
 }
