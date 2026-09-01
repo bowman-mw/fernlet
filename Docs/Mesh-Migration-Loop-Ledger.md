@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 12 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `190b6e0`
+**Started:** 2026-08-31 · **Iteration:** 13 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `21290b1`
 
 ## Items
 
@@ -28,7 +28,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 7 | Signed channel introduction productionized | 1 | 5 | done | `48b0c5c` | 12 named rejections, each a teardown; inbound now ranked by verified `sid`; `MeshIntroductionAuthority` is the item-8 seam (nil ⇒ refuse all) |
 | 8 | Transport selection in `MeshNetworkManager`; QUIC NOT default | 1 | 5, 7 | done | `099727d` | `MeshTransportSession` seam; Release can only answer MC; `FERNLET_MESH_TRANSPORT=quic` (DEBUG, one launch); manager IS the introduction authority; manager invite path finally tier-1-tested |
 | 9 | Rejection matrix at tier 2 | 2 | 8 | done | `7357110` | 6/6 rows + baseline observed sim↔sim over real QUIC; Lane C in runbook. Shipping removals refuse as `unknownIdentity` (barred stays empty by design) |
-| 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | Needs per-transfer photo streams in `NetworkPeerChannel` (item-5 residual). **Empty roster ⇒ QUIC refuses every peer** — first-meeting stranger admission is a P3 membership question (plan §8); flows need membership established first (MC or fixture) then transport switched |
+| 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | done | `596bcf8` | 6 flows observed both ways (slot commit, capabilities, chat, photos on new per-transfer streams, shop, 13+ age gate at the wire). Unreachable, recorded: hearts + moderation (mutual trust-vault ceremony — app-state, not transport; → P6), stranger admission (P3 §8). Photo-streams residual CLOSED |
 | 11 | Tier-3, and only this: AWDL path + Local Network permission prompt | 3 | 10 | todo | | Justify any addition to this row |
 | 12 | Convert the heartbeat flake test to a polled wait | 1 | — | done | `3ca3ddb` | Reused suite's `waitUntil` (2 s deadline, 200-poll floor); 3 isolated passes + suite |
 | 13 | **Verified pair converges to ONE tunnel.** Observed on-radio (item 9, both baseline runs): nil-`sid` window ⇒ both dial; inbound keys off `connection.id`, never colliding with the browsed key ⇒ suppression never fires. After introduction both sides KNOW the verified `sid` — collapse there by deterministic rule (dial preference), close the loser. Tier-1 repro on fakes + Lane C re-run as proof | 1 | 9 | done | `96337a3` | Fix real by construction, 14 tier-1 tests (repro red pre-fix). **Item 9's two-tunnel reading was churn misread as duplication** — Lane C can't form the duplicate (TXT arrives with browse); the collapse is a Lane B (hardware) row |
@@ -116,6 +116,14 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   double-dial window is physical-radio behaviour, so its collapse is proven at tier 1 + Lane B.
 - The full test suite resets simulator app state — Lane C scripts must re-harvest identities
   after any `xcodebuild test` run.
+- **Two awaited sends per frame desynchronize a shared QUIC stream** (item 10): length-prefix and
+  payload written separately + envelopes fired as independent tasks ⇒ interleaving at the
+  suspension ⇒ peer reads payload bytes as a length ⇒ tunnel dead. One contiguous write per frame
+  is load-bearing. Latent since item 5 — item 15's stable tunnel never sent an app frame.
+- Simulator `NIRangingSession` reports hardware support ⇒ friend handshakes land at the UWB gate,
+  never `awaitingManualCommit` — headless lanes must commit BOTH proximity gates.
+- QUIC stream lifetime = its Swift object's lifetime, and `inboundStreams` handlers run one task
+  per stream, concurrently — both measured on loopback, both load-bearing for the transfer design.
 - `MeshMultipeerSession.onDisconnectPeerRequestedForTesting` was deleted (item 8 seam replaced it);
   `Docs/Memory-Leak-Review-2026-08-17.md` lines 82/84 name it as a dated historical record — fine.
 
@@ -126,6 +134,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**10** — mesh flows at tier 2 over QUIC (Lane C harness; membership seeded first per the item-10
-note; photo streams residual to close on the way). The LAST item doable without the owner — after
-it: close-out per prompt §8, then stop (items 1/11 need the owner, 2 stays skip-gated).
+**Close-out** (prompt §8): mark P2 BUILT in the plan with landing SHAs, record deliberately-unfixed
+findings §6.4-style, re-tier P3–P6 for the restored sim lane, write the P3 handoff (plan §20, D4
+sealing constraint + §17.3 paperwork), memory note. Then STOP: items 1/11 need the owner; 2 stays
+skip-gated while `Localizable.xcstrings` is held.
