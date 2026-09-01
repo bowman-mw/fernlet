@@ -2107,3 +2107,264 @@ struct MeshTunnelConvergenceTests {
         #expect(outranking.linkTableForTesting.connectedCount == 1)
     }
 }
+
+// MARK: - MeshTransferStreamTableTests
+
+/// The per-transfer stream budget: which frames earn a stream of their own, how many may be open at
+/// once, and what happens on every way a transfer can end — including the peer vanishing mid-flight.
+///
+/// The policy is a pure value, so all of it is enumerable here. The framework half — opening the
+/// stream, writing the frame, reading the ack — needs two radios and is the runbook's Lane C.
+@MainActor
+@Suite(.serialized)
+struct MeshTransferStreamTableTests {
+
+    static let floor = MeshTransferStreamTable.bulkFloorBytes
+
+    // MARK: The floor
+
+    /// The fork itself. Below the floor a frame stays in order on the control stream; at or above it
+    /// the frame earns a stream of its own. The boundary is inclusive, and pinned here because "at
+    /// the floor" is the one value an off-by-one would move.
+    @Test func theBulkFloorSplitsControlFramesFromTransfers() {
+        #expect(MeshTransferStreamTable.route(reliableByteCount: Self.floor - 1) == .controlStream)
+        #expect(MeshTransferStreamTable.route(reliableByteCount: Self.floor) == .transferStream)
+        #expect(MeshTransferStreamTable.route(reliableByteCount: Self.floor + 1) == .transferStream)
+    }
+
+    /// Zero and one byte are control frames, not a degenerate transfer. A frame with no payload
+    /// never reaches the transport (`payloadLength` refuses a zero header), but the route must still
+    /// answer honestly rather than by accident of arithmetic.
+    @Test func anEmptyOrTinyFrameIsAControlFrame() {
+        #expect(MeshTransferStreamTable.route(reliableByteCount: 0) == .controlStream)
+        #expect(MeshTransferStreamTable.route(reliableByteCount: 1) == .controlStream)
+    }
+
+    /// Every frame the mesh sends in the ordinary course stays on the control stream, in order. This
+    /// is the assertion that keeps the reordering the fork buys away from the identity handshake,
+    /// chat, hearts, capabilities and moderation — the traffic whose order matters.
+    @Test func ordinaryTrafficNeverLeavesTheControlStream() {
+        // A sealed envelope around: a 500-character message, a capability list, a heart, a
+        // moderation signal, and a generous membership record.
+        for byteCount in [64, 512, 2_048, 8_192, 32_768] {
+            #expect(MeshTransferStreamTable.route(reliableByteCount: byteCount) == .controlStream,
+                    "a \(byteCount)-byte frame must stay in order on the control stream")
+        }
+    }
+
+    /// A friend photo — the payload plan §7.1 named — does cross the floor. 1400 px at q0.82 is
+    /// hundreds of kilobytes before the two base64 inflations, so this is the low end of real.
+    @Test func aFriendPhotoCrossesTheFloor() {
+        #expect(MeshTransferStreamTable.route(reliableByteCount: 200 * 1024) == .transferStream)
+    }
+
+    /// Totality: the route is one of exactly two answers, and both are reachable.
+    @Test func everyRouteIsReachable() {
+        let observed = Set([0, Self.floor].map { MeshTransferStreamTable.route(reliableByteCount: $0) })
+        #expect(observed == [.controlStream, .transferStream])
+    }
+
+    // MARK: Open, transfer, close
+
+    /// The whole life of one transfer: it takes a slot, holds it while it is open, and gives it back.
+    @Test func oneTransferTakesASlotAndGivesItBack() {
+        var table = MeshTransferStreamTable()
+        #expect(table.outbound.openCount == 0)
+
+        guard let id = table.openOutbound(reliableByteCount: Self.floor) else {
+            Issue.record("a bulk frame must be admitted on an empty budget")
+            return
+        }
+        #expect(table.outbound.openCount == 1)
+        #expect(table.outbound.isOpen(id))
+
+        table.closeOutbound(id)
+        #expect(table.outbound.openCount == 0)
+        #expect(!table.outbound.isOpen(id))
+    }
+
+    /// A sub-floor frame is not merely routed to the control stream — it never touches the budget.
+    /// A claim that consumed a slot and then declined to use it would starve real transfers.
+    @Test func aControlFrameNeverSpendsATransferSlot() {
+        var table = MeshTransferStreamTable()
+        #expect(table.openOutbound(reliableByteCount: Self.floor - 1) == nil)
+        #expect(table.outbound.openCount == 0)
+    }
+
+    /// The cap is exactly its capacity, and passing it falls back to the control stream rather than
+    /// failing: nil is the same answer a sub-floor frame gets, and it means the same thing.
+    @Test func theOutboundCapIsExactAndOverflowFallsBackToTheControlStream() {
+        var table = MeshTransferStreamTable()
+        var ids: [MeshTransferID] = []
+        for _ in 0..<MeshTransferStreamTable.maxConcurrentOutbound {
+            guard let id = table.openOutbound(reliableByteCount: Self.floor) else {
+                Issue.record("the budget refused a transfer below its own capacity")
+                return
+            }
+            ids.append(id)
+        }
+        #expect(table.outbound.openCount == MeshTransferStreamTable.maxConcurrentOutbound)
+        #expect(table.openOutbound(reliableByteCount: Self.floor) == nil, "the cap is the cap")
+
+        // One finishing makes room for exactly one more.
+        table.closeOutbound(ids[0])
+        #expect(table.openOutbound(reliableByteCount: Self.floor) != nil)
+        #expect(table.openOutbound(reliableByteCount: Self.floor) == nil)
+    }
+
+    /// The inbound cap is exact too, and a refused inbound transfer is the receiver declining to
+    /// serve a stream — the sender learns because its ack never arrives.
+    @Test func theInboundCapIsExact() {
+        var table = MeshTransferStreamTable()
+        for _ in 0..<MeshTransferStreamTable.maxConcurrentInbound {
+            #expect(table.openInbound() != nil)
+        }
+        #expect(table.openInbound() == nil)
+        #expect(table.inbound.openCount == MeshTransferStreamTable.maxConcurrentInbound)
+    }
+
+    /// The two directions are independent budgets. A peer sending us four photos must not stop us
+    /// sending it one.
+    @Test func theTwoDirectionsDoNotShareABudget() {
+        var table = MeshTransferStreamTable()
+        for _ in 0..<MeshTransferStreamTable.maxConcurrentInbound {
+            #expect(table.openInbound() != nil)
+        }
+        #expect(table.openInbound() == nil, "inbound is full")
+        #expect(table.openOutbound(reliableByteCount: Self.floor) != nil, "outbound is untouched")
+    }
+
+    // MARK: The failure path
+
+    /// **The peer vanished mid-transfer.** The write throws, the `defer` releases, and the slot is
+    /// free again — with nothing else disturbed. The budget is the thing that must not wedge, and
+    /// the release is keyed by id so it releases only its own.
+    @Test func aTransferThatFailsMidFlightReleasesItsOwnSlotAndNoOther() {
+        var table = MeshTransferStreamTable()
+        guard let doomed = table.openOutbound(reliableByteCount: Self.floor),
+              let survivor = table.openOutbound(reliableByteCount: Self.floor) else {
+            Issue.record("two transfers must fit an empty budget")
+            return
+        }
+        table.closeOutbound(doomed)
+        #expect(table.outbound.openCount == 1)
+        #expect(table.outbound.isOpen(survivor), "the surviving transfer keeps its slot")
+        #expect(!table.outbound.isOpen(doomed))
+    }
+
+    /// Releasing twice is a no-op. Both a `defer` and a teardown can reach the same transfer, and a
+    /// counter would have handed out a slot that was never free.
+    @Test func releasingTheSameTransferTwiceFreesOneSlotNotTwo() {
+        var table = MeshTransferStreamTable()
+        guard let first = table.openOutbound(reliableByteCount: Self.floor),
+              table.openOutbound(reliableByteCount: Self.floor) != nil else {
+            Issue.record("two transfers must fit an empty budget")
+            return
+        }
+        table.closeOutbound(first)
+        table.closeOutbound(first)
+        #expect(table.outbound.openCount == 1, "a double release must not free a live transfer's slot")
+    }
+
+    /// Ids are never reused while the budget churns, so a late release from a transfer that already
+    /// ended cannot free a slot a later transfer is holding.
+    @Test func anIdIsNeverHandedOutTwice() {
+        var table = MeshTransferStreamTable()
+        var seen: Set<MeshTransferID> = []
+        for _ in 0..<(MeshTransferStreamTable.maxConcurrentOutbound * 4) {
+            guard let id = table.openOutbound(reliableByteCount: Self.floor) else {
+                Issue.record("the budget must have room after each release")
+                return
+            }
+            #expect(seen.insert(id).inserted, "a transfer id was reused")
+            table.closeOutbound(id)
+        }
+    }
+
+    // MARK: The ack
+
+    /// The ack is one frozen byte. It is a wire token, not copy, and its size is what the sender
+    /// reads back — the two must not drift.
+    @Test func theAckIsOneFrozenByte() {
+        #expect(MeshTransferStreamTable.ack == Data([0x06]))
+        #expect(MeshTransferStreamTable.ack.count == 1)
+        #expect(MeshTransferStreamTable.ackByte == 0x06)
+    }
+
+    // MARK: Wiring
+
+    /// The budget is reachable through the production read a channel exposes, and a claim shows up
+    /// on it. `bookTunnelForTesting` mints the same channel `activate` hands an owner, so this walks
+    /// the real path: channel → session → identity map → tunnel → table.
+    @Test func aClaimIsVisibleThroughTheChannelsOwnRead() {
+        let session = NetworkMeshSession()
+        let key = MeshLinkKey("browsed-endpoint")
+        session.bookTunnelForTesting(
+            key,
+            role: .initiator,
+            verified: MeshVerifiedPeer(
+                signingPublicKey: Data(repeating: 0x11, count: 32),
+                fingerprint: "abcd-efgh-ijkl",
+                sessionID: "aaaa"
+            )
+        )
+        guard let channel = session.channels.first else {
+            Issue.record("a booked tunnel must carry a channel")
+            return
+        }
+        #expect(channel.openTransferCount == 0)
+
+        guard let id = session.claimOutboundTransferForTesting(key, byteCount: Self.floor) else {
+            Issue.record("a bulk frame must be admitted on a live tunnel")
+            return
+        }
+        #expect(channel.openTransferCount == 1)
+
+        session.releaseOutboundTransferForTesting(key, id: id)
+        #expect(channel.openTransferCount == 0)
+    }
+
+    /// A control-sized frame claims nothing through the production path either.
+    @Test func aControlSizedFrameClaimsNothingOnALiveTunnel() {
+        let session = NetworkMeshSession()
+        let key = MeshLinkKey("browsed-endpoint")
+        session.bookTunnelForTesting(key, role: .initiator, verified: nil)
+        #expect(session.claimOutboundTransferForTesting(key, byteCount: Self.floor - 1) == nil)
+        #expect(session.channels.first?.openTransferCount == 0)
+    }
+
+    /// **A budget cannot outlive the tunnel that bounded it.** The table is stored in the tunnel
+    /// record, so a torn-down link takes its open transfers with it — which is what makes "a peer
+    /// that vanished mid-transfer cannot wedge the budget" structural rather than a swept invariant.
+    @Test func aTornDownTunnelTakesItsOpenTransfersWithIt() {
+        let session = NetworkMeshSession()
+        let key = MeshLinkKey("browsed-endpoint")
+        session.bookTunnelForTesting(key, role: .initiator, verified: nil)
+        #expect(session.claimOutboundTransferForTesting(key, byteCount: Self.floor) != nil)
+        #expect(session.channels.first?.openTransferCount == 1)
+
+        session.stop()
+        #expect(session.tunnelKeysForTesting.isEmpty)
+        #expect(session.claimOutboundTransferForTesting(key, byteCount: Self.floor) == nil,
+                "there is no tunnel left to claim a slot on")
+    }
+
+    /// A peer with no tunnel has no transfers, and asking does not mint one.
+    @Test func anUnknownPeerHasNoOpenTransfers() {
+        let session = NetworkMeshSession()
+        let stranger = PeerHandle(
+            id: UUID(), displayHint: "stranger", discoveryInfo: nil, advertisedFingerprint: nil
+        )
+        #expect(session.openTransferCount(for: stranger) == 0)
+        #expect(session.tunnelKeysForTesting.isEmpty)
+    }
+
+    // MARK: The control stream's id
+
+    /// The control stream is named by RFC 9000's stream numbering, not by a latch. The dialing side
+    /// opens exactly one stream before the introduction, so the listening side can recognise it by
+    /// id alone — and every other inbound stream is a transfer.
+    @Test func theControlStreamIsTheDialingSidesFirstStream() {
+        #expect(NetworkMeshSession.controlStreamID == 0)
+    }
+}

@@ -46,6 +46,11 @@ enum MeshMatrixDebugOptions {
     /// "every peer is a stranger" state a device with no mesh is really in.
     static let membersKey = "FERNLET_MESH_MATRIX_MEMBERS"
 
+    /// `FERNLET_MESH_FLOWS=<csv>` — the app-layer flows to drive once a peer's slot commits, from
+    /// ``MeshFlowVerb``'s frozen tokens. Absent means the harness seeds and joins and drives
+    /// nothing, which is exactly what it did before flows existed.
+    static let flowsKey = "FERNLET_MESH_FLOWS"
+
     /// Ed25519 public-key length. Anything else in the member list is not a key and is dropped.
     static let signingKeyByteCount = 32
 
@@ -64,12 +69,28 @@ enum MeshMatrixDebugOptions {
     /// The signing keys to seed as members.
     static let seededMemberKeys = parseKeys(ProcessInfo.processInfo.environment[membersKey])
 
+    /// The app-layer flows this run drives. Empty means none.
+    static let flows = parseFlows(ProcessInfo.processInfo.environment[flowsKey])
+
     /// Frozen diagnostic English naming what the launch environment asked for, for the transcript.
     static var summary: String {
         let environment = ProcessInfo.processInfo.environment
         return "label=\(label) transport=\(environment["FERNLET_MESH_TRANSPORT"] ?? "default") "
             + "chaos=\(environment["FERNLET_MESH_CHAOS"] ?? "off") "
-            + "chaosBarred=\(environment["FERNLET_MESH_CHAOS_BARRED"] == nil ? "none" : "set")"
+            + "chaosBarred=\(environment["FERNLET_MESH_CHAOS_BARRED"] == nil ? "none" : "set") "
+            + "flows=\(flows.isEmpty ? "none" : flows.map(\.rawValue).joined(separator: "+"))"
+    }
+
+    /// Parses the comma-separated flow list, ignoring unrecognized tokens and bounded by the number
+    /// of flows that exist (Power of 10 rule 2). Order is the caller's; each flow fires once.
+    private static func parseFlows(_ raw: String?) -> [MeshFlowVerb] {
+        guard let raw, !raw.isEmpty else { return [] }
+        var parsed: [MeshFlowVerb] = []
+        for token in raw.split(separator: ",").prefix(MeshFlowVerb.allCases.count) {
+            guard let verb = MeshFlowVerb(rawValue: String(token)), !parsed.contains(verb) else { continue }
+            parsed.append(verb)
+        }
+        return parsed
     }
 
     /// Parses comma-separated base64 signing keys, dropping anything that is not exactly one
@@ -137,8 +158,12 @@ enum MeshRejectionMatrixHarness {
         echo("identity fingerprint=\(manager.localFingerprint) "
             + "signingKey=\(manager.localSigningPublicKey.base64EncodedString())")
         seedDescriptor(manager: manager)
+        // Before `startJoin()`, never after: a peer's capability list is snapshotted when its
+        // coordinator is built, so a provider the flow driver sets later would never reach the wire.
+        MeshFlowDriver.prepare(manager: manager)
         manager.startJoin()
         echo("radios started; searching=\(manager.isSearching)")
+        MeshFlowDriver.start(manager: manager)
     }
 
     /// Applies the seeded descriptor, or says out loud that none was asked for.

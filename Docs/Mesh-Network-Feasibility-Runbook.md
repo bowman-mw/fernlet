@@ -488,6 +488,121 @@ is the placeholder for a tunnel that died before anyone proved who they were.
 `The QUIC tunnel gave up after 3 attempts` on the dialing side and silence thereafter. A peer that
 refuses us is re-offered exactly three times, not forever.
 
+#### The app flows (answered 2026-09-01, P2 item 10)
+
+The rejection matrix proved the tunnel is *selective*. This asks the next question: **do the app
+layers above it work over QUIC?** Same two Simulators, same seeded mesh, driven by
+`FERNLET_MESH_FLOWS` — the flow driver commits each device's own slot and then calls the same public
+entry points the UI calls (`sendTempMessage`, `addPhoto`), echoing what each side observed under
+`[mesh-flow]`.
+
+```
+SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
+SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=<uuid> \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<base64-key,base64-key> \
+SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit,capabilities,chat,photo,shop \
+xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
+```
+
+| Variable | Read by | Behaviour when absent |
+| --- | --- | --- |
+| `FERNLET_MESH_FLOWS` | `MeshMatrixDebugOptions` → `MeshFlowDriver` (app target) | No flow is driven and no poll runs: the harness seeds and joins exactly as it did before flows existed. |
+
+Its tokens are `commit`, `capabilities`, `chat`, `chatAgeGated`, `photo`, `shop`. Committing is
+unconditional once *any* flow is asked for — every other flow needs a committed slot — so `commit`
+names a run that wants only that. Two seams the driver sets, both **before** `startJoin()` because a
+peer's capability list is snapshotted when its coordinator is built: `chatAllowedProvider` (a
+Simulator can reach no age determination, and `AgeGate.chat` refuses self-attestation) and the
+clothing shop's two providers (standing in for the `allowNearbyClothingShares` setting and a
+designed catalogue). Nothing is persisted; both die with the process.
+
+**One thing the Simulator forces.** `NIRangingSession` reports hardware support there, so the friend
+handshake lands at `awaitingProximityCommit` — the UWB gate — and the 15 cm dwell behind it can
+never complete without a radio. The driver therefore commits at **both** gates through
+`commitManualProximity`, which is exactly what the app's own debug "Force" control does with a stuck
+UWB gate. It stands in for that control, not for a user's consent decision.
+
+Run of 2026-09-01, ~130 s, iPhone 17 (A) + iPhone 17 Pro (B), both rostered in one mesh over QUIC.
+The run is symmetric: each device drove every flow and observed the peer's.
+
+| Flow | Result | Evidence |
+| --- | --- | --- |
+| **Slot commit** (the app handshake end to end) | **Observed**, both sides | `[mesh-flow] committing slot gate=awaitingProximityCommit` → `[mesh-flow] slots total=1 committed=1 states=[connected]` on A and on B |
+| **Capabilities exchange** | **Observed**, both sides | `[mesh-flow] capabilities peer=[activities,messages,moderation,photos,shop,wire2]` on both — the peer's advertised list, read off `ProximityCoordinator.State.connected(peer:)` after the signed identity introduction |
+| **Chat message delivered** | **Observed**, both directions | A: `[mesh-flow] sending chat isChatAllowed=true` then `[mesh-flow] chat received=1 sent=1`; B: the same pair. Each side sent one and received the other's |
+| **Photo transferred (per-transfer streams)** | **Observed**, both directions, **on the new streams** | A: `[mesh-flow] sending photo jpegBytes=437040` → `[mesh-quic] transfer opened bytes=483282 stream=1` → `transfer sent bytes=483282 stream=1`, and B: `[mesh-quic] transfer received bytes=483282 stream=1` → `[mesh-flow] photos received=1`. The reverse crossed on B's `stream=4`. Two different stream ids because the two directions exercise the two acceptors: an odd id is server-initiated (served by the dialing side's acceptor), an even one client-initiated (routed past the control stream by the listening side's) |
+| **Shop / clothing catalogue sync** | **Observed**, both sides | `[mesh-flow] shop peerCatalogs=1` on A and on B — the manager offers a catalogue once per slot at commit, so nothing is sent by hand |
+| **Age gate — the 13+ mesh-chat gate** | **Observed**, both halves, both sides | Gate open: `messages` present in the capability list above and `chat received=1 sent=1`. Gate closed (`FERNLET_MESH_FLOWS=…,chatAgeGated`): `[mesh-flow] ageGate chatAllowed=false`, `[mesh-flow] capabilities peer=[activities,moderation,photos,shop,wire2]` — **`messages` is gone from the wire** — and `[mesh-flow] sending chat isChatAllowed=false` followed by `chat received=0 sent=0` for the rest of the run. Both enforcement points fire over QUIC exactly as they do over MC: the capability is withheld and the send is refused |
+| **In-session hearts** | **Unreachable in this slice: mutual trust-vault records.** Not a transport limit | `sendSessionHeart(to:)` takes a `ProximityTrustedPeerRecord` and the receiver requires `ProximityTrustVault.isTrustedProximityPeer`; a fresh pair of Simulators has neither. Reaching it needs a *second* session — commit, end the session, complete the `pendingFriendReview` on both devices to write the vault rows, then reconnect — plus `allowNearbyHearts` on, which has no manager-level seam. The driver drives one session |
+| **Moderation signal** | **Unreachable in this slice: same trust-vault precondition** | `sendModerationReports` gates on `isTrustedProximityPeer(signingPublicKey:)` for the recipient and on a non-empty `ownModerationReportsProvider`; the receiver re-checks vault trust before verifying a single row. Two devices that have never kept each other as friends exchange nothing, correctly. The `moderation` **capability** is advertised and was observed in every capability list above |
+| **First-meeting stranger admission / the QR ceremony's stranger half** | **Unreachable at P2: membership (plan §8)** | An empty roster makes every peer a stranger and the QUIC introduction refuses the tunnel before any app frame — row 1 of the rejection matrix. Admitting a peer who is *not yet* a member is the membership question P3 owns; there is nothing at P2 to admit them into |
+
+#### The defect this lane found: two writes per frame desynchronize the control stream
+
+The first three attempts at this run never reached a single flow. The tunnel came up, the slot
+committed, and within a second both sides died with:
+
+```
+[mesh-quic] tunnelEnded controlStreamEnded fb795f343c2954da live=true tunnels=0 …:
+            The outbound QUIC tunnel ended: … (ProximityKit.MeshTransportError error 2.)
+```
+
+`MeshTransportError` error 2 is `invalidFrameLength` — the reader refused a length header. The cause
+was in `sendFramed`, which wrote a frame as **two** awaited sends, the length prefix and then the
+payload. Every frame on a tunnel shares one control stream, and `MeshNetworkManager` fires its
+envelopes as independent tasks: a photo manifest, a vouch list, a shop catalogue and a shop request
+all leave within the same instant of a slot committing. Two of those tasks suspend at the gap
+between the two sends, and the peer reads one frame's header followed by another frame's first four
+bytes as a length.
+
+Reproduced in isolation on a loopback QUIC pair, six concurrent writers, twelve frames each:
+
+```
+split=true  writers=6 frames=72   READER: a frame's bytes were not uniform after 0 good frames — DESYNC   (×3)
+split=false writers=6 frames=72   READER: 72 frames read intact — NO DESYNC                              (×3)
+```
+
+The fix is one contiguous write per frame — concurrent sends may be ordered either way, but neither
+can land inside the other, and the bytes on the wire are identical. It is applied to `sendFramed`
+and, for uniformity, to the handshake's `sendIntroductionFrame`. **The per-transfer streams
+deliberately keep two writes**: such a stream is opened, written and closed by one task, so it has no
+second writer to interleave with, and a bulk payload is exactly the one it would be wasteful to copy.
+
+This was latent, not new. Item 15's runs held a tunnel for 170 s because they never sent an app
+frame — the lane had no committed slot. The first frame-carrying run found it immediately.
+
+#### What per-transfer streams are, and what they are not
+
+A reliable frame at or above `MeshTransferStreamTable.bulkFloorBytes` (64 KiB) is written on a QUIC
+stream opened for it alone, so a several-hundred-kilobyte photo cannot park a heartbeat, a chat
+message or a moderation signal behind itself. Everything smaller stays in order on the control
+stream, which is what keeps the reordering this buys away from the traffic whose order matters.
+
+Nothing above the transport can tell. One transfer stream carries exactly one length-framed payload,
+delivered as exactly one `InboundPeerFrame`, under the same 16 MiB ceiling both radios enforce —
+`MeshNetworkManager` sends a friend photo the same way over MultipeerConnectivity and over QUIC. No
+chunking, no resume, no new envelope, no signed byte moved.
+
+Two properties worth recording because they were measured rather than assumed:
+
+* **`inboundStreams` handlers run concurrently**, one task per stream. The listening side's handler
+  for the control stream blocks for the tunnel's whole life; a loopback pair still delivered a
+  second stream to a second handler while the first was parked in its receive loop. Without that,
+  the listening side could not serve a transfer at all.
+* **A QUIC stream's lifetime is its Swift object's.** A sender that returned the moment its last
+  write returned tore the stream down under a peer that had not finished reading. The one-byte ack
+  the receiver writes back is what holds the object until the payload has landed — and it turns "the
+  peer vanished mid-transfer" into a thrown send the caller already handles rather than a silent
+  truncation.
+
+The budget cannot wedge. It lives **in** the tunnel record, so a torn-down link takes its open
+transfers with it; an exhausted outbound budget falls back to the control stream (delivering a bulk
+frame in order is always allowed); and a refused inbound transfer goes back un-acked, so the sender's
+write fails loudly and recovery is the next manifest sync — which is the MC photo path's own failure
+semantics reached by a different route.
+
 ### Lane B — physical multi-device and background (deferred to P8; see plan §15)
 
 These rows do not gate P1 or P2. They gate **shipping background continuation**, and they are
