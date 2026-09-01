@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 8 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `dabe9b8`
+**Started:** 2026-08-31 · **Iteration:** 9 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `3dfc75d`
 
 ## Items
 
@@ -26,11 +26,11 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | done | `5835b52` | Full duty list in one slice; 47 tier-1 tests, no `.discovered`, TXT carries `sid`/no `fp`, cellular prohibited, TLS identity ephemeral. Residuals live in items 7/8/10 + P9 |
 | 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | done | `5835b52` | `localLinkMarkers` + `permittedLocalLinkFiles` (2 files), disjoint-by-test from the HTTP family, planted-marker proven |
 | 7 | Signed channel introduction productionized | 1 | 5 | done | `48b0c5c` | 12 named rejections, each a teardown; inbound now ranked by verified `sid`; `MeshIntroductionAuthority` is the item-8 seam (nil ⇒ refuse all) |
-| 8 | Transport selection in `MeshNetworkManager`; QUIC NOT default | 1 | 5, 7 | todo | | |
-| 9 | Rejection matrix at tier 2 | 2 | 8 | todo | | Drive by making the Simulator misbehave |
-| 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | Needs per-transfer photo streams in `NetworkPeerChannel` (named residual from item 5) |
+| 8 | Transport selection in `MeshNetworkManager`; QUIC NOT default | 1 | 5, 7 | done | `099727d` | `MeshTransportSession` seam; Release can only answer MC; `FERNLET_MESH_TRANSPORT=quic` (DEBUG, one launch); manager IS the introduction authority; manager invite path finally tier-1-tested |
+| 9 | Rejection matrix at tier 2 | 2 | 8 | todo | | Drive by making the Simulator misbehave. **Item-0 re-tier applies: run sim↔sim on one Mac** (production tie-break never consults TXT/sim marking; `FERNLET_MESH_TRANSPORT=quic` + DEBUG hooks) — no device needed |
+| 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | Needs per-transfer photo streams in `NetworkPeerChannel` (item-5 residual). **Empty roster ⇒ QUIC refuses every peer** — first-meeting stranger admission is a P3 membership question (plan §8); flows need membership established first (MC or fixture) then transport switched |
 | 11 | Tier-3, and only this: AWDL path + Local Network permission prompt | 3 | 10 | todo | | Justify any addition to this row |
-| 12 | Convert `ProximityCoordinatorTests.heartbeatAcceleratesDuringTransferAndUsesCooldownAfterTransfer` from fixed 20 ms sleep to a polled wait (deadline + min-poll floor, house idiom) | 1 | — | todo | | Owner 2026-08-31: do in THIS loop, not a spawned session; chip task_916baef8 dismissed. Good bundle candidate with any small iteration |
+| 12 | Convert the heartbeat flake test to a polled wait | 1 | — | done | `3ca3ddb` | Reused suite's `waitUntil` (2 s deadline, 200-poll floor); 3 isolated passes + suite |
 
 ## Blocked on owner
 
@@ -99,6 +99,10 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 - Epoch gate at introduction is deliberately soft (item 7): equal **or one side empty** — a joining
   peer holds no group key yet, so strict equality would make admission impossible. Two different
   non-empty epochs ⇒ `.divergentEpoch`. P3 §8.4's merge relaxes further; flagged in source.
+- Flake protocol, refined again (iteration 9): if the sim is already Booted, `simctl boot` is a
+  no-op — budget a plain retry, not a boot. Boot+settle only cures the not-yet-booted case.
+- `MeshMultipeerSession.onDisconnectPeerRequestedForTesting` was deleted (item 8 seam replaced it);
+  `Docs/Memory-Leak-Review-2026-08-17.md` lines 82/84 name it as a dated historical record — fine.
 
 ## Known-red gates that are NOT this phase's fault
 
@@ -107,7 +111,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**8** — transport selection in `MeshNetworkManager` (both conformers selectable; QUIC NOT default;
-wire `MeshIntroductionAuthority`; this introduces the long-missing injection seam), **bundled with
-item 12** (the polled-wait flake fix — tiny, file-disjoint, its own commit). Item 1 waits on a
-device; item 2 stays skip-gated while `Localizable.xcstrings` is held by another session.
+**9** — the rejection matrix over the real QUIC radio, sim↔sim on one Mac (item-0 re-tier; no
+device needed). The tier-1 halves are already pinned by item 7's tests — item 9 proves them over
+real Bonjour/TLS with runbook evidence. Item 1 waits on a device; item 2 stays skip-gated while
+`Localizable.xcstrings` is held by another session.
