@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 6 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `1f2d56f`
+**Started:** 2026-08-31 · **Iteration:** 7 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `80b088d`
 
 ## Items
 
@@ -23,13 +23,14 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 3c | Outbound `sendHeart` gate: endpoint recognition via `hasHeartConnection(with:)` | 1 | 3b | done | `8c258b5` | Negative-checked against the old line; 45 tests in 4 suites green |
 | 3d | Close the id-vs-endpoint family for good (timeout path + exhaustive audit) | 1 | 3c | done | `2f273a9` | 14 sites fixed; full audit table with per-site verdicts is in the commit message. FAMILY CLOSED — do not re-audit |
 | 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | done | `ce91f5d` | Policy sound, 18 tests both-sides-exhaustive. Late TXT only ever WITHDRAWS dial permission (double-dial possible pre-TXT, deadlock impossible) |
-| 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | todo | | May take 2–3 iterations. **Two item-4 constraints:** (a) decide whether to emit `.discovered` — `ProximityCoordinator.shouldInviteDiscoveredPeer` (dormant) points the OPPOSITE way (`<`) to `shouldInitiateInvite` (`>`); if emitted, align one direction first. (b) TXT advertisement MUST carry `sid` (probe's doesn't) or the tie-break degrades to both-sides-dial. No `fp` in TXT (decision table) |
+| 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | in-flight | | Slice 1 + item 6 dispatched (iteration 7). **Two item-4 constraints:** (a) decide whether to emit `.discovered` — `ProximityCoordinator.shouldInviteDiscoveredPeer` (dormant) points the OPPOSITE way (`<`) to `shouldInitiateInvite` (`>`); if emitted, align one direction first. (b) TXT advertisement MUST carry `sid` (probe's doesn't) or the tie-break degrades to both-sides-dial. No `fp` in TXT (decision table) |
 | 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | todo | | Same commit as first QUIC file |
 | 7 | Signed channel introduction productionized | 1 | 5 | todo | | Serializer + registry framing together |
 | 8 | Transport selection in `MeshNetworkManager`; QUIC NOT default | 1 | 5, 7 | todo | | |
 | 9 | Rejection matrix at tier 2 | 2 | 8 | todo | | Drive by making the Simulator misbehave |
 | 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | |
 | 11 | Tier-3, and only this: AWDL path + Local Network permission prompt | 3 | 10 | todo | | Justify any addition to this row |
+| 12 | Convert `ProximityCoordinatorTests.heartbeatAcceleratesDuringTransferAndUsesCooldownAfterTransfer` from fixed 20 ms sleep to a polled wait (deadline + min-poll floor, house idiom) | 1 | — | todo | | Owner 2026-08-31: do in THIS loop, not a spawned session; chip task_916baef8 dismissed. Good bundle candidate with any small iteration |
 
 ## Blocked on owner
 
@@ -73,8 +74,8 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 - Recipe picker rows can't reach an endpoint directly — device recognition from a row is
   three-arm: row id ∨ proven fingerprint ∨ endpoint of the handle the row was minted from.
 - `ProximityCoordinatorTests.heartbeatAcceleratesDuringTransferAndUsesCooldownAfterTransfer`
-  flaked once under full-suite load (fixed 20 ms sleep vs 80 ms send); passes alone. A spawn-task
-  chip exists to convert it to a polled wait — not this loop's work.
+  flaked once under full-suite load (fixed 20 ms sleep vs 80 ms send); passes alone. Now item 12
+  (owner folded it into this loop; the new-session chip was dismissed).
 - **Runner-hang flake protocol updated (iteration 6):** `simctl shutdown all` did NOT cure it —
   three consecutive ~371 s hangs. What works: `xcrun simctl boot "iPhone 17"` + ~20 s settle
   *before* `xcodebuild`. A concurrent session shares this Mac's simulator fleet.
