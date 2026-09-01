@@ -726,4 +726,72 @@ struct ProximityRecipeShareCapTests {
         #expect(manager.channelAdmission(for: makePeer(named: "Blair")) == .turnAway,
                 "recipe sharing links two Fernlets at a time — the third is turned away")
     }
+
+    /// The OUTBOUND cap gate must recognize the picked row's device the way the channel gates do.
+    ///
+    /// The picker row's `id` is the discovery handle's `id`, and the cap gate compared it against
+    /// the connection's `id` — also a handle `id`. So a device that connected under a churned
+    /// handle refused the user's send to the very device it was paired with, naming that device as
+    /// the peer it was "still sharing with". The gate now asks the same same-device question the
+    /// invitation and channel-ready gates ask.
+    @Test func sendToTheDeviceAlreadyPairedIsNotRefusedByTheOutboundCap() throws {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+        manager.markRunningForTesting()  // keeps sendRecipeShare's start() from touching radios
+        let alex = makeReturningDevice(named: "Alex")
+        // Discovery holds the first handle (so the row is minted from it); the pairing came up
+        // under the second.
+        manager.multipeerSessionForTesting.onPeerDiscovered?(alex.first)
+        let recipient = try #require(manager.nearbyRecipients.first)
+        registerConnection(on: manager, peer: alex.again)
+
+        manager.sendRecipeShare(makePayload(), to: recipient)
+
+        if case .failed(let message) = manager.sendState {
+            Issue.record("The device we are paired with must not be refused by its own cap: \(message)")
+        }
+        #expect(manager.connectionCountForTesting == 1,
+                "and the live pairing is neither doubled nor dropped")
+
+        // Control: a genuinely different device is still refused while the pairing is held.
+        manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+            id: UUID(), displayName: "Blair", fingerprint: nil))
+        guard case .failed(let message) = manager.sendState else {
+            Issue.record("Expected the outbound cap to refuse a third device, got \(manager.sendState)")
+            return
+        }
+        #expect(message.contains("two Fernlets"))
+    }
+
+    /// The sender-side connect timeout must stand down once the pairing exists, however the device
+    /// arrived. Its stage check compared the row `id` against connection `id`s, so a device that
+    /// answered under a churned handle left the timer live: it failed the send as "no answer" and
+    /// best-effort kicked the pairing that was in fact progressing.
+    @Test func connectTimeoutStandsDownWhenTheDeviceAnsweredUnderAChurnedHandle() async throws {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+        manager.markRunningForTesting()
+        manager.connectTimeoutSeconds = 0.05
+        let alex = makeReturningDevice(named: "Alex")
+        manager.multipeerSessionForTesting.onPeerDiscovered?(alex.first)
+        let recipient = try #require(manager.nearbyRecipients.first)
+
+        manager.sendRecipeShare(makePayload(), to: recipient)
+        #expect(manager.sendState == .connecting(recipientName: "Alex"))
+        // The device answers under its OTHER handle — registerConnection is the production
+        // channel-ready add path, which is also what cancels the timer.
+        registerConnection(on: manager, peer: alex.again)
+
+        // A fixed wait is the right shape for "this must NOT happen": ten times the timer it is
+        // waiting out, on a decision the timer makes the moment it fires.
+        try await Task.sleep(for: .seconds(0.5))
+
+        if case .failed(let message) = manager.sendState {
+            Issue.record("The connect timeout must not fail a send whose device is connected: \(message)")
+        }
+        #expect(manager.connectionCountForTesting == 1,
+                "and the pairing the timeout would have kicked is untouched")
+        #expect(manager.engagedRecipientID == recipient.id,
+                "the picked row stays the engaged one — the timeout never cleared the send")
+    }
 }

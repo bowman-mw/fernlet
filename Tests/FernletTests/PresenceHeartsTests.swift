@@ -484,4 +484,56 @@ struct PresenceHeartsTests {
         #expect(manager.heartConnectionCountForTesting == 1,
                 "and the connection the device already holds is neither doubled nor dropped")
     }
+
+    /// The PRE-CONNECT RETRY must recognize a returning device the way every other gate does.
+    ///
+    /// `handleHeartConnectTimeout` and its delayed re-invite both asked "did the channel come up?"
+    /// as `heartConnections.contains { $0.id == peerID }`. A device that answered the invite under
+    /// a churned handle therefore read as never having connected: the timeout kicked the live
+    /// connection it already held and re-invited it, and each retry did it again until the attempt
+    /// budget ran out and the send failed. Both now ask `heartConnectRetryIsMoot(for:friend:)`,
+    /// which recognizes the device by endpoint, so the retry stands down.
+    @Test func connectTimeoutStandsDownWhenTheDeviceAnsweredUnderAChurnedHandle() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHeartsHost()
+        let friendKA = kaPublic()
+        let friend = makeFriend(fingerprint: "beefbeefbeefbeef", keyAgreementPublicKey: friendKA)
+        host.proximityTrustVault.apply(peers: [friend], audit: [])
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { self.baseDate }
+        manager.activateForTesting()
+
+        let epoch = IdentityService.presenceEpoch(at: baseDate)
+        let token = try identity.presenceTag(for: friendKA, epoch: epoch).base64EncodedString()
+        let theirOtherFriendTag = Data((0..<8).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
+        let robin = returningDevice(tokens: [token, theirOtherFriendTag])
+
+        // The send goes out to the handle discovery holds, arming the pre-connect timer under it.
+        manager.handleDiscoveredPeerForTesting(robin.first)
+        manager.sendHeart(to: friend)
+        guard case .connecting = manager.heartSendState else {
+            Issue.record("Expected the send to reach the connecting stage, got \(manager.heartSendState)")
+            return
+        }
+        #expect(!manager.heartConnectRetryIsMoot(for: robin.first, friend: friend),
+                "precondition: with the send pending and nothing connected, the retry is live")
+
+        // …and the device answers under its OTHER handle, so the record's id is not the timer's.
+        seedHeartConnection(on: manager, peer: robin.again, host: host, identity: identity)
+        #expect(manager.heartConnectRetryIsMoot(for: robin.first, friend: friend),
+                "the retry must see the device as connected, whichever handle it arrived under")
+
+        manager.fireHeartConnectTimeoutForTesting(peer: robin.first, friend: friend)
+
+        #expect(!manager.diagnosticEvents.contains { $0.message == "Retrying heart invite." },
+                "a device that is already connected must never be kicked and re-invited")
+        #expect(manager.heartConnectionCountForTesting == 1,
+                "and the live connection is left exactly as it was")
+        if case .failed = manager.heartSendState {
+            Issue.record("The retry must not fail a send whose device is connected")
+        }
+        #expect(manager.heartConnectRetryIsMoot(for: peer(tokens: ["stranger"]), friend: friend),
+                "control: a device with no pending send of its own has no retry to run")
+    }
 }
