@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 1 · **Tree at seed:** main = `16b9cb2` (pushed); loop running on `ae274da`
+**Started:** 2026-08-31 · **Iteration:** 2 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `1540d5b`
 
 ## Items
 
@@ -18,7 +18,8 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 0 | Sim↔sim experiment (prompt §2). Timeboxed to ONE iteration, DEBUG toggle only. | 2 | — | done | `926a791` | **CONNECTED** — Bonjour + QUIC/TLS + signed introduction both ways; multi-node on one Mac is a real lane (re-tier P3–P6 at close-out). Datagrams didn't negotiate — see surprises |
 | 1 | Capture Lane A diagnostic report; promote runbook rows *Observed working* → *Pass* | 2 | 1 device | todo | | Owner reports it connects; no report captured. Must also settle the datagram row (see surprises) |
 | 2 | String-catalog repair (9 stale keys, pre-existing) | 1 | quiet tree | todo | | SKIP if `Localizable.xcstrings` still held by another session |
-| 3 | §6.5 root fix: stable `id` per session + close §6.4 asymmetries 1–3 | 1 | — | todo | | Behaviour change — own it with tests |
+| 3 | §6.5 root fix: stable `id` per session + close §6.4 asymmetries 1–3 | 1 | — | done | `b8d7a5a` | `SessionPeerIdentity` minted once per peer, session-scoped, cleared in `stop()`; 9 tier-1 tests; goldens un-re-pinned |
+| 3b | Close the two remaining id-only `handleChannelReady` guards: `ProximityRecipeShareManager.swift:444`, `PresenceManager.swift:706` — same family as item 3, asymmetric vs their own `shouldAdmitChannel` | 1 | 3 | todo | | Rare post-fix (needs cap-64 eviction or stop/start) but real |
 | 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | todo | | The comparison that deadlocked the mesh |
 | 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | todo | | May take 2–3 iterations |
 | 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | todo | | Same commit as first QUIC file |
@@ -57,6 +58,12 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   `FERNLET_PROBE_AUTOSTART`, `FERNLET_PROBE_CONSOLE_LOG`. `allowsOutboundConnection` gained a
   7th parameter defaulted `false`.
 - `BGTaskScheduler` error 1 on Simulators — the sim lane can never speak to P8's background rows.
+- Item 3 **inverted a documented design intent**: the old `stop()` deliberately preserved the
+  endpoint map ("an owner would stop recognizing a device"). All three owners now drop every
+  peer-keyed record in the same teardown, so preserving identity across `stop()` protects nothing.
+- `MeshMultipeerSessionIdentityTests` first test can take ~90–110 s in a loaded full-suite run —
+  min-poll-floor absorbing MainActor starvation, bounded, terminates. Not a hang; don't drop the
+  poll floor.
 
 ## Known-red gates that are NOT this phase's fault
 
@@ -65,5 +72,6 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**3** — the §6.5 root fix (stable `id` per session + §6.4 asymmetries). No prereq; item 1 waits on a
-device, item 2 stays skip-gated while `Localizable.xcstrings` is held by another session.
+**3b** (small — finish the §6.4 finding-1 family), then **4** (tie-breaker tier-1 tests, incl. the
+missing/late-TXT case from the item-0 surprise). Item 1 waits on a device; item 2 stays skip-gated
+while `Localizable.xcstrings` is held by another session.
