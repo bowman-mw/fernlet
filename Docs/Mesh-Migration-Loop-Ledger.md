@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** not yet · **Iteration:** 0 · **Tree at seed:** main = `16b9cb2` (pushed)
+**Started:** 2026-08-31 · **Iteration:** 1 · **Tree at seed:** main = `16b9cb2` (pushed); loop running on `ae274da`
 
 ## Items
 
@@ -15,8 +15,8 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
-| 0 | Sim↔sim experiment (prompt §2). Timeboxed to ONE iteration, DEBUG toggle only. | 2 | — | todo | | High payoff: unlocks multi-node on one Mac |
-| 1 | Capture Lane A diagnostic report; promote runbook rows *Observed working* → *Pass* | 2 | 1 device | todo | | Owner reports it connects; no report captured |
+| 0 | Sim↔sim experiment (prompt §2). Timeboxed to ONE iteration, DEBUG toggle only. | 2 | — | done | `926a791` | **CONNECTED** — Bonjour + QUIC/TLS + signed introduction both ways; multi-node on one Mac is a real lane (re-tier P3–P6 at close-out). Datagrams didn't negotiate — see surprises |
+| 1 | Capture Lane A diagnostic report; promote runbook rows *Observed working* → *Pass* | 2 | 1 device | todo | | Owner reports it connects; no report captured. Must also settle the datagram row (see surprises) |
 | 2 | String-catalog repair (9 stale keys, pre-existing) | 1 | quiet tree | todo | | SKIP if `Localizable.xcstrings` still held by another session |
 | 3 | §6.5 root fix: stable `id` per session + close §6.4 asymmetries 1–3 | 1 | — | todo | | Behaviour change — own it with tests |
 | 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | todo | | The comparison that deadlocked the mesh |
@@ -44,7 +44,19 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Surprises worth not re-deriving
 
-- (nothing yet)
+- **QUIC datagrams show usable frame size 0 on sim↔sim — but NO lane has ever recorded a non-zero
+  size** (Lane A's Datagram row was never captured). Equally consistent with a probe QUIC-parameter
+  defect that would fail against a device too. Do not record it as a Simulator limitation; one
+  device↔Sim run (item 1) settles it. Both ends advertised `maxDatagramFrameSize=1024`, both saw
+  `datagram-flow=false`.
+- **An absent Bonjour TXT record reads as `device`** — a Sim saw a peer before its TXT arrived,
+  logged it `[device]`, and dialed (a dial the pre-existing policy also allowed). The old sim→sim
+  refusal was never airtight; no Simulator-origin check may rest on TXT presence alone. Item 4's
+  tie-breaker tests should cover the missing/late-TXT case.
+- Sim↔sim probe env toggles (all default-off, DEBUG-only): `FERNLET_PROBE_ALLOW_SIM_DIAL`,
+  `FERNLET_PROBE_AUTOSTART`, `FERNLET_PROBE_CONSOLE_LOG`. `allowsOutboundConnection` gained a
+  7th parameter defaulted `false`.
+- `BGTaskScheduler` error 1 on Simulators — the sim lane can never speak to P8's background rows.
 
 ## Known-red gates that are NOT this phase's fault
 
@@ -53,4 +65,5 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**0** — the sim↔sim experiment. Cheap, timeboxed, and its result re-tiers P3–P6.
+**3** — the §6.5 root fix (stable `id` per session + §6.4 asymmetries). No prereq; item 1 waits on a
+device, item 2 stays skip-gated while `Localizable.xcstrings` is held by another session.
