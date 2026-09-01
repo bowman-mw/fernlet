@@ -6,7 +6,9 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 13 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `21290b1`
+**Started:** 2026-08-31 · **STOPPED at the P2 boundary:** 2026-09-01, after 14 iterations · **Tree at
+seed:** main = `16b9cb2` (pushed); final loop head `b3dcbc4` (close-out; P2 marked **BUILT** in the
+plan, §20 P3 handoff written). NOT pushed.
 
 ## Items
 
@@ -134,7 +136,11 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**Close-out** (prompt §8): mark P2 BUILT in the plan with landing SHAs, record deliberately-unfixed
-findings §6.4-style, re-tier P3–P6 for the restored sim lane, write the P3 handoff (plan §20, D4
-sealing constraint + §17.3 paperwork), memory note. Then STOP: items 1/11 need the owner; 2 stays
-skip-gated while `Localizable.xcstrings` is held.
+**LOOP STOPPED — nothing here is runnable without the owner.** Close-out done (`b3dcbc4`); memory
+note written. What re-opens work:
+- **A device on the Wi-Fi** → item 1 (Lane A report; datagram row expected Pass) and item 11
+  (AWDL + Local Network prompt) — plus the Lane B cross-key-collapse row from item 13.
+- **`Localizable.xcstrings` freed** → item 2 (string-catalog repair, one write-mode run, own commit).
+- **Owner decisions** → plan §18 items 7 (unsigned-`sid` transcript v2) and 8 (`x509-self-signature`
+  hatch review).
+- **P3** starts as a FRESH session from the plan's §20 handoff block — not by resuming this loop.
