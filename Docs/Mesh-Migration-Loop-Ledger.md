@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 10 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `8b75261`
+**Started:** 2026-08-31 · **Iteration:** 11 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `7be47c8`
 
 ## Items
 
@@ -31,8 +31,9 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | Needs per-transfer photo streams in `NetworkPeerChannel` (item-5 residual). **Empty roster ⇒ QUIC refuses every peer** — first-meeting stranger admission is a P3 membership question (plan §8); flows need membership established first (MC or fixture) then transport switched |
 | 11 | Tier-3, and only this: AWDL path + Local Network permission prompt | 3 | 10 | todo | | Justify any addition to this row |
 | 12 | Convert the heartbeat flake test to a polled wait | 1 | — | done | `3ca3ddb` | Reused suite's `waitUntil` (2 s deadline, 200-poll floor); 3 isolated passes + suite |
-| 13 | **Verified pair converges to ONE tunnel.** Observed on-radio (item 9, both baseline runs): nil-`sid` window ⇒ both dial; inbound keys off `connection.id`, never colliding with the browsed key ⇒ suppression never fires. After introduction both sides KNOW the verified `sid` — collapse there by deterministic rule (dial preference), close the loser. Tier-1 repro on fakes + Lane C re-run as proof | 1 | 9 | todo | | Blocks item 10 — flows shouldn't run over ambiguous pairs |
-| 14 | Widen `TestHookBoundaryTests` `hookTokens` to the `FERNLET_MESH_*` / `FERNLET_PROBE_*` env family (items 0/8/9 hooks are outside its grep-wall; `#if DEBUG` is currently the only guard) | 1 | — | todo | | Cheap; bundle with 13, own commit |
+| 13 | **Verified pair converges to ONE tunnel.** Observed on-radio (item 9, both baseline runs): nil-`sid` window ⇒ both dial; inbound keys off `connection.id`, never colliding with the browsed key ⇒ suppression never fires. After introduction both sides KNOW the verified `sid` — collapse there by deterministic rule (dial preference), close the loser. Tier-1 repro on fakes + Lane C re-run as proof | 1 | 9 | done | `96337a3` | Fix real by construction, 14 tier-1 tests (repro red pre-fix). **Item 9's two-tunnel reading was churn misread as duplication** — Lane C can't form the duplicate (TXT arrives with browse); the collapse is a Lane B (hardware) row |
+| 14 | Widen `TestHookBoundaryTests` to the mesh/probe env families | 1 | — | done | `7ff49fc` | Per-family floors; planted Release-reachable read tripped TH1 by name; all 14 existing reads were clean |
+| 15 | **Diagnose the tunnel churn**: 3 activations per side in ~100 s with NO dial failure, refusal, give-up, or transport error logged on either side; predates item 13; reproduces with convergence disabled. First add the missing diagnostic — a live tunnel that ends logs NOTHING (`endTunnel` with a control stream emits no line) — then re-run Lane C and name the cause. Note the unverified correlation: churn cadence ≈ the 30 s heartbeat interval — check whether heartbeats actually flow on the real radio before believing anything else | 2 | 13 | todo | | Precedes item 10 — flows over churning tunnels would be flaky |
 
 ## Blocked on owner
 
@@ -105,7 +106,12 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   no-op — budget a plain retry, not a boot. Boot+settle only cures the not-yet-booted case.
 - Dial budget observed live (item 9): a refusing peer is re-offered exactly 3 times, then silence.
 - Lane C exists: `FERNLET_MESH_MATRIX` harness + `FERNLET_MESH_CONSOLE_LOG` + chaos hooks make the
-  production mesh drivable on two sims — items 10/13 reuse this, don't rebuild it.
+  production mesh drivable on two sims — items 10/15 reuse this, don't rebuild it.
+- **Tier-2 evidence lesson (items 9→13):** "accepted twice" read as two live tunnels, but a live
+  tunnel that ends logs nothing, so churn masqueraded as duplication. Before believing a
+  wire-level inference, instrument the counter (`tunnels=`) and run the control. The Lane C
+  duplicate can never form (TXT arrives with the browse result — only one side dials); the
+  double-dial window is physical-radio behaviour, so its collapse is proven at tier 1 + Lane B.
 - `MeshMultipeerSession.onDisconnectPeerRequestedForTesting` was deleted (item 8 seam replaced it);
   `Docs/Memory-Leak-Review-2026-08-17.md` lines 82/84 name it as a dated historical record — fine.
 
@@ -116,6 +122,6 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**13** (tunnel convergence — blocks item 10) bundled with **14** (hook-wall widening, own commit).
-Item 1 waits on a device; item 2 stays skip-gated while `Localizable.xcstrings` is held by another
-session.
+**15** — the tunnel-churn diagnosis (instrument the silent live-disconnect path, re-run Lane C,
+name the cause; heartbeat-flow check first). Then **10**. Item 1 waits on a device; item 2 stays
+skip-gated while `Localizable.xcstrings` is held by another session.
