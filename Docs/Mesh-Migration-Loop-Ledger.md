@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 2 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `1540d5b`
+**Started:** 2026-08-31 · **Iteration:** 3 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `0d20730`
 
 ## Items
 
@@ -19,7 +19,8 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 1 | Capture Lane A diagnostic report; promote runbook rows *Observed working* → *Pass* | 2 | 1 device | todo | | Owner reports it connects; no report captured. Must also settle the datagram row (see surprises) |
 | 2 | String-catalog repair (9 stale keys, pre-existing) | 1 | quiet tree | todo | | SKIP if `Localizable.xcstrings` still held by another session |
 | 3 | §6.5 root fix: stable `id` per session + close §6.4 asymmetries 1–3 | 1 | — | done | `b8d7a5a` | `SessionPeerIdentity` minted once per peer, session-scoped, cleared in `stop()`; 9 tier-1 tests; goldens un-re-pinned |
-| 3b | Close the two remaining id-only `handleChannelReady` guards: `ProximityRecipeShareManager.swift:444`, `PresenceManager.swift:706` — same family as item 3, asymmetric vs their own `shouldAdmitChannel` | 1 | 3 | todo | | Rare post-fix (needs cap-64 eviction or stop/start) but real |
+| 3b | Close the two remaining id-only `handleChannelReady` guards (RecipeShare + Presence) | 1 | 3 | done | `2a03800` | Endpoint helper + 3-case admission enum per manager, item-3 idiom; 4 tests; suite green (3320) |
+| 3c | Outbound `sendHeart` gate `PresenceManager.swift:645` still id-only (`$0.id == peer.id`) vs endpoint-based `hasHeartConnection(with:)`. One-line fix with the now-existing helper + one test. Consequence mild: stranded `pendingHeartSends` until connect timeout. (`:1280` is a test seam, NOT in the family.) | 1 | 3b | todo | | Gauntlet subset OK: build + scanners + Presence suites + goldens |
 | 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | todo | | The comparison that deadlocked the mesh |
 | 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | todo | | May take 2–3 iterations |
 | 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | todo | | Same commit as first QUIC file |
@@ -72,6 +73,6 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**3b** (small — finish the §6.4 finding-1 family), then **4** (tie-breaker tier-1 tests, incl. the
-missing/late-TXT case from the item-0 surprise). Item 1 waits on a device; item 2 stays skip-gated
-while `Localizable.xcstrings` is held by another session.
+**3c** (one-liner, subset gauntlet), then **4** (tie-breaker tier-1 tests, incl. the missing/late-TXT
+case from the item-0 surprise). Item 1 waits on a device; item 2 stays skip-gated while
+`Localizable.xcstrings` is held by another session.
