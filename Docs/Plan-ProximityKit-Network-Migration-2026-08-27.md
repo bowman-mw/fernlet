@@ -676,7 +676,7 @@ runs on one Mac, with no hardware and no human at all.**
 
 ---
 
-## 8. Phase P3 — durable session context, roster, and membership events
+## 8. Phase P3 — durable session context, roster, and membership events — **BUILT** (2026-09-02)
 
 **Testing lane (re-tiered 2026-09-01, §7.8).** This phase does **not** need a drawer of phones.
 Records, derived roster and the state machine are tier 1 on `FakePeerNetwork` with a virtual clock;
@@ -685,6 +685,27 @@ live roster, a rotation crossing two tunnels — runs 3–6 Simulators on one Ma
 harness (`FERNLET_MESH_TRANSPORT` / `_MATRIX` / `_FLOWS` / `_CONSOLE_LOG` plus the chaos hooks).
 Datagram-borne behaviour is on this lane too: item 15 struck the "datagrams need hardware"
 assumption. Physical devices are owed only what §15 lists.
+
+**Result:** membership is a set of signed records and the roster is **derived** from them on every
+read — `admitted − departed − removed` — on every node, joiners included. `MeshSessionContext` is
+sealed at rest by `MeshSessionStore` under `KeyDerivation.meshSessionContextV1`, on a per-instance
+disk root *and* keychain service, with a five-state load whose `LoadToken` makes a save behind a
+refusal structurally impossible. Five frames ride the wire — `member-admission.v1`,
+`member-departure.v1`, `member-removal.v1`, `terminated.v1`, `inventory-digest.v1` — each verified
+against an admitted signing key *before* insertion, never after. `MeshEpochRef` is a Lamport counter
+with a **derived** `epochID`, the introduction's epoch gate is now strict, and rotation fires on the
+15-minute timer ∪ any derived-roster change ∪ any ledger merge, which closes the confirmed
+voted-out-member-keeps-the-key-for-15-minutes gap. `MeshIntroductionAuthority` answers from the
+derived roster, so matrix row 3 (`barredMember`) is the shipping authority's own answer rather than
+a chaos hook's. Thirteen integrated acceptance scenarios and a 3687-test suite are green;
+`spm-wall-check.sh` passed. On Lane C a **pair** of Simulators proved admission, rotation, clean
+departure and removal over a real QUIC tunnel with the derived roster on both sides. **The
+three-node lane did not converge** — three Simulators form a spanning star (§8.7 finding 1) — so
+everything that needs a third *real* node is deferred behind it.
+
+§§8.1–8.4 below are the sketch, kept as the specification. §8.5 records what landed, §8.6 where
+reality moved the design and why, §8.7 what was deliberately left undone, and §8.8 the acceptance
+evidence.
 
 ### 8.1 MeshSessionContext (persisted, sealed)
 
@@ -801,6 +822,185 @@ struct MeshEpochRef: Codable, Hashable {
 Acceptance (P3): unit tests for every state edge; disconnect ≠ removal; idle-lapse resume; ceiling at
 both bounds; rotation on removal/departure/merge with old-key rejection after grace; context
 load/deferred/corrupt matrix; legacy `sessionGoodbye` interop.
+
+### 8.5 What landed
+
+| # | Work | SHA |
+|---|---|---|
+| 1 | **Records and the derived roster, pure.** Four record kinds in dedup-keyed, capped, grow-only sets under a total order; `MeshMembershipLedger` is the four sets; `MeshDerivedRoster` recomputes `admitted − departed − removed` on every read, plus coordinator, quorum and final-pair. Union-merge is commutative, associative and idempotent **including the caps**. No storage, transport, clock or signing | `cd8ea71` |
+| 2 | **The sealed `MeshSessionStore`** — five-state load, per-instance disk root *and* keychain service (`MeshSessionStorageScope`), `MeshSessionStoreIsolationTests` as the grep-wall, and the §17.3 paperwork it owed: doc guards, a `PrivacyWipeCoverage.md` disposition row, a delete-all leg that takes file and key together | `8166071` |
+| 3 | **Membership event wire tokens** on `CanonicalByteWriter`, goldens derived independently of the serializer; `MeshMembershipRecordVerifier` is the verify-then-insert door (quorum re-derived on the receiver's merged roster); legacy `sessionGoodbye` parsed, never emitted, grep-walled | `700605c` |
+| 3b | **`member-removal.v1`** — the fourth membership frame, wrapping the quorum-signed record item 1 modelled and item 3 already pinned bytes for. No signed bytes added, no golden moved; the target is excluded from `MeshRotationPolicy.recipients` and learns by key exclusion | `25e9c6c` |
+| 4 | **`MeshEpochRef` + `MeshEpochKeyring` + `MeshEpochAcceptance`**, and the introduction gate goes strict. `MeshFrameReplayWindow` moves replay protection off epochs; `MeshSessionContext` schema → 2 (`epochHeads` narrows to `[MeshEpochRef]`) | `374b1cc` |
+| 5 | **Membership-driven rotation** through one entry (`requestRotation(cause:)`), a frozen `cause` token, a 2 s coalescing window ranked `merge > membership > timer`, the new epoch head sealed **before** the key is distributed or acked, and the signed departure emitted before teardown | `ddcc717` |
+| 6 | **The §8.2 state machine** — ten states, eighteen events, one pure function per state, every non-edge a named rejection — plus `MeshSessionCeiling` at both bounds, `MeshSessionRestore` (5 load states → 7 outcomes) and the save cadence on the one writer seam | `3daf364` |
+| 7 | **`MeshIntroductionAuthority` answers from the derived roster.** Founders self-admit at `startNewMesh`; joiners arm at the admission grant, send `inventory-digest.v1`, and rebase through `MeshLedgerAdoption`; `.terminationVerified` wired through the §8.3 downgrade | `295e48f` |
+| 8 | **The acceptance battery** — thirteen integrated scenarios in four suites, one per §8.4 acceptance line, none disabled, no product defect found | `ed3c193` |
+| 0 | **Three-Simulator bring-up: DID NOT CONVERGE.** A spanning star, N−1 edges, the hub landing on a different node each run (3/3). Two silent nil-exits in `admitVerifiedInbound` now log at `notice`; runbook gains "Lane C — THREE nodes" | `c619d1f` |
+| 9 | **Pair membership over a real QUIC tunnel.** Harness founder/joiner/leave/remove seams; 4/4 scenarios proven; one delivery finding; runbook gains "Lane C — pair membership" | `2f6fd42` |
+
+| | |
+|---|---|
+| New (ProximityKit) | `Mesh/MeshMembershipRecords.swift`, `MeshDerivedRoster.swift` (`MeshMembershipRecordSet`, `MeshMembershipLedger`), `MeshMembershipEvents.swift`, `MeshMembershipRecordVerifier.swift`, `MeshSessionContext.swift`, `MeshSessionStore.swift`, `MeshSessionKeyStore.swift`, `MeshEpochRef.swift`, `MeshEpochAcceptance.swift`, `MeshEpochKeyring.swift`, `MeshFrameReplayWindow.swift`, `MeshRotationPolicy.swift`, `MeshSessionStateMachine.swift`, `MeshSessionCeiling.swift`, `MeshSessionRestore.swift`, `MeshLedgerAdoption.swift` |
+| Changed | `MeshNetworkManager` holds the ledger, the keyring and the store, and grew the four seams everything after it uses — `emitMembershipEvent(_:)`, `mergeMembershipLedger(_:)`, `commitVerifiedRecord(rollingBackTo:type:)`, `persistSessionContext(addingEpochHead:)`; `MeshChannelIntroduction` (strict epoch gate); `CryptographicPurpose`, `PayloadType`, `MeshPayloads`, `CanonicalSignatureSerializer` (the frames and their purposes); `MeshSessionTypes` + `SessionMessageStore` (§17.3 doc guards); `ProximityHost.meshSessionStorage`; `FernletStore` (delete-all leg); `NetworkMeshSession` + `MeshTransportDebugHooks` (notice-level inbound refusals, DEBUG membership echoes) |
+| Harness (app target, DEBUG) | `MeshFlowDriver`, `MeshRejectionMatrixHarness`: `FERNLET_MESH_ROLE`, `FERNLET_MESH_LEAVE_AFTER`, `FERNLET_MESH_REMOVE_AFTER`, the `[mesh-flow] membership` audit line, and the `armFounderLedgerForHarness` / `requestAdmissionForHarness` / `seedRemovalRecordForHarness` seams |
+| Tests | `MeshMembershipRecordsTests`, `MeshSessionStoreTests`, `MeshSessionStoreIsolationTests`, `MeshMembershipEventWireTests`, `MeshEpochModelTests`, `MeshRotationTriggerTests`, `MeshSessionStateMachineTests`, `MeshIntroductionAuthorityTests`, `MeshP3AcceptanceTests`, plus rows in `CryptographicPurposeBoundaryTests`, `CryptographicDomainSeparationTests`, `PrivacyWipeCoverageTests`, `NetworkMeshTransportTests` |
+| Docs | `PrivacyWipeCoverage.md`, `ProximityFunctionIndex.md`, the ProximityKit DocC landing page, and two new runbook sections |
+
+### 8.6 Deviations from the sketch, and why
+
+- **`epochID` is derived, not drawn.** §8.4 declares `let epochID: UUID  // unique per minted epoch`.
+  A drawn id is unique but *unshareable*: every member of a branch would have to be told the id, and
+  the introduction has no field to carry it. `epochID` is instead SHA-256 over
+  `meshID ‖ counter ‖ coordinatorFingerprint`, so every member of a branch computes the same ref
+  with **zero wire change**, and two partitions still differ, because their lowest-fingerprint
+  coordinators cannot be the same member. The canonical string form rides the introduction's
+  existing 96-character `epochRef` field, so no golden vector moved.
+- **The transcript `sid` move was deferred, and nothing signed moved with it** (§20.5's first
+  decision). §20.5 argued P3 was the cheap moment to move the transcript once, because `epochRef`
+  was becoming real. It became real *inside the existing field* instead, so a transcript v2 bought
+  nothing that P3 needed and would have spent an owner decision (§18 decision 7) and every golden
+  vector. **No golden vector moved in this entire phase.** §7.7 finding 1 stands exactly as written.
+- **The store's key row is deliberately NOT a `KeychainPrivateMediaKeyProvider.Role`.** §8.1 said
+  "new role beside `friendWall`". The media-key roles survive delete-all by design; a session
+  context must not. It is a sibling custody key row under its own service
+  (`com.fernlet.mesh-session`, `AfterFirstUnlockThisDeviceOnly`) with its own wipe row, so "beside
+  `friendWall`" describes where it sits, not what it is.
+- **The load has five states, and `refused` is the fifth.** §8.1 said four (loaded / absent /
+  deferred / corrupt); §20.2 said the fifth consideration had to be designed in rather than
+  discovered. It is a state, not a consideration: `MeshSessionSealRefusal` names what it refused, and
+  the `LoadToken` a writer needs is an associated value of `loaded`/`absent` **only**, so a caller
+  holding `refused`/`deferred`/`corrupt` structurally cannot call `save`. Durable-before-acknowledged
+  (§3.6) is enforced by the type system rather than by a comment.
+- **Termination is derived, not applied at merge.** §8.1 says "termination ends everything". Applying
+  a termination *into* the ledger at merge time would destroy commutativity — the answer would depend
+  on record arrival order. `MeshDerivedRoster` therefore evaluates the termination record at derive
+  time, which keeps union-merge associative and makes §8.3's downgrade (a terminator on a roster > 2
+  becomes that signer's departure) a property of the derivation instead of a mutation.
+- **Caps are keep-earliest-k, chosen so merging survives them.** §9 says "16 each" and stops there. A
+  cap that drops the *newest* record makes the merge order-dependent and lets a flood of junk crowd
+  out a real removal; keep-earliest-k under the records' own total order is the only rule under which
+  `A.merging(B) == B.merging(A)` still holds *at* the cap. `MeshMembershipRecordVerifier` is the
+  other half — a record must verify against an admitted key before it can occupy a slot at all.
+- **The ceiling is an edge from every live state, not just `localIdleStop`.** §8.2's diagram draws
+  `localIdleStop --> expired`. A session that hits the 6-hour deadline while `activeForeground`,
+  `partitioned` or `continuingInBackground` must expire there too; drawing it only off the idle stop
+  would have made the deadline evadable by staying busy. `MeshSessionCeiling` guards both bounds — a
+  monotonic budget clamped to 6 h and the signed absolute with 120 s skew — so a backward clock jump
+  cannot extend a session and a forged far-future deadline still buys at most 6 h.
+- **A joiner's bootstrap root is its *admitter's* key, not the founder's.** §8.1 assumes a ledger a
+  node already holds. A joiner holds exactly one key it has authenticated: the one that signed its
+  admission token. `MeshLedgerAdoption.adopt` therefore re-verifies a whole offered ledger from that
+  provisional root and rebases only if the result admits the admitter under the exact key the token
+  named. One round trip (`inventory-digest.v1`, answered once per peer per session, bounded by
+  `maxReGossipFrames` = 16 × 3 + 1), and no new signing domain.
+- **Five frames, not §8.3's three.** §8.3 names `member-departure.v1`, `terminated.v1` and
+  `inventory-digest.v1`. Item 1 needed record kinds for admissions and removals, and once a record
+  kind exists its wire token, `PayloadType` case and crypto purpose must share **one** frozen
+  spelling or the vocabulary wall fails — so `fernlet.mesh.member-admission.v1` and
+  `fernlet.mesh.member-removal.v1` were minted to match, and each is additive (no golden moved).
+  Without them a joiner could never be handed the record that admits it.
+- **The rotation `cause` token rides an *unsigned* payload.** §8.3 says the family is "extended with
+  a `cause` token". `meshKeyRotation` has no canonical serializer and no prior golden — it is
+  unsigned *inside* the signed envelope — so adding the field moved nothing and cost one new vector.
+  The cause is therefore a coalescing/diagnostic input, not an authorization: what authorizes a
+  rotation is `MeshEpochAcceptance` (deterministic coordinator of the presented roster, strictly
+  greater counter), exactly as §8.4 specifies.
+- **The lane the phase was re-tiered onto delivered pairs, not 3–6 nodes.** §8's testing-lane
+  paragraph promised 3–6 Simulators for anything needing real nodes. Item 0 found that three
+  Simulators form a **spanning star** — N−1 edges, the hub varying between runs — so item 9 was
+  re-planned onto a pair and given the harness seams the star had shown were missing
+  (`FERNLET_MESH_ROLE`, `_LEAVE_AFTER`, `_REMOVE_AFTER`, `armFounderLedgerForHarness`,
+  `requestAdmissionForHarness`, `seedRemovalRecordForHarness`). Everything a pair can carry was
+  carried; the rest is §8.7 finding 1.
+
+### 8.7 Findings for the owner — real, and deliberately NOT fixed here
+
+1. **Three Simulators form a spanning star, not a mesh (ledger item 0b, `c619d1f`).** Reproduced 3/3
+   with the hub on a different node each run; not launch order, not `sid` rank, not
+   `MeshLinkTable.maxConcurrentLinks` (8). Two failure shapes: the third pair is dialed and dropped
+   silently by the far side, or never proposed at all (run 5: no dial, no refusal, no error on either
+   node). Root cause not identified — a **P2 transport** defect, not a membership one; stopped at the
+   timebox. **Cost:** the three things a third real node was supposed to prove are unreachable —
+   §10.5's departure gossiped by a third member, a removal minted by a *real* quorum (⌊2/2⌋+1 = 2
+   votes with the target excluded leaves 1 eligible voter, so an honest two-node removal always
+   refuses `quorumNotMet(required: 2, presented: 1)`), and a rotation crossing two tunnels. All three
+   have tier-1 coverage; none has radio corroboration. **This is P4's first decision (§21.3).**
+2. **A clean departure can be lost in the teardown that follows it (`2f6fd42`).**
+   `leaveSessionAfterNotifyingPeers()` awaits `sendMembershipEvent(.meshMemberDeparture)` — which
+   returns when the frame reaches the transport, not the peer — and then stops the transport. On Lane
+   C the survivor got it in 2 of 3 runs. The durability rule is honoured (the record is sealed before
+   the frame goes out) and a departed member is not silently a member forever (it holds no admission,
+   so a rejoin is refused), but on the losing run the *immediate* consequences do not happen at all:
+   the roster does not shrink and the `.membership` rotation that re-keys without the departed device
+   never fires. **Cost:** a re-key that should have excluded a leaver can be skipped, until some other
+   record teaches the survivor. Fixing it is a transport change — a delivery ack or a bounded re-send
+   — or a merge-path recovery in P4/P5. **Owner decides which (§21.3).**
+3. **First-meeting stranger admission still has no path on the QUIC radio.** §7.7 finding 3 expected
+   P3 to close this; it does not. The transport is **members-only by construction**:
+   `MeshChannelIntroductionExchange.receive` refuses a foreign mesh id and a signing key the roster
+   does not name, before any app frame — so a founder holding a one-member derived roster refuses a
+   would-be joiner's tunnel, and the joiner has no other door. P3 gave the transport something to
+   admit a stranger *into*; it did not give a stranger a way to ask. **Cost:** MC remains the
+   first-meeting admission path, and Lane C reaches the grant flow only through the harness's seeded
+   two-member descriptor. A real answer is a bounded pre-admission channel (or MC until P9) — a
+   design decision, not a port detail.
+4. **`.developed`, `.backgrounded` and `.foregrounded` have no shipping caller.** The three state
+   events exist, transition correctly and are covered by the totality sweep, but nothing in the app
+   raises them: development and scene lifecycle are **P7's** app-layer run policy (§13). **Cost:**
+   nothing today — the states are unreachable in production, so the ceiling and idle-lapse paths are
+   driven only by `enforceSessionCeiling`/`evaluateIdleLapse`, which are on-demand with no timer.
+   P7 must wire both the events and a poller; until then the 30-minute idle rule is a rule nobody
+   calls on a schedule.
+5. **`MeshFrameReplayWindow` is built and not wired (`374b1cc`).** Per-sender frame-id dedup that
+   refuses at its cap, with the epoch-independence §8.4 requires. It is wired in **P5**, where routed
+   content is what an attacker would replay. **Cost:** today's replay protection is still the live
+   control path's key selection, which is exactly what §8.4 says must not carry it — harmless while
+   only control frames exist, and a gap the moment routed content does.
+6. **`FERNLET_MESH_CHAOS_BARRED` survives, now only for ≥ 3-node quorums.** Item 9 drove matrix row
+   3 (`barredMember`) with the hook **unset**, off the shipping derived roster, using
+   `seedRemovalRecordForHarness` — which bypasses the quorum arithmetic and nothing else. **Cost:**
+   the hook is still reachable in DEBUG and still a test-hook-wall entry. It can only add keys to
+   *this* side's own barred set, so it cannot admit a peer that would otherwise be refused; retiring
+   it needs a real ≥ 3-node quorum, so it is blocked on finding 1.
+7. **§17.3's `PrivacyInfo` / privacy-copy paragraph is owed to P3 and was not written.** Every other
+   §17.3 row landed in the commit that reversed the invariant — the doc guards (`8166071`), the
+   wipe-wall disposition row and delete-all wiring (`8166071`), and the DocC landing page (each
+   item). The user-facing paragraph — serverless + E2EE, nearby Fernlet devices may briefly hold
+   ciphertext they cannot read, background continuation uses local network and battery and iOS may
+   end it, content clears by development/session rules — was not. **Cost:** none mechanically (P3
+   adds no collected data type, no new network destination and no new required-reason API, so
+   `App/Fernlet/PrivacyInfo.xcprivacy` is unchanged and correct), but it is a **debt of P3's, not of
+   P4's**, and its real deadline is the first TestFlight build. Carry it as an owner item; do not let
+   P4 absorb it silently.
+
+### 8.8 Acceptance evidence
+
+§8.4's acceptance line, item by item, is `ed3c193` — thirteen scenarios on the *integrated*
+`MeshNetworkManager` over `FakeMeshTransportSession` + `FakePeerNetwork`, none disabled, no product
+defect found:
+
+| Suite | Scenarios |
+|---|---|
+| `MeshP3SessionAcceptanceTests` | every §8.2 edge through `applySessionEvent` (a 19-row table); disconnect ≠ removal on both sides of a drop; idle-lapse resume as a merge with **both** divergent heads sealed; the ceiling at both bounds across both clock jumps |
+| `MeshP3RotationAcceptanceTests` | rotation on removal, on departure and on merge, with the old key alive inside the ≤ 5-minute grace and dead after it |
+| `MeshP3RestoreMatrixAcceptanceTests` | all seven restore outcomes, with a file-system spy proving `deferred`/`refused`/`corrupt` run no writer |
+| `MeshP3InteropAcceptanceTests` | legacy `sessionGoodbye` closes the link and never the membership; the goodbye grep-wall; three-node convergence with a departure reaching the member that missed it (§10.5 at tier 1); nothing acknowledged while the store refuses to seal |
+
+- **Full `FernletTests`: 3687 tests green** (`ed3c193`); ≈ 11.4 min on this Mac.
+- **`Scripts/spm-wall-check.sh`: passed** (`ed3c193`).
+- **Lane C, pair membership (`2f6fd42`, runbook "Lane C — pair membership"): 4/4 over real QUIC.**
+  `iPhone 17` founder + `iPhone 17 Pro` joiner. Admission across a live **derived** roster
+  (`ledger=present derived=2` on both — `ledger=present` is what distinguishes it from every earlier
+  Lane C run, which converged only the gossiped descriptor); rotation crossing the tunnel (an
+  identical epoch head on both nodes, the founder named as coordinator inside the ref, so the key
+  itself crossed); clean departure accepted as `member-departure.v1` with the roster 2 → 1, `barred`
+  1 and a `.membership` rotation to epoch 2 (intermittent — §8.7 finding 2); removal ejecting the
+  peer at its next introduction as `barredMember` from the shipping authority with
+  `chaosBarred=none`.
+- **Lane C, three nodes (`c619d1f`, runbook "Lane C — THREE nodes"): the criterion is NOT met.** A
+  departure by one node was seen by the hub only, because a star has no third edge to see it over.
+  Recorded, not fixed (§8.7 finding 1).
 
 ---
 
@@ -1265,6 +1465,10 @@ on: **if you cannot seal, you must not acknowledge.**
 
 ## 20. P3 handoff — written at the P2 boundary, 2026-09-01
 
+**Spent at the P3 boundary, 2026-09-02.** Kept as the record of what P3 was handed and what it was
+told to decide; §8 is now **BUILT**, and §8.5–§8.8 say what actually happened. **§21 is the live
+handoff.** The pointers below say where each promise was kept — they do not rewrite what was written.
+
 P0, P1 and P2 are **BUILT** (§5, §6, §7). This section is what a fresh session needs to start P3 and
 nothing more; the sections above are the authority for *what* to build. §8 is the specification.
 
@@ -1276,11 +1480,17 @@ nothing more; the sections above are the authority for *what* to build. §8 is t
   the default and P3 cannot accidentally open it by omission. Today the manager answers from live
   session state; P3's job is to answer from the *derived* roster of §8.1 — `admitted − departed −
   removed` — which is the same question with a durable answer.
+  **Done, `295e48f`** (§8.5 item 7): `MeshNetworkManager.roster` is
+  `MeshDerivedRoster.introductionRoster(additionalBarred:)`, and the descriptor fallback survives
+  only for an empty ledger.
 - **A soft epoch rule waiting for §8.4 to make it strict.** The introduction accepts equal epochs
   **or one side empty**, because a joining peer holds no group key yet and strict equality would make
   admission impossible; two different non-empty epochs are already `.divergentEpoch`. §8.4's
   Lamport-style `MeshEpochRef` and its merge rule are what let this tighten. It is flagged in source
   at the comparison — tighten it there, deliberately, rather than discovering it later.
+  **Now strict, `374b1cc`** (§8.5 item 4): every non-empty `epochRef` must parse as a canonical
+  `MeshEpochRef`, equality is whole-value, and a joiner goes through
+  `MeshEpochAcceptance.introductionVerdict`. §7.7 finding 5 is closed.
 - **Membership events unlock two things P2 could not reach.**
   - **The hard-departed rejection row.** `MeshIntroductionRejection.barredMember` exists and was
     driven on the radio, but only under a chaos hook: `MeshNetworkManager.roster` keeps `barred`
@@ -1288,6 +1498,9 @@ nothing more; the sections above are the authority for *what* to build. §8 is t
     member it has dropped — so a genuinely removed member falls out of `members` and refuses as
     `unknownIdentity`. P3's `SignedRemovalRecord`s are what give `barred` real contents and make the
     branch the shipping authority's own answer instead of a test's.
+    **Done, `295e48f` + `2f6fd42`** (§8.5 items 7 and 9): an admission record keeps the member's
+    signing key, so `barred` names keys, and the row was driven on the radio with
+    `FERNLET_MESH_CHAOS_BARRED` **unset**. The hook survives only for quorums (§8.7 finding 6).
   - **The hearts and moderation ceremonies.** Both gate on *mutual* trust-vault rows written by
     completing `pendingFriendReview` on both devices in an earlier session (§7.7 finding 2). P3's
     durable context is the first thing in this plan that makes "an earlier session" a concept the
@@ -1295,6 +1508,9 @@ nothing more; the sections above are the authority for *what* to build. §8 is t
 - **A sim↔sim multi-node lane for roster and membership tests.** 3–6 Simulators on one Mac, driven
   from `simctl` through the Lane C harness (§7.8) — roster convergence, departure gossip via a third
   member, and rotation across two tunnels are all reachable without hardware.
+  **Partly true, `c619d1f` + `2f6fd42`** (§8.7 finding 1): a **pair** carries the derived roster,
+  admission, rotation, departure and removal over real QUIC. Three Simulators form a spanning star,
+  so departure gossip via a third member and a rotation across two tunnels are **blocked on 0b**.
 - **A selectable transport.** `MeshTransportSession` + `FakeMeshTransportSession` mean the manager
   itself is now drivable at tier 1; the state machine of §8.2 should be pinned there, not on a radio.
 
@@ -1329,6 +1545,11 @@ ProximityKit DocC landing page's invariants, with `doc-coverage-scan.py` still a
 commit that reverses a documented design intent — the paperwork is the half that makes it a reversal
 rather than a drift.
 
+**Discharged except one row.** The doc guards, the wipe-wall disposition row and the delete-all
+wiring landed in `8166071`; the landing page was rewritten as each item landed. The
+`PrivacyInfo`/privacy-copy paragraph was **not** written — §8.7 finding 7 says what it costs and why
+it is P3's debt rather than P4's.
+
 ### 20.4 Do these first, in this order
 
 1. **Records and derived roster, pure and tier 1.** `admitted − departed − removed`, union-merge,
@@ -1347,7 +1568,11 @@ rather than a drift.
 - **Whether the transcript takes `sid`** (§7.7 finding 1, §18 open decision 7). P3 is where
   `epochRef` stops being a placeholder, so if the signed transcript is going to move, moving it once
   — with the golden vectors updated deliberately — is much cheaper than twice.
+  **Deferred past P3, and no golden vector moved** (§8.6): `epochRef` became real *inside* the
+  existing 96-character field, so a transcript v2 bought P3 nothing. The `sid` binding is still
+  owner-gated and still §18 decision 7; the touch list is in `374b1cc`'s report.
 - **Whether the epoch gate goes strict** once §8.4's merge rule exists (§7.7 finding 5).
+  **Yes, `374b1cc`**, at `MeshChannelIntroductionExchange.receive`.
 - **Whether the QUIC TXT publishes `fp`** — still open, still moves signed bytes, still a wire
   decision with a golden vector attached (§19.4, unchanged by P2).
 
@@ -1362,3 +1587,158 @@ rather than a drift.
 - **`MeshTunnelConvergence` and the id-vs-endpoint family are closed** (`96337a3`, `2f273a9`). The
   second has an exhaustive per-site audit table in its commit message — re-auditing it is wasted
   time.
+
+Every row above was still owed at the P3 boundary. §21.4 carries them forward, with what P3 added.
+
+---
+
+## 21. P4 handoff — written at the P3 boundary, 2026-09-02
+
+P0, P1, P2 and P3 are **BUILT** (§5, §6, §7, §8). This section is what a fresh session needs to start
+P4 and nothing more; **§10 is the specification**, and §16.2's scenario matrix is the acceptance.
+P4 is partition and merge, built on `FakePeerNetwork` with a `VirtualClock` — **no hardware, and
+(§21.2) no third real node either.**
+
+### 21.1 What P4 inherits
+
+- **A derived roster and a union-merge that is already the merge P4 needs.**
+  `MeshMembershipLedger.merging(_:)` (`Mesh/MeshDerivedRoster.swift`) is commutative, associative and
+  idempotent **including at the caps** — keep-earliest-k under the records' own total order, so a
+  full set merges the same way an empty one does. `MeshDerivedRoster` recomputes
+  `admitted − departed − removed` on every read and hands out the coordinator (lowest fingerprint),
+  the ⌊|roster|/2⌋ + 1 quorum and the final-pair test. §10.3's "hard records win over soft presence"
+  is therefore not a rule P4 writes; it is a consequence of records being the only durable thing.
+- **`MeshEpochRef` with a *derived* `epochID`, and divergent-same-counter epochs already
+  representable.** Two branches that rotate independently at counter 7 hold two distinct refs,
+  because `epochID` is SHA-256 over `meshID ‖ counter ‖ coordinatorFingerprint` and their
+  lowest-fingerprint coordinators cannot be the same member. `MeshEpochAcceptance.rotationVerdict`
+  answers `coexist` for exactly that case, and `MeshEpochAcceptance.mergedHeads(_:adding:limit:)`
+  keeps both in `MeshSessionContext.epochHeads` (cap 8) until a merge mints a strictly greater
+  successor. **§10.3's "both old keys die at merge" is one `successor(coordinatorFingerprint:meshID:)`
+  call away, not a design.**
+- **Membership records that propagate by digest re-gossip — §10.5's mechanism, built.** On connect a
+  node sends `fernlet.mesh.inventory-digest.v1`; a differing digest is answered **once per peer per
+  session** with a bounded re-gossip of the frames it holds (`MeshNetworkManager.maxReGossipFrames`
+  = `MeshMembershipBounds.maxRecordsPerKind × 3`, admissions first, then departures, removals,
+  terminations). §10.5's worked example — A meets C, C gossips B's departure to D — is that path
+  running twice. It has tier-1 coverage
+  (`MeshP3InteropAcceptanceTests.aThreeNodeRosterConvergesAndADepartureReachesTheMemberThatMissedIt`)
+  and no radio corroboration (§21.2).
+- **`mergeMembershipLedger(_:)` — the P4 seam, already firing the right rotation.**
+  `MeshNetworkManager.mergeMembershipLedger(_:)` verifies each offered record, inserts what survives,
+  returns the `[MeshMembershipRecordRejection]` for the rest, and raises `requestRotation(cause:
+  .merge)`. `.merge` outranks `.membership`, which outranks `.timer`, inside a 2-second coalescing
+  window — so a merge that moves the roster mints **one** epoch, not one per record. Build §10.3's
+  exchange on top of this call; do not add a second merge path.
+- **`MeshLedgerAdoption` for a rebased joiner.** A joiner's bootstrap root is its **admitter's**
+  signing key, not the founder's. `MeshLedgerAdoption.adopt` re-verifies a whole offered ledger from
+  that provisional root and rebases only if the result admits the admitter under the exact key its
+  token named. On a pair the admitter *is* the founder, so the rebase is a proven no-op and an
+  unproven rebase — the first thing a third node exercises.
+- **The state machine edges partition needs, unwired to anything that raises them.**
+  `MeshSessionStateMachine` has `partitioned`, `linksLost`, `linksRestored` and `resumedAfterLapse`,
+  ten states and eighteen events, one pure function per state, every non-edge a named rejection and a
+  totality sweep proving no trap. §8.2's rule that **idle-lapse and partition are deliberately the
+  same mechanism** is enforced there: `resumedAfterLapse` goes through the ledger merge and epoch
+  acceptance (`coexist` is legal), never a fresh session.
+- **A sealed restore path across process death.** `MeshSessionStore` (five-state load) +
+  `MeshSessionRestore` (five loads → seven outcomes) + the one writer seam
+  `persistSessionContext(addingEpochHead:)`. `deferred`/`refused`/`corrupt` start no session and run
+  no writer, and `save` throws rather than half-succeeding — so "reconnect after a restart is a
+  merge" (§10.3) has durable state to merge *from*. The group key is still never persisted: resume
+  reconnects and rotates.
+- **The acceptance handles item 8 left behind**, so P4's suites need no new fixtures:
+  `MeshEpochFixtures` (`Tests/FernletTests/MeshEpochModelTests.swift`), `MeshSessionStoreFixtures`
+  (`MeshSessionStoreTests.swift`), and the manager's own DEBUG seams
+  `seedMembershipLedgerForTesting`, `seedEpochKeyringForTesting`, `rotateNowForTesting(cause:)`,
+  `onMembershipEventSentForTesting`, `identityForTesting`. **One trap:** `.merge` outranks
+  `.membership`, so a test that seeds a roster *via* the merge trigger cannot then observe a
+  membership rotation — `seedMembershipLedgerForTesting` exists precisely to seed without spending it.
+- **A quorum rule with an arithmetic P4 must respect.** ⌊|roster|/2⌋ + 1 distinct current voters,
+  re-derived on the **receiver's** merged roster at evaluation time
+  (`MeshMembershipRecordVerifier`) — which is what makes §10.4's table (roster 4 → a 2/2 split
+  moderates nobody; a 3/1 split can remove the isolated member) a property of the shipping verifier
+  rather than a doc.
+
+### 21.2 The sim↔sim lane, as it actually is
+
+§10's testing-lane paragraph promises "3–6 Simulators on one Mac" for the 2/2, 3/1 and nested
+re-split shapes. **Read it with §8.7 finding 1 in hand.**
+
+| Ask | Status |
+|---|---|
+| A **pair** over real QUIC, carrying the derived roster | **Proven** (`2f6fd42`): admission, rotation crossing the tunnel, clean departure, removal ejecting at the next introduction — all with `ledger=present` on both nodes and `FERNLET_MESH_CHAOS_BARRED` unset |
+| The harness seams a membership run needs | **Built and env-gated** (DEBUG, `FERNLET_MESH*` family): `FERNLET_MESH_ROLE=founder\|joiner`, `FERNLET_MESH_LEAVE_AFTER`, `FERNLET_MESH_REMOVE_AFTER`, `armFounderLedgerForHarness()`, `requestAdmissionForHarness()`, `seedRemovalRecordForHarness`, the `[mesh-flow] membership` audit line and the `[mesh-quic] membershipFrame` / `membershipRecord` echoes |
+| **≥ 3 nodes** — a 2/2 or 3/1 split, a departure gossiped by a third member, a rotation across two tunnels, a real quorum, `MeshLedgerAdoption`'s actual rebase | **BLOCKED on 0b** — three Simulators form a spanning star, N−1 edges, hub varying, 3/3 reproductions (runbook "Lane C — THREE nodes"). A P2 **transport** defect, not a membership one |
+
+So P4's tier-1 obligation is unchanged and complete on its own terms — `FakePeerNetwork` scripts
+n-way splits and heals with no wall-clock sleeps, which is where randomized bounded schedules under a
+fixed seed belong. What P4 **cannot** do without 0b is corroborate any of it on the radio. Plan for
+tier 1 first and decide 0b separately (§21.3); do not sequence the fake-fabric suites behind it.
+
+Two lane facts worth not re-deriving: a removal does **not** cut a live tunnel — it refuses the next
+introduction, per `MeshIntroductionAuthority` answering per introduction; and
+`seedRemovalRecordForHarness` re-seeds the ledger rather than travelling `insertMembershipRecord`, so
+it does not request a rotation (rotation-on-removal is tier 1, in `MeshRotationTriggerTests`).
+
+### 21.3 Decisions with defaults — take them deliberately, at the start
+
+| Decision | Default if the owner is silent | Why |
+|---|---|---|
+| **Does P4 fix 0b as pre-work, or build on pairs only?** | **Build on pairs only; timebox 0b to one iteration at the *end* of P4, not the start.** | It is a P2 transport defect and P4's real acceptance (§16.2's matrix, the convergence property test, §10.4's quorum table, §10.5's two worked examples) is tier 1 on the fake fabric, which is already green for three-node shapes. Spending P4's first iterations on a dial fan-out / silent-refusal bug risks the phase for corroboration, not correctness. **But P5 inherits it worse** — store-and-forward's delivery targets are defined in partition terms, and a relay drain across a real three-node split is the first thing that genuinely wants three radios. |
+| **Departure delivery: a transport ack in P4, or wait for P5 store-and-forward?** | **Wait for P5, and make P4's merge path the recovery.** | §8.7 finding 2: the leave awaits the local write and then stops the transport. A delivery ack or bounded re-send is a transport change; P5's relay is the mechanism that exists for exactly "a frame the peer did not get". P4 should assert the recovery instead — a survivor that missed a departure learns it at the next merge — which is a §10.5 property it owes a test for anyway. **If the owner wants it sooner:** the cheap half is to await a flush (or a bounded re-send window) *before* `leaveSession()` stops the transport, which is a `NetworkMeshSession` change, not a membership one. |
+| **Transcript `sid` binding (§18 decision 7, §7.7 finding 1)** | **Still owner-gated; still not taken.** | P3 declined it because `epochRef` became real inside the existing field and no golden vector moved. P4 moves no wire bytes either, so the decision keeps travelling — but note it gets *more* expensive with every phase that adds a frame. Touch list: `MeshChannelIntroductionTranscript`, `canonicalBytes`, `bind(channelBindingHash:)`, the purpose doc, the framing case and the distinctness table. |
+| **Does a merge re-run ingestion gates, or trust the branch that accepted first?** | **Re-run at ingestion**, per §10.3 (age gate and moderation run on ingestion exactly as the existing rebuild path does). | Records union; *content* does not get a free pass because another branch approved it. Say so in the acceptance suite rather than leaving it implied. |
+| **Epoch head cap 8 vs roster cap 8 under nested re-splits** | **Keep 8, and treat `mergedHeads`' limit as an assertion P4 tests, not a knob.** | §9 bounds partition branches by roster; a nested re-split cannot exceed everyone-alone. If a suite ever pushes past 8, that is a bug in the merge, not a small cap. |
+
+### 21.4 Still owed by the owner, and not blocking P4
+
+Carried from §20.6, plus what P3 added:
+
+- **Hardware, unchanged and still not blocking:** the Lane A diagnostic report (P2 loop item 1), AWDL
+  + the Local Network permission prompt (item 11), the double-dial collapse's Lane B row (§7.7
+  finding 6), and **Lane D** — the production transport over Wi-Fi with the cable unplugged, which
+  settles the reconnect-after-idle question and the run-3 device freeze at once (specified in the
+  runbook, not yet run).
+- **New from P3 — the three owner calls in the P3 ledger's "Blocked on owner":** 0b (the spanning
+  star), departure-delivery durability, and the transcript-`sid` move. §21.3 gives each a default.
+- **New from P3 — §17.3's `PrivacyInfo`/privacy-copy paragraph** (§8.7 finding 7). P3's debt, not
+  P4's; nothing mechanical is wrong today, and the real deadline is the first TestFlight build.
+- **Open decisions §18.1–§18.6 are untouched by P3**, and §18.2 (partition UX: "N friends out of
+  range — will sync when you reunite", or the subtitle count only) is the one P4 will actually want
+  an answer to, because it is the first phase with a partition to describe.
+- **A known-red gate that is nobody's current fault:** `sync-string-catalogs.sh --check` fails on
+  nine stale keys present in the file as committed (§5 item 4). One write-mode run on a quiet tree.
+  **Do not bisect it.**
+- **Closed; do not re-audit:** `MeshTunnelConvergence` and the id-vs-endpoint family (`96337a3`,
+  `2f273a9`), and — new — the crypto-purpose/`PayloadType`/record-kind spellings, which are walled by
+  `CryptographicPurposeBoundaryTests` and the vocabulary wall rather than by review.
+
+### 21.5 What P3 learned that re-tiers P4–P6 further
+
+- **§7.8's re-tier holds — for pair-shaped tests.** Everything the two-node lane proved in P2
+  reproduces, and P3 added the whole membership flow to it: a derived roster, admission, a rotation
+  whose key crosses a real tunnel, a signed departure and a removal that ejects at the next
+  introduction, all off the shipping authority. That is a genuine tier-2 lane and it costs no
+  hardware and no human.
+- **Anything needing three *real* nodes is blocked until 0b, and P5 feels it worse than P4.** P4's
+  acceptance is tier 1 by design; P5's relay drain across a split is the first thing that wants three
+  radios at once. If 0b is going to be fixed at all, the cheapest place is **the end of P4 or the
+  start of P5** — before P5's design is committed to a lane that cannot run it.
+- **P7's seams already exist.** `.developed`, `.backgrounded` and `.foregrounded` transition
+  correctly and are covered by the totality sweep; nothing raises them (§8.7 finding 4). P7 is
+  therefore mostly *wiring* — the events plus a poller for `enforceSessionCeiling` /
+  `evaluateIdleLapse`, which are on-demand today — and it can interleave earlier than §18's diagram
+  suggests, because the state model it needed is already built and tested.
+- **P5 inherits two things, one built and one retiring.** `MeshFrameReplayWindow` is built and not
+  wired (§8.7 finding 5): per-sender frame-id dedup, refuses at its cap, knows nothing about epochs,
+  which is the point. And the remaining `keyEpoch ==` gates in `MeshNetworkManager` — the photo
+  manifest's `key.epoch == photo.keyEpoch`, the `keyEpoch >= localJoinedEpoch` filter, and the
+  encrypted-metadata wrapper's `wrapper.keyEpoch == currentGroupKey?.epoch` — are what §8.4 says must
+  retire *with* the old path: each would wrongly reject content created in the other branch of a
+  split. Retire them with the path P5 replaces, not by loosening them in place.
+- **Instrument before inferring — twice more.** Item 0's inbound refusals and item 9's membership
+  echoes both existed only because "the frame never arrived" and "the frame arrived and was refused"
+  read identically without them, and item 9's departure finding was undiagnosable until they landed.
+  Any P4 lane run on real radios wants its own echo before its first run, not after its first
+  mystery.
