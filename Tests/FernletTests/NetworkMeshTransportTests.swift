@@ -362,6 +362,52 @@ struct MeshLinkTableTests {
         #expect(table.dueRetries(now: clock.now) == [MeshLinkKey("alpha"), MeshLinkKey("beta"), MeshLinkKey("charlie")])
     }
 
+    // MARK: - Re-propose budget (0b review finding 2)
+
+    /// The budget the re-propose sweep spends, and the loop it exists to stop.
+    ///
+    /// The sweep re-offers an `idle`, untunnelled browsed peer to the owner every five seconds, and
+    /// the owner has reasons to refuse a seat this radio cannot see — a locally-kicked peer, a
+    /// removed member, a capacity race. Each refusal ends the tunnel, which returns the link to
+    /// `idle` **with a full dial budget**, so without a second, separately-counted budget that is an
+    /// unbounded connect/refuse/re-dial cycle.
+    @Test func theReproposeBudgetIsSpentAndNeverRefilled() {
+        var table = MeshLinkTable()
+        let clock = VirtualClock()
+
+        for attempt in 1...MeshLinkTable.maxReproposalsPerEndpoint {
+            let admitted = table.admitRepropose(Self.alpha)
+            #expect(admitted, "re-proposal \(attempt) is inside the budget")
+            #expect(table.reproposalCount(of: Self.alpha) == attempt)
+        }
+        let overBudget = table.admitRepropose(Self.alpha)
+        #expect(!overBudget, "the budget must refuse once it is spent")
+
+        // The loop this closes, spelled out: a connect and a disconnect refill the DIAL budget and
+        // must not refill this one.
+        table.noteReady(Self.alpha, now: clock.now)
+        table.noteClosed(Self.alpha)
+        #expect(table.dialAttempts(for: Self.alpha) == 0, "test premise: connecting refills the dial budget")
+        let afterReconnect = table.admitRepropose(Self.alpha)
+        #expect(!afterReconnect, "a reconnect must NOT refill the re-propose budget")
+        #expect(table.reproposalCount(of: Self.alpha) == MeshLinkTable.maxReproposalsPerEndpoint)
+    }
+
+    /// Budgets are per endpoint, and die with the endpoint — so the map cannot grow without bound.
+    @Test func theReproposeBudgetIsPerEndpointAndDiesWithIt() {
+        var table = MeshLinkTable()
+        let booked = table.admitRepropose(Self.alpha)
+        #expect(booked)
+        #expect(table.reproposalCount(of: Self.beta) == 0, "one endpoint's budget is not another's")
+
+        table.forget(Self.alpha)
+        #expect(table.reproposalCount(of: Self.alpha) == 0, "forgetting an endpoint drops its budget")
+
+        _ = table.admitRepropose(Self.beta)
+        table.removeAll()
+        #expect(table.reproposalCount(of: Self.beta) == 0, "teardown drops every budget")
+    }
+
     static func record(named name: String, at now: Date) -> MeshEndpointRecord {
         MeshEndpointRecord(
             key: MeshLinkKey(name),
