@@ -1,13 +1,14 @@
 # Mesh Migration Loop Ledger — P3
 
 **Phase:** P3 (durable session context, roster, membership) · **Prompt:** [Next-Round-Prompt-Mesh-P3-2026-09-01.md](Next-Round-Prompt-Mesh-P3-2026-09-01.md)
-**Started:** 2026-09-01 · **Iteration:** 10 · **Tree at seed:** main = `801e34f` (pushed); launcher at `adfa3c0`
+**Started:** 2026-09-01 · **Iteration:** 11 · **Tree at seed:** main = `801e34f` (pushed); launcher at `adfa3c0`
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
-| 0 | Multi-node sim bring-up (3 nodes) | 2 | — | todo | | de-risks every tier-2 item; deferred behind tier-1 work per §1.3 |
+| 0 | Multi-node sim bring-up (3 nodes) | 2 | — | done (DID NOT CONVERGE) | `c619d1f` | 3 sims = spanning star, N−1 edges, hub varies; pairs fine; recorded in runbook |
+| 0b | Star-topology root cause (third pair dropped silently or never proposed) | 2 | 0 | blocked | | P2-transport defect, not membership; OWNER decides: fix in P3 tail or P4 pre-work. Gates §10.5 third-member gossip, real quorum, P4's multi-node lane |
 | 1 | Records + derived roster, pure | 1 | — | done | `cd8ea71` | 4 record kinds, ledger of 4 sets, roster derived per read; caps = keep-earliest-k (merge-stable); barred keys joined from admission |
 | 2 | Sealed MeshSessionStore (5-state, per-instance root, §17.3) | 1 | 1 | done | `8166071` | 1 iter. Store+paperwork landed; manager save-cadence wiring folded into item 6 |
 | 3 | Membership event wire tokens | 1 | 1 | done | `700605c` | transcript NOT moved; goodbye = presence-only downgrade; verifier gates insertion |
@@ -17,9 +18,10 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 6 | State machine §8.2 on the fake | 1 | 2 | done | `3daf364` | 10 states/18 events, ceiling at both bounds, restore 5→7, save cadence on the one writer |
 | 7 | IntroductionAuthority → derived roster | 1 | 1, 2, 3b, 5 | done | `295e48f` | joiners adopt via digest re-gossip; row 3 shipping; FULL suite green (3674) |
 | 8 | P3 acceptance battery | 1 | 2,4,5,6,7 | done | `ed3c193` | 13 scenarios, 0 disabled, 0 product findings; full suite 3687 green; wall-check passed |
-| 9 | Multi-node membership at tier 2 | 2 | 0, 7 | todo | | Lane C, 3–6 sims |
+| 9 | Multi-node membership at tier 2 — RE-PLANNED ONTO PAIRS | 2 | 7 | todo | | needs harness founder/joiner seam + clean-leave verb first (derived roster unreachable from harness today); pair subset: admission across live roster, rotation crossing a tunnel, clean departure → member-departure.v1; removal ejection via seeded record (no real quorum on 2). Third-member gossip stays blocked on 0b |
 
 ## Blocked on owner
+- 0b: three Simulators form a star, never a full mesh (runbook "Lane C — THREE nodes"). Decide whether the dial fan-out / silent-refusal defect is fixed inside P3 or as P4 pre-work.
 - Transcript-`sid` / `epochRef` move (§3 decision, §18 decision 7) — confirm before the wire changes.
 
 ## Decisions taken (defaults from §3 unless the owner overrides)
@@ -30,6 +32,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | Publish `fp` in TXT | no (transcript did not move) | 2026-09-01 |
 
 ## Surprises worth not re-deriving
+- Item 0: harness sets `currentMesh` directly → only the DESCRIPTOR roster converges over real tunnels; `startNewMesh` mints a random mesh id so seeded peers can't match it. Inbound refusals now log `inbound tunnel refused <case> for <key>` (before, refused and unattempted edges were indistinguishable). Log suffix: browsed `fernlet-mesh-<hex>` = we dialed; bare integer = inbound. `FERNLET_MESH_MATRIX_MEMBERS` already accepts 8 keys.
 - Item 8: residuals, not defects — `.developed`/`.backgrounded`/`.foregrounded` have no shipping caller (P7 seam); the 3-node fake scenario cannot mint a rotation because the coordinator is the lowest fingerprint and fixture identities are random — item 9's real 3-sim run is where the mint crosses tunnels. Keyring stamps supersession INSIDE the rotation whose drain waits ~10 s for acks a fake never sends — bracket grace assertions.
 - Item 7: joiner bootstrap root = ADMITTER's key (not founder's); `MeshLedgerAdoption.adopt` rebases from the self-admitted root. Re-gossip cap `maxReGossipFrames` = 16·3+1, answered once per peer per session. `FERNLET_MESH_CHAOS_BARRED` kept ONLY because 2 sims cannot make a quorum — item 9 retires it with ≥3 nodes. Audit keys `mesh.membershipLedger.{bootstrapped,adopted,reGossiped}`, `mesh.introductionAuthority.legacyRosterFallback`. Full FernletTests ≈ 11.4 min on this Mac.
 - Item 3b: `emitApprovedRemovalRecord`'s LOCAL insert is still refused `signerNotAdmitted` (empty ledger on every node but the founder) — broadcast proceeds anyway; item 7 closes it. `seedMembershipLedgerForTesting` seeds a roster without spending the merge trigger (`.merge` outranks `.membership`, so a merge-seeded test cannot observe a membership rotation). `PayloadType` is switched only with `default` (manager + coordinator), so the clean-build enum hazard does not apply.
@@ -48,4 +51,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share this tree and sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` are held by another session — never stage them.
 
 ## Next item
-0 (3-sim bring-up via Lane C, TIMEBOXED to one iteration) — then 9 if it converges, else re-plan 9 onto pairs. Only tier-2 work remains.
+9 (pairs): build the harness founder/joiner + clean-leave seams, then run the pair subset over two sims. Then §8 close-out (plan BUILT, P4 handoff §21, memory) and STOP.
