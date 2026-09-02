@@ -158,7 +158,10 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `localFingerprint` | Exposes the local identity fingerprint. |
 | `sessionParticipants` | Builds a de-duplicated participant list from local identity, current mesh members, or committed pairwise slots while excluding removed members. |
 | `leaveSession()` | Clears session photo metadata and leaves the mesh/pairwise session. |
-| `leaveSessionAfterNotifyingPeers()` | Sends session-goodbye envelopes to slots before leaving. |
+| `leaveSessionAfterNotifyingPeers()` | Ends the session and tears down transport. **No longer sends `.sessionGoodbye`** (P3 item 3): the legacy frame is parsed, never emitted, and the disconnect that follows already says everything an unsigned frame could. |
+| `prepareMembershipLedger(meshID:founderSigningPublicKey:)` | Arms the verified ledger at mesh creation, rooted in the founder's key. Idempotent per mesh; a different mesh id replaces it, because records never cross meshes. |
+| `dispatchMembershipEventPayload(_:plaintext:decoder:slot:)` | Decodes `.meshMemberDeparture` / `.meshTerminated` / `.meshInventoryDigest` on a COMMITTED slot and hands each to `MeshMembershipRecordVerifier`. Decode + verify + insert only — emission is not wired. |
+| `emitMembershipEvent(_:)` | **The emission seam, deliberately empty.** Membership events are sent on state-machine transitions (plan items 5–6), and a departure must ship together with the rotation that excludes the leaver. |
 | `finishSessionPhotos(keeping:)` | Finalizes session metadata, deletes unkept session photos from cache state, clears session photos, and persists. |
 | `deleteAllSessionPhotos()` | Finishes the session while keeping no photos. |
 | `startNewMesh(name:)` | Creates a new open mesh descriptor with the local member and starts discovery. |
@@ -352,6 +355,40 @@ BEFORE the record reaches a ledger a roster is derived from.
 | `…DerivedRoster.isFinalPair` | Judged on the DERIVED roster, never the connected pair (a 2/2 split of a 4-roster is not two final pairs). |
 | `…DerivedRoster.introductionRoster()` | Hands the QUIC transport members AND barred as keys — what makes `MeshIntroductionRoster.barred` a real answer instead of the empty list the live manager falls back to. |
 | `applyTermination(_:to:)` (private) | Read-time, not merge-time: a termination from a non-member is ignored; one whose signer sits on a roster larger than two downgrades to that signer's departure. Applying it at merge time would make the union order-dependent. |
+
+### `MeshMembershipEvents.swift`
+
+The membership events that MOVE (plan §8.3, §10.5). Record kind, `PayloadType` and crypto domain
+share one frozen English spelling per event, so a grep for the token finds every layer.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshMembershipEventFormat` | Widths and caps every frame is checked against BEFORE a signature is verified: 64-byte signature, 32-byte digest, 64-char fingerprint ceiling. |
+| `MeshRecordIdentity` | One record's kind + the four fields of its total order, so the digest is computed over a kind-tagged flattening of all four sets rather than four separate hashes. |
+| `MeshInventoryDigest` | Counts + SHA-256 over the sorted identities, under `Hash.meshInventoryDigestV1`. A pure function of the record SET — a hint that decides whether a full record exchange is worth its bytes, never an authority. |
+| `MeshMemberDeparturePayload` / `MeshTerminationPayload` | The two record frames. Each carries the signed record and nothing else — a second unsigned copy of the same fact is a second thing that can disagree. |
+| `MeshInventoryDigestPayload` | The signed digest message: digest + sender + `sentAt` + signature, with `isWellFormed` checked on untrusted bytes first. |
+| `SignedDepartureRecord.signed(…)` / `SignedTerminationRecord.signed(…)` / `SignedRemovalRecord.signed(…)` | `@MainActor` minting factories over `IdentityService`, mirroring `MeshAdmissionToken.signed`. Verification stays `nonisolated`. |
+| `MeshInventoryDigestPayload.signed(…)` | Computes this device's digest for a ledger and signs it. |
+| `MeshMembershipGoodbyeInterop` | The legacy `fernlet.session.bye.v1` rule: **parsed, never emitted**, and `departureRecord(forGoodbyeFrom:)` is ALWAYS nil — an unsigned frame must not be able to subtract a member from a signed roster (disconnect ≠ removal, §8.2). |
+| `MeshLegacyGoodbyeOutcome` | One case, `.disconnected`. The strongest statement an unsigned goodbye can support. |
+
+### `MeshMembershipRecordVerifier.swift`
+
+The verify-then-insert seam item 1 deliberately left open. Nothing that derives a roster may insert
+without coming through here: the sets are capped at sixteen and keep the EARLIEST records, so junk
+with a low timestamp crowds a real removal out on every device it reaches.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshMembershipRecordRejection` | Ten named refusals + frozen-English `diagnosticDescription`. A bare boolean is how "signed by a stranger" and "three votes short" become one indistinguishable non-update. |
+| `insert(_: SignedAdmissionRecord)` | Verifies under the token's own `meshAdmissionTokenV2` domain (one admission format, not two); the admitter must be a current member, or the founder when the ledger is empty. `expiresAt` is NOT re-applied — it gates admission, not a durable record. |
+| `insert(_: SignedDepartureRecord)` | Self-signed by the leaver; the key comes from that member's admission record, never from the departure. |
+| `insert(_: SignedRemovalRecord)` | Re-checks plan §10.4's ⌊&#124;roster&#124;/2⌋ + 1 against THIS device's merged roster via `MeshDerivedRoster.quorumThreshold`; distinct eligible voters only, target excluded. |
+| `insert(_: SignedTerminationRecord)` | Requires a CURRENT member — a departed, removed or unknown signer cannot end a mesh it is not in. Whether it terminates or downgrades stays `MeshDerivedRoster`'s read-time decision. |
+| `merge(_:)` | Imports a peer's ledger ONE RECORD AT A TIME through the same door, so a peer that forged one record cannot import all of them. |
+| `verify(_: MeshInventoryDigestPayload)` / `matchesLocalInventory(_:)` | Verifies a peer's digest, then answers whether it matches. A DIFFERING verified digest is the signal, not an error. |
+| `admittedSigningKey(for:)` (private) | The single lookup that turns "well-formed" into "signed by somebody entitled to sign it". |
 
 ## Transport And Ranging
 

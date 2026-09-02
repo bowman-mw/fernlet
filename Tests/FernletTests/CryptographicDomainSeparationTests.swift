@@ -66,6 +66,10 @@ struct CryptographicDomainSeparationTests {
         Domain("Signature.meshProbeChannelIntroductionV1", FernletCryptoPurpose.Signature.meshProbeChannelIntroductionV1),
         Domain("Signature.meshChannelIntroductionV1", FernletCryptoPurpose.Signature.meshChannelIntroductionV1),
         Domain("Signature.meshRoutedManifestV1", FernletCryptoPurpose.Signature.meshRoutedManifestV1),
+        Domain("Signature.meshMemberDepartureV1", FernletCryptoPurpose.Signature.meshMemberDepartureV1),
+        Domain("Signature.meshMemberRemovalV1", FernletCryptoPurpose.Signature.meshMemberRemovalV1),
+        Domain("Signature.meshTerminatedV1", FernletCryptoPurpose.Signature.meshTerminatedV1),
+        Domain("Signature.meshInventoryDigestV1", FernletCryptoPurpose.Signature.meshInventoryDigestV1),
         Domain("Signature.proximityQRIdentityV1", FernletCryptoPurpose.Signature.proximityQRIdentityV1),
         Domain("Signature.proximityQRResponseV1", FernletCryptoPurpose.Signature.proximityQRResponseV1),
         Domain("Signature.duressRecoveryRequestV1", FernletCryptoPurpose.Signature.duressRecoveryRequestV1),
@@ -113,6 +117,7 @@ struct CryptographicDomainSeparationTests {
         // Hash
         Domain("Hash.sealedPhotoContentV2", FernletCryptoPurpose.Hash.sealedPhotoContentV2),
         Domain("Hash.lockVerifierV2", FernletCryptoPurpose.Hash.lockVerifierV2),
+        Domain("Hash.meshInventoryDigestV1", FernletCryptoPurpose.Hash.meshInventoryDigestV1),
         Domain("Hash.recoveryContentKeyV1", FernletCryptoPurpose.Hash.recoveryContentKeyV1),
     ]
 

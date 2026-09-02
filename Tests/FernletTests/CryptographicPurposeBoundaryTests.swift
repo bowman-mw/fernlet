@@ -97,12 +97,49 @@ struct CryptographicPurposeBoundaryTests {
             "canonicalBytes(for: transcript) must satisfy meshChannelIntroductionV1's declared framing"
         )
 
+        // The membership events (network migration P3 item 3, plan §8.3). Four purposes, four
+        // serializers, registered and held to their declaration in the SAME change — the pairing
+        // 91c3956 broke. Each record's own signature is excluded from its bytes, so the fixtures
+        // below carry a placeholder one.
+        assertMembershipFramingHolds()
+
         // Still POSITIONAL, not a substring search: a length-prefixed purpose rejects its own raw
         // spelling. Accepting that would let a transcript carry the domain in an attacker-chosen
         // field and still reach the identity key.
         #expect(envelopePurpose.signingBytes(envelopePurpose.data) == nil)
         #expect(reportPurpose.signingBytes(reportPurpose.data) == nil)
         #expect(introductionPurpose.signingBytes(introductionPurpose.data) == nil)
+    }
+
+    /// The four membership-event transcripts against their declared `.lengthPrefixed` framing, and
+    /// against each OTHER's — a departure that satisfied the termination purpose would mean a
+    /// member removing itself and a member ending the mesh for everyone shared a signature.
+    ///
+    /// Split out of ``canonicalSerializerTranscriptsMatchTheirDeclaredFraming()`` so neither
+    /// function grows past the 60-line rule; both halves run in the same test.
+    private func assertMembershipFramingHolds() {
+        let departure = canonicalBytes(for: MeshMembershipEventFixtures.departure())
+        let removal = canonicalBytes(for: MeshMembershipEventFixtures.removal())
+        let termination = canonicalBytes(for: MeshMembershipEventFixtures.termination())
+        let inventory = canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload())
+
+        let departurePurpose = FernletCryptoPurpose.Signature.meshMemberDepartureV1
+        let removalPurpose = FernletCryptoPurpose.Signature.meshMemberRemovalV1
+        let terminationPurpose = FernletCryptoPurpose.Signature.meshTerminatedV1
+        let inventoryPurpose = FernletCryptoPurpose.Signature.meshInventoryDigestV1
+
+        #expect(departurePurpose.signingBytes(departure) != nil)
+        #expect(removalPurpose.signingBytes(removal) != nil)
+        #expect(terminationPurpose.signingBytes(termination) != nil)
+        #expect(inventoryPurpose.signingBytes(inventory) != nil)
+
+        #expect(departurePurpose.signingBytes(termination) == nil)
+        #expect(terminationPurpose.signingBytes(departure) == nil)
+        #expect(removalPurpose.signingBytes(inventory) == nil)
+        #expect(inventoryPurpose.signingBytes(removal) == nil)
+
+        #expect(departurePurpose.signingBytes(departurePurpose.data) == nil)
+        #expect(inventoryPurpose.signingBytes(inventoryPurpose.data) == nil)
     }
 
     /// The raw-prefix family: transcripts that concatenate their domain directly. Rejecting a

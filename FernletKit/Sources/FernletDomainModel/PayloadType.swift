@@ -32,6 +32,18 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     case workoutLiveUpdate     = "fernlet.workout.live.v1"
     // Session control
     case sessionHeartbeat      = "fernlet.session.ping.v1"
+    /// **Frozen and parked: parsed, never emitted** (network migration P3 item 3, plan §8.3).
+    ///
+    /// A goodbye is an UNSIGNED courtesy frame — its whole body is a `PayloadSummary` — so it can
+    /// say only "this link is going away", and that is exactly how a receiver must read it: the
+    /// peer is treated as **disconnected, not departed** (plan §8.2's "disconnect ≠ removal"). It
+    /// deliberately produces no `SignedDepartureRecord`: letting an unsigned frame subtract a
+    /// member from a signed roster would make membership forgeable by anyone who can reach the
+    /// link, and grow-only records are permanent, so the forgery could never be undone.
+    ///
+    /// New builds emit ``meshMemberDeparture`` instead, which is signed by the leaver. Decoding
+    /// stays for peers built before the transition; `MeshMembershipGoodbyeInterop` states the rule
+    /// in one place and `MeshMembershipEventWireTests` holds it.
     case sessionGoodbye        = "fernlet.session.bye.v1"
     // Friends
     case friendPhoto           = "fernlet.friend.photo.v1"
@@ -101,6 +113,20 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     case meshFriendVouchList   = "fernlet.mesh.vouch.v1"
     case meshRemovalProposal   = "fernlet.mesh.removal.proposal.v1"
     case meshRemovalSecond     = "fernlet.mesh.removal.second.v1"
+    // Membership events (network migration P3, plan §8.3). Each token is the SAME spelling as its
+    // membership-record kind and its Ed25519 signing domain — record kind, wire token and crypto
+    // purpose are one frozen English vocabulary, so grepping the token finds every layer that
+    // touches those bytes. None is in `sealingRequiredTypes`: a membership record is signed gossip
+    // that every member must be able to re-broadcast verbatim (plan §10.5), and pairwise sealing
+    // would make a record readable only by its first hop. Additive-safe — older clients park them.
+    /// A member's own signed statement that it left (`MeshMemberDeparturePayload`). Replaces the
+    /// legacy `.sessionGoodbye` as the thing that ends a MEMBERSHIP; a goodbye only ends a link.
+    case meshMemberDeparture   = "fernlet.mesh.member-departure.v1"
+    /// A final-pair member's signed statement that the mesh is over (`MeshTerminationPayload`).
+    case meshTerminated        = "fernlet.mesh.terminated.v1"
+    /// A signed summary of the records the sender's ledger holds, so a counterpart can tell it is
+    /// MISSING some and ask for a re-gossip (`MeshInventoryDigestPayload`, plan §10.5).
+    case meshInventoryDigest   = "fernlet.mesh.inventory-digest.v1"
     // Group encryption (Phase 3)
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"

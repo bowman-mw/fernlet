@@ -112,6 +112,30 @@ public nonisolated enum FernletCryptoPurpose {
         /// hence `.lengthPrefixed`. `CryptographicPurposeBoundaryTests` holds the serializer to that
         /// declaration; changing one without the other is what broke in `91c3956`.
         public static let meshChannelIntroductionV1 = CryptographicPurpose("fernlet.mesh.channel-introduction.v1", framing: .lengthPrefixed)
+        /// **Written since P3 item 3.** A leaver's own signature over its ``SignedDepartureRecord``
+        /// (plan §8.3, wire token `fernlet.mesh.member-departure.v1`). The spelling is deliberately
+        /// IDENTICAL to the record kind's `rawValue` and to the payload type it travels as: record
+        /// kind, wire token and crypto domain are ONE vocabulary, so a reader grepping the token
+        /// finds every layer that touches those bytes. Serialized by `canonicalBytes(for:)` with
+        /// `CanonicalByteWriter`, hence `.lengthPrefixed`.
+        public static let meshMemberDepartureV1 = CryptographicPurpose("fernlet.mesh.member-departure.v1", framing: .lengthPrefixed)
+        /// **Written since P3 item 3.** The tallier's signature over a completed
+        /// ``SignedRemovalRecord`` (plan §8.3/§10.4). The record carries its quorum evidence, so
+        /// this signature attests to the tally, and the receiver re-checks the arithmetic against
+        /// its own merged roster rather than trusting the tallier.
+        public static let meshMemberRemovalV1 = CryptographicPurpose("fernlet.mesh.member-removal.v1", framing: .lengthPrefixed)
+        /// **Written since P3 item 3.** A final-pair member's signature over its
+        /// ``SignedTerminationRecord`` (plan §8.3). Distinct from the departure domain even though
+        /// the record downgrades to a departure at a receiver whose roster is larger: the downgrade
+        /// is a DERIVATION over an already-verified termination, never a re-interpretation of the
+        /// bytes, so the two signatures must not cross-validate.
+        public static let meshTerminatedV1 = CryptographicPurpose("fernlet.mesh.terminated.v1", framing: .lengthPrefixed)
+        /// **Written since P3 item 3.** The sender's signature over a
+        /// ``MeshInventoryDigestPayload`` — "here is what my ledger holds" (plan §8.3, §10.5). The
+        /// digest itself is only a hint, but it is the input to a bounded re-gossip, so it is
+        /// signed: an unsigned digest arriving on a relayed path could be forged to spend a peer's
+        /// re-gossip budget, and an attributable one cannot.
+        public static let meshInventoryDigestV1 = CryptographicPurpose("fernlet.mesh.inventory-digest.v1", framing: .lengthPrefixed)
         /// **Reserved, not yet written.** P5's routed-content manifest signature (plan §11): item
         /// ID, type token, content hash, size, immutable destination set, expiry, and the
         /// per-recipient key wraps. Signed by the ORIGIN only — relays forward the origin's exact
@@ -214,6 +238,17 @@ public nonisolated enum FernletCryptoPurpose {
     public nonisolated enum Hash {
         public static let sealedPhotoContentV2 = CryptographicPurpose("fernlet.sealed-photo.content-hash.v2")
         public static let lockVerifierV2 = CryptographicPurpose("fernlet.lock.verifier.v2")
+        /// **Written since P3 item 3.** The domain the membership-inventory digest is computed
+        /// under (plan §10.5): SHA-256 over this tag followed by the canonical, sorted identities
+        /// of every record a ledger holds.
+        ///
+        /// Its own domain rather than a reuse of
+        /// ``FernletCryptoPurpose/Signature/meshInventoryDigestV1``: the signature domain tags the
+        /// bytes a peer signs, this one tags the bytes that are hashed INTO those. Sharing one
+        /// spelling would let a signed digest message and a raw digest input be the same bytes,
+        /// which is precisely the confusion the registry exists to deny. The `.hash.` infix also
+        /// keeps neither spelling a prefix of the other.
+        public static let meshInventoryDigestV1 = CryptographicPurpose("fernlet.mesh.inventory-digest.hash.v1")
         public static let recoveryContentKeyV1 = CryptographicPurpose("fernlet.lock.recovery.contentkey.v1")
     }
 }
