@@ -230,6 +230,7 @@ struct MeshMembershipEventGoldenTests {
     /// Record kind, wire token and crypto domain are ONE frozen English vocabulary. If they ever
     /// diverge, a grep for the token stops finding the layer that signs it.
     @Test func theTokenVocabularyIsShared() {
+        #expect(MeshMembershipRecordKind.admission.rawValue == PayloadType.meshMemberAdmission.rawValue)
         #expect(MeshMembershipRecordKind.departure.rawValue == PayloadType.meshMemberDeparture.rawValue)
         #expect(MeshMembershipRecordKind.removal.rawValue == PayloadType.meshMemberRemoval.rawValue)
         #expect(MeshMembershipRecordKind.termination.rawValue == PayloadType.meshTerminated.rawValue)
@@ -248,6 +249,15 @@ struct MeshMembershipEventGoldenTests {
         #expect(
             PayloadType.meshInventoryDigest.rawValue
                 == FernletCryptoPurpose.Signature.meshInventoryDigestV1.rawValue
+        )
+        // The admission frame is the one member of the family with NO signing domain of its own:
+        // the record it carries is the existing `MeshAdmissionToken`, signed under
+        // `meshAdmissionTokenV2`. A domain spelled like the frame would be a second admission
+        // format, which is exactly what `SignedAdmissionRecord` exists to avoid.
+        #expect(
+            PayloadType.meshMemberAdmission.rawValue
+                != FernletCryptoPurpose.Signature.meshAdmissionTokenV2.rawValue,
+            "the admission frame names a wire token; the record inside it stays signed under meshAdmissionTokenV2"
         )
     }
 

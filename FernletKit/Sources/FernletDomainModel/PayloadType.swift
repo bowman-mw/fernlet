@@ -122,6 +122,12 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// A member's own signed statement that it left (`MeshMemberDeparturePayload`). Replaces the
     /// legacy `.sessionGoodbye` as the thing that ends a MEMBERSHIP; a goodbye only ends a link.
     case meshMemberDeparture   = "fernlet.mesh.member-departure.v1"
+    /// An admitter's signed credential, kept as a durable record (`MeshMemberAdmissionPayload`,
+    /// plan §8.3/§10.5). It carries NO new signed bytes: the record wraps the existing
+    /// `MeshAdmissionToken`, still signed under `meshAdmissionTokenV2`, so this token names a frame
+    /// and never a signing domain. Re-gossiped so a member admitted by one peer appears on every
+    /// member's derived roster — without it a joiner is excluded from the next key distribution.
+    case meshMemberAdmission   = "fernlet.mesh.member-admission.v1"
     /// A completed removal: quorum was reached and the tallier signed the evidence
     /// (`MeshMemberRemovalPayload`, plan §8.3/§10.4). Sent to every member EXCEPT the removed one,
     /// who is not told and does not need to be — plan §8.3 excludes a removed member from the new
