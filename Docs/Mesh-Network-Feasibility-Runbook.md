@@ -625,7 +625,7 @@ up.**
 | Tier | Prove it here | Why |
 |---|---|---|
 | **1. Unit tests, no radio at all** | Anything that is pure logic: the dial tie-breaker's total order, retry budgets, state machines, framing bounds, rejection rules, partition scenarios. | Free, deterministic, runs in CI. `Tests/FernletTests/Mocks/FakePeerTransport.swift` exists for exactly this. If a check *can* live here, it must. |
-| **1b. Simulator ↔ Simulator, N nodes** | Real Bonjour, real QUIC, real TLS exporter, real crypto, real signed introductions — across 2, 3, 4 or 6 nodes, scripted, on one Mac with no hardware at all. **And QUIC datagrams**: proven on Lane C, 2026-09-01 (P2 item 15), correcting the earlier "not datagrams" reading. | Proven 2026-08-31. No device, no cable, no human tapping Start; `simctl` drives the whole run. Anything provable here must not be pushed up to tier 2. |
+| **1b. Simulator ↔ Simulator, N nodes** | Real Bonjour, real QUIC, real TLS exporter, real crypto, real signed introductions — across 2, 3, 4 or 6 nodes, scripted, on one Mac with no hardware at all. **Amended 2026-09-02 (P3 item 0): "N nodes" is proven for N=2 only.** Three Simulators run, discover and hold tunnels, but form a spanning STAR (N−1 edges), not a full mesh — see "Lane C — THREE nodes" below for what a 3-node run can and cannot be asked to prove. **And QUIC datagrams**: proven on Lane C, 2026-09-01 (P2 item 15), correcting the earlier "not datagrams" reading. | Proven 2026-08-31. No device, no cable, no human tapping Start; `simctl` drives the whole run. Anything provable here must not be pushed up to tier 2. |
 | **2. Device ↔ Simulator** | Real Bonjour, real QUIC, real TLS exporter, real crypto, and every app-layer mesh flow over them. Reconnection via endpoint cache. The full rejection matrix, by making the Simulator misbehave on purpose. | One device, attached debugger, fast turnaround. ~~QUIC datagrams, which tier 1b could not negotiate~~ — struck 2026-09-01: tier 1b *can* carry datagrams, so this is no longer a reason to come up here. |
 | **3. Two or more physical devices** | Only what is genuinely radio physics or OS policy: Apple peer-to-peer Wi-Fi (AWDL), the Local Network permission prompt, background and locked operation, battery, thermal, Low Power Mode. | Slow and hard to log. Keep this list as short as the work allows. |
 
@@ -1041,6 +1041,115 @@ transfers with it; an exhausted outbound budget falls back to the control stream
 frame in order is always allowed); and a refused inbound transfer goes back un-acked, so the sender's
 write fails loudly and recovery is the next manifest sync — which is the MC photo path's own failure
 semantics reached by a different route.
+
+### Lane C — THREE nodes (run 2026-09-02, P3 item 0): **the lane does not form a full mesh**
+
+P3's whole tier-2 story assumes three Simulators can carry a mesh. **They cannot, yet.** Three
+Simulators discover, introduce, and hold QUIC tunnels exactly as the pair does — but the graph they
+form is a **spanning star with N−1 edges, never the N(N−1)/2 full mesh**. One node ends holding two
+tunnels; the other two hold one each, to the hub, and never to each other. Reproduced three times
+(2026-09-02) with the hub landing on a *different* node each time, so it is not a property of any one
+Simulator, of launch order, or of the `sid` ranking.
+
+This does **not** retract anything above: every pairwise property the two-node lane proved still
+holds here. It narrows what a three-node run can be asked to prove.
+
+#### How to run it
+
+No harness change was needed — `FERNLET_MESH_MATRIX_MEMBERS` already accepts up to
+`MeshMatrixDebugOptions.maxSeededMembers` = 8 base64 keys, so N nodes is the two-node procedure with
+a longer member list. Sims: `iPhone 17` (A), `iPhone 17 Pro` (B), `iPhone 17 Pro Max` (C), all booted
+and settled ~20 s before installing.
+
+```
+# 1. harvest — one launch per sim with no mesh id, read the identity line
+SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
+xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
+#    → [mesh-matrix] identity fingerprint=<fp> signingKey=<base64>
+
+# 2. the run — identical environment on all three, ~3 s apart, a FRESH log path per node
+SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
+SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=threeNode-<A|B|C> \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=33333333-3333-3333-3333-333333333333 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<keyA>,<keyB>,<keyC> \
+SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit \
+xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
+```
+
+`FERNLET_MESH_FLOWS=commit` is what makes the topology readable: `[mesh-flow] slots total=N
+committed=N` is this node's own count of peers that finished the introduction *and* the proximity
+gate. A tunnel is `[mesh-quic] accepted <peer-fp> sid=…: tunnel activated, tunnels=N` — and the
+`for <name>` suffix on the following lines says which side dialed: a `fernlet-mesh-<hex>._…local.`
+name is a browsed advertisement (**this** side dialed, outbound), a bare integer is a
+`connection.id` (**inbound**, the peer dialed us).
+
+#### What was observed
+
+| Run | Launch order | Hub | Edges formed | Missing edge |
+| --- | --- | --- | --- | --- |
+| 1 | A, B, C | **A** (`tunnels=2`, stable ~7 min, beats both ways) | A↔B, A↔C | B↔C: C dialed B, C activated `tunnels=2`, then `tunnelEnded controlStreamEnded fb795f343c2954da live=true tunnels=1 … NWError 57 - Socket is not connected`. **B logged nothing at all** |
+| 3 | C, B, A | **B** | B↔C | A↔B churned: A activated and lost the tunnel **four times**, each `outbound … NWError 57`, `slots total=0` throughout, `gave up` never reached. A↔C never attempted |
+| 5 | A, B, C (instrumented build) | **B** (`slots total=2 committed=2`) | A↔B, B↔C | A↔C: **no dial, no refusal, no error on either side** — the edge is simply never attempted |
+
+Two different failure shapes, and the second is the worse one:
+
+* **Run 1 / run 3 — the dial lands and the far side silently drops it.** The dialer completes the
+  signed introduction, activates its tunnel, and then its control stream dies `ENOTCONN`; the
+  listening side never logs an `accepted`, never logs a `refused`, and never logs a `tunnelEnded`.
+  This is `NetworkMeshSession.admitVerifiedInbound` returning nil — the owner's `invitationGate`
+  failing closed, or `MeshLinkAdmission.refusedDuplicateTunnel` / `refusedCapacity`. **Both exits
+  logged at `debug` and neither reached the console mirror**, which is why an edge that was refused
+  and an edge nobody attempted read identically in a transcript. Fixed in this iteration:
+  `noteInboundRefusal(_:key:)` mirrors both at `notice`, naming who refused
+  (`inbound tunnel refused <owner|admission-case> for <key>`).
+* **Run 5 — the third pair never meets.** With the instrumentation in place, the missing A↔C edge
+  produced *no* refusal line on either node. A and C each discovered and dialed B and stopped; they
+  did not discover, dial, or refuse each other. So the star is **not** wholly an accept-side refusal:
+  at least sometimes the dial fan-out or the browse never proposes the third pair at all.
+
+Not a capacity cap: `MeshLinkTable.maxConcurrentLinks` is 8, and run 1's hub held two tunnels
+stably with heartbeats flowing both ways for the whole run.
+
+#### The departure half
+
+Run 1, hub A, ~t+4 min: `xcrun simctl terminate <C> MBO.Fernlet` (a hard kill — the harness has no
+clean-leave verb, so no `member-departure.v1` was emitted; see the finding below).
+
+* **A, the hub, saw it immediately and named it**: `[mesh-quic] tunnelEnded controlStreamEnded
+  87684c8a76bb86c7 live=true tunnels=1 for 5: The inbound QUIC tunnel ended: … NWError 61 -
+  Connection refused`, and `[mesh-flow] slots total=1 committed=1`.
+* **B saw nothing** — and correctly so: B never had an edge to C, so there was nothing to lose. B's
+  transcript across the departure is heartbeats to A and nothing else.
+
+So the item-0 criterion "a departure by one node is seen by **both** survivors" **is not met**, and
+it is not met for a membership reason: with a star, the only node that can observe a departure
+first-hand is the hub. Everything else has to arrive by gossip, which is exactly plan §10.5's
+propagation — untested here because the third node never had the departing peer.
+
+#### The roster question, and why it is not answered yet
+
+A three-node run today converges the **descriptor** roster (all three are seeded members, so
+`legacyIntroductionRoster()` answers 3 on every node) but says nothing about the **derived** roster:
+`MeshNetworkManager.roster` falls back to the gossiped descriptor whenever `membershipVerifier?.roster`
+is empty, and the harness sets `currentMesh` directly, which is precisely the "a test that sets
+`currentMesh` directly" case that fallback documents. A ledger is bootstrapped only by
+`startNewMesh(name:)` (founder) or a verified admission grant (joiner), and **neither is reachable
+from the harness**: `startNewMesh` mints its own random mesh id, so seeded peers would not match it,
+and a joiner needs an admitter — but a stranger cannot ask, because an empty derived roster refuses
+its tunnel before any app frame (the P2 "first-meeting stranger admission" row). Giving Lane C a
+founder/joiner shape is therefore a **prerequisite** for loop item 9, not a detail of it.
+
+#### What this lane can and cannot carry, for planning
+
+| Ask | Verdict |
+| --- | --- |
+| Three nodes discover, introduce, and hold QUIC tunnels | **Yes** — every pairwise property of the two-node lane reproduces |
+| Any *one* node observes two peers at once | **Yes** — the hub reaches `slots total=2 committed=2`, heartbeats both ways |
+| A full three-node mesh (every node sees the other two) | **No** — a spanning star, N−1 edges, reproduced 3/3 |
+| A departure gossiped by a *third* member (plan §10.5) | **Not reachable** until the star is a mesh, or until the run is planned as hub-plus-leaves and the gossip is asked of the hub |
+| The derived (records) roster converging over a radio | **Not reachable** — the harness has no founder/joiner seam (above) |
 
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
 
