@@ -51,6 +51,22 @@ enum MeshMatrixDebugOptions {
     /// nothing, which is exactly what it did before flows existed.
     static let flowsKey = "FERNLET_MESH_FLOWS"
 
+    /// `FERNLET_MESH_ROLE=founder|joiner` — the membership shape this node plays in a Lane C pair
+    /// run (P3 item 9). Absent means neither, which is every run before item 9 existed: the node
+    /// seeds a descriptor and drives flows, and no ledger is ever armed.
+    static let roleKey = "FERNLET_MESH_ROLE"
+
+    /// `FERNLET_MESH_LEAVE_AFTER=<seconds>` — leave the session that many polls in, through
+    /// `leaveSessionAfterNotifyingPeers()`, so the signed `member-departure.v1` is emitted BEFORE
+    /// the teardown. Absent means the run never leaves (a hard `simctl terminate` emits nothing,
+    /// which is what every Lane C run before this one did).
+    static let leaveAfterKey = "FERNLET_MESH_LEAVE_AFTER"
+
+    /// `FERNLET_MESH_REMOVE_AFTER=<seconds>` — file a signed removal record against the first
+    /// seeded member that is not this device, that many polls in. Founder role only. Absent means
+    /// no removal is ever filed.
+    static let removeAfterKey = "FERNLET_MESH_REMOVE_AFTER"
+
     /// Ed25519 public-key length. Anything else in the member list is not a key and is dropped.
     static let signingKeyByteCount = 32
 
@@ -72,13 +88,33 @@ enum MeshMatrixDebugOptions {
     /// The app-layer flows this run drives. Empty means none.
     static let flows = parseFlows(ProcessInfo.processInfo.environment[flowsKey])
 
+    /// The membership shape this node plays. ``MeshMatrixRole/none`` when the variable is absent.
+    static let role = MeshMatrixRole(rawValue: ProcessInfo.processInfo.environment[roleKey] ?? "")
+        ?? MeshMatrixRole.none
+
+    /// Poll at which this run leaves through the clean-departure verb, or nil for never.
+    static let leaveAfterSeconds = parseSeconds(ProcessInfo.processInfo.environment[leaveAfterKey])
+
+    /// Poll at which the founder files a removal record, or nil for never.
+    static let removeAfterSeconds = parseSeconds(ProcessInfo.processInfo.environment[removeAfterKey])
+
     /// Frozen diagnostic English naming what the launch environment asked for, for the transcript.
     static var summary: String {
         let environment = ProcessInfo.processInfo.environment
         return "label=\(label) transport=\(environment["FERNLET_MESH_TRANSPORT"] ?? "default") "
             + "chaos=\(environment["FERNLET_MESH_CHAOS"] ?? "off") "
             + "chaosBarred=\(environment["FERNLET_MESH_CHAOS_BARRED"] == nil ? "none" : "set") "
-            + "flows=\(flows.isEmpty ? "none" : flows.map(\.rawValue).joined(separator: "+"))"
+            + "flows=\(flows.isEmpty ? "none" : flows.map(\.rawValue).joined(separator: "+")) "
+            + "role=\(role.rawValue) "
+            + "leaveAfter=\(leaveAfterSeconds.map(String.init) ?? "never") "
+            + "removeAfter=\(removeAfterSeconds.map(String.init) ?? "never")"
+    }
+
+    /// Parses a whole number of seconds, clamped to the flow driver's own poll budget so a
+    /// mistyped variable can never ask for a schedule the run does not reach (Power of 10 rule 2).
+    private static func parseSeconds(_ raw: String?) -> Int? {
+        guard let raw, let value = Int(raw), value >= 0 else { return nil }
+        return min(value, MeshFlowDriver.maxTicks)
     }
 
     /// Parses the comma-separated flow list, ignoring unrecognized tokens and bounded by the number

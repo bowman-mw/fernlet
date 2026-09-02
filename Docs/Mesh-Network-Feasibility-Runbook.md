@@ -1149,7 +1149,128 @@ founder/joiner shape is therefore a **prerequisite** for loop item 9, not a deta
 | Any *one* node observes two peers at once | **Yes** — the hub reaches `slots total=2 committed=2`, heartbeats both ways |
 | A full three-node mesh (every node sees the other two) | **No** — a spanning star, N−1 edges, reproduced 3/3 |
 | A departure gossiped by a *third* member (plan §10.5) | **Not reachable** until the star is a mesh, or until the run is planned as hub-plus-leaves and the gossip is asked of the hub |
-| The derived (records) roster converging over a radio | **Not reachable** — the harness has no founder/joiner seam (above) |
+| The derived (records) roster converging over a radio | **Answered on a PAIR, 2026-09-02** — the founder/joiner seam this row asked for is built, and the derived roster converges over a real tunnel. See "Lane C — pair membership (P3 item 9)" below. On THREE nodes it stays blocked on 0b |
+
+### Lane C — pair membership (run 2026-09-02, P3 item 9): **the derived roster, over a real tunnel**
+
+Item 0 left the tier-2 story with a hole: three Simulators form a star, and the two-node lane could
+only ever converge the **descriptor** roster, because the P3 records ledger was unreachable from the
+harness. This section closes the second half. Four scenarios were driven over two Simulators, and
+three of the four are proven; the fourth is proven intermittently and the intermittency is a
+**product finding**, recorded below rather than tuned away.
+
+Nodes: `iPhone 17` = **A**, `d996bc564a17da2d` (founder) · `iPhone 17 Pro` = **B**,
+`fb795f343c2954da` (joiner). A is the lower fingerprint, so A is also the deterministic epoch
+coordinator; the roles happened to coincide and the assertions below name whichever node minted.
+
+#### Why the harness needed two new seams first
+
+**The QUIC transport is members-only by construction.** `MeshChannelIntroductionExchange.receive`
+refuses a foreign mesh id and refuses a signing key the roster does not name, so a founder holding a
+one-member derived roster refuses a would-be joiner's tunnel *before any app frame* — and the joiner
+has no other way to ask. `startNewMesh(name:)` mints a random mesh id, which seeded peers cannot
+match. That circularity is why item 0 could not reach the derived roster, and it is a real property
+of the shipping transport, not of the harness: **first-meeting stranger admission has no path on
+this radio.**
+
+The seams below are the smallest thing that opens it, and each one stands in for exactly one step:
+
+| Seam | Where | What it stands in for | What stays shipping code |
+| --- | --- | --- | --- |
+| `FERNLET_MESH_ROLE=founder\|joiner` | `MeshMatrixDebugOptions` / `MeshFlowDriver` | which membership shape the node plays | everything below |
+| `MeshNetworkManager.armFounderLedgerForHarness()` | DEBUG extension, `MeshNetworkManager.swift` | `startNewMesh`'s **id mint** and its `startSearching()` restart (which would re-mint the Bonjour name and drop the tunnel) | `prepareMembershipLedger` + `seedFounderAdmission` + `persistSessionContext` — the shipping founding, on the id the seeded descriptor already names. It also collapses the seeded two-member descriptor to what `startNewMesh` would have produced: the founder alone |
+| `MeshNetworkManager.requestAdmissionForHarness()` | same | the *trigger* only — a joiner whose seeded descriptor already lists it never gets the `handleMeshDescriptor` trigger | `sendAdmissionRequest(for:)`, the shipping emitter, and the whole grant path after it |
+| `FERNLET_MESH_LEAVE_AFTER=<seconds>` | `MeshFlowDriver` | a user tapping Leave | `leaveSessionAfterNotifyingPeers()` verbatim |
+| `FERNLET_MESH_REMOVE_AFTER=<seconds>` + `seedRemovalRecordForHarness` | same | **plan §10.4's quorum arithmetic, and nothing else** | the record is really signed under `meshMemberRemovalV1`; `MeshDerivedRoster` really derives `barred` from it; the introduction really refuses on it |
+| `[mesh-quic] membershipFrame sent …` / `membershipRecord … accepted\|<refusal>` | `MeshNetworkManager` (`MeshTransportConsoleLog`, DEBUG-only echo) | nothing — pure instrumentation | — |
+
+The last row is the same lesson item 0 learned about inbound refusals: **without it, "the frame
+never arrived" and "the frame arrived and was refused" read identically**, and run 1 below was
+un-diagnosable until it existed.
+
+Everything is `#if DEBUG` and env-gated in the family `TestHookBoundaryTests` walls; a Release build
+compiles the environment reads, the seams and the echoes to nothing.
+
+#### How to run it
+
+```
+# 1. harvest — one launch per sim with no mesh id (as in the three-node section)
+# 2. the pair, launched ~3 s apart, a FRESH log path per node
+SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
+SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=<run>-<A|B> \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=44444444-4444-4444-4444-444444444444 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<keyA>,<keyB> \
+SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit \
+SIMCTL_CHILD_FERNLET_MESH_ROLE=founder            # joiner on the other sim
+# joiner only, for the departure row:  SIMCTL_CHILD_FERNLET_MESH_LEAVE_AFTER=55
+# founder only, for the removal row:   SIMCTL_CHILD_FERNLET_MESH_REMOVE_AFTER=40
+xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
+```
+
+`FERNLET_MESH_MATRIX_MEMBERS` carries **both** keys on **both** nodes — that seeded descriptor is
+the only thing that can open the first tunnel. `[mesh-flow] membership …` is the new audit line:
+the **derived** roster's size, its barred count, its status and the epoch head, echoed whenever any
+of them moves. `ledger=absent` is the honest answer for a node still answering introductions from
+the gossiped descriptor, which is what every Lane C run before this one was doing.
+
+#### What was observed
+
+| # | Scenario | Verdict | Evidence |
+| --- | --- | --- | --- |
+| 1 | **Admission across a live roster** | **Proven** (runs 1, 2, 3) | A: `founder armed=true ledger=present derived=1 …` → `admitting fb795f343c2954da` → `membership ledger=present derived=2 barred=0 status=active`. B: `requesting admission asked=true` → `membershipRecord fernlet.mesh.member-admission.v1 accepted` → `membership ledger=present derived=2`. Both nodes' rosters are **derived**, not descriptor: `ledger=present` is the flag |
+| 2 | **Rotation crossing a tunnel** | **Proven** (runs 1, 2, 3) | Both nodes converge on the *same* head within one poll of the admission — run 2: `epochRef=1.ba90f6b015431d40e21496274e6e348f.d996bc564a17da2d` on A **and** on B; run 3: `1.c7ab028f2fb754ee6b136d685ecf9971.d996bc564a17da2d` on both. A (the lower fingerprint) is the coordinator named inside the ref, so A minted and B adopted — the key crossed the real QUIC tunnel, since B's head cannot be derived without the key it wraps |
+| 3 | **Clean departure → `member-departure.v1`** | **Proven, but INTERMITTENT — see the finding** | Run 2, B: `leaving via leaveSessionAfterNotifyingPeers …` → `[mesh-quic] membershipFrame sent fernlet.mesh.member-departure.v1 slots=1 recipients=all`. A: `[mesh-quic] membershipRecord fernlet.mesh.member-departure.v1 accepted` → `membership ledger=present derived=1 barred=1 status=active` → `epochRef=2.f60d0277d6c2fe0cb69287ccaf4b5233.d996bc564a17da2d` — the roster moved 2→1, B moved into `barred`, and the `.membership` rotation to epoch 2 happened with B necessarily excluded (it is barred and disconnected). **Run 1 lost it**: same steps, and A's roster never left `derived=2` |
+| 4 | **Removal ejecting a peer at its next connect** | **Proven** (run 3) | A at t+40 s: `removal filed=true target=fb795f343c2954da ledger=present derived=1 barred=1`. B relaunched at t+73 s: A logs, three times, `[mesh-quic] refused barredMember as responder: mesh=55555555-… epoch="1.c7ab…" rosterMembers=1 rosterBarred=1` and `A QUIC tunnel was refused: The peer has departed, been removed, or been blocked.` B logs `tunnelEnded introductionFailed unverified live=false … The outbound QUIC tunnel failed its signed channel introduction.` The run's own banner reads `chaosBarred=none`: **this is the shipping derived roster's answer, with `FERNLET_MESH_CHAOS_BARRED` unset** — matrix row 3 no longer needs the chaos hook on a pair |
+
+#### Finding — a clean departure can be lost in the teardown that follows it
+
+`leaveSessionAfterNotifyingPeers()` awaits `sendMembershipEvent(.meshMemberDeparture)` and then
+calls `leaveSession()`, which stops the transport immediately. The `await` returns when the frame
+has been handed to the transport, **not** when the peer has it, so the survivor sees the departure
+only if the QUIC write flushes before the connection is cancelled. On this lane it usually does and
+sometimes does not:
+
+* **Run 2 and run 4 — landed.** B logs `membershipFrame sent …member-departure.v1`, A logs
+  `membershipRecord …member-departure.v1 accepted`, roster 2→1, rotation to epoch 2.
+* **Run 1 — lost.** A's last membership line is `derived=2`; no roster move, no rotation. A's tunnel
+  ended `controlStreamEnded … MeshTransportError error 2` at that moment, against run 2's
+  `NWError 57 - Socket is not connected` — a *local* transport error rather than the peer's close,
+  which is consistent with the write never leaving. (Run 1 predates the `membershipFrame` /
+  `membershipRecord` echoes, so it can only be read off the roster; the echoes exist because of it.)
+
+This is the same class of gap as the P2 heartbeat/idle-timeout race: the ordering is correct in the
+code and the *durability* rule (plan §3.6) is honoured — the record is sealed before the frame goes
+out — but nothing waits for, or retries, delivery. A departed member is not silently still a member
+forever: it is barred by the *next* record any survivor accepts, and a rejoin attempt is refused
+because it holds no admission. But the immediate consequences of a departure — the roster shrinking
+and the `.membership` rotation that re-keys without the departed device — do not happen at all on
+the run where the frame is lost. **Not fixed here** (a delivery ack or a bounded re-send is a
+transport change, not a harness one); recorded for P4/P5, where the merge path is the natural place
+for a survivor to learn a departure it missed.
+
+#### Two smaller observations
+
+* **A removal does not cut the live tunnel; it refuses the next one.** In run 3 the removal was
+  filed at t+40 s and A's tunnel to B stayed up, with the slot committed, until B was terminated at
+  t+63 s. That is the design (plan §8.3 excludes the removed member from the *next* epoch's key, and
+  `MeshIntroductionAuthority` answers per introduction), and the transcript is now the evidence for
+  it rather than an inference.
+* **`seedRemovalRecordForHarness` does not request a rotation**, because it re-seeds the ledger
+  rather than travelling `insertMembershipRecord` — so run 3 shows the roster moving 2→1 with the
+  epoch head unchanged at 1. Rotation-on-removal is a tier-1 property (`MeshRotationTriggerTests`);
+  what this lane owes is rotation-on-*departure*, which row 3 above does show.
+
+#### What this lane deliberately does NOT prove
+
+| Ask | Why not |
+| --- | --- |
+| A departure gossiped by a **third** member (plan §10.5) | Two nodes. Blocked on **0b** — three Simulators form a star |
+| A removal minted by a **real quorum** | ⌊2/2⌋ + 1 = 2 votes with the target excluded leaves 1 eligible voter, so `MeshMembershipRecordVerifier` refuses every honest two-node removal `quorumNotMet(required: 2, presented: 1)`. Needs ≥ 3 nodes → blocked on 0b |
+| A rotation crossing **two** tunnels | One tunnel exists. Blocked on 0b |
+| `MeshLedgerAdoption.adopt`'s **rebase** onto a founder that is not the admitter | On a pair the admitter *is* the founder, so the joiner's bootstrap root is already right and the rebase is a no-op. Needs a third node admitted by the second |
+| First-meeting **stranger** admission | Unreachable on this transport by construction (above). Not a P3 item; recorded here because the harness seams exist only to route around it |
 
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
 

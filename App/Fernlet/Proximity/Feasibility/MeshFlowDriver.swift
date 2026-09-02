@@ -54,6 +54,30 @@ enum MeshFlowVerb: String, CaseIterable, Sendable {
     case shop
 }
 
+// MARK: - MeshMatrixRole
+
+/// The membership shape a Lane C node plays in a pair run (P3 item 9).
+///
+/// Frozen automation tokens parsed from a DEBUG-only environment variable: never localized, never
+/// persisted, never on a wire. ``none`` is the state every Lane C run before item 9 was in — a
+/// seeded descriptor and no ledger at all — and it is what an absent or unrecognized variable means.
+///
+/// The roles are asymmetric on purpose. The QUIC transport is members-only by construction, so the
+/// seeded descriptor is the only thing that can open the first tunnel; the ``founder`` collapses
+/// that descriptor to itself and arms the real ledger once the tunnel is up, and the ``joiner``
+/// then travels the shipping admission path to get onto it.
+enum MeshMatrixRole: String, CaseIterable, Sendable {
+
+    /// No membership role: seed, connect, drive flows. The pre-item-9 behaviour.
+    case none
+
+    /// Arm the founder ledger once a slot commits, then admit whoever asks.
+    case founder
+
+    /// Ask the founder for admission once a slot commits, then adopt what it is sent.
+    case joiner
+}
+
 // MARK: - MeshFlowRunState
 
 /// What the driver has already done, and what it last reported.
@@ -86,6 +110,19 @@ struct MeshFlowRunState {
 
     /// Peer catalogs held at the last report.
     var catalogs = -1
+
+    /// The derived-roster summary at the last report — the membership audit line (P3 item 9).
+    var membership = ""
+
+    /// Whether the founder has already armed its ledger. Once, per run.
+    var armedFounder = false
+
+    /// Whether the founder has already filed its removal record. Once, per run.
+    var seededRemoval = false
+
+    /// The poll at which the joiner last asked for admission, so the ask repeats on a schedule
+    /// rather than every second while it waits for the founder to arm.
+    var askedAdmissionAt = -1
 }
 
 // MARK: - MeshFlowDriver
@@ -163,10 +200,14 @@ enum MeshFlowDriver {
         echo("shop sharing=on catalogItems=\(catalog.items.count)")
     }
 
-    /// Starts the run's poll. A no-op when no flow was asked for, which is the behaviour this file
-    /// had before it existed.
+    /// Polls between a joiner's admission asks. The founder arms its ledger on its own first
+    /// committed slot, which the joiner cannot see, so the ask repeats until it lands.
+    static let admissionRetryTicks = 5
+
+    /// Starts the run's poll. A no-op when no flow and no membership role was asked for, which is
+    /// the behaviour this file had before it existed.
     static func start(manager: MeshNetworkManager) {
-        guard !MeshMatrixDebugOptions.flows.isEmpty else { return }
+        guard !MeshMatrixDebugOptions.flows.isEmpty || MeshMatrixDebugOptions.role != .none else { return }
         Task { @MainActor [weak manager] in
             guard let manager else { return }
             await run(manager: manager)
@@ -176,7 +217,7 @@ enum MeshFlowDriver {
     /// The bounded poll: commit what is waiting, fire what is due, report what changed.
     private static func run(manager: MeshNetworkManager) async {
         var state = MeshFlowRunState()
-        for _ in 0..<maxTicks {
+        for tick in 0..<maxTicks {
             do {
                 try await Task.sleep(for: .seconds(pollIntervalSeconds))
             } catch {
@@ -184,9 +225,87 @@ enum MeshFlowDriver {
             }
             commitPendingSlots(manager: manager, state: &state)
             report(manager: manager, state: &state)
+            driveRole(manager: manager, state: &state, tick: tick)
             fireDueFlows(manager: manager, state: &state)
+            guard MeshMatrixDebugOptions.leaveAfterSeconds != tick else {
+                await leave(manager: manager)
+                return
+            }
         }
         echo("run ended: poll budget spent")
+    }
+
+    // MARK: - Membership roles (P3 item 9)
+
+    /// The role's synchronous half, plus the membership audit line every run prints.
+    ///
+    /// Synchronous by design: `inout` state cannot cross an `await`, and the only asynchronous
+    /// step a role takes is the departure, which ends the run and is driven by ``run(manager:)``.
+    private static func driveRole(manager: MeshNetworkManager, state: inout MeshFlowRunState, tick: Int) {
+        switch MeshMatrixDebugOptions.role {
+        case .none: break
+        case .founder: driveFounder(manager: manager, state: &state, tick: tick)
+        case .joiner: driveJoiner(manager: manager, state: &state, tick: tick)
+        }
+        reportMembership(manager: manager, state: &state)
+    }
+
+    /// Arms the ledger on the first committed slot, admits whoever asks, and — when the run asked
+    /// for one — files the removal record.
+    ///
+    /// The admission loop iterates a COPY: `allowAdmission` mutates the published array.
+    private static func driveFounder(manager: MeshNetworkManager, state: inout MeshFlowRunState, tick: Int) {
+        if !state.armedFounder, committedSlotCount(manager) > 0 {
+            state.armedFounder = true
+            let armed = manager.armFounderLedgerForHarness()
+            echo("founder armed=\(armed) \(manager.harnessMembershipSummary)")
+        }
+        guard state.armedFounder else { return }
+        for request in Array(manager.pendingAdmissionRequests) {
+            echo("admitting \(request.requesterFingerprint)")
+            manager.allowAdmission(request)
+        }
+        guard MeshMatrixDebugOptions.removeAfterSeconds == tick, !state.seededRemoval else { return }
+        state.seededRemoval = true
+        guard let target = removalTargetFingerprint(manager) else {
+            echo("removal NOT filed: no seeded member other than this device")
+            return
+        }
+        let filed = manager.seedRemovalRecordForHarness(targetFingerprint: target)
+        echo("removal filed=\(filed) target=\(target) \(manager.harnessMembershipSummary)")
+    }
+
+    /// Asks for admission, on a repeat, until this device holds a ledger of its own.
+    private static func driveJoiner(manager: MeshNetworkManager, state: inout MeshFlowRunState, tick: Int) {
+        guard !manager.harnessHasLedger, committedSlotCount(manager) > 0 else { return }
+        guard tick - state.askedAdmissionAt >= admissionRetryTicks else { return }
+        state.askedAdmissionAt = tick
+        echo("requesting admission asked=\(manager.requestAdmissionForHarness())")
+    }
+
+    /// The first seeded member key that is not this device — the removal row's target.
+    private static func removalTargetFingerprint(_ manager: MeshNetworkManager) -> String? {
+        for key in MeshMatrixDebugOptions.seededMemberKeys where key != manager.localSigningPublicKey {
+            return IdentityService.fingerprint(of: key)
+        }
+        return nil
+    }
+
+    /// Leaves through the clean-departure verb, so the signed `member-departure.v1` is on the wire
+    /// before the transport is torn down.
+    private static func leave(manager: MeshNetworkManager) async {
+        echo("leaving via leaveSessionAfterNotifyingPeers \(manager.harnessMembershipSummary)")
+        await manager.leaveSessionAfterNotifyingPeers()
+        echo("left \(manager.harnessMembershipSummary)")
+    }
+
+    /// Echoes the derived roster + epoch head when either moves — the one line that makes
+    /// membership convergence readable in a `--console-pty` transcript.
+    private static func reportMembership(manager: MeshNetworkManager, state: inout MeshFlowRunState) {
+        let summary = manager.harnessMembershipSummary
+        guard summary != state.membership else { return }
+        echo("membership \(summary)")
+        state.membership = summary
     }
 
     /// Commits every slot sitting at a proximity gate.
