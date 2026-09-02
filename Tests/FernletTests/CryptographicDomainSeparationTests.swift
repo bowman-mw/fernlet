@@ -80,6 +80,7 @@ struct CryptographicDomainSeparationTests {
         Domain("KeyDerivation.meshProbeTLSExporterV1", FernletCryptoPurpose.KeyDerivation.meshProbeTLSExporterV1),
         Domain("KeyDerivation.meshTLSExporterV1", FernletCryptoPurpose.KeyDerivation.meshTLSExporterV1),
         Domain("KeyDerivation.meshRoutedContentKeyWrapV1", FernletCryptoPurpose.KeyDerivation.meshRoutedContentKeyWrapV1),
+        Domain("KeyDerivation.meshSessionContextV1", FernletCryptoPurpose.KeyDerivation.meshSessionContextV1),
         Domain("KeyDerivation.heartDropOuterSealV1", FernletCryptoPurpose.KeyDerivation.heartDropOuterSealV1),
         Domain("KeyDerivation.lockScryptWrappingV1", FernletCryptoPurpose.KeyDerivation.lockScryptWrappingV1),
         Domain("KeyDerivation.journalNarrativeLegacyV1", FernletCryptoPurpose.KeyDerivation.journalNarrativeLegacyV1),

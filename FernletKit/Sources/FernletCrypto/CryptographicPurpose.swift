@@ -152,6 +152,17 @@ public nonisolated enum FernletCryptoPurpose {
         /// ``FernletCryptoPurpose/AEAD/meshGroupKeyWrapV2`` pair — a derivation purpose plus the
         /// AEAD purpose that authenticates the wrap.
         public static let meshRoutedContentKeyWrapV1 = CryptographicPurpose("fernlet.mesh.routed.content-key.v1")
+        /// The sealed `MeshSessionContext` sidecar (P3 item 2, plan §8.1). Handed to
+        /// ``ColumnCrypto/init(purpose:)``, so it is BOTH the HKDF `info` that derives the file's
+        /// column key from the mesh-session seal key AND — inside the v3 at-rest format — half of
+        /// the additional authenticated data, beside this install's ``DeviceBindingID``.
+        ///
+        /// Its own domain rather than a reuse of ``meshGroupKeyWrapV1``: the group key is
+        /// memory-only and dies with the process, while this seals the one durable thing a mesh
+        /// session has. Sharing a domain would let a context blob and a key-wrap blob authenticate
+        /// under each other's derived key, which is exactly what the registry exists to prevent.
+        /// Changing this spelling orphans every sealed context already on disk.
+        public static let meshSessionContextV1 = CryptographicPurpose("fernlet.mesh.session-context.v1")
         public static let heartDropOuterSealV1 = CryptographicPurpose("fernlet.heartdrop.seal.v1")
         /// Scrypt has no `info` argument. This constant names its sole consumer; the v2 wrapping
         /// AEAD below authenticates the same purpose beside the derived key.

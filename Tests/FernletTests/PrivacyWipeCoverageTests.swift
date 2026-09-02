@@ -195,6 +195,11 @@ struct PrivacyWipeCoverageTests {
         // first — it needs the record names the local wipe destroys.
         "heartDropService.purgeDeadDrop",
         "heartDropService.wipeForDeleteAll",
+        // The sealed mesh-session context (P3 item 2): `MeshSessionContext.sealed` + its `.corrupt`
+        // quarantine sibling AND the `com.fernlet.mesh-session` key that seals them. One token
+        // because one call takes both halves — a file whose key survived is unreadable noise, and
+        // a key whose file survived is a promise to decrypt it.
+        "MeshSessionStore.wipeForDeleteAll",
         // Settings
         "storagePreferencesResetHook",
     ]
@@ -1007,7 +1012,7 @@ struct PrivacyWipeCoverageTests {
         "com.fernlet.lock", "com.fernlet.storage-preferences", "com.fernlet.journal",
         "com.fernlet.healthkit-anchors", "com.fernlet.private-media", "com.fernlet.narrative-buffer",
         "com.fernlet.heartdrop", "com.fernlet.identity", "com.fernlet.moderation",
-        "com.fernlet.device-binding"
+        "com.fernlet.device-binding", "com.fernlet.mesh-session"
     ]
 
     /// `com.fernlet.*` keychain SERVICE literals in `source`, found by anchoring on the binding that

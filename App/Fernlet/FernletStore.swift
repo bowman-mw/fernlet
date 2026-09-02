@@ -488,6 +488,27 @@ final class FernletStore {
     @ObservationIgnored nonisolated var heartDropStorage: HeartDropStorageScope {
         HeartDropStorageScope(directory: proximitySupportRoot, keychainService: heartDropKeychainService)
     }
+    /// THIS store's sealed mesh-session scope (P3 item 2): the directory holding
+    /// `MeshSessionContext.sealed` plus the keychain service holding the key that seals it.
+    ///
+    /// **Derived rather than injected, on purpose.** Both halves ride isolation axes this store
+    /// already carries — `proximitySupportRoot` for the file and `heartDropKeychainService` for the
+    /// key — so a test store isolated for the friend photo wall and the heart-drop sidecars is
+    /// isolated for mesh-session state for free, and one that is NOT already fails
+    /// `PhotoDirectoryIsolationTests` (whose `deleteAllData` trigger covers both lists). A fourth
+    /// injectable seam would add a fourth way to forget one. Production resolves to
+    /// `Application Support/Fernlet` + `com.fernlet.mesh-session`, unchanged from
+    /// `MeshSessionStorageScope.production`.
+    ///
+    /// Nothing writes through this scope yet — P3 item 2a builds the store and its wipe; item 2b
+    /// wires the session manager to it. The delete-all leg is here from the first commit anyway,
+    /// because a persisted surface with no wipe row is what the wall exists to catch.
+    @ObservationIgnored nonisolated var meshSessionStorage: MeshSessionStorageScope {
+        MeshSessionStorageScope(
+            directory: proximitySupportRoot,
+            keychainService: MeshSessionStorageScope.keychainService(besideHeartDrop: heartDropKeychainService)
+        )
+    }
     /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo
     /// stores below. Separate keychain row from the friend photo wall's, which stays on the
     /// original backup-restorable key inside `MeshNetworkManager`.
@@ -5408,6 +5429,15 @@ final class FernletStore {
         // Then the local state: prekeys (keychain), peer bundle cache, outbox, durable dedup, and
         // the service's own identity cache (the 4th live instance).
         heartDropService.wipeForDeleteAll()
+        // The sealed mesh-session context (P3 item 2, plan §8.1/§17.3): the file AND the keychain
+        // row that seals it, on THIS store's scope. Both halves together, always — ciphertext whose
+        // key survives is unreadable noise, and a key whose file survives is a promise to decrypt
+        // it. The identity rotation above already broke every trust relationship the roster inside
+        // that file names, so keeping it would leave signed membership records addressed to a
+        // fingerprint this device no longer has.
+        if !MeshSessionStore.wipeForDeleteAll(scope: meshSessionStorage) {
+            outcome.incompleteStores.append("your nearby-friends session state")
+        }
         // No `heartsAwayPurgePending` reset needed: it derives from the outbox this just emptied, so
         // the Settings "it'll keep trying" notice cannot outlive the wipe that made retrying
         // impossible — which is the honest reading, since nothing addressable is left.
