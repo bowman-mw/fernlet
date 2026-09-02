@@ -502,6 +502,119 @@ one). And the Simulator's report was copied at `6:35:30`, *before* the timeout a
 so the report shows a healthy connection and the console shows what happened next — the two artifacts
 do not overlap in time. Capture both sides' reports at the end of the next run.
 
+#### Run 2 and run 3 (2026-09-01, post-fix): the fix on the wire, a benign teardown EEXIST, and a device freeze
+
+Three runs on the same physical device over the same USB tether, all within ~40 minutes of the
+item-1 fix (`e5a4e80`). Run 1 is the one recorded above. Runs 2 and 3 are recorded here because run
+2 verifies the fix on the wire, and run 3 raised — and this note answers — a sharper question than
+run 1 did.
+
+**Run 2 (19:13): the idle-timeout fix is deployed and negotiated.** Fresh install carrying
+`e5a4e80`. The ready line now advertises the derived 90 s timeout on both sides, and QUIC took the
+minimum of two equal values. Connect, signed introduction both ways, and the datagram round trip all
+succeeded again:
+
+```
+QUIC ready with <device> at fe80::d0d4:faff:fee2:4f9e%en8.58565; DATAGRAM=1024, UDP=1280,
+  datagram-flow=false, idleTimeoutMs=90000, usable datagram frame size=0 bytes,
+  peer idleTimeoutMs=90000, beatSeconds=30.
+Initial QUIC datagram attempt 1 received pong → Verified a QUIC datagram round trip
+```
+
+**What run 2 did NOT re-test: reconnect-after-idle-timeout.** The tester stopped the probe ~10 s
+after connect — far inside the 90 s idle window — so the tunnel was never idle-reaped and no re-dial
+was ever attempted. The reconnect-after-idle axis (run 1's `Fail`, fixed and verified on Lane A2 by
+`kill -STOP`) was **not** re-exercised on hardware here. It stays owed by Lane D.
+
+**The teardown EEXIST in run 2 is benign teardown/multipath noise — verdict, with a repro behind
+it.** The device console showed the same `NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` pattern as
+run 1, but this time every occurrence is **bracketed by "already cancelled" lines**, during a
+**tester-initiated stop**, across two interfaces (`anpi0` and `en2`) for the **same listener port
+58565**:
+
+```
+nw_listener_cancel_block_invoke [L1] Listener is already cancelled, ignoring cancel   (x4)
+nw_connection_group_cancel_block_invoke [G1] The group has already been cancelled     (x2)
+NECP_CLIENT_ACTION_ADD_FLOW … local address: fe80::…%anpi0.58565 … [17: File exists]
+NECP_CLIENT_ACTION_ADD_FLOW … local address: fe80::…%en2.58565   … [17: File exists]
+```
+
+This is the OS's own multipath, not the probe's. The probe dials with a single `NetworkConnection`
+and listens with a single `NetworkListener`; it never creates an `NWConnectionGroup` or a
+`.multipath` service (grep the source — there is no connection-group construction). The `[G1]/[G2]`
+group and the anpi0+en2 fan-out are Network.framework's QUIC-listener *nexus* evaluating every viable
+link-local `use awdl` path for the listener's one fixed port. During teardown, one path's flow is
+cancelled while the OS is still setting up the sibling path's flow on the same port → `[17: File
+exists]`. It blocks **nothing**: nobody is re-dialing (the tester stopped the run) and the whole
+listener is being dropped anyway. This is categorically different from run 1, where a *wedged*
+responder held a *dead* connection's flow and the peer's *live* re-dials were what got refused. Run 1
+was a real wedge (closed by `releaseFailedInboundTunnel`); run 2 is teardown noise.
+
+**Run 3 (same session): the physical device FROZE, and sim+device never connected.** The Simulator's
+log shows the **listener failing to set up** — not a connect failure:
+
+```
+nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+nw_browser_cancel [B1] already cancelled (x3); nw_listener_cancel [L1] already cancelled (x4)
+```
+
+— then no `Bonjour discovery has N candidate(s)`, no `QUIC ready`, no dial. The three-run shape (run
+1 connect → blocking EEXIST; run 2 connect → teardown EEXIST; run 3 device frozen + sim
+listener-setup failure) sharpens the question from "is run 2's EEXIST benign" to **"does the probe
+leak NECP flow/listener state that accumulates across repeated start/stop cycles until the stack
+wedges?"**
+
+**Answered on the sim↔sim probe lane, 2026-09-01 ~19:25–19:37: no accumulation, every restart
+clean.** Two Simulators (iPhone 17 + iPhone 17 Pro), `ALLOW_SIM_DIAL` + `AUTOSTART` + `CONSOLE_LOG`,
+the item-1 binary:
+
+- **10 back-to-back fresh-process relaunches of one side.** Every one reached `QUIC listener is
+  ready` in 2–3 s, with **0** `SO_NECP_LISTENUUID failed` and **0** `ADD_FLOW … [17: File exists]`.
+  Run 3's sim-side listener-setup symptom did not reproduce across ten relaunches.
+- **The survivor (one long-lived process) across a full accept → peer-vanishes → release → re-accept
+  cycle.** It accepted an inbound tunnel, the peer was hard-killed, and about a minute later — its
+  idle timer runs from the last packet, ~90 s earlier — it detected the dead peer and released it,
+  the item-1 fix firing in-process on the survivor, then re-accepted the relaunched peer's re-dial:
+
+```
+7:37:03 QUIC failed for an inbound peer: … (NWError 60 - Operation timed out)
+7:37:03 Released the failed inbound QUIC tunnel; the listener can accept a re-dial.
+7:37:05 Accepted inbound QUIC tunnel id=6.        ← re-dial accepted, 2 s later
+```
+
+  Tally over the cycle: 2 accepts, 1 release, and **0** cap-`Ignored`, EEXIST, or NECP markers. The
+  code matches the behaviour: `stopNetworkOperations()` cancels and nils all six tasks, drops
+  `listener` and `browser` to `nil` (dropping the last reference is the only "cancel" the iOS 26
+  `NetworkConnection` API has), and calls `activeConnectionIDs.removeAll()`; every tunnel-teardown
+  path (`releaseFailedInboundTunnel`, `inboundTunnelStopped`, `outboundTunnelStopped`) removes its
+  slot; the responder is hard-capped at one inbound tunnel and the listener at `maxConnections = 4`.
+  A restart binds a **fresh ephemeral Bonjour port**, so it never asks for the just-freed port — the
+  run-2 EEXIST is intra-listener and cannot carry into a restart.
+
+  One expected behaviour worth stating: a hard-killed peer sends no QUIC `CONNECTION_CLOSE`, so the
+  survivor cannot notice the loss until its 90 s idle timer fires — and it refuses re-dials
+  (`Refused an inbound QUIC tunnel: one inbound tunnel is already held`) during that window. That is
+  the single-inbound cap doing its job, not a leak; it self-heals at the timeout and holds at most
+  one stale tunnel, never a growing set.
+
+**Honest causation.** A full **device freeze** is more severe than a userspace flow leak alone
+usually causes, and the sim-side `SO_NECP_LISTENUUID [2]` is plausibly a CoreSimulator networking
+hiccup independent of the device. The sim lane shows the probe does **not** accumulate NECP/listener
+state and that every restart is clean — so the freeze is **not demonstrably the probe**. But the sim
+cannot settle it either way: sim↔sim meets over a routable host address with peer-to-peer disabled,
+so it never exercises the link-local `use awdl` nexus-flow path that produced the kernel `EEXIST` on
+the device. That specific path — and whether the *shipping* transport leaks on it — is
+unreproducible without hardware. **Lane D remains owed**, and it is the run that can answer it.
+
+**`anpi0`** is an Apple-internal peer interface that came up alongside the USB tether in run 2. Its
+presence, plus `en2` and all-link-local addressing, is one more confirmation that run 2 — like run 1
+— was **not** infrastructure Wi-Fi. Read it only as "an Apple-internal interface that appeared
+alongside the USB path," never as infrastructure Wi-Fi or evidence of it.
+
+Artifacts (retained with this round's working notes): `lane-a-run2-sim-2026-09-01.txt`,
+`lane-a-run2-device-console-2026-09-01.txt`, `lane-a-run3-sim-2026-09-01.txt`, and the sim-lane
+repro logs.
+
 ### What this lane can and cannot prove
 
 This matters more than it looks: the device↔Simulator lane is the **cheap, high-frequency** loop —
