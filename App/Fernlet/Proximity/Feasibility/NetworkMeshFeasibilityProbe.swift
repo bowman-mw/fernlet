@@ -382,7 +382,31 @@ final class NetworkMeshFeasibilityProbe {
     private static let maxOutboundTunnelAttempts = 3
     private static let configuredDatagramFrameSize = 1_024
     private static let configuredUDPPayloadSize = 1_280
-    private static let heartbeatInterval: Duration = .seconds(30)
+    /// Seconds between heartbeats on a live tunnel. Stored once and spelled two ways below, so the
+    /// sleep and the idle timeout derived from it cannot drift apart.
+    private static let heartbeatIntervalSeconds = 30
+    private static var heartbeatInterval: Duration { .seconds(heartbeatIntervalSeconds) }
+    /// Heartbeats a tunnel may miss before QUIC's own idle timer reaps it — three, matching the
+    /// shipping transport's `MeshHeartbeatSchedule.missedBeatsBeforeIdleReap`. The constant is
+    /// restated rather than imported because the probe is deliberately independent of the transport
+    /// it was built to de-risk; the *rule* is what has to match, not the storage.
+    private static let missedBeatsBeforeIdleReap = 3
+    /// The QUIC `max_idle_timeout` this probe declares, in milliseconds.
+    ///
+    /// **The defect this closes, measured on hardware in P2 item 1 (2026-09-01).** The probe left the
+    /// timeout at Network.framework's default of roughly 30 s while beating every 30 s, so the first
+    /// beat was due at the instant the reap it existed to prevent had already happened. The device
+    /// side of the Lane A run lost that race — `nw_read_request_report [C4] Receive failed with error
+    /// "Operation timed out"` — and, because any tunnel error ends the whole probe, took its listener
+    /// down with it while the Simulator was still re-dialling. This is the same defect item 15 fixed
+    /// in `NetworkMeshSession`; only the production transport got the fix at the time.
+    ///
+    /// Declared on **both** the listener and the connection parameters: QUIC negotiates the minimum
+    /// of the two advertised values (RFC 9000 §10.1), so one side left on the default would pull the
+    /// effective timeout straight back under the beat interval.
+    private static var idleTimeoutMilliseconds: Int {
+        heartbeatIntervalSeconds * missedBeatsBeforeIdleReap * 1_000
+    }
     private static let outboundRetryDelay: Duration = .seconds(2)
     private static let progressTotal: Int64 = 100
 
@@ -586,6 +610,7 @@ final class NetworkMeshFeasibilityProbe {
             QUIC(alpn: [alpn])
                 .tls.certificateValidator { _, _ in true }
                 .tls.peerAuthentication(.none)
+                .idleTimeout(idleTimeoutMilliseconds)
                 .maxUDPPayloadSize(configuredUDPPayloadSize)
                 .maxDatagramFrameSize(configuredDatagramFrameSize)
         }
@@ -602,6 +627,7 @@ final class NetworkMeshFeasibilityProbe {
                 .tls.localIdentity(identity)
                 .tls.certificateValidator { _, _ in true }
                 .tls.peerAuthentication(.none)
+                .idleTimeout(idleTimeoutMilliseconds)
                 .maxUDPPayloadSize(configuredUDPPayloadSize)
                 .maxDatagramFrameSize(configuredDatagramFrameSize)
         }
@@ -615,7 +641,8 @@ final class NetworkMeshFeasibilityProbe {
         guard let options = candidate as? NWProtocolQUIC.Options else {
             return "unavailable"
         }
-        return "DATAGRAM=\(options.maxDatagramFrameSize), UDP=\(options.maxUDPPayloadSize), datagram-flow=\(options.isDatagram)"
+        return "DATAGRAM=\(options.maxDatagramFrameSize), UDP=\(options.maxUDPPayloadSize), "
+            + "datagram-flow=\(options.isDatagram), idleTimeoutMs=\(options.idleTimeout)"
     }
 
     private func startListener() throws {
@@ -839,7 +866,13 @@ final class NetworkMeshFeasibilityProbe {
     }
 
     private func acceptIncoming(_ connection: NetworkConnection<QUIC>) {
-        guard isRunning, inboundTunnelTask == nil else { return }
+        guard isRunning else { return }
+        // Never silent: this refusal is what a wedged responder looks like from the outside, and on
+        // 2026-09-01 it swallowed every re-dial of a timed-out tunnel without leaving a line to read.
+        guard inboundTunnelTask == nil else {
+            record("Refused an inbound QUIC tunnel: one inbound tunnel is already held.")
+            return
+        }
         let connectionID = connection.id
         guard reserveConnection(connectionID) else {
             record("Ignored an additional inbound tunnel after the \(Self.maxConnections)-connection cap.")
@@ -885,17 +918,51 @@ final class NetworkMeshFeasibilityProbe {
             let now = Date()
             if firstConnectedAt == nil { firstConnectedAt = now }
             lastConnectedAt = now
-            record("QUIC ready with \(peer) at \(remote); \(lastLiveQUICOptionSummary), usable datagram frame size=\(usableSize) bytes.")
+            record("QUIC ready with \(peer) at \(remote); \(lastLiveQUICOptionSummary), "
+                + "usable datagram frame size=\(usableSize) bytes, "
+                + "peer idleTimeoutMs=\(connection.remoteIdleTimeout), beatSeconds=\(Self.heartbeatIntervalSeconds).")
             recordPowerStateIfChanged()
         case .waiting(let error):
             record("QUIC waiting for \(peer): \(error.localizedDescription)")
         case .failed(let error):
             record("QUIC failed for \(peer): \(error.localizedDescription)")
+            releaseFailedInboundTunnel(connection, endpoint: endpoint)
         case .setup, .preparing, .cancelled:
             break
         @unknown default:
             break
         }
+    }
+
+    /// Releases the inbound tunnel whose connection has just failed, so the listener can accept a
+    /// re-dial. Outbound connections are left alone: `endpoint != nil` marks them, and the dialing
+    /// side already notices through its heartbeat send.
+    ///
+    /// **The responder cannot notice on its own, and that is the bug this closes.** It only ever
+    /// writes when written to, so its `answerDatagrams` loop parks in a datagram receive that does
+    /// not throw when the connection dies — measured on the sim↔sim lane, 2026-09-01: the tunnel
+    /// went `.failed` with `NWError 60` and the responder's task was still parked minutes later.
+    /// Two consequences, one visible and one not. `inboundTunnelTask` never cleared, so
+    /// ``acceptIncoming(_:)``'s guard silently dropped every re-dial; and the parked task's frame
+    /// kept the dead `NetworkConnection` alive, which on a physical radio is what leaves its NECP
+    /// flow registered and answers a re-dial with `ADD_FLOW … [17: File exists]`.
+    ///
+    /// Cancelling rather than failing the probe is deliberate, and matches what
+    /// `NetworkMeshSession.endTunnel` does: one tunnel ends, the radio keeps listening. The
+    /// cancellation also suppresses ``inboundTunnelStopped(_:connectionID:)``, whose `!Task.isCancelled`
+    /// guard is exactly the "this teardown was asked for" test.
+    ///
+    /// There is no `cancel()` on `NetworkConnection` in the iOS 26 Network API — dropping the last
+    /// reference is the only release there is, so cancelling the task that holds it is the fix.
+    private func releaseFailedInboundTunnel(
+        _ connection: NetworkConnection<QUIC>,
+        endpoint: Bonjour.Endpoint?
+    ) {
+        guard endpoint == nil, let task = inboundTunnelTask else { return }
+        inboundTunnelTask = nil
+        activeConnectionIDs.remove(connection.id)
+        task.cancel()
+        record("Released the failed inbound QUIC tunnel; the listener can accept a re-dial.")
     }
 
     private func outboundTunnelStopped(

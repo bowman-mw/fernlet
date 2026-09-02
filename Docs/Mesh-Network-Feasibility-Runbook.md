@@ -93,7 +93,16 @@ which is the multi-node lane and needs no hardware.
 Use one Simulator and one physical device on the same non-isolated Wi-Fi to
 exercise Bonjour discovery, QUIC framing, the signed introduction, and
 datagrams. Stop old runs before retrying: Bonjour may briefly retain a dynamic
-listener port after a process exits. The Simulator lane does not validate
+listener port after a process exits.
+
+**Unplug the cable, or the run is not on Wi-Fi.** A device attached by USB brings up an
+Ethernet-over-USB interface on the Mac (`en9` in the 2026-09-01 run), link-local addressed and with
+a direct route to the phone — and Bonjour will use it in preference to Wi-Fi without saying so. The
+run still exercises Bonjour, QUIC, TLS and the signed introduction perfectly well; what it cannot do
+is say anything about the Wi-Fi path. Pair for wireless debugging first (Xcode → Window → Devices
+and Simulators → **Connect via network**), then unplug. Check with `ifconfig | grep -c en9`, and read
+the interface scope in the `QUIC ready with …` event: `%en0` or a routable address is Wi-Fi, `%en9`
+is the cable. The Simulator lane does not validate
 local-network permission, Apple peer-to-peer Wi-Fi, continued-processing
 behavior, locked/background execution, battery use, or the release gate.
 
@@ -159,25 +168,339 @@ thermal-state / Low Power Mode transitions.
 One physical iOS 26.5-or-later device plus one Simulator on the same non-isolated infrastructure
 Wi-Fi. This is the standing development loop, not a release gate.
 
+**Recorded 2026-09-01 (P2 item 1) from a captured diagnostic report.** The rows below are no longer
+owner recollection: the Simulator's **Copy diagnostic report** output and the device's Xcode console
+for the same run are reproduced in full under *Evidence* after the table.
+
+**Read the link caveat before reading the table.** This run did **not** cross Wi-Fi. It crossed the
+iPhone-USB Ethernet tether — see *The link was not Wi-Fi* below. Everything above the IP layer is
+promoted on this evidence; nothing about a Wi-Fi path or AWDL is.
+
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |
-| Discovery | Each endpoint lists the other as a bounded Bonjour candidate on `_fernlet-mesh2._udp`; the Simulator's TXT marking makes the device the dialer. | **Observed working** (owner report) — no diagnostic report captured yet | 2026-08-31 |
-| QUIC connect | Exactly one connection per pair reaches `.ready`; the deterministic tie-breaker suppresses the duplicate tunnel. | **Observed working** (owner report) — no diagnostic report captured yet | 2026-08-31 |
-| Control stream | Signed identity hello and signed channel introduction complete in both directions; `controlStreamVerified` becomes true on both endpoints. | Not yet recorded | — |
-| Datagram | Ping/pong completes. (The reported usable frame size is recorded but is **not** the criterion — see the correction above.) | Not yet recorded on this lane. Answered on Lane C instead: datagrams carry traffic between two Simulators with a reported usable size of 0 | 2026-09-01 |
-| Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | Not yet recorded | — |
+| Discovery | Each endpoint lists the other as a bounded Bonjour candidate on `_fernlet-mesh2._udp`; the Simulator's TXT marking makes the device the dialer. | **Pass** — `Bonjour discovery has 1 candidate(s).` and `Opening QUIC tunnel attempt 1 to fernlet-probe-ab5ae6b8-…_udplocal. [device]`: the Simulator saw the device, marked it `[device]`, and dialed it | 2026-09-01 |
+| QUIC connect | Exactly one connection per pair reaches `.ready`; the deterministic tie-breaker suppresses the duplicate tunnel. | **Pass** — `QUIC ready with …[device] at fe80::c6:e886:e3b5:bee8%en9.59535`, and the report's counters read `connects: 1` / `reconnects: 0`. One connection, one direction, as the lane's one-way dial rule requires | 2026-09-01 |
+| Control stream | Signed identity hello and signed channel introduction complete in both directions; `controlStreamVerified` becomes true on both endpoints. | **Pass** — `Control initiator sent identity hello.` / `accepted remote identity hello.` / `sent signed channel introduction.` / `accepted remote signed channel introduction.`, and the report header `signed control stream: true` | 2026-09-01 |
+| Datagram | Ping/pong completes. (The reported usable frame size is recorded but is **not** the criterion — see the correction above.) | **Pass, on this lane at last** — `Initial QUIC datagram attempt 1 received pong.` → `Verified a QUIC datagram round trip.`, with `QUIC datagram verified: true` in the header and the reported usable size still `0`. First hardware evidence for datagrams; it agrees with Lane C's | 2026-09-01 |
+| Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | **Pass** — `Verified both Fernlet signatures against the same TLS exporter hash.` The introduction does not verify unless both endpoints derived the same hash from the live connection | 2026-09-01 |
+| Heartbeat flow | Authenticated heartbeats are observably sent and acknowledged over the live tunnel. | **Not observed on this lane — the window was too short, and the probe could not have held one anyway.** `authenticated heartbeats: 0` over a 13 s window (`6:35:19 PM` connect → `6:35:30 PM` copy) against a 30 s interval, so zero is the expected reading. The run then hit the idle-timeout defect below, which would have reaped the tunnel before the first beat regardless. Answered on Lane A2 the same day, post-fix: three beats at 30 s spacing | 2026-09-01 |
+| Reconnect after idle timeout | A tunnel lost to an idle timeout is re-dialed and the peer's listener accepts it. | **Fail** — the device's inbound connection timed out and every re-dial was then refused at the device's listener with `NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]`. **Root-caused, fixed in the probe and verified on Lane A2 the same day**; whether the *shipping* transport shares the kernel half is Lane D's question. See *The reconnect failure* below | 2026-09-01 |
+| Background continuation | A user-started `BGContinuedProcessingTaskRequest` begins with system activity. | **N/A on this lane** — the report was captured on the Simulator side, which refuses the request outright: `Background continuation is unavailable: … (BGTaskSchedulerErrorDomain error 1.)`. This is a Lane B row and stays deferred to P8 | 2026-09-01 |
 | Channel binding (off-radio) | A changed mesh ID, epoch, nonce, identity, or binding hash fails verification. | **Pass** — `MeshNetworkFeasibilityTests.signedIntroductionRejectsAnyChangedChannelBinding`, run in the standard suite | 2026-08-29 |
-| Dial policy | Self-candidates, already-failed candidates, and simulator→simulator dials are refused by default. | **Pass** — `MeshNetworkFeasibilityTests.discoveryPolicyRejectsSelfAndPreviouslyFailedCandidates`; the sim→sim refusal is opt-out only via `FERNLET_PROBE_ALLOW_SIM_DIAL` (Lane A2) | 2026-08-29 |
+| Dial policy | Self-candidates, already-failed candidates, and simulator→simulator dials are refused by default. | **Pass** — `MeshNetworkFeasibilityTests.discoveryPolicyRejectsSelfAndPreviouslyFailedCandidates`; the sim→sim refusal is opt-out only via `FERNLET_PROBE_ALLOW_SIM_DIAL` (Lane A2). Held live here too: the report's `simulator-to-simulator dial: refused (default)` | 2026-09-01 |
 | Plist configuration | The three keys the lane needs are present and the registration identifier is concrete, not the wildcard. | **Pass** — `MeshNetworkFeasibilityTests.probeInfoPlistConfigurationAllowsTheDeviceSpike` | 2026-08-29 |
 
-The three `Pass` rows are what the radio-free unit suite can honestly prove. They are listed here
-rather than omitted so the gap is legible.
+**What changed on 2026-09-01, and what did not.** Five rows moved to `Pass` on captured evidence
+rather than recollection, and the Datagram row moved for the first time *on hardware* — it had been
+answered only on Lane C. What did **not** move: this run crossed a USB tether, so no Wi-Fi-path row
+and nothing about AWDL is promoted by it, and the Wi-Fi Aware / peer-to-peer questions stay exactly
+where they were. And the run found a real defect, recorded as the lane's first `Fail`.
 
-**"Observed working" is not a Pass, deliberately.** The owner reports that a device and a Simulator do
-discover and connect (2026-08-31). That is real information and worth recording, but it is not the
-same as a captured **Copy diagnostic report** with byte counts, connect timestamps and the negotiated
-datagram frame size in it. Promote those rows to Pass when a report is attached; until then the lane
-is known-good, not evidenced.
+**"Observed working" is not a Pass, deliberately** — the rule that governed this table until today,
+kept because it is the reason the promotion above means anything. The owner had reported (2026-08-31)
+that a device and a Simulator discover and connect; that was real information and it was *not*
+recorded as a Pass, because it was not a captured **Copy diagnostic report** with byte counts,
+connect timestamps and the negotiated datagram size in it. It is one now, so the rows moved.
+
+#### The link was not Wi-Fi
+
+The runbook's own procedure says "the same non-isolated infrastructure Wi-Fi". This run did not use
+it, and reading the addresses is what says so:
+
+- The Simulator reached the device at `fe80::c6:e886:e3b5:bee8%en9.59535`; the device's own console
+  names the same address scoped to its `en2`.
+- On the Mac, `en9` carries `fe80::1c20:a841:6b8e:6c0` and `169.254.116.160` — an IPv4 **link-local**
+  address, i.e. no DHCP lease — and reports `media: autoselect (100baseTX <full-duplex>)`.
+- `en9` does not appear in `networksetup -listallhardwareports` at all (Wi-Fi there is `en0`). It is a
+  dynamically created interface, and the routing table holds a direct link-layer entry for the
+  device: `169.254.149.89  26:55:9a:92:80:73  UHLSW  en9`.
+
+A 100baseTX full-duplex interface that no network service owns, addressed link-local only, with a
+direct route to the attached phone, is the **iPhone-USB (Ethernet-over-USB) tether Xcode brings up
+for a connected device** — not infrastructure Wi-Fi.
+
+Consequences, stated so nobody reads more into the table than it holds:
+
+- **Every row above the IP layer is unaffected.** Bonjour, QUIC, TLS, the exporter binding, the
+  signed introduction and the datagram round trip do not care which link carried the packets, and
+  this is real hardware running the real QUIC stack at both ends.
+- **No Wi-Fi-path row is promoted, and no AWDL row is even touched.** Item 11 (the Wi-Fi path
+  question) stays open. Note the device console's evaluator parameters *do* say `use awdl` — that is
+  the parameters requesting peer-to-peer, not evidence that a peer-to-peer radio carried anything.
+- **Re-run over Wi-Fi before treating this as the standing loop's baseline.** Unplug the cable, keep
+  both ends on the same non-isolated Wi-Fi with no VPN, and confirm the ready line names a routable
+  or `%en0`-scoped address rather than `%en9`.
+
+#### The reconnect failure, and what it was
+
+Two faults, one behind the other. Naming them separately matters because only one of them is the
+probe's own and only one of them could reach the shipping transport.
+
+**Fault 1 — the tunnel was reaped by QUIC's idle timer, at the probe's own heartbeat cadence.** The
+device console:
+
+```
+nw_read_request_report [C4] Receive failed with error "Operation timed out"
+quic_packet_builder_append_for_pn_space builder is null or 0
+quic_conn_send_internal path is null or 0
+nw_connection_group_handle_connection_state_changed [G1] connection [C1 connected
+  fe80::1c20:a841:6b8e:6c0%en2.63016 quic, local: fe80::c6:e886:e3b5:bee8%en2.59535, definite,
+  attribution: developer, server, path satisfied, viable, interface: en2, scoped]
+  failed with error Operation timed out
+```
+
+This is **exactly the defect P2 item 15 measured and fixed in `NetworkMeshSession`, still live in the
+probe** — item 15 changed the shipping transport and the probe only got that round's datagram-gate
+change. The probe declared no `max_idle_timeout`, so it inherited Network.framework's default of
+roughly 30 s, while `heartbeatInterval` was also 30 s. Worse than on Lane C, because of who beats:
+`runInitiator` starts the heartbeat loop and sleeps a full interval before the first beat, while
+`runResponder` only *answers* datagrams. So after the initial ping/pong at `6:35:19`, nothing at all
+was due to cross the wire until `6:35:49` — and the reap was due at the same instant. A keepalive
+that fires no sooner than the timeout it defends against is not a keepalive.
+
+Fixed the same way item 15 fixed the transport: `idleTimeoutMilliseconds` is derived from the
+probe's own beat interval as `heartbeatIntervalSeconds × missedBeatsBeforeIdleReap` (30 × 3 = 90 s)
+and declared on **both** the listener and the connection parameters, because QUIC negotiates the
+minimum of the two advertised values. The ready event and the diagnostic report now carry
+`idleTimeoutMs=` and the peer's advertised value, so the next run's report proves the fix is on the
+wire instead of leaving a reader to infer it.
+
+**Fault 2 — every re-dial afterwards was refused at the device's listener.** The console again:
+
+```
+nw_path_evaluator_create_flow_inner failed NECP_CLIENT_ACTION_ADD_FLOW (null) evaluator parameters:
+  quic, definite, server, attribution: developer, reuse local address, … use awdl,
+  local address: fe80::c6:e886:e3b5:bee8%en2.59535
+nw_path_evaluator_create_flow_inner NECP_CLIENT_ACTION_ADD_FLOW C565CBD6-… [17: File exists]
+nw_endpoint_flow_setup_channel [C6 fe80::1c20:a841:6b8e:6c0%en2.52176 initial channel-flow …]
+  failed to request add nexus flow
+nw_connection_create_from_protocol_on_nw_queue [C6] Failed to create connection from listener
+nw_ip_channel_inbox_handle_new_flow nw_connection_create_from_protocol_on_nw_queue failed
+```
+
+and the same three lines again for the IPv4 link-local attempt (`C8`, `local address:
+169.254.149.89:59535`). `EEXIST` on `ADD_FLOW` means the kernel still holds a flow registration for
+that local endpoint, so the listener cannot create a connection for the new one. Note that both
+refusals name port **59535** — the listener's port — under two *different* local addresses (v6 then
+v4) and two different remote ports, so the collision is on the listener's own registration, not on a
+5-tuple.
+
+**The trigger is probe-only, and it was found by reproducing it — not by reading the code.** The
+first reading of this file said the probe ends its whole run on any tunnel error
+(`inboundTunnelStopped` → `tunnelStopped` → `endProbe` → `stopNetworkOperations()`, which sets
+`listener = nil`), so the re-dials must have hit a listener in teardown. **That reading was wrong,
+and a sim↔sim run disproved it in three minutes.** It is recorded here because the true cause is
+worse and quieter, and because "the code says it ends" was a completely plausible wrong answer.
+
+**Reproduction, sim↔sim probe lane, 2026-09-01 18:54–18:58.** Two Simulators, `ALLOW_SIM_DIAL`,
+`AUTOSTART`, `CONSOLE_LOG`; the initiator's app process suspended with `kill -STOP` for 110 s (past
+the 90 s timeout) and resumed with `kill -CONT`:
+
+```
+# A — the responder, the survivor
+6:54:59 PM: QUIC ready with an inbound peer at 169.254.116.160:57196; … idleTimeoutMs=90000,
+            usable datagram frame size=0 bytes, peer idleTimeoutMs=90000, beatSeconds=30.
+6:54:59 PM: Verified a QUIC datagram round trip.
+6:56:29 PM: QUIC failed for an inbound peer: … (Network.NWError error 60 - Operation timed out)
+            ← and then NOTHING. No "Ending mesh feasibility probe". No "Accepted inbound QUIC
+              tunnel". Minutes of silence.
+
+# B — the initiator, suspended and resumed
+6:57:09 PM: QUIC failed for …[Simulator]: … (NWError 60 - Operation timed out)
+6:57:09 PM: Outbound QUIC tunnel ended; retry 2 of 3: … (NWError 57 - Socket is not connected)
+6:57:12 PM: Opening QUIC tunnel attempt 2 to fernlet-probe-dbb87903-….
+            ← the re-dial, which never reached `.ready`, never reached `.failed`, and was never
+              accepted
+```
+
+The run confirms three things at once, and one of them is the answer:
+
+1. **The idle-timeout fix negotiates.** `idleTimeoutMs=90000` in the live options, `peer
+   idleTimeoutMs=90000` read back off the connection, and the reap landed at `6:56:29` — exactly
+   90 s after `6:54:59`, where the old default would have fired at 30.
+2. **The survivor did not end its probe.** Zero `Ending mesh feasibility probe` lines. The
+   "end-on-any-tunnel-error" theory is dead.
+3. **The survivor's responder task never returned.** That is the defect.
+
+**Why: the responder never writes unless written to, so it can never notice a dead peer.**
+`runResponder` parks in `answerDatagrams`, a QUIC **datagram** receive, which did not throw when the
+connection failed — the task was still parked minutes after `.failed`. Two consequences follow, and
+they are the two symptoms:
+
+- `inboundTunnelTask` never cleared, so `acceptIncoming`'s `guard … inboundTunnelTask == nil`
+  **silently dropped every re-dial** — the userspace half, and the reason B's attempt 2 vanished.
+- The parked task's frame kept the dead `NetworkConnection` alive. **That is what leaves the NECP
+  flow registered**, and on a physical link-local `use awdl` path it is what answers the listener's
+  next `ADD_FLOW` with `[17: File exists]` — the kernel half, and the device's symptom.
+
+One leak, two symptoms, on two different layers. The initiator escapes it because it *does* write
+unprompted: its heartbeat send threw `NWError 57` and `outboundTunnelStopped` ran normally.
+
+**Fixed in the probe** (2026-09-01): `connectionStateChanged`'s `.failed` case now calls
+`releaseFailedInboundTunnel`, which clears `inboundTunnelTask`, frees the connection slot and cancels
+the task holding the connection — one tunnel ends, the listener keeps running, which is what
+`NetworkMeshSession.endTunnel` does. `acceptIncoming`'s refusal also logs a line now instead of
+returning silently; a wedge that leaves no trace is how this cost a device run.
+
+**Verified on the radio, same lane, same `kill -STOP` procedure, with the fix in.** The whole cycle
+now completes, and the run also fills in the Heartbeat row this lane could not:
+
+```
+# B — the responder, the survivor
+7:01:40 PM: Accepted inbound QUIC tunnel id=1.
+7:01:40 PM: QUIC ready with an inbound peer … idleTimeoutMs=90000, peer idleTimeoutMs=90000,
+            beatSeconds=30.
+7:03:10 PM: QUIC failed for an inbound peer: … (NWError 60 - Operation timed out)   ← 90 s exactly
+7:03:10 PM: Released the failed inbound QUIC tunnel; the listener can accept a re-dial.
+7:03:46 PM: Accepted inbound QUIC tunnel id=5.                                       ← the re-dial
+7:03:46 PM: Control responder accepted signed channel introduction.
+7:04:16 PM: Responder received heartbeat.
+7:04:46 PM: Responder received heartbeat.
+7:05:17 PM: Responder received heartbeat.                                            ← 30 s spacing
+
+# A — the initiator, suspended 7:01:54–7:03:44
+7:03:44 PM: Outbound QUIC tunnel ended; retry 2 of 3: … (NWError 57 - Socket is not connected)
+7:03:46 PM: Opening QUIC tunnel attempt 2 to fernlet-probe-f710bb63-….
+7:03:46 PM: Initial QUIC datagram attempt 1 received pong.
+```
+
+Four things this settles that the Lane A device run could not: the declared 90 s timeout is what the
+connection actually uses (the reap is 90 s after ready, not 30); a reaped inbound tunnel is released
+instead of wedging its listener; the re-dial is accepted and re-completes the signed introduction and
+the datagram round trip; and **authenticated heartbeats flow at 30 s spacing**, which is the row the
+13-second device window left blank. What it still cannot say anything about is the kernel `EEXIST` —
+see the caveats below.
+
+**Is the mechanism shared with production? Not on the evidence, but the question is not closed.**
+
+| | Probe | Production (`NetworkMeshSession.swift`) |
+| --- | --- | --- |
+| What the responder parks in | `answerDatagrams` — a **datagram** receive, observed not to throw on connection failure | `receiveFrames(for:from:)` — a **control-stream** receive, observed to throw: Lane C's `tunnelEnded controlStreamEnded … NWError 60` lines are that throw |
+| A tunnel error… | now: `releaseFailedInboundTunnel`, listener kept | `endTunnel(_:cause:reason:)` → `tunnels.removeValue(forKey:)` + `cancelTasks()`. **The listener is never touched**; `stop()` and `updateDiscoveryInfo` are its only other writers |
+| A failed *pending* inbound | no pending state; one `inboundTunnelTask` | `dropPendingInbound(_:)`, plus `expirePendingInbound(now:)` on the shared poll |
+| Concurrent inbound tunnels | one | `maxPendingInboundTunnels` pending + `MeshLinkTable.maxConcurrentLinks` live |
+
+So the shipping transport's inbound teardown is driven off the **stream** receive, which does throw,
+and Lane C recorded it re-dialing successfully after idle timeouts four times per side. Two caveats
+keep this from being a clean acquittal:
+
+- The `EEXIST` is a property of a *listener-derived nexus flow on a link-local, `use awdl` path*.
+  Neither the sim↔sim lane nor Lane C can produce one — two Simulators share the host stack and meet
+  over a routable host address with peer-to-peer disabled — so Lane C's successful re-dials are weak
+  evidence about this specific kernel path.
+- Production also runs a **datagram reader task** per tunnel (`datagramTask`). Nothing here proves it
+  unblocks on connection failure; what it proves is that production does not *depend* on it to end a
+  tunnel. If a device run shows the leak anyway, that task is the first place to look.
+- **There is no fix of the "explicitly cancel the connection" shape available to either side.** In
+  the iOS 26 Swift-native Network API, `NetworkConnection` exposes `start()`, `onStateUpdate`, the
+  endpoints and `tryNextEndpoint` — and **no `cancel()`**; the legacy `NWConnection.cancel()` is on a
+  different type. Dropping the last reference is the only release there is, which is why the probe's
+  fix cancels the task that holds it. Do not plan a production fix around a `cancel()` call.
+
+The residual question — *can a live `NetworkMeshSession` listener accept a re-dial on a link-local
+peer-to-peer path after one of its inbound connections idled out?* — is unanswerable without putting
+the **shipping transport** on hardware, which has never been done. That run is Lane D, below.
+
+#### Evidence — the captured artifacts, in full
+
+The Simulator's **Copy diagnostic report**, 2026-09-01 18:35:32:
+
+```
+Fernlet mesh feasibility diagnostic (DEBUG only)
+generated: 9/1/2026, 6:35:32 PM
+transport: Simulator infrastructure
+simulator-to-simulator dial: refused (default)
+status: Signed QUIC control stream verified
+running: true
+background task: not active
+signed control stream: true
+QUIC datagram verified: true
+advertised QUIC DATAGRAM frame size: 1024
+advertised QUIC UDP payload size: 1280
+live QUIC options: DATAGRAM=1024, UDP=1280, datagram-flow=false
+usable datagram frame size: 0
+authenticated heartbeats: 0
+bytes sent: 784
+bytes received: 785
+connects: 1 (first 6:35:19 PM, last 6:35:19 PM)
+reconnects: 0 (last never)
+thermal state: nominal
+low power mode: false
+shutdown reason: none
+candidates:
+fernlet-probe-ab5ae6b8-2d5a-4e3e-bb06-b4addba2bad5._fernlet-mesh2._udplocal. [device]
+events:
+6:35:18 PM: Start requested; host=Simulator infrastructure, peer-to-peer=false, DATAGRAM=1024, UDP=1280.
+6:35:18 PM: Local Fernlet signing identity is provisioned.
+6:35:19 PM: Cleared any prior continuation request before submitting a new one.
+6:35:19 PM: Background continuation is unavailable: The operation couldn't be completed. (BGTaskSchedulerErrorDomain error 1.)
+6:35:19 PM: Starting Simulator infrastructure probe on _fernlet-mesh2._udp.
+6:35:19 PM: QUIC listener is ready.
+6:35:19 PM: Bonjour listener advertised fernlet-probe-cd6b1fdf-47d2-4a70-a613-2680ad59d2c8._fernlet-mesh2._udp.local..
+6:35:19 PM: Listening and browsing on _fernlet-mesh2._udp.
+6:35:19 PM: Bonjour browser is ready.
+6:35:19 PM: Bonjour discovery has 1 candidate(s).
+6:35:19 PM: Opening QUIC tunnel attempt 1 to fernlet-probe-ab5ae6b8-2d5a-4e3e-bb06-b4addba2bad5._fernlet-mesh2._udplocal. [device].
+6:35:19 PM: QUIC waiting for fernlet-probe-ab5ae6b8-…_udplocal. [device]: The operation couldn't be completed. (Network.NWError error 50 - Network is down)
+6:35:19 PM: Control initiator opened stream id=0.
+6:35:19 PM: QUIC ready with fernlet-probe-ab5ae6b8-…_udplocal. [device] at fe80::c6:e886:e3b5:bee8%en9.59535; DATAGRAM=1024, UDP=1280, datagram-flow=false, usable datagram frame size=0 bytes.
+6:35:19 PM: Power state: thermal=nominal, lowPowerMode=false.
+6:35:19 PM: Control initiator sent identity hello.
+6:35:19 PM: Control initiator accepted remote identity hello.
+6:35:19 PM: Control initiator sent signed channel introduction.
+6:35:19 PM: Control initiator accepted remote signed channel introduction.
+6:35:19 PM: Verified both Fernlet signatures against the same TLS exporter hash.
+6:35:19 PM: QUIC datagram capability check: reported usable frame size=0, required=23. Reported on the parent connection, so it is evidence only — the ping/pong below is the test.
+6:35:19 PM: Sending initial QUIC datagram ping attempt 1 of 3.
+6:35:19 PM: Initial QUIC datagram attempt 1 received pong.
+6:35:19 PM: Verified a QUIC datagram round trip.
+6:35:30 PM: Copied mesh feasibility diagnostic report to the pasteboard.
+```
+
+Two lines in it are worth not misreading. `Network is down` (error 50) at `6:35:19` is a transient
+`.waiting` on the way up, not a failure — `.ready` follows in the same second. And `usable datagram
+frame size: 0` sits directly above `QUIC datagram verified: true`, which is the whole point of the
+item-15 correction: the number is evidence, the ping/pong is the test.
+
+The device's Xcode console for the same run, mesh lines only (startup, HealthKit, CloudKit and ODR
+lines omitted as unrelated); the device probe's own event log was not captured:
+
+```
+boringssl_session_set_peer_verification_state_from_session(492) [C2:1] Unable to extract cached
+  certificates from the SSL_SESSION object
+nw_protocol_instance_set_output_handler Not calling remove_input_handler on 0x11fd61e00:udp
+nw_read_request_report [C4] Receive failed with error "Operation timed out"
+quic_packet_builder_append_for_pn_space builder is null or 0
+quic_conn_send_internal path is null or 0
+nw_connection_group_handle_connection_state_changed [G1] connection [C1 connected
+  fe80::1c20:a841:6b8e:6c0%en2.63016 quic, local: fe80::c6:e886:e3b5:bee8%en2.59535, definite,
+  attribution: developer, server, path satisfied (Path is satisfied), viable, interface: en2,
+  scoped] failed with error Operation timed out
+nw_path_evaluator_create_flow_inner failed NECP_CLIENT_ACTION_ADD_FLOW (null) evaluator parameters:
+  quic, definite, server, attribution: developer, reuse local address, context: Default Network
+  Context (private), proc: 729602E6-…, delegated upid: 0, use awdl,
+  local address: fe80::c6:e886:e3b5:bee8%en2.59535
+nw_path_evaluator_create_flow_inner NECP_CLIENT_ACTION_ADD_FLOW C565CBD6-… [17: File exists]
+nw_endpoint_flow_setup_channel [C6 fe80::1c20:a841:6b8e:6c0%en2.52176 initial channel-flow …]
+  failed to request add nexus flow
+nw_endpoint_flow_failed_with_error [C6 …] already failing, returning
+nw_endpoint_handler_create_from_protocol_listener [C6 … failed channel-flow …]
+  nw_endpoint_flow_pre_attach_protocols
+nw_connection_create_from_protocol_on_nw_queue [C6] Failed to create connection from listener
+nw_ip_channel_inbox_handle_new_flow nw_connection_create_from_protocol_on_nw_queue failed
+… the same five lines again for C8, local address: 169.254.149.89:59535, remote 169.254.116.160:54914
+```
+
+The `boringssl … Unable to extract cached certificates` line is expected and not a fault: the DEBUG
+listener presents a fixed self-signed test identity that neither side trusts or caches, and the
+Fernlet-signed, exporter-bound introduction is the only authentication check on this lane.
+
+**Two gaps in the evidence, named rather than papered over.** The device probe's own **Copy
+diagnostic report** was not captured, so the device's view of the introduction is inferred from the
+Simulator's (`accepted remote signed channel introduction` cannot be logged unless the device signed
+one). And the Simulator's report was copied at `6:35:30`, *before* the timeout at roughly `6:35:49`,
+so the report shows a healthy connection and the console shows what happened next — the two artifacts
+do not overlap in time. Capture both sides' reports at the end of the next run.
 
 ### What this lane can and cannot prove
 
@@ -255,6 +578,9 @@ total order as the device↔device branch, so exactly one Simulator of a pair di
 | Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | **Pass** — implied by the line above; the introduction does not verify unless both hashes match | 2026-08-31 |
 | Datagram | Datagrams carry traffic in both directions. | ~~**Fail** — `usable frame size=0, required=23`~~ **Corrected to Pass, 2026-09-01 (P2 item 15).** The 2026-08-31 Fail was the probe refusing to try, not the transport refusing to carry: it threw on the reported usable size before sending a datagram. With the *shipping* transport on this same lane, mesh heartbeats were sent **and received** over QUIC datagrams in both directions for a full 170 s run — with the reported usable size still `0`. The number is read off the parent connection, which is not a datagram flow; see the correction under "How the probe is bounded" | 2026-09-01 |
 | Dial policy, default off | With `FERNLET_PROBE_ALLOW_SIM_DIAL` absent, two Simulators discover each other and neither dials. | **Pass** — control run held ~90 s: two candidates on each side, zero `Opening QUIC tunnel` lines, zero connections | 2026-08-31 |
+| Heartbeat flow | Authenticated heartbeats are observably sent and acknowledged over the live tunnel. | **Pass** — `Responder received heartbeat.` at `7:04:16`, `7:04:46`, `7:05:17`, i.e. three beats at 30 s spacing, each acknowledged. Only reachable once the idle timeout stopped reaping the tunnel first (P2 item 1) | 2026-09-01 |
+| Reconnect after idle timeout | A tunnel lost to an idle timeout is re-dialed and the peer's listener accepts it. | **Pass, after a fix** — the initiator suspended with `kill -STOP` for 110 s; the responder reaped at exactly 90 s, logged `Released the failed inbound QUIC tunnel`, and accepted the re-dial 36 s later (`Accepted inbound QUIC tunnel id=5`), re-completing the signed introduction and the datagram round trip. Before the fix, the same run wedged silently — see Lane A's *reconnect failure* | 2026-09-01 |
+| Declared QUIC idle timeout | Both endpoints advertise the derived timeout, and the connection uses it. | **Pass** — `idleTimeoutMs=90000` in the live options and `peer idleTimeoutMs=90000` read off the connection on both sides, with the reap landing 90 s after ready rather than the framework default's ~30 | 2026-09-01 |
 
 Evidence — the two console transcripts, trimmed to the load-bearing lines:
 
@@ -602,6 +928,123 @@ transfers with it; an exhausted outbound budget falls back to the control stream
 frame in order is always allowed); and a refused inbound transfer goes back un-acked, so the sender's
 write fails loudly and recovery is the next manifest sync — which is the MC photo path's own failure
 semantics reached by a different route.
+
+### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
+
+**The shipping transport has never run on hardware.** Lane A puts the *spike* on a device; Lane C
+puts the *production* transport between two Simulators. Nothing has yet put `NetworkMeshSession` on
+a physical radio, and everything P2 concluded about the production mesh — the rejection matrix, the
+idle-timeout fix, single-tunnel convergence, per-transfer streams, the six app flows — was concluded
+on two Simulators sharing one host network stack. This lane is the cheapest run that changes that,
+and it is the one that answers the question Lane A's `Fail` row left open.
+
+It is Lane C's harness with one instance moved onto a phone. No new switches, no new code.
+
+**Run it over Wi-Fi, and check that you did.** The 2026-09-01 Lane A run crossed the iPhone-USB
+tether without anyone noticing until the addresses were read afterwards, which cost that run every
+Wi-Fi and AWDL row it might otherwise have earned. Two minutes of setup avoids repeating it:
+
+1. Xcode → Window → **Devices and Simulators** → select the phone → tick **Connect via network**.
+   Wait for the globe icon.
+2. **Unplug the cable.** With it attached, `en9` exists and Bonjour will happily prefer it.
+3. Mac and phone on the same non-isolated Wi-Fi, no VPN, no client isolation.
+4. Confirm afterwards: `ifconfig | grep -c en9` should print `0`, and the run's ready line should
+   name a routable or `%en0`-scoped address — never `%en9`.
+
+#### Step 1 — read each side's signing key
+
+`FERNLET_MESH_MATRIX=1` makes each instance print its own identity on launch, and the roster in
+step 2 is just those two keys handed to both sides. The Fernlet signing identity is keychain-backed
+and stable across launches, so this is done once per install, not once per run.
+
+Simulator side:
+
+```
+xcrun simctl install <sim-udid> <DerivedData>/Build/Products/Debug-iphonesimulator/Fernlet.app
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
+xcrun simctl launch --console-pty <sim-udid> MBO.Fernlet -completeOnboarding
+```
+
+Device side — Xcode → Product → **Scheme → Edit Scheme… → Run → Arguments**, then:
+
+- *Environment Variables*: `FERNLET_MESH_MATRIX` = `1`
+- *Arguments Passed On Launch*: `-completeOnboarding`
+
+Run on the device and read Xcode's console. Both sides print one line:
+
+```
+[mesh-matrix] identity fingerprint=<16 hex> signingKey=<base64 Ed25519 public key>
+```
+
+Copy both `signingKey=` values. That is the whole of "getting the device's key into the Simulator's
+roster fixture" — there is no fixture file, no keychain export, and nothing to copy off the phone but
+a public key that the harness prints for you.
+
+#### Step 2 — run both sides in one seeded mesh
+
+Pick any UUID for `<mesh-uuid>` and use the **same one on both sides**; likewise the members list,
+which is `<device-key>,<sim-key>` in either order on both sides.
+
+Simulator side:
+
+```
+SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
+SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=laneD-wifi \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=<mesh-uuid> \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<device-key>,<sim-key> \
+SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit,capabilities,chat,photo,shop \
+xcrun simctl launch --console-pty <sim-udid> MBO.Fernlet -completeOnboarding
+```
+
+Device side — the same seven variables in the scheme's *Environment Variables*, without the
+`SIMCTL_CHILD_` prefixes (that prefix is only how `simctl` forwards a variable into a Simulator's
+child process; Xcode sets them on the device process directly):
+
+| Variable | Value |
+| --- | --- |
+| `FERNLET_MESH_TRANSPORT` | `quic` |
+| `FERNLET_MESH_MATRIX` | `1` |
+| `FERNLET_MESH_CONSOLE_LOG` | `1` |
+| `FERNLET_MESH_MATRIX_LABEL` | `laneD-wifi` |
+| `FERNLET_MESH_MATRIX_MESH_ID` | `<mesh-uuid>` — identical to the Simulator's |
+| `FERNLET_MESH_MATRIX_MEMBERS` | `<device-key>,<sim-key>` — identical to the Simulator's |
+| `FERNLET_MESH_FLOWS` | `commit,capabilities,chat,photo,shop` |
+
+Grant **Local Network** access when the phone prompts — the Simulator never shows that prompt, so
+this is the first time the lane sees it, and refusing it looks exactly like a dead radio.
+
+Let it run **at least 4 minutes**. Three minutes is the floor for anything meaningful: the first
+heartbeat is due at 30 s, the declared idle timeout is 90 s, and the question this lane exists to
+answer is what happens *after* one of those expires.
+
+#### What to read out of the two transcripts
+
+Both sides echo under `[mesh-quic]` (the radio) and `[mesh-flow]` (the driver). The rows below are
+what to fill in; the first four are Lane C results being re-asked on a physical radio, and the last
+two are new questions only this lane can answer.
+
+| Check | Required result | Result | Date |
+| --- | --- | --- | --- |
+| Wi-Fi path | The ready/activation lines name a routable or `%en0`-scoped address, and `en9` does not exist. This is the row the 2026-09-01 run could not earn | — | — |
+| Local Network permission | The phone prompts once, and the mesh comes up after it is granted | — | — |
+| Accepted baseline on hardware | `accepted <fingerprint> sid=…: tunnel activated, tunnels=1` on both sides | — | — |
+| Tunnel stability | One activation per side and **zero** `tunnelEnded` lines across ≥ 4 minutes, with `idleTimeoutMs=90000 beatSeconds=30` on the `datagramCapacity` line | — | — |
+| Heartbeat + datagram flow | `heartbeat sending over datagram` and `heartbeat received over datagram` on both sides at 30 s spacing — the item-15 result, on a physical radio | — | — |
+| App flows | Slot commit, capabilities, chat both ways, a photo on a per-transfer stream, shop catalogue — the item-10 table, on a physical radio | — | — |
+| **Reconnect after a real idle timeout** | Kill one side (stop the Xcode run, or `xcrun simctl terminate <sim-udid> MBO.Fernlet`), wait > 90 s, restart it: the survivor's listener accepts the re-dial and a tunnel re-forms | — | — |
+| **No NECP flow leak** | The survivor's console shows **no** `NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` and no `Failed to create connection from listener` after the peer's tunnel ends | — | — |
+
+The last two rows are the point of the lane. They are the residual from Lane A's `Fail`: the probe
+could not answer them because it ends its whole run — listener included — on the first tunnel error,
+whereas `NetworkMeshSession.endTunnel` ends one tunnel and keeps listening. If they come back clean,
+the `EEXIST` cascade is confirmed probe-only and needs no production fix. If the survivor's listener
+*does* refuse the re-dial, the fault is real in the shipping transport on a link-local peer-to-peer
+path, and the fix candidates are, smallest first: re-listen on a fresh port after a tunnel ends
+(`updateDiscoveryInfo` already has the stop-and-recreate shape), or drop `peerToPeerIncluded` from
+the listener parameters and keep it only on the dialing side. Do not plan on "cancel the stale
+connection" — `NetworkConnection` has no `cancel()` in the iOS 26 API.
 
 ### Lane B — physical multi-device and background (deferred to P8; see plan §15)
 
