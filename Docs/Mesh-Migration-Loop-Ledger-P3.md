@@ -1,0 +1,42 @@
+# Mesh Migration Loop Ledger — P3
+
+**Phase:** P3 (durable session context, roster, membership) · **Prompt:** [Next-Round-Prompt-Mesh-P3-2026-09-01.md](Next-Round-Prompt-Mesh-P3-2026-09-01.md)
+**Started:** 2026-09-01 · **Iteration:** 2 · **Tree at seed:** main = `801e34f` (pushed); launcher at `adfa3c0`
+
+## Items
+States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
+| # | Item | Tier | Prereq | State | SHA | Note |
+|---|---|---|---|---|---|---|
+| 0 | Multi-node sim bring-up (3 nodes) | 2 | — | todo | | de-risks every tier-2 item; deferred behind tier-1 work per §1.3 |
+| 1 | Records + derived roster, pure | 1 | — | done | `cd8ea71` | 4 record kinds, ledger of 4 sets, roster derived per read; caps = keep-earliest-k (merge-stable); barred keys joined from admission |
+| 2 | Sealed MeshSessionStore (5-state, per-instance root, §17.3) | 1 | 1 | todo | | 2–3 iters; D4 design call |
+| 3 | Membership event wire tokens | 1 | 1 | todo | | moves signed bytes |
+| 4 | Epoch model §8.4 + tighten the gate | 1 | 3 | todo | | |
+| 5 | Membership-driven rotation | 1 | 3, 4 | todo | | closes voted-out-keeps-key gap |
+| 6 | State machine §8.2 on the fake | 1 | 2 | todo | | |
+| 7 | IntroductionAuthority → derived roster | 1 | 1, 2, 5 | todo | | makes matrix row 3 shipping |
+| 8 | P3 acceptance battery | 1 | 2,4,5,6,7 | todo | | |
+| 9 | Multi-node membership at tier 2 | 2 | 0, 7 | todo | | Lane C, 3–6 sims |
+
+## Blocked on owner
+- Transcript-`sid` / `epochRef` move (§3 decision, §18 decision 7) — confirm before the wire changes.
+
+## Decisions taken (defaults from §3 unless the owner overrides)
+| Decision | Choice | Taken on |
+|---|---|---|
+| Bind `sid`+`epochRef` in transcript v2 | (default: yes, once) | — |
+| Epoch gate strict after §8.4 | (default: yes) | — |
+| Publish `fp` in TXT | (default: no unless bundled) | — |
+
+## Surprises worth not re-deriving
+- Item 1: `SignedAdmissionRecord` wraps `MeshAdmissionToken` whole — `expiresAt` is admission-time freshness only, never a validity test on a durable record. Termination is derived (not applied at merge) to keep commutativity. Records are NOT signature-checked in the pure layer; item 3 must verify before insertion (junk low-timestamp records could crowd a real removal out of a 16-slot set). Minted `member-admission.v1`/`member-removal.v1` tokens beyond §8.3's two — respell in item 3 if wanted. Legacy `sessionGoodbye` has no record shape yet (item 3 decides).
+- Instrument the wire before believing an inference; a negative read off an *accessor* is not a negative observed on the wire.
+- The Lane C harness exists (`FERNLET_MESH_MATRIX`/`_FLOWS`/`_CONSOLE_LOG` + chaos) — reuse it. It commits **both** proximity gates.
+- One contiguous write per QUIC frame is load-bearing.
+- A hard-killed QUIC peer sends no `CONNECTION_CLOSE`; survivor refuses re-dials until its idle timer — bounded, not a leak.
+- `/loop` never compacts between iterations → fresh session per phase; the ledger is the only durable state.
+- The id-vs-endpoint family and `MeshTunnelConvergence` are **closed** (`2f273a9`, `96337a3`). Do not re-audit.
+- Concurrent sessions share this tree and sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` are held by another session — never stage them.
+
+## Next item
+2 (sealed store, iter 1 of 2–3). Item 0 stays deferred behind tier-1 work.
