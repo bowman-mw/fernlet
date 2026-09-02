@@ -64,6 +64,11 @@ the *receiving* user's Connection Inspector, so a localized sender would put its
 someone else's audit trail. A localized inspector is still possible later — render
 `payloadTypeToken` through a receiver-side lookup table instead of showing the sender's string.
 
+The membership records added for plan §8.1 are the same rule one layer down:
+`MeshMembershipRecordKind`'s raw values (`fernlet.mesh.member-admission.v1` and its three siblings)
+are wire bytes and sealed-context keys, so they are frozen English and have no display half at all —
+nothing shows a record kind to a person.
+
 The rule is enforced mechanically by `Tests/FernletTests/LocalizationBoundaryTests.swift` (the
 localization wall — sibling of the S3, no-tracking and Power-of-10 walls), which pins the frozen raw
 values case by case and grep-walls `String(localized:)` inside `FernletKit/Sources` for the
@@ -312,6 +317,41 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | --- | --- |
 | `PeerSlot.id` | Uses peer UUID as slot identity. |
 | `MeshSessionParticipant.id` | Uses participant fingerprint as identity. |
+
+### `MeshMembershipRecords.swift`
+
+The four signed, immutable, grow-only membership records (plan §8.1/§8.3) and the caps §9 puts on
+them. Pure value types: no store, no transport, no clock, and no signature verification — a record's
+`signature` is opaque bytes it carries, and the layer that owns the crypto purpose must check it
+BEFORE the record reaches a ledger a roster is derived from.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshMembershipRecordKind` | The frozen wire tokens naming the four records (`fernlet.mesh.member-admission.v1`, `…member-departure.v1`, `…member-removal.v1`, `fernlet.mesh.terminated.v1`). English forever. |
+| `MeshMembershipRecord` | What every record exposes so the merge and the roster are written once: mesh id, member fingerprint (the dedup key), `occurredAt`, author, opaque signature, plus the kind token and per-kind cap. |
+| `MeshMembershipBounds` | Plan §9's caps in one place — roster 8, 16 records per kind, 1 termination, 8 custodians/voters — reusing `MeshIntroductionRoster`'s own constants rather than restating them. |
+| `MeshMembershipRecordOrder.precedes(_:_:)` | The total order sets sort and truncate by: `occurredAt`, then member, then author, then signature bytes. Total by construction, so "keep the earliest N" is the same answer on every device. |
+| `SignedAdmissionRecord` | Wraps the existing `MeshAdmissionToken` whole (no second signed-admission format). `signingPublicKey` is what lets a removal name a KEY, not just a fingerprint. The token's `expiresAt` is an admission-time freshness check, never a validity test on the durable record. |
+| `SignedDepartureRecord` | Self-signed by the leaver, with a bounded `MeshCustodyHandoffSummary`. Grow-only, so departure is permanent: a re-admission record for the same fingerprint is subtracted straight back out. |
+| `SignedRemovalRecord` | A COMPLETED removal only (expired proposals leave no trace), carrying `proposalID` + the quorum's `voterFingerprints` as evidence a partitioned member can re-check. |
+| `SignedTerminationRecord` | A final-pair member's end-of-mesh record. `rosterAtSigning` is audit only — the downgrade is judged against the RECEIVER's merged roster. |
+| `MeshCustodyHandoffSummary` | Who took custody at a departure, capped at the roster cap and clamped on decode as well as construction. |
+
+### `MeshDerivedRoster.swift`
+
+`roster = admitted − departed − removed`, derived on every read and stored nowhere (plan §8.1).
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshMembershipRecordSet<Record>` | One kind's bounded grow-only set: deduplicated by member (earliest wins), sorted by the total order, capped on init/insert/merge AND decode. |
+| `…RecordSet.merging(_:)` / `.inserting(_:)` | Set union. Commutative, associative and idempotent INCLUDING the cap — keeping the earliest *k* of a set is the same answer whether you cap before or after merging, which is what makes convergence independent of who connected first. |
+| `MeshMembershipLedger` | The four record sets, their union-merge, and `derivedRoster`. The union-mergeable half of plan §8.1's `MeshSessionContext` (the clock, the routing digest and the persistence story are the store's, not this). |
+| `MeshDerivedRoster.init(ledger:)` | The derivation: admitted (earliest 8) − departed − removed, then the termination rule. |
+| `…DerivedRoster.quorumThreshold` | ⌊&#124;roster&#124;/2⌋ + 1 (plan §10.4), never zero. |
+| `…DerivedRoster.coordinatorFingerprint` | Lowest fingerprint present — the deterministic election plan §8.4 assumes each partition can run alone. |
+| `…DerivedRoster.isFinalPair` | Judged on the DERIVED roster, never the connected pair (a 2/2 split of a 4-roster is not two final pairs). |
+| `…DerivedRoster.introductionRoster()` | Hands the QUIC transport members AND barred as keys — what makes `MeshIntroductionRoster.barred` a real answer instead of the empty list the live manager falls back to. |
+| `applyTermination(_:to:)` (private) | Read-time, not merge-time: a termination from a non-member is ignored; one whose signer sits on a roster larger than two downgrades to that signer's departure. Applying it at merge time would make the union order-dependent. |
 
 ## Transport And Ranging
 
