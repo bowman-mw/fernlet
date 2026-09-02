@@ -700,8 +700,11 @@ derived roster, so matrix row 3 (`barredMember`) is the shipping authority's own
 a chaos hook's. Thirteen integrated acceptance scenarios and a 3687-test suite are green;
 `spm-wall-check.sh` passed. On Lane C a **pair** of Simulators proved admission, rotation, clean
 departure and removal over a real QUIC tunnel with the derived roster on both sides. **The
-three-node lane did not converge** — three Simulators form a spanning star (§8.7 finding 1) — so
-everything that needs a third *real* node is deferred behind it.
+three-node lane did not converge at the time of writing** — three Simulators formed a spanning star
+— so everything needing a third *real* node was deferred behind it. **That was fixed immediately
+after the phase closed (``871b7ee``, §8.7 finding 1): three Simulators now form a full mesh 3/3,
+with `derived=3` on every node, one epoch head agreed across two tunnels, and a clean departure
+accepted by both survivors.** Read §8.7 finding 1 and §21.2 for what that unblocks.
 
 §§8.1–8.4 below are the sketch, kept as the specification. §8.5 records what landed, §8.6 where
 reality moved the design and why, §8.7 what was deliberately left undone, and §8.8 the acceptance
@@ -916,16 +919,39 @@ load/deferred/corrupt matrix; legacy `sessionGoodbye` interop.
 
 ### 8.7 Findings for the owner — real, and deliberately NOT fixed here
 
-1. **Three Simulators form a spanning star, not a mesh (ledger item 0b, `c619d1f`).** Reproduced 3/3
-   with the hub on a different node each run; not launch order, not `sid` rank, not
-   `MeshLinkTable.maxConcurrentLinks` (8). Two failure shapes: the third pair is dialed and dropped
-   silently by the far side, or never proposed at all (run 5: no dial, no refusal, no error on either
-   node). Root cause not identified — a **P2 transport** defect, not a membership one; stopped at the
-   timebox. **Cost:** the three things a third real node was supposed to prove are unreachable —
-   §10.5's departure gossiped by a third member, a removal minted by a *real* quorum (⌊2/2⌋+1 = 2
-   votes with the target excluded leaves 1 eligible voter, so an honest two-node removal always
-   refuses `quorumNotMet(required: 2, presented: 1)`), and a rotation crossing two tunnels. All three
-   have tier-1 coverage; none has radio corroboration. **This is P4's first decision (§21.3).**
+1. **~~Three Simulators form a spanning star, not a mesh~~ — FIXED in ``871b7ee``** (was ledger item
+   0b, `c619d1f`). It was **not** a transport defect. `isSessionOpen` carries the mesh-wide "this
+   mesh admits new **members**" rule and was being read as the gate on opening a **link at all**, at
+   three sites in `MeshNetworkManager`: `handlePeerDiscovered` (outbound), `shouldAcceptInvitation`
+   (the QUIC radio's `invitationGate`, inbound) and `channelAdmission` (the seat decision).
+   `handleMeshDescriptor` re-derives `isSessionOpen` from the *gossiped* descriptor's mode, so on a
+   `.closed` mesh — the Lane C seeded shape, and what a user gets by closing a real mesh — the first
+   committed peer's descriptor latched it false on every node, and from that instant the node
+   neither dialed, accepted, nor seated anybody, its own co-members included. Whichever node had
+   both edges in flight before that merge kept two tunnels and became the hub; a pair was never
+   affected because its only edge predates any descriptor. The fix is one property,
+   `mayLinkToDiscoveredPeers` (`isSessionOpen || currentMesh != nil`) at those three gates: a closed
+   mesh refuses new members where membership is decided (the members-only introduction, MC's
+   identity introduction, the admission prompt), and stops refusing links. **Three Simulators now
+   form a full mesh 3/3** — see the runbook's "Fixed (0b)" subsection, which also records `derived=3`
+   on all three, a rotation minted by a non-founder crossing two tunnels, and a clean departure
+   accepted by **both** survivors. Findings 1's dependants are unblocked: §10.5's third-member
+   propagation is now reachable, and finding 6's `FERNLET_MESH_CHAOS_BARRED` retirement is no longer
+   blocked on this.
+
+   **A security review of the change returned COMMIT WITH FIXES, and the fixes are in it.** The
+   relaxation is only safe where the transport is members-only, which MC — the shipping default —
+   is not, so the membership decision is *also* taken where MC knows the identity:
+   `maySeatVerifiedPeer(signingPublicKey:)` in `checkCoordinatorStates`, before `onSlotConnected`
+   sends the descriptor, the photo manifest or the vouch list; and `broadcastMeshDescriptor` /
+   `sendMeshDescriptor` now refuse an uncommitted slot (the descriptor is plaintext and names every
+   member's fingerprint, display name and both public keys). The re-propose sweep gained a
+   never-refilled per-endpoint budget (`MeshLinkTable.maxReproposalsPerEndpoint` = 6) so an owner
+   that keeps refusing a seat cannot sustain a connect/refuse/re-dial loop, and it defers while any
+   inbound introduction is in flight. Full write-up in the runbook's "What the security review of
+   the 0b change changed". **One item is owed before QUIC ships:** `browsed peers=` logs nearby
+   Bonjour instance names at `.notice`/`.public` — fine while the radio is DEBUG-only, not fine
+   after.
 2. **A clean departure can be lost in the teardown that follows it (`2f6fd42`).**
    `leaveSessionAfterNotifyingPeers()` awaits `sendMembershipEvent(.meshMemberDeparture)` — which
    returns when the frame reaches the transport, not the peer — and then stops the transport. On Lane
@@ -1663,18 +1689,26 @@ P4 is partition and merge, built on `FakePeerNetwork` with a `VirtualClock` — 
 ### 21.2 The sim↔sim lane, as it actually is
 
 §10's testing-lane paragraph promises "3–6 Simulators on one Mac" for the 2/2, 3/1 and nested
-re-split shapes. **Read it with §8.7 finding 1 in hand.**
+re-split shapes. **§8.7 finding 1 is FIXED (``871b7ee``), so this table has moved:** three Simulators
+now form a full mesh, and the ≥ 3-node row below is proven rather than blocked.
 
 | Ask | Status |
 |---|---|
 | A **pair** over real QUIC, carrying the derived roster | **Proven** (`2f6fd42`): admission, rotation crossing the tunnel, clean departure, removal ejecting at the next introduction — all with `ledger=present` on both nodes and `FERNLET_MESH_CHAOS_BARRED` unset |
 | The harness seams a membership run needs | **Built and env-gated** (DEBUG, `FERNLET_MESH*` family): `FERNLET_MESH_ROLE=founder\|joiner`, `FERNLET_MESH_LEAVE_AFTER`, `FERNLET_MESH_REMOVE_AFTER`, `armFounderLedgerForHarness()`, `requestAdmissionForHarness()`, `seedRemovalRecordForHarness`, the `[mesh-flow] membership` audit line and the `[mesh-quic] membershipFrame` / `membershipRecord` echoes |
-| **≥ 3 nodes** — a 2/2 or 3/1 split, a departure gossiped by a third member, a rotation across two tunnels, a real quorum, `MeshLedgerAdoption`'s actual rebase | **BLOCKED on 0b** — three Simulators form a spanning star, N−1 edges, hub varying, 3/3 reproductions (runbook "Lane C — THREE nodes"). A P2 **transport** defect, not a membership one |
+| **3 nodes** — a full mesh, the derived roster on three nodes, a rotation across two tunnels, a clean departure reaching **both** survivors | **Proven** (``871b7ee``, runbook "Lane C — THREE nodes → Fixed (0b)"): 3/3 runs reach `slots total=2 committed=2` on every node; `membership … derived=3` on every node; one `epochRef` agreed by all three, minted by the **non-founder** lowest fingerprint, so the key crossed two tunnels; `member-departure.v1` sent `recipients=all` and `accepted` by both survivors, each moving to `derived=2 barred=1` and rotating to epoch 2 |
+| **≥ 3 nodes** — a 2/2 or 3/1 split, a departure learned by **re-gossip** rather than directly, a real quorum, `MeshLedgerAdoption`'s actual rebase | **Now reachable, not yet run.** The lane carries three nodes; these four asks need a run designed for them. The departure above was delivered *directly* over C's two tunnels (`recipients=all`), so §10.5's re-gossip path is still uncorroborated; the rebase needs a joiner admitted by a **non-founder**, which the harness's founder-admits-everyone driver does not produce |
 
 So P4's tier-1 obligation is unchanged and complete on its own terms — `FakePeerNetwork` scripts
 n-way splits and heals with no wall-clock sleeps, which is where randomized bounded schedules under a
-fixed seed belong. What P4 **cannot** do without 0b is corroborate any of it on the radio. Plan for
-tier 1 first and decide 0b separately (§21.3); do not sequence the fake-fabric suites behind it.
+fixed seed belong. P4 **can** now corroborate a three-node shape on the radio as well; plan tier 1
+first regardless, and treat the three-sim run as evidence rather than as the acceptance gate.
+
+**One lane caveat the fix introduced:** the harness's founder arms its ledger on its *first*
+committed slot (`MeshFlowDriver.driveFounder`), which collapses the seeded descriptor to the founder
+alone — so a third node whose tunnel is not already up when that happens is a stranger and is
+refused. Launch the three sims ~1 s apart (`STAGGER=1` in the runbook's script), not 3 s, or the
+third node never gets in.
 
 Two lane facts worth not re-deriving: a removal does **not** cut a live tunnel — it refuses the next
 introduction, per `MeshIntroductionAuthority` answering per introduction; and
@@ -1685,7 +1719,7 @@ it does not request a rotation (rotation-on-removal is tier 1, in `MeshRotationT
 
 | Decision | Default if the owner is silent | Why |
 |---|---|---|
-| **Does P4 fix 0b as pre-work, or build on pairs only?** | **Build on pairs only; timebox 0b to one iteration at the *end* of P4, not the start.** | It is a P2 transport defect and P4's real acceptance (§16.2's matrix, the convergence property test, §10.4's quorum table, §10.5's two worked examples) is tier 1 on the fake fabric, which is already green for three-node shapes. Spending P4's first iterations on a dial fan-out / silent-refusal bug risks the phase for corroboration, not correctness. **But P5 inherits it worse** — store-and-forward's delivery targets are defined in partition terms, and a relay drain across a real three-node split is the first thing that genuinely wants three radios. |
+| ~~**Does P4 fix 0b as pre-work, or build on pairs only?**~~ **DECIDED AND DONE** — the owner called it, and it was fixed before P4 started (``871b7ee``). The reasoning below is kept only because it explains what P4 no longer has to weigh. | **Moot.** | It is a P2 transport defect and P4's real acceptance (§16.2's matrix, the convergence property test, §10.4's quorum table, §10.5's two worked examples) is tier 1 on the fake fabric, which is already green for three-node shapes. Spending P4's first iterations on a dial fan-out / silent-refusal bug risks the phase for corroboration, not correctness. **But P5 inherits it worse** — store-and-forward's delivery targets are defined in partition terms, and a relay drain across a real three-node split is the first thing that genuinely wants three radios. |
 | **Departure delivery: a transport ack in P4, or wait for P5 store-and-forward?** | **Wait for P5, and make P4's merge path the recovery.** | §8.7 finding 2: the leave awaits the local write and then stops the transport. A delivery ack or bounded re-send is a transport change; P5's relay is the mechanism that exists for exactly "a frame the peer did not get". P4 should assert the recovery instead — a survivor that missed a departure learns it at the next merge — which is a §10.5 property it owes a test for anyway. **If the owner wants it sooner:** the cheap half is to await a flush (or a bounded re-send window) *before* `leaveSession()` stops the transport, which is a `NetworkMeshSession` change, not a membership one. |
 | **Transcript `sid` binding (§18 decision 7, §7.7 finding 1)** | **Still owner-gated; still not taken.** | P3 declined it because `epochRef` became real inside the existing field and no golden vector moved. P4 moves no wire bytes either, so the decision keeps travelling — but note it gets *more* expensive with every phase that adds a frame. Touch list: `MeshChannelIntroductionTranscript`, `canonicalBytes`, `bind(channelBindingHash:)`, the purpose doc, the framing case and the distinctness table. |
 | **Does a merge re-run ingestion gates, or trust the branch that accepted first?** | **Re-run at ingestion**, per §10.3 (age gate and moderation run on ingestion exactly as the existing rebuild path does). | Records union; *content* does not get a free pass because another branch approved it. Say so in the acceptance suite rather than leaving it implied. |

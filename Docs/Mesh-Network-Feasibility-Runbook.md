@@ -1042,17 +1042,18 @@ frame in order is always allowed); and a refused inbound transfer goes back un-a
 write fails loudly and recovery is the next manifest sync — which is the MC photo path's own failure
 semantics reached by a different route.
 
-### Lane C — THREE nodes (run 2026-09-02, P3 item 0): **the lane does not form a full mesh**
+### Lane C — THREE nodes (runs 2026-09-02, P3 items 0 and 0b): **a star, then a full mesh**
 
-P3's whole tier-2 story assumes three Simulators can carry a mesh. **They cannot, yet.** Three
-Simulators discover, introduce, and hold QUIC tunnels exactly as the pair does — but the graph they
-form is a **spanning star with N−1 edges, never the N(N−1)/2 full mesh**. One node ends holding two
-tunnels; the other two hold one each, to the hub, and never to each other. Reproduced three times
-(2026-09-02) with the hub landing on a *different* node each time, so it is not a property of any one
-Simulator, of launch order, or of the `sid` ranking.
+P3's whole tier-2 story assumes three Simulators can carry a mesh. **Item 0 found that they did
+not, and item 0b fixed it.** This section keeps both halves: what the star looked like, because the
+evidence is what named the defect, and the fix with its 3/3 proof in "Fixed (0b)" below. Read the
+star as history; the lane's current answer is the last two subsections.
 
-This does **not** retract anything above: every pairwise property the two-node lane proved still
-holds here. It narrows what a three-node run can be asked to prove.
+As found (item 0, `c619d1f`): three Simulators discovered, introduced and held QUIC tunnels exactly
+as the pair did — but the graph they formed was a **spanning star with N−1 edges, never the
+N(N−1)/2 full mesh**. One node ended holding two tunnels; the other two held one each, to the hub,
+and never to each other. Reproduced three times with the hub landing on a *different* node each
+time, so it was not a property of any one Simulator, of launch order, or of the `sid` ranking.
 
 #### How to run it
 
@@ -1141,15 +1142,162 @@ and a joiner needs an admitter — but a stranger cannot ask, because an empty d
 its tunnel before any app frame (the P2 "first-meeting stranger admission" row). Giving Lane C a
 founder/joiner shape is therefore a **prerequisite** for loop item 9, not a detail of it.
 
+#### Fixed (0b) — the root cause was the owner's link gate, not the transport
+
+Both failure shapes were one flag. `MeshNetworkManager.isSessionOpen` carries the mesh-wide "this
+mesh admits new **members**" rule, and it was being read as the gate on opening a **link at all**, at
+three sites:
+
+| Site | What a false answer did | How it read in a transcript |
+| --- | --- | --- |
+| `handlePeerDiscovered` (proximity-join branch) | returned before the `sid` tie-break, so no dial | **shape (b)**: no dial, no refusal, no error, on either node |
+| `shouldAcceptInvitation` — the QUIC radio's `invitationGate` | `admitVerifiedInbound` returns nil after the peer is verified | **shape (a)**: the dialer's control stream dies `NWError 57`; the far side logs nothing (item 0 added `noteInboundRefusal` for exactly this) |
+| `channelAdmission` — the seat decision | `.kick` → `disconnectPeer` after the introduction succeeded | a `localEviction` / re-dial loop; the far side reads a truncated frame and reports `MeshTransportError error 2` (`invalidFrameLength`), which looks like a transport defect and is not |
+
+`handleMeshDescriptor` re-derives `isSessionOpen` from the **gossiped** descriptor's mode. The Lane C
+harness seeds `mode: .closed` deliberately (a closed mesh publishes no `meshID`, so every run's TXT
+is byte-identical) — so `startJoin()`'s `isSessionOpen = true` let the *first* edge form, and then
+the first committed peer's descriptor latched the flag false on every node. From that instant a node
+neither dialed, accepted, nor seated anybody, **its own co-members included**. Whichever node had
+both of its edges in flight before that merge kept two tunnels and became the hub — a race, hence a
+different hub every run, and hence not launch order, not `sid` rank and not the 8-link cap. A pair
+was never affected because its only edge predates any descriptor crossing it.
+
+This is a product defect and not a harness artefact: a `.closed` mesh could never form or heal the
+tunnels it is made of. The fix is one property — `mayLinkToDiscoveredPeers` = `isSessionOpen ||
+currentMesh != nil` — at those three gates plus the two re-invite guards in `handlePeerDisconnected`.
+Once a device holds a mesh, the **roster** decides who may connect, where the peer's identity is
+actually known: the QUIC introduction is members-only, MC's slot coordinator refuses at its identity
+introduction, joining still needs an admission the user grants, and `setSessionOpen(false)` still
+evicts uncommitted slots. Regression: `Tests/FernletTests/MeshClosedMeshStarTopologyTests.swift`
+(five tests; three of them fail on the pre-fix tree).
+
+Two diagnostics landed with it, both `notice` + console mirror, for the same reason item 0's
+`noteInboundRefusal` did — discovery and the dial decision were the two stages with no transcript at
+all:
+
+* `[mesh-quic] browsed peers=<n> [<names>]` on every change of the browse set size. **This is what
+  retired the discovery hypothesis:** every node browses all its peers, and always did. It also
+  corrects a reading convention item 0 recorded — a browsed-name link key means only that *this side
+  had browsed that peer*, not that it dialed, because `admitVerifiedInbound` remaps a verified
+  inbound connection onto the browsed key. The useful half is the contrapositive: a **bare integer**
+  key means this side had **not** browsed that peer.
+* `[mesh-quic] dial refused <admission> for <key>` (was `debug`).
+
+A bounded re-propose sweep rides the existing 1 Hz poll
+(`NetworkMeshSession.reproposeIdleBrowsedPeers`, every `reproposeIntervalSeconds` = 5 s): discovery
+announces a peer **once**, so an announcement the owner declines is otherwise never repeated, and the
+pair is stranded for the life of the session. It re-offers only `idle`, untunnelled, browsed peers
+whose advertised `sid` is not already on a live tunnel — so it cannot double-dial, cannot spend a
+retry budget, and cannot fight the duplicate collapse.
+
+#### What the security review of the 0b change changed (2026-09-02)
+
+The fix above relaxes three **link** gates, and that is only safe where the transport itself is
+members-only. It is on QUIC. **It is not on MC — which is the shipping default**
+(`MeshTransportFactory.shippingDefault`): an MC invitation carries no identity, and the identity
+introduction one layer up is gated on revoked/blocked keys, not on the roster. Four findings, all
+fixed in the same change:
+
+1. **HIGH — a closed mesh must still refuse a verified stranger.** Without a second gate, a stranger
+   seated on a closed MC mesh would be sent this device's signed identity introduction and then, on
+   any `broadcastMeshDescriptor()`, a **plaintext** descriptor naming the mesh, every member's
+   fingerprint, display name and both public keys — and `setSessionOpen(false)`'s eviction of
+   uncommitted slots would be undone by the next discovery. Closed had become "no new *member*"
+   instead of "stops admitting". Fixed by taking the membership decision where MC *does* know the
+   identity: `MeshNetworkManager.maySeatVerifiedPeer(signingPublicKey:)`, asked in
+   `checkCoordinatorStates` the moment a slot's coordinator verifies and **before**
+   `onSlotConnected` sends the descriptor, the photo manifest or the vouch list. It asks the same
+   `roster` the QUIC introduction asks — derived records first, gossiped descriptor as the
+   documented fallback, `barred` honoured — and only on a **closed** mesh; an open mesh and a device
+   with no mesh are unchanged. Admit-by-prompt still works, because `allowAdmission(_:)` appends the
+   member to `currentMesh` before it grants. Second lock: `broadcastMeshDescriptor` /
+   `sendMeshDescriptor` now refuse an **uncommitted** slot outright.
+2. **MEDIUM — the re-propose sweep could sustain a connect/refuse/re-dial loop.** The owner refuses
+   seats for reasons this radio cannot see (a locally-kicked peer — and that record is consumed by
+   the disconnect that follows it — a removed member, a capacity race), each refusal ends the tunnel,
+   and `noteClosed` returns the link to `idle` **with a full dial budget**. Fixed with a second,
+   separately-counted budget that is deliberately **never refilled**:
+   `MeshLinkTable.maxReproposalsPerEndpoint` = 6, spent through `admitRepropose(_:)`, evicted with
+   the endpoint cache.
+3. **LOW — the sweep could dial a peer whose inbound was mid-introduction.** `pendingInbound` is
+   keyed by *connection id*, never by a browsed key, so the radio cannot tell which peer it is. The
+   sweep now defers entirely while any introduction is in flight — bounded, because
+   `expirePendingInbound` runs first in the same tick.
+4. **LOW — a comment claimed the first sweep waited an interval.** It sweeps on the first poll tick;
+   the comment now says so.
+
+Tests: `theReproposeBudgetIsSpentAndNeverRefilled`, `theReproposeBudgetIsPerEndpointAndDiesWithIt`
+(`NetworkMeshTransportTests`); `aClosedMeshRefusesToSeatAVerifiedStranger`,
+`anOpenMeshAndANoMeshDeviceSeatAnybodyAsBefore`, `admittingByPromptMakesTheRequesterSeatable`,
+`anUncommittedSlotIsNeverSentTheMeshDescriptor` (`MeshClosedMeshStarTopologyTests`).
+
+One posture worth stating: a `currentMesh` with an **empty** member list and no ledger refuses
+everybody, this device included. That is fail-closed and deliberate.
+
+**Logging note.** `browsed peers=` prints nearby Bonjour instance names at `.notice` with
+`privacy: .public`, matching the precedent set by `accepted`/`datagramCapacity`. It is acceptable
+only because the QUIC radio is DEBUG-only today. **Downgrade it (and its neighbours) before QUIC
+ships.**
+
+#### The 3/3 proof (runs 2026-09-02, item 0b)
+
+Procedure exactly as above, with one change: launch the three sims **~1 s apart, not 3 s**. The
+harness's founder arms its ledger on its first committed slot, which collapses the seeded descriptor
+to the founder alone — a third node whose tunnel is not already up by then is a stranger and is
+refused. Scripted as `STAGGER=1` in the scratch `threerun.sh`.
+
+*Topology, no roles* — `topo3`, `topo4`, `topo5`, every node in every run:
+
+```
+[mesh-quic] browsed peers=2 [fernlet-mesh-…,fernlet-mesh-…]
+[mesh-flow] slots total=2 committed=2 states=[connected,connected]
+```
+
+No `tunnelEnded`, no `dial refused`, no `inbound tunnel refused`, no churn. **3/3 full mesh**, where
+item 0 was 3/3 star.
+
+*Membership, `FERNLET_MESH_ROLE=founder` on A and `joiner` on B and C* — `mem1`, `mem2`, both runs:
+
+| Node | Evidence |
+| --- | --- |
+| A (founder, `d996bc564a17da2d`) | `founder armed=true … derived=1` → `admitting fb795f343c2954da` → `admitting 87684c8a76bb86c7` → `membershipFrame sent fernlet.mesh.member-admission.v1 slots=2 recipients=2` → `membership ledger=present derived=3 barred=0 status=active` |
+| B (joiner, `fb795f343c2954da`) | `requesting admission asked=true` → two `membershipRecord fernlet.mesh.member-admission.v1 accepted` → `derived=3` |
+| C (joiner, `87684c8a76bb86c7`) | same, `derived=3` |
+| all three | `epochRef=1.f62a1fdb65021c9d93c2ed7e7d177e1d.87684c8a76bb86c7` — **one head, agreed by all three, coordinated by C**, the lowest fingerprint and *not* the founder. B cannot derive that head without the key it wraps, so the key crossed two tunnels |
+
+*Departure*, C with `FERNLET_MESH_LEAVE_AFTER=55`:
+
+```
+C: leaving via leaveSessionAfterNotifyingPeers … derived=3
+C: [mesh-quic] membershipFrame sent fernlet.mesh.member-departure.v1 slots=2 recipients=all
+A: [mesh-quic] membershipRecord fernlet.mesh.member-departure.v1 accepted
+A: membership … derived=2 barred=1 … epochRef=2.f79caa1f8ffb97cee9801c694da0cce9.d996bc564a17da2d
+B: [mesh-quic] membershipRecord fernlet.mesh.member-departure.v1 accepted
+B: membership … derived=2 barred=1 … epochRef=2.f79caa1f8ffb97cee9801c694da0cce9.d996bc564a17da2d
+```
+
+**Both survivors accepted it, and each got it DIRECTLY from C** (`recipients=all` over C's two live
+tunnels), not by A's digest re-gossip — so item 0's criterion is met, and plan §10.5's re-gossip
+path remains uncorroborated on a radio. Both survivors then rotated to epoch 2, coordinated by A,
+which is now the lowest surviving fingerprint. The departure landed in **2 of 2** runs here; §8.7
+finding 2's unacknowledged-write race is unfixed and can still eat it, and this lane does not claim
+otherwise.
+
+One line worth not misreading: A's transcript carries
+`tunnelEnded controlStreamEnded 87684c8a76bb86c7 … MeshTransportError error 2` at C's departure. That
+is `invalidFrameLength` from reading a connection C tore down mid-frame on its way out — the
+teardown, not a framing defect.
+
 #### What this lane can and cannot carry, for planning
 
 | Ask | Verdict |
 | --- | --- |
 | Three nodes discover, introduce, and hold QUIC tunnels | **Yes** — every pairwise property of the two-node lane reproduces |
 | Any *one* node observes two peers at once | **Yes** — the hub reaches `slots total=2 committed=2`, heartbeats both ways |
-| A full three-node mesh (every node sees the other two) | **No** — a spanning star, N−1 edges, reproduced 3/3 |
-| A departure gossiped by a *third* member (plan §10.5) | **Not reachable** until the star is a mesh, or until the run is planned as hub-plus-leaves and the gossip is asked of the hub |
-| The derived (records) roster converging over a radio | **Answered on a PAIR, 2026-09-02** — the founder/joiner seam this row asked for is built, and the derived roster converges over a real tunnel. See "Lane C — pair membership (P3 item 9)" below. On THREE nodes it stays blocked on 0b |
+| A full three-node mesh (every node sees the other two) | **Yes, since 0b** — 3/3 runs, every node `slots total=2 committed=2`. It read **No** (a spanning star, N−1 edges, 3/3) before the fix |
+| A departure reaching **both** survivors | **Yes, since 0b** — C left through `leaveSessionAfterNotifyingPeers()` and both A and B accepted `member-departure.v1`. Delivered **directly** over C's two tunnels (`recipients=all`), so plan §10.5's *re-gossip* path is still uncorroborated |
+| The derived (records) roster converging over a radio | **Yes** — on a PAIR since 2026-09-02 (see "Lane C — pair membership" below) and on **three nodes** since 0b: `membership … ledger=present derived=3` on all three |
 
 ### Lane C — pair membership (run 2026-09-02, P3 item 9): **the derived roster, over a real tunnel**
 
@@ -1266,10 +1414,10 @@ for a survivor to learn a departure it missed.
 
 | Ask | Why not |
 | --- | --- |
-| A departure gossiped by a **third** member (plan §10.5) | Two nodes. Blocked on **0b** — three Simulators form a star |
-| A removal minted by a **real quorum** | ⌊2/2⌋ + 1 = 2 votes with the target excluded leaves 1 eligible voter, so `MeshMembershipRecordVerifier` refuses every honest two-node removal `quorumNotMet(required: 2, presented: 1)`. Needs ≥ 3 nodes → blocked on 0b |
-| A rotation crossing **two** tunnels | One tunnel exists. Blocked on 0b |
-| `MeshLedgerAdoption.adopt`'s **rebase** onto a founder that is not the admitter | On a pair the admitter *is* the founder, so the joiner's bootstrap root is already right and the rebase is a no-op. Needs a third node admitted by the second |
+| A departure gossiped by a **third** member (plan §10.5) | Two nodes. **0b is fixed**, and the three-node run above shows a departure reaching both survivors — but *directly*, `recipients=all`. Re-gossip needs a run where the leaver has no tunnel to one survivor |
+| A removal minted by a **real quorum** | ⌊2/2⌋ + 1 = 2 votes with the target excluded leaves 1 eligible voter, so `MeshMembershipRecordVerifier` refuses every honest two-node removal `quorumNotMet(required: 2, presented: 1)`. Needs ≥ 3 nodes — **now reachable** since 0b, not yet run |
+| A rotation crossing **two** tunnels | One tunnel exists here. **Proven on three nodes** since 0b: one `epochRef` agreed by all three, minted by the non-founder lowest fingerprint |
+| `MeshLedgerAdoption.adopt`'s **rebase** onto a founder that is not the admitter | On a pair the admitter *is* the founder, so the joiner's bootstrap root is already right and the rebase is a no-op. Needs a third node admitted by the second — the harness's founder admits everyone, so a driver change is owed |
 | First-meeting **stranger** admission | Unreachable on this transport by construction (above). Not a P3 item; recorded here because the harness seams exist only to route around it |
 
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
