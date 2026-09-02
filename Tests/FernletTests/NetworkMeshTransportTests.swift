@@ -1100,6 +1100,18 @@ enum MeshIntroductionHarness {
     /// A different one — what the two ends see when they are not on the same tunnel.
     static let otherBinding = Data(repeating: 0xB2, count: MeshChannelIntroductionFormat.channelBindingByteCount)
 
+    /// The mesh epoch references are minted against. Fixed so two calls agree.
+    static let epochMeshID = UUID(uuidString: "3F2504E0-4F89-11D3-9A0C-0305E82C3301") ?? UUID()
+
+    /// A canonical `MeshEpochRef` string, the only shape a hello's `epochRef` may now take besides
+    /// empty. `coordinator` is what makes two same-counter epochs *divergent* rather than equal —
+    /// exactly as two partitions with different lowest fingerprints would produce.
+    static func epoch(_ counter: UInt32, coordinator: String = "00000000000000aa") -> String {
+        MeshEpochRef.minted(
+            counter: counter, coordinatorFingerprint: coordinator, meshID: epochMeshID
+        )?.canonicalString ?? ""
+    }
+
     /// One side of an introduction: its signing key and the hello it sends.
     struct Endpoint {
         let signingKey: Curve25519.Signing.PrivateKey
@@ -1110,7 +1122,7 @@ enum MeshIntroductionHarness {
 
     static func endpoint(
         meshID: UUID,
-        epochRef: String = "7",
+        epochRef: String = MeshIntroductionHarness.epoch(7),
         sessionID: String,
         protocolVersion: Int = MeshChannelIntroductionFormat.protocolVersion,
         nonce: Data = MeshChannelIntroductionFormat.randomNonce()
@@ -1240,10 +1252,15 @@ struct MeshChannelIntroductionTests {
     /// A peer being admitted holds no group key, so it presents no epoch. Requiring equality
     /// outright would make admission itself impossible — the joining side could never introduce
     /// itself to the mesh it is asking to join.
+    ///
+    /// Under the strict rule (plan §8.4, §20.1) this is no longer an empty-string *bypass*: the
+    /// joiner goes through `MeshEpochAcceptance.introductionVerdict`, which admits it only because
+    /// the keyed side's reference is itself a canonical `MeshEpochRef`.
     @Test func aPeerWithNoEpochYetIsAdmitted() throws {
         let meshID = UUID()
+        let nine = MeshIntroductionHarness.epoch(9)
         let joiner = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "", sessionID: "joiner")
-        let member = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "9", sessionID: "member")
+        let member = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: nine, sessionID: "member")
         let run = try MeshIntroductionHarness.run(
             initiator: joiner, responder: member, roster: MeshIntroductionHarness.roster(joiner, member)
         )
@@ -1251,8 +1268,13 @@ struct MeshChannelIntroductionTests {
         #expect(run.responderOutcome?.verifiedPeer?.signingPublicKey == joiner.publicKey)
         #expect(run.initiatorOutcome?.verifiedPeer?.signingPublicKey == member.publicKey)
         #expect(run.initiatorTranscript == run.responderTranscript)
-        #expect(MeshChannelIntroductionExchange.agreedEpoch("", "9") == "9")
-        #expect(MeshChannelIntroductionExchange.agreedEpoch("4", "") == "4")
+        #expect(MeshChannelIntroductionExchange.agreedEpoch("", nine) == nine)
+        #expect(MeshChannelIntroductionExchange.agreedEpoch(nine, "") == nine)
+        // Two devices that hold no epoch at all still converge — on nothing.
+        #expect(MeshChannelIntroductionExchange.epochsConverge("", ""))
+        // The tightening: an empty side no longer waves through whatever the other side sent.
+        #expect(!MeshChannelIntroductionExchange.epochsConverge("", "9"))
+        #expect(!MeshChannelIntroductionExchange.epochsConverge("7", ""))
     }
 
     // MARK: Refusals
@@ -1307,12 +1329,14 @@ struct MeshChannelIntroductionTests {
         #expect(exchange.derivedTranscript == nil)
     }
 
-    /// Two peers each holding a DIFFERENT epoch are on diverged branches, which P2 cannot merge.
-    /// Refusing is the honest answer until plan §8.4's merge lands.
+    /// Two peers each holding a DIFFERENT epoch are on diverged branches. They coexist in the model
+    /// (plan §8.4) but hold different group keys, so the tunnel is refused until P4's merge exists.
     @Test func aDivergentEpochIsRefusedAndLeavesNoTranscript() {
         let meshID = UUID()
-        let local = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "4", sessionID: "local")
-        let peer = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "9", sessionID: "peer")
+        let four = MeshIntroductionHarness.epoch(4)
+        let nine = MeshIntroductionHarness.epoch(9)
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: four, sessionID: "local")
+        let peer = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: nine, sessionID: "peer")
         var exchange = MeshChannelIntroductionExchange(role: .initiator, localHello: local.hello)
         var nonces = MeshIntroductionNonceCache()
 
@@ -1324,9 +1348,47 @@ struct MeshChannelIntroductionTests {
         #expect(rejection == .divergentEpoch)
         #expect(bound == nil)
         #expect(exchange.derivedTranscript == nil)
-        #expect(!MeshChannelIntroductionExchange.epochsConverge("4", "9"))
-        #expect(MeshChannelIntroductionExchange.epochsConverge("4", "4"))
-        #expect(MeshChannelIntroductionExchange.epochsConverge("", "9"))
+        #expect(!MeshChannelIntroductionExchange.epochsConverge(four, nine))
+        #expect(MeshChannelIntroductionExchange.epochsConverge(four, four))
+    }
+
+    /// The tightening plan §20.1 asked for, on the axis a decimal counter could not express: two
+    /// partitions that each rotated to counter 7 both used to send `"7"` and the gate agreed they
+    /// matched. Same counter, different minting coordinator, is now SEEN — and refused.
+    @Test func twoBranchesSharingACounterNoLongerLookEqual() {
+        let meshID = UUID()
+        let ours = MeshIntroductionHarness.epoch(7, coordinator: "00000000000000aa")
+        let theirs = MeshIntroductionHarness.epoch(7, coordinator: "00000000000000bb")
+        #expect(ours != theirs, "two branches at one counter must not share a canonical string")
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: ours, sessionID: "local")
+        let peer = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: theirs, sessionID: "peer")
+        var exchange = MeshChannelIntroductionExchange(role: .initiator, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        let rejection = exchange.receive(
+            peer.hello, roster: MeshIntroductionHarness.roster(local, peer), nonces: &nonces
+        )
+        #expect(rejection == .divergentEpoch)
+        #expect(exchange.derivedTranscript == nil)
+    }
+
+    /// A non-empty epoch reference that is not a canonical `MeshEpochRef` is a malformed hello —
+    /// refused with the width checks, before any epoch is compared. Under the soft rule these all
+    /// sailed through whenever the other side happened to hold no epoch.
+    @Test func aNonCanonicalEpochReferenceIsAMalformedHello() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "", sessionID: "local")
+        var nonces = MeshIntroductionNonceCache()
+
+        for junk in ["7", "0007.deadbeef", "not-an-epoch", "\(MeshEpochBounds.counterCap + 1).x"] {
+            let peer = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: junk, sessionID: "peer")
+            var exchange = MeshChannelIntroductionExchange(role: .initiator, localHello: local.hello)
+            let rejection = exchange.receive(
+                peer.hello, roster: MeshIntroductionHarness.roster(local, peer), nonces: &nonces
+            )
+            #expect(rejection == .malformedHello, "\(junk) was not refused as malformed")
+            #expect(exchange.derivedTranscript == nil)
+        }
     }
 
     /// A peer the roster has never heard of is refused, whatever else it gets right.
@@ -1465,7 +1527,7 @@ struct MeshChannelIntroductionTests {
         let short = MeshChannelHello(
             protocolVersion: MeshChannelIntroductionFormat.protocolVersion,
             meshID: meshID,
-            epochRef: "7",
+            epochRef: MeshIntroductionHarness.epoch(7),
             signingPublicKey: Data(repeating: 3, count: 16),
             nonce: peer.hello.nonce,
             sessionID: "peer"

@@ -49,7 +49,10 @@ enum MeshSessionStoreFixtures {
 
     /// A context with two admissions and one departure, so the sealed bytes carry a real ledger
     /// rather than an empty one.
-    static func context(developedLocally: Bool = false, epochHeads: [String] = ["epoch-1"]) -> MeshSessionContext {
+    static func context(
+        developedLocally: Bool = false,
+        epochHeads: [MeshEpochRef] = [MeshEpochFixtures.ref(1)]
+    ) -> MeshSessionContext {
         var ledger = MeshMembershipLedger(
             admissions: MeshMembershipRecordSet([
                 MeshMembershipFixtures.admission(0),
@@ -197,7 +200,9 @@ struct MeshSessionStoreRoundTripTests {
         defer { Fixture.tearDown(scope) }
         let store = MeshSessionStore(scope: scope)
         let cap = MeshSessionContextSchema.maxEpochHeads
-        let context = Fixture.context(epochHeads: (0..<(cap + 6)).map { "epoch-\($0)" })
+        let context = Fixture.context(
+            epochHeads: (0..<(cap + 6)).map { MeshEpochFixtures.ref(UInt32($0)) }
+        )
 
         #expect(context.epochHeads.count == cap, "init did not clamp the epoch heads")
 
@@ -366,6 +371,33 @@ struct MeshSessionStoreLoadStateTests {
 
         let load = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
         #expect(load == .corrupt(MeshSessionCorruption(detail: .unsupportedSchemaVersion(99))))
+    }
+
+    /// The schema-2 bump (P3 item 4) treats a **v1** file as corrupt rather than migrating it.
+    ///
+    /// Deliberate, and only defensible because of when it happened: the store shipped in this same
+    /// phase, so no build that wrote a v1 file has ever run on a device. `corrupt` is the state
+    /// that refuses to overwrite a file this build cannot account for — the right answer for a
+    /// context whose `epochHeads` may hold strings that are not canonical `MeshEpochRef`s.
+    @Test func aVersionOneContextIsCorruptRatherThanMigrated() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let store = MeshSessionStore(scope: scope)
+        try Fixture.save(Fixture.context(), into: store)
+        guard case .available(let key) = MeshSessionSealKey.forSeal(service: scope.keychainService) else {
+            Issue.record("could not read the seal key the save just minted")
+            return
+        }
+        let probe = try DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            try ColumnCrypto(purpose: FernletCryptoPurpose.KeyDerivation.meshSessionContextV1)
+                .seal(SchemaVersionProbe(schemaVersion: 1), contentKey: key)
+        }
+        try Fixture.writeRaw(probe, into: store)
+
+        let load = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
+        #expect(MeshSessionContextSchema.current == 2, "the bump this test guards")
+        #expect(load == .corrupt(MeshSessionCorruption(detail: .unsupportedSchemaVersion(1))))
+        #expect(Fixture.token(load) == nil, "a v1 file must vend no write token")
     }
 
     /// A context sealed on another install opens for nobody here. It is the ciphertext that is

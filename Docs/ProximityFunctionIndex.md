@@ -161,6 +161,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `leaveSessionAfterNotifyingPeers()` | Ends the session and tears down transport. **No longer sends `.sessionGoodbye`** (P3 item 3): the legacy frame is parsed, never emitted, and the disconnect that follows already says everything an unsigned frame could. |
 | `prepareMembershipLedger(meshID:founderSigningPublicKey:)` | Arms the verified ledger at mesh creation, rooted in the founder's key. Idempotent per mesh; a different mesh id replaces it, because records never cross meshes. |
 | `dispatchMembershipEventPayload(_:plaintext:decoder:slot:)` | Decodes `.meshMemberDeparture` / `.meshTerminated` / `.meshInventoryDigest` on a COMMITTED slot and hands each to `MeshMembershipRecordVerifier`. Decode + verify + insert only — emission is not wired. |
+| `epochRef` (`MeshIntroductionAuthority`) | Serializes a real `MeshEpochRef` into the introduction's existing string field (P3 item 4): counter from the group key, coordinator = the lowest fingerprint of the **gossiped descriptor** roster (not `activeSlots` — a converged mesh must derive one answer on both ends). Empty when there is no key, no descriptor, or the counter is past the cap: claiming an epoch it cannot derive is worse than claiming none. |
 | `emitMembershipEvent(_:)` | **The emission seam, deliberately empty.** Membership events are sent on state-machine transitions (plan items 5–6), and a departure must ship together with the rotation that excludes the leaver. |
 | `finishSessionPhotos(keeping:)` | Finalizes session metadata, deletes unkept session photos from cache state, clears session photos, and persists. |
 | `deleteAllSessionPhotos()` | Finishes the session while keeping no photos. |
@@ -389,6 +390,58 @@ with a low timestamp crowds a real removal out on every device it reaches.
 | `merge(_:)` | Imports a peer's ledger ONE RECORD AT A TIME through the same door, so a peer that forged one record cannot import all of them. |
 | `verify(_: MeshInventoryDigestPayload)` / `matchesLocalInventory(_:)` | Verifies a peer's digest, then answers whether it matches. A DIFFERING verified digest is the signal, not an error. |
 | `admittedSigningKey(for:)` (private) | The single lookup that turns "well-formed" into "signed by somebody entitled to sign it". |
+
+### `MeshEpochRef.swift`
+
+Plan §8.4's epoch model. A Lamport counter, a derived per-minting id, and the minting coordinator's
+fingerprint — canonical, deterministic, and short enough to ride the introduction's existing 96-char
+`epochRef` field (no wire framing moved).
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshEpochBounds` | Plan §8.4's numbers in one place: counter cap 4096, keyring 3 predecessors, 5-minute grace, the 32/16 hex widths, the frozen derivation domain `fernlet.mesh.epoch.v1`. |
+| `MeshEpochRef` | `counter` + `epochID` + `coordinatorFingerprint`. Two branches at ONE counter are two distinct values — the representability plan §8.4 needs. |
+| `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)` | Derives `epochID` as SHA-256(domain ‖ meshID ‖ counter ‖ coordinator) truncated to 16 bytes, so every member of a branch computes the same id with no wire change. Returns nil over the cap or on a non-canonical fingerprint. |
+| `…successor(coordinatorFingerprint:meshID:)` | `counter + 1`, or **nil at the cap** — the documented "rotation refused; the session must end" answer. Never traps. |
+| `…canonicalString` / `init(canonical:)` / `isCanonical(_:)` | `"<counter>.<32 hex>.<16 hex>"`, canonical in both directions (no leading zeros, no uppercase) so two devices sign byte-identical strings. The parse is strict and every refusal is named. |
+| `MeshEpochRefParseError` | Five named refusals, including `counterOverCap(_:)` which carries what it saw. |
+| `MeshEpochRefOrder.precedes(_:_:)` | Total order for head sets: counter, then coordinator, then epoch id. Deterministic truncation, NOT a ranking of "better" epochs. |
+| `Codable` (single value) | Encodes as the canonical string, so a persisted `epochHeads` entry is validated on decode instead of carried as an opaque token. |
+
+### `MeshEpochKeyring.swift`
+
+The bounded keyring: current + ≤ 3 predecessors, ≤ 5 minutes each. **Memory-only, forever** —
+`MeshEpochRef`s persist, keys never do.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshEpochKeyring.init(head:key:)` | There is no empty keyring; a device with no group key holds none, which is what its `epochRef` reports as "no epoch". |
+| `rotate(to:key:at:)` | Moves the head and starts the old one's grace window. Throws `MeshEpochKeyringRotationRefusal` (`staleCounter` / `alreadyCurrent` / `divergentBranch`) and leaves the ring untouched — a divergent branch never supersedes. **Item 5's rotation entry point.** |
+| `key(for:at:)` / `canOpen(_:at:)` | Head first, then a predecessor still inside grace. After grace, nil — there is no other holder of the bytes and no "try it anyway". |
+| `openableEpochs(at:)` / `prune(at:)` | Diagnostic surface and memory hygiene. The clock is injected everywhere; nothing here reads `Date()`. |
+
+### `MeshEpochAcceptance.swift`
+
+Plan §8.4's acceptance rule as two pure decisions. Authentication happens before either is asked.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `rotationVerdict(local:presented:presentedRoster:presenterFingerprint:)` | The plan verbatim: presenter must be the deterministic coordinator (lowest fingerprint) of the roster it presents, and the counter must strictly advance. **Continuity is never required** — 5 → 9 is accepted. |
+| `MeshEpochRotationVerdict` | `accept` / `coexist` / `reject`. `coexist` is the answer a boolean cannot give: two partitions at one counter are both correct until a merge mints a greater successor. |
+| `MeshEpochRotationRefusal` | Five named refusals + frozen-English diagnostics. |
+| `mergedHeads(_:adding:limit:)` | How coexistence becomes a persisted state: both divergent heads survive, duplicates collapse, the oldest fall off by `MeshEpochRefOrder` so every device drops the same ones. |
+| `introductionVerdict(local:peer:)` | The **strict** gate (plan §20.1). Junk is `malformed` even opposite an empty side; equality is equality of the whole ref, so two branches that both rendered `"7"` are now seen; the joiner that holds no key is a named branch, not a short-circuit. |
+
+### `MeshFrameReplayWindow.swift`
+
+Replay protection moved OFF epochs (plan §8.4). Knows nothing about epochs, which is the point.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `admit(frameID:from:meshID:expiresAt:now:)` | Per-**authenticated**-sender dedup by frame id, with the frame's own expiry and an explicit mesh id. Only `admitted` records anything. |
+| `MeshFrameReplayVerdict` | `admitted` / `replayed` / `expired` / `foreignMesh` / `senderWindowFull`. |
+| bounds | 8 senders (the roster cap) × 64 ids, and the cap **refuses rather than evicts** — an LRU would let a flood of fresh frames erase the history an attacker wants to replay into. |
+| `forget(senderFingerprint:)` | What a departure or removal does, so a re-admitted member starts with a clean window. |
 
 ## Transport And Ranging
 
