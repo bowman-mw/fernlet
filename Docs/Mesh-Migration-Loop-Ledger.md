@@ -132,6 +132,15 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   3-minute two-sim run (`kill -STOP` one side past the idle timeout). Reproduce before believing.
 - The USB tether is an invisible default for device↔Mac runs — link-local `en9`/`en2` addresses with
   no DHCP lease are the tell. Unplug before any run that claims a Wi-Fi row.
+- **Runs 2–3 (2026-09-01, `a8bdbe1`):** idle-timeout fix verified on the wire (`idleTimeoutMs=90000`
+  both sides). The recurring device-side `[17: File exists]` / `SO_NECP_LISTENUUID` errors are NOT a
+  probe flow-leak: 10 back-to-back sim relaunches were clean (0 NECP errors), the probe has no
+  `NWConnectionGroup` (the `[G1]`/anpi0/en2 fan-out is the OS QUIC-listener nexus), and restart binds
+  a fresh ephemeral port. The run-3 device freeze did NOT reproduce on the sim → not demonstrably the
+  probe; Lane D (real hardware) still settles it.
+- A hard-killed QUIC peer sends no `CONNECTION_CLOSE`, so a survivor only notices at the 90 s idle
+  timer and refuses re-dials until then — bounded (one stale inbound), self-healing. Explains run 1's
+  "listener refused re-dials" and any device-side "refused" lines Lane D will see; do not read it as a leak.
 - **Two awaited sends per frame desynchronize a shared QUIC stream** (item 10): length-prefix and
   payload written separately + envelopes fired as independent tasks ⇒ interleaving at the
   suspension ⇒ peer reads payload bytes as a length ⇒ tunnel dead. One contiguous write per frame
