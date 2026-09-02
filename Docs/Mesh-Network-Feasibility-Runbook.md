@@ -615,6 +615,94 @@ Artifacts (retained with this round's working notes): `lane-a-run2-sim-2026-09-0
 `lane-a-run2-device-console-2026-09-01.txt`, `lane-a-run3-sim-2026-09-01.txt`, and the sim-lane
 repro logs.
 
+#### Lane A — owner runs 2026-09-02 (heartbeats on hardware; the continued-processing budget)
+
+Two owner runs on the evening of 2026-09-02, phone (physical, `peer-to-peer=true`, a
+`BGContinuedProcessingTaskRequest` submitted with the **fail-immediately** strategy) ↔ one Simulator
+on the same Mac. The phone was on the same Wi-Fi as the Mac **and** attached by USB — both facts
+matter below, because the two runs took two different links.
+
+**Read what this lane is first.** These are runs of the **DEBUG feasibility probe** on
+`_fernlet-mesh2._udp` — the instrument, not `NetworkMeshSession`. Nothing here is a production-mesh
+result, and nothing here closes Lane D.
+
+| Run / time | Path and interface | What was verified | How it ended |
+| --- | --- | --- | --- |
+| **Run 1** — 7:38 PM, ~4 s | Wi-Fi, phone-side `en0`, link-local IPv6 | Simulator dialled the phone; the phone accepted inbound. Both endpoints verified the other's signed channel introduction **against the same TLS exporter hash**. QUIC datagram ping/pong on attempt 1. 786 bytes each way. `authenticated heartbeats: 0` — a 4 s session against a 30 s beat, so zero is the expected reading | Stopped by the tester at ~4 s. The Simulator saw `NWError 57 - Socket is not connected` because the phone stopped first — the known hard-close signature |
+| **Run 2, tunnel 1** — Simulator start 7:43:54, ready 7:43:55, dead 7:44:53 (~58 s) | Wi-Fi, phone-side `en0`, link-local | Signed introduction both directions and the datagram round trip, again | `NWError 57` at 7:44:53. **Why is not captured** — see below |
+| **Run 2, retry gap** — attempt 2 opened 7:45:01, waited 28 s | — | The Simulator's bounded budget doing its job: `retry 2 of 3`, then a survivor patiently waiting for the peer to come back | Ended when the owner restarted the phone's probe at 7:45:27 |
+| **Run 2, tunnel 2** — ready 7:45:29 | **USB**, phone `anpi0` ↔ Simulator `en8`, link-local — *not* Wi-Fi | Fresh signed introduction both directions and a fresh datagram round trip. **The phone received an authenticated heartbeat at 7:46:01**, 32 s after ready — the first heartbeat evidence on hardware. The Simulator counted 2 heartbeats across its two tunnels | The owner backgrounded the phone app; at 7:46:13 the phone logged `Ending mesh feasibility probe: iOS expired or cancelled the continued-processing task`, completed the task with `success=false`, and the tunnel died. Simulator `NWError 57` at 7:46:13, `retry 3 of 3` at 7:46:33, attempt 3 still pending when the report was copied |
+
+**Final counters.** Phone: connects 1, heartbeats 1, 815 bytes sent / 813 received, thermal state
+nominal, Low Power Mode off. Simulator: connects 2, reconnects 2, heartbeats 2, 1628 sent / 1631
+received. The phone's counters cover only its second launch, which is why its connect count is 1
+against the Simulator's 2.
+
+**Background-continuation lines, both sides.** Phone: `The continued-processing task started; the
+system activity is now task-owned.` Simulator: `Background continuation is unavailable:
+BGTaskSchedulerErrorDomain error 1` — expected, and the same refusal the 2026-09-01 report carries.
+
+**Noise seen and dismissed, so nobody re-opens it.** A transient `NWError 50 - Network is down` on
+both sides immediately before `QUIC ready` in run 1 (harmless; the connection came up). The phone's
+listener logged the documented benign `NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` /
+`Failed to create connection from listener` once per run and the tunnel came up anyway — the run-2
+(2026-09-01) teardown/multipath signature, not run 1's wedge. On tunnel 2 the phone logged
+`Refused an inbound QUIC tunnel: one inbound tunnel is already held` **twice** — the Simulator's dial
+arrived on more than one path — and `quic_conn_process_inbound … unable to parse packet` once, a
+stray packet addressed to the retired connection id.
+
+**Interpretation — stated narrowly, because it is easy to overclaim from here.**
+
+1. **Neither tunnel loss was a network failure, and the probe cannot tell us whether one would be.**
+   The probe *tears itself down* when the continued-processing task ends: task ends → `endProbe` →
+   `stopNetworkOperations()`. That is by design, and it means this instrument can say **nothing**
+   about whether a QUIC tunnel survives backgrounding on its own. Answering that needs a
+   probe/harness variant that **keeps the tunnel and keeps logging after task expiry** — which is a
+   P8 experiment, not a re-run of this one.
+2. **First measured continued-processing budget on hardware: iOS ended the task ≈ 46 s after it
+   started**, shortly after the app was backgrounded, with the fail-immediately strategy. **One
+   sample.** Candidate causes for P8 to separate, none of them asserted here: the probe reports no
+   progress on the task (§14 makes monotonic progress the shipping requirement precisely because the
+   system kills tasks that do not advance); the USB/debugger attachment; or simply the system's own
+   policy for a task of this shape. Do not quote 46 s as a budget — quote it as the first sample.
+3. **Multi-path, and why Lane D says "unplug the cable".** With the cable attached, tunnel 2 took the
+   **USB** path (`anpi0`/`en8`) even though tunnel 1 had just run over Wi-Fi `en0`, and the phone
+   refused the duplicate dials that arrived on the other path. This run is **not** Lane D and closes
+   none of its rows.
+4. **AWDL was not exercised.** Both ends were on the same infrastructure Wi-Fi and the Wi-Fi path was
+   `en0`; peer-to-peer was requested in the parameters, which is not evidence a peer-to-peer radio
+   carried anything.
+5. **Proven on hardware for the first time, and this is the run's real yield:** signed channel
+   introduction in **both** directions, a datagram round trip, **authenticated heartbeats**, and a
+   bounded reconnect in which the survivor waits for the peer to return and then completes a fresh
+   introduction on the new tunnel.
+6. **Item 11's permission half was observably granted.** The phone browsed and found the Simulator,
+   which it cannot do without Local Network access. The AWDL half of item 11 is untouched.
+
+**Not captured, and stated rather than guessed:** the phone's report for the interval covering tunnel
+1's death. The likeliest reading is the same mechanism as tunnel 2 — the *first* continued-processing
+task expiring after an earlier backgrounding, tearing the probe down under it — and ~58 s is in the
+same neighbourhood as the 46 s that *was* measured. It is a reading, not a record; the phone-side log
+for 7:43–7:45 would settle it.
+
+**What this changes for Lane D and Lane B (P8).**
+
+- **Lane D — unchanged in what it owes, sharper in how to run it.** The cable steered a live tunnel
+  onto USB mid-run here, so the runbook's "unplug the cable" step is now an observed requirement, not
+  a precaution. Lane D's `Wi-Fi path`, `Reconnect after a real idle timeout` and `No NECP flow leak`
+  rows are all still `—`.
+- **Lane D can now expect the Local Network prompt to already be granted** on this phone; treat that
+  row as "confirm, not discover".
+- **Lane B (P8) gains its first datum and its first blocking design note.** The 46 s observation
+  belongs to §15.1, and the "probe tears down with the task" property means the background-survival
+  row **cannot** be answered by re-running this probe — P8 must build the variant that outlives its
+  own task before that row can move off `Deferred to P8`.
+- **Nothing about battery, thermal, Low Power Mode or lock is touched.** Thermal nominal / Low Power
+  off over a 4-minute foreground run is not a measurement of any of them.
+
+Artifacts (retained with this round's working notes): the phone's and Simulator's **Copy diagnostic
+report** output for both runs, and the phone's Xcode console for the 7:45–7:47 window.
+
 ### What this lane can and cannot prove
 
 This matters more than it looks: the device↔Simulator lane is the **cheap, high-frequency** loop —
@@ -1541,6 +1629,13 @@ connection" — `NetworkConnection` has no `cancel()` in the iOS 26 API.
 
 These rows do not gate P1 or P2. They gate **shipping background continuation**, and they are
 carried out on 2–4 physical devices per plan §15.1–15.4.
+
+**First hardware datum, and the caveat that comes with it (2026-09-02):** iOS ended the probe's
+continued-processing task ≈ **46 s** after it started, shortly after the app was backgrounded, with
+the fail-immediately strategy — one sample, see *Lane A — owner runs 2026-09-02* above. It does not
+move the **Background operation** row, because the probe **tears its own tunnel down when the task
+ends**; answering "does an established connection survive backgrounding?" needs a variant that keeps
+the tunnel and keeps logging past task expiry, and building it is part of P8.
 
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |

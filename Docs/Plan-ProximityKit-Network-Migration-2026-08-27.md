@@ -1292,6 +1292,13 @@ endpoint while backgrounded; fresh Bonjour browse while backgrounded (expected t
 each × infra-Wi-Fi and AWDL. Plus Low Power Mode on/off (undocumented — empirical answer required)
 and memory-pressure kills.
 
+*First hardware observation (2026-09-02, DEBUG probe, one sample):* iOS ended a user-started
+continued-processing task ≈ **46 s** after it started, shortly after the app was backgrounded, with
+the fail-immediately strategy and no progress reported on the task. It does **not** answer the
+"survives background+lock" row: the probe tears its own tunnel down when the task ends, so this gate
+needs a variant that keeps the tunnel and keeps logging past expiry. Runbook, *Lane A — owner runs
+2026-09-02 (heartbeats on hardware; the continued-processing budget)*.
+
 **15.2 Partition walks:** the §10 scenarios physically — 2/2 split with traffic both sides, walk back
 together, verify convergence + single post-merge rotation; 3/1 with a removal vote; departure-carried-
 by-third-member (§10.5 verbatim).
@@ -1734,6 +1741,16 @@ Carried from §20.6, plus what P3 added:
   finding 6), and **Lane D** — the production transport over Wi-Fi with the cable unplugged, which
   settles the reconnect-after-idle question and the run-3 device freeze at once (specified in the
   runbook, not yet run).
+- **Item 11 has split (2026-09-02).** The **Local Network prompt half is observed granted** on the
+  owner's phone — it browsed and found the Simulator, which it cannot do otherwise — so Lane D's
+  permission row is now "confirm, not discover". The **AWDL half is still owed**: both ends of the
+  2026-09-02 runs sat on the same infrastructure Wi-Fi (`en0`), and peer-to-peer being requested in
+  the parameters is not evidence a peer-to-peer radio carried anything.
+- **Lane D is still owed, and the cable is now an observed hazard, not a precaution.** In the
+  2026-09-02 runs the second tunnel came up over the **USB** path (`anpi0`/`en8`) while the first had
+  run over Wi-Fi, and the phone refused the duplicate dials arriving on the other path. Unplug the
+  cable (Xcode → Devices and Simulators → **Connect via network**) before Lane D, and check
+  afterwards that no ready line names a USB-side interface.
 - **New from P3 — the three owner calls in the P3 ledger's "Blocked on owner":** 0b (the spanning
   star), departure-delivery durability, and the transcript-`sid` move. §21.3 gives each a default.
 - **New from P3 — §17.3's `PrivacyInfo`/privacy-copy paragraph** (§8.7 finding 7). P3's debt, not
