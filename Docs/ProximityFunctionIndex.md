@@ -260,12 +260,24 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `distributeRotation(_:cause:acked:closingEpoch:)` | Step 3: mint the key, wrap it **only** for `MeshRotationPolicy.recipients`, broadcast with the `cause` token, adopt locally. |
 | `wrappedGroupKey(_:for:)` | Pairwise wraps for each recipient with a handshake-verified KA key — never the descriptor's gossiped value. |
 | `adoptEpoch(_:key:)` / `clearEpochKeyring()` / `epochRef(counter:coordinatorFingerprint:)` | Move the held `MeshEpochKeyring` onto an adopted epoch (a keyring refusal is logged, never fatal), drop it with its key, and re-derive a peer's named ref from bytes both sides already share. |
-| `terminateForExhaustedEpochs()` | Plan §8.4's counter cap: emit `terminated.v1`, end the session. Never a trap. |
+| `terminateForExhaustedEpochs()` | Plan §8.4's counter cap: mark and persist the ending, then emit `terminated.v1` and end the session. Never a trap. |
 | `recordRotationBlock(_:)` / `lastRotationBlockReason` / `lastRotationCause` | Frozen-English diagnostics: a rotation that did not happen is audited and readable, never swallowed. |
-| `persistSessionContext(addingEpochHead:)` | **The single save seam** for `MeshSessionContext` (item 6 extends the cadence here rather than adding a second writer). Durable before acknowledged: false blocks the caller. |
+| `persistSessionContext(addingEpochHead:terminating:)` | **The single save seam** for `MeshSessionContext` — item 6 extended the cadence here rather than adding a second writer over a five-state load. Durable before acknowledged: false blocks the caller, always. |
+| `sessionContextIdentity` (private) | The mesh a context is written for: the live descriptor, or — during a launch restore — the context just loaded, which is what lets an expiry found at launch be written back. |
+| `applySessionEvent(_:)` | Offers one event to `MeshSessionStateMachine` and performs the effects **in order**, abandoning the rest at the first failure. That ordering is durable-before-acknowledged made mechanical. |
+| `performSessionEffects(_:for:)` / `performSessionEffect(_:for:)` | The effect performer: stage a mark, save, begin a merge, start/stop the radios, arm/clear the idle window, offer a resume. Only a failed save returns false. |
+| `stageEnding(from:)` / `barRejoin(reason:)` / `rejoinRefusal(for:)` | The ending mark and the rejoin bar are one fact, staged together and re-derived from the sealed file at launch — a developed, departed or terminated mesh is refused at both doors (descriptor adoption and admission grant). |
+| `startSessionCeiling(hardDeadline:startedAt:)` / `sessionCeilingVerdict(now:monotonicElapsed:)` | Arm and read the dual-bound ceiling. The monotonic origin is a `ContinuousClock` instant; tests pass elapsed seconds instead of waiting. |
+| `enforceSessionCeiling(now:monotonicElapsed:)` | At either bound: mark terminated, persist, **await** `terminated.v1`, end the session. A refused save abandons the emit. |
+| `evaluateIdleLapse(now:)` | Plan §8.2's 30-minute window as a value, evaluated on demand — no timer, nothing to spin. |
+| `restoreSessionContextAtLaunch(now:)` / `retrySessionRestoreIfPending(now:)` | The durable half: five load states → seven outcomes, a bounded retry for the two retryable ones, a quarantine for a corrupt file, and **no writer** for any of the three token-less states. |
+| `resumeSessionAfterLapse(mergingLedger:peerEpochHead:)` | Idle-lapse resume = partition heal = the merge path. Merges the ledger and coexists the peer's epoch head; never a fresh session, never a silent re-key. |
+| `recordVerifiedAdmissionDurably()` / `joinDurably()` | **The join-ack gate**: no epoch adopted, no key unwrapped, no beacon started and no "joined" shown until the context is on the disk. |
+| `commitVerifiedRecord(rollingBackTo:type:)` | Keeps a verified record only if the context containing it was sealed — otherwise the verifier snapshot is restored, so "verified" and "remembered" stay the same set. |
+| `resetSessionStateMachine(keepingTerminalState:)` / `abandonUnpersistedSession()` | Clear the run-scoped halves (a terminal state survives until a new session starts), and unwind a founding whose context could not be sealed. |
 | `sendMembershipEvent(_:)` / `emitMembershipEvent(_:)` | Mint, sign and broadcast `member-departure.v1` / `terminated.v1`. The async form is awaited by `leaveSessionAfterNotifyingPeers()`, which would otherwise race its own teardown. |
 | `emitApprovedRemovalRecord(_:)` | Mints and files the removal record when a vote completes. **Seam:** there is no `member-removal` wire frame yet, so peers still learn of the removal from `.meshRemovalSecond` + the descriptor. |
-| `mergeMembershipLedger(_:)` | P4's merge seam: verify-then-insert another ledger and raise a `merge` rotation when the derived roster moves. |
+| `mergeMembershipLedger(_:)` | P4's merge seam: verify-then-insert another ledger and raise a `merge` rotation when the derived roster moves — **after** the merged ledger is durable, and rolled back if it is not. |
 | `rotateIfRosterChanged(from:)` | The roster-change trigger. A refused record, or one that moves no roster, spends no rotation. |
 | `handleRotationSync(_:)` | Non-coordinator sync response that waits for drain then sends key ack. |
 | `handleKeyRotation(_:)` | Non-coordinator key application from elected coordinator and ack back to coordinator. |
@@ -472,6 +484,43 @@ Replay protection moved OFF epochs (plan §8.4). Knows nothing about epochs, whi
 | `MeshFrameReplayVerdict` | `admitted` / `replayed` / `expired` / `foreignMesh` / `senderWindowFull`. |
 | bounds | 8 senders (the roster cap) × 64 ids, and the cap **refuses rather than evicts** — an LRU would let a flood of fresh frames erase the history an attacker wants to replay into. |
 | `forget(senderFingerprint:)` | What a departure or removal does, so a re-admitted member starts with a clean window. |
+
+### `MeshSessionStateMachine.swift`
+
+P3 item 6 (plan §8.2): the session lifecycle as a pure, total function. Ten states, eighteen events,
+an ordered effect list, and a named refusal for every non-edge — never a trap, because most of these
+events arrive from the wire.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshSessionState` | `idle` / `joining` / `activeForeground` / `continuingInBackground` / `partitioned` / `localIdleStop` / `handingOff` / `departed` / `terminated` / `expired`. `partitioned` and `localIdleStop` are states in which this device is **still a member**. |
+| `MeshSessionEvent` | Every edge label plus the two the prose adds: the ceiling (`hardDeadlineReached`) and the launch restore (`contextRestored`). `terminationReason` is the ONE place an ending's reason is decided, so the mark written and the line logged cannot disagree. |
+| `MeshSessionEffect` | What the owner must do, in order. `persistContext` precedes every announcement; there is deliberately **no emit effect** — a membership frame must be awaited before the transport is torn down. |
+| `MeshSessionTransition` / `MeshSessionTransitionRejection` | `moved(to:effects:)` or `rejected(_)`, with five named rules (`sessionAlreadyEnded`, `noSessionYet`, `sessionAlreadyStarted`, `eventNotApplicableInState`, `restoreOnlyFromIdle`). |
+| `MeshSessionStateMachine.transition(from:on:)` | The total function. The ended check runs first (the permanent rejoin bar), then the restore and the ceiling — handled once each so seven per-state copies cannot drift — then one function per state. |
+
+### `MeshSessionCeiling.swift`
+
+Plan §8.2's 6-hour ceiling, guarded at **both** bounds.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshSessionCeiling.init(hardDeadline:startedAt:)` | Reads the wall clock ONCE and turns it into a monotonic budget, clamped to `0 ... 6 h` — so a descriptor claiming a deadline days out buys nothing extra. |
+| `verdict(now:monotonicElapsed:)` | Monotonic bound first (a clock set backwards cannot lengthen a session), then the signed absolute ± 120 s skew (what a forward jump trips). Returns the tighter remaining time. |
+| `MeshSessionCeilingBound` / `MeshSessionCeilingVerdict` | Which bound ended it, and its durable `MeshSessionTerminationReason`. |
+
+### `MeshSessionRestore.swift`
+
+The launch-time classifier: five load states → seven outcomes, none of which lets a token-less state
+write.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshSessionRestore.outcome(for:selfFingerprint:now:)` | `absent` → no session; `deferred`/`refused` → retryable, logged apart; `corrupt` → quarantine; `loaded` → a recorded ending first, then the ceiling, then resumable. |
+| `MeshSessionRestoreOutcome` | Seven cases with `disposition`, `isRetryable`, `context` and a frozen-English `logToken`. `expired` is the one that must WRITE. |
+| `MeshSessionRestoredDisposition` | What the state machine sees: `none` / `resumable` / `terminated` / `departed` / `expired`. |
+| `MeshSessionRestoreBounds.maxAttempts` | Three: enough to cross a first-unlock boundary, small enough that a permanently refusing custody costs three reads rather than a loop. |
+| `MeshSessionRejoinBar` | The permanent bar (mesh id + reason), re-derived from the sealed context at every launch — a bar that lived only in memory would be lifted by a force-quit. |
 
 ## Transport And Ranging
 
