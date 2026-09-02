@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P3
 
 **Phase:** P3 (durable session context, roster, membership) · **Prompt:** [Next-Round-Prompt-Mesh-P3-2026-09-01.md](Next-Round-Prompt-Mesh-P3-2026-09-01.md)
-**Started:** 2026-09-01 · **Iteration:** 8 · **Tree at seed:** main = `801e34f` (pushed); launcher at `adfa3c0`
+**Started:** 2026-09-01 · **Iteration:** 9 · **Tree at seed:** main = `801e34f` (pushed); launcher at `adfa3c0`
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -15,7 +15,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 4 | Epoch model §8.4 + tighten the gate | 1 | 3 | done | `374b1cc` | epochID derived not drawn; goldens untouched; gate strict; replay window built-not-wired (P5) |
 | 5 | Membership-driven rotation | 1 | 3, 4 | done | `ddcc717` | 2 s debounce; cause on unsigned payload (new golden only); leave regression closed |
 | 6 | State machine §8.2 on the fake | 1 | 2 | done | `3daf364` | 10 states/18 events, ceiling at both bounds, restore 5→7, save cadence on the one writer |
-| 7 | IntroductionAuthority → derived roster | 1 | 1, 2, 3b, 5 | todo | | makes matrix row 3 shipping |
+| 7 | IntroductionAuthority → derived roster | 1 | 1, 2, 3b, 5 | done | `295e48f` | joiners adopt via digest re-gossip; row 3 shipping; FULL suite green (3674) |
 | 8 | P3 acceptance battery | 1 | 2,4,5,6,7 | todo | | |
 | 9 | Multi-node membership at tier 2 | 2 | 0, 7 | todo | | Lane C, 3–6 sims |
 
@@ -30,6 +30,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | Publish `fp` in TXT | no (transcript did not move) | 2026-09-01 |
 
 ## Surprises worth not re-deriving
+- Item 7: joiner bootstrap root = ADMITTER's key (not founder's); `MeshLedgerAdoption.adopt` rebases from the self-admitted root. Re-gossip cap `maxReGossipFrames` = 16·3+1, answered once per peer per session. `FERNLET_MESH_CHAOS_BARRED` kept ONLY because 2 sims cannot make a quorum — item 9 retires it with ≥3 nodes. Audit keys `mesh.membershipLedger.{bootstrapped,adopted,reGossiped}`, `mesh.introductionAuthority.legacyRosterFallback`. Full FernletTests ≈ 11.4 min on this Mac.
 - Item 3b: `emitApprovedRemovalRecord`'s LOCAL insert is still refused `signerNotAdmitted` (empty ledger on every node but the founder) — broadcast proceeds anyway; item 7 closes it. `seedMembershipLedgerForTesting` seeds a roster without spending the merge trigger (`.merge` outranks `.membership`, so a merge-seeded test cannot observe a membership rotation). `PayloadType` is switched only with `default` (manager + coordinator), so the clean-build enum hazard does not apply.
 - Item 6: `.terminationVerified`/`.removed` state events are NOT yet applied from the dispatch path (ledger insertion happens; deciding a received record names THIS device needs item 7's derived shipping roster). `.developed`, `.backgrounded`/`.foregrounded` unwired (P7 seam). `enforceSessionCeiling`/`evaluateIdleLapse` are on-demand, no timer — item 8/P7 decide who polls. Removal receive path (3b) should call `commitVerifiedRecord(rollingBackTo:type:)`. Acceptance handles for item 8: `MeshSessionCeiling`, `MeshSessionRestore.outcome`, `applySessionEvent`, `MeshSessionStoreFixtures`.
 - Item 5: `meshKeyRotation` is UNSIGNED inside the signed envelope (no canonical serializer, no prior golden). `MeshSessionContext.hardDeadline` is stamped `createdAt + 6h` but only RECORDED — item 6 enforces it. `removedMemberFingerprints` is the interim removal authority until item 7. `ProximityHost.meshSessionStorage` is the scope seam. Test seams: `seedEpochKeyringForTesting`, `rotateNowForTesting(cause:)`, `onMembershipEventSentForTesting`, `identityForTesting`.
@@ -46,4 +47,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share this tree and sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` are held by another session — never stage them.
 
 ## Next item
-7 (IntroductionAuthority → derived roster; joiners adopt a ledger; wire `.terminationVerified`). Then 8. Item 0 stays deferred behind tier-1 work.
+8 (P3 acceptance battery — all prereqs met). Then 0 (3-sim bring-up, timeboxed), then 9.
