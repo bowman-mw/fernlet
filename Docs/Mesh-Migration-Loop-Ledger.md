@@ -6,7 +6,8 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **STOPPED at the P2 boundary:** 2026-09-01, after 14 iterations · **Tree at
+**Started:** 2026-08-31 · **STOPPED at the P2 boundary:** 2026-09-01, after 14 iterations · post-boundary owner
+item 1 landed `e5a4e80` · **Tree at
 seed:** main = `16b9cb2` (pushed); final loop head `b3dcbc4` (close-out; P2 marked **BUILT** in the
 plan, §20 P3 handoff written). NOT pushed.
 
@@ -18,7 +19,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
 | 0 | Sim↔sim experiment (prompt §2). Timeboxed to ONE iteration, DEBUG toggle only. | 2 | — | done | `926a791` | **CONNECTED** — Bonjour + QUIC/TLS + signed introduction both ways; multi-node on one Mac is a real lane (re-tier P3–P6 at close-out). Datagrams didn't negotiate — see surprises |
-| 1 | Capture Lane A diagnostic report; promote runbook rows *Observed working* → *Pass* | 2 | 1 device | todo | | Owner reports it connects; no report captured. Datagram row now expected Pass (item 15 fixed the probe's false gate) — confirm on hardware |
+| 1 | Capture Lane A diagnostic report; promote runbook rows *Observed working* → *Pass* | 2 | 1 device | done | `e5a4e80` | Owner run 2026-09-01 (Sim → iPhone over **USB tether**, not Wi-Fi): 5 rows Pass incl. first hardware datagram round trip. Exposed + fixed two PROBE defects (no idle timeout; responder parked in a non-throwing datagram receive ⇒ dead tunnel never released ⇒ re-dials refused). Probe-only trigger, not a clean acquittal of production — Lane D owed |
 | 2 | String-catalog repair (9 stale keys, pre-existing) | 1 | quiet tree | todo | | SKIP if `Localizable.xcstrings` still held by another session |
 | 3 | §6.5 root fix: stable `id` per session + close §6.4 asymmetries 1–3 | 1 | — | done | `b8d7a5a` | `SessionPeerIdentity` minted once per peer, session-scoped, cleared in `stop()`; 9 tier-1 tests; goldens un-re-pinned |
 | 3b | Close the two remaining id-only `handleChannelReady` guards (RecipeShare + Presence) | 1 | 3 | done | `2a03800` | Endpoint helper + 3-case admission enum per manager, item-3 idiom; 4 tests; suite green (3320) |
@@ -39,8 +40,11 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Blocked on owner
 
-- **Item 1** needs one physical iOS 26.5+ device on the same non-isolated Wi-Fi as the Mac. Not
-  blocking: items 2–8 are all tier 1 and can proceed while this waits.
+- **Lane D — the shipping transport's first hardware run** (runbook has exact commands): production
+  `NetworkMeshSession` via the Lane C harness with one side on the iPhone, **over Wi-Fi with the USB
+  cable unplugged** (the 2026-09-01 run silently crossed the USB tether and forfeited every Wi-Fi/AWDL
+  row). This is what settles whether the device-listener EEXIST is probe-only. Item 11 (AWDL + Local
+  Network prompt) rides the same session.
 - **Non-blocking, wants owner eyes:** item 5 took the FIRST crypto escape hatch since the
   standardization round (`x509-self-signature` — an X.509 self-signature has no Fernlet domain to
   name; census 3→4 files / 6→7 hatches, `Crypto-Domain-Separation.md` updated same commit).
@@ -118,6 +122,16 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   double-dial window is physical-radio behaviour, so its collapse is proven at tier 1 + Lane B.
 - The full test suite resets simulator app state — Lane C scripts must re-harvest identities
   after any `xcodebuild test` run.
+- **A pure responder cannot detect a dead peer** (item 1): it only writes when written to, so its
+  receive is the only thing that can notice — and a QUIC *datagram* receive does NOT throw on
+  connection failure while a *stream* receive does. Production parks in the control-stream receive
+  (escapes); the probe parked in the datagram receive (wedged). Design rule for any receiver.
+- `NetworkConnection` has NO `cancel()` in the iOS 26 Swift-native API — dropping the last reference
+  is the only release. "Explicitly cancel the dead flow" is not an available fix anywhere.
+- A plausible code-reading ("the probe ends its run on any tunnel error") was falsified by a
+  3-minute two-sim run (`kill -STOP` one side past the idle timeout). Reproduce before believing.
+- The USB tether is an invisible default for device↔Mac runs — link-local `en9`/`en2` addresses with
+  no DHCP lease are the tell. Unplug before any run that claims a Wi-Fi row.
 - **Two awaited sends per frame desynchronize a shared QUIC stream** (item 10): length-prefix and
   payload written separately + envelopes fired as independent tasks ⇒ interleaving at the
   suspension ⇒ peer reads payload bytes as a length ⇒ tunnel dead. One contiguous write per frame
@@ -138,8 +152,9 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 **LOOP STOPPED — nothing here is runnable without the owner.** Close-out done (`b3dcbc4`); memory
 note written. What re-opens work:
-- **A device on the Wi-Fi** → item 1 (Lane A report; datagram row expected Pass) and item 11
-  (AWDL + Local Network prompt) — plus the Lane B cross-key-collapse row from item 13.
+- **A device on the Wi-Fi, cable unplugged** → Lane D (production transport's first hardware run)
+  + item 11 (AWDL + Local Network prompt) + the Lane B cross-key-collapse row from item 13. Item 1 is
+  done (`e5a4e80`).
 - **`Localizable.xcstrings` freed** → item 2 (string-catalog repair, one write-mode run, own commit).
 - **Owner decisions** → plan §18 items 7 (unsigned-`sid` transcript v2) and 8 (`x509-self-signature`
   hatch review).
