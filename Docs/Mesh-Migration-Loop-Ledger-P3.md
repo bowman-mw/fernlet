@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P3
 
 **Phase:** P3 (durable session context, roster, membership) · **Prompt:** [Next-Round-Prompt-Mesh-P3-2026-09-01.md](Next-Round-Prompt-Mesh-P3-2026-09-01.md)
-**Started:** 2026-09-01 · **Iteration:** 12 · **Tree at seed:** main = `801e34f` (pushed); launcher at `adfa3c0`
+**Started:** 2026-09-01 · **Iteration:** 12 (FINAL) · **Tree at seed:** main = `801e34f` (pushed); launcher at `adfa3c0`
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -67,5 +67,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share this tree and sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` are held by another session — never stage them.
 
 ## Next item
-§8 close-out (plan BUILT, P4 handoff §21, memory) and STOP. Every P3 item is done; 0b and the
-departure-delivery finding are owner calls, not loop work.
+NONE — P3 CLOSED 2026-09-02. Plan §8 BUILT + §21 P4 handoff in `6b38c61`; memory note `mesh-p3-membership-round-2026-09-01`. Owner calls open: 0b (3-sim star), departure delivery unacked, transcript `sid`, §17.3 PrivacyInfo paragraph (deadline: first TestFlight). Main is NOT pushed. P4 starts a FRESH session from plan §21.
