@@ -28,7 +28,7 @@ types (which still have no production callers).
 | Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
 | A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
-| Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation()` |
+| Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation(cause:)` |
 | Durable sidecar state (data of record) | `ProtectedSidecar` — classifies absent / deferred / corrupt / loaded and keeps memory authoritative on write failure. Do NOT use `JSONSidecarFile` for data of record: it collapses every read failure to `nil`. |
 | Sealing a payload to a peer, with framing | `IdentityService.seal(_:to:)` + `SealedPayloadFormat` (capability-derived, never inferred from bytes) |
 | Verifying a human holds a key | `ProximityVerifyQR` + `ProximityVerifySignature.message(...)` — shared transcript, so the friend and coach ceremonies cannot diverge |
@@ -161,7 +161,8 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `leaveSessionAfterNotifyingPeers()` | Ends the session and tears down transport. **No longer sends `.sessionGoodbye`** (P3 item 3): the legacy frame is parsed, never emitted, and the disconnect that follows already says everything an unsigned frame could. |
 | `prepareMembershipLedger(meshID:founderSigningPublicKey:)` | Arms the verified ledger at mesh creation, rooted in the founder's key. Idempotent per mesh; a different mesh id replaces it, because records never cross meshes. |
 | `dispatchMembershipEventPayload(_:plaintext:decoder:slot:)` | Decodes `.meshMemberDeparture` / `.meshTerminated` / `.meshInventoryDigest` on a COMMITTED slot and hands each to `MeshMembershipRecordVerifier`. Decode + verify + insert only — emission is not wired. |
-| `epochRef` (`MeshIntroductionAuthority`) | Serializes a real `MeshEpochRef` into the introduction's existing string field (P3 item 4): counter from the group key, coordinator = the lowest fingerprint of the **gossiped descriptor** roster (not `activeSlots` — a converged mesh must derive one answer on both ends). Empty when there is no key, no descriptor, or the counter is past the cap: claiming an epoch it cannot derive is worse than claiming none. |
+| `epochRef` (`MeshIntroductionAuthority`) | The **held** keyring's head as a canonical string (P3 item 5 — item 4 re-derived it on every read, so a descriptor merge could rename this device's epoch with no rotation behind it). Empty when this device holds no key, which is a named branch of the acceptance rule, not a wildcard. |
+| `epochCoordinatorFingerprint` | The lowest fingerprint of `presentedRotationRoster()` — the ledger's derived roster once it knows one, else the **gossiped descriptor** members plus self (never `activeSlots`). The coordinator source and the presented roster must move together or members stop agreeing on `epochID`. |
 | `emitMembershipEvent(_:)` | **The emission seam, deliberately empty.** Membership events are sent on state-machine transitions (plan items 5–6), and a departure must ship together with the rotation that excludes the leaver. |
 | `finishSessionPhotos(keeping:)` | Finalizes session metadata, deletes unkept session photos from cache state, clears session photos, and persists. |
 | `deleteAllSessionPhotos()` | Finishes the session while keeping no photos. |
@@ -251,7 +252,21 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `checkBeaconLiveness()` | Triggers takeover when elected coordinator's beacon has gone silent. |
 | `takeOverCoordinator()` | Schedules a recovered rotation time and broadcasts a takeover beacon. |
 | `scheduleRotationTimer(fireAt:)` | Schedules the next key rotation if local device is coordinator at fire time. |
-| `initiateRotation()` | Coordinator rotation protocol: sync, collect acks, generate new key, wrap per member, broadcast rotation, and apply locally. |
+| `requestRotation(cause:)` | **The one entry point to rotation** (P3 item 5, plan §8.3): timer, roster change and merge all pass through `MeshRotationTriggerQueue`, which coalesces a burst and refuses re-entry. The coordinator check happens at fire time, not here. |
+| `armRotationDebounce(firingAt:)` / `runDebouncedRotation()` / `rearmDeferredRotation()` | The single armed window (cancel-and-replace), the claim-then-rotate step, and the re-arm for a trigger that arrived mid-rotation. |
+| `initiateRotation(cause:)` | Coordinator rotation, in the order that matters: plan the epoch, drain for acks, **persist the head**, then distribute. A `terminate` plan ends the session; a blocked save abandons the rotation. |
+| `plannedRotation()` / `presentedRotationRoster()` | The successor plan through `MeshRotationPolicy` + `MeshEpochAcceptance`, and the roster it is presented against (derived roster, else descriptor members + self). |
+| `drainForRotation(closingEpoch:)` | Steps 1–2: announce the closing epoch, re-arm the 15-minute timer, collect drain acks. Returns nil when cancelled mid-drain, so nothing is distributed. |
+| `distributeRotation(_:cause:acked:closingEpoch:)` | Step 3: mint the key, wrap it **only** for `MeshRotationPolicy.recipients`, broadcast with the `cause` token, adopt locally. |
+| `wrappedGroupKey(_:for:)` | Pairwise wraps for each recipient with a handshake-verified KA key — never the descriptor's gossiped value. |
+| `adoptEpoch(_:key:)` / `clearEpochKeyring()` / `epochRef(counter:coordinatorFingerprint:)` | Move the held `MeshEpochKeyring` onto an adopted epoch (a keyring refusal is logged, never fatal), drop it with its key, and re-derive a peer's named ref from bytes both sides already share. |
+| `terminateForExhaustedEpochs()` | Plan §8.4's counter cap: emit `terminated.v1`, end the session. Never a trap. |
+| `recordRotationBlock(_:)` / `lastRotationBlockReason` / `lastRotationCause` | Frozen-English diagnostics: a rotation that did not happen is audited and readable, never swallowed. |
+| `persistSessionContext(addingEpochHead:)` | **The single save seam** for `MeshSessionContext` (item 6 extends the cadence here rather than adding a second writer). Durable before acknowledged: false blocks the caller. |
+| `sendMembershipEvent(_:)` / `emitMembershipEvent(_:)` | Mint, sign and broadcast `member-departure.v1` / `terminated.v1`. The async form is awaited by `leaveSessionAfterNotifyingPeers()`, which would otherwise race its own teardown. |
+| `emitApprovedRemovalRecord(_:)` | Mints and files the removal record when a vote completes. **Seam:** there is no `member-removal` wire frame yet, so peers still learn of the removal from `.meshRemovalSecond` + the descriptor. |
+| `mergeMembershipLedger(_:)` | P4's merge seam: verify-then-insert another ledger and raise a `merge` rotation when the derived roster moves. |
+| `rotateIfRosterChanged(from:)` | The roster-change trigger. A refused record, or one that moves no roster, spends no rotation. |
 | `handleRotationSync(_:)` | Non-coordinator sync response that waits for drain then sends key ack. |
 | `handleKeyRotation(_:)` | Non-coordinator key application from elected coordinator and ack back to coordinator. |
 | `handleKeyAck(_:)` | Coordinator-side collection of sync-phase acks. |
@@ -431,6 +446,21 @@ Plan §8.4's acceptance rule as two pure decisions. Authentication happens befor
 | `MeshEpochRotationRefusal` | Five named refusals + frozen-English diagnostics. |
 | `mergedHeads(_:adding:limit:)` | How coexistence becomes a persisted state: both divergent heads survive, duplicates collapse, the oldest fall off by `MeshEpochRefOrder` so every device drops the same ones. |
 | `introductionVerdict(local:peer:)` | The **strict** gate (plan §20.1). Junk is `malformed` even opposite an empty side; equality is equality of the whole ref, so two branches that both rendered `"7"` are now seen; the joiner that holds no key is a named branch, not a short-circuit. |
+
+### `MeshRotationPolicy.swift`
+
+P3 item 5 (plan §8.3): when a rotation happens and who the new key is for. Pure, clock-injected, and
+owned by nothing that sends, seals or sleeps.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshKeyRotationCause` | The frozen English wire token on `MeshKeyRotationPayload`: `timer` / `membership` / `merge`. Absent (or unknown) decodes as `timer` — the only rotation older builds performed. |
+| `MeshRotationTriggerBounds` | The 2-second coalescing window, and the cause ranking (`merge` > `membership` > `timer`) used when a burst collapses. |
+| `MeshRotationTriggerQueue` | `request` / `claim` / `finish` / `reset`. One trigger fires one rotation; a burst inside the window fires one; a trigger raised mid-rotation is deferred and re-armed, never dropped or run concurrently. |
+| `MeshRotationTriggerOutcome` | `scheduled` / `coalesced` / `queuedBehindInFlight` — three answers because the caller arms a task, leaves one armed, or arms nothing. |
+| `MeshRotationPolicy.plan(head:coordinatorFingerprint:meshID:presentedRoster:)` | The successor, through `MeshEpochAcceptance`. `terminate` at the counter cap; named `refuse` otherwise. |
+| `MeshRotationPolicy.recipients(acked:selfFingerprint:derivedRoster:locallyRemoved:)` | **The exclusion rule.** Removed and departed members get no key; the set narrows to the derived roster once one exists. Subtractive on purpose — a positive rule over the still-empty ledger would distribute to nobody. |
+| `MeshRotationPlan` / `MeshRotationRefusal` | Rotate / terminate / refuse, with frozen-English diagnostics. |
 
 ### `MeshFrameReplayWindow.swift`
 
