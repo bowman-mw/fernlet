@@ -122,6 +122,11 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// A member's own signed statement that it left (`MeshMemberDeparturePayload`). Replaces the
     /// legacy `.sessionGoodbye` as the thing that ends a MEMBERSHIP; a goodbye only ends a link.
     case meshMemberDeparture   = "fernlet.mesh.member-departure.v1"
+    /// A completed removal: quorum was reached and the tallier signed the evidence
+    /// (`MeshMemberRemovalPayload`, plan §8.3/§10.4). Sent to every member EXCEPT the removed one,
+    /// who is not told and does not need to be — plan §8.3 excludes a removed member from the new
+    /// epoch's key distribution, so the removal reaches them as the key they no longer hold.
+    case meshMemberRemoval     = "fernlet.mesh.member-removal.v1"
     /// A final-pair member's signed statement that the mesh is over (`MeshTerminationPayload`).
     case meshTerminated        = "fernlet.mesh.terminated.v1"
     /// A signed summary of the records the sender's ledger holds, so a counterpart can tell it is
