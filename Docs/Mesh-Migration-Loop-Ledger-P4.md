@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P4
 
 **Phase:** P4 (partition and merge) · **Prompt:** [Next-Round-Prompt-Mesh-P4-2026-09-02.md](Next-Round-Prompt-Mesh-P4-2026-09-02.md)
-**Started:** 2026-09-02 · **Iteration:** 3 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
+**Started:** 2026-09-02 · **Iteration:** 4 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -9,7 +9,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 |---|---|---|---|---|---|---|
 | 1 | Partition detection + branch-local operation (§10.2) | 1 | — | done | `e48ab81` | `MeshBranchView` + `MeshPartitionDetector` (pure edge detector); `evaluatePartition(reachable:now:)` on-demand, no timer; nothing calls it in shipping code yet (P7 polls). 10 tests, 3708 green |
 | 2 | The single merge path (§10.3) on `mergeMembershipLedger` | 1 | 1 | done | 2a `bf81039`, 2b `9225748` | All four reconnect entries (blip/heal/lapse/restart) route through `mergeReconnected(_:entry:)` → the one path; union rides the existing inventory-digest + re-gossip (no wire change); overflow counted at the writer after the seal; blip-merge only for a peer already in the roster; `MeshMergeExchangeTests` drives the digest end-to-end on `FakePeerNetwork`. Schema 2. Epoch heads *on the wire* → item 3. |
-| 3 | Divergent-epoch reconciliation, coexist → one head | 1 | 2 | todo | | successor = max+1, cause .merge, no wall clock |
+| 3 | Divergent-epoch reconciliation, coexist → one head | 1 | 2 | done | `6d6cd34` | Minter = `presentedRotationRoster().min()` (pure fn of merged roster; branch-scoped ⇒ lowest present when coordinator absent); `rotationBasisHead` = max known head ⇒ next = max+1, cause `.merge`, coalesces with a roster move; `unresolvedEpochHeads` stops re-minting. **New additive frame** `fernlet.mesh.epoch-heads.v1` (full trio, no golden moved) on the signed unsealed membership broadcast. `divergent` verdict → `.reconcile` gated by `mayReconcileDivergentEpochs` (default false; QUIC-only reach). Schema 2. 9 tests / 3 suites; wall-check PASSED; 3732 green |
 | 4 | §10.5 re-gossip + departure recovery at merge | 1 | 2 | todo | | owner's worked example verbatim |
 | 5 | Quorum under partition (§10.4), rosters 2–8 | 1 | 1 | todo | | check if proposal/vote records exist first |
 | 6 | Termination + development under partition (§10.6) | 1 | 1, 5 | todo | | final pair = MERGED roster |
@@ -64,5 +64,10 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - **(P4 i3)** `IdentityService()` is keyed on one process-wide keychain service, so two managers in one process are **the same device** (fingerprints collide). `MeshNetworkManager`'s internal designated init now takes `identity: IdentityService? = nil` for exactly this; unreachable from the public init.
 - **(P4 i3)** `MeshMergeExchangeTests` is the rig for item 3's heads-on-the-wire: both ends already exchange real signed frames on `FakePeerNetwork`, so a head-bearing frame asserts end-to-end without new fakes.
 
+- **(P4 i4)** **Widening an existing signed frame moves its golden** (the inventory digest is pinned by `goldenInventoryHex`), so new wire content = a new additive frame with the full trio. Recipe that worked: an independent Python re-implementation that first reproduces an *existing* golden byte-for-byte, then derives the new one. `CryptographicDomainSeparationTests.theInventoryCoversEveryDeclaredPurpose` demands an inventory row per declared purpose — declaring without a row is an untested domain. `DecodedMembershipRecord` switches are exhaustive (two needed a case).
+- **(P4 i4)** `MeshKeyRotationPayload.newEpoch` now carries the *planned* counter (was closing+1) because receivers re-derive the ref from it; `distributeRotation` lost `closingEpoch`. `MeshEpochRef` carries no timestamp at all — wall-clock immunity is structural.
+- **(P4 i4)** For P5: a *reconciling* tunnel carries membership/epoch frames (signed, unsealed) but `meshEncryptedMetadata` between two branches stays dropped until the mint — that is P5's retirement, not loosened here.
+- **(P4 i4)** Seams: item 4 — `receiveEpochHeads` sits beside the digest handler, a departure re-gossip rides the same reconnect; item 7 — `foldEpochHeads` is the only head writer; item 9 — `MeshReconcileFixtures.merge/mint` + `consumePendingRotationForTesting` are the deterministic driver. DEBUG accessors: `rotationBasisHeadForTesting`, `presentedEpochHeadsForTesting`, `epochRefForTesting(counter:coordinatorFingerprint:)`, `consumePendingRotationForTesting()`.
+
 ## Next item
-3 — divergent-epoch reconciliation (`coexist` → one head): successor at counter max+1, `cause = .merge`, minted by the merged view's deterministic coordinator (default when absent: lowest fingerprint present), no wall clock; **plus** epoch heads on the wire and opening the `divergent` tunnel gate in `MeshEpochAcceptance.introductionVerdict` as part of the mint (see (P4 i2)). Check whether the existing `epochRef` frame can carry the head set before adding a frame. Items 5 and 8 remain unblocked (prereq 1 only) if 3 stalls.
+4 — §10.5 re-gossip + departure recovery at merge: the owner's worked example **verbatim** ({A,B}/{C,D}, B departs, A meets C, C gossips to D, all three converge on {A,C,D} with quorum 2, B never meeting C or D), plus a survivor that *missed* a departure learning it at the next merge. Rides `receiveEpochHeads`/digest re-gossip on the reconnect (item 3 seam). Then 5, 7, 8 (all unblocked); 6 waits on 5; 9 on 2,3,5,7.
