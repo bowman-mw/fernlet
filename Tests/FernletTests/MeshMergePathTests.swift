@@ -23,6 +23,11 @@
 //  6. **Commutativity at the MANAGER seam.** A merging B's offer and B merging A's reach the same
 //     roster and the same head set. The ledger-level laws are P3 item 1's tests
 //     (`MeshMembershipLedgerTests`) and are deliberately not repeated.
+//  7. **The overflow is counted where the drop happens** — at the one context writer, against the
+//     heads that actually sealed, at the cap boundary (8 seals clean, the 9th is named).
+//  8. **Reconnect ≡ merge; admission ≠ reconnect.** The `peerCommitted` self-edge opens a merge
+//     window only for a peer already on the derived roster; a new member's first commit keeps its
+//     own `.membership` rotation.
 //
 // Not here, on purpose: divergent-epoch reconciliation (`coexist` → one head) is item 3, and
 // content merge is item 7. This file proves both heads *survive*; it never mints the successor.
@@ -242,13 +247,15 @@ struct MeshMergePathTests {
     ) throws {
         let now = MeshP3Acceptance.base
         let names = MeshMergeFixtures.roster(manager)
-        guard let local = names.first(where: { $0 == manager.identityForTesting.localFingerprint })
+        guard let local = names.first(where: { $0 == manager.identityForTesting.localFingerprint }),
+              let member = names.first(where: { $0 != local })
         else { throw MeshMergeTestFailure.rosterTooSmall }
         switch entry {
         case .blip:
             // A peer re-committing into a session that was already live: the self-edge that carries
-            // no `beginMerge` effect, and would otherwise resume against a stale roster.
-            manager.applySessionEvent(.peerCommitted)
+            // no `beginMerge` effect, and would otherwise resume against a stale roster. The peer is
+            // named because only an EXISTING member's commit is a reconnect (2b residual iii).
+            manager.applySessionEvent(.peerCommitted, committedPeer: member)
             #expect(manager.awaitingResumeMerge, "a blip opens a merge exchange")
             manager.mergeReconnected(MeshMergeOffer(ledger: offered), entry: .blip)
         case .partitionHeal:
@@ -276,7 +283,8 @@ struct MeshMergePathTests {
         let seeded = try MeshMergeFixtures.members(1, "burst-seed")
         let manager = try MeshMergeFixtures.liveManager(store: store, others: seeded, meshID: meshID)
         let newcomers = try MeshMergeFixtures.members(3, "burst-new")
-        manager.applySessionEvent(.peerCommitted)   // the blip opens the window
+        // An existing member's commit — the blip opens the window (a NEW peer's would not).
+        manager.applySessionEvent(.peerCommitted, committedPeer: seeded[0].localFingerprint)
         #expect(manager.awaitingResumeMerge)
         let before = manager.mergeApplicationCount
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
@@ -470,5 +478,92 @@ struct MeshMergePathTests {
         #expect(heads[0] == heads[1], "and the identical head set")
         #expect(results[0].count == 4, "founder + shared + one from each branch")
         #expect(heads[0].count == 2, "both same-counter heads coexist, neither duplicated")
+    }
+
+    /// **Claim 7 (2b residual i).** The overflow is counted **where the head is dropped** — at the
+    /// one context writer, against what actually sealed — not at the merge against a set the file
+    /// never held.
+    ///
+    /// Driven at the boundary on purpose: exactly the cap seals eight and loses nothing, and the
+    /// ninth head is named. The count moving only on the ninth is what distinguishes a measurement
+    /// of the sealed set from a measurement of the offer.
+    @Test func theHeadOverflowIsCountedAtTheWriterAgainstWhatSealed() throws {
+        let scoped = makeTestStore()
+        let meshID = UUID()
+        let seeded = try MeshMergeFixtures.members(1, "cap-seed")
+        let manager = try MeshMergeFixtures.liveManager(store: scoped, others: seeded, meshID: meshID)
+        let cap = MeshSessionContextSchema.maxEpochHeads
+        // One head per hypothetical branch coordinator, all at one counter — the only shape that
+        // can reach the cap at all (plan §21.3: a nested re-split cannot exceed everyone-alone).
+        let heads: [MeshEpochRef] = try (0..<(cap + 1)).map { index in
+            guard let ref = MeshEpochRef.minted(
+                counter: 7, coordinatorFingerprint: String(format: "%016x", index + 1), meshID: meshID
+            ) else { throw MeshMergeTestFailure.couldNotMintEpoch }
+            return ref
+        }
+        let offered = try MeshMergeFixtures.offeredLedger(manager, others: seeded, meshID: meshID)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            manager.mergeReconnected(
+                MeshMergeOffer(ledger: offered, epochHeads: Array(heads.prefix(cap))),
+                entry: .partitionHeal
+            )
+        }
+        #expect(MeshMergeFixtures.sealedHeads(scoped).count == cap, "exactly at the cap, all of them seal")
+        #expect(manager.droppedEpochHeadCount == 0, "at the cap exactly, the FILE lost nothing")
+
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            manager.mergeReconnected(
+                MeshMergeOffer(ledger: .empty, epochHeads: [heads[cap]]), entry: .partitionHeal
+            )
+        }
+        #expect(MeshMergeFixtures.sealedHeads(scoped).count == cap, "the cap is a hard bound on the file")
+        #expect(manager.droppedEpochHeadCount == 1,
+                "the ninth head is COUNTED where it was dropped, never silently truncated")
+        manager.leaveMesh()
+    }
+
+    /// **Claim 8 (2b residual iii).** Reconnect ≡ merge; admission ≠ reconnect.
+    ///
+    /// The `peerCommitted` self-edge is the only reconnect the state machine expresses, and it also
+    /// carries every genuinely new member's first commit. Only the first is a merge: a member that
+    /// was **already on the derived roster** opens the merge window and its records mint `.merge`;
+    /// a peer that was not opens nothing, and the admission that follows rotates `.membership` —
+    /// which is visible precisely because `.merge` outranks `.membership` in the coalescing window.
+    @Test func onlyAnAlreadyMemberCommitOpensTheMergeWindow() throws {
+        let meshID = UUID()
+        let seeded = try MeshMergeFixtures.members(1, "gate-seed")
+        let manager = try MeshMergeFixtures.liveManager(store: store, others: seeded, meshID: meshID)
+        let newcomer = try MeshMergeFixtures.members(1, "gate-new")[0]
+        let before = manager.mergeApplicationCount
+
+        // A peer this device has never admitted: not a reconnect, so no merge window.
+        manager.applySessionEvent(.peerCommitted, committedPeer: newcomer.localFingerprint)
+        #expect(!manager.awaitingResumeMerge, "a NEW member's commit is an admission, not a reconnect")
+        #expect(manager.mergeApplicationCount == before, "and it runs no merge")
+        #expect(manager.rotationTriggers.pendingCause == nil, "nor asks for a rotation by itself")
+
+        // Its admission arrives on the LIVE record path and rotates as membership.
+        let coordinator = MeshP3Acceptance.attachSlot(
+            to: manager, fingerprint: seeded[0].localFingerprint
+        ).coordinator
+        let record = SignedAdmissionRecord(token: try MeshAdmissionToken.signed(
+            meshID: meshID,
+            joinerFingerprint: newcomer.localFingerprint,
+            joinerSigningPublicKey: newcomer.localSigningPublicKey,
+            admitterIdentity: manager.identityForTesting
+        ))
+        try MeshP3Acceptance.deliver(
+            encoding: MeshMemberAdmissionPayload(record: record),
+            type: .meshMemberAdmission, to: manager, from: seeded[0], over: coordinator
+        )
+        #expect(MeshMergeFixtures.roster(manager).contains(newcomer.localFingerprint))
+        #expect(manager.rotationTriggers.pendingCause == .membership,
+                "a new admission keeps its own rotation — a merge window would have relabelled it")
+        #expect(manager.mergeApplicationCount == before, "and still no merge ran")
+
+        // The same event for a member ALREADY on the roster is the blip, and is a merge.
+        manager.applySessionEvent(.peerCommitted, committedPeer: seeded[0].localFingerprint)
+        #expect(manager.awaitingResumeMerge, "a returning member's commit IS plan §10.3's merge")
+        manager.leaveMesh()
     }
 }
