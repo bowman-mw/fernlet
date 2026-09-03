@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P4
 
 **Phase:** P4 (partition and merge) · **Prompt:** [Next-Round-Prompt-Mesh-P4-2026-09-02.md](Next-Round-Prompt-Mesh-P4-2026-09-02.md)
-**Started:** 2026-09-02 · **Iteration:** 4 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
+**Started:** 2026-09-02 · **Iteration:** 5 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -10,7 +10,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 1 | Partition detection + branch-local operation (§10.2) | 1 | — | done | `e48ab81` | `MeshBranchView` + `MeshPartitionDetector` (pure edge detector); `evaluatePartition(reachable:now:)` on-demand, no timer; nothing calls it in shipping code yet (P7 polls). 10 tests, 3708 green |
 | 2 | The single merge path (§10.3) on `mergeMembershipLedger` | 1 | 1 | done | 2a `bf81039`, 2b `9225748` | All four reconnect entries (blip/heal/lapse/restart) route through `mergeReconnected(_:entry:)` → the one path; union rides the existing inventory-digest + re-gossip (no wire change); overflow counted at the writer after the seal; blip-merge only for a peer already in the roster; `MeshMergeExchangeTests` drives the digest end-to-end on `FakePeerNetwork`. Schema 2. Epoch heads *on the wire* → item 3. |
 | 3 | Divergent-epoch reconciliation, coexist → one head | 1 | 2 | done | `6d6cd34` | Minter = `presentedRotationRoster().min()` (pure fn of merged roster; branch-scoped ⇒ lowest present when coordinator absent); `rotationBasisHead` = max known head ⇒ next = max+1, cause `.merge`, coalesces with a roster move; `unresolvedEpochHeads` stops re-minting. **New additive frame** `fernlet.mesh.epoch-heads.v1` (full trio, no golden moved) on the signed unsealed membership broadcast. `divergent` verdict → `.reconcile` gated by `mayReconcileDivergentEpochs` (default false; QUIC-only reach). Schema 2. 9 tests / 3 suites; wall-check PASSED; 3732 green |
-| 4 | §10.5 re-gossip + departure recovery at merge | 1 | 2 | todo | | owner's worked example verbatim |
+| 4 | §10.5 re-gossip + departure recovery at merge | 1 | 2 | done | `ac3bddf` | Tests only (`reGossipRecords` already carried departures). Worked example verbatim + residual + missed-departure recovery + merge laws under departures; path proved from the fabric's per-frame sender handle. `MeshDepartureRig` = general N-manager rig for item 9. 3738 green |
 | 5 | Quorum under partition (§10.4), rosters 2–8 | 1 | 1 | todo | | check if proposal/vote records exist first |
 | 6 | Termination + development under partition (§10.6) | 1 | 1, 5 | todo | | final pair = MERGED roster |
 | 7 | Content merge: order, dedup, gates re-run at ingestion | 1 | 2 | todo | | |
@@ -69,5 +69,11 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - **(P4 i4)** For P5: a *reconciling* tunnel carries membership/epoch frames (signed, unsealed) but `meshEncryptedMetadata` between two branches stays dropped until the mint — that is P5's retirement, not loosened here.
 - **(P4 i4)** Seams: item 4 — `receiveEpochHeads` sits beside the digest handler, a departure re-gossip rides the same reconnect; item 7 — `foldEpochHeads` is the only head writer; item 9 — `MeshReconcileFixtures.merge/mint` + `consumePendingRotationForTesting` are the deterministic driver. DEBUG accessors: `rotationBasisHeadForTesting`, `presentedEpochHeadsForTesting`, `epochRefForTesting(counter:coordinatorFingerprint:)`, `consumePendingRotationForTesting()`.
 
+- **(P4 i5)** `MeshNetworkManager` resolves an inbound frame's slot by `slots.first { $0.coordinator === coordinator }`, so an N-node rig needs **one `ProximityCoordinator` per link** or every frame lands on the first slot. `MeshDepartureRig` does this; reuse it (items 5, 6, 9).
+- **(P4 i5)** The runner-hang flake hits the **first** test invocation after each build, consistently; the retry is the acceptance. Same-counter `coexist` ordering depends on which real fingerprint sorts first — seed branches at *distinct* counters when the test is not about item 3.
+
+## Findings deliberately not fixed (for §8 close-out step 3)
+- **A merged record is not pushed onward proactively.** `sendInventoryDigest` has two callers (`beginMergeExchange`, the admission-grant reply), so C — already linked to D — hands D a departure only at D's *next* merge exchange (blip/heal/lapse/restart). §10.5's "C gossips it to D" is true but reconnect-gated; a long-lived C–D link delays convergence until something re-opens an exchange. Cost: latency, never correctness. Candidate for item 9's schedules (does a bounded schedule always re-open one?) or P5's routed store. Owner's eye.
+
 ## Next item
-4 — §10.5 re-gossip + departure recovery at merge: the owner's worked example **verbatim** ({A,B}/{C,D}, B departs, A meets C, C gossips to D, all three converge on {A,C,D} with quorum 2, B never meeting C or D), plus a survivor that *missed* a departure learning it at the next merge. Rides `receiveEpochHeads`/digest re-gossip on the reconnect (item 3 seam). Then 5, 7, 8 (all unblocked); 6 waits on 5; 9 on 2,3,5,7.
+5 — quorum under partition (§10.4): ⌊|roster|/2⌋+1 distinct signed votes re-derived on the **receiver's** merged roster; proposal ID; 5-min expiry; target cannot vote; incomplete proposal leaves no trace; completed = permanent `SignedRemovalRecord` that union-merges; table-driven rosters 2–8 × partition shapes. **Check first whether proposal/vote records exist** — P3 shipped only `member-removal.v1`; if the vote is new signed bytes it is the full trio (defaults `fernlet.mesh.removal-proposal.v1` / `fernlet.mesh.removal-vote.v1`). Then 7, 8; 6 after 5; 9 after 7.
