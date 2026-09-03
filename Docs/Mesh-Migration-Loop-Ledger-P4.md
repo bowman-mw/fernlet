@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P4
 
 **Phase:** P4 (partition and merge) · **Prompt:** [Next-Round-Prompt-Mesh-P4-2026-09-02.md](Next-Round-Prompt-Mesh-P4-2026-09-02.md)
-**Started:** 2026-09-02 · **Iteration:** 13 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
+**Started:** 2026-09-02 · **Iteration:** 14 done · **PHASE CLOSED 2026-09-03** — close-out `19af2d7` (plan §10 BUILT, §10.7–§10.10, §22 P5 handoff) · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit); **not pushed** since
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -121,5 +121,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 ## Blocked on owner (cont.)
 - **CI gate for the P4 battery:** add nine `-only-testing:FernletTests/MeshP4*AcceptanceTests` lines to `.github/workflows/s3-wall.yml` after the key-custody step (~line 190), same form as the boundary suites. Note P3's `MeshP3*AcceptanceTests` are not CI-gated today either. Exact lines are in `73e9755`'s message / the item-10 summary.
 
+- **(P4 i14)** The close-out ran as a draft → two-lens adversarial verify → apply workflow (9 agents, 51 corrections; **two verifier corrections were wrong** and refused against the code — `MeshPayloads.swift` was not touched in P4; the legacy removal's 60 s window IS in code). The apply step **529-overloaded three times on Opus** with a 40 k inline prompt; it succeeded on the session model once its inputs were files in the scratchpad. A single-file apply step should read inputs from files.
+
 ## Next item
-**Close-out (§8)** — tier 1 is complete (items 1–10 + 2c; 2d deferred by name). One iteration: (1) mark §10 **BUILT** in the plan with landing SHAs in the §7/§8 format; (2) record deviations from the sketch + defaults taken (§8.6 model) — the decisions table above; (3) findings deliberately not fixed with cost (§8.7 model) — the two "Findings" sections above; (4) memory note; (5) **§22 P5 handoff** in the §20/§21 format: item 8's `MeshDeliveryTarget`, the merge path as the drain's model (reconnect ≡ merge ≡ relay drain), `MeshFrameReplayWindow` built-and-unwired, the three `keyEpoch` gates by line (P4 i8) to retire *with* the path P5 replaces, 2d + the window redesign, the three-node sim lane; (6) what P4 learned that re-tiers P5–P7. Then **stop the loop** (§6.1). Tier-2 items 11–14 are corroboration on the owner's sim fleet, recorded as owed, not the gate.
+**None — P4 is closed (§6.1).** This ledger is a finished record; do not reuse it. P5 starts fresh from plan **§22** (the live handoff) with its own launcher and ledger. Tier-2 items 11–14 remain owed on the owner's sim fleet (recorded in §10.9 / §22.4), not a gate. Owner actions: the nine `MeshP4*AcceptanceTests` CI lines; push `main`.
