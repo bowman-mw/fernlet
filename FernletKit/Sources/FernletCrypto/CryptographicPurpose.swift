@@ -143,6 +143,19 @@ public nonisolated enum FernletCryptoPurpose {
         /// mesh toward ``MeshEpochBounds/counterCap``, where the only legal answer is to terminate.
         /// Length-prefixed, like every other `CanonicalByteWriter` transcript.
         public static let meshEpochHeadsV1 = CryptographicPurpose("fernlet.mesh.epoch-heads.v1", framing: .lengthPrefixed)
+        /// **Written since P4 item 5.** A proposer's signature over a `SignedRemovalProposal` —
+        /// "I propose removing this member, and this is my vote" (plan §10.4). Distinct from the
+        /// vote domain even though the proposal *is* the proposer's vote: the proposal is the only
+        /// object that binds `proposalID → (mesh, target, proposer)`, so a vote's signature must
+        /// never validate as one, or a member could re-point somebody else's proposal at a
+        /// different target. Length-prefixed, like every other `CanonicalByteWriter` transcript.
+        public static let meshRemovalProposalV1 = CryptographicPurpose("fernlet.mesh.removal-proposal.v1", framing: .lengthPrefixed)
+        /// **Written since P4 item 5.** A voter's signature over a `SignedRemovalVote` (plan
+        /// §10.4). Distinct from the removal record's domain: a vote is *live* state that expires
+        /// after five minutes and never reaches a ledger, while `meshMemberRemovalV1` signs the
+        /// permanent, quorum-complete record — a signature that satisfied both would let a single
+        /// vote be replayed as a completed removal.
+        public static let meshRemovalVoteV1 = CryptographicPurpose("fernlet.mesh.removal-vote.v1", framing: .lengthPrefixed)
         /// **Reserved, not yet written.** P5's routed-content manifest signature (plan §11): item
         /// ID, type token, content hash, size, immutable destination set, expiry, and the
         /// per-recipient key wraps. Signed by the ORIGIN only — relays forward the origin's exact

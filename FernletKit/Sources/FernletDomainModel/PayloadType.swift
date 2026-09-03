@@ -147,6 +147,20 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// input to the successor a merge mints, and an unsigned one could push a mesh toward its
     /// counter cap.
     case meshEpochHeads        = "fernlet.mesh.epoch-heads.v1"
+    /// A member's **signed** proposal to remove another member, which is also the proposer's own
+    /// vote (`SignedRemovalProposal`, plan §10.4, network migration P4 item 5).
+    ///
+    /// Additive beside the frozen, UNSIGNED `meshRemovalProposal` / `meshRemovalSecond` pair
+    /// declared earlier, not a replacement for it: those hard-code quorum at two and are what
+    /// already-shipped builds speak. The hyphenated spelling is the tell — `removal-proposal` is the signed, quorum-derived
+    /// family; `removal.proposal` is the legacy two-party one.
+    case meshRemovalProposalSigned = "fernlet.mesh.removal-proposal.v1"
+    /// One member's **signed** vote on an open removal proposal (`SignedRemovalVote`, plan §10.4).
+    ///
+    /// Never a record: the receiver tallies it against its OWN merged roster, and an incomplete
+    /// proposal expires after five minutes leaving no trace. Only the completed removal
+    /// (`meshMemberRemoval`) is durable.
+    case meshRemovalVote       = "fernlet.mesh.removal-vote.v1"
     // Group encryption (Phase 3)
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"

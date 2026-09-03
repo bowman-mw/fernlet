@@ -134,6 +134,35 @@ enum MeshMembershipEventFixtures {
         )
     }
 
+    /// P4 item 5's proposal id — a third one, so the quorum vectors are their own records rather
+    /// than variants of the two the removal goldens already pinned.
+    static let quorumProposalID = UUID(uuidString: "4E4E4E4E-5F5F-4A4A-9B9B-2C2C2C2C2C2C") ?? UUID()
+
+    /// The `fernlet.mesh.removal-proposal.v1` frame (plan §10.4). Its target is the same `fp004`
+    /// the removal record names, so the three vectors read as one story: propose, vote, complete.
+    static func removalProposal() -> SignedRemovalProposal {
+        SignedRemovalProposal(
+            meshID: meshID,
+            proposalID: quorumProposalID,
+            targetFingerprint: "fp004",
+            proposerFingerprint: "fp001",
+            issuedAt: base.addingTimeInterval(360),
+            signature: opaqueSignature
+        )
+    }
+
+    /// The `fernlet.mesh.removal-vote.v1` frame: `fp002` agreeing with the proposal above.
+    static func removalVote() -> SignedRemovalVote {
+        SignedRemovalVote(
+            meshID: meshID,
+            proposalID: quorumProposalID,
+            targetFingerprint: "fp004",
+            voterFingerprint: "fp002",
+            castAt: base.addingTimeInterval(420),
+            signature: opaqueSignature
+        )
+    }
+
     static func hex(_ data: Data) -> String {
         data.map { String(format: "%02x", $0) }.joined()
     }
@@ -177,6 +206,19 @@ struct MeshMembershipEventGoldenTests {
     /// own golden, and no vector above it moves. Widening the inventory digest to carry heads would
     /// have moved ``goldenInventoryHex``, which is a wire decision rather than a merge fix.
     static let goldenEpochHeadsHex = "000000000000001b6665726e6c65742e6d6573682e65706f63682d68656164732e76311f1f1f1f2e2e4d4d8c8c0b0b0b0b0b0b00000000000000056670303031000000006553f22c00000000000000020000000000000033372e33353563383737613338333466663262396238366230373466636361663265372e303030303030303030303030303061610000000000000033372e64613561343166343766666635343264326163616631323630616230316433312e30303030303030303030303030306262"
+
+    /// P4 item 5's vectors: the signed proposal and the signed vote, derived by the same
+    /// independent Python re-implementation of the FORMAT that minted ``goldenEpochHeadsHex`` —
+    /// length-prefixed domain, 16 raw UUID bytes, length-prefixed UTF-8 strings, an i64
+    /// floored-seconds date, signature excluded — and proved honest the same way, by first
+    /// reproducing ``goldenRemovalHex`` byte-for-byte before either of these was minted.
+    ///
+    /// Both frames are **additive**. Nothing above them moves: the completed removal's canonical
+    /// bytes are untouched by item 5, which is the point of giving the live quorum its own two
+    /// domains instead of widening the record everybody has already pinned.
+    static let goldenRemovalProposalHex = "00000000000000206665726e6c65742e6d6573682e72656d6f76616c2d70726f706f73616c2e76311f1f1f1f2e2e4d4d8c8c0b0b0b0b0b0b4e4e4e4e5f5f4a4a9b9b2c2c2c2c2c2c0000000000000005667030303400000000000000056670303031000000006553f268"
+
+    static let goldenRemovalVoteHex = "000000000000001c6665726e6c65742e6d6573682e72656d6f76616c2d766f74652e76311f1f1f1f2e2e4d4d8c8c0b0b0b0b0b0b4e4e4e4e5f5f4a4a9b9b2c2c2c2c2c2c0000000000000005667030303400000000000000056670303032000000006553f2a4"
 
     @Test func aDepartureRecordIsGoldenStable() {
         let actual = MeshMembershipEventFixtures.hex(canonicalBytes(for: MeshMembershipEventFixtures.departure()))
@@ -249,6 +291,66 @@ struct MeshMembershipEventGoldenTests {
         #expect(MeshMembershipEventFixtures.hex(canonicalBytes(for: decoded)) == Self.goldenEpochHeadsHex)
     }
 
+    /// P4 item 5's two frames, pinned — and the claim the pinning is *for*: the completed removal's
+    /// bytes did not move. A quorum folded into the removal record would have moved
+    /// ``goldenRemovalHex``, which is a wire decision, not a merge fix.
+    @Test func theRemovalQuorumFramesAreGoldenStable() {
+        let proposal = MeshMembershipEventFixtures.removalProposal()
+        let vote = MeshMembershipEventFixtures.removalVote()
+        #expect(proposal.isWellFormed)
+        #expect(vote.isWellFormed)
+        let proposalHex = MeshMembershipEventFixtures.hex(canonicalBytes(for: proposal))
+        let voteHex = MeshMembershipEventFixtures.hex(canonicalBytes(for: vote))
+        #expect(proposalHex == Self.goldenRemovalProposalHex, "actual proposal golden hex = \(proposalHex)")
+        #expect(voteHex == Self.goldenRemovalVoteHex, "actual vote golden hex = \(voteHex)")
+        #expect(
+            MeshMembershipEventFixtures.hex(canonicalBytes(for: MeshMembershipEventFixtures.removal()))
+                == Self.goldenRemovalHex,
+            "the completed removal record's bytes are untouched by item 5"
+        )
+    }
+
+    /// Both quorum frames survive the wire with their signed bytes intact.
+    @Test func theRemovalQuorumFramesPreserveTheSignedBytesAcrossTheWire() throws {
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+        let proposal = try decoder.decode(
+            SignedRemovalProposal.self,
+            from: try encoder.encode(MeshMembershipEventFixtures.removalProposal())
+        )
+        let vote = try decoder.decode(
+            SignedRemovalVote.self, from: try encoder.encode(MeshMembershipEventFixtures.removalVote())
+        )
+        #expect(proposal == MeshMembershipEventFixtures.removalProposal())
+        #expect(vote == MeshMembershipEventFixtures.removalVote())
+        #expect(MeshMembershipEventFixtures.hex(canonicalBytes(for: proposal)) == Self.goldenRemovalProposalHex)
+        #expect(MeshMembershipEventFixtures.hex(canonicalBytes(for: vote)) == Self.goldenRemovalVoteHex)
+    }
+
+    /// The proposal, the vote and the completed record are three domains, not one.
+    ///
+    /// The pairing that matters is proposal↔vote: they are the SAME field shape with the author in
+    /// the same position, so only the domain keeps them apart. If a vote's transcript satisfied the
+    /// proposal domain, one member could re-point somebody else's proposal at a different target.
+    @Test func theQuorumFramesEachGetTheirOwnDomain() {
+        let proposal = canonicalBytes(for: MeshMembershipEventFixtures.removalProposal())
+        let vote = canonicalBytes(for: MeshMembershipEventFixtures.removalVote())
+        let removal = canonicalBytes(for: MeshMembershipEventFixtures.removal())
+        #expect(Set([proposal, vote, removal]).count == 3)
+
+        let proposalPurpose = FernletCryptoPurpose.Signature.meshRemovalProposalV1
+        let votePurpose = FernletCryptoPurpose.Signature.meshRemovalVoteV1
+        let removalPurpose = FernletCryptoPurpose.Signature.meshMemberRemovalV1
+        #expect(proposalPurpose.signingBytes(proposal) != nil)
+        #expect(votePurpose.signingBytes(vote) != nil)
+        #expect(proposalPurpose.signingBytes(vote) == nil)
+        #expect(votePurpose.signingBytes(proposal) == nil)
+        #expect(removalPurpose.signingBytes(proposal) == nil)
+        #expect(removalPurpose.signingBytes(vote) == nil)
+        #expect(proposalPurpose.signingBytes(removal) == nil)
+        #expect(votePurpose.signingBytes(removal) == nil)
+    }
+
     /// The signature is the OUTPUT of signing these bytes, so changing it must not move one byte.
     /// A serializer that folded the signature in would make every signature unverifiable, and no
     /// round-trip test would see it.
@@ -313,6 +415,22 @@ struct MeshMembershipEventGoldenTests {
                 == FernletCryptoPurpose.Signature.meshEpochHeadsV1.rawValue
         )
         #expect(PayloadType.meshEpochHeads.rawValue == "fernlet.mesh.epoch-heads.v1")
+        // P4 item 5's pair, same rule — and the frozen LEGACY pair beside them, which is a
+        // different spelling on purpose: dots for the unsigned two-party vote already-shipped
+        // builds speak, hyphens for the signed quorum. A grep for either finds exactly one family.
+        #expect(
+            PayloadType.meshRemovalProposalSigned.rawValue
+                == FernletCryptoPurpose.Signature.meshRemovalProposalV1.rawValue
+        )
+        #expect(
+            PayloadType.meshRemovalVote.rawValue
+                == FernletCryptoPurpose.Signature.meshRemovalVoteV1.rawValue
+        )
+        #expect(PayloadType.meshRemovalProposalSigned.rawValue == "fernlet.mesh.removal-proposal.v1")
+        #expect(PayloadType.meshRemovalVote.rawValue == "fernlet.mesh.removal-vote.v1")
+        #expect(PayloadType.meshRemovalProposal.rawValue == "fernlet.mesh.removal.proposal.v1")
+        #expect(PayloadType.meshRemovalSecond.rawValue == "fernlet.mesh.removal.second.v1")
+        #expect(PayloadType.meshRemovalProposalSigned != PayloadType.meshRemovalProposal)
         // The admission frame is the one member of the family with NO signing domain of its own:
         // the record it carries is the existing `MeshAdmissionToken`, signed under
         // `meshAdmissionTokenV2`. A domain spelled like the frame would be a second admission

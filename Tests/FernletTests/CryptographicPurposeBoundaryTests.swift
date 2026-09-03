@@ -111,7 +111,7 @@ struct CryptographicPurposeBoundaryTests {
         #expect(introductionPurpose.signingBytes(introductionPurpose.data) == nil)
     }
 
-    /// The five membership-event transcripts against their declared `.lengthPrefixed` framing, and
+    /// The seven membership-event transcripts against their declared `.lengthPrefixed` framing, and
     /// against each OTHER's — a departure that satisfied the termination purpose would mean a
     /// member removing itself and a member ending the mesh for everyone shared a signature.
     ///
@@ -123,18 +123,24 @@ struct CryptographicPurposeBoundaryTests {
         let termination = canonicalBytes(for: MeshMembershipEventFixtures.termination())
         let inventory = canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload())
         let epochHeads = canonicalBytes(for: MeshMembershipEventFixtures.epochHeadsPayload())
+        let proposal = canonicalBytes(for: MeshMembershipEventFixtures.removalProposal())
+        let vote = canonicalBytes(for: MeshMembershipEventFixtures.removalVote())
 
         let departurePurpose = FernletCryptoPurpose.Signature.meshMemberDepartureV1
         let removalPurpose = FernletCryptoPurpose.Signature.meshMemberRemovalV1
         let terminationPurpose = FernletCryptoPurpose.Signature.meshTerminatedV1
         let inventoryPurpose = FernletCryptoPurpose.Signature.meshInventoryDigestV1
         let epochHeadsPurpose = FernletCryptoPurpose.Signature.meshEpochHeadsV1
+        let proposalPurpose = FernletCryptoPurpose.Signature.meshRemovalProposalV1
+        let votePurpose = FernletCryptoPurpose.Signature.meshRemovalVoteV1
 
         #expect(departurePurpose.signingBytes(departure) != nil)
         #expect(removalPurpose.signingBytes(removal) != nil)
         #expect(terminationPurpose.signingBytes(termination) != nil)
         #expect(inventoryPurpose.signingBytes(inventory) != nil)
         #expect(epochHeadsPurpose.signingBytes(epochHeads) != nil)
+        #expect(proposalPurpose.signingBytes(proposal) != nil)
+        #expect(votePurpose.signingBytes(vote) != nil)
 
         #expect(departurePurpose.signingBytes(termination) == nil)
         #expect(terminationPurpose.signingBytes(departure) == nil)
@@ -145,6 +151,13 @@ struct CryptographicPurposeBoundaryTests {
         // "what epoch I am on" — which is the input to the counter a merge mints at.
         #expect(inventoryPurpose.signingBytes(epochHeads) == nil)
         #expect(epochHeadsPurpose.signingBytes(inventory) == nil)
+        // The pair P4 item 5 adds: a proposal and a vote are the same field shape with the author
+        // in the same position, so ONLY the domain keeps them apart — and neither may satisfy the
+        // completed removal's domain, or one live vote could be replayed as a finished quorum.
+        #expect(proposalPurpose.signingBytes(vote) == nil)
+        #expect(votePurpose.signingBytes(proposal) == nil)
+        #expect(removalPurpose.signingBytes(vote) == nil)
+        #expect(votePurpose.signingBytes(removal) == nil)
 
         #expect(departurePurpose.signingBytes(departurePurpose.data) == nil)
         #expect(inventoryPurpose.signingBytes(inventoryPurpose.data) == nil)
