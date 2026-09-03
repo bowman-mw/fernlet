@@ -110,6 +110,30 @@ enum MeshMembershipEventFixtures {
         )
     }
 
+    /// The two divergent branch heads the epoch-head vector carries: one counter, two minting
+    /// coordinators — the only shape a merge actually has to reconcile (plan §10.3).
+    ///
+    /// Built through ``MeshEpochRef/minted(counter:coordinatorFingerprint:meshID:)`` so the ids in
+    /// the pinned hex are the *derived* ones a real branch would compute, not literals a test made
+    /// up: a change to the epoch-id derivation must move this golden.
+    static func divergentHeads() -> [MeshEpochRef] {
+        [
+            MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000aa", meshID: meshID),
+            MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000bb", meshID: meshID)
+        ].compactMap { $0 }
+    }
+
+    /// The `fernlet.mesh.epoch-heads.v1` frame's payload (P4 item 3).
+    static func epochHeadsPayload() -> MeshEpochHeadsPayload {
+        MeshEpochHeadsPayload(
+            meshID: meshID,
+            heads: divergentHeads(),
+            senderFingerprint: "fp001",
+            sentAt: base.addingTimeInterval(300),
+            signature: opaqueSignature
+        )
+    }
+
     static func hex(_ data: Data) -> String {
         data.map { String(format: "%02x", $0) }.joined()
     }
@@ -143,6 +167,16 @@ struct MeshMembershipEventGoldenTests {
     static let goldenRecordsHashHex = "68a143515034a365db8d43758d2f6458b29c33481f9c4b3d9c54e503bed603e9"
 
     static let goldenInventoryHex = "00000000000000206665726e6c65742e6d6573682e696e76656e746f72792d6469676573742e76311f1f1f1f2e2e4d4d8c8c0b0b0b0b0b0b00000000000000056670303031000000006553f1f00000000000000001000000000000000000000000000000000000000000000000000000000000002068a143515034a365db8d43758d2f6458b29c33481f9c4b3d9c54e503bed603e9"
+
+    /// P4 item 3's vector: two divergent branch heads at one counter, derived by the same
+    /// independent Python re-implementation of the FORMAT that minted
+    /// ``goldenRemovalAtVoterCapHex`` — and proved honest the same way, by first reproducing
+    /// ``goldenInventoryHex`` byte-for-byte before minting this one.
+    ///
+    /// The frame is **additive**: it has its own token, its own registered signature domain and its
+    /// own golden, and no vector above it moves. Widening the inventory digest to carry heads would
+    /// have moved ``goldenInventoryHex``, which is a wire decision rather than a merge fix.
+    static let goldenEpochHeadsHex = "000000000000001b6665726e6c65742e6d6573682e65706f63682d68656164732e76311f1f1f1f2e2e4d4d8c8c0b0b0b0b0b0b00000000000000056670303031000000006553f22c00000000000000020000000000000033372e33353563383737613338333466663262396238366230373466636361663265372e303030303030303030303030303061610000000000000033372e64613561343166343766666635343264326163616631323630616230316433312e30303030303030303030303030306262"
 
     @Test func aDepartureRecordIsGoldenStable() {
         let actual = MeshMembershipEventFixtures.hex(canonicalBytes(for: MeshMembershipEventFixtures.departure()))
@@ -191,6 +225,28 @@ struct MeshMembershipEventGoldenTests {
         #expect(hashHex == Self.goldenRecordsHashHex, "actual records hash hex = \(hashHex)")
         let actual = MeshMembershipEventFixtures.hex(canonicalBytes(for: payload))
         #expect(actual == Self.goldenInventoryHex, "actual inventory golden hex = \(actual)")
+    }
+
+    /// P4 item 3's frame, pinned. The heads' canonical strings are what the transcript carries, so
+    /// a change to ``MeshEpochRef/canonicalString`` or to the epoch-id derivation moves this
+    /// vector — which is exactly the alarm a silently re-spelled epoch name should raise.
+    @Test func anEpochHeadsMessageIsGoldenStable() {
+        let payload = MeshMembershipEventFixtures.epochHeadsPayload()
+        #expect(payload.heads.count == 2, "the vector needs both branch heads to have minted")
+        #expect(payload.isWellFormed)
+        let actual = MeshMembershipEventFixtures.hex(canonicalBytes(for: payload))
+        #expect(actual == Self.goldenEpochHeadsHex, "actual epoch-heads golden hex = \(actual)")
+    }
+
+    /// The frame survives the wire with its signed bytes intact — the property a `Codable`
+    /// round-trip alone cannot show, and the one that matters because every head is re-parsed from
+    /// its canonical string on the way in.
+    @Test func anEpochHeadsFramePreservesTheSignedBytesAcrossTheWire() throws {
+        let payload = MeshMembershipEventFixtures.epochHeadsPayload()
+        let wire = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(MeshEpochHeadsPayload.self, from: wire)
+        #expect(decoded == payload)
+        #expect(MeshMembershipEventFixtures.hex(canonicalBytes(for: decoded)) == Self.goldenEpochHeadsHex)
     }
 
     /// The signature is the OUTPUT of signing these bytes, so changing it must not move one byte.
@@ -250,6 +306,13 @@ struct MeshMembershipEventGoldenTests {
             PayloadType.meshInventoryDigest.rawValue
                 == FernletCryptoPurpose.Signature.meshInventoryDigestV1.rawValue
         )
+        // P4 item 3's frame joins the same vocabulary: one frozen English spelling across the wire
+        // token and the signature domain.
+        #expect(
+            PayloadType.meshEpochHeads.rawValue
+                == FernletCryptoPurpose.Signature.meshEpochHeadsV1.rawValue
+        )
+        #expect(PayloadType.meshEpochHeads.rawValue == "fernlet.mesh.epoch-heads.v1")
         // The admission frame is the one member of the family with NO signing domain of its own:
         // the record it carries is the existing `MeshAdmissionToken`, signed under
         // `meshAdmissionTokenV2`. A domain spelled like the frame would be a second admission

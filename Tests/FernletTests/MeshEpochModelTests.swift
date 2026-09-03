@@ -407,10 +407,15 @@ struct MeshEpochAcceptanceTests {
             #expect(MeshEpochAcceptance.introductionVerdict(local: "", peer: junk) == .malformed)
             #expect(MeshEpochAcceptance.introductionVerdict(local: junk, peer: "") == .malformed)
         }
-        // 2. Two branches wearing one counter are now seen.
-        #expect(MeshEpochAcceptance.introductionVerdict(local: ours, peer: theirs) == .divergent)
-        // 3. Different counters are divergent too, until P4's merge exists.
-        #expect(MeshEpochAcceptance.introductionVerdict(local: ours, peer: later) == .divergent)
+        // 2. Two branches wearing one counter are now seen — and, since P4 item 3, NAMED rather
+        //    than refused: the merge that reconciles them runs over the tunnel this used to tear
+        //    down. Both heads come back, so nothing about the divergence is lost in the answer.
+        #expect(MeshEpochAcceptance.introductionVerdict(local: ours, peer: theirs)
+                == .reconcile(local: MeshEpochFixtures.ref(7),
+                              peer: MeshEpochFixtures.ref(7, coordinator: MeshEpochFixtures.coordinatorB)))
+        // 3. Different counters reconcile too — plan §10.3 mints `max + 1` over both.
+        #expect(MeshEpochAcceptance.introductionVerdict(local: ours, peer: later)
+                == .reconcile(local: MeshEpochFixtures.ref(7), peer: MeshEpochFixtures.ref(9)))
     }
 }
 

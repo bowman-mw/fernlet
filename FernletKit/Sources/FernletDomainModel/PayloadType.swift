@@ -138,6 +138,15 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// A signed summary of the records the sender's ledger holds, so a counterpart can tell it is
     /// MISSING some and ask for a re-gossip (`MeshInventoryDigestPayload`, plan §10.5).
     case meshInventoryDigest   = "fernlet.mesh.inventory-digest.v1"
+    /// A signed statement of the epoch branch head(s) the sender is on — the **epoch half** of plan
+    /// §10.3's union exchange (`MeshEpochHeadsPayload`, network migration P4 item 3).
+    ///
+    /// The record half already had frames (`meshInventoryDigest` asks, the record frames answer);
+    /// the head half had none, so two branches that both rotated while split could fold only what
+    /// each had assembled locally. Signed for the same reason the digest is: the heads are the
+    /// input to the successor a merge mints, and an unsigned one could push a mesh toward its
+    /// counter cap.
+    case meshEpochHeads        = "fernlet.mesh.epoch-heads.v1"
     // Group encryption (Phase 3)
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"

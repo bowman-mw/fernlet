@@ -111,7 +111,7 @@ struct CryptographicPurposeBoundaryTests {
         #expect(introductionPurpose.signingBytes(introductionPurpose.data) == nil)
     }
 
-    /// The four membership-event transcripts against their declared `.lengthPrefixed` framing, and
+    /// The five membership-event transcripts against their declared `.lengthPrefixed` framing, and
     /// against each OTHER's — a departure that satisfied the termination purpose would mean a
     /// member removing itself and a member ending the mesh for everyone shared a signature.
     ///
@@ -122,24 +122,33 @@ struct CryptographicPurposeBoundaryTests {
         let removal = canonicalBytes(for: MeshMembershipEventFixtures.removal())
         let termination = canonicalBytes(for: MeshMembershipEventFixtures.termination())
         let inventory = canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload())
+        let epochHeads = canonicalBytes(for: MeshMembershipEventFixtures.epochHeadsPayload())
 
         let departurePurpose = FernletCryptoPurpose.Signature.meshMemberDepartureV1
         let removalPurpose = FernletCryptoPurpose.Signature.meshMemberRemovalV1
         let terminationPurpose = FernletCryptoPurpose.Signature.meshTerminatedV1
         let inventoryPurpose = FernletCryptoPurpose.Signature.meshInventoryDigestV1
+        let epochHeadsPurpose = FernletCryptoPurpose.Signature.meshEpochHeadsV1
 
         #expect(departurePurpose.signingBytes(departure) != nil)
         #expect(removalPurpose.signingBytes(removal) != nil)
         #expect(terminationPurpose.signingBytes(termination) != nil)
         #expect(inventoryPurpose.signingBytes(inventory) != nil)
+        #expect(epochHeadsPurpose.signingBytes(epochHeads) != nil)
 
         #expect(departurePurpose.signingBytes(termination) == nil)
         #expect(terminationPurpose.signingBytes(departure) == nil)
         #expect(removalPurpose.signingBytes(inventory) == nil)
         #expect(inventoryPurpose.signingBytes(removal) == nil)
+        // The pair P4 item 3 adds: the digest and the head set travel the same reconnect, so a
+        // signature that satisfied both domains would let a peer's "what I hold" be replayed as
+        // "what epoch I am on" — which is the input to the counter a merge mints at.
+        #expect(inventoryPurpose.signingBytes(epochHeads) == nil)
+        #expect(epochHeadsPurpose.signingBytes(inventory) == nil)
 
         #expect(departurePurpose.signingBytes(departurePurpose.data) == nil)
         #expect(inventoryPurpose.signingBytes(inventoryPurpose.data) == nil)
+        #expect(epochHeadsPurpose.signingBytes(epochHeadsPurpose.data) == nil)
     }
 
     /// The raw-prefix family: transcripts that concatenate their domain directly. Rejecting a

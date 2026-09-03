@@ -136,6 +136,13 @@ public nonisolated enum FernletCryptoPurpose {
         /// signed: an unsigned digest arriving on a relayed path could be forged to spend a peer's
         /// re-gossip budget, and an attributable one cannot.
         public static let meshInventoryDigestV1 = CryptographicPurpose("fernlet.mesh.inventory-digest.v1", framing: .lengthPrefixed)
+        /// **Written since P4 item 3.** The sender's signature over a `MeshEpochHeadsPayload` — the
+        /// epoch branch head(s) it is on (plan §10.3's union exchange). Signed, and distinct from
+        /// the inventory digest's domain, because the heads decide the counter the merge's
+        /// successor is minted at: an unsigned or cross-validating head set would let a peer walk a
+        /// mesh toward ``MeshEpochBounds/counterCap``, where the only legal answer is to terminate.
+        /// Length-prefixed, like every other `CanonicalByteWriter` transcript.
+        public static let meshEpochHeadsV1 = CryptographicPurpose("fernlet.mesh.epoch-heads.v1", framing: .lengthPrefixed)
         /// **Reserved, not yet written.** P5's routed-content manifest signature (plan §11): item
         /// ID, type token, content hash, size, immutable destination set, expiry, and the
         /// per-recipient key wraps. Signed by the ORIGIN only — relays forward the origin's exact

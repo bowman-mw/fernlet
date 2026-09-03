@@ -1375,8 +1375,11 @@ struct MeshChannelIntroductionTests {
         #expect(exchange.derivedTranscript == nil)
     }
 
-    /// Two peers each holding a DIFFERENT epoch are on diverged branches. They coexist in the model
-    /// (plan §8.4) but hold different group keys, so the tunnel is refused until P4's merge exists.
+    /// Two peers each holding a DIFFERENT epoch are on diverged branches, and this side may not
+    /// reconcile — `mayReconcileDivergentEpochs` is left at its **fail-closed default**, which is
+    /// what a device holding no mesh or no ledger answers. The tunnel is refused and leaves nothing
+    /// behind. (P4 item 3's opposite case, where the authority says a merge can run, is
+    /// `MeshEpochReconciliationTests`.)
     @Test func aDivergentEpochIsRefusedAndLeavesNoTranscript() {
         let meshID = UUID()
         let four = MeshIntroductionHarness.epoch(4)
@@ -1400,7 +1403,8 @@ struct MeshChannelIntroductionTests {
 
     /// The tightening plan §20.1 asked for, on the axis a decimal counter could not express: two
     /// partitions that each rotated to counter 7 both used to send `"7"` and the gate agreed they
-    /// matched. Same counter, different minting coordinator, is now SEEN — and refused.
+    /// matched. Same counter, different minting coordinator, is now SEEN — and, with no authority
+    /// saying a merge can run, still refused.
     @Test func twoBranchesSharingACounterNoLongerLookEqual() {
         let meshID = UUID()
         let ours = MeshIntroductionHarness.epoch(7, coordinator: "00000000000000aa")
