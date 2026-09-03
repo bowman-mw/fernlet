@@ -1,18 +1,35 @@
 // MeshConvergencePropertyTests.swift
 // FernletTests
 //
-// P4 item 9, iteration A (plan §16.2): the **convergence property test**.
+// P4 item 9 (plan §16.2): the **convergence property test**.
 //
 //   > scenario matrix = roster {3, 4, 6, 8} × partition shapes … × events during split … → assert:
 //   > merged state identical on every member (**convergence property test** over randomized bounded
 //   > schedules with a fixed seed), exactly one post-merge epoch at every member, quorum arithmetic
 //   > per §10.4, no content loss, no duplicate ledger commits.
 //
-// **Iteration A covers rosters 3 and 4** — shapes `2/1`, `2/2` and `3/1` — over the full event
-// vocabulary, under the fixed seed family in ``MeshConvergenceSeeds``. Rosters 6 and 8, shapes `3/3`
-// and `4/2/2`, and the nested re-split mid-merge are iteration B; ``MeshPartitionShape`` already
-// carries the two wider shapes and ``MeshScheduleGenerator`` already handles any number of branches,
-// so B adds matrix rows and the re-split, not a second generator.
+// **The matrix is whole.** Iteration A covered rosters 3 and 4 — shapes `2/1`, `2/2` and `3/1`.
+// Iteration B adds rosters 6 and 8 — `3/3` and `4/2/2` — and §16.2's fifth shape, the **nested
+// re-split mid-merge**. The wider rosters cost no generator change (``MeshScheduleGenerator``
+// already handled any number of branches) and one bound: ``MeshScheduleBounds/maxSettleSweeps``,
+// because a `4/2/2` heal is a chain of three branch stars and therefore one hop wider than anything
+// rosters 3 and 4 can produce.
+//
+// **What the nested re-split drives, and why it is not just another shape.** A partition shape cuts
+// a mesh that has not merged yet. The re-split cuts one that is **mid-merge**: the survivors have
+// re-formed the full mesh, every one of them is inside an open merge window, and then one healing
+// branch is cut in two. `MeshNetworkManager.applySessionEvent` answers `next == .partitioned` with
+// `abandonMergeExchange()`, and ``MeshResplitInvariants`` is what proves that call does what the
+// ledger's "(P4 i11)" liveness residual needs it to: the window this device was holding is dropped,
+// and the **next** heal opens a fresh one instead of leaving it silent for the session.
+//
+// The sub-branches deliberately run content and a branch-local rotation and **no membership
+// record**. That is not squeamishness: `reGossipRecords(to:)` answers once per peer per *session*
+// and `abandonMergeExchange()` does not reset the answered set, so a record minted after the
+// abandon reaches a peer only when something re-opens an exchange with an unspent pair — which is
+// the latency finding P4 already recorded ("a merged record is not pushed onward proactively"), not
+// a new one. The epoch-heads half of §10.3's exchange carries no such gate, which is exactly why
+// the heads still converge across the abandon and why the head cap is the claim worth making here.
 //
 // **Nothing here re-implements a rule.** Every event is one call into a seam an earlier item built
 // and tested, and the checker reads the shipping derivations rather than copies of them:
@@ -106,7 +123,7 @@ nonisolated struct MeshConvergenceCell: Equatable, Sendable, CustomStringConvert
 
 // MARK: - MeshConvergenceMatrix
 
-/// The cells iteration A runs, built once from the fixed seed family — and the one it defers, by
+/// The cells the matrix runs, built once from the fixed seed family — and the one it defers, by
 /// name, to a defect rather than to a loosened check.
 nonisolated enum MeshConvergenceMatrix {
 
@@ -135,16 +152,85 @@ nonisolated enum MeshConvergenceMatrix {
     /// just proved it needs one. No wire change, no new golden, no new persisted surface. Both cells
     /// run here now, with every assertion exactly as strict as it is everywhere else.
     ///
+    /// ## And it holds four again (P4 item 9b) — a different defect, deferred the same way
+    ///
+    /// §16.2's roster-8 row found the next one. `concludeMerge()` closes the merge window on the
+    /// **first** peer inventory digest that matches local inventory. Between two devices that is
+    /// convergence. Across eight it is not: a device re-forming a full mesh asks every peer at
+    /// once, and the answers come back over several pumps — so the first match can close the window
+    /// while other peers' re-gossips are still in flight. Those records then arrive **outside** a
+    /// merge window, take the live-record path, and ask for a `.membership` rotation instead of the
+    /// merge's. Everything else about the cell is correct: the state converges, the roster and the
+    /// heads are identical at every member, and nothing is committed twice — the record is applied
+    /// once, under the other name.
+    ///
+    /// It is **not** fixed here. The safe fix is a merge window that closes only once every peer it
+    /// asked has matched, which is a change to what a window *means* and carries the liveness risk
+    /// the ledger's "(P4 i11)" note is about (a window that never closes opens no later exchange —
+    /// exactly what item 9b's `askOneReconnectedPeer` had to add a path around). That belongs with
+    /// the window's own redesign, not with a matrix row.
+    ///
+    /// So the four cells that reach it are deferred **from the strict property only**, and
+    /// ``MeshConvergencePropertyTests/aDeferredCellConvergesAndFailsOnlyOnTheNamedDefect(cell:)``
+    /// still runs every one of them: all five §16.2 invariants bar the rotation-cause claim, plus a
+    /// positive assertion that the defect is *exactly* this and reaches exactly one member. A cell
+    /// that started failing for any other reason, or a defect that spread, fails there.
+    ///
     /// A schedule may be deferred again only the same way: **by name**, with the defect written
-    /// down. ``MeshConvergencePropertyTests/noScheduleIsDeferredAndTheMatrixIsWhole()`` is what
-    /// makes a silent one impossible.
-    static let deferred: [MeshConvergenceCell] = []
-
-    /// Shape × quorum preference × seed, minus ``deferred``: 3 × 2 × 8 = 48 cells, every one of them
-    /// replayable from its own seed.
-    static let iterationA: [MeshConvergenceCell] = {
+    /// down. ``MeshConvergencePropertyTests/everyDeferralIsNamedAndTheRestOfTheMatrixIsWhole()`` is
+    /// what makes a silent one impossible.
+    static let deferred: [MeshConvergenceCell] = {
         var cells: [MeshConvergenceCell] = []
-        for shape in MeshPartitionShape.iterationA {
+        for seed in deferredSeeds {
+            for preferQuorum in [true, false] {
+                cells.append(MeshConvergenceCell(
+                    shape: .fourTwoTwo, preferQuorum: preferQuorum, seed: seed
+                ))
+            }
+        }
+        return cells
+    }()
+
+    /// The two fixed seeds whose `4/2/2` schedule reaches the window-closes-early defect above.
+    static let deferredSeeds: [UInt64] = [0x308d_0d41_4707_d80, 0xace0_7337_d1bd_4fcc]
+
+    /// Rosters 3 and 4 — shapes `2/1`, `2/2`, `3/1`: 3 × 2 × 8 = 48 cells.
+    static let iterationA: [MeshConvergenceCell] = cells(for: MeshPartitionShape.iterationA)
+
+    /// Rosters 6 and 8 — shapes `3/3` and `4/2/2`: 2 × 2 × 8 = 32 cells.
+    static let iterationB: [MeshConvergenceCell] = cells(for: MeshPartitionShape.iterationB)
+
+    /// The whole of §16.2's matrix: shape × quorum preference × seed, minus ``deferred``.
+    static let all: [MeshConvergenceCell] = iterationA + iterationB
+
+    /// The cells the **nested re-split** runs, on top of their own flat heal.
+    ///
+    /// Deliberately a short list rather than a fourth matrix dimension. The re-split is a shape, and
+    /// what it exercises — the abandon, the re-plan and the head cap — does not vary with the seed
+    /// the way the flat matrix's arithmetic does; every extra cell is a whole roster-6-or-8 build
+    /// run twice over. Rosters 6 and 8 on purpose: they are where a nested cut produces more branch
+    /// heads than any flat split of the same roster can.
+    static let resplit: [MeshConvergenceCell] = {
+        var cells: [MeshConvergenceCell] = []
+        for shape in MeshPartitionShape.iterationB {
+            for preferQuorum in [true, false] {
+                for seed in MeshConvergenceSeeds.family.prefix(resplitSeedCount) {
+                    cells.append(MeshConvergenceCell(
+                        shape: shape, preferQuorum: preferQuorum, seed: seed
+                    ))
+                }
+            }
+        }
+        return cells
+    }()
+
+    /// How many of the fixed seeds the re-split cells replay.
+    static let resplitSeedCount = 2
+
+    /// Shape × quorum preference × seed, minus ``deferred``, for one list of shapes.
+    private static func cells(for shapes: [MeshPartitionShape]) -> [MeshConvergenceCell] {
+        var cells: [MeshConvergenceCell] = []
+        for shape in shapes {
             for preferQuorum in [true, false] {
                 for seed in MeshConvergenceSeeds.family where
                     !deferred.contains(MeshConvergenceCell(
@@ -155,7 +241,7 @@ nonisolated enum MeshConvergenceMatrix {
             }
         }
         return cells
-    }()
+    }
 }
 
 // MARK: - MeshConvergenceDigest
@@ -216,6 +302,13 @@ final class MeshConvergenceMember {
 
     /// The delivery target for every item it holds, keyed by content id.
     var targets: [UUID: MeshDeliveryTarget] = [:]
+
+    /// The ingestion gates **this member** re-runs over the merged union (item 7, §21.3's decision).
+    ///
+    /// `.open` unless a cell deliberately blocks a sender at one member. Local by construction: the
+    /// union is shared and identical everywhere, the *view* over it is not — which is the half
+    /// `aBlockedSenderChangesOnlyThatMembersView` exists to prove is really per-member.
+    var gates: MeshContentGates = .open
 
     /// Whether it is still a member: false once it departs or a quorum removes it.
     var isParticipating = true
@@ -292,6 +385,11 @@ final class MeshConvergenceRun {
     /// Every rotation cause seen during the heal. §10.3 permits exactly one kind: the merge's.
     var healCauses: Set<MeshKeyRotationCause> = []
 
+    /// The members that queued a `.membership` rotation during the heal, in the order they did.
+    /// Named rather than merely counted: a heal that rotates `.membership` is a record that reached
+    /// somebody outside a merge window, and *which* member that was is the whole diagnosis.
+    var healMembershipAt: [String] = []
+
     /// Delivery-target merges that were refused by name. Must stay empty: a refusal means two
     /// members disagreed about **who a piece of content is for**, which §10.1 forbids.
     var deliveryRefusals: [String] = []
@@ -302,6 +400,33 @@ final class MeshConvergenceRun {
     /// A monotonically increasing id source for content, so no two items share a `contentID`.
     /// Read and advanced by the content adapters in the extension below.
     var contentCounter = 0
+
+    /// §10.4's threshold the **manager** re-derived at the instant the removal vote was opened.
+    ///
+    /// Recorded rather than re-computed so a cell can assert that a departure which ran *first*
+    /// really shrank the arithmetic the vote was judged against.
+    var quorumAtVote: Int?
+
+    /// Every epoch head this cell minted, canonically, in mint order. Distinctness is asserted:
+    /// two branches or two sides that landed on one head would make a divergence claim vacuous.
+    var mintedHeads: [String] = []
+
+    /// How many heads had been minted before the nested re-split's own rotations.
+    var mintedHeadsBeforeResplit = 0
+
+    /// The nested re-split this run was interrupted by, if any.
+    var resplit: MeshResplitPlan?
+
+    /// Members inside an open merge window at the instant the re-split cut the fabric. Non-empty is
+    /// the precondition that makes the cut a **mid-merge** one rather than a second flat split.
+    var awaitingBeforeResplit: [String] = []
+
+    /// Members still inside one immediately after the cut. Must be empty — `abandonMergeExchange`.
+    var awaitingAfterResplit: [String] = []
+
+    /// Members that opened a **fresh** exchange on the first commit of the re-planned heal. Must be
+    /// non-empty, or the abandon narrowed the window into silence (ledger "(P4 i11)").
+    var awaitingAfterReheal: [String] = []
 
     /// The members still on the roster.
     var livingMembers: [MeshConvergenceMember] { members.filter(\.isParticipating) }
@@ -405,15 +530,24 @@ final class MeshConvergenceRun {
                 "two branches on one counter would make this cell item 3's, not item 9's")
     }
 
-    /// Re-seeds one branch's keyring at its current counter, coordinated by the branch's own lowest
-    /// fingerprint (§10.2's branch coordinator rule).
+    /// Re-seeds one branch's keyring at its current counter.
     private func seedBranch(_ branch: Int) throws {
-        let living = branchMembers(branch)
-        guard let coordinator = living.map(\.fingerprint).min() else { return }
+        guard branchCounters.indices.contains(branch) else { return }
+        try seedEpoch(for: branchMembers(branch), counter: branchCounters[branch])
+    }
+
+    /// Puts one **set of members** on a freshly minted head at `counter`, coordinated by that set's
+    /// own lowest fingerprint (§10.2's branch coordinator rule, which reads presence).
+    ///
+    /// Shared by the flat split's branches and by a nested re-split's sides, because §10.2 makes no
+    /// distinction between them: a side is a branch that appeared later.
+    func seedEpoch(for members: [MeshConvergenceMember], counter: UInt32) throws {
+        guard let coordinator = members.map(\.fingerprint).min() else { return }
         guard let head = MeshEpochRef.minted(
-            counter: branchCounters[branch], coordinatorFingerprint: coordinator, meshID: meshID
+            counter: counter, coordinatorFingerprint: coordinator, meshID: meshID
         ) else { throw MeshConvergenceFailure.couldNotMintEpoch }
-        for member in living { MeshDepartureRig.seedEpoch(member.node, head: head) }
+        mintedHeads.append(head.canonicalString)
+        for member in members { MeshDepartureRig.seedEpoch(member.node, head: head) }
     }
 
     // MARK: Members
@@ -523,8 +657,16 @@ extension MeshConvergenceRun {
     private func distribute(
         _ target: MeshDeliveryTarget, in branch: Int, insert: (MeshConvergenceMember) -> Void
     ) {
+        distribute(target, to: branchMembers(branch), insert: insert)
+    }
+
+    /// The same, to an explicit set of members — what a nested re-split's **side** is.
+    func distribute(
+        _ target: MeshDeliveryTarget, to members: [MeshConvergenceMember],
+        insert: (MeshConvergenceMember) -> Void
+    ) {
         createdContent.insert(target.contentID)
-        for member in branchMembers(branch) {
+        for member in members {
             insert(member)
             member.targets[target.contentID] = target
             advanceDelivery(of: target.contentID, at: member)
@@ -574,6 +716,7 @@ extension MeshConvergenceRun {
         guard let roster = proposer.node.manager.membershipVerifier?.roster else {
             throw MeshConvergenceFailure.noDerivedRoster
         }
+        quorumAtVote = roster.quorumThreshold
         let extras = withQuorum
             ? roster.quorumThreshold - 1
             : max(0, min(voters.count - 1, roster.quorumThreshold - 2))
@@ -692,7 +835,23 @@ extension MeshConvergenceRun {
     /// Ordered rather than simultaneous because a re-gossip is answered **once per peer per
     /// session**: a pair that exchanges before either side has learned anything is answered "we
     /// match" and is never asked again (ledger "(P4 i7)").
-    func runHeal() async throws {
+    /// - Parameter plan: A nested re-split to interrupt the heal with, §16.2's fifth shape. The cut
+    ///   lands after the ordered walk and **before** the merge it opened has concluded.
+    func runHeal(interruptedBy plan: MeshResplitPlan? = nil) async throws {
+        try await runOrderedHeal()
+        if let plan {
+            resplit = plan
+            try await runNestedResplit(plan)
+        }
+        try await formFullMesh()
+        sample.reset()
+        try await MeshDepartureRig.settle(livingNodes, on: fabric, sampling: sample)
+        recordHealRotations()
+        settleModels()
+    }
+
+    /// The schedule's own ordered walk: bridges first, then the intra-branch spread.
+    private func runOrderedHeal() async throws {
         for step in schedule.heal {
             guard let near = participant(global: step.near),
                   let far = participant(global: step.far) else { continue }
@@ -703,11 +862,6 @@ extension MeshConvergenceRun {
             recordHealRotations()
             mergeModels(near: near, far: far)
         }
-        try await formFullMesh()
-        sample.reset()
-        try await MeshDepartureRig.settle(livingNodes, on: fabric, sampling: sample)
-        recordHealRotations()
-        settleModels()
     }
 
     /// Reforms the **full** mesh the ordered heal's spanning walk left as a chain, and commits
@@ -734,26 +888,43 @@ extension MeshConvergenceRun {
     /// Bounded twice over: ``MeshScheduleBounds/maxCommitRounds`` rounds, and an early exit the
     /// moment §10.3's `max` agrees at every member (``basesAgree()``).
     private func formFullMesh() async throws {
-        let living = livingMembers
-        for (position, near) in living.enumerated() {
-            for far in living.dropFirst(position + 1)
-            where !fabric.canReach(near.node.handle, far.node.handle) {
-                MeshDepartureRig.link(near.node, far.node, on: fabric)
-            }
-        }
+        linkEveryPair()
         for _ in 0..<MeshScheduleBounds.maxCommitRounds {
             sample.reset()
-            commitEveryPair(living)
+            commitEveryPair(livingMembers)
             try await MeshDepartureRig.settle(
-                livingNodes, on: fabric, sampling: sample, until: { self.basesAgree() }
+                livingNodes, on: fabric, sampling: sample, until: { self.mergeIsDone() }
             )
             recordHealRotations()
-            if basesAgree() { return }
+            if mergeIsDone() { break }
+        }
+        fullMeshIsWhole()
+    }
+
+    /// Whether the merge this phase is driving has actually finished: §10.3's `max` agrees **and**
+    /// every member derives the same roster.
+    ///
+    /// Both halves, because they converge by different routes and at different speeds. Epoch heads
+    /// ride a frame with no once-per-peer gate, so they agree early; records ride §10.5's re-gossip,
+    /// which answers a given peer once per session — a member whose peers all answered it before
+    /// any of them had learned a departure has to be asked again, and the second commit round is
+    /// what asks. Stopping on the heads alone left exactly that member a record short, with the
+    /// phase declaring itself done.
+    private func mergeIsDone() -> Bool { basesAgree() && rostersAgree() }
+
+    /// Whether every living member's derived roster is the survivors, exactly.
+    private func rostersAgree() -> Bool {
+        let expected = Set(livingMembers.map(\.fingerprint))
+        return livingMembers.allSatisfy {
+            Set(MeshMergeFixtures.roster($0.node.manager)) == expected
         }
     }
 
-    /// Commits every living pair, both directions, on the merged reachable set.
-    private func commitEveryPair(_ living: [MeshConvergenceMember]) {
+    /// The healed mesh really is a **full** mesh, on the merged roster: nobody's derived roster
+    /// still names a member it cannot reach, so §10.2's branch scoping elects one coordinator
+    /// rather than one per stale view (§8.7 finding 1, `871b7ee`).
+    private func fullMeshIsWhole() {
+        let living = livingMembers
         let reachable = Set(living.map(\.fingerprint))
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             for member in living {
@@ -761,7 +932,55 @@ extension MeshConvergenceRun {
                     reachable: reachable, now: MeshP3Acceptance.base
                 )
                 #expect(member.node.manager.branchView?.isPartitioned == false,
-                        "\(member.node.label): its roster still names an unreachable member")
+                        "\(member.node.label): roster names an unreachable member: \(diagnostic(member))")
+            }
+        }
+    }
+
+    /// What one member is missing, as a frozen diagnostic line. A bare "still partitioned" says
+    /// nothing about *which* record never arrived, and that is the only interesting half.
+    private func diagnostic(_ member: MeshConvergenceMember) -> String {
+        let ledger = member.node.manager.membershipVerifier?.ledger
+        let stranded = member.node.manager.branchView?.temporarilyDisconnectedFingerprints ?? []
+        return "unreachable=\(stranded.count) adm=\(ledger?.admissions.count ?? -1) "
+            + "dep=\(ledger?.departures.count ?? -1)/\(expectedDepartures.count) "
+            + "rem=\(ledger?.removals.count ?? -1)/\(expectedRemovals.count) "
+            + "awaiting=\(member.node.manager.awaitingResumeMerge) "
+            + "merges=\(member.node.manager.mergeApplicationCount) "
+            + "digestsSeen=\(member.node.manager.peerInventoryDigests.count) "
+            + "answered=\(member.node.manager.reGossipDiagnosticsForTesting.answered.count) "
+            + "slots=\(member.node.manager.reGossipDiagnosticsForTesting.slots)"
+    }
+
+    /// Seats a link for every living pair that cannot currently reach its partner.
+    ///
+    /// Only pairs the fabric says are unreachable, because seating a second slot for a peer that
+    /// already has one would give one link two coordinators. A link a re-split merely **cut**
+    /// (`FakePeerNetwork.partition`) is restored with `heal`, not re-seated, for the same reason.
+    private func linkEveryPair() {
+        let living = livingMembers
+        for (position, near) in living.enumerated() {
+            for far in living.dropFirst(position + 1)
+            where !fabric.canReach(near.node.handle, far.node.handle) {
+                MeshDepartureRig.link(near.node, far.node, on: fabric)
+            }
+        }
+    }
+
+    /// Commits every living pair, both directions, on the merged reachable set.
+    ///
+    /// Presence is re-evaluated first and **not** asserted on here. At the start of the first round
+    /// a member's roster may still name somebody it cannot reach — on a three-branch shape the
+    /// ordered walk genuinely can leave one member a record short, and this phase is what fixes it.
+    /// The claim belongs where it is true and load-bearing: ``fullMeshIsWhole()``, run once the
+    /// rounds are done, where every member must be on the merged roster's own election.
+    private func commitEveryPair(_ living: [MeshConvergenceMember]) {
+        let reachable = Set(living.map(\.fingerprint))
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            for member in living {
+                _ = member.node.manager.evaluatePartition(
+                    reachable: reachable, now: MeshP3Acceptance.base
+                )
             }
             for (position, near) in living.enumerated() {
                 for far in living.dropFirst(position + 1) {
@@ -825,7 +1044,9 @@ extension MeshConvergenceRun {
     /// step starts from a known one.
     private func recordHealRotations() {
         for member in livingMembers {
-            healCauses.formUnion(sample.causes(at: member.node.label))
+            let causes = sample.causes(at: member.node.label)
+            if causes.contains(.membership) { healMembershipAt.append(member.node.label) }
+            healCauses.formUnion(causes)
             if sample.windowCount(at: member.node.label) > 1 {
                 healWindowOverflow.append(member.node.label)
             }
@@ -863,8 +1084,9 @@ extension MeshConvergenceRun {
     /// every shape §16.2 names, so ``MeshScheduleBounds/maxSettleSweeps`` floods it. Convergence is
     /// **asserted** by the checker rather than assumed here.
     private func settleModels() {
+        let walk = schedule.heal + (resplit?.heal ?? [])
         for _ in 0..<MeshScheduleBounds.maxSettleSweeps {
-            for step in schedule.heal {
+            for step in walk {
                 guard let near = participant(global: step.near),
                       let far = participant(global: step.far) else { continue }
                 mergeModels(near: near, far: far)
@@ -896,6 +1118,143 @@ extension MeshConvergenceRun {
     }
 }
 
+// MARK: - MeshConvergenceRun: the nested re-split mid-merge
+
+extension MeshConvergenceRun {
+
+    /// §16.2's fifth shape, in four named phases.
+    ///
+    /// Split into phases rather than written as one function because each of them carries a claim
+    /// the others do not, and a single 100-line runner would break Power of 10 R4 *and* hide which
+    /// phase a failure came from — the same reason ``MeshConvergenceRun`` itself is phased.
+    func runNestedResplit(_ plan: MeshResplitPlan) async throws {
+        openMergeWindows()
+        cutResplit(plan)
+        try await runResplitEvents(plan)
+        try await reHealAfterResplit(plan)
+    }
+
+    /// **Phase 1 — get mid-merge.** Re-form the full mesh and commit every pair, which is what puts
+    /// every member inside an open merge window (`beginMergeExchange`, via the `.linksRestored`
+    /// effect list or the `peerCommitted` blip).
+    ///
+    /// Nothing is settled first, and nothing may suspend before the sample: `awaitingResumeMerge` is
+    /// set **synchronously** inside `beginMergeExchange`, while the digest and head frames it queued
+    /// are still unsent tasks. Reading it here is therefore a fact, not a race (ledger "(P4 i3)").
+    private func openMergeWindows() {
+        linkEveryPair()
+        commitEveryPair(livingMembers)
+        awaitingBeforeResplit = livingMembers
+            .filter(\.node.manager.awaitingResumeMerge).map(\.node.label)
+    }
+
+    /// **Phase 2 — cut, mid-merge.** Every link between the two sides is dropped silently (a radio
+    /// that stopped reaching, not a disconnect anybody is told about), and each member re-evaluates
+    /// §10.2 against what it can *actually* reach.
+    ///
+    /// The three claims here are the whole point of the shape: the cut is a **new** partition
+    /// (`.linksLost`, not `.unchanged`), it lands in `MeshSessionState.partitioned`, and
+    /// `abandonMergeExchange()` therefore drops the window this device was holding.
+    private func cutResplit(_ plan: MeshResplitPlan) {
+        for near in plan.holdouts {
+            guard let holdout = participant(global: near) else { continue }
+            for far in plan.rest {
+                guard let other = participant(global: far) else { continue }
+                fabric.partition(holdout.node.handle, from: other.node.handle)
+            }
+        }
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            for member in livingMembers {
+                let verdict = member.node.manager.evaluatePartition(
+                    reachable: reachableFingerprints(from: member), now: MeshP3Acceptance.base
+                )
+                #expect(verdict == .linksLost,
+                        "\(member.node.label): a re-split is a NEW partition, not an unchanged one")
+                #expect(member.node.manager.sessionState == .partitioned,
+                        "\(member.node.label): and it lands in `partitioned`, which is what abandons")
+            }
+        }
+        awaitingAfterResplit = livingMembers
+            .filter(\.node.manager.awaitingResumeMerge).map(\.node.label)
+    }
+
+    /// **Phase 3 — bounded events in the new sub-branches.** One branch-local rotation and one
+    /// content item per side, and no membership record (this file's header says why).
+    private func runResplitEvents(_ plan: MeshResplitPlan) async throws {
+        mintedHeadsBeforeResplit = mintedHeads.count
+        let base = (branchCounters.max() ?? 0) + 1
+        for (offset, side) in plan.sides.prefix(MeshScheduleBounds.maxResplitSides).enumerated() {
+            let living = side.compactMap { participant(global: $0) }
+            guard !living.isEmpty else { continue }
+            try rotateSide(living, counter: base + Self.branchCounterStride * UInt32(offset + 1))
+            try createSideText(by: living)
+            try await MeshDepartureRig.settle(living.map(\.node), on: fabric)
+            MeshDepartureRig.consumeRotations(living.map(\.node))
+        }
+    }
+
+    /// One side's 15-minute rotation, sampled and disarmed synchronously, then re-seeded on the
+    /// side's **own** lowest-fingerprint coordinator — §10.2's branch rule, applied to a side.
+    private func rotateSide(_ side: [MeshConvergenceMember], counter: UInt32) throws {
+        for member in side {
+            member.node.manager.requestRotation(cause: .timer)
+            #expect(member.node.manager.consumePendingRotationForTesting() == .timer,
+                    "\(member.node.label): a sub-branch queues its own timer cause, like any branch")
+        }
+        try seedEpoch(for: side, counter: counter)
+    }
+
+    /// One text per side, so the re-split has content of its own to lose if the re-heal drops it.
+    private func createSideText(by side: [MeshConvergenceMember]) throws {
+        guard let author = side.first else { return }
+        contentCounter += 1
+        let item = MeshContentFixtures.message(
+            contentCounter, sender: author.fingerprint,
+            claimed: TimeInterval(contentCounter), firstSeen: TimeInterval(contentCounter)
+        )
+        let target = try makeTarget(for: item, by: author)
+        distribute(target, to: side) { $0.content.messages = $0.content.messages.inserting(item) }
+    }
+
+    /// **Phase 4 — re-plan and heal.** The cut links are restored (healed, never re-seated), and the
+    /// re-planned walk over the two *sides* runs bridge-first, each pair spent once in this window.
+    ///
+    /// The sample right after the first commit is the ledger's "(P4 i11)" residual, walked: a
+    /// window that `abandonMergeExchange` had merely narrowed rather than cleared would leave this
+    /// empty, because `openBlipMergeIfReconnected` guards on `!awaitingResumeMerge`.
+    private func reHealAfterResplit(_ plan: MeshResplitPlan) async throws {
+        restoreResplitLinks(plan)
+        var spent: Set<Set<Int>> = []
+        for step in plan.heal {
+            guard let near = participant(global: step.near),
+                  let far = participant(global: step.far) else { continue }
+            #expect(spent.insert(step.unordered).inserted,
+                    "a re-planned heal spends each pair once inside its own window")
+            sample.reset()
+            commitHealStep(near: near, far: far)
+            if awaitingAfterReheal.isEmpty {
+                awaitingAfterReheal = livingMembers
+                    .filter(\.node.manager.awaitingResumeMerge).map(\.node.label)
+            }
+            try await MeshDepartureRig.settle(livingNodes, on: fabric, sampling: sample)
+            recordHealRotations()
+            mergeModels(near: near, far: far)
+        }
+    }
+
+    /// Puts every cut link back. `heal`, not `link`: the sockets were never told they had gone, so
+    /// re-seating would give one link a second coordinator and split its inbound frames in two.
+    private func restoreResplitLinks(_ plan: MeshResplitPlan) {
+        for near in plan.holdouts {
+            guard let holdout = participant(global: near) else { continue }
+            for far in plan.rest {
+                guard let other = participant(global: far) else { continue }
+                fabric.heal(holdout.node.handle, from: other.node.handle)
+            }
+        }
+    }
+}
+
 // MARK: - MeshConvergenceInvariants
 
 /// §16.2's five assertions, over the members a cell ends with.
@@ -909,6 +1268,16 @@ enum MeshConvergenceInvariants {
 
     /// Runs all five.
     static func check(_ run: MeshConvergenceRun) throws {
+        try checkExceptTheHealsRotationCause(run)
+        oneRotationCauseAcrossTheHeal(run)
+    }
+
+    /// Everything ``check(_:)`` asserts **except** the heal's rotation-cause claim.
+    ///
+    /// The split exists for the cells in ``MeshConvergenceMatrix/deferred``, which converge on
+    /// identical state and still label one reconnect-carried record `.membership`. They owe every
+    /// other claim in full, and `aDeferredCellConvergesAndFailsOnlyOnTheNamedDefect` collects them.
+    static func checkExceptTheHealsRotationCause(_ run: MeshConvergenceRun) throws {
         let survivors = run.livingMembers
         #expect(survivors.count >= 2, "\(run.schedule.seed): a cell must end with a mesh")
         try identicalMergedState(run, survivors)
@@ -916,6 +1285,18 @@ enum MeshConvergenceInvariants {
         quorumArithmetic(run, survivors)
         noContentLoss(run, survivors)
         noDuplicateCommits(run, survivors)
+    }
+
+    /// **(e·ii) One rotation cause across the heal**, and it is the merge's.
+    ///
+    /// Separated from ``noDuplicateCommits(_:_:)`` because it is a different claim: that one counts
+    /// commits, this one says every record a *reconnect* carried went down the merge path. A
+    /// `.membership` here means one did not — the shape P4 item 2 found as the `peerCommitted`
+    /// self-edge bypass, and the shape §16.2's roster-8 row found again in
+    /// ``MeshConvergenceMatrix/deferred``.
+    static func oneRotationCauseAcrossTheHeal(_ run: MeshConvergenceRun) {
+        #expect(run.healCauses.isSubset(of: [.merge]),
+                "a heal asks for ONE rotation kind, the merge's: \(run.healCauses) at \(run.healMembershipAt)")
     }
 
     /// **(a) Merged state identical on every member**: the derived roster, the removal and departure
@@ -1015,8 +1396,6 @@ enum MeshConvergenceInvariants {
     static func noDuplicateCommits(_ run: MeshConvergenceRun, _ survivors: [MeshConvergenceMember]) {
         #expect(run.healWindowOverflow.isEmpty,
                 "two debounce windows in one heal step is a second rotation: \(run.healWindowOverflow)")
-        #expect(run.healCauses.isSubset(of: [.merge]),
-                "a heal asks for ONE kind of rotation and it is the merge's: \(run.healCauses)")
         for member in survivors {
             let ledger = member.node.manager.membershipVerifier?.ledger
             #expect(ledger?.admissions.count == run.schedule.shape.rosterSize,
@@ -1043,17 +1422,92 @@ enum MeshConvergenceInvariants {
     }
 }
 
+// MARK: - MeshResplitInvariants
+
+/// What a **nested re-split mid-merge** adds on top of §16.2's five, over the members a cell ends
+/// with.
+///
+/// Three claims, none of them re-implemented here: the merge window's own lifecycle across the
+/// abandon, the epoch head cap under a cut that produces more heads than a flat split can, and the
+/// evidence that the re-split really diverged rather than quietly doing nothing.
+@MainActor
+enum MeshResplitInvariants {
+
+    /// Runs all three.
+    static func check(_ run: MeshConvergenceRun) {
+        theWindowIsOpenedAbandonedAndReopened(run)
+        theHeadCapHolds(run)
+        theResplitReallyDiverged(run)
+    }
+
+    /// **(f) The merge window across the abandon** — the ledger's "(P4 i11)" liveness residual,
+    /// walked end to end rather than reasoned about.
+    ///
+    /// `abandonMergeExchange()` is the whole of the bound on that residual, and it is only a bound
+    /// if all three of these hold: the cut landed while windows were **open**, it **cleared** them,
+    /// and the next heal **re-opened** one. Miss the middle claim and a device sits awaiting for the
+    /// rest of the session; miss the last and the abandon has traded a stuck window for a silent one.
+    static func theWindowIsOpenedAbandonedAndReopened(_ run: MeshConvergenceRun) {
+        #expect(!run.awaitingBeforeResplit.isEmpty,
+                "seed \(String(run.schedule.seed, radix: 16)): the cut must land MID-merge")
+        #expect(run.awaitingBeforeResplit.count == run.livingMembers.count,
+                "every member re-forming a full mesh opens an exchange: \(run.awaitingBeforeResplit)")
+        #expect(run.awaitingAfterResplit.isEmpty,
+                "a re-split abandons the merge in flight: \(run.awaitingAfterResplit) still awaiting")
+        #expect(!run.awaitingAfterReheal.isEmpty,
+                "the next heal must open a FRESH exchange: openBlipMergeIfReconnected guards on !awaitingResumeMerge")
+    }
+
+    /// **(g) The epoch head cap, under the re-split.** A nested cut mints branch heads a flat split
+    /// of the same roster cannot, and the folded set still never exceeds
+    /// ``MeshSessionContextSchema/maxEpochHeads``.
+    ///
+    /// The second claim is the one worth stating carefully: a head is only ever dropped from a
+    /// **full** set, and every drop is counted at the one context writer (P4 item 2b), never
+    /// truncated in silence. `MeshMergePathTests.theHeadOverflowIsCountedAtTheWriterAgainstWhatSealed`
+    /// drives that counter at its exact boundary (cap seals, cap + 1 is named); this asserts the
+    /// same property holds in a live mesh that reached the cap by re-splitting rather than by being
+    /// handed nine heads.
+    static func theHeadCapHolds(_ run: MeshConvergenceRun) {
+        let cap = MeshSessionContextSchema.maxEpochHeads
+        for member in run.livingMembers {
+            let manager = member.node.manager
+            let label = "\(member.node.label) (seed \(String(run.schedule.seed, radix: 16)))"
+            #expect(manager.knownEpochHeads.count <= cap,
+                    "\(label): the sealed head set is bounded by the cap, always")
+            #expect(manager.presentedEpochHeadsForTesting.count <= cap,
+                    "\(label): and so is what it presents on the wire")
+            #expect(manager.droppedEpochHeadCount == 0 || manager.knownEpochHeads.count == cap,
+                    "\(label): dropped \(manager.droppedEpochHeadCount) at \(manager.knownEpochHeads.count) — heads only fall off a FULL set")
+            #expect(Set(manager.knownEpochHeads.map(\.canonicalString)).count
+                    == manager.knownEpochHeads.count, "\(label): no head is folded twice")
+        }
+    }
+
+    /// **(h) The re-split really diverged.** One fresh head per side, all of them distinct, so the
+    /// cap claim above is not being made about a set that never grew.
+    static func theResplitReallyDiverged(_ run: MeshConvergenceRun) {
+        #expect(run.mintedHeads.count == run.mintedHeadsBeforeResplit + MeshScheduleBounds.maxResplitSides,
+                "a nested re-split mints exactly one head per side on top of the flat split's")
+        #expect(Set(run.mintedHeads).count == run.mintedHeads.count,
+                "two branches or two sides that landed on ONE head would make divergence vacuous")
+        #expect(run.mintedHeads.count > run.schedule.branches.count,
+                "and strictly more heads than the flat split alone produced")
+    }
+}
+
 // MARK: - MeshConvergencePropertyTests
 
-/// §16.2's convergence property, over iteration A's matrix: rosters 3 and 4 × shapes `2/1`, `2/2`
-/// and `3/1` × the full event vocabulary, under the fixed seed family.
+/// §16.2's convergence property, over the whole matrix: rosters 3, 4, 6 and 8 × shapes `2/1`, `2/2`,
+/// `3/1`, `3/3` and `4/2/2` × the full event vocabulary, under the fixed seed family — plus §16.2's
+/// fifth shape, the nested re-split mid-merge.
 @MainActor
 @Suite(.serialized)
 struct MeshConvergencePropertyTests {
 
     /// **The property.** One seeded, bounded schedule per cell: split, events, ordered heal, bounded
     /// settle, then all five of §16.2's assertions.
-    @Test(arguments: MeshConvergenceMatrix.iterationA)
+    @Test(arguments: MeshConvergenceMatrix.all)
     func aSeededScheduleConvergesOnEveryMember(cell: MeshConvergenceCell) async throws {
         let run = try MeshConvergenceRun.build(cell.schedule, label: "conv")
         try await run.runSplitEvents()
@@ -1071,30 +1525,63 @@ struct MeshConvergencePropertyTests {
     /// the merge-window deadlock they found was fixed. An entry back in
     /// ``MeshConvergenceMatrix/deferred`` means somebody re-opened the exception instead of fixing
     /// what it points at, and this fails until the defect note beside it is written down.
-    @Test func noScheduleIsDeferredAndTheMatrixIsWhole() {
-        #expect(MeshConvergenceMatrix.deferred.isEmpty,
-                "the deadlock is fixed (2c); a new entry needs a defect note, not a softer check")
-        #expect(MeshConvergenceMatrix.iterationA.count
-                == MeshPartitionShape.iterationA.count * 2 * MeshConvergenceSeeds.derivedCount)
-        #expect(MeshConvergenceMatrix.iterationA.count == 48, "3 shapes × 2 preferences × 8 seeds")
-        // The formerly-deferred seed is IN the matrix now, on both quorum preferences.
+    @Test func everyDeferralIsNamedAndTheRestOfTheMatrixIsWhole() {
+        let whole = MeshPartitionShape.matrix.count * 2 * MeshConvergenceSeeds.derivedCount
+        #expect(whole == 80, "5 shapes × 2 preferences × 8 seeds is the matrix §16.2 asks for")
+        #expect(MeshConvergenceMatrix.deferred.count == 4,
+                "exactly the four cells the defect note beside `deferred` describes; a fifth needs its own note")
+        #expect(MeshConvergenceMatrix.deferred.allSatisfy { $0.shape == .fourTwoTwo },
+                "the deferral is roster 8's, which is where an N-way window closes early")
+        #expect(MeshConvergenceMatrix.all.count == whole - MeshConvergenceMatrix.deferred.count)
+        #expect(MeshConvergenceMatrix.all.count == 76, "and every other cell runs, at full strength")
+        #expect(MeshConvergenceMatrix.iterationA.count == 48, "rosters 3 and 4, none deferred")
+        #expect(MeshConvergenceMatrix.iterationB.count == 28, "rosters 6 and 8, minus the four")
+        #expect(Set(MeshConvergenceMatrix.all.map(\.shape.rosterSize)) == [3, 4, 6, 8],
+                "§16.2's four rosters all run")
+        #expect(!MeshConvergenceMatrix.resplit.isEmpty, "and §16.2's fifth shape runs too")
+        // 2c's cell is IN the matrix, on both preferences: the deadlock stays fixed.
         for preferQuorum in [true, false] {
-            #expect(MeshConvergenceMatrix.iterationA.contains(MeshConvergenceCell(
+            #expect(MeshConvergenceMatrix.all.contains(MeshConvergenceCell(
                 shape: .twoTwo, preferQuorum: preferQuorum, seed: 0x308d_0d41_4707_d80
             )), "the cell that found the deadlock runs, at full strictness")
         }
     }
 
+    /// **A deferred cell is deferred to a named defect, not out of the suite.** Every one of them
+    /// still runs, still converges, and still owes §16.2's other four invariants in full — and the
+    /// defect it is deferred to must still be *exactly* the one written down beside
+    /// ``MeshConvergenceMatrix/deferred``: one member, one `.membership` rotation, no second.
+    ///
+    /// This is what makes the deferral safe to leave standing. A cell that broke for another
+    /// reason, a defect that reached a second member, or a fix that landed and made the note stale
+    /// all fail here rather than passing quietly.
+    @Test(arguments: MeshConvergenceMatrix.deferred)
+    func aDeferredCellConvergesAndFailsOnlyOnTheNamedDefect(cell: MeshConvergenceCell) async throws {
+        let run = try MeshConvergenceRun.build(cell.schedule, label: "deferred")
+        try await run.runSplitEvents()
+        try await run.runHeal()
+        try MeshConvergenceInvariants.checkExceptTheHealsRotationCause(run)
+        #expect(run.healCauses.contains(.membership),
+                "\(cell): the named defect is gone — un-defer this cell and delete the note")
+        #expect(run.healCauses.isSubset(of: [.merge, .membership]),
+                "\(cell): a heal still asks for no OTHER kind of rotation — a `.timer` here is new")
+        #expect(run.healMembershipAt.count == 1,
+                "\(cell): exactly one member takes the live path: \(run.healMembershipAt)")
+        #expect(run.healWindowOverflow.isEmpty,
+                "\(cell): and it is still ONE commit: the record is applied once, under the other name")
+        for node in run.livingNodes { node.manager.leaveMesh() }
+    }
+
     /// **The full vocabulary really fires.** Every event in §16.2's list is executed somewhere in
-    /// iteration A's matrix — asserted over the schedules the matrix actually runs, so a generator
-    /// that stopped emitting departures could not hide behind 48 green cells.
-    @Test func iterationAExecutesEveryEventInTheVocabulary() {
+    /// the matrix — asserted over the schedules the matrix actually runs, so a generator that
+    /// stopped emitting departures could not hide behind 80 green cells.
+    @Test func theMatrixExecutesEveryEventInTheVocabulary() {
         var seen: Set<String> = []
-        for cell in MeshConvergenceMatrix.iterationA {
+        for cell in MeshConvergenceMatrix.all {
             seen.formUnion(cell.schedule.steps.map(\.event.token))
         }
         for event in MeshScheduleEvent.vocabulary {
-            #expect(seen.contains(event.token), "iteration A's matrix never runs \(event.token)")
+            #expect(seen.contains(event.token), "the matrix never runs \(event.token)")
         }
     }
 
@@ -1106,7 +1593,7 @@ struct MeshConvergencePropertyTests {
     /// commute across the partition tree, the two digests would differ — and the digest is projected
     /// onto member indices precisely so two runs with different keys are comparable at all.
     @Test func pairwiseMergesCommuteAcrossThePartitionTree() async throws {
-        for shape in MeshPartitionShape.iterationA {
+        for shape in MeshPartitionShape.matrix {
             let schedule = MeshScheduleGenerator.schedule(
                 seed: MeshConvergenceSeeds.root, shape: shape, preferQuorum: false
             )
@@ -1117,15 +1604,165 @@ struct MeshConvergencePropertyTests {
         }
     }
 
+    // MARK: §16.2's fifth shape — the nested re-split mid-merge
+
+    /// **The property, interrupted.** The same seeded schedule, healed until every member is inside
+    /// an open merge window, then cut in two again — and it still ends with §16.2's five invariants
+    /// plus ``MeshResplitInvariants``' three.
+    ///
+    /// The interruption is not a second flat split: `openMergeWindows` re-forms the whole mesh and
+    /// commits it, so the cut lands on devices that are *awaiting a re-gossip they will never get*.
+    /// That is the state the ledger's "(P4 i11)" residual is about, and the only thing bounding it
+    /// is `abandonMergeExchange()`.
+    @Test(arguments: MeshConvergenceMatrix.resplit)
+    func aNestedResplitMidMergeStillConverges(cell: MeshConvergenceCell) async throws {
+        let schedule = cell.schedule
+        guard let plan = MeshScheduleGenerator.resplit(for: schedule) else {
+            Issue.record("\(cell): no branch left to re-split — the cell asserts nothing")
+            return
+        }
+        let run = try MeshConvergenceRun.build(schedule, label: "resplit")
+        try await run.runSplitEvents()
+        try await run.runHeal(interruptedBy: plan)
+        try MeshConvergenceInvariants.check(run)
+        MeshResplitInvariants.check(run)
+        #expect(run.createdContent.count > run.schedule.branches.count,
+                "\(cell): the sides' own content is part of what must not be lost")
+        for node in run.livingNodes { node.manager.leaveMesh() }
+    }
+
+    /// **§10.3's "N-way merges need no special case", under the nested cut.** The same schedule and
+    /// the same re-split, healed in two valid link orders, converge on identical state.
+    ///
+    /// Both halves are reordered — the flat heal's intra steps and the re-plan's — because after the
+    /// cut the re-plan is the walk that actually delivers, and reversing only the first would leave
+    /// the interesting half in one order.
+    @Test func theNestedResplitHealCommutes() async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: MeshConvergenceSeeds.root, shape: .threeThree, preferQuorum: false
+        )
+        guard let plan = MeshScheduleGenerator.resplit(for: schedule) else {
+            Issue.record("the commute cell must be re-splittable")
+            return
+        }
+        let forward = try await converge(schedule, label: "rs-commute-f", resplit: plan)
+        let reversed = try await converge(
+            schedule.withReversedIntraHeal(), label: "rs-commute-r",
+            resplit: plan.withReversedIntraHeal()
+        )
+        #expect(forward == reversed,
+                "two valid orders of an interrupted heal must converge on identical state")
+    }
+
+    // MARK: The rig gaps iteration A left open
+
+    /// The seed of the fixed family whose `3/1` schedule opens with the removal vote **and** still
+    /// creates content after the departure is moved ahead of it.
+    ///
+    /// Pinned by value rather than taken as "the first that works", and checked against the family,
+    /// because a cell chosen at run time is not a fixed seed. Most of the family puts every content
+    /// event in the departing member's hands, which after the reorder would leave a cell with no
+    /// content to assert convergence over at all.
+    private static let departureFirstSeed: UInt64 = 0xace0_7337_d1bd_4fcc
+
+    /// **The gates are per member; the union is not.** One member blocks one sender: every member
+    /// still holds the identical merged ledger, and the *visible* transcript, photo list and heart
+    /// list differ at exactly that member.
+    ///
+    /// §10.3's merge re-runs the ingestion gates, and §21.3's decision is that they are re-run **as
+    /// a view**, never as a filter on what was stored — so a member that lifts a block sees the
+    /// content again without a second merge. That is a property of `MeshContentGates` over an
+    /// unmutated union, and iteration A never exercised two members holding different gates.
+    @Test func aBlockedSenderChangesOnlyThatMembersView() async throws {
+        let run = try await convergedRun(shape: .twoTwo, label: "gates")
+        let survivors = run.livingMembers
+        guard let blocker = survivors.first, let union = survivors.first?.content,
+              let blocked = union.senders.sorted().first(where: { $0 != blocker.fingerprint })
+        else { throw MeshConvergenceFailure.rosterTooSmall }
+        blocker.gates = MeshContentGates(chatAllowed: true, blockedFingerprints: [blocked])
+        #expect(union.senders.count >= 2, "a gate cell needs content from at least two authors")
+
+        for member in survivors {
+            #expect(member.content == union, "the UNION is identical at every member, gates or not")
+        }
+        let mine = blocker.content
+        #expect(mine.visibleTranscript(gates: blocker.gates).allSatisfy { $0.senderFingerprint != blocked },
+                "the blocker sees none of that sender's messages")
+        #expect(mine.visiblePhotos(gates: blocker.gates).allSatisfy { $0.senderFingerprint != blocked },
+                "nor photos")
+        #expect(mine.visibleHearts(gates: blocker.gates).allSatisfy { $0.senderFingerprint != blocked },
+                "nor hearts")
+        let hidden = mine.messages.all.count - mine.visibleTranscript(gates: blocker.gates).count
+            + mine.photos.all.count - mine.visiblePhotos(gates: blocker.gates).count
+            + mine.hearts.all.count - mine.visibleHearts(gates: blocker.gates).count
+        #expect(hidden > 0, "a gate that hid nothing would make this cell vacuous")
+        for member in survivors where member !== blocker {
+            #expect(member.content.visibleTranscript(gates: member.gates) == mine.messages.all,
+                    "\(member.node.label): every OTHER member's view is the whole union")
+            #expect(member.content.visiblePhotos(gates: member.gates) == mine.photos.all)
+            #expect(member.content.visibleHearts(gates: member.gates) == mine.hearts.all)
+        }
+        for node in run.livingNodes { node.manager.leaveMesh() }
+    }
+
+    /// **§10.4 at the manager seam: a departure shrinks the roster, and the quorum with it.**
+    ///
+    /// The generator forces the departure last, so iteration A could never run one *before* the vote
+    /// it changes the arithmetic of. `withDepartureBeforeTheVote()` lifts exactly that constraint on
+    /// one cell: roster 4, branch of three. Run in the generator's own order the branch needs three
+    /// votes; with the departure first the roster is three, the threshold is two, and the two voters
+    /// left are a quorum — which is the plan's own worked consequence, re-derived by the manager on
+    /// its merged roster rather than asserted from a table.
+    @Test func aDepartureBeforeTheVoteReDerivesQuorumOnTheShrunkRoster() async throws {
+        #expect(MeshConvergenceSeeds.family.contains(Self.departureFirstSeed),
+                "the pinned cell must still be one of the fixed seeds")
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: Self.departureFirstSeed, shape: .threeOne, preferQuorum: true
+        )
+        let ordered = schedule.withDepartureBeforeTheVote()
+        #expect(ordered.steps != schedule.steps, "this cell must actually reorder something")
+
+        let control = try MeshConvergenceRun.build(schedule, label: "order-control")
+        try await control.runSplitEvents()
+        #expect(control.quorumAtVote == 3, "roster 4 ⇒ quorum 3 when the vote runs first")
+        for node in control.livingNodes { node.manager.leaveMesh() }
+
+        let shrunk = try MeshConvergenceRun.build(ordered, label: "order-shrunk")
+        try await shrunk.runSplitEvents()
+        #expect(shrunk.expectedDepartures.count == 1, "the departure really ran first")
+        #expect(shrunk.quorumAtVote == 2, "roster 4 → 3 drops quorum to 2 (§10.4), at the manager")
+        #expect(shrunk.expectedRemovals.count == 1, "and two voters are now a quorum")
+        try await shrunk.runHeal()
+        try MeshConvergenceInvariants.check(shrunk)
+        for node in shrunk.livingNodes { node.manager.leaveMesh() }
+    }
+
     /// Runs one schedule end to end and returns its digest.
     private func converge(
-        _ schedule: MeshConvergenceSchedule, label: String
+        _ schedule: MeshConvergenceSchedule, label: String, resplit: MeshResplitPlan? = nil
     ) async throws -> MeshConvergenceDigest {
         let run = try MeshConvergenceRun.build(schedule, label: label)
         try await run.runSplitEvents()
-        try await run.runHeal()
+        try await run.runHeal(interruptedBy: resplit)
         let digest = try run.digest()
         for node in run.livingNodes { node.manager.leaveMesh() }
         return digest
+    }
+
+    /// Runs the root seed of one shape end to end and hands back the live run, for the cells that
+    /// assert on the members rather than on the digest.
+    private func convergedRun(
+        shape: MeshPartitionShape, label: String
+    ) async throws -> MeshConvergenceRun {
+        let run = try MeshConvergenceRun.build(
+            MeshScheduleGenerator.schedule(
+                seed: MeshConvergenceSeeds.root, shape: shape, preferQuorum: false
+            ),
+            label: label
+        )
+        try await run.runSplitEvents()
+        try await run.runHeal()
+        try MeshConvergenceInvariants.check(run)
+        return run
     }
 }

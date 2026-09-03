@@ -356,8 +356,11 @@ struct MeshMergeExchangeTests {
     /// `0x308d0d414707d80` on `2/2`); this is that shape at two managers and one wire.
     ///
     /// The responder is **already** inside a window opened by a third member, which is what makes
-    /// the scenario the defect and not the happy path: B cannot open an exchange for A, so the only
-    /// thing that can carry B's head to A is B's answer. Both halves of the answer are one merge:
+    /// the scenario the defect and not the happy path: B opens no *second exchange* for A, so what
+    /// carries B's head to A is B's answer — and, since P4 item 9b, B's one-shot ask of the peer
+    /// that has just committed (`askOneReconnectedPeer`, which arms no window). Both are asserted
+    /// below, because the answer half is still the only one a responder that never sees a commit
+    /// event can send. Both halves of the answer are one merge:
     /// the records ask for `.merge` through `mergeMembershipLedger`, the folded head asks for
     /// `.merge` through `requestMergeRotationForDivergentHeads`, and the two coalesce in one 2 s
     /// window rather than opening a second.
@@ -448,9 +451,10 @@ struct MeshMergeExchangeTests {
         let toA = MeshMergeWire.receivedTypes(left.transport)
         #expect(toA.contains(PayloadType.meshEpochHeads.rawValue),
                 "the answer to a mismatched digest carries the responder's epoch heads")
-        #expect(!toA.contains(PayloadType.meshInventoryDigest.rawValue),
-                "B opened no exchange of its own — it was awaiting throughout, which is the defect")
-        #expect(managerB.awaitingResumeMerge, "and its window never closed underneath the scenario")
+        #expect(managerB.awaitingResumeMerge,
+                "B stayed awaiting throughout: it never opened a second exchange of its own")
+        #expect(managerB.rotationBasisHeadForTesting == headB,
+                "and nothing it received moved the head it was already counting up from")
 
         // 2. The asker ends on the RESPONDER's basis head, not on its own older one.
         #expect(managerA.knownEpochHeads.contains(headB), "A folded the branch head it had not seen")
@@ -468,6 +472,107 @@ struct MeshMergeExchangeTests {
                 "the records and the folded head asked for ONE kind of rotation, and it is the merge's")
         #expect(windows.count == 1,
                 "and for ONE debounce window: a second value here is a second rotation")
+
+        managerA.consumePendingRotationForTesting()
+        managerB.consumePendingRotationForTesting()
+        managerA.leaveMesh()
+        managerB.leaveMesh()
+    }
+
+    /// **Claim 6 (P4 item 9b): a device already inside a merge window still ASKS a peer that
+    /// commits later — without opening a second window.**
+    ///
+    /// Claim 5 closed the answer half. This is the ask half of the same asymmetry, one party wider,
+    /// and §16.2's roster-8 row is what found it: on a `4/2/2` heal a member acquires most of its
+    /// slots *after* its first reconnect, and `beginMergeExchange` only ever asked the slots that
+    /// existed when it ran. A peer seated afterwards was therefore never asked — and when it was
+    /// awaiting too, never told either, because an exchange is the only unprompted sender of a
+    /// digest or a head. Both sides then counted the post-merge epoch up from different heads, for
+    /// good; §16.2's "exactly one post-merge epoch at every member" failed at the member.
+    ///
+    /// `openBlipMergeIfReconnected` now answers that with a one-shot ask of exactly the committing
+    /// peer. The three claims: the two frames reach the new peer, the window is **not** re-armed
+    /// (one merge stays one merge), and a peer that is not on the roster still gets nothing.
+    @Test func aDeviceAlreadyAwaitingStillAsksAPeerThatCommitsLater() async throws {
+        let fabric = FakePeerNetwork()
+        let left = fabric.addEndpoint(named: "late-left")
+        let right = fabric.addEndpoint(named: "late-right")
+        let bystander = fabric.addEndpoint(named: "late-bystander")
+        fabric.connect(left.handle, right.handle)
+        fabric.connect(right.handle, bystander.handle)
+        fabric.clock.advance(by: .milliseconds(50))
+
+        let storeA = makeTestStore()
+        let storeB = makeTestStore()
+        let idA = try MeshPartitionFixtures.identity("late-a")
+        let idB = try MeshPartitionFixtures.identity("late-b")
+        let idC = try MeshPartitionFixtures.identity("late-c")
+        #expect(Set([idA.localFingerprint, idB.localFingerprint, idC.localFingerprint]).count == 3,
+                "the rig needs three distinct provisioned identities")
+        let meshID = UUID()
+        let ledger = try MeshPartitionFixtures.ledger(founder: idA, others: [idB, idC], meshID: meshID)
+        let headA = try MeshReconcileFixtures.head(2, idA, meshID)
+        let headB = try MeshReconcileFixtures.head(9, idB, meshID)
+        let managerA = MeshReconcileFixtures.member(
+            store: storeA, identity: idA, ledger: ledger,
+            founderKey: idA.localSigningPublicKey, meshID: meshID, head: headA
+        )
+        let managerB = MeshReconcileFixtures.member(
+            store: storeB, identity: idB, ledger: ledger,
+            founderKey: idA.localSigningPublicKey, meshID: meshID, head: headB
+        )
+
+        // B's window is opened by C, and only C is in its slot set at that moment.
+        managerB.addSlotForTesting(
+            coordinator: MeshP3Acceptance.coordinator(), peer: bystander.handle,
+            fingerprint: idC.localFingerprint, channel: right.transport
+        )
+        managerB.applySessionEvent(.peerCommitted, committedPeer: idC.localFingerprint)
+        #expect(managerB.awaitingResumeMerge, "B is mid-merge with C before A is ever seated")
+        let entryBeforeA = managerB.pendingMergeEntry
+
+        // A is seated afterwards — the late slot a branch-by-branch heal really produces.
+        let coordinatorA = MeshP3Acceptance.coordinator()
+        let coordinatorBA = MeshP3Acceptance.coordinator()
+        managerA.addSlotForTesting(
+            coordinator: coordinatorA, peer: right.handle,
+            fingerprint: idB.localFingerprint, channel: left.transport
+        )
+        managerB.addSlotForTesting(
+            coordinator: coordinatorBA, peer: left.handle,
+            fingerprint: idA.localFingerprint, channel: right.transport
+        )
+        let nodeA = MeshMergeWireNode(
+            store: storeA, manager: managerA, channel: left.transport,
+            handle: left.handle, coordinator: coordinatorA
+        )
+        let nodeB = MeshMergeWireNode(
+            store: storeB, manager: managerB, channel: right.transport,
+            handle: right.handle, coordinator: coordinatorBA
+        )
+
+        // A stranger commits first: not on the roster, so it is told nothing at all.
+        managerB.applySessionEvent(.peerCommitted, committedPeer: "0000000000000000")
+        try await MeshMergeWire.settle([nodeA, nodeB], on: fabric)
+        #expect(MeshMergeWire.receivedTypes(left.transport).isEmpty,
+                "a commit from a peer that is not on the roster asks nobody anything")
+
+        managerB.applySessionEvent(.peerCommitted, committedPeer: idA.localFingerprint)
+        #expect(managerB.awaitingResumeMerge && managerB.pendingMergeEntry == entryBeforeA,
+                "the ask arms no second window: one merge stays one merge")
+        try await MeshMergeWire.settle([nodeA, nodeB], on: fabric, until: {
+            managerA.knownEpochHeads.contains(headB)
+        })
+
+        let toA = MeshMergeWire.receivedTypes(left.transport)
+        #expect(toA.contains(PayloadType.meshInventoryDigest.rawValue),
+                "the late peer is ASKED, though B was awaiting when it committed")
+        #expect(toA.contains(PayloadType.meshEpochHeads.rawValue),
+                "and told which branch head B is on — the half that convergence needs")
+        #expect(managerA.rotationBasisHeadForTesting == headB,
+                "so A counts the post-merge epoch up from B's head, not its own stranded one")
+        #expect(managerB.awaitingResumeMerge && managerB.pendingMergeEntry == entryBeforeA,
+                "and B's original window is still the only one")
 
         managerA.consumePendingRotationForTesting()
         managerB.consumePendingRotationForTesting()

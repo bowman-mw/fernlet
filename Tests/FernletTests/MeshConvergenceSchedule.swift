@@ -51,9 +51,26 @@ nonisolated enum MeshScheduleBounds {
     /// The most pairwise exchanges a heal may take. A spanning walk over ≤ 8 survivors needs 7.
     static let maxHealSteps = 12
 
-    /// How many times the settle sweeps the healed graph. The healed link graph has diameter ≤ 3
-    /// for every shape §16.2 names, so three sweeps flood it and the fourth is headroom.
-    static let maxSettleSweeps = 4
+    /// How many times the settle sweeps the healed graph.
+    ///
+    /// The widest shape §16.2 names is `4/2/2`, whose ordered heal is a chain of three branch stars:
+    /// a leaf of the first branch reaches a leaf of the third in four hops. A sweep walks every heal
+    /// step in order, so in the worst ordering it advances one hop — four sweeps flood the widest
+    /// graph and the last two are headroom. Raised from four in iteration B for exactly that reason:
+    /// rosters 6 and 8 are wider than rosters 3 and 4, not because a bound was inconvenient.
+    static let maxSettleSweeps = 6
+
+    /// The most events one **sub-branch** of a nested re-split runs: its own branch-local rotation
+    /// and one content item. Deliberately tiny — the re-split is about the *merge window*, and a
+    /// long event list inside it would only re-run the split phase's own coverage.
+    static let maxResplitEventsPerSide = 2
+
+    /// How many sides a nested re-split cuts the survivors into.
+    ///
+    /// Two, and a third would prove nothing new: `abandonMergeExchange` is a property of **one**
+    /// cut (`next == .partitioned`), and the head cap is reached by everyone-alone, which the
+    /// original split's branch count already dominates.
+    static let maxResplitSides = 2
 
     /// How many commit rounds the full-mesh phase runs before it gives up.
     ///
@@ -129,9 +146,13 @@ nonisolated struct MeshScheduleRandom: Equatable, Sendable {
 /// One of §16.2's partition shapes, as the branch sizes it splits a roster into.
 ///
 /// The roster size is derived from the shape rather than passed alongside it, so a cell cannot ask
-/// for a `3/1` of a roster of six. Iteration A exercises ``twoOne``, ``twoTwo`` and ``threeOne``;
-/// ``threeThree`` and ``fourTwoTwo`` are declared here — the generator already handles any number of
-/// branches — and are iteration B's matrix rows.
+/// for a `3/1` of a roster of six. That is also why the enum is **closed at §16.2's own list**
+/// (`2/2, 3/1, 3/3, 4/2/2`, plus ``twoOne`` as roster 3's analogue of `2/2`): §16.2's four rosters
+/// map onto it exactly — 3 → `2/1`, 4 → `2/2` and `3/1`, 6 → `3/3`, 8 → `4/2/2` — and a `3/1` of a
+/// roster of six would be a shape the plan does not name, invented by the test rather than asked
+/// for by it. Iteration A ran ``twoOne``, ``twoTwo`` and ``threeOne``; iteration B adds
+/// ``threeThree`` and ``fourTwoTwo``, which needed no generator change (it already handled any
+/// number of branches) and no new bound beyond ``MeshScheduleBounds/maxSettleSweeps``.
 nonisolated enum MeshPartitionShape: String, Equatable, Sendable, CaseIterable {
 
     /// Roster 3 split 2/1 — the roster-3 analogue of `2/2`, and the smallest shape with a majority
@@ -144,10 +165,11 @@ nonisolated enum MeshPartitionShape: String, Equatable, Sendable, CaseIterable {
     /// Roster 4 split 3/1 — quorum 3, so the majority branch can remove the isolated member.
     case threeOne
 
-    /// Roster 6 split 3/3. **Iteration B.**
+    /// Roster 6 split 3/3 — quorum 4, so **neither** branch of three can moderate. **Iteration B.**
     case threeThree
 
-    /// Roster 8 split 4/2/2 — the only three-branch shape. **Iteration B.**
+    /// Roster 8 split 4/2/2 — the only three-branch shape. Quorum 5, so the branch of four is still
+    /// one vote short: §10.4's arithmetic refuses the largest branch §16.2 names. **Iteration B.**
     case fourTwoTwo
 
     /// How many members each branch holds, in branch order.
@@ -167,8 +189,16 @@ nonisolated enum MeshPartitionShape: String, Equatable, Sendable, CaseIterable {
     /// §10.4's threshold for this shape's roster: ⌊|roster|/2⌋ + 1, written from the plan.
     var quorumThreshold: Int { rosterSize / 2 + 1 }
 
-    /// The shapes iteration A runs. Named so the matrix and this file cannot drift apart.
+    /// The shapes iteration A ran — rosters 3 and 4. Named so the matrix and this file cannot drift
+    /// apart.
     static let iterationA: [MeshPartitionShape] = [.twoOne, .twoTwo, .threeOne]
+
+    /// The shapes iteration B adds — rosters 6 and 8, which is what makes §16.2's roster list whole.
+    static let iterationB: [MeshPartitionShape] = [.threeThree, .fourTwoTwo]
+
+    /// Every shape the matrix runs. `allCases` in the order the two iterations added them, asserted
+    /// to be exactly `allCases` so a case added later cannot sit outside the matrix.
+    static let matrix: [MeshPartitionShape] = iterationA + iterationB
 }
 
 // MARK: - MeshScheduleEvent
@@ -335,6 +365,82 @@ nonisolated struct MeshConvergenceSchedule: Equatable, Sendable {
         return MeshConvergenceSchedule(
             seed: seed, shape: shape, branches: branches, departingMember: departingMember,
             removal: removal, steps: steps, heal: bridges + intra.reversed()
+        )
+    }
+
+    /// The same schedule with the departure moved to **just before** its branch's removal vote.
+    ///
+    /// The generator forces the departure last for the reason its own documentation gives — a
+    /// departed member takes no further part, so a schedule that let it act afterwards would be
+    /// asserting on a member that is gone. This transform lifts exactly that one constraint, for
+    /// exactly one claim: §10.4's *"after a departure shrinks roster 4 → 3, quorum drops to 2"*,
+    /// re-derived at the **manager** seam rather than at the model seam
+    /// (`MeshQuorumPartitionTests.rosterTwoCannotModerateAndADepartureRestoresAPairsPower` is the
+    /// model half). Nothing downstream moves: the leaver, the target and the heal were all planned
+    /// before the events were ordered, so the survivors and the spanning walk are untouched.
+    ///
+    /// A no-op unless the schedule runs both a departure and a vote, with the vote first.
+    func withDepartureBeforeTheVote() -> MeshConvergenceSchedule {
+        guard let removal else { return self }
+        let voteAt = steps.firstIndex {
+            if case .removalVote = $0.event { return $0.branch == removal.proposingBranch }
+            return false
+        }
+        guard let voteAt, let departureAt = steps.firstIndex(where: { $0.event == .departure }),
+              departureAt > voteAt else { return self }
+        var moved = steps
+        moved.insert(moved.remove(at: departureAt), at: voteAt)
+        return MeshConvergenceSchedule(
+            seed: seed, shape: shape, branches: branches, departingMember: departingMember,
+            removal: removal, steps: moved, heal: heal
+        )
+    }
+}
+
+// MARK: - MeshResplitPlan
+
+/// §16.2's fifth shape: a **nested re-split mid-merge**.
+///
+/// Not a partition shape — a partition shape splits a *whole* mesh before anything has merged. This
+/// is the cut that lands **while §10.3's exchange is open**: the survivors have re-formed the full
+/// mesh, every member is inside a merge window it has not concluded, and one healing branch is then
+/// cut in two. `MeshNetworkManager.applySessionEvent` answers that with `abandonMergeExchange()` on
+/// `next == .partitioned`, which is the behaviour this plan exists to drive.
+///
+/// The two sides are ``holdouts`` (a sub-branch of one original branch, cut off from everybody) and
+/// ``rest`` (every other survivor, which stays internally whole). Two sides and no more —
+/// ``MeshScheduleBounds/maxResplitSides``.
+nonisolated struct MeshResplitPlan: Equatable, Sendable {
+
+    /// Which branch of the original split is the one that re-splits.
+    let branch: Int
+
+    /// The members cut off from everybody else, as global indices. Never empty, never everybody.
+    let holdouts: [Int]
+
+    /// Every other survivor, as global indices. Never empty.
+    let rest: [Int]
+
+    /// The re-planned heal: one bridge between the two sides' anchors, then each side's remaining
+    /// members hanging off their own anchor, in a seeded order.
+    ///
+    /// Planned fresh rather than replayed, because the first heal's walk is over the *branches* and
+    /// this one is over the two **sides** — a different partition of the same survivors.
+    let heal: [MeshHealStep]
+
+    /// Both sides, in a fixed order, so a phase that has to act "once per side" is one loop.
+    var sides: [[Int]] { [holdouts, rest] }
+
+    /// Every survivor the re-split touches.
+    var members: [Int] { holdouts + rest }
+
+    /// The same plan with the intra-side half of its heal reversed — still a valid order, for the
+    /// same reason ``MeshConvergenceSchedule/withReversedIntraHeal()`` is.
+    func withReversedIntraHeal() -> MeshResplitPlan {
+        let bridges = heal.filter(\.isBridge)
+        let intra = heal.filter { !$0.isBridge }
+        return MeshResplitPlan(
+            branch: branch, holdouts: holdouts, rest: rest, heal: bridges + intra.reversed()
         )
     }
 }
@@ -526,6 +632,102 @@ nonisolated enum MeshScheduleGenerator {
         }
         return Array((bridges + random.shuffled(intra)).prefix(MeshScheduleBounds.maxHealSteps))
     }
+
+    // MARK: The nested re-split (iteration B)
+
+    /// The salt the re-split's own generator is seeded from.
+    ///
+    /// A **separate** generator rather than more draws from the schedule's, so adding a re-split
+    /// cannot re-phase a single draw of the base schedule: iteration A's 48 cells have to stay
+    /// byte-identical, and one extra `random.next()` in `schedule(seed:shape:preferQuorum:)` would
+    /// quietly rewrite all of them. Frozen constant, never displayed.
+    static let resplitSalt: UInt64 = 0x5245_5350_4C49_5400
+
+    /// Plans a nested re-split for an already-generated schedule.
+    ///
+    /// - Returns: nil when no branch has two survivors left to cut apart, which is the honest answer
+    ///   for a schedule whose departures and removals emptied its wide branch.
+    static func resplit(for schedule: MeshConvergenceSchedule) -> MeshResplitPlan? {
+        var random = MeshScheduleRandom(seed: schedule.seed ^ resplitSalt)
+        return resplit(for: schedule, using: &random)
+    }
+
+    /// The seeded half of ``resplit(for:)``.
+    private static func resplit(
+        for schedule: MeshConvergenceSchedule, using random: inout MeshScheduleRandom
+    ) -> MeshResplitPlan? {
+        let survivors = Set(schedule.survivors)
+        func living(_ branch: Int) -> [Int] { schedule.branches[branch].filter(survivors.contains) }
+        let candidates = schedule.branches.indices.filter { living($0).count >= 2 }
+        guard let branch = candidates.max(by: { living($0).count < living($1).count }) else {
+            return nil
+        }
+        let pool = living(branch)
+        let cutSize = 1 + random.index(below: max(1, pool.count - 1))
+        let holdouts = Array(random.shuffled(pool).prefix(cutSize)).sorted()
+        let rest = schedule.survivors.filter { !holdouts.contains($0) }
+        guard !holdouts.isEmpty, !rest.isEmpty else { return nil }
+        return MeshResplitPlan(
+            branch: branch, holdouts: holdouts, rest: rest,
+            heal: resplitHeal(
+                holdouts: holdouts, rest: rest, spent: Set(schedule.heal.map(\.unordered)),
+                using: &random
+            )
+        )
+    }
+
+    /// The re-planned heal: bridge first, then each side's own star, in a seeded order.
+    private static func resplitHeal(
+        holdouts: [Int], rest: [Int], spent: Set<Set<Int>>, using random: inout MeshScheduleRandom
+    ) -> [MeshHealStep] {
+        let anchors = bridgeAnchors(holdouts: holdouts, rest: rest, spent: spent, using: &random)
+        var intra: [MeshHealStep] = []
+        for member in holdouts where member != anchors.near {
+            intra.append(MeshHealStep(near: anchors.near, far: member, isBridge: false))
+        }
+        for member in rest where member != anchors.far {
+            intra.append(MeshHealStep(near: anchors.far, far: member, isBridge: false))
+        }
+        let bridge = MeshHealStep(near: anchors.near, far: anchors.far, isBridge: true)
+        return Array(([bridge] + random.shuffled(intra)).prefix(MeshScheduleBounds.maxHealSteps))
+    }
+
+    /// The pair that bridges the two sides, preferring one the **first** heal never used.
+    ///
+    /// `MeshNetworkManager.reGossipRecords(to:)` answers once per peer per *session*, and
+    /// `abandonMergeExchange()` does not reset that (it clears the window, not the answered set).
+    /// So where a fresh pair exists the re-plan spends it, and where none does the re-plan leans on
+    /// the half of §10.3's exchange that has **no** once-per-peer gate — the epoch heads — which is
+    /// why the sub-branch events mint no membership record. Both draws are taken unconditionally so
+    /// the presence of a fresh pair cannot re-phase the rest of the plan.
+    private static func bridgeAnchors(
+        holdouts: [Int], rest: [Int], spent: Set<Set<Int>>, using random: inout MeshScheduleRandom
+    ) -> (near: Int, far: Int) {
+        let fallback = (
+            near: holdouts[random.index(below: holdouts.count)],
+            far: rest[random.index(below: rest.count)]
+        )
+        var fresh: [MeshHealStep] = []
+        for near in holdouts.prefix(MeshPartitionFixtureBounds.maxMembers) {
+            for far in rest.prefix(MeshPartitionFixtureBounds.maxMembers)
+            where !spent.contains([near, far]) {
+                fresh.append(MeshHealStep(near: near, far: far, isBridge: true))
+            }
+        }
+        let pick = fresh.isEmpty ? nil : fresh[random.index(below: fresh.count)]
+        guard let pick else { return fallback }
+        return (pick.near, pick.far)
+    }
+}
+
+// MARK: - MeshPartitionFixtureBounds
+
+/// The roster ceiling every loop over members is bounded by (Power of 10 R2), written from plan §9's
+/// cap rather than from whatever a caller happened to pass.
+nonisolated enum MeshPartitionFixtureBounds {
+
+    /// Plan §9's roster cap, and the widest roster §16.2 names.
+    static let maxMembers = 8
 }
 
 // MARK: - MeshConvergenceSeeds
@@ -562,10 +764,10 @@ nonisolated enum MeshConvergenceSeeds {
 @Suite(.serialized)
 struct MeshConvergenceScheduleTests {
 
-    /// Every (shape, quorum-preference, seed) cell iteration A generates.
+    /// Every (shape, quorum-preference, seed) cell the whole matrix generates — both iterations.
     private func allCells() -> [MeshConvergenceSchedule] {
         var cells: [MeshConvergenceSchedule] = []
-        for shape in MeshPartitionShape.iterationA {
+        for shape in MeshPartitionShape.matrix {
             for preferQuorum in [true, false] {
                 for seed in MeshConvergenceSeeds.family {
                     cells.append(MeshScheduleGenerator.schedule(
@@ -643,14 +845,93 @@ struct MeshConvergenceScheduleTests {
         }
     }
 
-    /// **The vocabulary is covered.** Every event in §16.2's list is emitted somewhere in iteration
-    /// A's matrix — a cell family that quietly stopped producing departures would otherwise pass.
-    @Test func iterationAsMatrixEmitsEveryEventInTheVocabulary() {
+    /// **The vocabulary is covered.** Every event in §16.2's list is emitted somewhere in the
+    /// matrix — a cell family that quietly stopped producing departures would otherwise pass.
+    @Test func theMatrixEmitsEveryEventInTheVocabulary() {
         var seen: Set<String> = []
         for cell in allCells() { seen.formUnion(cell.steps.map(\.event.token)) }
         for event in MeshScheduleEvent.vocabulary {
-            #expect(seen.contains(event.token), "iteration A never emits \(event.token)")
+            #expect(seen.contains(event.token), "the matrix never emits \(event.token)")
         }
+    }
+
+    /// **The matrix is the whole enum.** A shape added to ``MeshPartitionShape`` and forgotten in
+    /// ``MeshPartitionShape/matrix`` would be a row §16.2 asks for and nothing runs.
+    @Test func everyDeclaredShapeIsInTheMatrix() {
+        #expect(Set(MeshPartitionShape.matrix) == Set(MeshPartitionShape.allCases))
+        #expect(MeshPartitionShape.matrix.count == MeshPartitionShape.allCases.count,
+                "no shape is listed twice")
+        #expect(MeshPartitionShape.iterationB.map(\.rosterSize) == [6, 8],
+                "§16.2's rosters 6 and 8 are exactly 3/3 and 4/2/2")
+        #expect(Set(MeshPartitionShape.matrix.map(\.rosterSize)) == [3, 4, 6, 8],
+                "and the four rosters §16.2 names are all covered")
+    }
+
+    /// **The nested re-split is a valid second partition.** Two non-empty sides that together are
+    /// the survivors, a heal that is a spanning walk over them, and every pair spent once.
+    @Test func theNestedResplitCutsTheSurvivorsInTwoAndHealsThemBack() {
+        var planned = 0
+        for cell in allCells() {
+            guard let plan = MeshScheduleGenerator.resplit(for: cell) else { continue }
+            planned += 1
+            let survivors = Set(cell.survivors)
+            #expect(!plan.holdouts.isEmpty && !plan.rest.isEmpty, "a cut has two sides")
+            #expect(Set(plan.members) == survivors, "and together they are the survivors, exactly")
+            #expect(plan.members.count == survivors.count, "with nobody counted twice")
+            #expect(Set(plan.holdouts).isSubset(of: Set(cell.branches[plan.branch])),
+                    "seed \(cell.seed): the holdouts come out of ONE branch (§16.2's 'nested')")
+            #expect(plan.heal.count <= MeshScheduleBounds.maxHealSteps)
+            #expect(plan.heal.filter(\.isBridge).count == 1, "two sides need exactly one bridge")
+            var pairs: Set<Set<Int>> = []
+            var reached: Set<Int> = plan.heal.first.map { [$0.near] } ?? []
+            for step in plan.heal {
+                #expect(pairs.insert(step.unordered).inserted, "each pair once per heal window")
+                #expect(step.near != step.far)
+                if reached.contains(step.near) || reached.contains(step.far) {
+                    reached.formUnion([step.near, step.far])
+                }
+            }
+            #expect(reached == survivors || survivors.count <= 1,
+                    "seed \(cell.seed): the re-plan must reach every survivor in order")
+        }
+        #expect(planned > 0, "no cell could be re-split, so the plan asserts nothing")
+    }
+
+    /// **The re-split is replayable and does not re-phase the base schedule.** Same seed, same
+    /// plan; and the schedule the plan was taken from is byte-identical to one generated without it.
+    @Test func theResplitPlanIsReplayableAndSaltedAwayFromTheSchedule() {
+        for shape in MeshPartitionShape.matrix {
+            let cell = MeshScheduleGenerator.schedule(
+                seed: MeshConvergenceSeeds.root, shape: shape, preferQuorum: false
+            )
+            #expect(MeshScheduleGenerator.resplit(for: cell)
+                    == MeshScheduleGenerator.resplit(for: cell), "one seed, one re-split")
+            #expect(MeshScheduleGenerator.schedule(
+                seed: MeshConvergenceSeeds.root, shape: shape, preferQuorum: false
+            ) == cell, "\(shape.rawValue): planning a re-split moved no draw of the base schedule")
+        }
+    }
+
+    /// **The departure-before-the-vote transform reorders and nothing else.** Same multiset of
+    /// steps, same heal, same survivors — only the position of the departure moves.
+    @Test func movingTheDepartureAheadOfTheVoteChangesOnlyTheOrder() {
+        var moved = 0
+        for cell in allCells() {
+            let reordered = cell.withDepartureBeforeTheVote()
+            #expect(reordered.steps.count == cell.steps.count)
+            #expect(reordered.steps.map(\.event.token).sorted()
+                    == cell.steps.map(\.event.token).sorted(), "the same events, reordered")
+            #expect(reordered.heal == cell.heal && reordered.survivors == cell.survivors)
+            guard reordered.steps != cell.steps,
+                  let departureAt = reordered.steps.firstIndex(where: { $0.event == .departure }),
+                  let voteAt = reordered.steps.firstIndex(where: {
+                      if case .removalVote = $0.event { return true }
+                      return false
+                  }) else { continue }
+            moved += 1
+            #expect(departureAt < voteAt, "seed \(cell.seed): the departure now runs first")
+        }
+        #expect(moved > 0, "no cell was reordered, so the transform asserts nothing")
     }
 
     /// **§10.4's arithmetic, at the plan level.** A quorum is only ever claimed where the branch
