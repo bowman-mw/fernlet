@@ -291,8 +291,9 @@ enum MeshFlowDriver {
         return nil
     }
 
-    /// Leaves through the clean-departure verb, so the signed `member-departure.v1` is on the wire
-    /// before the transport is torn down.
+    /// Leaves through the clean-departure verb, so the signed ending is on the wire before the
+    /// transport is torn down. On a roster larger than two that is `member-departure.v1`; on a
+    /// roster of exactly two `MeshDevelopmentPlan` makes it `terminated.v1` (plan §10.6).
     private static func leave(manager: MeshNetworkManager) async {
         echo("leaving via leaveSessionAfterNotifyingPeers \(manager.harnessMembershipSummary)")
         await manager.leaveSessionAfterNotifyingPeers()

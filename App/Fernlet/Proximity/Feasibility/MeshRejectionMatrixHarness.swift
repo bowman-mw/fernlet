@@ -57,9 +57,12 @@ enum MeshMatrixDebugOptions {
     static let roleKey = "FERNLET_MESH_ROLE"
 
     /// `FERNLET_MESH_LEAVE_AFTER=<seconds>` — leave the session that many polls in, through
-    /// `leaveSessionAfterNotifyingPeers()`, so the signed `member-departure.v1` is emitted BEFORE
-    /// the teardown. Absent means the run never leaves (a hard `simctl terminate` emits nothing,
-    /// which is what every Lane C run before this one did).
+    /// `leaveSessionAfterNotifyingPeers()`, so the signed ending is emitted BEFORE the teardown.
+    /// Which ending is `MeshDevelopmentPlan`'s (P4 item 6, plan §10.6): a merged derived roster
+    /// larger than two emits `member-departure.v1`, and a run whose roster is exactly **two** emits
+    /// `terminated.v1` instead — so a two-node Lane C leave ends the mesh rather than shrinking it.
+    /// Absent means the run never leaves (a hard `simctl terminate` emits nothing, which is what
+    /// every Lane C run before this one did).
     static let leaveAfterKey = "FERNLET_MESH_LEAVE_AFTER"
 
     /// `FERNLET_MESH_REMOVE_AFTER=<seconds>` — file a signed removal record against the first

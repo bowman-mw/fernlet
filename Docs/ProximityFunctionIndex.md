@@ -158,7 +158,8 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `localFingerprint` | Exposes the local identity fingerprint. |
 | `sessionParticipants` | Builds a de-duplicated participant list from local identity, current mesh members, or committed pairwise slots while excluding removed members. |
 | `leaveSession()` | Clears session photo metadata and leaves the mesh/pairwise session. |
-| `leaveSessionAfterNotifyingPeers()` | Ends the session and tears down transport. **No longer sends `.sessionGoodbye`** (P3 item 3): the legacy frame is parsed, never emitted, and the disconnect that follows already says everything an unsigned frame could. |
+| `leaveSessionAfterNotifyingPeers()` / `leaveSessionAfterNotifyingPeers(clock:)` | Ends the session and tears down transport. **No longer sends `.sessionGoodbye`** (P3 item 3): the legacy frame is parsed, never emitted. Since P4 item 6 (plan §10.6) the ending is `MeshDevelopmentPlan`'s: a merged roster larger than two departs with the custodians the branch view says are reachable, a genuine final pair signs the termination. The `clock:` form injects the instant the 15-second handoff window opens and the instant it closes, so the bound is asserted on a test clock rather than by timing a real send. |
+| `developmentPlan(startedAt:)` / `recordDevelopmentHandoffOutcome(_:finishedAt:)` | Derive plan §10.6's decision from the merged derived roster plus the branch view, and record how the bounded handoff ended (`lastDevelopmentPlan`, `lastDevelopmentHandoffOutcome`). Memory-only: a decision, not a fact about membership — the durable half is the sealed ending mark. |
 | `prepareMembershipLedger(meshID:founderSigningPublicKey:)` | Arms the verified ledger at mesh creation, rooted in the founder's key. Idempotent per mesh; a different mesh id replaces it, because records never cross meshes. |
 | `dispatchMembershipEventPayload(_:plaintext:decoder:slot:)` | Decodes `.meshMemberAdmission` / `.meshMemberDeparture` / `.meshMemberRemoval` / `.meshTerminated` / `.meshInventoryDigest` / `.meshEpochHeads` on a COMMITTED slot, buffers for adoption when this device is still on its bootstrap ledger, else inserts through `MeshMembershipRecordVerifier`, commits durably, then hands the roster move to `applyRosterMove(_:from:)`. |
 | `decodeMembershipFrame(_:plaintext:decoder:)` | Static, pure: one frame → the record it carries, with the type's own clamps applied. Split from insertion because a bootstrap joiner takes the same decode down the adoption path. |
@@ -292,7 +293,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `recordVerifiedAdmissionDurably()` / `joinDurably()` | **The join-ack gate**: no epoch adopted, no key unwrapped, no beacon started and no "joined" shown until the context is on the disk. |
 | `commitVerifiedRecord(rollingBackTo:type:)` | Keeps a verified record only if the context containing it was sealed — otherwise the verifier snapshot is restored, so "verified" and "remembered" stay the same set. |
 | `resetSessionStateMachine(keepingTerminalState:)` / `abandonUnpersistedSession()` | Clear the run-scoped halves (a terminal state survives until a new session starts), and unwind a founding whose context could not be sealed. |
-| `sendMembershipEvent(_:)` / `emitMembershipEvent(_:)` | Mint, sign and broadcast `member-departure.v1` / `terminated.v1`. The async form is awaited by `leaveSessionAfterNotifyingPeers()`, which would otherwise race its own teardown. |
+| `sendMembershipEvent(_:custodyHandoff:)` / `emitMembershipEvent(_:)` | Mint, sign and broadcast `member-departure.v1` / `terminated.v1`. The async form is awaited by `leaveSessionAfterNotifyingPeers()`, which would otherwise race its own teardown. A departure carries the leaver's `MeshCustodyHandoffSummary` (custodians named, item count still zero — P5 owns the content). **A termination is gated on `MeshDevelopmentPlan.permitsTermination(_:)`** (P4 item 6): a device whose own merged roster is larger than two refuses to sign one, logged rather than silent. No ledger at all still may — the ceiling and the epoch-counter cap end sessions that never had one. |
 | `sendRemovalRecord(_:)` / `emitRemovalRecord(_:)` | Broadcast a completed `member-removal.v1` to every member EXCEPT the one it removes (plan §8.3). |
 | `membershipEventRecipients(excluding:)` | Who a membership frame about a fingerprint may reach — `MeshRotationPolicy.recipients` reused verbatim, so the set that gets the new key and the set that is told why cannot drift apart. The subject is excluded here, not by the caller's ordering. |
 | `emitApprovedRemovalRecord(_:)` | The legacy two-party path's completion. Since P4 item 5 it is a one-line call onto `mintAndFileRemoval(target:proposalID:voterFingerprints:)`. |
@@ -550,6 +551,19 @@ here reaches `MeshMembershipLedger`, and nothing here is `Codable` — presence 
 | --- | --- |
 | `MeshMemberPresence` | `present` / `temporarilyDisconnected` — frozen English tokens, logged verbatim, never localized. Presence, **never a record**. |
 | `MeshBranchView.init(roster:reachable:selfFingerprint:)` | Splits the derived roster into present and `temporarilyDisconnected`, and **copies** `memberCount`, `quorumThreshold` and `isFinalPair` through unchanged — the three answers a partition must not move (§10.2/§10.4/§10.6). |
+
+### `MeshDevelopmentPlan.swift`
+
+P4 item 6 (plan §10.6): what "the user developed the mesh" means while it is split, as one pure
+value derived before anything is signed.
+
+| Function / property | Behavior |
+| --- | --- |
+| `MeshDevelopmentEnding` | `departure` or `termination`, plus the frozen wire token and the two session events each implies (`departureRequested`/`departureSent`, `terminationRequested(.finalPairTermination)`/`terminationSent`). Frozen English; never display copy. |
+| `MeshDevelopmentPlan.init(roster:branch:selfFingerprint:startedAt:)` | The ending comes from the **merged derived roster** (`isFinalPair`); the custodians come from the **branch view** (`presentFingerprints − self`). The connected-peer count is not a member of the type, so the mistake §10.6 forbids cannot be made at a call site. No ledger ⇒ departure; no branch view ⇒ every roster member assumed reachable. |
+| `handoffDeadline` / `handoffHasExpired(at:)` / `handoffOutcome(finishedAt:)` | §10.6's 15-second window as a deadline and a pure comparison — no timer, no sleep. `completed` / `noReachableCustodian` / `windowExpired` are all named answers; the unreachable branch is never in the target set, so nothing waits on it. |
+| `handoffSummary` | The `MeshCustodyHandoffSummary` the departure record carries: custodians named, `handedOffItemCount` zero until P5's routed store has something to hand over. |
+| `permitsTermination(_:)` | The **issuance** gate: only a merged roster of two or fewer may sign a `terminated.v1`. A nil/empty roster is permitted — the ceiling and the counter cap end sessions with no ledger. Receivers never depend on it: `MeshDerivedRoster` downgrades a wrongly-issued termination at read. |
 | `branchCoordinatorFingerprint` / `isLocalBranchCoordinator` | The lowest fingerprint **present** — what scopes a branch's 15-minute rotation to itself, and why two branches' same-counter epochs are distinct refs that `coexist`. |
 | `isPartitioned` / `isAlone` / `branchMemberCount` / `presence(of:)` | Whether any member is out of reach, whether this is a partition of one (nobody to heartbeat, so the 30-minute window runs), the branch size, and one member's presence (nil for a fingerprint the roster does not name). |
 | `MeshPartitionVerdict` | `unchanged` / `linksLost` / `linksRestored`, with `sessionEvent` naming the edge each raises. |
