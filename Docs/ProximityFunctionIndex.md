@@ -569,6 +569,27 @@ value derived before anything is signed.
 | `MeshPartitionVerdict` | `unchanged` / `linksLost` / `linksRestored`, with `sessionEvent` naming the edge each raises. |
 | `MeshPartitionDetector.verdict(previous:current:)` | The pure edge-detector: only *entering* a partition raises `linksLost`, only a *full* heal raises `linksRestored`. A deepening split is already partitioned; a partial heal leaves the branch a branch and lets the returning peer take `peerCommitted` into the merge path. No clock, so no timestamp can manufacture or hide a partition. |
 
+### `MeshContentMerge.swift` / `MeshContentIngest.swift`
+
+P4 item 7 (plan §10.3, §21.3): the **content** half of the merge — ID-keyed union, deterministic
+re-derivation, and the ingestion gates re-run at the receiving member. Pure values, nothing
+persisted (`MeshSessionContext` schema stays 2), nothing on the wire. P5 owns the routed store and
+the drain; this file owns only the rules.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshMergeableContent` | What one merged content kind must expose: `contentID` (the UUID the union keys on), `senderFingerprint`, `orderingInstant`, a content-derived `mergeTiebreak`, and `setCapacity`. |
+| `MeshContentOrder.precedes(_:_:)` | The one total order: `(orderingInstant, senderFingerprint, contentID, mergeTiebreak)` ascending — §10.3's stated transcript order verbatim, plus a last resort that can only break a tie the first three cannot. |
+| `MeshContentSet<Item>` | The ID-keyed set: dedup by id (the order-least copy wins), sort, keep the newest `setCapacity` — the same bound every live surface applies. `merging(_:)` is commutative, associative and idempotent, at the cap as well as below it. Deliberately **not** `Codable`. |
+| `MeshMergedPhoto` / `MeshMergedMessage` / `MeshMergedHeart` | The three projections. The photo carries `keyEpoch` through untouched (§21.5's P5 handoff) and a **local** SHA-256 digest, not a wire field. The message carries both clocks — the untrusted `claimedSentAt` and the receiver's `firstSeenAt`. The heart carries **no** receipt field: a peer's receipt is not this member's. |
+| `MeshMergedMessage.clamped(_:around:)` / `claimWindow` | The ±10-minute clamp. A claim inside its window is returned unchanged, which is why honest traffic sorts identically at every member; a forged stamp moves at most 10 minutes from where it actually arrived. |
+| `MeshContentLedger` | Three sets and nothing else — the content twin of `MeshMembershipLedger`. `merging(_:)` is set union in all three kinds, so an N-way partition tree converges with pairwise merges only. |
+| `MeshPhotoReassembly.digest(of:)` / `verdict(reassembled:expecting:)` / `admitting(_:reassembled:into:)` | §10.3's "hash-validated on reassembly". `admitting` returns the set **unchanged** unless the bytes validate, so "silently kept" is not a reachable state; `rejectedEmpty` and `rejectedDigestMismatch` are named, not silent. |
+| `MeshContentGates` / `folding(chatAllowed:senders:isRefused:)` / `admits(_:)` | §21.3's decision as a value: the 13+ chat gate and the local block/ban, folded once from the seams that already enforce them (`MeshNetworkManager.isChatAllowed`, `ProximityHost.isBlockedFingerprint`, `ModerationBanStore.isPeerBanned`). Local by construction — two members may hold different gates over one union. |
+| `MeshContentLedger.visibleTranscript(gates:)` / `visiblePhotos(gates:)` / `visibleHearts(gates:)` / `senders` | The gates as a **view filter over an unmutated union** — same shape as termination-derived-at-read. A blocked sender's message still unions; it simply does not render at the member that blocked them, and re-opening the gate reveals it with no second merge. |
+| `MeshHeartReceipt` / `MeshContentLedger.heartReceipt(_:committed:)` | `pending` / `received`, frozen tokens. The union alone answers `pending` for everything. |
+| `MeshHeartCommit.commit(_:into:)` / `MeshHeartCommitOutcome` | Drives merged hearts through the **existing** `ProximityHeartLedger` — its id-dedup, its 5-minute per-sender cooldown — rather than a second copy of them. `judgements` is one per distinct gift id: a duplicate that crossed the split is collapsed by the union *before* the ledger sees it, so the cooldown is judged once. |
+
 ### `MeshSessionCeiling.swift`
 
 Plan §8.2's 6-hour ceiling, guarded at **both** bounds.
