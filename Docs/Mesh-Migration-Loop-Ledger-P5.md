@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P5
 
 **Phase:** P5 (encrypted store-and-forward routing) · **Prompt:** [Next-Round-Prompt-Mesh-P5-2026-09-03.md](Next-Round-Prompt-Mesh-P5-2026-09-03.md)
-**Started:** 2026-09-03 · **Iteration:** 2 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
+**Started:** 2026-09-03 · **Iteration:** 3 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -9,17 +9,17 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 |---|---|---|---|---|---|---|
 | 1 | MeshRoutedManifest + MeshRecipientKeyWrap (§11) | 1 | — | done | `bf31f46` | trio additive, no golden moved; verifier splits departed (ok) vs removed (refused); acceptedTypeTokens is item 11's seam |
 | 1a | Pre-existing test-host crash: `unowned let store` in mesh rigs (MeshNetworkManager.swift:182, PresenceManager.swift:141) traps nondeterministically after mesh.merge.askedLateReconnect | 1 | — | todo | | seen in P4-era logs before item 1 existed; rig must own the store for the manager's lifetime; small, file-disjoint |
-| 2 | MeshChunk on P2's existing stream lane | 1 | 1 | in-flight | | reuse MeshTransferStreamTable, no new transport |
-| 3 | MeshCustodyReceipt, four-state sidecar + fifth wrinkle | 1 | 2 | todo | | seal refused ≠ deferred |
+| 2 | MeshChunk on P2's existing stream lane | 1 | 1 | done | `5019e04` | origin-signed chunks + assembly-time contentHash check; chunkID derived, origin-free; Transport/ docs-only |
+| 3 | MeshCustodyReceipt, four-state sidecar + fifth wrinkle | 1 | 2 | in-flight | | seal refused ≠ deferred |
 | 4 | MeshRecipientReceipt, per-type ack stages | 1 | 3 | todo | | hearts final only at foreground decrypt + commit |
 | 5 | Routed content digest, own frozen token | 1 | 1 | todo | | do NOT collide with membership's inventory-digest.v1 |
 | 6 | The drain on the one merge path | 1 | 1, 5 | todo | | reconnect ≡ merge ≡ relay drain |
 | 7 | Merge-window redesign (2d comes due) | 1 | 6 | todo | | close only when every asked peer matched |
 | 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; increment 1's only relay hop |
-| 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth |
+| 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth; must COUNT parked manifest-less chunks (C10) and DROP a parked set whose manifest is refused |
 | 10 | Locked-device handling | 1 | 3 | todo | | ciphertext-only custody; keychain protection unweakened |
-| 11 | Type-token registry | 1 | 1 | todo | | unknown types rejected, not forwarded |
-| 12 | MeshFrameReplayWindow wired | 1 | 2 | todo | | against manifest/chunk ids, never epoch |
+| 11 | Type-token registry | 1 | 1 | todo | | unknown types rejected, not forwarded; feeds item 1's `acceptedTypeTokens`; with item 9, drop parked chunk sets on `unknownTypeToken` |
+| 12 | MeshFrameReplayWindow wired | 1 | 2 | todo | | against manifest/chunk ids, never epoch. CAVEAT: window bound is 64 frames × 8 senders = 512 ids but one maximal item is 1024 chunks → a legitimate 65th chunk hits `senderWindowFull`; resize/key per item, do not paper over (chunkID is origin-free, C3/C4) |
 | 13 | Retire the three keyEpoch gates with the path | 1 | 1–7 | todo | | never loosen in place; re-check line numbers first |
 | 14 | P5 acceptance battery | 1 | 1–13 | todo | | extend MeshScheduleGenerator, not a new rig |
 
@@ -39,7 +39,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | Departure delivery ack | (default: still no ack; drain carries custody instead) | — |
 | D1 recipient keys | mint takes caller-supplied verified `[fingerprint: X25519 pub]`; refuses by name if a destination lacks one | 2026-09-03 |
 | D2 contentHash/size | opaque SHA-256 over the CIPHERTEXT + complete sealed-blob size; item 1 computes neither | 2026-09-03 |
-| D3 item seal | not item 1; `AEAD.meshRoutedItemV1` stays Reserved; content key from `makeContentKey()` | 2026-09-03 |
+| D3 item seal | not item 1 and not item 2 — the seal is item 6 / P6's; `AEAD.meshRoutedItemV1` stays Reserved; content key from `makeContentKey()` | 2026-09-03 |
 | D4/D5 wrap | fresh ephemeral + nonce per wrap; AAD = purpose ‖ meshID ‖ itemID ‖ origin ‖ recipient (transplant-proof) | 2026-09-03 |
 | D6 expiry | receiver requires exact floored equality with own hardDeadline + 1200 s | 2026-09-03 |
 | D7 wraps ≡ destinations | wire-enforced; "roster − self" is mint policy, never a v2 trigger | 2026-09-03 |
@@ -50,11 +50,25 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | D12 destinations | trusted on origin signature, bounded, distinct, origin-free; NOT checked against ledger.admissions | 2026-09-03 |
 | D13 unknown tokens | verifier takes `acceptedTypeTokens` from day one; refused between shape check and origin lookup | 2026-09-03 |
 | D14 departed vs removed | departed origin still verifies; quorum-removed origin refused (`originRemoved`) | 2026-09-03 |
+| C1/C2 chunk integrity | BOTH: per-chunk origin Ed25519 signature over the transcript AND assembly-time contentHash check; relays forward the origin-signed chunk unchanged, never re-derive the inner signature | 2026-09-03 |
+| C3/C4 chunkID | derived, not a wire field: UUID(SHA-256(purpose ‖ itemID ‖ index)[0..<16]); origin-free — the replay window separates by sender | 2026-09-03 |
+| C5/C6 digests | domain-tagged: `Hash.meshRoutedContentV1` "fernlet.mesh.routed-content.hash.v1", `Hash.meshRoutedChunkV1` "fernlet.mesh.routed-chunk.hash.v1", + chunk-id purpose; manifest.contentHash meaning frozen = SHA-256(lp(purpose) ‖ blob) | 2026-09-03 |
+| C7 chunk frame | `Signature.meshRoutedChunkV1` "fernlet.mesh.routed-chunk.v1" (.lengthPrefixed) + `PayloadType.meshRoutedChunk` | 2026-09-03 |
+| C8/C9 wire fields | meshID, itemID, origin, contentHash, chunkIndex/Count (UInt32), chunkHash, expiresAt, payload, signature; `size` stays the manifest's | 2026-09-03 |
+| C10 manifest-less chunk | admissible: verified from the chunk alone and PARKED, never silently dropped (items 9/11 own the parked set's fate) | 2026-09-03 |
+| C11/C12 blob contract | no item sealer in item 2 (seal = item 6 / P6); blob is self-contained (nonce + tag inside); contentHash + size measure the COMPLETE blob | 2026-09-03 |
+| C13 assembler | in-memory bounded `[UInt32: MeshChunk]`; item 3 re-backs bytes with the sealed sidecar; duplicate-vs-conflict decided on transcript + payload, not hedged signature bytes | 2026-09-03 |
+| C14 chunker | primitive = one chunk; bounded loop over it; guard chain (incl. full-blob hash) once per item | 2026-09-03 |
+| C15 pacing placeholders | `maxChunksInFlightPerPeer = maxConcurrentOutbound − 1` (3) and 256 KiB are tier-2 placeholders; measure with a concurrent photo transfer on the same tunnel | 2026-09-03 |
+| C16 Transport/ | no behavioural change; one docs-only amendment in MeshTransferStreamTable | 2026-09-03 |
 
 ## Session notes
 - 2026-09-03: Opus 4.8/5 were briefly down (item 1's workflow ran on the session model, Fable 5.1); owner confirmed Opus is back — later items use `model: "opus"` per the launcher. Ultracode on: each item runs as a small Workflow (understand → implement → adversarial verify → fix).
 
 ## Surprises worth not re-deriving
+- **CryptoKit Ed25519 signatures are HEDGED (nondeterministic).** Never compare signed records by full `==`; compare canonical bytes + payload and verify both signatures. Two mints differ only in the 64 signature bytes; goldens exclude the signature.
+- `CryptographicWallScan` matches bare primitive names in COMMENTS too (`rawCryptographicCallsNameAPurpose`); don't name a sealing primitive in prose.
+- A non-existent suite in `-only-testing` matches zero tests and still prints `TEST EXECUTE SUCCEEDED` — always check `Test run with N tests` is non-zero (item 1's verifier suite is `MeshRoutedManifestSigningTests`; there is no `…VerifyTests`).
 - **Full-suite host crash is pre-existing and nondeterministic** (item 1a): `Attempted to read an unowned reference … already destroyed` on the main thread after `mesh.merge.askedLateReconnect`; the 60 "failing" tests are the ones interrupted, no assertion failed. Re-run the interrupted suites targeted (54 suites → 680 green) and read the implementer's clean full run before believing the red.
 - zsh does not word-split `$SUITES` — `${=SUITES}` or an array; `TEST EXECUTE SUCCEEDED` over "Executed 0 tests" is a green banner over nothing.
 - Swift Testing's `passed on 'Clone` counter reads 0 in this Xcode; the proof is `Test run with N tests in M suites passed` + per-suite ✔ lines.
@@ -77,4 +91,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share this tree + sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` held by another session — never stage them.
 
 ## Next item
-2 (in-flight, iteration 2) — then 1a as a bundled small commit when convenient
+3 (in-flight, iteration 3) — then 1a as a bundled small commit when convenient
