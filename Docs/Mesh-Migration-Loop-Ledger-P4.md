@@ -1,14 +1,14 @@
 # Mesh Migration Loop Ledger — P4
 
 **Phase:** P4 (partition and merge) · **Prompt:** [Next-Round-Prompt-Mesh-P4-2026-09-02.md](Next-Round-Prompt-Mesh-P4-2026-09-02.md)
-**Started:** 2026-09-02 · **Iteration:** 2 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
+**Started:** 2026-09-02 · **Iteration:** 3 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
 | 1 | Partition detection + branch-local operation (§10.2) | 1 | — | done | `e48ab81` | `MeshBranchView` + `MeshPartitionDetector` (pure edge detector); `evaluatePartition(reachable:now:)` on-demand, no timer; nothing calls it in shipping code yet (P7 polls). 10 tests, 3708 green |
-| 2 | The single merge path (§10.3) on `mergeMembershipLedger` | 1 | 1 | in-flight | 2a `bf81039` | 2a: all four reconnect entries (blip/heal/lapse/restart) route through `mergeReconnected(_:entry:)` → the one path; union rides the existing inventory-digest + re-gossip (no wire change); `MeshMergeOffer.foldedHeads` names cap overflow; schema 2. **2b owes:** (i) overflow counted at the writer (`writeSessionContext`), small; (ii) a tier-1 digest ask driven end-to-end through `FakePeerNetwork`, small; (iii) gate `openBlipMergeIfReconnected` on "peer ∈ derived roster before commit" so a NEW admission still rotates `.membership`, not `.merge`, small. Epoch heads *on the wire* → handed to item 3 (see surprises). |
+| 2 | The single merge path (§10.3) on `mergeMembershipLedger` | 1 | 1 | done | 2a `bf81039`, 2b `9225748` | All four reconnect entries (blip/heal/lapse/restart) route through `mergeReconnected(_:entry:)` → the one path; union rides the existing inventory-digest + re-gossip (no wire change); overflow counted at the writer after the seal; blip-merge only for a peer already in the roster; `MeshMergeExchangeTests` drives the digest end-to-end on `FakePeerNetwork`. Schema 2. Epoch heads *on the wire* → item 3. |
 | 3 | Divergent-epoch reconciliation, coexist → one head | 1 | 2 | todo | | successor = max+1, cause .merge, no wall clock |
 | 4 | §10.5 re-gossip + departure recovery at merge | 1 | 2 | todo | | owner's worked example verbatim |
 | 5 | Quorum under partition (§10.4), rosters 2–8 | 1 | 1 | todo | | check if proposal/vote records exist first |
@@ -60,5 +60,9 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - **(P4 i2)** The `peerCommitted` self-edge carried no effects — that was the silent merge bypass for blips and partial heals. Any future state-machine self-edge needs the same check.
 - **(P4 i2)** `awaitingResumeMerge` no longer clears inside `mergeMembershipLedger`; the window closes on a peer digest that *matches* local inventory, and a re-split abandons it. Interrupted-run logs (`** BUILD INTERRUPTED **`) carry no markers — count only runs with a `Test run with` line.
 
+- **(P4 i3)** **Sample rotation-queue state right after a synchronous pump, never after an `await`.** Under a loaded suite a `Task.yield()` can take seconds, so the 2 s debounce fires and consumes `pendingCause` before the assertion reads it (`test3.log`, 2 issues, fixed by sampling inside `settle`). Every multi-node async test needs this discipline. The wire test costs ~91 s under load vs 0.5 s alone (yield-bound); suite total did not regress.
+- **(P4 i3)** `IdentityService()` is keyed on one process-wide keychain service, so two managers in one process are **the same device** (fingerprints collide). `MeshNetworkManager`'s internal designated init now takes `identity: IdentityService? = nil` for exactly this; unreachable from the public init.
+- **(P4 i3)** `MeshMergeExchangeTests` is the rig for item 3's heads-on-the-wire: both ends already exchange real signed frames on `FakePeerNetwork`, so a head-bearing frame asserts end-to-end without new fakes.
+
 ## Next item
-2b — the three small residuals above (i–iii) in one iteration, then item 3 (which absorbs "heads on the wire" + the `divergent` tunnel gate). Items 5 and 8 remain unblocked (prereq 1 only) if 2b/3 stall.
+3 — divergent-epoch reconciliation (`coexist` → one head): successor at counter max+1, `cause = .merge`, minted by the merged view's deterministic coordinator (default when absent: lowest fingerprint present), no wall clock; **plus** epoch heads on the wire and opening the `divergent` tunnel gate in `MeshEpochAcceptance.introductionVerdict` as part of the mint (see (P4 i2)). Check whether the existing `epochRef` frame can carry the head set before adding a frame. Items 5 and 8 remain unblocked (prereq 1 only) if 3 stalls.
