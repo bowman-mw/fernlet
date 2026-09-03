@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P4
 
 **Phase:** P4 (partition and merge) · **Prompt:** [Next-Round-Prompt-Mesh-P4-2026-09-02.md](Next-Round-Prompt-Mesh-P4-2026-09-02.md)
-**Started:** 2026-09-02 · **Iteration:** 5 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
+**Started:** 2026-09-02 · **Iteration:** 6 done · **Tree at seed:** main = `262f3da` (pushed; = `3722511` + the launcher commit)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -11,7 +11,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 2 | The single merge path (§10.3) on `mergeMembershipLedger` | 1 | 1 | done | 2a `bf81039`, 2b `9225748` | All four reconnect entries (blip/heal/lapse/restart) route through `mergeReconnected(_:entry:)` → the one path; union rides the existing inventory-digest + re-gossip (no wire change); overflow counted at the writer after the seal; blip-merge only for a peer already in the roster; `MeshMergeExchangeTests` drives the digest end-to-end on `FakePeerNetwork`. Schema 2. Epoch heads *on the wire* → item 3. |
 | 3 | Divergent-epoch reconciliation, coexist → one head | 1 | 2 | done | `6d6cd34` | Minter = `presentedRotationRoster().min()` (pure fn of merged roster; branch-scoped ⇒ lowest present when coordinator absent); `rotationBasisHead` = max known head ⇒ next = max+1, cause `.merge`, coalesces with a roster move; `unresolvedEpochHeads` stops re-minting. **New additive frame** `fernlet.mesh.epoch-heads.v1` (full trio, no golden moved) on the signed unsealed membership broadcast. `divergent` verdict → `.reconcile` gated by `mayReconcileDivergentEpochs` (default false; QUIC-only reach). Schema 2. 9 tests / 3 suites; wall-check PASSED; 3732 green |
 | 4 | §10.5 re-gossip + departure recovery at merge | 1 | 2 | done | `ac3bddf` | Tests only (`reGossipRecords` already carried departures). Worked example verbatim + residual + missed-departure recovery + merge laws under departures; path proved from the fabric's per-frame sender handle. `MeshDepartureRig` = general N-manager rig for item 9. 3738 green |
-| 5 | Quorum under partition (§10.4), rosters 2–8 | 1 | 1 | todo | | check if proposal/vote records exist first |
+| 5 | Quorum under partition (§10.4), rosters 2–8 | 1 | 1 | done | `91fcaef` | Two new signed records, full trio each: `removal-proposal.v1` (binds proposalID→mesh/target/proposer) + `removal-vote.v1` (re-binds target). In-memory `MeshRemovalQuorum`, expiry = receiver first-seen + 5 min (stamps are a ±10 min bound only), quorum re-derived at verdict on the merged roster, completion mints `member-removal.v1` via shared `mintAndFileRemoval`; independent completions dedup by member. Table 2–8 × shapes asserted. Wall PASSED; 3761 green, first invocation |
 | 6 | Termination + development under partition (§10.6) | 1 | 1, 5 | todo | | final pair = MERGED roster |
 | 7 | Content merge: order, dedup, gates re-run at ingestion | 1 | 2 | todo | | |
 | 8 | Delivery-target semantics for P5 (§10.1) | 1 | 1 | todo | | design call §5c |
@@ -37,6 +37,8 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | Partition detection mechanism | (default: no new timer; P7 polls) | — |
 | Minting coordinator absent at merge | (default: lowest fingerprint present) | — |
 | `temporarilyDisconnected` persisted | (default: no — presence only, schema stays 2) | — |
+| Removal proposal/vote wire tokens | **Taken:** `fernlet.mesh.removal-proposal.v1` + `fernlet.mesh.removal-vote.v1` (hyphens; two records — one cannot bind proposalID→target under one signature) | 2026-09-03 (i6) |
+| Proposals/votes persisted | **Taken:** no — in-memory `MeshRemovalQuorum`, 5-min expiry deletes; "live, not archaeological" | 2026-09-03 (i6) |
 
 ## Surprises worth not re-deriving
 - `LoadToken` is an associated value of `loaded`/`absent` only — `refused`/`deferred`/`corrupt` structurally cannot `save`.
@@ -72,8 +74,13 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - **(P4 i5)** `MeshNetworkManager` resolves an inbound frame's slot by `slots.first { $0.coordinator === coordinator }`, so an N-node rig needs **one `ProximityCoordinator` per link** or every frame lands on the first slot. `MeshDepartureRig` does this; reuse it (items 5, 6, 9).
 - **(P4 i5)** The runner-hang flake hits the **first** test invocation after each build, consistently; the retry is the acceptance. Same-counter `coexist` ordering depends on which real fingerprint sorts first — seed branches at *distinct* counters when the test is not about item 3.
 
+- **(P4 i6)** **A grep for `removal` missed a family:** a legacy *unsigned* two-party vote exists — `fernlet.mesh.removal.proposal.v1` / `fernlet.mesh.removal.second.v1` (**dots**), quorum hard-coded at 2, reads `Date()`; shipping UI + `DisposableCameraView` call it. The new signed family uses **hyphens**; one grep separates them. Left frozen and untouched.
+- **(P4 i6)** `MeshRemovalQuorumRejection.proposalExpired` is unreachable (`cast` prunes before the index lookup, so a late vote answers `.unknownProposal`); kept as a defensive guard. Test-isolation traps: a `@MainActor static let` cannot be a default argument; a type nested in a `@MainActor` suite does **not** inherit isolation.
+- **(P4 i6)** Seams: item 6 — `MeshDerivedRoster.isFinalPair` / `quorumThreshold`; the roster-2 table cell asserts only "quorum cannot be met" and defers what the pair does. Item 9 — `MeshQuorumFixtures.verdict(voters:target:roster:meshID:)` (one-call driver) + `MeshQuorumManagerSeamTests.branch(_:)` (4-node/3-link rig). Tier-2 item 12 — `proposeSignedRemoval(of:now:)` + `voteOnSignedRemoval(_:now:)` are the shipping entry points.
+
 ## Findings deliberately not fixed (for §8 close-out step 3)
+- **The UI still calls the legacy unsigned two-party removal** (`removal.proposal.v1` / `removal.second.v1`, quorum fixed at 2, `Date()`), and its `.meshRemovalSecond` interim exclusion authority remains. The signed quorum path exists beside it. Retiring the legacy path is an owner decision (it changes what the moderation sheet does on a roster > 2); cost until then: two removal mechanisms, one of which ignores §10.4's arithmetic.
 - **A merged record is not pushed onward proactively.** `sendInventoryDigest` has two callers (`beginMergeExchange`, the admission-grant reply), so C — already linked to D — hands D a departure only at D's *next* merge exchange (blip/heal/lapse/restart). §10.5's "C gossips it to D" is true but reconnect-gated; a long-lived C–D link delays convergence until something re-opens an exchange. Cost: latency, never correctness. Candidate for item 9's schedules (does a bounded schedule always re-open one?) or P5's routed store. Owner's eye.
 
 ## Next item
-5 — quorum under partition (§10.4): ⌊|roster|/2⌋+1 distinct signed votes re-derived on the **receiver's** merged roster; proposal ID; 5-min expiry; target cannot vote; incomplete proposal leaves no trace; completed = permanent `SignedRemovalRecord` that union-merges; table-driven rosters 2–8 × partition shapes. **Check first whether proposal/vote records exist** — P3 shipped only `member-removal.v1`; if the vote is new signed bytes it is the full trio (defaults `fernlet.mesh.removal-proposal.v1` / `fernlet.mesh.removal-vote.v1`). Then 7, 8; 6 after 5; 9 after 7.
+6 — termination + development under partition (§10.6; prereqs 1 and 5 met): development in a split with merged roster > 2 is a departure with the bounded 15 s handoff to the *reachable* members; "final pair" judged on the **merged derived roster** (`MeshDerivedRoster.isFinalPair`), never the connected pair; a wrongly-issued termination downgrades to the signer's departure at every receiver with a larger roster; genuine final pair with an unreachable partner. Then 7, 8; 9 after 7.
