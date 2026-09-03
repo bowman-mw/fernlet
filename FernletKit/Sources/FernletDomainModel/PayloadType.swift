@@ -172,6 +172,19 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// of whom are destinations) can read the type token, size and destination fingerprints.
     /// Additive: older builds park the token (`isUnknownPayloadType`) and still verify the envelope.
     case meshRoutedManifest    = "fernlet.mesh.routed-manifest.v1"
+    /// One origin-signed slice of a routed item's ciphertext — mesh, item, origin, the whole
+    /// item's content hash, `chunkIndex` of `chunkCount`, this slice's own hash, the item's expiry
+    /// and the slice itself (`MeshChunkPayload`, network migration P5 item 2, plan §11). Same
+    /// spelling as `Signature.meshRoutedChunkV1`: token, record and signing domain are one
+    /// vocabulary.
+    ///
+    /// NOT in `sealingRequiredTypes`, on purpose: the payload is ALREADY ciphertext under the
+    /// item's own content key, and a custodian must be able to re-broadcast the origin's exact
+    /// signed object verbatim — pairwise sealing would make a chunk readable only by its first hop
+    /// and forbid the relay plan §11 requires. Confidentiality is the per-recipient wrap in the
+    /// manifest, not the envelope.
+    /// Additive: older builds park the token (`isUnknownPayloadType`) and still verify the envelope.
+    case meshRoutedChunk       = "fernlet.mesh.routed-chunk.v1"
     // Group encryption (Phase 3)
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"

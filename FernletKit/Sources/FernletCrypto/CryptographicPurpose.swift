@@ -162,6 +162,20 @@ public nonisolated enum FernletCryptoPurpose {
         /// signed object and never re-sign, so this purpose has exactly one signer per manifest.
         /// Same framing reservation as ``meshChannelIntroductionV1``.
         public static let meshRoutedManifestV1 = CryptographicPurpose("fernlet.mesh.routed-manifest.v1", framing: .lengthPrefixed)
+        /// **Written since P5 item 2.** P5's routed-content CHUNK signature (plan §11): mesh, item,
+        /// origin, the whole item's content hash, `chunkIndex` of `chunkCount`, the chunk's own
+        /// payload hash, and the item's expiry. The payload itself is excluded from the transcript
+        /// and bound through that hash. Signed by the ORIGIN only — a custodian forwards the exact
+        /// signed object and never re-signs.
+        ///
+        /// Distinct from ``meshRoutedManifestV1`` (`routed-chunk` vs `routed-manifest`, diverging
+        /// at `c`/`m`): a chunk describes a slice and a manifest describes who an item is for and
+        /// who can open it, so a signature satisfying both would let one stand in for the other.
+        /// Distinct from ``FernletCryptoPurpose/Hash/meshRoutedChunkV1``, which tags the bytes that
+        /// are hashed rather than the bytes that are signed — the `.hash.` infix in the Hash
+        /// spelling is what keeps neither a prefix of the other. Same framing reservation as
+        /// ``meshRoutedManifestV1``.
+        public static let meshRoutedChunkV1 = CryptographicPurpose("fernlet.mesh.routed-chunk.v1", framing: .lengthPrefixed)
         public static let proximityQRIdentityV1 = CryptographicPurpose("fernlet.verify.qr.v1")
         public static let proximityQRResponseV1 = CryptographicPurpose("fernlet.verify.response.v1")
         public static let duressRecoveryRequestV1 = CryptographicPurpose("fernlet.duress.recovery.request.v1")
@@ -239,7 +253,9 @@ public nonisolated enum FernletCryptoPurpose {
         /// seal (plan §11 — "content encryption is independent of the group key"). Registered
         /// beside the wrap because the two are one review: a wrap purpose with no item purpose
         /// would leave P5 to invent the second spelling alone, which is how copy-paste collisions
-        /// enter a registry.
+        /// enter a registry. **The seal is item 6 / P6's**: item 2 chunks an opaque blob and
+        /// deliberately does not seal, because `AES.GCM.seal` mints a random nonce and a sealing
+        /// chunker could therefore be neither a pure function of its inputs nor goldened.
         public static let meshRoutedItemV1 = CryptographicPurpose("fernlet.mesh.routed.item.aead.v1")
         public static let heartDropSidecarV2 = CryptographicPurpose("fernlet.heartdrop.sidecar.aead.v2")
         public static let pendingNarrativeBufferV2 = CryptographicPurpose("fernlet.pending-narrative-buffer.aead.v2")
@@ -269,6 +285,38 @@ public nonisolated enum FernletCryptoPurpose {
         /// which is precisely the confusion the registry exists to deny. The `.hash.` infix also
         /// keeps neither spelling a prefix of the other.
         public static let meshInventoryDigestV1 = CryptographicPurpose("fernlet.mesh.inventory-digest.hash.v1")
+        /// **Written since P5 item 2.** The domain a routed ITEM's content hash is computed under
+        /// (plan §11): SHA-256 over this tag, length-prefixed, followed by the complete sealed
+        /// blob. It is what `MeshRoutedManifest.contentHash` measures and what a reassembled item
+        /// is finally checked against.
+        ///
+        /// Not the neighbouring spelling twice over. It is not
+        /// ``FernletCryptoPurpose/KeyDerivation/meshRoutedContentKeyWrapV1``
+        /// (`fernlet.mesh.routed.content-key.v1`), which sits one character away — `routed.content-`
+        /// then `key` vs `hash` — and is a KDF input rather than a digest tag; the `.hash.` infix
+        /// is what keeps them apart. And it is not ``meshRoutedChunkV1`` below: untagged, a
+        /// one-chunk item's item hash and its chunk hash would be the SAME 32 bytes, so a chunk
+        /// hash could be replayed as a content hash.
+        public static let meshRoutedContentV1 = CryptographicPurpose("fernlet.mesh.routed-content.hash.v1")
+        /// **Written since P5 item 2.** The domain ONE chunk's payload hash is computed under
+        /// (plan §11): SHA-256 over this tag, length-prefixed, followed by that chunk's slice. It
+        /// is the field a chunk's origin signature binds the payload through, since the payload is
+        /// excluded from the signed transcript.
+        ///
+        /// Its own domain rather than a reuse of ``meshRoutedContentV1``: for a one-chunk item the
+        /// two digests would otherwise cover identical bytes and be interchangeable. Distinct from
+        /// the signature spelling ``FernletCryptoPurpose/Signature/meshRoutedChunkV1``
+        /// (`fernlet.mesh.routed-chunk.v1`) by the `.hash.` infix, so neither prefixes the other.
+        public static let meshRoutedChunkV1 = CryptographicPurpose("fernlet.mesh.routed-chunk.hash.v1")
+        /// **Written since P5 item 2.** The domain a chunk's DERIVED replay-window id is computed
+        /// under (plan §11, item 12's dedup key): SHA-256 over this tag, length-prefixed, then the
+        /// item id and the chunk index, of which the first 16 bytes are read as a `UUID`.
+        ///
+        /// Its own domain rather than a reuse of ``meshRoutedChunkV1``: that one hashes payload
+        /// BYTES and this one hashes an `(item, index)` pair, so a shared spelling would let a
+        /// crafted payload collide with an id. `routed-chunk-id.hash` diverges from
+        /// `routed-chunk.hash` at `-` vs `.`, so neither is a prefix of the other.
+        public static let meshRoutedChunkIDV1 = CryptographicPurpose("fernlet.mesh.routed-chunk-id.hash.v1")
         public static let recoveryContentKeyV1 = CryptographicPurpose("fernlet.lock.recovery.contentkey.v1")
     }
 }

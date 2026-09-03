@@ -107,6 +107,7 @@ on the reasoning.
 | `duressRecoveryRequestV1` | `fernlet.duress.recovery.request.v1` | `.rawPrefix` | `DuressRecoveryCoordinator` |
 | `duressRecoveryReplyV1` | `fernlet.duress.recovery.reply.v1` | `.rawPrefix` | `DuressRecoveryCoordinator` |
 | `meshRoutedManifestV1` | `fernlet.mesh.routed-manifest.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedManifest`, `MeshRoutedManifestVerifier` |
+| `meshRoutedChunkV1` | `fernlet.mesh.routed-chunk.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshChunker`, `MeshChunkVerifier` |
 
 #### KeyDerivation
 
@@ -144,7 +145,7 @@ on the reasoning.
 | `meshGroupPhotoV2` | `fernlet.mesh.group-photo.aead.v2` | `MeshNetworkManager` |
 | `meshEncryptedMetadataV2` | `fernlet.mesh.encrypted-metadata.aead.v2` | `MeshNetworkManager` |
 | `meshRoutedContentKeyWrapV1` | `fernlet.mesh.routed.content-key.wrap.aead.v1` | `MeshRoutedContentKeyWrapper` |
-| `meshRoutedItemV1` | `fernlet.mesh.routed.item.aead.v1` | — (reserved; P5 item 2) |
+| `meshRoutedItemV1` | `fernlet.mesh.routed.item.aead.v1` | — (reserved; P5 item 6 / P6 — item 2 chunks an opaque blob and deliberately does not seal, because an AEAD seal mints a random nonce and a sealing chunker could not be goldened) |
 | `heartDropSidecarV2` | `fernlet.heartdrop.sidecar.aead.v2` | `HeartDropSidecarKey` |
 | `pendingNarrativeBufferV2` | `fernlet.pending-narrative-buffer.aead.v2` | `PendingNarrativeBuffer` |
 | `lockContentKeyWrapV2` | `fernlet.lock.content-key-wrap.aead.v2` | `FernletLockService` |
@@ -163,6 +164,9 @@ on the reasoning.
 |---|---|---|
 | `sealedPhotoContentV2` | `fernlet.sealed-photo.content-hash.v2` | `SealedPhotoBackupService` |
 | `lockVerifierV2` | `fernlet.lock.verifier.v2` | `FernletLockService` |
+| `meshRoutedContentV1` | `fernlet.mesh.routed-content.hash.v1` | `MeshRoutedContentDigest` (the whole sealed blob a manifest's `contentHash` measures) |
+| `meshRoutedChunkV1` | `fernlet.mesh.routed-chunk.hash.v1` | `MeshRoutedContentDigest` (one chunk's payload — its own domain so a one-chunk item's two digests are not interchangeable) |
+| `meshRoutedChunkIDV1` | `fernlet.mesh.routed-chunk-id.hash.v1` | `MeshRoutedContentDigest` (the derived replay-window id item 12 keys on) |
 | `recoveryContentKeyV1` | `fernlet.lock.recovery.contentkey.v1` | `FernletLockService` |
 
 ### Two notes on the inventory
@@ -183,8 +187,13 @@ signed membership records (`member-departure`, `member-removal`, `terminated`; t
 reuses `meshAdmissionTokenV2`, which is listed), `inventory-digest`, `epoch-heads`,
 `removal-proposal` and `removal-vote` — because those frame commits added registry constants and
 `allDomains` rows without a row here.
-P5 item 1 adds only its own four routed rows (one signature, one derivation, two AEAD) and records
-the drift rather than backfilling it; the test remains the authority on the SET.
+P5 item 1 added only its own four routed rows (one signature, one derivation, two AEAD) and P5 item
+2 only its own four (one signature, three hash); both record the drift rather than backfilling it,
+and the test remains the authority on the SET.
+
+**`meshInventoryDigestV1` is absent from the Hash table for the same reason** (note added
+2026-09-03, P5 item 2): P3 item 3 added the constant and its `allDomains` row without a row here.
+Item 2's three routed hash rows above are listed; the inventory's is still owed.
 
 ## 4. Transcript framing
 

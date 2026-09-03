@@ -24,12 +24,14 @@ types (which still have no production callers).
 | Need | Prefer Reusing |
 | --- | --- |
 | Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:)` |
-| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:)` is overloaded for the identity envelope, the mesh admission token, the three Group-Activity types, a moderation row, and the routed manifest (P5 item 1), each behind its own domain tag. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
+| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:)` is overloaded for the identity envelope, the mesh admission token, the three Group-Activity types, a moderation row, the routed manifest (P5 item 1) and the routed chunk (P5 item 2), each behind its own domain tag. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
 | Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
 | A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation(cause:)` |
-| Per-recipient routed content-key wrap | `MeshRoutedContentKeyWrapper.wrap/unwrap/additionalData` (P5 item 1) — the routed sibling of `encryptGroupKey`: the same X25519 → HKDF → AES-GCM chain under the routed purposes with a manifest-binding AAD. Never re-roll the chain (items 2/10, P6) and never reuse the group-key purposes for it. |
+| Per-recipient routed content-key wrap | `MeshRoutedContentKeyWrapper.wrap/unwrap/additionalData` (P5 item 1) — the routed sibling of `encryptGroupKey`: the same X25519 → HKDF → AES-GCM chain under the routed purposes with a manifest-binding AAD. Never re-roll the chain (item 10, P6) and never reuse the group-key purposes for it. |
+| Splitting or reassembling routed content | `MeshChunker.chunk(of:at:for:identity:)` / `.chunks(of:for:identity:)` and `MeshChunkAssembly` (P5 item 2) — the ONE chunking transport. Chunks are ordinary reliable frames that earn a QUIC transfer stream by size alone (`MeshTransferStreamTable.route(reliableByteCount:)`); do not build a second chunking path, a transfer id, a resume token or an application-visible ack. |
+| Hashing routed content | `MeshRoutedContentDigest.contentHash(of:)` (the whole sealed blob) / `.chunkHash(of:)` (one slice) / `.chunkID(itemID:chunkIndex:)` (P5 item 2). Never a bare `SHA256.hash` for routed bytes: each digest carries its own registered `Hash` purpose, which is what stops a one-chunk item's chunk hash being replayable as its item hash. |
 | Durable sidecar state (data of record) | `ProtectedSidecar` — classifies absent / deferred / corrupt / loaded and keeps memory authoritative on write failure. Do NOT use `JSONSidecarFile` for data of record: it collapses every read failure to `nil`. |
 | Sealing a payload to a peer, with framing | `IdentityService.seal(_:to:)` + `SealedPayloadFormat` (capability-derived, never inferred from bytes) |
 | Verifying a human holds a key | `ProximityVerifyQR` + `ProximityVerifySignature.message(...)` — shared transcript, so the friend and coach ceremonies cannot diverge |
@@ -615,7 +617,8 @@ P5 item 1 (plan §11): the origin-signed description of one routed item, and the
 content-key wrap that rides inside it. Pure values, no clock; the only mint takes a
 `MeshDeliveryTarget`, so the destination set is the full roster at creation and never the connected
 set. Deliberately NOT in this file: persistence and its wipe row (item 3), dispatch/emission (item
-6), chunks and the item seal under `AEAD.meshRoutedItemV1` (item 2), the type-token registry (item
+6), chunks (item 2) and the item seal under `AEAD.meshRoutedItemV1` (item 6 / P6 — item 2 chunks an
+opaque blob and deliberately does not seal), the type-token registry (item
 11), receipts (items 3/4).
 
 | Type / Function | What It Does |
@@ -651,16 +654,86 @@ reach a per-recipient static-key wrap (D14).
 P5 item 1 (plan §11, invariant §3.3): the per-recipient content-key wrap and its inverse —
 `IdentityService.encryptGroupKey` primitive for primitive with the routed purposes and a
 binding-carrying AAD. `nonisolated` and static: the recipient's private key never enters the file.
-Deliberately NOT here: the item seal (item 2), any key from descriptor gossip or the trust vault.
+Deliberately NOT here: the item seal (item 6 / P6 — item 2 chunks an opaque blob), any key from
+descriptor gossip or the trust vault.
 
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshRoutedWrapBinding` | What a wrap is bound to besides its recipient: `meshID`, `itemID`, `originFingerprint`. Part of the AEAD's authenticated data, so a wrap cannot be transplanted between manifests, meshes or origins. |
 | `MeshRoutedKeyWrapError` | `invalidRecipientKey(fingerprint:)`, `invalidContentKey`, `notAddressedToMe`, `malformed`, `openFailed` — one token for every CryptoKit refusal on purpose (distinguishing them would be an oracle). Frozen English diagnostics. |
-| `makeContentKey()` | 32 random bytes from the platform CSPRNG, as `Data` (no pointer API; item 2 builds the `SymmetricKey`). Minted BEFORE the item is sealed and hashed. |
+| `makeContentKey()` | 32 random bytes from the platform CSPRNG, as `Data` (no pointer API; item 6 / P6 builds the `SymmetricKey` at the seal — item 2 chunks an opaque blob and never sees a key). Minted BEFORE the item is sealed and hashed. |
 | `wrap(contentKey:recipientFingerprint:recipientKeyAgreementPublicKey:binding:)` | Fresh ephemeral X25519 + fresh GCM nonce per wrap → HKDF-SHA256 (salt `KeyDerivation.meshRoutedContentKeyWrapV1`, info eph ‖ recipient) → AES-256-GCM over the 32-byte key with `additionalData` authenticated. Public keys only. |
 | `unwrap(_:binding:localFingerprint:localKeyAgreementPublicKey:staticAgreement:)` | The inverse, refusing `notAddressedToMe` and `malformed` before any key agreement; the DH is a closure into `IdentityService.heartDropStaticAgreement(withEphemeralPublicKey:)` (the `HeartDropSealer.open` shape), whose own error propagates. Everything CryptoKit refuses is `openFailed`. |
 | `additionalData(binding:recipientFingerprint:)` | `AEAD.meshRoutedContentKeyWrapV1.data` (raw prefix) ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(recipient). Frozen wire-bearing bytes, pinned by an independently derived golden. |
+
+### `MeshChunk.swift`
+
+P5 item 2 (plan §11): one origin-signed slice of a routed item's ciphertext, plus the two
+domain-tagged digests and the derived chunk id the routed family hashes under. Pure values, no
+clock; the payload is EXCLUDED from the signed transcript and bound through `chunkHash`.
+Deliberately NOT in this file: persistence (item 3, with its wipe row), dispatch/emission and the
+item seal (item 6 / P6 — item 2 chunks an opaque blob), any relay hop, custody transfer, hop count
+or TTL (item 8 / increment 2), the type-token registry (item 11), backpressure (item 9).
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshChunkFormat` | Frozen widths and caps: 64-byte signature, two 32-byte hashes and the 64-byte fingerprint ceiling (all reused from `MeshRoutedManifestFormat`), `maxChunkPayloadBytes` = 256 KiB (**the only new magic number**, named so tier 2 can re-measure pacing without touching the wire shape), `maxChunkCount` = 1024 **derived** from `maxContentByteCount`, and `maxChunksInFlightPerPeer` = 3. |
+| `MeshChunkFormat.maxChunkCount` | 256 MiB / 256 KiB. Its doc names the coincidence item 9 must not collapse: 1024 routed *items* (plan §9) and 1024 *chunks in one maximal item* are two different caps that happen to be equal. |
+| `MeshChunkFormat.maxChunksInFlightPerPeer` | `MeshTransferStreamTable.maxConcurrentOutbound - 1` — **one slot of headroom** in a budget every reliable frame ≥ 64 KiB shares (friend photos above all), not a throughput target and not a guarantee: nothing reserves a slot, and `openOutbound` returning nil is indistinguishable from "sub-floor". The safe number is a tier-2 measurement; this is the v1 placeholder item 6 must not re-derive. |
+| `MeshChunkFormat.chunkCount(forSize:)` | `ceil(size / 256 KiB)`, nil for zero or above the content cap. The single definition the mint, the verifier, the assembler and `expectedPayloadByteCount` all share. The cap guard runs first, so a hostile `size` cannot overflow the ceil. |
+| `MeshRoutedContentDigest` | `contentHash(of:)` (the whole sealed blob, `Hash.meshRoutedContentV1`), `chunkHash(of:)` (one slice, `Hash.meshRoutedChunkV1`) and `chunkID(itemID:chunkIndex:)` (`Hash.meshRoutedChunkIDV1`, first 16 bytes as a `UUID`). Two domains because untagged, a ONE-chunk item's item hash and chunk hash would be the same 32 bytes. The domain prefix is writer-produced and the body is streamed into `SHA256()`, so a 256 KiB payload is never copied to be hashed. |
+| `MeshChunk` | The record: `meshID`, `itemID`, `originFingerprint`, `contentHash` (the manifest's, copied), `chunkIndex`, `chunkCount`, `chunkHash`, `expiresAt` (the manifest's formula, never restated), `payload`, `signature`. Carries no `createdAt`, no `size`, no type token, no epoch/branch/partition, no custodian/hop/TTL and no explicit id. Both doors floor `expiresAt`; nothing is clamped — an over-long payload FAILS `isWellFormed` rather than being trimmed. |
+| `isWellFormed` / `isLive(at:)` | Widths and counts on untrusted bytes before the signature; liveness `now <= expiresAt` under an injected clock. |
+| `MeshChunk.chunkID` | The derived replay-window id (item 12 keys on it). Deterministic; equal across a retransmission, different per index or item, origin-free on purpose because `MeshFrameReplayWindow.admit` already separates by sender. Not an RFC-4122 UUID — a 128-bit dedup key with `UUID`'s shape. **Its doc gives item 12 the wiring's shape, not the whole wiring:** `MeshFrameReplayWindow.maxFramesPerSender` is 64 and the window refuses rather than evicts, while `maxChunkCount` is 1024, so an item above 16 MiB would hit `senderWindowFull` on its 65th chunk — item 12 sizes a P5 window (or a per-item chunk bitmap) first, and keys the sender axis on the ORIGIN. |
+| `MeshChunk.expectedPayloadByteCount(index:count:size:)` | The ONE chunk-boundary rule: every index but the last is exactly 256 KiB, the last is the remainder; nil for an out-of-range index or a `count` that disagrees with the size. |
+| `MeshChunkPayload` | The `fernlet.mesh.routed-chunk.v1` frame: the chunk and nothing else. Signed, NOT sealed (not in `sealingRequiredTypes`) — the payload is already ciphertext and a custodian must re-broadcast verbatim. Registered in item 2, dispatched from item 6. |
+
+### `MeshChunkVerifier.swift`
+
+P5 item 2: the one door a received chunk passes before the routed store may hold its bytes. Public
+material only (signature + SHA-256 + ledger, never a content key), so it runs on a locked device
+over ciphertext-only custody. **The manifest is optional**: chunks ride streams that are not ordered
+against the control stream, so a chunk that arrives first is verified and parked.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshChunkRejection` | Frozen English tokens: `foreignMesh`, `malformed`, `originNotAdmitted`, `originRemoved`, `originKeyMismatch`, `signatureInvalid`, `chunkHashMismatch`, `expiryMismatch`, `manifestMismatch`, `chunkCountMismatch`, `payloadLengthMismatch`. Logged verbatim, never localized. |
+| `MeshChunkVerifier(meshID:hardDeadline:ledger:manifest:)` | Bound to one session and, optionally, one **already-verified** manifest — the type never re-verifies it and it is the only authority on `itemID`, `originFingerprint`, `contentHash` and `size`. |
+| `verify(_:)` | Eleven guards: mesh → shape → admitted key (from `ledger.admissions`, by the chunk's OWN origin) → origin not in `ledger.removals` (departures never consulted) → key/fingerprint agreement → signature → **then** the chunk hash (so a hash mismatch names a payload swapped under an authentic chunk) → expiry equality → and, with a manifest, the identity **triple** `(itemID, originFingerprint, contentHash)`, the chunk count and the payload length. Dropping the origin leg of the triple would let an admitted member squat another origin's item id under its own valid signature. |
+
+### `MeshChunker.swift`
+
+P5 item 2: the mint, and the only place a chunk signature is produced. `nonisolated` type,
+`@MainActor` on the two mint functions only (`IdentityService` is main-actor isolated). Deliberately
+NOT here: any send path, envelope, queue or pacer (item 6), any forwarding or custody transfer (item
+8), any content-key handling — the blob is opaque.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshChunkMintError` | `emptyBlob`, `sizeMismatch(blobByteCount:manifestSize:)`, `contentHashMismatch`, `notTheOrigin(origin:)`, `tooManyChunks(size:)` (unreachable while a well-formed manifest bounds `size` AND the blob really is that size — kept because the bound belongs where the growth is), `indexOutOfRange(index:count:)`. Frozen English diagnostics; never `LocalizedError`. |
+| `chunk(of:at:for:identity:)` | The primitive: mints exactly ONE signed chunk, so item 6 can stream a large item at `blob + one chunk` of peak memory. Slices into a FRESH `Data` (never a `SubSequence` sharing indices), hashes the slice, signs the transcript, and rebuilds from the unsigned value's own fields so signed bytes == wire bytes. |
+| `chunks(of:for:identity:)` | The bounded run: `for index in 0..<count`, `count ≤ 1024`. Never a `while`. Derives the guard chain **once per item** and mints through the private `mint(of:at:count:for:identity:)` — re-entering the validating primitive per index would cost `count + 1` whole-blob SHA-256 passes (1025 over 256 MiB for a maximal item, on the main actor) for a chain whose every clause but the index is loop-invariant. |
+| `mint(of:at:count:for:identity:)` | Private: one chunk over an ALREADY-validated `(blob, manifest, origin)` plus the derived count — the loop body, and the whole mint apart from the guard chain. Re-checks only the index, the one clause that is not loop-invariant. No door into the mint skips validation. |
+| `validated(blob:manifest:origin:)` | The guard chain and the derived count, run **once per item** (its content-hash clause is a pass over the whole blob). Refuses to mint for a manifest this device did not originate — a custodian is a courier, not a co-signer. Pure and `nonisolated`. |
+
+### `MeshChunkAssembly.swift`
+
+P5 item 2: the receive-side reassembler — a bounded value that collects one item's chunks in any
+order and decides once whether the ciphertext is whole. **Every input returns a verdict; nothing is
+silently dropped.** Chunk bytes live in MEMORY here; item 3 re-backs the byte custody with its
+sealed sidecar and reuses this verdict logic unchanged. Deliberately NOT here: any capacity verdict
+— the assembly's own bound IS 1024 × 256 KiB = `maxContentByteCount`, so plan §11's aggregate
+256 MiB / 1024-**item** backpressure is a seam item 9 adds in FRONT of `admit`/`forChunk`, and its
+accounting must include parked, manifest-less chunks.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshChunkRefusal` | Frozen English tokens: `foreignItem`, `countMismatch`, `indexOutOfRange`, `conflictingChunk`, `chunkHashMismatch`, `sizeOverflow`, `payloadLengthMismatch`, `notBound`, `sizeMismatch`, `contentHashMismatch`. Never user copy — item 9 owns the visible backpressure failure. |
+| `MeshChunkAdmission` / `MeshChunkBinding` / `MeshChunkCompletion` | `admitted(received:expected:)` / `duplicate(received:)` (a retransmission is a **no-op, not an error**) / `refused(_:)`; `bound` / `refused(_:)`; `complete(blob:)` / `incomplete(received:expected:)` / `refused(_:)`. |
+| `forManifest(_:)` / `forChunk(_:)` | An assembly already bound to the manifest's size, or an UNBOUND one for a chunk that arrived first (the parked case). Both take a value their verifier already accepted. |
+| `admit(_:)` | Identity triple → count → index → duplicate/conflict → chunk hash (re-checked because this is the boundary item 3 gates durable custody on) → size overflow → length rule (bound: exactly what `expectedPayloadByteCount` fixes; unbound: interior chunks are exactly 256 KiB and the last is 1 … 256 KiB, checked at the door rather than left to the verifier's precondition). **Duplicate vs conflict is decided on the signed transcript plus the payload, never on `==`:** CryptoKit's Ed25519 signing is hedged, so an honest re-mint (item 6 streams without retaining, item 8 transfers custody) differs only in the 64-byte signature, and `conflictingChunk` is an integrity claim about content. |
+| `bind(to:)` | Cross-checks the triple and the derived count, re-validates every already-held chunk's length against the now-known size in one bounded loop, and refuses **without mutating** if any fails. Idempotent. |
+| `completion(against:)` | `notBound` while unbound; `foreignItem` for another manifest; `incomplete` at the first gap (never a partial blob); `sizeMismatch` / `contentHashMismatch`; else `complete(blob:)`. **`complete` is NECESSARY, NEVER SUFFICIENT for a custody receipt**: it is a verdict over in-memory bytes, so the order is durable → complete → receipt, and durability is item 3's separate gate (plan §3.6). |
 
 ### `MeshSessionCeiling.swift`
 
@@ -940,6 +1013,7 @@ bytes. **The field order in each function IS the schema.**
 | `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
 | `canonicalBytes(for: MeshRoutedManifest)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |
+| `canonicalBytes(for: MeshChunk)` | P5 item 2: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ u64(chunkIndex) ‖ u64(chunkCount) ‖ lp(chunkHash) ‖ expiresAt. **Both `payload` and `signature` excluded** — the payload is bound THROUGH `chunkHash`, so a 256 KiB slice costs 32 transcript bytes with the same authenticity. Field order is the schema. |
 | `legacyCanonicalBytes(for:)` (envelope, token) | The exact pre-WI-6 `JSONEncoder` configuration, retained ONLY to VERIFY signatures minted by in-field peers on older builds. Never used to sign; do not change its configuration — its byte output is a compatibility contract with already-signed data. |
 | `CanonicalByteWriter` | The append-only binary writer (`appendByte`/`appendInt64`/`appendUUID`/`appendString`/`appendLengthPrefixed`/`appendDate`, optional presence bytes, byte-ordered maps). |
 | `canonicalUTF8Ordered(_:_:)` | Byte-lexicographic key ordering — unambiguous and identical on every stack, unlike `.sortedKeys`' UTF-16 ordering. |
