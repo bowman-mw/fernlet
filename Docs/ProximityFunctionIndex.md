@@ -590,6 +590,24 @@ the drain; this file owns only the rules.
 | `MeshHeartReceipt` / `MeshContentLedger.heartReceipt(_:committed:)` | `pending` / `received`, frozen tokens. The union alone answers `pending` for everything. |
 | `MeshHeartCommit.commit(_:into:)` / `MeshHeartCommitOutcome` | Drives merged hearts through the **existing** `ProximityHeartLedger` — its id-dedup, its 5-minute per-sender cooldown — rather than a second copy of them. `judgements` is one per distinct gift id: a duplicate that crossed the split is collapsed by the union *before* the ledger sees it, so the cooldown is judged once. |
 
+### `MeshDeliveryTarget.swift`
+
+P4 item 8 (plan §10.1, launcher §5(c)): **who content is for**, held apart from **how far each copy
+has got** — the vocabulary P5's `MeshRoutedManifest` expresses its destination set in. Pure value,
+no clock, nothing persisted (`MeshSessionContext` schema stays 2), nothing on the wire. P5 persists
+targets inside its routed store; this file owns only the rule.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshDeliveryTarget.init(contentID:roster:selfFingerprint:)` | Captures the destination set = **full derived roster at creation time − self**. The parameter is a `MeshDerivedRoster`, so a branch view or a reachable set cannot be passed by mistake; there is no other initializer and **no method removes a destination**. `init(for:roster:selfFingerprint:)` is the one-call form for a `MeshMergeableContent` item. |
+| `MeshDeliveryState` | The stored, merged half: `pending` / `custodied(by:)` / `delivered`, a three-rung monotone ladder. `delivered` is terminal (§11's final ack — hearts only after foreground decrypt + ledger commit); `custodied` says on its own that **custody ≠ delivery**. `later(_:_:)` is the max under that order, with the least custodian fingerprint as a deterministic tiebreak (not a preference). |
+| `MeshDeliveryDisposition` | The read-time answer: the three states plus `departed`, which is **derived against the current roster**, never stored — same shape as the termination downgrade, so a departure/removal unioning in closes a destination with nothing rewritten. Grow-only records make the closure permanent, which is why the drain may stop rather than back off. `isOutstanding` / `isClosed` are the buckets P5 branches on. |
+| `MeshDeliveryStateToken` / `MeshDeliveryRefusal` | Frozen English tokens: `pending`/`custodied`/`delivered`/`departed`, and `notADestination`/`alreadyDelivered`/`wouldRegress`/`differentContent`/`destinationSetMismatch`. Logged verbatim, never localized; §18.2's display copy forks separately. |
+| `advancing(_:to:)` → `MeshDeliveryOutcome` | Moves one destination up the ladder on the receipt as evidence — never on elapsed time. Re-applying the current state is idempotent; anything backwards is **refused by name**. |
+| `merging(_:)` → `MeshDeliveryOutcome` | Per-destination **max** — commutative, associative, idempotent, so two members that learned different receipts converge losing neither. A destination-set (or content-id) mismatch is refused by name rather than unioned or intersected: either would invent or drop a recipient. |
+| `outstanding(in:)` / `closed(in:)` / `isFullyDelivered(in:)` | §11's "destinations lacking a `MeshRecipientReceipt`", the roster-closed set, and the complement. A target whose every destination departed is fully delivered vacuously — the answer that lets P5 retire the item. |
+| `outstandingReachable(from:in:)` / `outstandingUnreachable(from:in:)` | The two existing seams as **derivations, not duplicates**: for a fresh target the first equals `MeshDevelopmentPlan.handoffTargets` and the second equals `MeshBranchView.temporarilyDisconnectedFingerprints`. Neither type was modified. Reachability filters the *work*, never the destination set. |
+
 ### `MeshSessionCeiling.swift`
 
 Plan §8.2's 6-hour ceiling, guarded at **both** bounds.
