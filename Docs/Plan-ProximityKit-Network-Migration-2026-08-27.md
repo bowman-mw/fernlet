@@ -1046,7 +1046,7 @@ The mesh is small by design and every partition structure inherits it:
 
 ---
 
-## 10. Phase P4 — partition and merge (the split-brain design)
+## 10. Phase P4 — partition and merge (the split-brain design) — **BUILT** (2026-09-03)
 
 The scenario driving this phase (owner, 2026-08-27): four devices split into two groups of two, both
 groups keep sharing photos and messages, keys may rotate while split, then everyone reunites — and the
@@ -1165,6 +1165,267 @@ bounded (no dead-drop side channel for mesh state).
 Acceptance (P4): deterministic fake-transport suites for §16.2's scenario matrix; the convergence
 property test; quorum arithmetic table-driven tests (rosters 2–8 × partition shapes); the two worked
 examples above encoded verbatim as tests.
+
+### 10.7 What landed
+
+**Result:** a partition is presence and a merge is one code path. `MeshBranchView` derives the branch
+from (derived roster, reachable set, self) and copies `memberCount` / `quorumThreshold` /
+`isFinalPair` through unchanged, so a split can neither shrink the roster nor make a branch a final
+pair; `mergeReconnected(_:entry:)` is the single front door onto P3's `mergeMembershipLedger(_:)`,
+and a blip, a partition heal, an idle lapse and a process restart all arrive through it. Two branches
+that each rotated while split coexist until the merged view's coordinator mints `max + 1` with
+`cause = .merge`. Removal is a signed proposal plus signed votes, re-tallied on the **receiver's**
+merged roster. Content unions by ID with the gates re-run at ingestion, and a delivery destination is
+the full roster at creation with reachability as a delivery *state*. §16.2's matrix runs under a
+fixed seed on `FakePeerNetwork` and found three shipping defects, two of them fixed here.
+
+| # | Work | SHA |
+|---|---|---|
+| 1 | **Partition detection + branch-local operation.** `MeshBranchPresence.swift`: `MeshBranchView`, `MeshMemberPresence`, and `MeshPartitionDetector.verdict(previous:current:)` as a pure edge detector (`linksLost` → `partitioned`; a full heal → `linksRestored`; a deepening split or partial heal raises nothing). `evaluatePartition(reachable:now:)` is on-demand in the `enforceSessionCeiling` idiom. Proves `temporarilyDisconnected` is presence: nothing `Codable`, no record, no quorum move | `e48ab81` |
+| 2a | **One merge path.** `MeshMergeEntry` (blip / partitionHeal / idleLapseResume / processRestart) records which door and nothing branches on it; the union rides the existing inventory digest and bounded re-gossip, so no wire byte moved. Two fail-opens closed on the way: a relaunched member held **no ledger at all**, and a merge delivering this device's own removal did not eject (`applyMergedRosterVerdict` now runs before the rotation); a third, smaller fix beside them — presence went stale after a merge, so `refreshBranchViewAfterMerge` re-derives the branch view | `bf81039` |
+| 2b | **Merge residuals.** Head overflow counted at the writer *after* the seal (`mesh.sessionContext.epochHeadsDropped`) via `MeshMergeOffer.foldedHeads`; `MeshMergeExchangeTests` drives the real signed digest end-to-end across two managers on one `FakePeerNetwork`; blip-merge opens only for a peer already in the derived roster, so reconnect ≡ merge while admission ≠ reconnect | `9225748` |
+| 2c | **Merge-window deadlock, found by 9a** (seed `0x308d0d414707d80`, shape 2/2). `receiveInventoryDigest`'s mismatch answer now runs `reGossipRecords(to:)` **then** `sendEpochHeads(to:)`, one Task, fixed order. No new frame, no golden, schema stays 2. Proves the property test earned its keep: a genuine shipping merge bug none of items 2–8's targeted tests reached. Matrix whole at 48/48, assertions unchanged | `ab89d8c` |
+| 2d | **Window closes on the FIRST matching digest**, found by 9b on 4/2/2 — one record lands outside the window and rotates `.membership` instead of `.merge`. State converges, nothing commits twice; the safe fix changes what a window *means*. **Deferred by name**, four cells, guard-pinned (§10.9) | — |
+| 3 | **Coexist → one head.** `presentedRotationRoster().min()` mints `successor` at counter = max+1, `cause = .merge`; `rotationBasisHead` counts from the highest known head and `unresolvedEpochHeads` stops a reconciled merge re-minting. New additive frame `fernlet.mesh.epoch-heads.v1` on the signed, unsealed membership broadcast; the `divergent` introduction verdict becomes `.reconcile(local:peer:)`, so two rotated branches can open the tunnel the merge runs over | `6d6cd34` |
+| 4 | **§10.5 verbatim.** Tests only — `reGossipRecords(to:)` already carried departures. The owner's worked example on `MeshDepartureRig` (one `ProximityCoordinator` per link), the path proved from the fabric's per-frame sender handle; plus the missed-departure recovery and the residual (B leaving alone leaves a phantom member nothing invents a record for) | `ac3bddf` |
+| 5 | **Quorum under partition.** `SignedRemovalProposal` (`fernlet.mesh.removal-proposal.v1`) binds proposalID → (mesh, target, proposer); `SignedRemovalVote` (`fernlet.mesh.removal-vote.v1`) re-binds the target. In-memory `MeshRemovalQuorum`, quorum re-derived at verdict on the merged roster, completion mints `member-removal.v1` through one shared `mintAndFileRemoval`. Table-driven over rosters 2–8 × shapes. The legacy *unsigned* two-party removal the UI still calls is untouched beside it (§10.9) | `91fcaef` |
+| 6 | **Termination under partition.** `MeshDevelopmentPlan` decides the ending from the merged derived roster and the custodians from the branch view, with the 15 s window as a deadline plus an outcome; the connected-peer count is not a member of the type, so §10.6's forbidden read is unavailable at any call site. Two real gaps closed: a genuine final pair could never terminate, and nothing gated issuance | `fa1becd` |
+| 7 | **Content merge.** `MeshContentSet<Item>` (dedup by ID, one total order, keep newest k, caps reused) + `MeshContentLedger` (three unions ⇒ N-way needs no special case) + `MeshContentGates` as a **view filter over an unmutated union**. Transcript order = `claimedSentAt` clamped to ±10 min of a receiver-local first-seen, then sender, then ID. Proves a forged stamp cannot jump the queue by more than ten minutes | `6bdc73b` |
+| 8 | **`MeshDeliveryTarget`.** Its only initializers take a `MeshDerivedRoster` (destinations = members − self) and nothing removes a destination, so the wrong construction is unrepresentable. Stored state is the three-rung chain `pending → custodied(by:) → delivered`, merged per destination by max; `departed` is derived at read. Proves reachability is a delivery state, never a destination state | `7febf40` |
+| 9a | **Convergence property test.** `MeshScheduleRandom` (SplitMix64, inout), root seed `0x00F32B1C00090002` + seven successors, `MeshScheduleBounds` all asserted and none a knob; five invariants in `MeshConvergenceInvariants`; heal = a spanning walk using each pair once, because re-gossip answers once per peer per session. Rosters 3–4 × 2/1, 2/2, 3/1: 46 of 48 cells green, two deferred by name; found 2c | `52051cc` |
+| 9b | **The matrix whole.** Rosters 6 and 8 as 3/3 and 4/2/2 plus `MeshResplitPlan`'s nested re-split mid-merge, with the head cap asserted live. Shipping defect fixed, one party wider than 2c: `askOneReconnectedPeer` sends one digest and one heads frame to a peer seated *after* the window opened (ten of sixteen 4/2/2 cells had counted the post-merge epoch from different heads permanently). 76 + 8 green, 4 deferred | `c48bf4c` |
+| 10 | **The P4 acceptance battery.** `MeshP4AcceptanceTests`: nine serialized suites, 24 tests, one per §10 clause, each a self-contained scenario on the shipping seams so CI can gate one line per clause. §10.4's four named consequences now asserted at the **manager seam** as well (three had been derived-roster value-seam only); the concurrent-vote gap closed as `2q > n`; deferrals named and bounded and the fixed seed walled | `73e9755` |
+
+**Wire.** Three additive frames across two commits, each with its full trio in the same commit —
+frozen token, `PayloadType` case, crypto purpose + domain-separation inventory row, canonical bytes,
+an independently derived golden, and a framing-transcript case in
+`CryptographicPurposeBoundaryTests.canonicalSerializerTranscriptsMatchTheirDeclaredFraming`:
+`fernlet.mesh.epoch-heads.v1` (`6d6cd34`) and `fernlet.mesh.removal-proposal.v1` /
+`fernlet.mesh.removal-vote.v1` (`91fcaef`). **No existing golden moved in this entire phase**
+(`goldenRemovalHex` and `goldenInventoryHex` are asserted unchanged), `MeshSessionContext` stayed at
+**schema 2**, and no new persisted surface means no new wipe row.
+
+| | |
+|---|---|
+| New (ProximityKit) | `Mesh/MeshBranchPresence.swift`, `MeshMergeOffer.swift`, `MeshRemovalQuorum.swift`, `MeshDevelopmentPlan.swift`, `MeshContentMerge.swift`, `MeshContentIngest.swift`, `MeshDeliveryTarget.swift` |
+| Changed | `MeshNetworkManager` (items 1–3, 2c, 5, 6 and 9b: the merge front door, epoch heads, the quorum entry points, the termination gate, the late-reconnect ask; its `distributeRotation` lost `closingEpoch`, and the `MeshKeyRotationPayload.newEpoch` it writes now carries the *planned* counter because receivers re-derive the ref from it — the payload type itself is unchanged); `MeshEpochAcceptance`, `MeshMembershipEvents`, `MeshMembershipRecordVerifier`, `MeshChannelIntroduction` + `NetworkMeshSession` (the `.reconcile` verdict), `CanonicalSignatureSerializer`, `CryptographicPurpose`, `PayloadType`; `SessionMessageStore` + `ProximityHeartLedger` (two caps became `nonisolated` — the only shipping change item 7 made); `MeshFlowDriver` + `MeshRejectionMatrixHarness` (the tier-2 note that a pair now emits `terminated.v1`) |
+| Test seams (ProximityKit, DEBUG) | `rotationRosterForTesting`, `epochCoordinatorFingerprintForTesting`, `rotationBasisHeadForTesting`, `presentedEpochHeadsForTesting`, `epochRefForTesting(counter:coordinatorFingerprint:)`, `consumePendingRotationForTesting()`, `reGossipDiagnosticsForTesting` — accessors in the existing test-seams section; **no env hook added** |
+| Tests | `MeshPartitionDetectionTests`, `MeshMergePathTests`, `MeshMergeExchangeTests`, `MeshEpochReconciliationTests`, `MeshDepartureRecoveryTests`, `MeshQuorumPartitionTests`, `MeshTerminationPartitionTests`, `MeshContentMergeTests`, `MeshDeliveryTargetTests`, `MeshConvergenceSchedule` + `MeshConvergencePropertyTests`, `MeshP4AcceptanceTests`, plus rows in `CryptographicPurposeBoundaryTests`, `CryptographicDomainSeparationTests`, `MeshMembershipEventWireTests`, `MeshEpochModelTests`, `NetworkMeshTransportTests` |
+| Docs | `ProximityFunctionIndex.md` and the ProximityKit DocC landing page, in the same commit as each item that added a shipping type (items 1, 2a, 2b, 3, 5–8); `ab89d8c` updated the landing page alone |
+
+**The gauntlet, item by item:** 3687 at the P3 boundary (`ed3c193`) → 3708, 3716, 3719, 3732, 3738,
+3761, 3774, 3804, 3815, 3824, 3825, 3835, **3859** (`73e9755`) — every item green at its own landing,
+with `power-of-10-scan.py` at 0 violations and `doc-coverage-scan.py` at 0 throughout.
+
+### 10.8 Deviations from the sketch, and why
+
+- **§10 never says what *notices* a partition, and P4 added no timer.**
+  `evaluatePartition(reachable:now:)` is on-demand, in the `enforceSessionCeiling` / `evaluateIdleLapse`
+  idiom, and no shipping code raises it yet — **P7 wires the poller** (§8.7 finding 4). Inventing a
+  scheduler here would have duplicated P7's seam and given the split-brain design a second clock to reason
+  about.
+- **When the merged view's coordinator is in neither branch, the lowest fingerprint *present* mints.**
+  §10.3 says only "deterministic coordinator of merged view mints epoch counter = max+1", and never
+  says who mints when that member is in neither branch. `presentedRotationRoster()` intersects the
+  roster with the branch's present set while partitioned, so the answer falls out of §10.2's branch
+  rule rather than being a new one. It converges because counters only rise and `coexist` is legal in
+  the interim, and it never blocks a two-member reconnect on an absent member.
+- **`temporarilyDisconnected` is not persisted; `MeshSessionContext` stayed at schema 2.** §10.2 says
+  "presence state, not a record" and leaves durability open. Nothing in `MeshBranchPresence.swift` is
+  `Codable`: sealing a reversible local judgement would make it durable and reintroduce exactly the
+  shape signed records exist to avoid.
+- **Departure delivery waits for P5; P4 built the recovery instead** (§21.3's default; §8.7 finding 2).
+  An ack or a bounded re-send is a `NetworkMeshSession` change, and P5's relay is the mechanism that
+  exists for "a frame the peer did not get". `ac3bddf` asserts the recovery a merge owes anyway — a
+  survivor that missed a departure learns it at the next merge — and asserts the residual with it.
+- **A merge re-runs the ingestion gates** (§21.3's default). `MeshContentGates` is a view filter over
+  an unmutated union rather than a mutation, so a merged item and a live one get identical verdicts
+  and a branch's approval buys no free pass.
+- **Head cap 8 is an assertion, not a knob** (§21.3). `MeshEpochHeadFold.droppedCount` names the
+  overflow instead of `prefix`-ing silently, `writeSessionContext` records the drop only after the
+  seal succeeds — a refused seal dropped nothing — and 9b asserts the cap live under a nested
+  re-split, where §9's "everyone alone" bound is tightest.
+- **The proposal and the vote are two records, hyphenated, and live only in memory.** §10.4 says
+  "votes are signed records referencing a proposal ID"; it does not say how many records that is.
+  Two, because one signature cannot bind proposalID → (mesh, target, proposer) *and* be re-castable
+  by other members — if any vote could establish the binding, a hostile vote on someone else's
+  proposal ID naming a different target would tally against the wrong member. Hyphens match the
+  frozen family (the legacy *unsigned* dotted `removal.proposal.v1` family is a different one, §10.9).
+  §10.4's five-minute expiry is measured from the receiver's `firstSeenAt`, with the signed
+  `issuedAt` only a ±10 min replay bound, so no forged stamp can extend or kill a window; expiry
+  deletes rather than tombstones.
+- **The `divergent` introduction verdict had to become an admission, not a refusal.** §10.3 draws the
+  merge as though the tunnel already exists. It did not: two well-formed unequal heads answered
+  `divergent` and the transport refused the tunnel, so two branches that had both rotated could not
+  connect to merge **at all**. `.reconcile(local:peer:)` is admitted only when
+  `MeshIntroductionAuthority.mayReconcileDivergentEpochs` says a merge can run (default false, fail
+  closed), and only over QUIC, which is members-only before any app frame; every identity, roster,
+  mesh-ID, malformed-hello and replay refusal is unchanged.
+- **The responder's merge window is deliberately not closed on "answered".** The obvious companion to
+  2c's fix is to clear `awaitingResumeMerge` when a device answers a digest. It is not taken: all 48
+  cells converge on the heads alone, and the open window is what routes a later re-gossip through the
+  one merge path instead of the live-record path, where each record would rotate `.membership`. The
+  cost is a liveness residual, recorded rather than traded away (§10.9).
+- **The battery runs the fixed-seed corner; the 80-cell space stays where it was built.** §10's
+  acceptance line asks for "deterministic fake-transport suites for §16.2's scenario matrix".
+  Re-running all 80 cells inside `MeshP4AcceptanceTests` would have doubled a 25.5 s property run for
+  no new information, so the battery runs the root seed on all five shapes plus the nested re-split
+  through the same runner and checker, and asserts the larger matrix's *properties* — whole at 76/80,
+  deferral pinned at 4, every cell replaying byte-identically — in `MeshP4DeferralAcceptanceTests`
+  and `MeshP4DeterminismAcceptanceTests`.
+- **The content-merge rules are pure values; nothing is wired into `MeshNetworkManager`.** §10.3
+  writes ordering and dedup as if there were a store to apply them to. **P5 owns the routed store and
+  the drain, P6 the feature routing**, so P4 built the vocabulary and tested it against the shipping
+  caps and the existing heart ledger's dedup and five-minute cooldown. One naming note: §10.3's "gift
+  ID" had no counterpart in the shipping heart surfaces — item 7's projection names the union key
+  `MeshMergedHeart.giftID`, and `recordReceivedHeart(id:senderDisplayName:senderFingerprint:)` is the
+  dedup the clause means.
+- **`MeshDeliveryTarget` is not `Codable`.** §10.1 defines the destination set and says nothing about
+  who stores it; persistence is P5's decision, with its own wipe row. The type therefore carries no
+  encoding, no `keyEpoch`, no branch and no partition of origin — and `departed` is derived at read
+  rather than stored, because a fourth stored state would let a departure overwrite a `delivered`
+  under the max-merge.
+
+### 10.9 Findings for the owner — real, and deliberately NOT fixed here
+
+1. **The merge window closes on the FIRST matching digest** (ledger item 2d, found by `c48bf4c`).
+   `concludeMerge()` clears `awaitingResumeMerge` the moment one peer's inventory digest matches
+   local inventory. Between two devices that *is* convergence; across eight it is not — a device
+   re-forming a full mesh asks every peer at once and the answers come back over several pumps, so a
+   later re-gossip lands **outside** the window, takes the live-record path, and asks for a
+   `.membership` rotation instead of the merge's. It reaches **4 of §16.2's 80 cells** (`fourTwoTwo`
+   × {quorum, short} × seeds `0x308d0d414707d80`, `0xace07337d1bd4fcc`), which still run under
+   `aDeferredCellConvergesAndFailsOnlyOnTheNamedDefect`, pinned at 4 by the deferral guard.
+   **Cost:** a label on one member's rotation cause — the state converges, roster and heads are
+   identical at every member, nothing commits twice. The safe fix, closing only once *every asked
+   peer* has matched, changes what a window **means** and carries finding 2's liveness risk, so it
+   belongs to the window's own redesign under P5's `reconnect ≡ merge ≡ relay drain`.
+2. **The merge window's liveness residual** (`ab89d8c`). 2c deliberately does **not** close the
+   responder's window on "answered" — the open window is what routes a later re-gossip through the
+   one merge path — so a responder can end a scenario still `awaitingResumeMerge`, and
+   `openBlipMergeIfReconnected` guards on `!awaitingResumeMerge`, so it opens no further blip
+   exchange for that session. **Cost:** bounded — `askOneReconnectedPeer(_:)` still asks a peer
+   seated later, `abandonMergeExchange()` clears it on a re-split, `resetSessionStateMachine` with
+   the session. If it must ever close, the safe rule is "answered **and** the peer's next digest
+   matched", never "answered" alone.
+3. **A merged record is not pushed onward proactively.** Every caller of `sendInventoryDigest` fires
+   only as a link opens — `beginMergeExchange(entry:)` and `askOneReconnectedPeer(_:)` on a
+   reconnect, `handleAdmissionGrant`'s reply on a join — so a member already linked to a third hands
+   that third a departure only at the third's *next* merge exchange: §10.5's "C gossips it to D" is
+   true and reconnect-gated. Beside it, `reGossipedToFingerprints` answers once per peer per session
+   and `abandonMergeExchange()` does **not** reset it (only `leaveMesh`, `prepareMembershipLedger`
+   and `armJoinerLedger` do), so a re-plan after a re-split must prefer pairs the first heal never
+   used. **Cost:** latency, never correctness; a proactive push belongs in P5's routed store.
+4. **The UI still calls the legacy UNSIGNED two-party removal.** `DisposableCameraView` calls
+   `proposeRemoval(of:)` and `secondRemoval(_:)`, which ride `fernlet.mesh.removal.proposal.v1` /
+   `fernlet.mesh.removal.second.v1` (**dots**) — unsigned, quorum hard-coded at two
+   (`handleRemovalSecond` completes on one seconder whatever the roster size), reading `Date()` for
+   a 60-second window — and `removedMemberFingerprints` remains the interim exclusion authority. The
+   signed family (`fernlet.mesh.removal-proposal.v1` / `removal-vote.v1`, **hyphens**;
+   `proposeSignedRemoval(of:now:)` / `voteOnSignedRemoval(_:now:)`, `91fcaef`) sits beside it with
+   no UI caller. **Cost:** two mechanisms, one ignoring §10.4's arithmetic on every roster > 2.
+   Retiring the legacy path changes what the moderation sheet does — the owner's call.
+5. **Cap × forged stamp at a full `MeshContentSet`.** The union laws survive the cap because "keep
+   the newest k under a fixed total order" composes — *provided* two copies of one ID agree on their
+   ordering keys. The only field they can differ on is receiver-local `firstSeenAt`, and it reaches
+   `orderingInstant` only for a clamped claim, i.e. a forged stamp
+   (`MeshMergedMessage.orderingInstant` is `clamped(claimedSentAt, around: firstSeenAt)`). On a
+   **full** set that is the single shape where an inner merge could drop the copy an outer merge
+   keeps. **Cost:** at most one forged item's position differs at the cap; never a genuine one. P5's
+   routed store owns first-seen and settles it.
+6. **Two independent completions on one target are asserted, never *scheduled*.**
+   `MeshQuorumPartitionTests.independentCompletionsConvergeOnOneRemoval` proves independent
+   completions dedup to one removal record per member, and item 10's
+   `noTwoBranchesOfOnePartitionCanBothReachQuorum` proves `2q > n` for rosters 2–8 against the
+   shipping derivation, and `twoIndependentCompletionsOnOneTargetDedupToOneRemoval` runs the dedup at
+   the manager seam (both `MeshP4LedgerCommitAcceptanceTests`), while
+   `MeshConvergenceInvariants.quorumArithmetic` re-derives §10.4's threshold at every member — but
+   the generator plans exactly one removal per cell. **Cost:** the property test does not exercise
+   concurrent proposals; the dedup-by-member law and the arithmetic do. One extra cell closes it, or
+   P5's own suite.
+7. **The three `keyEpoch` gates each reject other-branch content, and are left strict.** All in
+   `MeshNetworkManager.swift`: `handlePhotoManifest`'s `.filter { $0.keyEpoch >= localJoinedEpoch }`
+   (~line 5864), `handleFriendPhotoEnvelope`'s `key.epoch == photo.keyEpoch` (~line 4018), and
+   `handleEncryptedMetadata`'s `wrapper.keyEpoch == currentGroupKey?.epoch` (~line 6339). A
+   reconciling tunnel carries the signed, unsealed membership and epoch frames, but sealed
+   `meshEncryptedMetadata` between two branches stays dropped until the merged coordinator mints.
+   **Cost:** other-branch content is invisible until the mint. Per §21.5 they retire **with** the
+   path P5 replaces — not loosened in place, and not here.
+8. **Neither acceptance battery is CI-gated.** `.github/workflows/s3-wall.yml` names the four boundary
+   suites and the key-custody trio (`KeyCustodyBoundaryTests`, `ColumnCryptoDeviceBindingTests`,
+   `SealedBackupFormatPinTests`, lines 186–188, the workflow's last step today) and no mesh acceptance
+   suite at all. Nine `-only-testing:FernletTests/MeshP4*AcceptanceTests` lines — one per §10 clause,
+   recorded as the owner action in `73e9755`'s message, one per suite in `MeshP4AcceptanceTests.swift` —
+   are owed after that step, and P3's `MeshP3*AcceptanceTests` are not gated either. **Cost:** both
+   batteries are cited as this plan's acceptance and run only when somebody runs the suite by hand.
+9. **§18.2's partition UX copy is still the owner's, and P4 built none.** `MeshMemberPresence`
+   (`present` / `temporarilyDisconnected`) is a **frozen English token** — logged verbatim, compared
+   as a `rawValue` — so display copy forks separately as a `LocalizedStringKey`. One fact the copy
+   has to respect: `applyVerifiedTermination()` calls `leaveSession()`, so "what they hold" after an
+   ending is the **sealed context**, not the in-memory ledger. **Cost:** none mechanically; P4 is
+   the first phase with a partition to describe, and it describes it to nobody.
+10. **Tier-2 items 11–14 are corroboration owed on the owner's sim fleet, not the tier-1 gate.** A
+    real 2/2 and 3/1 split on four sims (`STAGGER=1`, re-harvest identities); a real quorum removal
+    on ≥ 3 nodes, which is what retires `FERNLET_MESH_CHAOS_BARRED`; §10.5's re-gossip on the radio
+    (a leaver with no tunnel to one survivor); and `MeshLedgerAdoption`'s non-founder rebase, which
+    needs a `MeshFlowDriver` change because `driveFounder` admits everybody. **One lane behaviour
+    changed under items 11–13:** since `fa1becd` a two-node Lane C run with
+    `FERNLET_MESH_LEAVE_AFTER` emits `terminated.v1`, not `member-departure.v1` (a genuine final
+    pair now takes the termination edge); three-node runs are unaffected. **Cost:** §16.2 is green
+    at tier 1 at 76 of 80 cells — finding 1 holds the other four — and no partition shape has yet
+    been seen on a radio.
+11. **Three P4 values are built with no shipping caller**, the shape of §8.7 findings 4 and 5:
+    `MeshPartitionDetector` / `evaluatePartition(reachable:now:)` (nothing raises it until **P7**
+    wires the poller — it is on-demand in the `enforceSessionCeiling` / `evaluateIdleLapse` idiom,
+    with no timer), `MeshContentSet` / `MeshContentLedger` / `MeshContentGates` (**P5/P6**
+    ingestion) and `MeshDeliveryTarget` (**P5**'s routed store). **Cost:** none today — proven at
+    tier 1, unreachable in production until the phase that consumes them raises them.
+12. **Two quorum residuals, both deliberate.** `evaluateRemovalQuorum(_:now:)`
+    (`MeshNetworkManager.swift`, ~line 2169) fires on proposal and vote arrival only, never on a roster
+    change — a proposal one vote short does not complete when a departure lowers the threshold, it expires
+    — and `MeshRemovalQuorumRejection.proposalExpired` (`MeshRemovalQuorum.swift`, the case at ~line 214)
+    is unreachable at its one return site (`cast`, ~line 431), because `cast` calls `prune(at:)` before
+    the index lookup, so a late vote answers `.unknownProposal`. **Cost:** a stale proposal must be
+    re-proposed after a roster move (§10.4's window is live, not archaeological); one rejection case
+    survives as a guard.
+
+### 10.10 Acceptance evidence
+
+§10's acceptance line and §16.2, clause by clause, is `73e9755` — nine serialized suites, 24 tests,
+each a self-contained scenario on the shipping seams so CI can gate one line per clause:
+
+| Suite | Scenarios |
+|---|---|
+| `MeshP4ScenarioMatrixAcceptanceTests` | the root seed on all five §16.2 shapes (rosters 3/4/6/8) plus the nested re-split, through the same runner and invariant checker; the shape list asserted closed at five |
+| `MeshP4ConvergencePropertyAcceptanceTests` | one 3/3 schedule healed two valid ways, identical digests |
+| `MeshP4QuorumAcceptanceTests` | §10.4's four named consequences at the **manager seam** — a 2/2 of four removes nobody, a 3/1 removes the isolated member, roster 2 is impossible, 4 → 3 restores a pair |
+| `MeshP4WorkedExampleAcceptanceTests` | §10.5 verbatim; §10.6's final pair judged on the merged roster, with the downgrade |
+| `MeshP4EpochAcceptanceTests` | coexist → one head at max+1 with `cause = .merge`; the superseded key readable in grace and dead after; cap 8 with the ninth named |
+| `MeshP4ContentAcceptanceTests` | three unions across 4/2/2 in six link orders; gates filter the view and never the union |
+| `MeshP4LedgerCommitAcceptanceTests` | one rotation kind per heal, one record per event, nothing left queued; two independent completions dedup to one removal; no two branches of one partition can both reach quorum (`2q > n`, rosters 2–8) |
+| `MeshP4DeferralAcceptanceTests` | the honesty clause: the matrix whole at 76 of 80, the deferral count pinned at 4, each deferred cell run on the other four invariants with the defect asserted to be exactly one member's `.membership` label, and 2c's cell at full strictness |
+| `MeshP4DeterminismAcceptanceTests` | the root seed and its derived family, all 80 cells replaying byte-identically, and a grep-wall over both convergence files banning every system RNG, `Date`, shuffle and random call |
+
+- **The battery: 24 tests green, 12 s alone** (`73e9755`).
+- **Full `FernletTests`: 3859 tests green** (`73e9755`), on the third invocation after one interrupted
+  run and one instance of the known runner hang.
+- **§16.2's matrix: 80 declared** (5 shapes × 2 quorum preferences × 8 seeds), **76 run + 8 nested
+  re-split green, 4 deferred by name and bounded** (2d). Property suites run in 25.5 s alone, so no
+  seeds were pruned.
+- **Determinism:** root seed `0x00F32B1C00090002` in `MeshConvergenceSeeds.root`, the family of eight
+  re-derived by the generator's own SplitMix64, and
+  `neitherConvergenceFileConsultsASystemRNGOrAWallClock` as the grep-wall.
+- **`Scripts/spm-wall-check.sh`: passed** at `6d6cd34` and `91fcaef` — the two items that touched the
+  wire vocabulary.
+- **Owed, and not run: tier 2.** Ledger items 11–14 (a real 2/2 and 3/1 split on four Simulators, a
+  real quorum removal on ≥ 3 nodes — the run that retires `FERNLET_MESH_CHAOS_BARRED` (§8.7 finding
+  6) — §10.5's re-gossip on the radio, `MeshLedgerAdoption`'s actual rebase) are corroboration on the
+  owner's sim fleet, recorded as owed rather than as the gate.
+- **CI gate owed to the owner:** nine `-only-testing:FernletTests/MeshP4*AcceptanceTests` lines in
+  `.github/workflows/s3-wall.yml`, after the key-custody step (lines 186–188, the workflow's last step
+  today), in the same form as the boundary suites; `73e9755` records the ask, and the nine suite names
+  are the `@Suite`s in `MeshP4AcceptanceTests.swift`. P3's `MeshP3*AcceptanceTests` are not CI-gated
+  today either.
 
 ---
 
@@ -1627,6 +1888,10 @@ Every row above was still owed at the P3 boundary. §21.4 carries them forward, 
 
 ## 21. P4 handoff — written at the P3 boundary, 2026-09-02
 
+**Spent at the P4 boundary, 2026-09-03.** Kept as the record of what P4 was handed and what it was
+told to decide; §10 is now **BUILT**, and §10.7–§10.10 say what actually happened. **§22 is the live
+handoff.**
+
 P0, P1, P2 and P3 are **BUILT** (§5, §6, §7, §8). This section is what a fresh session needs to start
 P4 and nothing more; **§10 is the specification**, and §16.2's scenario matrix is the acceptance.
 P4 is partition and merge, built on `FakePeerNetwork` with a `VirtualClock` — **no hardware, and
@@ -1793,3 +2058,163 @@ Carried from §20.6, plus what P3 added:
   read identically without them, and item 9's departure finding was undiagnosable until they landed.
   Any P4 lane run on real radios wants its own echo before its first run, not after its first
   mystery.
+
+---
+
+## 22. P5 handoff — written at the P4 boundary, 2026-09-03
+
+P0–P4 are **BUILT** (§5, §6, §7, §8, §10). This is what a fresh session needs to start P5 and nothing
+more; **§11 is the specification** and §10.3's sequence is the shape the drain plugs into. P5 is
+`MeshRoutedManifest`, `MeshChunk`, `MeshCustodyReceipt` and the drain — custody ≠ delivery in every UI
+surface, hearts final only after foreground decrypt + ledger commit, photos and text final on durable
+recipient storage (§11).
+
+### 22.1 What P5 inherits
+
+- **`MeshDeliveryTarget` — the destination-set vocabulary, built for exactly this** (`7febf40`). Its
+  initializers take a `MeshDerivedRoster` — there is no initializer taking a reachable set, a
+  `MeshBranchView` or a bare fingerprint list: destinations are `members − self`, the **full roster at
+  creation**, and nothing removes one. Per destination the state is the monotone chain `pending` →
+  `custodied(by:)` → `delivered` over frozen `MeshDeliveryStateToken` spellings, regression refused by
+  name. **`departed` is not stored** — it is derived at read against the current roster, since a fourth
+  stored state would let a max-merge overwrite a `delivered`. `merging(_:)` is the per-destination max; a
+  content-id or destination-set mismatch is refused, never unioned. It is **not `Codable`, on purpose**:
+  P5 owns persistence, and that surface owes a `Docs/PrivacyWipeCoverage.md` row plus delete-all wiring
+  **in the same commit**. For a fresh target `outstandingReachable(from:in:)` ==
+  `MeshDevelopmentPlan.handoffTargets` and `outstandingUnreachable(from:in:)` ==
+  `MeshBranchView.temporarilyDisconnectedFingerprints`, and `MeshDevelopmentPlan.handoffSummary` names the
+  custodians with `handedOffItemCount: 0` — **that count is the single field P5 fills.**
+- **The one merge path *is* the drain's model: reconnect ≡ merge ≡ relay drain** (`bf81039`, `9225748`,
+  `6d6cd34`). `mergeReconnected(_:entry:)` is the named front door onto the unchanged
+  `mergeMembershipLedger(_:)`; `MeshMergeEntry` (`blip` / `partitionHeal` / `idleLapseResume` /
+  `processRestart`) records which door and **nothing branches on it**. The exchange rides the signed
+  `fernlet.mesh.inventory-digest.v1` ask, the bounded re-gossip answer (`reGossipRecords(to:)`, capped by
+  `maxReGossipFrames`, **once per peer per session**) and the additive `fernlet.mesh.epoch-heads.v1`
+  frame; a peer seated after the window opened is asked one-off by `askOneReconnectedPeer` (`c48bf4c`).
+- **The merge window is the piece P5 should expect to redesign.** `concludeMerge()` closes on the
+  **first** matching digest, so across eight members a later re-gossip lands outside it and rotates
+  `.membership` (2d, deferred by name: 4 of 80 cells, converging, nothing committed twice); and a
+  responder that *answered* stays open for the rest of the session (P4 i11's liveness residual, bounded by
+  `abandonMergeExchange` and a session reset). The drain gives "the exchange is finished" a second,
+  content-shaped meaning: redesign it there, and never loosen "answered" into "closed" (see `ab89d8c`).
+- **`MeshFrameReplayWindow`, built, unwired, deliberately epoch-independent** (§8.7 finding 5): per-sender
+  frame-id dedup, `maxFramesPerSender` 64, refuses at its cap, knows nothing about epochs. **P5 is where
+  routed content is what an attacker would replay** — wire it against manifest and chunk ids, never an
+  epoch.
+- **The three `keyEpoch` gates, to retire *with* the path P5 replaces** (P4 i8; all
+  `MeshNetworkManager.swift`, lines current at `81a4b3d`): `handlePhotoManifest` line 5864 (the `keyEpoch
+  >= localJoinedEpoch` filter), `handleFriendPhotoEnvelope` line 4018 (`key.epoch == photo.keyEpoch`),
+  `handleEncryptedMetadata` line 6339 (`wrapper.keyEpoch == currentGroupKey?.epoch`). Each wrongly rejects
+  content created in the other branch of a split. **Retire them with the path; never loosen them in
+  place.** Item 3's companion fact (P4 i4): a *reconciling* tunnel carries membership and epoch frames —
+  signed, unsealed, which is how `fernlet.mesh.epoch-heads.v1` crosses a divergent pair — but
+  `meshEncryptedMetadata` between two branches stays **dropped** until the mint. That drop is P5's
+  retirement too.
+- **The content-merge rules the routed store must honour** (`6bdc73b`, pure values).
+  `MeshContentSet<Item>` dedups by content ID under one total order and keeps the newest k against the
+  three **existing** caps — `FriendPhotoLimits.maxManifestEntries`, `SessionMessageStore.maxMessages`,
+  `ProximityHeartLedger.maxStoredHearts`; `MeshContentLedger.merging(_:)` is three set unions. Transcript
+  order is `claimedSentAt` clamped to ±10 min of the receiver-local `firstSeenAt`, then sender, then id;
+  `MeshPhotoReassembly` admits a manifest only on a digest match; hearts commit **once** through
+  `ProximityHeartLedger`'s id-dedup and cooldown, `MeshHeartCommitOutcome.judgements` being the
+  drain-idempotence assertion; `MeshContentGates` is a **view filter** over an unmutated union. **One
+  residual is P5's:** at a *full* set two copies of one id can differ only on receiver-local first-seen,
+  which reaches `orderingInstant` for a clamped (forged) stamp — the routed store owns first-seen, so that
+  is where it closes.
+- **A merged record is not pushed onward proactively — the first latency question the drain inherits.**
+  Every caller of `sendInventoryDigest` fires only as a link opens (`beginMergeExchange` and
+  `askOneReconnectedPeer` on a reconnect, `handleAdmissionGrant`'s reply on a join), so C — already linked
+  to D — hands D a departure only at D's *next* merge exchange. §10.5's "C gossips it to D" is true but
+  reconnect-gated; the cost is latency, never correctness, and P5's routed store is the candidate place to
+  close it (§10.9 finding 3).
+- **The rigs, and a tier 1 that now carries eight managers.** `MeshDepartureRig` is the general N-manager
+  rig — **one `ProximityCoordinator` per link**, because the manager resolves an inbound frame's slot by
+  coordinator identity; `MeshMergeExchangeTests` is the two-manager wire rig carrying real signed frames
+  on `FakePeerNetwork`; `MeshReconcileFixtures`, `MeshQuorumFixtures` and `MeshContentFixtures` are the
+  per-item drivers; `MeshScheduleGenerator` / `MeshConvergenceRun` / `MeshConvergenceInvariants` are the
+  property harness over `MeshScheduleRandom` (SplitMix64, `inout`), seeded from
+  `MeshConvergenceSeeds.root` = `0x00F32B1C00090002` under `MeshScheduleBounds` (bounds asserted, not
+  knobs). The disciplines, each of which cost an iteration: `try service.ensureProvisioned()` and roster
+  size as a **hard precondition** (unprovisioned instances share one placeholder fingerprint, so a roster
+  silently dedupes); a **distinct identity per manager**, since `IdentityService()` is keyed on one
+  process-wide keychain service; sample rotation-queue state **right after a synchronous pump, never after
+  an `await`**; **distinct epoch counters per branch**; heals **ordered**, since re-gossip answers once
+  per peer per session; a healed partition must be **re-formed as a full mesh with a second commit
+  round**, because §10.2's branch scoping reads presence; `.merge` > `.membership` > `.timer` inside the 2
+  s coalescing window, so a merge-seeded test cannot then observe a membership rotation
+  (`seedMembershipLedgerForTesting` seeds without spending it); `MeshNetworkManager` holds its host store
+  `unowned`, so an inline `makeTestStore()` traps the test process; `SWIFT_DEFAULT_ACTOR_ISOLATION =
+  MainActor` means fixtures must be `@MainActor`; and the `test runner hung before establishing
+  connection` flake hits the **first** invocation after each build — the retry is the acceptance, so
+  budget two invocations (~13 min each) per gauntlet run.
+
+### 22.2 The sim↔sim lane, as it actually is
+
+**Unchanged by P4** — §21.2's table stands as written: three Simulators form a full mesh since 0b was
+fixed (`871b7ee`), the pair row is proven over real QUIC, and the four ≥ 3-node asks (a 2/2 or 3/1 split,
+a departure learned by re-gossip rather than directly, a real quorum, `MeshLedgerAdoption`'s actual
+rebase) are reachable but **not yet run** — tier-2 items 11–14, owed, never the gate. One behaviour change
+(`fa1becd`): a **two-node** Lane C run with `FERNLET_MESH_LEAVE_AFTER` now emits
+`fernlet.mesh.terminated.v1`, not `fernlet.mesh.member-departure.v1`, because a genuine final pair finally
+takes §8.2's `handingOff → terminated` edge (three-node runs unaffected). **P5 is the phase that most
+wants this lane** — §21.5's relay drain across a real three-node split is now reachable — but plan tier 1
+first, keep `STAGGER=1`, and re-harvest identities after any test run.
+
+### 22.3 Decisions with defaults — take them deliberately, at the start
+
+| Decision | Default if the owner is silent | Why |
+|---|---|---|
+| **Where a `MeshDeliveryTarget` is persisted, and its wipe row** | **Inside the routed store's own sealed surface**, encoded by P5 (the type stays non-`Codable`), with the `Docs/PrivacyWipeCoverage.md` disposition row and delete-all writer wiring in the **same commit**. | §17.3's paperwork rule and the wipe wall. A new persisted surface with no wipe row fails CI, and the delivery map is exactly "who this user was sending what to". |
+| **Does the drain close the merge window?** | **Yes — redesign the window as part of the drain.** Closing only when *every asked peer* has matched is 2d's safe fix and it carries P4 i11's liveness risk with it, so the responder-side rule has to be "answered *and* the peer's next digest matched", never "answered" alone. | The current rule (first matching digest) predates having any content to drain. Changing it inside P4 would have altered what a window means with no drain to justify it. |
+| **Departure delivery — P4's deferral comes due** | **Still no transport ack:** the merge path stays the recovery (asserted verbatim in `ac3bddf`), and the drain carries custody for *routed content*, not membership frames. | §10.5's residual — a member that leaves entirely alone — is accepted and bounded. If the owner wants the ack, the cheap half is still awaiting a flush before `leaveSession()` stops the transport, a `NetworkMeshSession` change. |
+| **§18.2 partition UX copy** | **Owner's, and now on P5's path:** default is the subtitle count only, and **no new localized string** until the answer lands. | P5 is the first phase that must *show* a delivery state, so the copy question stops being hypothetical. Shipping copy without the answer means localizing twice. |
+| **Retiring the legacy unsigned two-party removal** | **No — leave it frozen** beside the signed `removal-proposal.v1` / `removal-vote.v1` family. | Owner's: it changes what the moderation sheet does on a roster > 2. P5 touches neither path. |
+
+### 22.4 Still owed by the owner, and not blocking P5
+
+Carried from §21.4, with what P4 added:
+
+- **Hardware, unchanged:** the Lane A report, Lane B's double-dial row (§7.7 finding 6), the **AWDL half**
+  of item 11 (its Local Network prompt half is observed granted), and **Lane D — the production transport
+  over Wi-Fi with the cable OUT**; check afterwards that no ready line names a USB-side interface
+  (`anpi0`/`en8`).
+- **The CI gate lines for both acceptance batteries.** Neither P3's `MeshP3*AcceptanceTests` nor P4's nine
+  `MeshP4*AcceptanceTests` suites are gated in `.github/workflows/s3-wall.yml`; the nine `-only-testing:`
+  lines go after the key-custody step (lines 186–188, the workflow's last step today); `73e9755` records
+  the owner action, and the suite names are the nine `@Suite`s in
+  `Tests/FernletTests/MeshP4AcceptanceTests.swift`.
+- **Tier-2 items 11–14** on the sim fleet: a real 2/2 and 3/1 split, a real quorum removal on ≥ 3 nodes
+  (retiring `FERNLET_MESH_CHAOS_BARRED`), §10.5 re-gossip on the radio, and `MeshLedgerAdoption`'s rebase
+  behind a `MeshFlowDriver` change.
+- **The legacy unsigned removal's retirement decision** (§22.3's last row): the UI still calls
+  `fernlet.mesh.removal.proposal.v1` / `fernlet.mesh.removal.second.v1`, quorum hard-coded at 2, reading
+  `Date()`. **Transcript `sid`** (§18 decision 7) stays owner-gated; P4 moved no existing golden (items 3
+  and 5 each added a new frame with its own), and P5's routed frames make it dearer.
+- **The one-line `sync-string-catalogs.sh` write** on a quiet tree (nine stale keys) — known-red, **do not
+  bisect it**; and **the `HeartDrop` CloudKit record type is missing from the container**, owner-side
+  schema rather than code.
+- **§17.3's `PrivacyInfo` / privacy-copy paragraph** by the first TestFlight build — P5 makes it concrete,
+  since nearby devices briefly holding ciphertext they cannot read *is* the drain. Also **downgrade
+  `browsed peers=` from `.notice`/`.public`** before QUIC ships.
+- **Closed; do not re-audit:** `MeshTunnelConvergence` and the id-vs-endpoint family (`96337a3`,
+  `2f273a9`), and the crypto-purpose / `PayloadType` / record-kind spellings, walled by
+  `CryptographicPurposeBoundaryTests` and the vocabulary wall rather than by review.
+
+### 22.5 What P4 learned that re-tiers P5–P7 further
+
+- **The seeded property test paid for itself on its first iteration, so P5's drain gets one from day
+  one.** `52051cc` found the merge-window deadlock that `ab89d8c` fixed — a shipping merge bug none of
+  items 2–8's targeted tests reached; `c48bf4c` found the late-reconnect strand that permanently stranded
+  ten of sixteen 4/2/2 cells on different heads, and named 2d. **Three shipping merge defects — 2c and the
+  late-reconnect strand fixed, 2d deferred by name — all out of randomized bounded schedules under a fixed
+  seed.** The generator is reusable as it stands: every event is *one call into an existing seam*, so
+  custody, a receipt or a drain step is a new case, not a new rig. Write that battery beside P5's first
+  increment, not after it.
+- **Tier 1 now carries up to eight managers on the fake fabric** — rosters 6 and 8 as 3/3 and 4/2/2 plus a
+  nested re-split mid-merge, 76 cells of 80 green with 4 deferred by name, the property family in 25.5 s
+  alone. A drain across a 4/2/2 with pending custody on both sides is a **tier-1** test, not a lane run.
+- **P7 is still mostly wiring (§21.5), and now has a second consumer:** nothing in shipping code raises
+  `evaluatePartition(reachable:now:)` or its `evaluatePartition(now:)` wrapper, so P7's poller feeds
+  partition detection as well as the ceiling and the idle lapse.
+- **The P8 boundary is unchanged.** Background continuation, battery and thermal remain irreducibly
+  physical — hardware only, per §15. Nothing P4 built moves that line, and nothing P5 builds will.
