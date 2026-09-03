@@ -161,6 +161,17 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// proposal expires after five minutes leaving no trace. Only the completed removal
     /// (`meshMemberRemoval`) is durable.
     case meshRemovalVote       = "fernlet.mesh.removal-vote.v1"
+    /// The origin-signed description of one routed item — id, type, ciphertext hash and size,
+    /// immutable destination set, expiry, and a per-recipient content-key wrap
+    /// (`MeshRoutedManifestPayload`, network migration P5 item 1, plan §11). Same spelling as
+    /// `Signature.meshRoutedManifestV1`: token, record and signing domain are one vocabulary.
+    ///
+    /// NOT in `sealingRequiredTypes`, on purpose: a custodian forwards the origin's exact signed
+    /// object inside its own envelope, and pairwise sealing would make the manifest readable only
+    /// by its first hop. Confidentiality is the wrap, not the envelope — every roster member (all
+    /// of whom are destinations) can read the type token, size and destination fingerprints.
+    /// Additive: older builds park the token (`isUnknownPayloadType`) and still verify the envelope.
+    case meshRoutedManifest    = "fernlet.mesh.routed-manifest.v1"
     // Group encryption (Phase 3)
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"

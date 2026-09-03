@@ -156,7 +156,7 @@ public nonisolated enum FernletCryptoPurpose {
         /// permanent, quorum-complete record — a signature that satisfied both would let a single
         /// vote be replayed as a completed removal.
         public static let meshRemovalVoteV1 = CryptographicPurpose("fernlet.mesh.removal-vote.v1", framing: .lengthPrefixed)
-        /// **Reserved, not yet written.** P5's routed-content manifest signature (plan §11): item
+        /// **Written since P5 item 1.** P5's routed-content manifest signature (plan §11): item
         /// ID, type token, content hash, size, immutable destination set, expiry, and the
         /// per-recipient key wraps. Signed by the ORIGIN only — relays forward the origin's exact
         /// signed object and never re-sign, so this purpose has exactly one signer per manifest.
@@ -190,7 +190,7 @@ public nonisolated enum FernletCryptoPurpose {
         /// hands it to `sec_protocol_metadata_create_secret` and signs the SHA-256 of the result
         /// into ``FernletCryptoPurpose/Signature/meshChannelIntroductionV1``'s transcript.
         public static let meshTLSExporterV1 = CryptographicPurpose("fernlet.mesh.tls-exporter.v1")
-        /// **Reserved, not yet written.** P5's per-recipient content-key wrap (plan §11): the
+        /// **Written since P5 item 1.** P5's per-recipient content-key wrap (plan §11): the
         /// X25519 shared secret between the origin and one destination is run through HKDF under
         /// this purpose to derive the key-wrapping key. Mirrors the ``meshGroupKeyWrapV1`` /
         /// ``FernletCryptoPurpose/AEAD/meshGroupKeyWrapV2`` pair — a derivation purpose plus the
@@ -231,7 +231,7 @@ public nonisolated enum FernletCryptoPurpose {
         public static let meshGroupKeyWrapV2 = CryptographicPurpose("fernlet.mesh.groupkey.wrap.aead.v2")
         public static let meshGroupPhotoV2 = CryptographicPurpose("fernlet.mesh.group-photo.aead.v2")
         public static let meshEncryptedMetadataV2 = CryptographicPurpose("fernlet.mesh.encrypted-metadata.aead.v2")
-        /// **Reserved, not yet written.** Authenticated data for P5's per-recipient content-key
+        /// **Written since P5 item 1.** Authenticated data for P5's per-recipient content-key
         /// wrap — the sealing half of the pair whose derivation half is
         /// ``FernletCryptoPurpose/KeyDerivation/meshRoutedContentKeyWrapV1``.
         public static let meshRoutedContentKeyWrapV1 = CryptographicPurpose("fernlet.mesh.routed.content-key.wrap.aead.v1")

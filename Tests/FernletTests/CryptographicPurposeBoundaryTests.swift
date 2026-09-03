@@ -103,6 +103,11 @@ struct CryptographicPurposeBoundaryTests {
         // below carry a placeholder one.
         assertMembershipFramingHolds()
 
+        // The routed-content manifest (network migration P5 item 1, plan §11). Registered
+        // `.lengthPrefixed` in P0 before anything signed under it; this is the serializer arriving
+        // and being held to that declaration in the same change — the 91c3956 pairing.
+        assertRoutedFramingHolds()
+
         // Still POSITIONAL, not a substring search: a length-prefixed purpose rejects its own raw
         // spelling. Accepting that would let a transcript carry the domain in an attacker-chosen
         // field and still reach the identity key.
@@ -162,6 +167,29 @@ struct CryptographicPurposeBoundaryTests {
         #expect(departurePurpose.signingBytes(departurePurpose.data) == nil)
         #expect(inventoryPurpose.signingBytes(inventoryPurpose.data) == nil)
         #expect(epochHeadsPurpose.signingBytes(epochHeadsPurpose.data) == nil)
+    }
+
+    /// The routed manifest against its declared `.lengthPrefixed` framing and against the
+    /// membership frames it travels beside: a manifest that satisfied the inventory digest's
+    /// purpose would let "what I am sending" be replayed as "what I hold", and one that satisfied
+    /// the departure's would let content stand in for a member leaving.
+    private func assertRoutedFramingHolds() {
+        let manifestPurpose = FernletCryptoPurpose.Signature.meshRoutedManifestV1
+        let inventoryPurpose = FernletCryptoPurpose.Signature.meshInventoryDigestV1
+        let epochHeadsPurpose = FernletCryptoPurpose.Signature.meshEpochHeadsV1
+        let departurePurpose = FernletCryptoPurpose.Signature.meshMemberDepartureV1
+        let manifest = canonicalBytes(for: MeshRoutedManifestFixtures.manifest())
+        let inventory = canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload())
+        let epochHeads = canonicalBytes(for: MeshMembershipEventFixtures.epochHeadsPayload())
+        let departure = canonicalBytes(for: MeshMembershipEventFixtures.departure())
+        #expect(manifestPurpose.signingBytes(manifest) != nil)                 // declared == emitted
+        #expect(inventoryPurpose.signingBytes(manifest) == nil)                // cross-domain, both ways
+        #expect(manifestPurpose.signingBytes(inventory) == nil)
+        #expect(epochHeadsPurpose.signingBytes(manifest) == nil)
+        #expect(manifestPurpose.signingBytes(epochHeads) == nil)
+        #expect(departurePurpose.signingBytes(manifest) == nil)
+        #expect(manifestPurpose.signingBytes(departure) == nil)
+        #expect(manifestPurpose.signingBytes(manifestPurpose.data) == nil)     // positional: rejects its own raw spelling
     }
 
     /// The raw-prefix family: transcripts that concatenate their domain directly. Rejecting a

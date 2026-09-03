@@ -24,11 +24,12 @@ types (which still have no production callers).
 | Need | Prefer Reusing |
 | --- | --- |
 | Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:)` |
-| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:)` is overloaded for the identity envelope, the mesh admission token, the three Group-Activity types, and a moderation row, each behind its own domain tag. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
+| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:)` is overloaded for the identity envelope, the mesh admission token, the three Group-Activity types, a moderation row, and the routed manifest (P5 item 1), each behind its own domain tag. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
 | Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
 | A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation(cause:)` |
+| Per-recipient routed content-key wrap | `MeshRoutedContentKeyWrapper.wrap/unwrap/additionalData` (P5 item 1) — the routed sibling of `encryptGroupKey`: the same X25519 → HKDF → AES-GCM chain under the routed purposes with a manifest-binding AAD. Never re-roll the chain (items 2/10, P6) and never reuse the group-key purposes for it. |
 | Durable sidecar state (data of record) | `ProtectedSidecar` — classifies absent / deferred / corrupt / loaded and keeps memory authoritative on write failure. Do NOT use `JSONSidecarFile` for data of record: it collapses every read failure to `nil`. |
 | Sealing a payload to a peer, with framing | `IdentityService.seal(_:to:)` + `SealedPayloadFormat` (capability-derived, never inferred from bytes) |
 | Verifying a human holds a key | `ProximityVerifyQR` + `ProximityVerifySignature.message(...)` — shared transcript, so the friend and coach ceremonies cannot diverge |
@@ -608,6 +609,59 @@ targets inside its routed store; this file owns only the rule.
 | `outstanding(in:)` / `closed(in:)` / `isFullyDelivered(in:)` | §11's "destinations lacking a `MeshRecipientReceipt`", the roster-closed set, and the complement. A target whose every destination departed is fully delivered vacuously — the answer that lets P5 retire the item. |
 | `outstandingReachable(from:in:)` / `outstandingUnreachable(from:in:)` | The two existing seams as **derivations, not duplicates**: for a fresh target the first equals `MeshDevelopmentPlan.handoffTargets` and the second equals `MeshBranchView.temporarilyDisconnectedFingerprints`. Neither type was modified. Reachability filters the *work*, never the destination set. |
 
+### `MeshRoutedManifest.swift`
+
+P5 item 1 (plan §11): the origin-signed description of one routed item, and the per-recipient
+content-key wrap that rides inside it. Pure values, no clock; the only mint takes a
+`MeshDeliveryTarget`, so the destination set is the full roster at creation and never the connected
+set. Deliberately NOT in this file: persistence and its wipe row (item 3), dispatch/emission (item
+6), chunks and the item seal under `AEAD.meshRoutedItemV1` (item 2), the type-token registry (item
+11), receipts (items 3/4).
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedManifestFormat` | The frozen widths and caps every manifest is checked against BEFORE its signature is verified: 64-byte signature, 32-byte hash, 64-byte token/fingerprint ceilings, 7 destinations (roster cap − origin), 256 MiB `size` (the relay cache's whole budget — item 9 reuses it), 32/12/48-byte wrap fields, 32-byte content key, and the 20-minute development grace. |
+| `MeshRecipientKeyWrap` | One destination's copy of the content key: recipient fingerprint + ephemeral X25519 public key (32) + GCM nonce (12) + sealed key (48 = 32 ciphertext ‖ 16 tag). Lives inside the manifest and is bound into the origin's signature; never on the wire alone. `isWellFormed` is a width check. |
+| `MeshRoutedManifest` | The record: `meshID`, `itemID` (= `MeshDeliveryTarget.contentID` = the replay window's per-sender frame id; the routed store's union key is the PAIR `(originFingerprint, itemID)` — both signed — because any admitted member can mint under its own key reusing another origin's id, and an id already held under a different origin is refused at the store door in item 3/6, never here), `originFingerprint`, `typeToken`, `contentHash`, `size`, `createdAt`, `expiresAt` (= `hardDeadline` + grace), `destinations` (`MeshDeliveryTarget.destinations` verbatim), `keyWraps` (one per destination, same order), `signature`. Both lists are clamped to the destination cap and BOTH instants are floored to whole seconds on the memberwise init AND on decode, so an over-cap list is unrepresentable and a relay's sub-second re-encoding cannot extend liveness or produce a manifest `!=` the origin's that still verifies. Carries no epoch, branch, custody or first-seen. |
+| `isWellFormed` / `isLive(at:)` | Width/count check on untrusted bytes before the signature; liveness `now <= expiresAt` under an injected clock (the `MeshFrameReplayWindow.admit` predicate). |
+| `expiry(afterHardDeadline:)` / `floored(_:)` | The ONE expiry formula and the ONE finite-guarded floor, shared by the mint and the verifier. Both return `Date`s — no reader may `Int64(_:)` either instant, because an admitted origin can sign `1e300` and `appendDate` saturates rather than traps. |
+| `MeshRoutedManifestPayload` | The `fernlet.mesh.routed-manifest.v1` frame: the manifest and nothing else. Signed, NOT sealed (not in `sealingRequiredTypes`) so a custodian can re-broadcast it verbatim; the wraps are the confidentiality. Registered here, dispatched from item 6. |
+| `MeshRoutedManifestMintError` | Why the mint refused, by name: `noDestinations`, `tooManyDestinations` (unreachable through `MeshDeliveryTarget`'s only initializer — the derived roster caps at 8, so a target names at most 7; kept so the mint states its own bound), `originIsADestination`, `invalidTypeToken`, `invalidContentHash`, `invalidSize`, `invalidContentKey`, `missingRecipientKey(fingerprint:)`. A manifest that cannot be built for the WHOLE destination set is not built at all. |
+| `MeshRoutedManifest.signed(meshID:target:typeToken:contentHash:size:createdAt:hardDeadline:contentKey:recipientKeys:identity:)` | `@MainActor` mint: validates, mints one wrap per destination from the caller-supplied handshake-verified X25519 keys (a missing key refuses the whole mint), floors both instants, signs `canonicalBytes(for:)` under `Signature.meshRoutedManifestV1`, and returns a copy built from the CLAMPED unsigned fields so signed bytes == wire bytes. The signer is always the origin. |
+
+### `MeshRoutedManifestVerifier.swift`
+
+P5 item 1 (plan §11): the one door a received manifest passes through. Public material only, so it
+runs on a locked device over ciphertext-only custody; `nonisolated`, no clock. Deliberately NOT
+here: a roster check (a DEPARTED origin's content stays valid — leaving is not a retraction — so
+departures are never consulted), a destination lookup in the ledger (D12: destinations are trusted
+on the origin's signature, bounded by expiry and the relay caps), and any dispatch. Deliberately
+HERE: the removal check — a quorum-REMOVED origin (plan §10.4) is refused by name, because removal
+is the mesh's moderation act and the group-key rotation that enforces it on live traffic cannot
+reach a per-recipient static-key wrap (D14).
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedManifestRejection` | Frozen English tokens: `foreignMesh`, `malformed`, `unknownTypeToken`, `originNotAdmitted`, `originRemoved`, `originKeyMismatch`, `signatureInvalid`, `wrapsDoNotMatchDestinations`, `destinationSetInvalid`, `expiryMismatch`. Logged verbatim, never localized. |
+| `MeshRoutedManifestVerifier(meshID:hardDeadline:ledger:acceptedTypeTokens:)` | Bound to one session: the mesh, its signed ceiling, the merged membership ledger, and the routed-type tokens this build will hold or forward (D13 — item 1's callers pass a fixture set, item 11 the registry's; empty means accept nothing). |
+| `verify(_:)` | Ten guards in order: mesh → shape → type token accepted → admitted key (from `ledger.admissions`, by the manifest's OWN origin, never the envelope's sender) → origin not in `ledger.removals` (the same set `MeshDerivedRoster` subtracts; departures untouched) → key/fingerprint agreement → signature under `Signature.meshRoutedManifestV1` → wraps ≡ destinations → distinct set without the origin → `expiresAt` == own `hardDeadline` + grace (`Date` equality through `floored`; no `Int64` anywhere). Returns the named rejection or nil. |
+
+### `MeshRoutedContentKeyWrapper.swift`
+
+P5 item 1 (plan §11, invariant §3.3): the per-recipient content-key wrap and its inverse —
+`IdentityService.encryptGroupKey` primitive for primitive with the routed purposes and a
+binding-carrying AAD. `nonisolated` and static: the recipient's private key never enters the file.
+Deliberately NOT here: the item seal (item 2), any key from descriptor gossip or the trust vault.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedWrapBinding` | What a wrap is bound to besides its recipient: `meshID`, `itemID`, `originFingerprint`. Part of the AEAD's authenticated data, so a wrap cannot be transplanted between manifests, meshes or origins. |
+| `MeshRoutedKeyWrapError` | `invalidRecipientKey(fingerprint:)`, `invalidContentKey`, `notAddressedToMe`, `malformed`, `openFailed` — one token for every CryptoKit refusal on purpose (distinguishing them would be an oracle). Frozen English diagnostics. |
+| `makeContentKey()` | 32 random bytes from the platform CSPRNG, as `Data` (no pointer API; item 2 builds the `SymmetricKey`). Minted BEFORE the item is sealed and hashed. |
+| `wrap(contentKey:recipientFingerprint:recipientKeyAgreementPublicKey:binding:)` | Fresh ephemeral X25519 + fresh GCM nonce per wrap → HKDF-SHA256 (salt `KeyDerivation.meshRoutedContentKeyWrapV1`, info eph ‖ recipient) → AES-256-GCM over the 32-byte key with `additionalData` authenticated. Public keys only. |
+| `unwrap(_:binding:localFingerprint:localKeyAgreementPublicKey:staticAgreement:)` | The inverse, refusing `notAddressedToMe` and `malformed` before any key agreement; the DH is a closure into `IdentityService.heartDropStaticAgreement(withEphemeralPublicKey:)` (the `HeartDropSealer.open` shape), whose own error propagates. Everything CryptoKit refuses is `openFailed`. |
+| `additionalData(binding:recipientFingerprint:)` | `AEAD.meshRoutedContentKeyWrapV1.data` (raw prefix) ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(recipient). Frozen wire-bearing bytes, pinned by an independently derived golden. |
+
 ### `MeshSessionCeiling.swift`
 
 Plan §8.2's 6-hour ceiling, guarded at **both** bounds.
@@ -885,6 +939,7 @@ bytes. **The field order in each function IS the schema.**
 | `canonicalBytes(for: MeshAdmissionToken)` | Canonical v2 bytes for an admission token; `admitterSignature` excluded. |
 | `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
+| `canonicalBytes(for: MeshRoutedManifest)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |
 | `legacyCanonicalBytes(for:)` (envelope, token) | The exact pre-WI-6 `JSONEncoder` configuration, retained ONLY to VERIFY signatures minted by in-field peers on older builds. Never used to sign; do not change its configuration — its byte output is a compatibility contract with already-signed data. |
 | `CanonicalByteWriter` | The append-only binary writer (`appendByte`/`appendInt64`/`appendUUID`/`appendString`/`appendLengthPrefixed`/`appendDate`, optional presence bytes, byte-ordered maps). |
 | `canonicalUTF8Ordered(_:_:)` | Byte-lexicographic key ordering — unambiguous and identical on every stack, unlike `.sortedKeys`' UTF-16 ordering. |

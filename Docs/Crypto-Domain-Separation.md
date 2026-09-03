@@ -106,6 +106,7 @@ on the reasoning.
 | `proximityQRResponseV1` | `fernlet.verify.response.v1` | `.rawPrefix` | `CoachVerificationCeremony`, `DuressRecoveryCoordinator`, `MeshNetworkManager`, `ProximityVerification` |
 | `duressRecoveryRequestV1` | `fernlet.duress.recovery.request.v1` | `.rawPrefix` | `DuressRecoveryCoordinator` |
 | `duressRecoveryReplyV1` | `fernlet.duress.recovery.reply.v1` | `.rawPrefix` | `DuressRecoveryCoordinator` |
+| `meshRoutedManifestV1` | `fernlet.mesh.routed-manifest.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedManifest`, `MeshRoutedManifestVerifier` |
 
 #### KeyDerivation
 
@@ -117,6 +118,7 @@ on the reasoning.
 | `heartDropPairV1` | `fernlet.heartdrop.v1` | `IdentityService` |
 | `presencePairV1` | `fernlet.presence.tag.v1` | `IdentityService` |
 | `meshGroupKeyWrapV1` | `fernlet.mesh.groupkey.v1` | `IdentityService` |
+| `meshRoutedContentKeyWrapV1` | `fernlet.mesh.routed.content-key.v1` | `MeshRoutedContentKeyWrapper` |
 | `heartDropOuterSealV1` | `fernlet.heartdrop.seal.v1` | `HeartDropSealer` |
 | `lockScryptWrappingV1` | `fernlet.lock.scrypt.wrapping.v1` | — |
 | `journalNarrativeLegacyV1` | `journal-narrative` | `ColumnCrypto`, `JournalNarrativeRepository` |
@@ -141,6 +143,8 @@ on the reasoning.
 | `meshGroupKeyWrapV2` | `fernlet.mesh.groupkey.wrap.aead.v2` | `IdentityService` |
 | `meshGroupPhotoV2` | `fernlet.mesh.group-photo.aead.v2` | `MeshNetworkManager` |
 | `meshEncryptedMetadataV2` | `fernlet.mesh.encrypted-metadata.aead.v2` | `MeshNetworkManager` |
+| `meshRoutedContentKeyWrapV1` | `fernlet.mesh.routed.content-key.wrap.aead.v1` | `MeshRoutedContentKeyWrapper` |
+| `meshRoutedItemV1` | `fernlet.mesh.routed.item.aead.v1` | — (reserved; P5 item 2) |
 | `heartDropSidecarV2` | `fernlet.heartdrop.sidecar.aead.v2` | `HeartDropSidecarKey` |
 | `pendingNarrativeBufferV2` | `fernlet.pending-narrative-buffer.aead.v2` | `PendingNarrativeBuffer` |
 | `lockContentKeyWrapV2` | `fernlet.lock.content-key-wrap.aead.v2` | `FernletLockService` |
@@ -172,6 +176,15 @@ transcript collected from the probe be replayed as a real mesh admission.
 `intimacy-log` — predate the registry. `ColumnCrypto.init(label:)` exists solely to map those four
 strings back to their typed constants for fixtures, and it fails closed on anything else: an unknown
 label hits `assertionFailure` rather than deriving a silently orphaned key.
+
+**The table predates P2–P4's mesh signature purposes (note added 2026-09-03).** Eight spellings
+the test inventories are not in the Signature table above — `channel-introduction`, the three
+signed membership records (`member-departure`, `member-removal`, `terminated`; the admission frame
+reuses `meshAdmissionTokenV2`, which is listed), `inventory-digest`, `epoch-heads`,
+`removal-proposal` and `removal-vote` — because those frame commits added registry constants and
+`allDomains` rows without a row here.
+P5 item 1 adds only its own four routed rows (one signature, one derivation, two AEAD) and records
+the drift rather than backfilling it; the test remains the authority on the SET.
 
 ## 4. Transcript framing
 
