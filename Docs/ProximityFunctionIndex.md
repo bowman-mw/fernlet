@@ -265,7 +265,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `requestRotation(cause:)` | **The one entry point to rotation** (P3 item 5, plan §8.3): timer, roster change and merge all pass through `MeshRotationTriggerQueue`, which coalesces a burst and refuses re-entry. The coordinator check happens at fire time, not here. |
 | `armRotationDebounce(firingAt:)` / `runDebouncedRotation()` / `rearmDeferredRotation()` | The single armed window (cancel-and-replace), the claim-then-rotate step, and the re-arm for a trigger that arrived mid-rotation. |
 | `initiateRotation(cause:)` | Coordinator rotation, in the order that matters: plan the epoch, drain for acks, **persist the head**, then distribute. A `terminate` plan ends the session; a blocked save abandons the rotation. |
-| `plannedRotation()` / `presentedRotationRoster()` | The successor plan through `MeshRotationPolicy` + `MeshEpochAcceptance`, and the roster it is presented against (derived roster, else descriptor members + self). |
+| `plannedRotation()` / `presentedRotationRoster()` / `fullRotationRoster()` | The successor plan through `MeshRotationPolicy` + `MeshEpochAcceptance`, and the roster it is presented against — the full one (derived roster, else descriptor members + self), **intersected with the branch** while partitioned (P4 item 1, plan §10.2). The branch scoping lives here, once, so the presented roster and `epochCoordinatorFingerprint` cannot drift apart. |
 | `drainForRotation(closingEpoch:)` | Steps 1–2: announce the closing epoch, re-arm the 15-minute timer, collect drain acks. Returns nil when cancelled mid-drain, so nothing is distributed. |
 | `distributeRotation(_:cause:acked:closingEpoch:)` | Step 3: mint the key, wrap it **only** for `MeshRotationPolicy.recipients`, broadcast with the `cause` token, adopt locally. |
 | `wrappedGroupKey(_:for:)` | Pairwise wraps for each recipient with a handshake-verified KA key — never the descriptor's gossiped value. |
@@ -280,6 +280,9 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `startSessionCeiling(hardDeadline:startedAt:)` / `sessionCeilingVerdict(now:monotonicElapsed:)` | Arm and read the dual-bound ceiling. The monotonic origin is a `ContinuousClock` instant; tests pass elapsed seconds instead of waiting. |
 | `enforceSessionCeiling(now:monotonicElapsed:)` | At either bound: mark terminated, persist, **await** `terminated.v1`, end the session. A refused save abandons the emit. |
 | `evaluateIdleLapse(now:)` | Plan §8.2's 30-minute window as a value, evaluated on demand — no timer, nothing to spin. |
+| `evaluatePartition(now:)` / `evaluatePartition(reachable:now:)` | Plan §10.2's partition detection, evaluated **on demand** in the same idiom — no new timer; P7 wires the one poller. Re-derives `branchView`, raises `linksLost` / `linksRestored`, and **mints nothing**: the derived roster does not move. |
+| `reachableRosterFingerprints()` / `presence(of:)` / `branchView` | Who this device can reach (self + committed active slots), one member's `MeshMemberPresence`, and the branch snapshot itself — memory-only, never sealed, cleared with the session. |
+| `noteExternalHeartbeat(from:at:)` | Pushes the idle window out for a **current member's** authenticated heartbeat, so a live branch of ≥ 2 stays alive while a partition of one runs to `localIdleStop`. Own fingerprint and non-members are refused. |
 | `restoreSessionContextAtLaunch(now:)` / `retrySessionRestoreIfPending(now:)` | The durable half: five load states → seven outcomes, a bounded retry for the two retryable ones, a quarantine for a corrupt file, and **no writer** for any of the three token-less states. |
 | `resumeSessionAfterLapse(mergingLedger:peerEpochHead:)` | Idle-lapse resume = partition heal = the merge path. Merges the ledger and coexists the peer's epoch head; never a fresh session, never a silent re-key. |
 | `recordVerifiedAdmissionDurably()` / `joinDurably()` | **The join-ack gate**: no epoch adopted, no key unwrapped, no beacon started and no "joined" shown until the context is on the disk. |
@@ -512,6 +515,21 @@ events arrive from the wire.
 | `MeshSessionEffect` | What the owner must do, in order. `persistContext` precedes every announcement; there is deliberately **no emit effect** — a membership frame must be awaited before the transport is torn down. |
 | `MeshSessionTransition` / `MeshSessionTransitionRejection` | `moved(to:effects:)` or `rejected(_)`, with five named rules (`sessionAlreadyEnded`, `noSessionYet`, `sessionAlreadyStarted`, `eventNotApplicableInState`, `restoreOnlyFromIdle`). |
 | `MeshSessionStateMachine.transition(from:on:)` | The total function. The ended check runs first (the permanent rejoin bar), then the restore and the ceiling — handled once each so seven per-state copies cannot drift — then one function per state. |
+
+### `MeshBranchPresence.swift`
+
+P4 item 1 (plan §10.2): what a device can **see**, held apart from what it can **prove**. Nothing
+here reaches `MeshMembershipLedger`, and nothing here is `Codable` — presence is never sealed and
+`MeshSessionContextSchema.current` stays at 2.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshMemberPresence` | `present` / `temporarilyDisconnected` — frozen English tokens, logged verbatim, never localized. Presence, **never a record**. |
+| `MeshBranchView.init(roster:reachable:selfFingerprint:)` | Splits the derived roster into present and `temporarilyDisconnected`, and **copies** `memberCount`, `quorumThreshold` and `isFinalPair` through unchanged — the three answers a partition must not move (§10.2/§10.4/§10.6). |
+| `branchCoordinatorFingerprint` / `isLocalBranchCoordinator` | The lowest fingerprint **present** — what scopes a branch's 15-minute rotation to itself, and why two branches' same-counter epochs are distinct refs that `coexist`. |
+| `isPartitioned` / `isAlone` / `branchMemberCount` / `presence(of:)` | Whether any member is out of reach, whether this is a partition of one (nobody to heartbeat, so the 30-minute window runs), the branch size, and one member's presence (nil for a fingerprint the roster does not name). |
+| `MeshPartitionVerdict` | `unchanged` / `linksLost` / `linksRestored`, with `sessionEvent` naming the edge each raises. |
+| `MeshPartitionDetector.verdict(previous:current:)` | The pure edge-detector: only *entering* a partition raises `linksLost`, only a *full* heal raises `linksRestored`. A deepening split is already partitioned; a partial heal leaves the branch a branch and lets the returning peer take `peerCommitted` into the merge path. No clock, so no timestamp can manufacture or hide a partition. |
 
 ### `MeshSessionCeiling.swift`
 
