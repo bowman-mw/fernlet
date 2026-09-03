@@ -17,6 +17,10 @@
 //     rather than one `.membership` per record.
 //  4. **The window closes on a MATCHING digest**, which is the honest completion signal: the two
 //     sides hold the same records, so there is nothing left to re-gossip.
+//  5. **The ANSWER carries the epoch heads too** (P4 item 2c). A responder already inside its own
+//     open window cannot open an exchange for the asker, so an answer of records alone left the
+//     asker converged on the ledger and stranded on its own older head — the deadlock the seeded
+//     convergence property found.
 //
 // **What the fabric carries and what this file supplies.** Frames are real: signed by the sending
 // manager, encoded, carried by `FakePeerNetwork` on a clock the test owns, and verified on arrival
@@ -336,6 +340,137 @@ struct MeshMergeExchangeTests {
         #expect(MeshMergeFixtures.roster(managerA) == MeshMergeFixtures.roster(managerB),
                 "both ends converged on one roster")
 
+        managerA.leaveMesh()
+        managerB.leaveMesh()
+    }
+
+    /// **Claim 5 (P4 item 2c): the answer to a MISMATCHED digest carries the epoch heads too.**
+    ///
+    /// The ask half sends both frames — the digest and `fernlet.mesh.epoch-heads.v1`. The answer
+    /// half used to send only records, and that asymmetry deadlocks a healing mesh: a device inside
+    /// an open merge window opens no second exchange (`openBlipMergeIfReconnected` guards on
+    /// `!awaitingResumeMerge`) and an exchange was the only other sender of a head, so a member that
+    /// only ever *answered* a digest converged on the responder's ledger while still counting up
+    /// from its own older `rotationBasisHead` — with nothing left in flight to correct it, ever.
+    /// The seeded convergence property found it (`MeshConvergencePropertyTests`, seed
+    /// `0x308d0d414707d80` on `2/2`); this is that shape at two managers and one wire.
+    ///
+    /// The responder is **already** inside a window opened by a third member, which is what makes
+    /// the scenario the defect and not the happy path: B cannot open an exchange for A, so the only
+    /// thing that can carry B's head to A is B's answer. Both halves of the answer are one merge:
+    /// the records ask for `.merge` through `mergeMembershipLedger`, the folded head asks for
+    /// `.merge` through `requestMergeRotationForDivergentHeads`, and the two coalesce in one 2 s
+    /// window rather than opening a second.
+    @Test func theAnswerToAMismatchedDigestCarriesTheEpochHeads() async throws {
+        let fabric = FakePeerNetwork()
+        let left = fabric.addEndpoint(named: "deadlock-left")
+        let right = fabric.addEndpoint(named: "deadlock-right")
+        let bystander = fabric.addEndpoint(named: "deadlock-bystander")
+        fabric.connect(left.handle, right.handle)
+        fabric.connect(right.handle, bystander.handle)
+        fabric.clock.advance(by: .milliseconds(50))
+
+        let storeA = makeTestStore()
+        let storeB = makeTestStore()
+        let idA = try MeshPartitionFixtures.identity("deadlock-a")
+        let idB = try MeshPartitionFixtures.identity("deadlock-b")
+        let idC = try MeshPartitionFixtures.identity("deadlock-c")
+        #expect(Set([idA.localFingerprint, idB.localFingerprint, idC.localFingerprint]).count == 3,
+                "the rig needs three distinct provisioned identities")
+
+        // A's ledger is B's minus C's admission — the same signed bytes, so the digests differ only
+        // because one record is missing. The heads differ too, and by more than one: A must end on
+        // B's, which it can only learn from the answer.
+        let meshID = UUID()
+        let full = try MeshPartitionFixtures.ledger(founder: idA, others: [idB, idC], meshID: meshID)
+        var partial = MeshMembershipLedger.empty
+        for record in full.admissions.all where record.memberFingerprint != idC.localFingerprint {
+            partial.admissions = partial.admissions.inserting(record)
+        }
+        #expect(partial.admissions.count == 2 && full.admissions.count == 3)
+        let headA = try MeshReconcileFixtures.head(2, idA, meshID)
+        let headB = try MeshReconcileFixtures.head(5, idB, meshID)
+        let managerA = MeshReconcileFixtures.member(
+            store: storeA, identity: idA, ledger: partial,
+            founderKey: idA.localSigningPublicKey, meshID: meshID, head: headA
+        )
+        let managerB = MeshReconcileFixtures.member(
+            store: storeB, identity: idB, ledger: full,
+            founderKey: idA.localSigningPublicKey, meshID: meshID, head: headB
+        )
+        #expect(managerA.rotationBasisHeadForTesting == headA, "A starts on the lower branch head")
+        #expect(managerB.rotationBasisHeadForTesting == headB, "and B on the higher one")
+
+        // B is ALREADY awaiting, on a window opened by C. Its ask went to C and to nobody else, so
+        // nothing B holds has ever been offered to A — and B will now refuse to open a second
+        // exchange however often A commits. This is the deadlock's precondition, made explicit.
+        let coordinatorBC = MeshP3Acceptance.coordinator()
+        managerB.addSlotForTesting(
+            coordinator: coordinatorBC, peer: bystander.handle,
+            fingerprint: idC.localFingerprint, channel: right.transport
+        )
+        managerB.applySessionEvent(.peerCommitted, committedPeer: idC.localFingerprint)
+        #expect(managerB.awaitingResumeMerge, "B's merge window is open, and only C was asked")
+
+        let coordinatorA = MeshP3Acceptance.coordinator()
+        let coordinatorBA = MeshP3Acceptance.coordinator()
+        managerA.addSlotForTesting(
+            coordinator: coordinatorA, peer: right.handle,
+            fingerprint: idB.localFingerprint, channel: left.transport
+        )
+        managerB.addSlotForTesting(
+            coordinator: coordinatorBA, peer: left.handle,
+            fingerprint: idA.localFingerprint, channel: right.transport
+        )
+        let nodeA = MeshMergeWireNode(
+            store: storeA, manager: managerA, channel: left.transport,
+            handle: left.handle, coordinator: coordinatorA
+        )
+        let nodeB = MeshMergeWireNode(
+            store: storeB, manager: managerB, channel: right.transport,
+            handle: right.handle, coordinator: coordinatorBA
+        )
+
+        // A reconnects and asks. Only the answer can come back.
+        managerA.applySessionEvent(.peerCommitted, committedPeer: idB.localFingerprint)
+        #expect(managerA.awaitingResumeMerge, "the blip opened A's window")
+        var causes: Set<MeshKeyRotationCause> = []
+        var windows: Set<Date> = []
+        try await MeshMergeWire.settle([nodeA, nodeB], on: fabric, observing: { node in
+            guard node === nodeA else { return }
+            if let cause = node.manager.rotationTriggers.pendingCause { causes.insert(cause) }
+            if let firesAt = node.manager.rotationTriggers.firesAt { windows.insert(firesAt) }
+        }, until: {
+            managerA.knownEpochHeads.contains(headB) && managerA.mergeApplicationCount >= 3
+        })
+
+        // 1. The defect itself: the answer carried a head, and it was the ONLY thing that could.
+        let toA = MeshMergeWire.receivedTypes(left.transport)
+        #expect(toA.contains(PayloadType.meshEpochHeads.rawValue),
+                "the answer to a mismatched digest carries the responder's epoch heads")
+        #expect(!toA.contains(PayloadType.meshInventoryDigest.rawValue),
+                "B opened no exchange of its own — it was awaiting throughout, which is the defect")
+        #expect(managerB.awaitingResumeMerge, "and its window never closed underneath the scenario")
+
+        // 2. The asker ends on the RESPONDER's basis head, not on its own older one.
+        #expect(managerA.knownEpochHeads.contains(headB), "A folded the branch head it had not seen")
+        #expect(managerA.rotationBasisHeadForTesting == headB,
+                "A counts the post-merge epoch up from B's head, not from its own stranded one")
+        #expect(managerA.rotationBasisHeadForTesting == managerB.rotationBasisHeadForTesting,
+                "so §10.3's `max` is one number across the merge")
+
+        // 3. The records converged in the same answer, and the whole answer is ONE `.merge`.
+        #expect(MeshMergeFixtures.roster(managerA) == MeshMergeFixtures.roster(managerB),
+                "both ends converged on one roster")
+        #expect(managerA.mergeApplicationCount == 3,
+                "every record frame went through mergeReconnected — none took the live-record path")
+        #expect(causes == [.merge],
+                "the records and the folded head asked for ONE kind of rotation, and it is the merge's")
+        #expect(windows.count == 1,
+                "and for ONE debounce window: a second value here is a second rotation")
+
+        managerA.consumePendingRotationForTesting()
+        managerB.consumePendingRotationForTesting()
         managerA.leaveMesh()
         managerB.leaveMesh()
     }

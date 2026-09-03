@@ -63,8 +63,9 @@ nonisolated enum MeshScheduleBounds {
     /// windows the ordered heal left open and the second is what actually delivers the epoch heads
     /// they were holding. The phase exits the moment §10.3's `max` agrees at every member, so a cell
     /// that converges in one round costs one — and raising this past two changes nothing, because a
-    /// mesh in which *every* member is awaiting sends nothing at all (see
-    /// `MeshConvergenceMatrix.deferred`).
+    /// mesh in which *every* member is awaiting opens no exchange at all. That last case is why the
+    /// digest ANSWER now carries the heads as well (P4 item 2c): a round it cannot open is a round
+    /// no ceiling here can supply.
     static let maxCommitRounds = 2
 
     /// The most content items one branch creates — one photo, one text, one heart. Far below the

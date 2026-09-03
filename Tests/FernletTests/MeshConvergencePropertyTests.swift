@@ -32,17 +32,20 @@
 // re-derives §10.4's arithmetic from the merged roster **independently**, so the cell compares two
 // answers rather than reading one twice.
 //
-// **What the property found.** One schedule of the 48 does not converge, and it is skipped **by
-// name** (`MeshConvergenceMatrix.deferred`) rather than by a softened assertion. The cause is a
-// liveness deadlock in the merge window, not a fixture problem: `awaitingResumeMerge` is cleared
-// only by a peer inventory digest that *matches* local inventory, and a device that is awaiting
-// opens no new exchange — so once every member of a healing mesh is inside an open window, no digest
-// and no `fernlet.mesh.epoch-heads.v1` frame is ever sent again, and a member that only ever
-// *answered* a digest is left counting up from a lower head than its peers. The answer half of
-// §10.3's exchange re-gossips records but sends no epoch heads; making it symmetric would close it.
-// That is a shipping-code change, so it is recorded, not made.
+// **What the property found, and what it cost the shipping code.** On its first run one schedule of
+// the 48 did not converge — seed `0x308d0d414707d80` on `2/2` — and it was deferred **by name**
+// rather than by a softened assertion. The cause was a liveness deadlock in the merge window, not a
+// fixture problem: `awaitingResumeMerge` clears only on a peer inventory digest that *matches* local
+// inventory, a device that is awaiting opens no new exchange, and the answer half of §10.3's
+// exchange re-gossiped records while sending no epoch heads — so a member that only ever *answered*
+// a digest was left counting up from a lower head than its peers, with nothing in flight to correct
+// it. **P4 item 2c made the answer symmetric with the ask** (`receiveInventoryDigest`'s mismatch
+// branch now sends `sendEpochHeads(to:)` beside `reGossipRecords(to:)` — an existing registered
+// frame, no wire change), and all 48 cells run here with every assertion as strict as it ever was.
+// `MeshMergeExchangeTests.theAnswerToAMismatchedDigestCarriesTheEpochHeads` is the targeted
+// regression for it.
 //
-// **No wall-clock sleeps, and no shipping-code change.** Every settle is `MeshDepartureRig.settle`'s
+// **No wall-clock sleeps.** Every settle is `MeshDepartureRig.settle`'s
 // bounded yield-and-pump; every instant is `MeshP3Acceptance.base` plus a fixed offset; every
 // rotation claim is sampled inside a pump or immediately after a synchronous call, never after an
 // `await` (ledger "(P4 i3)"). No new seam was added to `MeshNetworkManager`: everything this file
@@ -107,40 +110,38 @@ nonisolated struct MeshConvergenceCell: Equatable, Sendable, CustomStringConvert
 /// name, to a defect rather than to a loosened check.
 nonisolated enum MeshConvergenceMatrix {
 
-    /// The one schedule iteration A does **not** run, and exactly why.
+    /// The schedules iteration A does **not** run. **Empty, and it stays empty.**
     ///
-    /// ## The defect: the merge window can deadlock, and the epoch head stops with it
+    /// ## History: it held one seed, and the seed held a real defect (P4 items 9a → 2c)
     ///
-    /// `MeshNetworkManager` clears `awaitingResumeMerge` in exactly one place — `concludeMerge()`,
+    /// `MeshNetworkManager` cleared `awaitingResumeMerge` in exactly one place — `concludeMerge()`,
     /// reached only when a peer's **inventory digest matches local inventory**. And a device that is
     /// `awaitingResumeMerge` refuses to open another exchange: `openBlipMergeIfReconnected` guards
-    /// on `!awaitingResumeMerge`. An exchange is the only thing that sends a digest *or* an
-    /// epoch-heads frame. So once every member of a healing mesh sits inside an open window with no
-    /// matching digest in flight, **nothing is ever sent again** and every window stays open.
+    /// on `!awaitingResumeMerge`. An exchange was the only thing that sent a digest *or* an
+    /// epoch-heads frame. So once every member of a healing mesh sat inside an open window with no
+    /// matching digest in flight, **nothing was ever sent again**.
     ///
-    /// Seed `0x308d0d414707d80` on `2/2` walks straight into it: branch `{2,1}` | branch `{3,0}`,
-    /// member 0 departs, the heal bridges `2–3` and then spreads `2–1`. Member 2 answers member 1's
-    /// mismatched digest with a re-gossip — records converge, roster 3 everywhere — but the **answer
-    /// half sends no epoch heads**, and by then members 1, 2 and 3 are all awaiting, so no later
-    /// commit round can open an exchange. Member 1 ends on `rotationBasisHead` counter 12 while
-    /// members 2 and 3 are on 20, and §16.2's "exactly one post-merge epoch at every member" fails —
-    /// at the member, not at the assertion.
+    /// Seed `0x308d0d414707d80` on `2/2` walked straight into it: branch `{2,1}` | branch `{3,0}`,
+    /// member 0 departs, the heal bridges `2–3` and then spreads `2–1`. Member 2 answered member 1's
+    /// mismatched digest with a re-gossip — records converged, roster 3 everywhere — but the
+    /// **answer half sent no epoch heads**, and by then members 1, 2 and 3 were all awaiting, so no
+    /// later commit round could open an exchange. Member 1 ended on `rotationBasisHead` counter 12
+    /// while members 2 and 3 were on 20, and §16.2's "exactly one post-merge epoch at every member"
+    /// failed — at the member, not at the assertion.
     ///
-    /// ## What would close it
+    /// **P4 item 2c closed it** by making the answer half symmetric with the ask half:
+    /// `receiveInventoryDigest`'s mismatch branch now sends `sendEpochHeads(to: [sender])` beside
+    /// `reGossipRecords(to:)` — an existing, registered, already-signed frame to a peer that has
+    /// just proved it needs one. No wire change, no new golden, no new persisted surface. Both cells
+    /// run here now, with every assertion exactly as strict as it is everywhere else.
     ///
-    /// Make the **answer half symmetric with the ask half**: `receiveInventoryDigest`'s mismatch
-    /// branch already calls `reGossipRecords(to:)`; adding `sendEpochHeads(to: [sender])` beside it
-    /// sends an existing, registered, already-signed frame to a peer that has just proved it needs
-    /// one. No wire change, no new golden, no new persisted surface. That is a shipping-code change
-    /// and therefore not this item's to make — it is recorded here and skipped **by name**, with
-    /// every other assertion in the cell left exactly as strict as it is everywhere else.
-    static let deferred: [MeshConvergenceCell] = [
-        MeshConvergenceCell(shape: .twoTwo, preferQuorum: true, seed: 0x308d_0d41_4707_d80),
-        MeshConvergenceCell(shape: .twoTwo, preferQuorum: false, seed: 0x308d_0d41_4707_d80)
-    ]
+    /// A schedule may be deferred again only the same way: **by name**, with the defect written
+    /// down. ``MeshConvergencePropertyTests/noScheduleIsDeferredAndTheMatrixIsWhole()`` is what
+    /// makes a silent one impossible.
+    static let deferred: [MeshConvergenceCell] = []
 
-    /// Shape × quorum preference × seed, minus ``deferred``: 3 × 2 × 8 − 2 = 46 cells, every one of
-    /// them replayable from its own seed.
+    /// Shape × quorum preference × seed, minus ``deferred``: 3 × 2 × 8 = 48 cells, every one of them
+    /// replayable from its own seed.
     static let iterationA: [MeshConvergenceCell] = {
         var cells: [MeshConvergenceCell] = []
         for shape in MeshPartitionShape.iterationA {
@@ -725,9 +726,10 @@ extension MeshConvergenceRun {
     ///    `openBlipMergeIfReconnected` guards on `!awaitingResumeMerge`, and that window closes only
     ///    on a peer digest that *matches* local inventory. So in a chain heal the middle member is
     ///    still awaiting its first peer when the second commits, and the second peer therefore never
-    ///    receives the middle member's folded epoch heads. A **second commit round**, once the first
-    ///    window has concluded, is what delivers them — and when *every* member is awaiting at once,
-    ///    no round can (this file's header note, and `MeshConvergenceMatrix.deferred`).
+    ///    receives the middle member's folded epoch heads *from an exchange of its own*. A **second
+    ///    commit round**, once the first window has concluded, is what delivers them — and when
+    ///    *every* member is awaiting at once, no round can, which is the deadlock P4 item 2c fixed
+    ///    by making the digest ANSWER carry the heads too (this file's header note).
     ///
     /// Bounded twice over: ``MeshScheduleBounds/maxCommitRounds`` rounds, and an early exit the
     /// moment §10.3's `max` agrees at every member (``basesAgree()``).
@@ -1064,19 +1066,22 @@ struct MeshConvergencePropertyTests {
         for node in run.livingNodes { node.manager.leaveMesh() }
     }
 
-    /// **The deferral cannot grow silently.** Exactly one schedule is skipped, it is named, and it
-    /// is skipped for the defect ``MeshConvergenceMatrix/deferred`` documents — not for a check that
-    /// was made easier. A second entry here means somebody widened the exception instead of fixing
-    /// what it points at.
-    @Test func exactlyOneScheduleIsDeferredAndItIsNamed() {
-        #expect(MeshConvergenceMatrix.deferred.count == 2,
-                "one schedule, both quorum preferences — see the defect note")
-        #expect(Set(MeshConvergenceMatrix.deferred.map(\.seed)).count == 1)
-        #expect(MeshConvergenceMatrix.deferred.allSatisfy { $0.shape == .twoTwo })
+    /// **Nothing is skipped, and a deferral cannot reappear silently.** The matrix is whole: every
+    /// shape × quorum preference × seed runs, including the two cells P4 item 2c un-deferred once
+    /// the merge-window deadlock they found was fixed. An entry back in
+    /// ``MeshConvergenceMatrix/deferred`` means somebody re-opened the exception instead of fixing
+    /// what it points at, and this fails until the defect note beside it is written down.
+    @Test func noScheduleIsDeferredAndTheMatrixIsWhole() {
+        #expect(MeshConvergenceMatrix.deferred.isEmpty,
+                "the deadlock is fixed (2c); a new entry needs a defect note, not a softer check")
         #expect(MeshConvergenceMatrix.iterationA.count
-                == MeshPartitionShape.iterationA.count * 2 * MeshConvergenceSeeds.derivedCount - 2)
-        for cell in MeshConvergenceMatrix.deferred {
-            #expect(!MeshConvergenceMatrix.iterationA.contains(cell))
+                == MeshPartitionShape.iterationA.count * 2 * MeshConvergenceSeeds.derivedCount)
+        #expect(MeshConvergenceMatrix.iterationA.count == 48, "3 shapes × 2 preferences × 8 seeds")
+        // The formerly-deferred seed is IN the matrix now, on both quorum preferences.
+        for preferQuorum in [true, false] {
+            #expect(MeshConvergenceMatrix.iterationA.contains(MeshConvergenceCell(
+                shape: .twoTwo, preferQuorum: preferQuorum, seed: 0x308d_0d41_4707_d80
+            )), "the cell that found the deadlock runs, at full strictness")
         }
     }
 
