@@ -152,36 +152,46 @@ nonisolated enum MeshConvergenceMatrix {
     /// just proved it needs one. No wire change, no new golden, no new persisted surface. Both cells
     /// run here now, with every assertion exactly as strict as it is everywhere else.
     ///
-    /// ## And it holds four again (P4 item 9b) — a different defect, deferred the same way
+    /// ## History: it held four more, and P5 item 7 closed those too (P4 item 9b → 2d)
     ///
-    /// §16.2's roster-8 row found the next one. `concludeMerge()` closes the merge window on the
-    /// **first** peer inventory digest that matches local inventory. Between two devices that is
+    /// §16.2's roster-8 row found the next one. P4's `concludeMerge()` closed the merge window on
+    /// the **first** peer inventory digest that matched local inventory. Between two devices that is
     /// convergence. Across eight it is not: a device re-forming a full mesh asks every peer at
-    /// once, and the answers come back over several pumps — so the first match can close the window
-    /// while other peers' re-gossips are still in flight. Those records then arrive **outside** a
-    /// merge window, take the live-record path, and ask for a `.membership` rotation instead of the
-    /// merge's. Everything else about the cell is correct: the state converges, the roster and the
-    /// heads are identical at every member, and nothing is committed twice — the record is applied
-    /// once, under the other name.
+    /// once, and the answers come back over several pumps — so the first match closed the window
+    /// while other peers' re-gossips were still in flight. Those records then arrived **outside** a
+    /// merge window, took the live-record path, and asked for a `.membership` rotation instead of
+    /// the merge's. Everything else about those cells was correct: the state converged, the roster
+    /// and the heads were identical at every member, and nothing was committed twice — the record
+    /// was applied once, under the other name. Four cells reached it: `4/2/2` × {quorum, short} ×
+    /// the two seeds now named ``windowRedesignSeeds``.
     ///
-    /// It is **not** fixed here. The safe fix is a merge window that closes only once every peer it
-    /// asked has matched, which is a change to what a window *means* and carries the liveness risk
-    /// the ledger's "(P4 i11)" note is about (a window that never closes opens no later exchange —
-    /// exactly what item 9b's `askOneReconnectedPeer` had to add a path around). That belongs with
-    /// the window's own redesign, not with a matrix row.
-    ///
-    /// So the four cells that reach it are deferred **from the strict property only**, and
-    /// ``MeshConvergencePropertyTests/aDeferredCellConvergesAndFailsOnlyOnTheNamedDefect(cell:)``
-    /// still runs every one of them: all five §16.2 invariants bar the rotation-cause claim, plus a
-    /// positive assertion that the defect is *exactly* this and reaches exactly one member. A cell
-    /// that started failing for any other reason, or a defect that spread, fails there.
+    /// **P5 item 7 closed it** by redesigning what a window *is*. It is now an explicit value
+    /// (`MeshMergeWindow`) that closes only when `pending = (asked ∪ answered) ∩ reachable ∖
+    /// matched` is empty — every asked peer matched — with the responder-side rule "answered **and**
+    /// the peer's next digest matched", never "answered" alone, which would have reopened the 2c
+    /// deadlock from the other side. The occasion that rule needs is one post-merge proof: a fold
+    /// that moves this device's digest re-advertises it to the peers the window still owes. The four
+    /// cells run here again, at full strictness, and
+    /// ``MeshConvergencePropertyTests/theFourCellsThatWereDeferredRunAtFullStrictness(cell:)`` names
+    /// them as the regression fixture.
     ///
     /// A schedule may be deferred again only the same way: **by name**, with the defect written
     /// down. ``MeshConvergencePropertyTests/everyDeferralIsNamedAndTheRestOfTheMatrixIsWhole()`` is
-    /// what makes a silent one impossible.
-    static let deferred: [MeshConvergenceCell] = {
+    /// what makes a silent one impossible, and the empty list plus its ``cells(for:)`` filter is the
+    /// mechanism that rule rides on.
+    static let deferred: [MeshConvergenceCell] = []
+
+    /// The two fixed seeds whose `4/2/2` schedule reached the window-closes-early defect above.
+    ///
+    /// Values unchanged from when they were the deferral: they are the named regression fixture
+    /// now, exactly as `deadlockSeed` is P4 item 2c's.
+    static let windowRedesignSeeds: [UInt64] = [0x308d_0d41_4707_d80, 0xace0_7337_d1bd_4fcc]
+
+    /// The four cells P4 item 2d deferred, built from ``windowRedesignSeeds`` — the regression
+    /// fixture item 7's redesign has to keep green.
+    static let windowRedesignCells: [MeshConvergenceCell] = {
         var cells: [MeshConvergenceCell] = []
-        for seed in deferredSeeds {
+        for seed in windowRedesignSeeds {
             for preferQuorum in [true, false] {
                 cells.append(MeshConvergenceCell(
                     shape: .fourTwoTwo, preferQuorum: preferQuorum, seed: seed
@@ -190,9 +200,6 @@ nonisolated enum MeshConvergenceMatrix {
         }
         return cells
     }()
-
-    /// The two fixed seeds whose `4/2/2` schedule reaches the window-closes-early defect above.
-    static let deferredSeeds: [UInt64] = [0x308d_0d41_4707_d80, 0xace0_7337_d1bd_4fcc]
 
     /// Rosters 3 and 4 — shapes `2/1`, `2/2`, `3/1`: 3 × 2 × 8 = 48 cells.
     static let iterationA: [MeshConvergenceCell] = cells(for: MeshPartitionShape.iterationA)
@@ -1267,17 +1274,14 @@ extension MeshConvergenceRun {
 enum MeshConvergenceInvariants {
 
     /// Runs all five.
-    static func check(_ run: MeshConvergenceRun) throws {
-        try checkExceptTheHealsRotationCause(run)
-        oneRotationCauseAcrossTheHeal(run)
-    }
-
-    /// Everything ``check(_:)`` asserts **except** the heal's rotation-cause claim.
     ///
-    /// The split exists for the cells in ``MeshConvergenceMatrix/deferred``, which converge on
-    /// identical state and still label one reconnect-carried record `.membership`. They owe every
-    /// other claim in full, and `aDeferredCellConvergesAndFailsOnlyOnTheNamedDefect` collects them.
-    static func checkExceptTheHealsRotationCause(_ run: MeshConvergenceRun) throws {
+    /// There is deliberately **no relaxed entry point.** P4 carried a
+    /// `checkExceptTheHealsRotationCause` for the cells 2d deferred; P5 item 7 closed that defect,
+    /// leaving a public checker that silently dropped one §16.2 claim with no caller — a loosened
+    /// assertion lying in the open for the next person to reach for. A future deferral re-introduces
+    /// its own relaxation with its own written note, which is the discipline
+    /// ``MeshConvergenceMatrix/deferred`` demands.
+    static func check(_ run: MeshConvergenceRun) throws {
         let survivors = run.livingMembers
         #expect(survivors.count >= 2, "\(run.schedule.seed): a cell must end with a mesh")
         try identicalMergedState(run, survivors)
@@ -1285,6 +1289,7 @@ enum MeshConvergenceInvariants {
         quorumArithmetic(run, survivors)
         noContentLoss(run, survivors)
         noDuplicateCommits(run, survivors)
+        oneRotationCauseAcrossTheHeal(run)
     }
 
     /// **(e·ii) One rotation cause across the heal**, and it is the merge's.
@@ -1528,14 +1533,12 @@ struct MeshConvergencePropertyTests {
     @Test func everyDeferralIsNamedAndTheRestOfTheMatrixIsWhole() {
         let whole = MeshPartitionShape.matrix.count * 2 * MeshConvergenceSeeds.derivedCount
         #expect(whole == 80, "5 shapes × 2 preferences × 8 seeds is the matrix §16.2 asks for")
-        #expect(MeshConvergenceMatrix.deferred.count == 4,
-                "exactly the four cells the defect note beside `deferred` describes; a fifth needs its own note")
-        #expect(MeshConvergenceMatrix.deferred.allSatisfy { $0.shape == .fourTwoTwo },
-                "the deferral is roster 8's, which is where an N-way window closes early")
-        #expect(MeshConvergenceMatrix.all.count == whole - MeshConvergenceMatrix.deferred.count)
-        #expect(MeshConvergenceMatrix.all.count == 76, "and every other cell runs, at full strength")
-        #expect(MeshConvergenceMatrix.iterationA.count == 48, "rosters 3 and 4, none deferred")
-        #expect(MeshConvergenceMatrix.iterationB.count == 28, "rosters 6 and 8, minus the four")
+        #expect(MeshConvergenceMatrix.deferred.isEmpty,
+                "nothing is deferred: a re-entry needs its own written-down defect note")
+        #expect(MeshConvergenceMatrix.all.count == whole)
+        #expect(MeshConvergenceMatrix.all.count == 80, "and every cell runs, at full strength")
+        #expect(MeshConvergenceMatrix.iterationA.count == 48, "rosters 3 and 4")
+        #expect(MeshConvergenceMatrix.iterationB.count == 32, "rosters 6 and 8, the four restored")
         #expect(Set(MeshConvergenceMatrix.all.map(\.shape.rosterSize)) == [3, 4, 6, 8],
                 "§16.2's four rosters all run")
         #expect(!MeshConvergenceMatrix.resplit.isEmpty, "and §16.2's fifth shape runs too")
@@ -1545,30 +1548,29 @@ struct MeshConvergencePropertyTests {
                 shape: .twoTwo, preferQuorum: preferQuorum, seed: 0x308d_0d41_4707_d80
             )), "the cell that found the deadlock runs, at full strictness")
         }
+        // And so are 2d's four, which P5 item 7's window redesign retired.
+        for cell in MeshConvergenceMatrix.windowRedesignCells {
+            #expect(MeshConvergenceMatrix.all.contains(cell),
+                    "\(cell): the cell 2d deferred is back IN the matrix, not beside it")
+        }
     }
 
-    /// **A deferred cell is deferred to a named defect, not out of the suite.** Every one of them
-    /// still runs, still converges, and still owes §16.2's other four invariants in full — and the
-    /// defect it is deferred to must still be *exactly* the one written down beside
-    /// ``MeshConvergenceMatrix/deferred``: one member, one `.membership` rotation, no second.
+    /// **The four cells P4 item 2d deferred, at full strictness.** They are not merely back in the
+    /// matrix; they are named here as the regression fixture for P5 item 7's window redesign, so a
+    /// window that went back to closing on the first matching digest fails on the cells that found
+    /// that defect rather than on a count somewhere else.
     ///
-    /// This is what makes the deferral safe to leave standing. A cell that broke for another
-    /// reason, a defect that reached a second member, or a fix that landed and made the note stale
-    /// all fail here rather than passing quietly.
-    @Test(arguments: MeshConvergenceMatrix.deferred)
-    func aDeferredCellConvergesAndFailsOnlyOnTheNamedDefect(cell: MeshConvergenceCell) async throws {
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "deferred")
+    /// Built locally from ``MeshConvergenceMatrix/windowRedesignCells`` rather than from
+    /// ``MeshConvergenceMatrix/deferred``: a `@Test(arguments:)` over an empty array runs zero cases
+    /// and reports green.
+    @Test(arguments: MeshConvergenceMatrix.windowRedesignCells)
+    func theFourCellsThatWereDeferredRunAtFullStrictness(cell: MeshConvergenceCell) async throws {
+        let run = try MeshConvergenceRun.build(cell.schedule, label: "window7")
         try await run.runSplitEvents()
         try await run.runHeal()
-        try MeshConvergenceInvariants.checkExceptTheHealsRotationCause(run)
-        #expect(run.healCauses.contains(.membership),
-                "\(cell): the named defect is gone — un-defer this cell and delete the note")
-        #expect(run.healCauses.isSubset(of: [.merge, .membership]),
-                "\(cell): a heal still asks for no OTHER kind of rotation — a `.timer` here is new")
-        #expect(run.healMembershipAt.count == 1,
-                "\(cell): exactly one member takes the live path: \(run.healMembershipAt)")
-        #expect(run.healWindowOverflow.isEmpty,
-                "\(cell): and it is still ONE commit: the record is applied once, under the other name")
+        try MeshConvergenceInvariants.check(run)
+        #expect(run.healCauses == [.merge],
+                "\(cell): every reconnect-carried record takes the merge path: \(run.healMembershipAt)")
         for node in run.livingNodes { node.manager.leaveMesh() }
     }
 

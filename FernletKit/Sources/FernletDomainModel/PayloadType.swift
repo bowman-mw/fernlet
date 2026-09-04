@@ -236,8 +236,10 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     ///
     /// **Not `meshRoutedInventoryDigest`.** That token says what a disk holds; this one says what
     /// comparing two such statements produced — one Bool, no entry list, no member table, no item
-    /// id. Signed rather than unsigned because the merge window closes on quiescence, so a forged
-    /// `true` would close a window that should still be open.
+    /// id. Signed rather than unsigned because the bit is a **recorded fact**: the merge window is
+    /// gated by the membership digest and not by quiescence, but the bit is stored per peer, counted
+    /// onto the merge's audit line and is the input to a future capacity surface, so a forged `true`
+    /// poisons all three.
     ///
     /// NOT in `sealingRequiredTypes`, on purpose: signed-and-unsealed is what lets a frame cross a
     /// DIVERGENT pair, the same property that carries `meshInventoryDigest`, `meshEpochHeads` and

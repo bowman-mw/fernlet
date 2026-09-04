@@ -74,15 +74,22 @@ nonisolated enum MeshScheduleBounds {
 
     /// How many commit rounds the full-mesh phase runs before it gives up.
     ///
-    /// Two, and the second is not headroom: a device inside an open merge window opens no second
-    /// exchange (`openBlipMergeIfReconnected` guards on `!awaitingResumeMerge`), and that window
-    /// closes only on a peer digest that *matches* local inventory. So the first round closes the
-    /// windows the ordered heal left open and the second is what actually delivers the epoch heads
-    /// they were holding. The phase exits the moment §10.3's `max` agrees at every member, so a cell
-    /// that converges in one round costs one — and raising this past two changes nothing, because a
-    /// mesh in which *every* member is awaiting opens no exchange at all. That last case is why the
-    /// digest ANSWER now carries the heads as well (P4 item 2c): a round it cannot open is a round
-    /// no ceiling here can supply.
+    /// **Two, and the number survived P5 item 7 while its justification did not.** P4's argument was
+    /// that a device inside an open merge window opens no second exchange and that window closes
+    /// only on a matching digest, so the first round closed the ordered heal's windows and the
+    /// second delivered the heads they were holding — and that raising the ceiling changed nothing
+    /// because a mesh in which *every* member is awaiting opened no exchange at all.
+    ///
+    /// Both halves are now false in their details. A device inside a window still asks every later
+    /// reconnect (`askOneReconnectedPeer`, P4 item 9b), and the responder side *can* close: a fold
+    /// that moves the local digest re-advertises it to the peers the window still owes, so a mesh in
+    /// which every member is awaiting still makes progress on its own frames (P5 item 7's proof
+    /// door). What has not changed is why two is enough: the phase exits the moment §10.3's `max`
+    /// agrees at every member, a cell that converges in one round costs one, and the second round is
+    /// what carries the heads a first-round exchange could not.
+    ///
+    /// This is an assertion, not a knob (`everyScheduleStaysInsideItsBounds`). Raising it needs its
+    /// own written note, in the idiom P4 used raising `maxSettleSweeps` from 4 to 6.
     static let maxCommitRounds = 2
 
     /// The most content items one branch creates — one photo, one text, one heart. Far below the

@@ -213,7 +213,7 @@ struct MeshRoutedDrainTests {
         rig.routedIndex(rig.nodes[node])?.record(for: key)?.chunks.count ?? 0
     }
 
-    /// **The D-6.8 trap, pinned.** `receiveInventoryDigest` returns at `concludeMerge()` before its
+    /// **The D-6.8 trap, pinned.** `receiveInventoryDigest` returns at its match branch before its
     /// own `Task` whenever the two ledgers already agree — the commonest blip — so a routed answer
     /// piggybacked there would never run in exactly the case the drain exists for.
     @Test func theDrainRunsWhenTheMembershipDigestAlreadyMatches() async throws {
@@ -931,19 +931,151 @@ struct MeshRoutedDrainWallTests {
         try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
     }
 
-    /// **The mechanical form of "do NOT add a second reconnect path".** The routed inventory fires
-    /// from exactly the three sites the membership digest does, and from nowhere else.
+    /// **The mechanical form of "do NOT add a second reconnect path".** The routed ask rides exactly
+    /// the three **ask** doors; the membership digest has two additional, non-ask doors — the
+    /// post-merge **proof** and the joiner's post-**adoption** digest — each of which opens no
+    /// window, asks nothing and carries no routed bulk.
     ///
-    /// Counted on the SYMBOL, not on a spelling: a fourth call written `await sendRoutedInventory(…)`
-    /// — the natural form for any same-actor caller, and the one the signature invites — would leave
-    /// a `self?.`-prefixed count at three and the wall green.
+    /// **This claim was amended by P5 item 7, deliberately, and strengthened in the same commit.**
+    /// Before item 7 both counts were four and equal. The window redesign added
+    /// `readvertiseMergeProof(to:)` — a fourth `sendInventoryDigest(` call that is the *occasion*
+    /// the strict closing rule needs, since nothing else ever sends a second digest inside one
+    /// session — and then `attemptLedgerAdoption(ownAdmission:meshID:)`, a fifth, which is the same
+    /// missing occasion for a **joiner**: its grant-reply digest is a one-record bootstrap ledger,
+    /// so the admitter answers it and carries the obligation, and adoption rebases without going
+    /// through `mergeMembershipLedger(_:)`, so the proof door never fires there. Routing either
+    /// through a private helper to keep the textual count at four was rejected on purpose: that
+    /// would have left the wall green while the property it protects had changed. So the counts
+    /// moved and the wall became **per function** instead — it now names WHICH functions may send
+    /// each ask, which a count never could.
+    ///
+    /// Counted on the SYMBOL, not on a spelling: a call written `await sendRoutedInventory(…)` —
+    /// the natural form for any same-actor caller, and the one the signature invites — would leave a
+    /// `self?.`-prefixed count at three and the wall green.
     @Test func theDrainFiresOnlyFromTheMergeDoor() throws {
         let source = MeshRoutedSourceScan.codeOnly(try managerSource())
         let routed = source.components(separatedBy: "sendRoutedInventory(").count - 1
         let membership = source.components(separatedBy: "sendInventoryDigest(").count - 1
-        #expect(routed == 4, "one declaration plus three call sites, found \(routed)")
-        #expect(membership == 4, "one declaration plus three call sites, found \(membership)")
-        #expect(routed == membership, "the two asks must ride the same doors")
+        #expect(routed == 4, "one declaration plus three ask sites, found \(routed)")
+        #expect(membership == 6,
+                "those three plus the proof and adoption doors, found \(membership)")
+        for door in Self.askDoors {
+            let body = try #require(Self.body(startingWith: door, in: source),
+                                    "\(door) is gone from MeshNetworkManager.swift")
+            #expect(body.components(separatedBy: "sendInventoryDigest(").count - 1 == 1,
+                    "\(door) asks with exactly one membership digest")
+            #expect(body.components(separatedBy: "sendRoutedInventory(").count - 1 == 1,
+                    "\(door) carries exactly one routed twin")
+        }
+        for door in Self.nonAskDoors {
+            let body = try #require(Self.body(startingWith: door, in: source),
+                                    "\(door) is gone from MeshNetworkManager.swift")
+            #expect(body.components(separatedBy: "sendInventoryDigest(").count - 1 == 1,
+                    "\(door) sends exactly one membership digest")
+            #expect(!body.contains("sendRoutedInventory("),
+                    "\(door) is not an ask: it must never carry routed bulk")
+        }
+    }
+
+    /// The two doors that send a membership digest WITHOUT opening an exchange: the post-merge proof
+    /// (P5 item 7, D-7.8) and the joiner's post-adoption digest (D-7.33).
+    private static let nonAskDoors = [
+        "private func readvertiseMergeProof(to peers:",
+        "private func attemptLedgerAdoption(ownAdmission:"
+    ]
+
+    /// The three doors that open an exchange, and therefore carry both halves of it.
+    private static let askDoors = [
+        "private func beginMergeExchange(entry:",
+        "private func askOneReconnectedPeer(_ peer:",
+        "private func handleAdmissionGrant("
+    ]
+
+    /// **P5 item 7's own asymmetries, asserted from both sides.** The merge window is cleared at its
+    /// three sites and nowhere else; the drain's per-peer budget is still refunded by the three
+    /// session resets and still **not** by `abandonMergeExchange`; the membership re-gossip
+    /// budget is not refunded by a flap either (D-7.30) — a flapping link must not let a peer
+    /// re-spend this device's bytes; and **`pendingMergeEntry` is not folded into the window's
+    /// clear** (D-7.23/D-7.29), which is the asymmetry `clearMergeWindow()`'s own doc comment
+    /// claims and this is the wall that makes the claim true. Folding `pendingMergeEntry = nil`
+    /// into either `clearMergeWindow()` or `resetSessionStateMachine` would silently destroy the
+    /// launch restore's `.processRestart` arming, which is set with no window at all.
+    @Test func theMergeWindowIsClearedAtExactlyItsOwnSites() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let cleared = "clearMergeWindow()"
+        #expect(source.components(separatedBy: cleared).count - 1 == 4,
+                "one declaration plus three call sites")
+        for declaration in [
+            "private func concludeMergeIfConverged() {",
+            "private func abandonMergeExchange() {",
+            "private func resetSessionStateMachine(keepingTerminalState: Bool) {"
+        ] {
+            let body = try #require(Self.functionBody(declaration, in: source),
+                                    "\(declaration) is gone from MeshNetworkManager.swift")
+            #expect(body.components(separatedBy: cleared).count - 1 == 1,
+                    "\(declaration) must clear the merge window exactly once")
+        }
+        let abandon = try #require(
+            Self.functionBody("private func abandonMergeExchange() {", in: source)
+        )
+        #expect(!abandon.contains("clearRoutedDrainState()"),
+                "a partition is not a new session: the drain's budget is not refunded")
+        #expect(!abandon.contains("reGossipedToFingerprints"),
+                "and neither is the membership re-gossip budget (D-7.30)")
+        for declaration in [
+            "private func clearMergeWindow() {",
+            "private func resetSessionStateMachine(keepingTerminalState: Bool) {"
+        ] {
+            let body = try #require(Self.functionBody(declaration, in: source),
+                                    "\(declaration) is gone from MeshNetworkManager.swift")
+            #expect(!body.contains("pendingMergeEntry"),
+                    "\(declaration) must not fold in the pre-window arming slot (D-7.23/D-7.29)")
+        }
+    }
+
+    /// **The reach set is a transport fact, not a traffic class.** `reachableMergePeers()` reads
+    /// every committed slot, never `activeSlots` and never the `activeSlots`-based
+    /// `reachableRosterFingerprints()`, which is the obvious wrong reuse.
+    ///
+    /// Only a source wall can catch this: `rerankSlots()` re-assigns a slot's `kind` from ranging
+    /// samples that `FakePeerNetwork` never produces, so the demotion half of the bug is invisible
+    /// to tier 1 — a demoted-but-linked peer would silently leave the pending set and 2d would
+    /// return, triggered by a distance sample with no membership meaning.
+    @Test func theMergeWindowsReachSetIsEveryCommittedSlot() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let reach = try #require(
+            Self.functionBody("private func reachableMergePeers() -> Set<String> {", in: source)
+        )
+        #expect(reach.contains("slots.compactMap"), "every committed slot is the reach set")
+        #expect(!reach.contains("activeSlots"), "`.active` is a distance rank, not a reach")
+        #expect(!reach.contains("reachableRosterFingerprints"), "and neither is the partition helper")
+        for declaration in [
+            "private func concludeMergeIfConverged() {",
+            "private func clearMergeWindow() {",
+            "private func recordMergeMatch(_ peer: String) {",
+            "private func recordMergeAnswer(_ peer: String) {",
+            "private func advanceMergeWindowAfterFold(previousDigest: MeshInventoryDigest?) {",
+            "private func readvertiseMergeProof(to peers: Set<String>) {"
+        ] {
+            let body = try #require(Self.functionBody(declaration, in: source),
+                                    "\(declaration) is gone from MeshNetworkManager.swift")
+            #expect(!body.contains(".active"), "\(declaration) must not read a slot rank")
+            #expect(!body.contains("kind"), "\(declaration) must not read a slot kind")
+        }
+    }
+
+    /// One function's body found from a declaration **prefix**, brace-matched from the first `{`
+    /// after it — so a declaration whose parameters wrap onto several lines can still be named.
+    ///
+    /// - Parameters:
+    ///   - prefix: The declaration's opening text, unique in the file.
+    ///   - source: The source to search.
+    /// - Returns: The body, or nil when the declaration is gone.
+    private static func body(startingWith prefix: String, in source: String) -> String? {
+        guard let start = source.range(of: prefix),
+              let open = source.range(of: "{", range: start.upperBound..<source.endIndex)
+        else { return nil }
+        return functionBody(String(source[start.lowerBound..<open.upperBound]), in: source)
     }
 
     /// The drain state is refunded by the three session resets and by nothing else — not by
