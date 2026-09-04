@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P5
 
 **Phase:** P5 (encrypted store-and-forward routing) · **Prompt:** [Next-Round-Prompt-Mesh-P5-2026-09-03.md](Next-Round-Prompt-Mesh-P5-2026-09-03.md)
-**Started:** 2026-09-03 · **Iteration:** 6 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
+**Started:** 2026-09-03 · **Iteration:** 7 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -13,10 +13,12 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 3 | MeshCustodyReceipt, four-state sidecar + fifth wrinkle | 1 | 2 | done | `64e8c44` | MeshRoutedStore five-state floor; witness-gated receipt (durable-before-acknowledged as a type rule); wipe row + delete-all wired; keychain service com.fernlet.mesh-routed |
 | 4 | MeshRecipientReceipt, per-type ack stages | 1 | 3 | done | `fdabe2e` | stage resolved from the type token via ONE table (item 11's value); witness-gated; heart = judgements + ledger proof + itemID==giftID; routed index schema → 2 |
 | 5 | Routed content digest, own frozen token | 1 | 1 | done | `df1a48d` | MeshRoutedInventory (no 'Digest' stem), advertiser-signed, exact chunk bitmap + signer index lists; Delta.between → ask/offer/receipts; matched = quiescence |
-| 6 | The drain on the one merge path | 1 | 1, 5 | in-flight | | reconnect ≡ merge ≡ relay drain. From item 5: `peerRoutedInventories` (never `peerInventoryDigests`) holding the peer's inventory + its quiescence bit; its OWN once-per-peer-per-session set (not `reGossipedToFingerprints`); a per-peer per-session refused set for capacity refusals subtracted from the entitlement set; the routed answer inside `receiveInventoryDigest`'s single Task; a non-`.loaded` store sends NO digest, never an empty one |
-| 7 | Merge-window redesign (2d comes due) | 1 | 6 | todo | | close only when every asked peer matched; consumes `converged(local:peerReportsQuiescent:)` + the four deadlock regressions in MeshRoutedInventoryDeltaTests; must decide: transfer-length window holding, digests sent only as a link opens, the capacity-refusal contract |
-| 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; entitlement source 2 + the custody self-rule: the digest is the index, the signed receipt is the authority; `MeshCustodyHandoffSummary.handedOffItemCount` is the one field P5 fills; increment 1's only relay hop; item 3's door is `recordingCustodyTransfer(item:for:receipt:now:)` (parked item answers manifestMismatch); `advancingAll` must choose skip-delivered vs refuse-batch (item 4 documented it by a passing test, not fixed) |
-| 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth; must COUNT parked manifest-less chunks (C10) and DROP a parked set whose manifest is refused; read `itemsReclaimableAsCustodian`, NEVER `isAcknowledgedLocally` (D-4.19); MUST add the missing `capacityExceeded("chunkCount")` guard in `MeshRoutedItemRecord.init(from:)` (MeshRoutedIndex.swift ~410 — decodes a bare UInt32; item 5 residual) |
+| 6 | The drain on the one merge path | 1 | 1, 5 | done | `b2a09fd` | rides the three sendInventoryDigest call sites (grep-walled); push-only plan; per-peer SESSION FRAME BUDGET (not a once-per-peer boolean); origin-retains at manifest + chunk doors; routed answer = fernlet.mesh.routed-drain-answer.v1 carrying the quiescence bit |
+| 6a | Fixture rot: drain/convergence cells inherit `MeshMergeWire.start`'s fixed `MeshP3Acceptance.base` anchor, so every fixture manifest expires 2027-01-15T14:20:00Z | 1 | — | todo | | test-fixture time bomb (memory: fixed-date fixtures rot); anchor the manifests' expiry to the injected clock, small |
+| 6b | Drain store I/O runs on the MAIN ACTOR (up to a 256 MiB hash in committingCustody; up to 64 sealed-file opens per answer) | 2 | 6 | todo | | bounded per answer; `maxChunksPerAnswer` (64) and `maxChunksInFlightPerPeer` are the two numbers tier 2 re-measures; P6/P7 may move it off-main |
+| 7 | Merge-window redesign (2d comes due) | 1 | 6 | in-flight | | close only when every asked peer matched; consumes `converged(local:peerReportsQuiescent:)` + the four deadlock regressions in MeshRoutedInventoryDeltaTests; must decide: transfer-length window holding, digests sent only as a link opens, the capacity-refusal contract |
+| 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; entitlement source 2 + the custody self-rule: the digest is the index, the signed receipt is the authority; `MeshCustodyHandoffSummary.handedOffItemCount` is the one field P5 fills; owes the 3-node cell `aCustodianServesTheOriginsExactBytes` (item 6 deferred it: only item 8 writes the transfer rung); increment 1's only relay hop; item 3's door is `recordingCustodyTransfer(item:for:receipt:now:)` (parked item answers manifestMismatch); `advancingAll` must choose skip-delivered vs refuse-batch (item 4 documented it by a passing test, not fixed) |
+| 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth; must COUNT parked manifest-less chunks (C10) and DROP a parked set whose manifest is refused; read `itemsReclaimableAsCustodian`, NEVER `isAcknowledgedLocally` (D-4.19); MUST add the missing `capacityExceeded("chunkCount")` guard in `MeshRoutedItemRecord.init(from:)` (MeshRoutedIndex.swift ~410 — decodes a bare UInt32; item 5 residual); owes the end-to-end cell `aCapacityRefusalIsVisibleAndBounded` (item 6 pinned refusals at the store door only; `routedRefusedKeys` / `lastRoutedDrainRefusal` are the manager's surfaces); chunks that rode ahead of a refused manifest sit PARKED (item 6 residual iii) |
 | 10 | Locked-device handling | 1 | 3 | todo | | ciphertext-only custody; keychain protection unweakened; D-4.4/4.5 already split photos/text (ciphertext-only IS final) from hearts (custodied(by: self) until a foreground pass); FOREGROUNDNESS is the one unenforced leg on the heart path (D-4.16) — wire `MeshSessionState.activeForeground` here |
 | 11 | Type-token registry | 1 | 1 | todo | | unknown types rejected, not forwarded; feeds item 1's `acceptedTypeTokens`; with item 9, drop parked chunk sets on `unknownTypeToken` |
 | 12 | MeshFrameReplayWindow wired | 1 | 2 | todo | | against manifest/chunk ids, never epoch. CAVEAT: window bound is 64 frames × 8 senders = 512 ids but one maximal item is 1024 chunks → a legitimate 65th chunk hits `senderWindowFull`; resize/key per item, do not paper over (chunkID is origin-free, C3/C4); item 4 added a second derived id per (origin, item, member) for receipts |
@@ -97,12 +99,28 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | D-5.13/5.14 builder + bitmap | `init?` nil only past `maxReferencedMembers`; mint throws `tooManyReferencedMembers`; exact held-chunk bitmap ceil(chunkCount/8), frozen bit order, trailing zeros mandatory | 2026-09-04 |
 | D-5.16/5.17 delta safety | foreign-mesh pair → nil, never an empty delta (empty reads as matched = fail-open); signer sets compared as resolved fingerprints, never indices | 2026-09-04 |
 | D-5.18/5.19 review round | mint derives "this device" from `identity` alone (no `selfFingerprint` param); `ask`/`offer` are DISTINCT keys in canonical order | 2026-09-04 |
+| D-6.1 `.absent` store | advertises an EMPTY inventory; deferred/corrupt/refused advertise nothing | 2026-09-04 |
+| D-6.2/6.8 routed answer | `fernlet.mesh.routed-drain-answer.v1` / `MeshRoutedDrainAnswer*` (states a comparison, own stem); sent from its own receive door | 2026-09-04 |
+| D-6.3 call sites | `sendRoutedInventory` has exactly the three of `sendInventoryDigest(to:)` — beginMergeExchange, askOneReconnectedPeer, the admission-grant reply; grep-walled | 2026-09-04 |
+| D-6.4 push-only | no ask frame; `delta.ask` is diagnostic | 2026-09-04 |
+| D-6.5 pacing | per-peer SESSION frame budget (`sessionFramesPerPeer` = 1024 + 32) charged by the plan's frameCount — overturns the once-per-peer boolean; `maxChunksPerAnswer` = 64 | 2026-09-04 |
+| D-6.6 state clearing | exactly `peerInventoryDigests`' three sites (leaveMesh, prepareMembershipLedger, armJoinerLedger); NOT abandonMergeExchange | 2026-09-04 |
+| D-6.7 custody receipts | forwarded AND ingested: `forwardableCustodyReceipts(item:)` + `recordingCustodyEvidence(item:receipt:now:)` | 2026-09-04 |
+| D-6.9/6.10 tokens + binding | `acceptedTypeTokens` = `MeshRoutedAckStageTable.increment1.tokens`; answer binds advertiser == self and advertisedAt == the stored peer inventory's | 2026-09-04 |
+| D-6.11/6.12 store + clock | store built per call (`MeshRoutedStore(scope: store.meshRoutedStorage)`); `now: Date = Date()` defaults on entry points + `dispatchRoutedPayload(…now:)` seam (review) | 2026-09-04 |
+| D-6.13/6.14 | no item seal (P6); no persistence, no wipe row | 2026-09-04 |
+| D-6.15/6.16 origin-retains | non-origin offers iff complete && (origin == self \|\| target.state(of: peer) == .custodied(by: self)) — never `isCustodied`; receive admits only self ∈ destinations \|\| sender == origin, at manifest AND chunk doors | 2026-09-04 |
+| D-6.17 hard deadline | `currentMesh.createdAt + MeshSessionCeiling.ceilingSeconds`, never `sessionCeiling?.hardDeadline` (armed lazily) | 2026-09-04 |
+| D-6.18 converged halves | `MeshRoutedPeerInventory` records BOTH: localQuiescent/quiescentLocalAsOf beside reportsQuiescent/quiescentAsOf | 2026-09-04 |
 
 ## Session notes
 - 2026-09-04 00:41: item 5's workflow hit the session usage limit mid-verify (implementer green, full suite 4232; 34 refuter votes + fix + gauntlet failed at spawn). Resumed from run wf_65b84324-d14 after the 12:40am reset — cached stages replay, only verify/fix/gauntlet re-run. If a workflow's agents fail with 'session limit', schedule a wake for after the reset instead of retrying.
 - 2026-09-03: Opus 4.8/5 were briefly down (item 1's workflow ran on the session model, Fable 5.1); owner confirmed Opus is back — later items use `model: "opus"` per the launcher. Ultracode on: each item runs as a small Workflow (understand → implement → adversarial verify → fix).
 
 ## Surprises worth not re-deriving
+- `MeshRoutedStorageScope.production` may not appear as a literal in ANY test source (MeshRoutedStoreIsolationTests greps for it) — assemble the string at run time in a wall test.
+- A `ProximityPayloadHandling` conformance cannot take a `now:` — inject the clock one call below the conformance (`dispatchRoutedPayload(…now:)`).
+- A conflicting-chunk verdict needs a VALID origin signature over altered bytes; `MeshChunker.mint` is private by design, so drive `.duplicate`, not `.conflictingChunk`, from a rig.
 - `#expect(_, "comment")` needs a LITERAL comment (`String` → `Comment?` build error); no interpolated/computed comments.
 - ColumnCrypto seals with a fresh nonce on every write — never assert sealed-byte equality across two writes; compare the decoded value.
 - An EMPTY routed store's pre-first-unlock refusal arrives at `.seal`, not `.open` (a green field answers absent without consulting custody); a corrupt-quarantine test must establish the seal key before planting garbage (custody is classified before content).
@@ -132,4 +150,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share this tree + sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` held by another session — never stage them.
 
 ## Next item
-6 (in-flight, iteration 6) — then 1a as a bundled small commit when convenient
+7 (in-flight, iteration 7) — then 6a (fixture rot) and 1a as bundled small commits when convenient
