@@ -113,6 +113,7 @@ struct CryptographicPurposeBoundaryTests {
         assertRoutedChunkFramingHolds()
         assertCustodyReceiptFramingHolds()
         assertRecipientReceiptFramingHolds()
+        assertRoutedInventoryFramingHolds()
 
         // Still POSITIONAL, not a substring search: a length-prefixed purpose rejects its own raw
         // spelling. Accepting that would let a transcript carry the domain in an attacker-chosen
@@ -265,6 +266,41 @@ struct CryptographicPurposeBoundaryTests {
         #expect(chunkPurpose.signingBytes(recipient) == nil)
         #expect(recipientPurpose.signingBytes(chunk) == nil)
         #expect(recipientPurpose.signingBytes(recipientPurpose.data) == nil)  // positional
+    }
+
+    /// The routed inventory digest against its declared `.lengthPrefixed` framing, and against the
+    /// MEMBERSHIP inventory digest's domain and the three other routed domains — the two digests
+    /// summarise different things under one English word, so a signature satisfying both would let
+    /// "what records I hold" be replayed as "what content I am carrying, and for whom".
+    ///
+    /// Split out of ``canonicalSerializerTranscriptsMatchTheirDeclaredFraming()`` so neither function
+    /// grows past the 60-line rule; both halves run in the same test. Purposes are declared
+    /// function-local because sibling helpers cannot see each other's `let`s.
+    private func assertRoutedInventoryFramingHolds() {
+        let routedPurpose = FernletCryptoPurpose.Signature.meshRoutedInventoryDigestV1
+        let membershipPurpose = FernletCryptoPurpose.Signature.meshInventoryDigestV1
+        let recipientPurpose = FernletCryptoPurpose.Signature.meshRecipientReceiptV1
+        let custodyPurpose = FernletCryptoPurpose.Signature.meshCustodyReceiptV1
+        let manifestPurpose = FernletCryptoPurpose.Signature.meshRoutedManifestV1
+        let chunkPurpose = FernletCryptoPurpose.Signature.meshRoutedChunkV1
+        let routed = canonicalBytes(for: MeshRoutedInventoryFixtures.payload())
+        let membership = canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload())
+        let recipient = canonicalBytes(for: MeshRecipientReceiptFixtures.receipt())
+        let custody = canonicalBytes(for: MeshCustodyReceiptFixtures.receipt())
+        let manifest = canonicalBytes(for: MeshRoutedManifestFixtures.manifest())
+        let chunk = canonicalBytes(for: MeshChunkFixtures.chunk())
+        #expect(routedPurpose.signingBytes(routed) != nil)      // declared == emitted
+        #expect(membershipPurpose.signingBytes(routed) == nil)  // the collision, both ways
+        #expect(routedPurpose.signingBytes(membership) == nil)
+        #expect(recipientPurpose.signingBytes(routed) == nil)
+        #expect(routedPurpose.signingBytes(recipient) == nil)
+        #expect(custodyPurpose.signingBytes(routed) == nil)
+        #expect(routedPurpose.signingBytes(custody) == nil)
+        #expect(manifestPurpose.signingBytes(routed) == nil)
+        #expect(routedPurpose.signingBytes(manifest) == nil)
+        #expect(chunkPurpose.signingBytes(routed) == nil)
+        #expect(routedPurpose.signingBytes(chunk) == nil)
+        #expect(routedPurpose.signingBytes(routedPurpose.data) == nil)  // positional
     }
 
     /// The raw-prefix family: transcripts that concatenate their domain directly. Rejecting a

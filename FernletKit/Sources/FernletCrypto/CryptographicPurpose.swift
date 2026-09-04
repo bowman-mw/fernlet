@@ -206,6 +206,23 @@ public nonisolated enum FernletCryptoPurpose {
         /// `recipient-receipt-id.hash.v1` diverge at `.` vs `-`, so neither prefixes the other. Same
         /// framing reservation as ``meshRoutedManifestV1``.
         public static let meshRecipientReceiptV1 = CryptographicPurpose("fernlet.mesh.recipient-receipt.v1", framing: .lengthPrefixed)
+        /// **Written since P5 item 5.** P5's ROUTED-INVENTORY-DIGEST signature (plan §11, §10.3):
+        /// the mesh, a minimal fingerprint table and one entry per live held item — the signed
+        /// `(origin, itemID)` pair, whether the manifest is held, the chunk count, the exact
+        /// held-chunk bitmap and the two receipt-signer index lists — plus the ADVERTISER and the
+        /// instant it was signed.
+        ///
+        /// Distinct from ``meshInventoryDigestV1`` (`routed-inventory-digest` vs `inventory-digest`,
+        /// diverging at the first character after `fernlet.mesh.`, `r` vs `i`), and the distinction
+        /// is the point: that domain signs a summary of a MEMBERSHIP LEDGER, this one a summary of a
+        /// routed content STORE. A signature satisfying both would let "what records I hold" be
+        /// replayed as "what content I am carrying, and for whom". Distinct from
+        /// ``meshRoutedManifestV1``, ``meshRoutedChunkV1``, ``meshCustodyReceiptV1`` and
+        /// ``meshRecipientReceiptV1`` at the character after `routed-`/`fernlet.mesh.`. There is
+        /// deliberately **no** `Hash` sibling: the digest carries no rollup hash — the entry list IS
+        /// the digest, and a hash would be a second representation of one fact that can disagree with
+        /// it. Same framing reservation as ``meshRoutedManifestV1``.
+        public static let meshRoutedInventoryDigestV1 = CryptographicPurpose("fernlet.mesh.routed-inventory-digest.v1", framing: .lengthPrefixed)
         public static let proximityQRIdentityV1 = CryptographicPurpose("fernlet.verify.qr.v1")
         public static let proximityQRResponseV1 = CryptographicPurpose("fernlet.verify.response.v1")
         public static let duressRecoveryRequestV1 = CryptographicPurpose("fernlet.duress.recovery.request.v1")

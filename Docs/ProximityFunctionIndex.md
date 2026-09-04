@@ -900,6 +900,35 @@ what makes `fileprivate` a real gate — stays true.
 | `recordingRecipientReceipt(item:receipt:now:)` | **The only writer of a `delivered` rung in the whole store**, and it advances exactly one destination: the receipt's own signer. No `for destinations:` parameter, deliberately — that would let one member's receipt mark somebody else delivered. Re-checks the identity triple, the mesh, the destination set and capacity; stores the receipt replace-by-signer in the SAME index write; writes nothing on any refusal; no expiry gate (a receipt for an expired item is still evidence). |
 | `forwardableRecipientReceipts(item:)` | The stored bytes verbatim, in signer order, **including this device's own** — the deliberate difference from custody, because a heart's final-ack condition is a one-shot ledger judgement the ledger refuses to repeat. |
 
+### `MeshRoutedInventory.swift`, `MeshRoutedInventoryBuilder.swift`, `MeshRoutedInventoryVerifier.swift`
+
+P5 item 5: the ROUTED CONTENT digest — what a device advertises it is holding, so the drain knows what
+to ask for and what to offer. **Not** `MeshInventoryDigest`, which summarises a MEMBERSHIP ledger under
+`fernlet.mesh.inventory-digest.v1`; this is `fernlet.mesh.routed-inventory-digest.v1`, and the two wire
+spellings share a stem on purpose, so the Swift value-type names are the separation that holds.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedInventoryFormat` | Every bound **reused**: 1024 entries (the store's item cap), 16 referenced members (the ADMISSION cap, not the roster's — a departed custodian must still be nameable), 9 custody signers per entry (8 stored + this device's never-stored own) and 8 recipient signers (this device's own is stored), the 128-byte widest bitmap, the shared fingerprint and signature widths. |
+| `MeshRoutedInventoryEntry` | One held item: `originIndex` into the member table + `itemID` (D11's signed pair), `holdsManifest` (false ⇒ parked, advertised never hidden), `chunkCount`, `heldChunks` — the **exact** held set as a bitmap in a frozen bit order, with a hard trailing-zero rule — and the two signer index lists. `heldChunkCount`/`isComplete` are DERIVED popcounts, never stored. `missingChunks(against:)` / `chunksHeldBeyond(_:)` are the ask and offer directions, both over the two entries' overlap in this entry's index space. |
+| `MeshRoutedInventory` | mesh + minimal member table + canonically ordered entries. `isWithinCaps` → `.overCapacity`, five `isWellFormed` clauses → `.malformed` (members ascending and MINIMAL, indices in range and ascending, chunk counts in 1…1024, canonical bitmaps, entries strictly increasing). Nothing is clamped, sorted or repaired at either door — `==` is set equality only because a non-canonical value is refused. No rollup hash: the list IS the digest. |
+| `MeshRoutedInventoryPayload` | The advertiser-signed frame — inventory, `senderFingerprint`, floored `sentAt` (bound into the signature), signature. Carries its **own** shape check for the two scalars no door clamps. `signed(meshID:index:sentAt:identity:)` derives and signs, with no `Date()` default anywhere — and takes **no `selfFingerprint`**: `identity.localFingerprint` is the sole spelling of "this device", so a caller cannot mint a valid digest whose custody self-claim names a member that never held the item. |
+| `MeshRoutedInventory.init?(meshID:index:selfFingerprint:at:)` | The builder: one bounded pass for the member table, one for the entries, over a **loaded** index. Filters on `isLive(at:)` only — parked, fully-delivered and unrestorable-delivery items are all advertised, because every delivery enumerator drops one of those classes. Custody self-rule: this device appears iff `isCustodied` **and** the item is not its own. Nil only past the member cap; the mint turns that into `MeshRoutedInventoryMintError.tooManyReferencedMembers`. |
+| `MeshRoutedInventoryVerifier` | mesh → caps → shape (the PAYLOAD's) → admitted key by the payload's own fingerprint → not quorum-removed → key/fingerprint agreement → Ed25519. Public material only, so it runs on a locked device. D14: a departed advertiser still verifies; departures are never consulted. A verified digest that DIFFERS is not a rejection. |
+
+### `MeshRoutedInventoryDelta.swift`
+
+P5 item 5: the pure comparison. **All the drain's policy lives here**, so item 6 implements none of
+its own; no clock, no I/O, no store.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedInventoryReceiptRef` | `(key, signer, kind)` with the signer a **resolved fingerprint** — member tables are minimal per digest, so an index-wise comparison across two tables silently yields both false forwards and false gaps. |
+| `MeshRoutedChunkGap` | `(key, chunkCount, missing)` where `missing` is a canonical bitmap over THIS device's count, never all-zero, and never carrying a bit above the two sides' overlap: a peer's larger count claim is neither believed nor asked for. `missingIndices()` expands on demand, one item at a time. |
+| `between(local:remote:offerableToPeer:)` | The six lists, in canonical order. Four are pure functions of the two digests; only the two OFFER lists take the entitlement set, whose two honest sources (a destination with work outstanding; a custodian chosen at departure) are both rooted in the origin's signed manifest. Returns **nil** for a foreign-mesh pair — never an empty delta, which would read as matched. |
+| `ask` / `offer` | The two request lists and the two offer lists as **distinct keys in canonical order**, not concatenations: one key satisfies both an ask rule and a chunk rule whenever it is held parked against an un-parked peer that is ahead, so a concatenation would name it twice and order it manifests-then-chunks. Item 6 paces sends off these. |
+| `isQuiescent` / `converged(local:peerReportsQuiescent:)` | `isQuiescent` is strictly LOCAL ("nothing I know I owe or need") and is true for a device holding nothing, against every peer — so item 7's predicate is the **pair** form, with the peer's bit carried on the drain's answer. |
+
 ### `MeshRoutedContentHasher.swift`
 
 P5 item 3: the streaming sibling of `MeshRoutedContentDigest.contentHash(of:)` — the same domain, fed

@@ -110,6 +110,7 @@ on the reasoning.
 | `meshRoutedChunkV1` | `fernlet.mesh.routed-chunk.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshChunker`, `MeshChunkVerifier` |
 | `meshCustodyReceiptV1` | `fernlet.mesh.custody-receipt.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshCustodyReceipt`, `MeshCustodyReceiptVerifier` |
 | `meshRecipientReceiptV1` | `fernlet.mesh.recipient-receipt.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRecipientReceipt`, `MeshRecipientReceiptVerifier` |
+| `meshRoutedInventoryDigestV1` | `fernlet.mesh.routed-inventory-digest.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedInventory`, `MeshRoutedInventoryVerifier` |
 
 #### KeyDerivation
 
@@ -207,6 +208,24 @@ families:
   derived dedup id — and that id is one per `(recipient, item)`, never one per chunk.
 - Two receipt id families now derive from an `(itemID, origin, member)` triple under two different
   hash domains. **A future third receipt family must pick a third domain**, not reuse either.
+
+### A drift note, 2026-09-03 (P5 item 5)
+
+One purpose was added, and no `Hash` sibling — the routed inventory digest carries **no rollup
+hash**, because the entry list IS the digest and a hash would be a second representation of one fact
+that can disagree with it. The pair that matters is the one the English word hides:
+
+- `fernlet.mesh.routed-inventory-digest.v1` (Signature) vs `fernlet.mesh.inventory-digest.v1`
+  (Signature): the second summarises a **membership ledger** — four counts and a rollup hash over the
+  record identities — while the first summarises a **routed content store** — a minimal fingerprint
+  table plus one entry per held item, with an exact held-chunk bitmap and the receipt signers. A
+  signature satisfying both domains would let "what records I hold" be replayed as "what content I am
+  carrying, and for whom". They diverge at `r` vs `i`, the first character after `fernlet.mesh.`, so
+  neither prefixes the other.
+- The wire spellings deliberately **share** the `inventory-digest` stem, so `grep` finds both
+  families and is not a separation mechanism. What separates them is the Swift value-type stems: no
+  routed value type carries `InventoryDigest`, no membership value type carries `Routed`.
+  `MeshRoutedInventoryGoldenTests.theDigestNamesDoNotCollide` asserts exactly that.
 
 ### Two notes on the inventory
 

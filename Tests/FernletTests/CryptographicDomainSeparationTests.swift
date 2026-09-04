@@ -69,6 +69,7 @@ struct CryptographicDomainSeparationTests {
         Domain("Signature.meshRoutedChunkV1", FernletCryptoPurpose.Signature.meshRoutedChunkV1),
         Domain("Signature.meshCustodyReceiptV1", FernletCryptoPurpose.Signature.meshCustodyReceiptV1),
         Domain("Signature.meshRecipientReceiptV1", FernletCryptoPurpose.Signature.meshRecipientReceiptV1),
+        Domain("Signature.meshRoutedInventoryDigestV1", FernletCryptoPurpose.Signature.meshRoutedInventoryDigestV1),
         Domain("Signature.meshMemberDepartureV1", FernletCryptoPurpose.Signature.meshMemberDepartureV1),
         Domain("Signature.meshMemberRemovalV1", FernletCryptoPurpose.Signature.meshMemberRemovalV1),
         Domain("Signature.meshTerminatedV1", FernletCryptoPurpose.Signature.meshTerminatedV1),

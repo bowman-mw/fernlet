@@ -208,6 +208,26 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// made the item final is resolved from the origin-signed type token, never stated by the signer.
     /// Additive: older builds park the token (`isUnknownPayloadType`) and still verify the envelope.
     case meshRecipientReceipt  = "fernlet.mesh.recipient-receipt.v1"
+    /// An advertiser's signed summary of the ROUTED CONTENT it holds — its mesh, a minimal
+    /// fingerprint table and one entry per live held item, each naming the signed `(origin, itemID)`
+    /// pair, whether the manifest is held, the item's chunk count, the exact held-chunk bitmap and
+    /// the custody/recipient receipt signers (`MeshRoutedInventoryPayload`, network migration P5
+    /// item 5, plan §11). Same spelling as `Signature.meshRoutedInventoryDigestV1`: token, record
+    /// and signing domain are one vocabulary.
+    ///
+    /// **Not `meshInventoryDigest`.** That token summarises a MEMBERSHIP LEDGER with four counts and
+    /// a rollup hash; this summarises a routed STORE with per-item lists. The two wire spellings
+    /// deliberately share the `inventory-digest` stem — a grep finds both families — so the
+    /// separation that holds is over Swift value types: no routed type carries `InventoryDigest`, no
+    /// membership type carries `Routed`.
+    ///
+    /// NOT in `sealingRequiredTypes`, on purpose: signed-and-unsealed is what lets a frame cross a
+    /// DIVERGENT pair, the same property that carries `meshInventoryDigest` and `meshEpochHeads` over
+    /// a reconciling tunnel. A sealed routed digest would be dropped in exactly the partition the
+    /// drain exists to heal. It carries no content, no destination set and no type token — only what
+    /// is held. Additive: older builds park the token (`isUnknownPayloadType`) and still verify the
+    /// envelope.
+    case meshRoutedInventoryDigest = "fernlet.mesh.routed-inventory-digest.v1"
     // Group encryption (Phase 3)
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"
