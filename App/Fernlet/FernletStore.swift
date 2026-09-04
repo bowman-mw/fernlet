@@ -509,6 +509,31 @@ final class FernletStore {
             keychainService: MeshSessionStorageScope.keychainService(besideHeartDrop: heartDropKeychainService)
         )
     }
+    /// This store's sealed ROUTED-CONTENT scope (network migration P5 item 3, plan §11/§19.5):
+    /// the directory holding `MeshRoutedIndex.sealed`, its `.corrupt` quarantine sibling and the
+    /// `MeshRoutedChunks` payload files, plus the keychain service holding the key that seals them.
+    ///
+    /// **Derived, not injected**, for exactly the reason `meshSessionStorage` above is: both halves
+    /// come from seams the test walls already enforce — `proximitySupportRoot` for the files and
+    /// `heartDropKeychainService` for the key — so a test store isolated for the friend photo wall
+    /// and the heart-drop sidecars is isolated for routed custody for free, and one that is NOT
+    /// already fails `PhotoDirectoryIsolationTests`. A fourth injectable seam would add a fourth way
+    /// to forget one. Production resolves to `Application Support/Fernlet` +
+    /// `com.fernlet.mesh-routed`, unchanged from `MeshRoutedStorageScope.production`.
+    ///
+    /// Its own keychain service rather than a lodger under the mesh-session one: one fate per
+    /// service is the only arrangement a service-wide delete can express honestly, and a session
+    /// wipe must not leave routed ciphertext on disk as bytes nothing can open.
+    ///
+    /// Nothing writes through this scope yet — P5 item 3 builds the store and its wipe; item 6 wires
+    /// the drain to it. The delete-all leg is here from the first commit anyway, because a persisted
+    /// surface with no wipe row is what the wall exists to catch.
+    @ObservationIgnored nonisolated var meshRoutedStorage: MeshRoutedStorageScope {
+        MeshRoutedStorageScope(
+            directory: proximitySupportRoot,
+            keychainService: MeshRoutedStorageScope.keychainService(besideHeartDrop: heartDropKeychainService)
+        )
+    }
     /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo
     /// stores below. Separate keychain row from the friend photo wall's, which stays on the
     /// original backup-restorable key inside `MeshNetworkManager`.
@@ -5437,6 +5462,15 @@ final class FernletStore {
         // fingerprint this device no longer has.
         if !MeshSessionStore.wipeForDeleteAll(scope: meshSessionStorage) {
             outcome.incompleteStores.append("your nearby-friends session state")
+        }
+        // The sealed routed-content store (P5 item 3, plan §11/§19.5): the index, its `.corrupt`
+        // quarantine sibling, every sealed chunk payload file AND the keychain row that seals them,
+        // on THIS store's scope. Same both-halves-together rule as the line above. Ordered here on
+        // purpose: the identity rotation at the head of this leg has already broken every trust
+        // relationship the stored destination fingerprints name, so a delivery map naming who this
+        // user was sending what to must not outlive it.
+        if !MeshRoutedStore.wipeForDeleteAll(scope: meshRoutedStorage) {
+            outcome.incompleteStores.append("your nearby-friends delivery state")
         }
         // No `heartsAwayPurgePending` reset needed: it derives from the outbox this just emptied, so
         // the Settings "it'll keep trying" notice cannot outlive the wipe that made retrying

@@ -108,6 +108,7 @@ on the reasoning.
 | `duressRecoveryReplyV1` | `fernlet.duress.recovery.reply.v1` | `.rawPrefix` | `DuressRecoveryCoordinator` |
 | `meshRoutedManifestV1` | `fernlet.mesh.routed-manifest.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedManifest`, `MeshRoutedManifestVerifier` |
 | `meshRoutedChunkV1` | `fernlet.mesh.routed-chunk.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshChunker`, `MeshChunkVerifier` |
+| `meshCustodyReceiptV1` | `fernlet.mesh.custody-receipt.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshCustodyReceipt`, `MeshCustodyReceiptVerifier` |
 
 #### KeyDerivation
 
@@ -120,6 +121,7 @@ on the reasoning.
 | `presencePairV1` | `fernlet.presence.tag.v1` | `IdentityService` |
 | `meshGroupKeyWrapV1` | `fernlet.mesh.groupkey.v1` | `IdentityService` |
 | `meshRoutedContentKeyWrapV1` | `fernlet.mesh.routed.content-key.v1` | `MeshRoutedContentKeyWrapper` |
+| `meshRoutedStoreV1` | `fernlet.mesh.routed-store.v1` | `MeshRoutedStore` (the at-rest seal for `MeshRoutedIndex.sealed` and every `MeshRoutedChunks/<uuid>.chunk` file) |
 | `heartDropOuterSealV1` | `fernlet.heartdrop.seal.v1` | `HeartDropSealer` |
 | `lockScryptWrappingV1` | `fernlet.lock.scrypt.wrapping.v1` | — |
 | `journalNarrativeLegacyV1` | `journal-narrative` | `ColumnCrypto`, `JournalNarrativeRepository` |
@@ -167,7 +169,26 @@ on the reasoning.
 | `meshRoutedContentV1` | `fernlet.mesh.routed-content.hash.v1` | `MeshRoutedContentDigest` (the whole sealed blob a manifest's `contentHash` measures) |
 | `meshRoutedChunkV1` | `fernlet.mesh.routed-chunk.hash.v1` | `MeshRoutedContentDigest` (one chunk's payload — its own domain so a one-chunk item's two digests are not interchangeable) |
 | `meshRoutedChunkIDV1` | `fernlet.mesh.routed-chunk-id.hash.v1` | `MeshRoutedContentDigest` (the derived replay-window id item 12 keys on) |
+| `meshCustodyReceiptIDV1` | `fernlet.mesh.custody-receipt-id.hash.v1` | `MeshCustodyReceipt` (the derived dedup id — `(itemID, origin, custodian)`, excluding both the hedged signature and `custodiedAt`, so a re-mint of the same claim is the same id) |
 | `recoveryContentKeyV1` | `fernlet.lock.recovery.contentkey.v1` | `FernletLockService` |
+
+### A drift note, 2026-09-03 (P5 item 3)
+
+Three purposes were added together and are stated here because each sits one character from a
+neighbour:
+
+- `fernlet.mesh.custody-receipt.v1` (Signature) vs `fernlet.mesh.custody-receipt-id.hash.v1` (Hash):
+  they diverge at `.` vs `-`, so neither prefixes the other. One tags the bytes that are SIGNED, the
+  other the bytes that are hashed into a derived dedup id.
+- `fernlet.mesh.routed-store.v1` (KeyDerivation) vs `fernlet.mesh.routed-manifest.v1`,
+  `fernlet.mesh.routed-chunk.v1`, `fernlet.mesh.routed-content.hash.v1` and
+  `fernlet.mesh.routed.content-key.v1`: they diverge at `-s` vs `-m`/`-c`/`.`. It is the at-rest seal
+  for a whole surface, and **changing its spelling orphans every sealed routed file already on disk**
+  — a routed chunk file is other people's ciphertext this device promised to hold.
+- The routed store's AAD is purpose ‖ install binding with **no file name in it**, so under one key
+  and one install every `MeshRoutedChunks/<uuid>.chunk` blob authenticates in any slot. The binding of
+  a file to a slot is restored by comparing the opened chunk's descriptor and payload length to the
+  index's, on every read — a comparison that is not redundant and must not be removed as such.
 
 ### Two notes on the inventory
 

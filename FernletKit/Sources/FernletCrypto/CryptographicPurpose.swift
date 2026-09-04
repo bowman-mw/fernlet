@@ -176,6 +176,21 @@ public nonisolated enum FernletCryptoPurpose {
         /// spelling is what keeps neither a prefix of the other. Same framing reservation as
         /// ``meshRoutedManifestV1``.
         public static let meshRoutedChunkV1 = CryptographicPurpose("fernlet.mesh.routed-chunk.v1", framing: .lengthPrefixed)
+        /// **Written since P5 item 3.** P5's CUSTODY-RECEIPT signature (plan §11, §3.6): mesh,
+        /// item, the item's ORIGIN, its content hash, the CUSTODIAN, the durable custody instant and
+        /// the item's expiry. Signed by the **custodian**, about the origin's item — the one routed
+        /// record whose subject did not author it — and forwarded verbatim by relays, which never
+        /// re-sign.
+        ///
+        /// Distinct from ``meshRoutedManifestV1`` and ``meshRoutedChunkV1`` (`custody-receipt` vs
+        /// `routed-…`, diverging at `c`/`r`): a manifest says who an item is for, a chunk says
+        /// "these bytes are part of it", and a receipt says "I am holding all of it" — a signature
+        /// satisfying two of those would let one stand in for another. Distinct from
+        /// ``FernletCryptoPurpose/Hash/meshCustodyReceiptIDV1``, which tags the bytes hashed into the
+        /// derived dedup id rather than the bytes that are signed; `custody-receipt.v1` and
+        /// `custody-receipt-id.hash.v1` diverge at `.` vs `-`, so neither prefixes the other. Same
+        /// framing reservation as ``meshRoutedManifestV1``.
+        public static let meshCustodyReceiptV1 = CryptographicPurpose("fernlet.mesh.custody-receipt.v1", framing: .lengthPrefixed)
         public static let proximityQRIdentityV1 = CryptographicPurpose("fernlet.verify.qr.v1")
         public static let proximityQRResponseV1 = CryptographicPurpose("fernlet.verify.response.v1")
         public static let duressRecoveryRequestV1 = CryptographicPurpose("fernlet.duress.recovery.request.v1")
@@ -221,6 +236,22 @@ public nonisolated enum FernletCryptoPurpose {
         /// under each other's derived key, which is exactly what the registry exists to prevent.
         /// Changing this spelling orphans every sealed context already on disk.
         public static let meshSessionContextV1 = CryptographicPurpose("fernlet.mesh.session-context.v1")
+        /// **Written since P5 item 3.** The sealed routed-content store (plan §11, §19.5) — its
+        /// `MeshRoutedIndex.sealed` catalogue and every `MeshRoutedChunks/<uuid>.chunk` payload
+        /// file. Handed to ``ColumnCrypto/init(purpose:)``, so it is BOTH the HKDF `info` that
+        /// derives each file's column key from the routed seal key AND — inside the v3 at-rest
+        /// format — half of the additional authenticated data, beside this install's
+        /// ``DeviceBindingID``.
+        ///
+        /// Its own domain rather than a reuse of ``meshSessionContextV1``: the two surfaces have
+        /// separate keychain services and separate fates, and sharing a domain would let a session
+        /// blob and a routed blob authenticate under each other's derived key. Note that the AAD
+        /// carries no file name, so under one key and one install every routed chunk blob
+        /// authenticates in any slot — the routed index restores that binding by comparing each
+        /// opened chunk's descriptor to the one holding its slot, on every read.
+        ///
+        /// Changing this spelling orphans every sealed routed file already on disk.
+        public static let meshRoutedStoreV1 = CryptographicPurpose("fernlet.mesh.routed-store.v1")
         public static let heartDropOuterSealV1 = CryptographicPurpose("fernlet.heartdrop.seal.v1")
         /// Scrypt has no `info` argument. This constant names its sole consumer; the v2 wrapping
         /// AEAD below authenticates the same purpose beside the derived key.
@@ -317,6 +348,17 @@ public nonisolated enum FernletCryptoPurpose {
         /// crafted payload collide with an id. `routed-chunk-id.hash` diverges from
         /// `routed-chunk.hash` at `-` vs `.`, so neither is a prefix of the other.
         public static let meshRoutedChunkIDV1 = CryptographicPurpose("fernlet.mesh.routed-chunk-id.hash.v1")
+        /// **Written since P5 item 3.** The domain a custody receipt's DERIVED id is computed
+        /// under (plan §11, item 12's dedup key): SHA-256 over this tag, length-prefixed, then the
+        /// item id, the origin and the custodian, of which the first 16 bytes are read as a `UUID`.
+        ///
+        /// `custodiedAt` is deliberately not an input: a re-mint of the same claim is the same
+        /// claim, and CryptoKit's Ed25519 signing is hedged, so the id is what stays stable across
+        /// two mints of one receipt. Its own domain rather than a reuse of
+        /// ``FernletCryptoPurpose/Signature/meshCustodyReceiptV1``: that one tags the bytes that are
+        /// SIGNED and this one the bytes that are hashed, and the `-id.hash` infix keeps neither a
+        /// prefix of the other.
+        public static let meshCustodyReceiptIDV1 = CryptographicPurpose("fernlet.mesh.custody-receipt-id.hash.v1")
         public static let recoveryContentKeyV1 = CryptographicPurpose("fernlet.lock.recovery.contentkey.v1")
     }
 }

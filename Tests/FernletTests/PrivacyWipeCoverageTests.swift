@@ -200,6 +200,12 @@ struct PrivacyWipeCoverageTests {
         // because one call takes both halves — a file whose key survived is unreadable noise, and
         // a key whose file survived is a promise to decrypt it.
         "MeshSessionStore.wipeForDeleteAll",
+        // The sealed routed-content store (P5 item 3): `MeshRoutedIndex.sealed`, its `.corrupt`
+        // quarantine sibling, every `MeshRoutedChunks/<uuid>.chunk` payload file AND the
+        // `com.fernlet.mesh-routed` key that seals them. One token because one call takes every
+        // half — a chunk file whose key survived is unreadable noise, and a key whose files
+        // survived is a promise to decrypt other people's ciphertext.
+        "MeshRoutedStore.wipeForDeleteAll",
         // Settings
         "storagePreferencesResetHook",
     ]
@@ -1012,7 +1018,8 @@ struct PrivacyWipeCoverageTests {
         "com.fernlet.lock", "com.fernlet.storage-preferences", "com.fernlet.journal",
         "com.fernlet.healthkit-anchors", "com.fernlet.private-media", "com.fernlet.narrative-buffer",
         "com.fernlet.heartdrop", "com.fernlet.identity", "com.fernlet.moderation",
-        "com.fernlet.device-binding", "com.fernlet.mesh-session"
+        "com.fernlet.device-binding", "com.fernlet.mesh-session",
+        "com.fernlet.mesh-routed"
     ]
 
     /// `com.fernlet.*` keychain SERVICE literals in `source`, found by anchoring on the binding that

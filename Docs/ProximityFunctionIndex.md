@@ -735,6 +735,124 @@ accounting must include parked, manifest-less chunks.
 | `bind(to:)` | Cross-checks the triple and the derived count, re-validates every already-held chunk's length against the now-known size in one bounded loop, and refuses **without mutating** if any fails. Idempotent. |
 | `completion(against:)` | `notBound` while unbound; `foreignItem` for another manifest; `incomplete` at the first gap (never a partial blob); `sizeMismatch` / `contentHashMismatch`; else `complete(blob:)`. **`complete` is NECESSARY, NEVER SUFFICIENT for a custody receipt**: it is a verdict over in-memory bytes, so the order is durable → complete → receipt, and durability is item 3's separate gate (plan §3.6). |
 
+### `MeshChunkAdmissionRule.swift`
+
+P5 item 3 (C13): the two chunk-set decisions, extracted so the IN-MEMORY reassembler and the DURABLE
+store reach them through one function each. Item 2's `MeshChunkAssemblyTests` pass unmodified beside
+the extraction, which is the regression proof. Pure; nothing here reads a clock, a file or a payload.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshChunkDescriptor` | Exactly the eight fields `canonicalBytes(for: MeshChunk)` writes, in that order — so descriptor equality and transcript equality are the same statement. `Codable`: the routed index persists one per held chunk file. The payload and the signature are absent by design. |
+| `MeshChunkSetShape` | The state one decision reads: identity triple, chunk count, `boundSize` (nil ⇒ parked), bytes held, the descriptor at the incoming index, and every held slot's payload length. Built from a chunk map on one side and from index records on the other. |
+| `MeshChunkAdmissionRule.verdict(for:payloadHash:in:receivedCount:)` | The one PER-CHUNK decision, in item 2's order: `foreignItem` → `countMismatch` → `indexOutOfRange` → duplicate/`conflictingChunk` → `chunkHashMismatch` → `sizeOverflow` → `payloadLengthMismatch`. The duplicate check is `descriptor(held) == descriptor(chunk) && payloadHash == held.chunkHash` — equivalent to item 2's transcript-plus-payload comparison, and it still answers `conflictingChunk` for a chunk whose payload does not hash to its own declared `chunkHash`. |
+| `MeshChunkAdmissionRule.bindingVerdict(for:in:)` | The one BINDING decision, in `MeshChunkAssembly.bind(to:)`'s order: identity triple ⇒ `foreignItem`; derived count ≠ the set's ⇒ `countMismatch`; any held slot the manifest's size makes the wrong length ⇒ `payloadLengthMismatch`. Mutates nothing, so a refusal leaves the parked set exactly as it was — on both sides. |
+
+### `MeshCustodyReceipt.swift`
+
+P5 item 3 (plan §11, §3.6): a custodian's signed statement that it durably holds one routed item's
+COMPLETE ciphertext. **Custody is not delivery**, and the receipt says nothing about the custodian
+being able to read what it holds.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshCustodyReceiptFormat` | Three widths, all **reused** from `MeshRoutedManifestFormat`: 64-byte signature, 32-byte content hash, 64-byte fingerprint ceiling. |
+| `MeshCustodyReceipt` | mesh, item, the item's ORIGIN (the subject), `contentHash`, the CUSTODIAN (the signer), the durable custody instant and the item's expiry. No key epoch, branch, hop count, TTL, destination set, chunk index or schema integer — the `.v1` in the domain IS the version. Both doors floor both instants; nothing is clamped, and the two fingerprints are width-checked in `isWellFormed` so an over-long one is a cheap `malformed` rather than a `signatureInvalid`. |
+| `MeshCustodyReceipt.receiptID` | `UUID(SHA-256(lp(Hash.meshCustodyReceiptIDV1) ‖ uuid(itemID) ‖ lp(origin) ‖ lp(custodian))[0..<16])`. **Derived, never a wire field**, and it excludes both the hedged signature and `custodiedAt`, so a re-mint of the same claim is the same id. The frame id item 12 admits. |
+| `MeshCustodyReceipt.signed(witness:manifest:identity:)` | The ONLY mint, and it takes a `MeshCustodyDurabilityWitness` — which only a returned durable write produces. `meshID` and `expiresAt` come off the manifest, `custodiedAt` off the witness. Refuses `notTheCustodian`, `witnessForAnotherItem`, `contentHashMismatch`, `originIsSelf`, `itemExpired`. There is no factory that signs somebody else's receipt. |
+| `MeshCustodyReceiptPayload` | The wire frame, `PayloadType.meshCustodyReceipt`. Signed and UNSEALED so members can forward it verbatim and converge on delivery state (plan §3.2). |
+
+### `MeshCustodyReceiptVerifier.swift`
+
+P5 item 3: the one door a received receipt passes through. The signing key is resolved by the
+**custodian** fingerprint from the admission ledger, never from the envelope sender.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshCustodyReceiptRejection` | Nine frozen English tokens: `foreignMesh`, `malformed`, `custodianIsOrigin`, `custodianNotAdmitted`, `custodianRemoved`, `custodianKeyMismatch`, `expiryMismatch`, `signatureInvalid`, `manifestMismatch`. |
+| `verify(_:)` | mesh → shape → custodian ≠ origin → admitted key → not removed → key/fingerprint agreement → expiry equality (`hardDeadline + grace`, D6) → signature → (only with a manifest) the identity **triple**. D14 holds: a **departed** custodian's receipt still verifies; a **quorum-removed** one's does not. |
+
+### `MeshRoutedStoreKey.swift`
+
+P5 item 3: where one device's sealed routed custody lives, and the key row that seals it.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing. `productionKeychainService` is `com.fernlet.mesh-routed` — its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
+| `MeshRoutedStorageScope.keychainService(besideHeartDrop:)` | Production in ⇒ production out; any isolated heart-drop service ⇒ a distinct sibling. This is what lets `FernletStore` DERIVE the scope from seams the test walls already enforce instead of adding a fourth injectable one. |
+| `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. |
+| `MeshRoutedSealKey.wipe(service:)` | Deletes every row under the service. The file half is `MeshRoutedStore.wipeForDeleteAll(scope:)`; both halves always go together. |
+
+### `MeshRoutedIndex.swift`
+
+P5 item 3: the sealed CATALOGUE — what this device holds for other people, how far each destination's
+copy has got, and which sealed payload file backs each chunk. No I/O, no crypto, no clock.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedIndexSchema` | Version 1, its **own** from day one (`MeshSessionContext` stays at 2). Older or newer is `corrupt`, never migrated. |
+| `MeshRoutedStoreFormat` | `maxItems` 1024; `maxContentBytes` = `MeshRoutedManifestFormat.maxContentByteCount` (**reused** — moving it moves a WIRE bound, because `MeshChunkFormat.maxChunkCount` is derived from it); `maxChunksPerItem` = `MeshChunkFormat.maxChunkCount`; `maxHeldChunkFiles` 4096 (file count is not bounded by bytes); `maxReceiptsPerItem` = the roster cap. |
+| `MeshRoutedIndexDecodingError` | `unsupportedSchemaVersion(_:)` and `capacityExceeded(_:)`. At rest a cap violation is a **refusal**, never a clamp: clamping would silently drop a durable record whose payload files stay on disk, possibly one a receipt was already emitted for. |
+| `MeshRoutedItemKey` | The union key — the **signed pair** `(originFingerprint, itemID)` (D11). An item id alone lets an admitted member squat another origin's id under its own key and have it verify. |
+| `MeshRoutedChunkDescriptor` | The chunk's transcript fields, its payload length and the **opaque** `<uuid>.chunk` file name. A mirror, not a binding: the seal's AAD carries no file name, so every read compares the opened chunk against this. |
+| `MeshRoutedDeliveryProgress` / `MeshRoutedDeliveryRecord` | The persisted half of `MeshDeliveryTarget`: the sparse progress map only. `pending` is an absence; `departed` is never encoded and is refused on decode. The destination set is NOT stored — it comes back from the origin's signed manifest. |
+| `MeshRoutedItemRecord` | Key, content hash, chunk count, expiry, the manifest stored **whole** (nil ⇒ parked), receiver-local `firstSeenAt`, `custodiedAt` (written once, cleared by a repair), the held descriptors, the delivery record and other members' receipts. |
+| `MeshRoutedIndex` | The ordered records plus the counters item 9 reads (`itemCount`, `totalContentBytesHeld`, `heldChunkFileCount`), `firstSeenAt(of:)`, `heldChunkIndices(of:)`, and item 6/8's enumeration: `outstandingDestinations(for:in:)`, `outstandingReachable`/`outstandingUnreachable`, `outstandingItems(at:in:)`, `itemsAwaitingHandoff(at:in:)` and `handoffCandidateCount(at:in:)` (a **candidate** count — `handedOffItemCount` is filled after the transfers). Plus `itemsWithUnrestorableDelivery(at:)`: every enumerator above skips an item whose stored delivery map will not restore, so that item is **named** here rather than silently dropped from all of them (`MeshRoutedItemRef.deliveryRestoreRefused` is the same fact per item; a parked item is not one — it has no signed set to fail to restore). |
+
+### `MeshRoutedStore.swift`
+
+P5 item 3: the sealed sidecar's floor, mirroring `MeshSessionStore` method for method — and the only
+file in the routed store that names `ColumnCrypto`.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedSealRefusal` / `MeshRoutedDeferral` / `MeshRoutedCorruption` | Siblings of P3's, with **identical frozen rawValues** (a test asserts the sets are equal). Separate types because `MeshSessionSealRefusal.summary` hard-codes "mesh session context". |
+| `MeshRoutedLoad` | Five states; only `loaded` and `absent` vend a `LoadToken`, whose initializer is `fileprivate` to this file — so no verb, in any other file, can mint one. |
+| `load()` | File before custody (a missing index answers `absent` without consulting the keychain), emptiness before key, a read error is never absence, and `ColumnCrypto`'s three error families stay apart: binding READ error ⇒ defer, binding absent ⇒ refuse, wrong BYTES ⇒ corrupt. Read-only: the sweeps are explicit calls. |
+| `save(_:token:)` | Seals and writes atomically at `.completeFileProtectionUntilFirstUserAuthentication`. **No write-side deferral for the install binding** — `DeviceBindingID.current()` collapses unavailable and read-error into nil, so the seal refuses, fail-closed. |
+| `readChunkFile(expecting:contentKey:)` | Opens one payload file and compares all eight descriptor fields **and** the payload length against the slot's stored descriptor. Not redundant: the AAD is purpose ‖ install only, so every blob authenticates in any slot. Missing/unauthentic ⇒ repair; unreadable ⇒ defer, repair nothing. |
+| `quarantineCorruptIndex(_:)` | The only route from `corrupt` to a writer. Moves the bytes aside rather than deleting them, and its contract requires the caller to spend the returned token on `sweepingOrphanChunkFiles()` first — after a quarantine every payload file is an orphan. |
+| `wipeForDeleteAll(scope:)` | Index + quarantine sibling + the whole chunk directory + the keychain row, together. A missing file counts as success. |
+
+### `MeshRoutedCustody.swift`
+
+P5 item 3: the custody verbs items 4/6/8/9/10/11 call. Three outcome channels, no fourth, and
+nothing silent.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedUnavailability` | `deferred` / `corrupt` / `refused` / `notWritten`, each with a frozen `logToken`. `isRetryable` is true for all but `corrupt` — the SAME answer `MeshSessionRestoreOutcome.isRetryable` gives its own refusal, because the dominant cause here is the pre-first-unlock window that self-heals on unlock. Bounded by `MeshRoutedRetryBounds.maxAttempts` (reused from P3). |
+| `MeshRoutedStoreRefusal` | Thirteen frozen tokens: the four capacity refusals, `duplicateItemID`, `manifestMismatch`, `unknownItem`, `itemExpired`, `chunkCountMismatch`, `heldChunkLengthMismatch`, `notADestination`, `chunkFileMismatch`, `capacityReceipts`. |
+| `admittingManifest(_:now:)` | Binds a parked set through `MeshChunkAdmissionRule.bindingVerdict`, stamps `firstSeenAt` if new, creates the delivery record. Reserves **both** budgets — bytes and file slots — from the manifest's known chunk count, so an item that could never be finished is refused now rather than half-staged. |
+| `stagingChunk(_:now:)` | Verdict through the shared rule, then the file, then the index — never the reverse. A failed index save removes the file this call just wrote and audits either way. The file cap is checked against `max(index, directory)`, so an orphan cannot hide from the cap that bounds it. |
+| `recordingCustodyTransfer(item:for:receipt:now:)` | Advances each named destination to `custodied(by: receipt.custodianFingerprint)` and stores the receipt as evidence in **one** index write. There is no `to custodian:` parameter: the custodian IS the signer, so the durable state and the signature cannot disagree. Writes nothing on any refusal. |
+| `forwardableManifest(item:)` / `forwardableChunk(item:index:)` | The origin's stored, signed objects **verbatim**, one chunk resident at a time. A slot mismatch answers `chunkFileMismatch` and emits nothing. |
+| `sweepingExpired(now:)` / `sweepingOrphanChunkFiles()` / `dropping(item:reason:)` | On demand, never on a timer (P7 owns the poller). The orphan sweep's loop is bounded by **2 ×** `maxHeldChunkFiles` and reports `sweptToCeiling`, because a directory that got over the cap is exactly what orphans produce. |
+
+### `MeshRoutedCustodyCommit.swift`
+
+P5 item 3: **one type and one function, on purpose.** `MeshCustodyDurabilityWitness`'s initializer is
+`fileprivate`, and `fileprivate` is FILE scope — so the only way to hold a witness is to have
+completed the verb beside it, and `MeshCustodyReceipt.signed` takes one as a parameter. That is plan
+§3.6 in the type system rather than in a comment. The mirror-image gate is `LoadToken`'s own
+`fileprivate` init in `MeshRoutedStore.swift`, so this file cannot mint a write token either: two
+gates, two files, neither able to open the other's door. Moving the type would widen the gate with no
+compile error, which is what the grep-wall in `MeshRoutedStoreIsolationTests` exists to notice.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshCustodyDurabilityWitness` | Origin, item, the re-measured content hash, the custodian, and the STORED `custodiedAt` — not this pass's instant, so a re-mint's canonical bytes are byte-identical. |
+| `committingCustody(item:custodian:now:)` | **Always** re-streams every chunk file in index order through `MeshRoutedContentHasher`, compares each opened chunk against its slot's descriptor, and gates on size then content hash before any witness exists. Writes `custodiedAt` once. **Idempotent means "does not refuse", never "skips the check"**: an item whose file went away answers `incomplete`, mints nothing, and has its `custodiedAt` cleared. A failed stamp write mints no witness and reports the store's own `unavailability(from:)` classification — a refused seal is not an absent file (§19.5), so this writer flattens nothing the others keep apart. |
+
+### `MeshRoutedContentHasher.swift`
+
+P5 item 3: the streaming sibling of `MeshRoutedContentDigest.contentHash(of:)` — the same domain, fed
+one chunk file at a time so 256 MiB is never resident. One domain, two shapes; never a second domain.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedContentHasher` | `init()` seeds with `lp(Hash.meshRoutedContentV1)` exactly as the one-shot does; `update(_:)` feeds a slice in index order; `finalized()` is the 32-byte digest. A test pins the agreement across several split points. |
+
 ### `MeshSessionCeiling.swift`
 
 Plan §8.2's 6-hour ceiling, guarded at **both** bounds.
@@ -1014,6 +1132,7 @@ bytes. **The field order in each function IS the schema.**
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
 | `canonicalBytes(for: MeshRoutedManifest)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |
 | `canonicalBytes(for: MeshChunk)` | P5 item 2: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ u64(chunkIndex) ‖ u64(chunkCount) ‖ lp(chunkHash) ‖ expiresAt. **Both `payload` and `signature` excluded** — the payload is bound THROUGH `chunkHash`, so a 256 KiB slice costs 32 transcript bytes with the same authenticity. Field order is the schema. |
+| `canonicalBytes(for: MeshCustodyReceipt)` | P5 item 3: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ custodian ‖ custodiedAt ‖ expiresAt; `signature` excluded. **Two fingerprints in two fixed positions** — the item's ORIGIN (the subject) and the CUSTODIAN (the signer) — so a receipt cannot be re-read as being about the signer's own item, and one lifted onto another origin's item fails the signature. No destination set, no chunk index, no partial count: a receipt exists only for a COMPLETE item. Field order is the schema. |
 | `legacyCanonicalBytes(for:)` (envelope, token) | The exact pre-WI-6 `JSONEncoder` configuration, retained ONLY to VERIFY signatures minted by in-field peers on older builds. Never used to sign; do not change its configuration — its byte output is a compatibility contract with already-signed data. |
 | `CanonicalByteWriter` | The append-only binary writer (`appendByte`/`appendInt64`/`appendUUID`/`appendString`/`appendLengthPrefixed`/`appendDate`, optional presence bytes, byte-ordered maps). |
 | `canonicalUTF8Ordered(_:_:)` | Byte-lexicographic key ordering — unambiguous and identical on every stack, unlike `.sortedKeys`' UTF-16 ordering. |

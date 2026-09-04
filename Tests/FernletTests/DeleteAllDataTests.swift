@@ -14,6 +14,7 @@ import LocalPersistence
 import PrivateHealthStore
 import PrivateMemoryStore
 import PrivateStoreCore
+@testable import ProximityKit
 import FernletScoring
 import StoreCore
 @testable import Fernlet
@@ -865,6 +866,49 @@ struct DeleteAllDataTests {
         let countsAllZero = store.milestoneCounts.values.allSatisfy({ $0 == 0 })
         #expect(countsAllZero, "the wipe left a lifetime milestone count standing")
         #expect(store.milestoneCounts[.resetBoundary] == nil, "the boundary marker is being published as a countable kind")
+    }
+
+    // MARK: - The sealed routed-content store (P5 item 3)
+
+    /// The reachability a text wall cannot prove: the routed store's wipe is actually CALLED by the
+    /// real funnel, and it takes every half with it.
+    ///
+    /// `PrivacyWipeCoverageTests` proves the row, the manifest token and the call all exist and agree;
+    /// only a run through `deleteAllData` proves the call runs. P3 shipped no such case for the
+    /// sealed mesh-session store — this is the one its successor owes.
+    ///
+    /// Seeded through the FILES rather than through the sealer, so the assertion is about the wipe
+    /// and not about `ColumnCrypto`: routed custody is bytes on disk plus a keychain row, and the
+    /// wipe has to take all of them.
+    @Test func deleteAllRemovesTheSealedRoutedStore() async throws {
+        let store = makeTestStore()
+        let scope = store.meshRoutedStorage
+        let routed = MeshRoutedStore(scope: scope)
+        try FileManager.default.createDirectory(at: routed.chunkDirectory, withIntermediateDirectories: true)
+        try Data([0x03, 0xAA]).write(to: routed.indexURL)
+        try Data([0x03, 0xBB]).write(to: routed.quarantineURL)
+        let chunkFile = routed.chunkFileURL(named: "\(UUID().uuidString).chunk")
+        try Data([0x03, 0xCC]).write(to: chunkFile)
+        guard case .available = MeshRoutedSealKey.forSeal(service: scope.keychainService) else {
+            Issue.record("the routed seal key could not be minted, so the wipe assertion would be vacuous")
+            return
+        }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(FileManager.default.fileExists(atPath: routed.indexURL.path) == false,
+                "the sealed routed index survived delete everything")
+        #expect(FileManager.default.fileExists(atPath: routed.quarantineURL.path) == false,
+                "the routed index's quarantine sibling survived delete everything")
+        #expect(FileManager.default.fileExists(atPath: chunkFile.path) == false,
+                "a routed chunk payload file survived delete everything")
+        #expect(FileManager.default.fileExists(atPath: routed.chunkDirectory.path) == false,
+                "the routed chunk directory survived delete everything")
+        guard case .refused(let cause) = MeshRoutedSealKey.forOpen(service: scope.keychainService) else {
+            Issue.record("the routed seal key survived delete everything — the files would be gone and the key would not")
+            return
+        }
+        #expect(cause == .sealKeyMissingForSealedFile)
     }
 
     private func wireSucceedingSealedHooks(_ store: FernletStore) {

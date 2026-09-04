@@ -185,6 +185,18 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// manifest, not the envelope.
     /// Additive: older builds park the token (`isUnknownPayloadType`) and still verify the envelope.
     case meshRoutedChunk       = "fernlet.mesh.routed-chunk.v1"
+    /// A custodian's signed statement that it durably holds one routed item's COMPLETE ciphertext
+    /// — mesh, item, the item's origin, its content hash, the custodian, the durable custody instant
+    /// and the item's expiry (`MeshCustodyReceiptPayload`, network migration P5 item 3, plan §11).
+    /// Same spelling as `Signature.meshCustodyReceiptV1`: token, record and signing domain are one
+    /// vocabulary.
+    ///
+    /// NOT in `sealingRequiredTypes`, on purpose: a receipt is a plan §3.2 union record that members
+    /// must be able to forward verbatim so they converge on delivery state, and pairwise sealing
+    /// would make one readable only by its first hop. It carries no content — custody is not
+    /// delivery, and the bytes it is about stay in the custodian's sealed sidecar.
+    /// Additive: older builds park the token (`isUnknownPayloadType`) and still verify the envelope.
+    case meshCustodyReceipt    = "fernlet.mesh.custody-receipt.v1"
     // Group encryption (Phase 3)
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"
