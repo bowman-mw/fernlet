@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P5
 
 **Phase:** P5 (encrypted store-and-forward routing) · **Prompt:** [Next-Round-Prompt-Mesh-P5-2026-09-03.md](Next-Round-Prompt-Mesh-P5-2026-09-03.md)
-**Started:** 2026-09-03 · **Iteration:** 4 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
+**Started:** 2026-09-03 · **Iteration:** 5 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -11,15 +11,15 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 1a | Pre-existing test-host crash: `unowned let store` in mesh rigs (MeshNetworkManager.swift:182, PresenceManager.swift:141) traps nondeterministically after mesh.merge.askedLateReconnect | 1 | — | todo | | seen in P4-era logs before item 1 existed; rig must own the store for the manager's lifetime; small, file-disjoint |
 | 2 | MeshChunk on P2's existing stream lane | 1 | 1 | done | `5019e04` | origin-signed chunks + assembly-time contentHash check; chunkID derived, origin-free; Transport/ docs-only |
 | 3 | MeshCustodyReceipt, four-state sidecar + fifth wrinkle | 1 | 2 | done | `64e8c44` | MeshRoutedStore five-state floor; witness-gated receipt (durable-before-acknowledged as a type rule); wipe row + delete-all wired; keychain service com.fernlet.mesh-routed |
-| 4 | MeshRecipientReceipt, per-type ack stages | 1 | 3 | in-flight | | hearts final only at foreground decrypt + commit |
-| 5 | Routed content digest, own frozen token | 1 | 1 | todo | | do NOT collide with membership's inventory-digest.v1 |
+| 4 | MeshRecipientReceipt, per-type ack stages | 1 | 3 | done | `fdabe2e` | stage resolved from the type token via ONE table (item 11's value); witness-gated; heart = judgements + ledger proof + itemID==giftID; routed index schema → 2 |
+| 5 | Routed content digest, own frozen token | 1 | 1 | in-flight | | do NOT collide with membership's inventory-digest.v1 |
 | 6 | The drain on the one merge path | 1 | 1, 5 | todo | | reconnect ≡ merge ≡ relay drain |
 | 7 | Merge-window redesign (2d comes due) | 1 | 6 | todo | | close only when every asked peer matched |
-| 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; increment 1's only relay hop; item 3's door is `recordingCustodyTransfer(item:for:receipt:now:)` (parked item answers manifestMismatch) |
-| 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth; must COUNT parked manifest-less chunks (C10) and DROP a parked set whose manifest is refused |
-| 10 | Locked-device handling | 1 | 3 | todo | | ciphertext-only custody; keychain protection unweakened |
+| 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; increment 1's only relay hop; item 3's door is `recordingCustodyTransfer(item:for:receipt:now:)` (parked item answers manifestMismatch); `advancingAll` must choose skip-delivered vs refuse-batch (item 4 documented it by a passing test, not fixed) |
+| 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth; must COUNT parked manifest-less chunks (C10) and DROP a parked set whose manifest is refused; read `itemsReclaimableAsCustodian`, NEVER `isAcknowledgedLocally` (D-4.19) |
+| 10 | Locked-device handling | 1 | 3 | todo | | ciphertext-only custody; keychain protection unweakened; D-4.4/4.5 already split photos/text (ciphertext-only IS final) from hearts (custodied(by: self) until a foreground pass); FOREGROUNDNESS is the one unenforced leg on the heart path (D-4.16) — wire `MeshSessionState.activeForeground` here |
 | 11 | Type-token registry | 1 | 1 | todo | | unknown types rejected, not forwarded; feeds item 1's `acceptedTypeTokens`; with item 9, drop parked chunk sets on `unknownTypeToken` |
-| 12 | MeshFrameReplayWindow wired | 1 | 2 | todo | | against manifest/chunk ids, never epoch. CAVEAT: window bound is 64 frames × 8 senders = 512 ids but one maximal item is 1024 chunks → a legitimate 65th chunk hits `senderWindowFull`; resize/key per item, do not paper over (chunkID is origin-free, C3/C4) |
+| 12 | MeshFrameReplayWindow wired | 1 | 2 | todo | | against manifest/chunk ids, never epoch. CAVEAT: window bound is 64 frames × 8 senders = 512 ids but one maximal item is 1024 chunks → a legitimate 65th chunk hits `senderWindowFull`; resize/key per item, do not paper over (chunkID is origin-free, C3/C4); item 4 added a second derived id per (origin, item, member) for receipts |
 | 13 | Retire the three keyEpoch gates with the path | 1 | 1–7 | todo | | never loosen in place; re-check line numbers first |
 | 14 | P5 acceptance battery | 1 | 1–13 | todo | | extend MeshScheduleGenerator, not a new rig |
 
@@ -72,11 +72,26 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | D-3.9 delivered | no `delivered` rung written in item 3 — only the frozen spelling; item 4/6 write it | 2026-09-03 |
 | D-3.10/3.11 transfer + idempotence | transfer names destinations, custodian from the receipt; idempotent = re-streams + re-gates, never skips | 2026-09-03 |
 | D-3.12/3.13 caps | over-cap at rest = corrupt, never clamped; writer doors refuse by name; file cap counts the directory; an orphan-making writer removes it | 2026-09-03 |
+| D-4.1/4.2 receipt | recipient-signed, about the origin's item, forwarded verbatim; the ack STAGE is not on the wire — receipt = "final"; stage resolved from the manifest's type token via the table | 2026-09-03 |
+| D-4.3 decrypt-pending | = `custodied(by: self)` on the existing frozen ladder; no fourth rung | 2026-09-03 |
+| D-4.4/4.5 locked device | photos/text: durable ciphertext-only storage IS final; hearts: NOT final until a foreground pass (custodied(by: self) across restarts) | 2026-09-03 |
+| D-4.6 control | the ACK RECORD must be durable (index write), not the content | 2026-09-03 |
+| D-4.7 one table | store door takes the TABLE: `committingDelivery(item:recipient:stages:evidence:now:)`; shipping code names exactly one `MeshRoutedAckStageTable` (grep-wall) | 2026-09-03 |
+| D-4.8/4.9/4.10 heart evidence | three fail-closed legs: judged exactly once in this `MeshHeartCommitOutcome` (judgements reused), `ProximityHeartLedger.commitProof(for:)` → `MeshHeartLedgerProof` (additive, read-only, fileprivate init), itemID == giftID frozen for `fernlet.mesh.routed-type.heart.v1` | 2026-09-03 |
+| D-4.11 routed index schema | `MeshRoutedIndexSchema.current` = 2; schema 1 corrupt (quarantine + orphan sweep); at-rest token unchanged | 2026-09-03 |
+| D-4.12/4.13 own receipt + re-commit | recipient stores its OWN receipt in `recipientReceipts` beside peers' (item 6 re-sends); re-commit re-runs the whole verification | 2026-09-03 |
+| D-4.14/4.15 refusals | mint errors reachable only; new store refusals `capacityRecipientReceipts`, `unknownTypeToken` | 2026-09-03 |
+| D-4.16 foregroundness | unenforceable from a pure value in ProximityKit — item 10 / P6 wire `MeshSessionState.activeForeground` | 2026-09-03 |
+| D-4.17/4.18 delivered rung | split as item 3: `committingDelivery` writes record-level `deliveredAt` + witness; heart stage keeps the held-ciphertext precondition (`isComplete && isCustodied`) — a deliberate deviation from §11's letter | 2026-09-03 |
+| D-4.19 awaiting local ack | `itemsAwaitingLocalAck(at:for:)` = live items where this device is a destination and its OWN receipt is absent | 2026-09-03 |
+| Type tokens | `MeshRoutedTypeToken` photo / tempMessage / heart = `fernlet.mesh.routed-type.<x>.v1`, frozen and pinned by test | 2026-09-03 |
 
 ## Session notes
 - 2026-09-03: Opus 4.8/5 were briefly down (item 1's workflow ran on the session model, Fable 5.1); owner confirmed Opus is back — later items use `model: "opus"` per the launcher. Ultracode on: each item runs as a small Workflow (understand → implement → adversarial verify → fix).
 
 ## Surprises worth not re-deriving
+- `#expect(_, "comment")` needs a LITERAL comment (`String` → `Comment?` build error); no interpolated/computed comments.
+- ColumnCrypto seals with a fresh nonce on every write — never assert sealed-byte equality across two writes; compare the decoded value.
 - An EMPTY routed store's pre-first-unlock refusal arrives at `.seal`, not `.open` (a green field answers absent without consulting custody); a corrupt-quarantine test must establish the seal key before planting garbage (custody is classified before content).
 - `Result<_, MeshRoutedUnavailability>` will not compile and must not — the unavailability is an outcome value, not an `Error`.
 - **CryptoKit Ed25519 signatures are HEDGED (nondeterministic).** Never compare signed records by full `==`; compare canonical bytes + payload and verify both signatures. Two mints differ only in the 64 signature bytes; goldens exclude the signature.
@@ -104,4 +119,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share this tree + sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` held by another session — never stage them.
 
 ## Next item
-4 (in-flight, iteration 4) — then 1a as a bundled small commit when convenient
+5 (in-flight, iteration 5) — then 1a as a bundled small commit when convenient
