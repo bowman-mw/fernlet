@@ -1110,6 +1110,52 @@ struct MeshRoutedDeliveryIngestTests {
         }
     }
 
+    /// **P5 item 6's custody mirror**: stored custody receipts are handed on verbatim, in custodian
+    /// order, and an unknown item forwards an empty list rather than a refusal.
+    @Test func forwardableCustodyReceiptsReturnsStoredBytes() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let rig = try Ack.photoRig(scope)
+        let receipt = try MeshRoutedCustodyFixtures.receipt(rig)
+        let stored = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.recordingCustodyEvidence(item: rig.key, receipt: receipt, now: Fixture.now)
+        }
+        #expect(stored.value?.isNew == true, "\(stored)")
+
+        let forwarded = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.forwardableCustodyReceipts(item: rig.key)
+        }
+        let receipts = try #require(forwarded.value)
+        #expect(receipts.map(\.custodianFingerprint) == [receipt.custodianFingerprint])
+        #expect(receipts.first?.signature == receipt.signature, "a courier forwards, never re-signs")
+        #expect(receipts.first.map { canonicalBytes(for: $0) } == canonicalBytes(for: receipt))
+
+        let unknown = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.forwardableCustodyReceipts(
+                item: MeshRoutedItemKey(originFingerprint: "fp404", itemID: UUID())
+            )
+        }
+        #expect(unknown.value?.isEmpty == true, "\(unknown)")
+    }
+
+    /// The asymmetry with the recipient mirror, stated as a test: a record stores **other members'**
+    /// custody receipts only. This device's own custody is the `custodiedAt` stamp, and its receipt
+    /// is re-minted from the durable bytes when the drain needs it.
+    @Test func forwardableCustodyReceiptsExcludesThisDevicesOwn() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let rig = try Ack.photoRig(scope)
+        MeshRoutedCustodyFixtures.stageAll(rig)
+        _ = MeshRoutedCustodyFixtures.commit(rig)
+
+        let forwarded = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.forwardableCustodyReceipts(item: rig.key)
+        }
+        #expect(forwarded.value?.isEmpty == true, "own custody is never a stored receipt")
+        let record = try #require(MeshRoutedCustodyFixtures.loadedIndex(rig.store)?.record(for: rig.key))
+        #expect(record.custodiedAt != nil, "own custody is the stamp")
+    }
+
     /// The record round-trips with `delivered` entries and the new evidence array, and the two new
     /// fields decode differently on purpose.
     @Test func aSchemaTwoRecordMissingTheReceiptsKeyIsCorrupt() throws {

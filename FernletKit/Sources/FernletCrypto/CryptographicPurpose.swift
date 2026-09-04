@@ -223,6 +223,23 @@ public nonisolated enum FernletCryptoPurpose {
         /// the digest, and a hash would be a second representation of one fact that can disagree with
         /// it. Same framing reservation as ``meshRoutedManifestV1``.
         public static let meshRoutedInventoryDigestV1 = CryptographicPurpose("fernlet.mesh.routed-inventory-digest.v1", framing: .lengthPrefixed)
+        /// **Written since P5 item 6.** P5's ROUTED-DRAIN-ANSWER signature (plan §11, §10.3, §22.1):
+        /// the mesh, the ADVERTISER whose routed inventory is being answered, that advertisement's
+        /// own instant, the one quiescence bit, and the answering device with the instant it signed.
+        ///
+        /// Distinct from ``meshRoutedInventoryDigestV1`` (`routed-drain-answer` vs
+        /// `routed-inventory-digest`, diverging at `d` vs `i` immediately after `routed-`, so
+        /// neither prefixes the other), and the distinction is the point: that domain signs what a
+        /// **disk holds**, this one the result of **comparing two** such statements. A signature
+        /// satisfying both would let "we are in sync" be replayed as "here is everything I hold",
+        /// and — in the direction that actually matters — let a stale `quiescent: true` close a
+        /// merge window that should still be open. Distinct from ``meshInventoryDigestV1``,
+        /// ``meshRoutedManifestV1``, ``meshRoutedChunkV1``, ``meshCustodyReceiptV1`` and
+        /// ``meshRecipientReceiptV1`` at the character after `routed-`/`fernlet.mesh.`. There is
+        /// deliberately **no** `Hash` or `AEAD` sibling: the frame carries one Bool and two binding
+        /// scalars, so there is nothing to digest and nothing to seal. Same framing reservation as
+        /// ``meshRoutedManifestV1``.
+        public static let meshRoutedDrainAnswerV1 = CryptographicPurpose("fernlet.mesh.routed-drain-answer.v1", framing: .lengthPrefixed)
         public static let proximityQRIdentityV1 = CryptographicPurpose("fernlet.verify.qr.v1")
         public static let proximityQRResponseV1 = CryptographicPurpose("fernlet.verify.response.v1")
         public static let duressRecoveryRequestV1 = CryptographicPurpose("fernlet.duress.recovery.request.v1")

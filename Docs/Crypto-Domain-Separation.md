@@ -111,6 +111,7 @@ on the reasoning.
 | `meshCustodyReceiptV1` | `fernlet.mesh.custody-receipt.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshCustodyReceipt`, `MeshCustodyReceiptVerifier` |
 | `meshRecipientReceiptV1` | `fernlet.mesh.recipient-receipt.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRecipientReceipt`, `MeshRecipientReceiptVerifier` |
 | `meshRoutedInventoryDigestV1` | `fernlet.mesh.routed-inventory-digest.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedInventory`, `MeshRoutedInventoryVerifier` |
+| `meshRoutedDrainAnswerV1` | `fernlet.mesh.routed-drain-answer.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedDrainAnswer`, `MeshRoutedDrainAnswerVerifier` |
 
 #### KeyDerivation
 
@@ -226,6 +227,24 @@ that can disagree with it. The pair that matters is the one the English word hid
   families and is not a separation mechanism. What separates them is the Swift value-type stems: no
   routed value type carries `InventoryDigest`, no membership value type carries `Routed`.
   `MeshRoutedInventoryGoldenTests.theDigestNamesDoNotCollide` asserts exactly that.
+
+### A drift note, 2026-09-04 (P5 item 6)
+
+One purpose was added, and again **no `Hash` and no `AEAD` sibling** — the drain answer carries one
+Bool and two binding scalars, so there is nothing to digest and nothing to seal. The family now has
+three tokens under one English word, and the pair that matters is the new one:
+
+- `fernlet.mesh.routed-drain-answer.v1` (Signature) vs `fernlet.mesh.routed-inventory-digest.v1`
+  (Signature): the second says what a **disk holds**; the first says what **comparing two** such
+  statements produced — which advertisement is being answered, and whether the answerer's own delta
+  against it is empty. A signature satisfying both would let "we are in sync" be replayed as "here is
+  everything I hold", and, in the direction that actually matters, would let a stale or forged
+  `quiescent: true` close a merge window that should still be open. They diverge at `d` vs `i`, the
+  first character after `routed-`, so neither prefixes the other; and neither prefixes
+  `fernlet.mesh.inventory-digest.v1`.
+- `MeshRoutedDrainAnswerGoldenTests.theDrainAnswerNamesDoNotCollide` and
+  `CryptographicPurposeBoundaryTests.assertRoutedDrainAnswerFramingHolds` are the mechanical halves,
+  the second checking both digest domains against the answer's transcript in both directions.
 
 ### Two notes on the inventory
 

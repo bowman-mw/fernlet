@@ -115,6 +115,10 @@ struct CryptographicPurposeBoundaryTests {
         assertRecipientReceiptFramingHolds()
         assertRoutedInventoryFramingHolds()
 
+        // The routed DRAIN ANSWER (network migration P5 item 6, plan §11, §10.3). Its purpose, its
+        // serializer, its golden and this case land in the same change — the 91c3956 pairing again.
+        assertRoutedDrainAnswerFramingHolds()
+
         // Still POSITIONAL, not a substring search: a length-prefixed purpose rejects its own raw
         // spelling. Accepting that would let a transcript carry the domain in an attacker-chosen
         // field and still reach the identity key.
@@ -301,6 +305,33 @@ struct CryptographicPurposeBoundaryTests {
         #expect(chunkPurpose.signingBytes(routed) == nil)
         #expect(routedPurpose.signingBytes(chunk) == nil)
         #expect(routedPurpose.signingBytes(routedPurpose.data) == nil)  // positional
+    }
+
+    /// The drain answer against its declared `.lengthPrefixed` framing, and against BOTH digest
+    /// domains — the routed inventory's (what a disk holds) and the membership inventory's (what a
+    /// ledger holds). A signature satisfying the answer's domain and either digest's would let "we
+    /// are in sync" be replayed as a statement of holdings, and — the direction that matters — let a
+    /// stale quiescence bit close a merge window that should still be open.
+    ///
+    /// Split out of ``canonicalSerializerTranscriptsMatchTheirDeclaredFraming()`` so neither function
+    /// grows past the 60-line rule; both halves run in the same test.
+    private func assertRoutedDrainAnswerFramingHolds() {
+        let answerPurpose = FernletCryptoPurpose.Signature.meshRoutedDrainAnswerV1
+        let routedPurpose = FernletCryptoPurpose.Signature.meshRoutedInventoryDigestV1
+        let membershipPurpose = FernletCryptoPurpose.Signature.meshInventoryDigestV1
+        let manifestPurpose = FernletCryptoPurpose.Signature.meshRoutedManifestV1
+        let answer = canonicalBytes(for: MeshRoutedDrainAnswerFixtures.payload())
+        let routed = canonicalBytes(for: MeshRoutedInventoryFixtures.payload())
+        let membership = canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload())
+        let manifest = canonicalBytes(for: MeshRoutedManifestFixtures.manifest())
+        #expect(answerPurpose.signingBytes(answer) != nil)      // declared == emitted
+        #expect(routedPurpose.signingBytes(answer) == nil)      // the collision, both ways
+        #expect(answerPurpose.signingBytes(routed) == nil)
+        #expect(membershipPurpose.signingBytes(answer) == nil)
+        #expect(answerPurpose.signingBytes(membership) == nil)
+        #expect(manifestPurpose.signingBytes(answer) == nil)
+        #expect(answerPurpose.signingBytes(manifest) == nil)
+        #expect(answerPurpose.signingBytes(answerPurpose.data) == nil)  // positional
     }
 
     /// The raw-prefix family: transcripts that concatenate their domain directly. Rejecting a

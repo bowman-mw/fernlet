@@ -777,6 +777,136 @@ struct MeshRoutedCustodyEvidenceTests {
         #expect(again.refusal == .unknownItem)
     }
 
+    /// **P5 item 6's evidence-only door.** A forwarded custody receipt is stored as evidence and
+    /// moves **no rung**: the drain has no honest value for `recordingCustodyTransfer`'s
+    /// `for destinations:`, which is the caller's statement about a hand-off nobody made.
+    @Test func recordingCustodyEvidenceStoresWithoutMovingARung() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let rig = try MeshRoutedCustodyFixtures.rig(scope: scope)
+        let receipt = try MeshRoutedCustodyFixtures.receipt(rig)
+        let before = try #require(index(of: rig.store)?.record(for: rig.key)?.deliveryTarget)
+
+        let outcome = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.recordingCustodyEvidence(item: rig.key, receipt: receipt, now: Fixture.now)
+        }
+        let evidence = try #require(outcome.value)
+        #expect(evidence.custodian == receipt.custodianFingerprint)
+        #expect(evidence.isNew)
+
+        let record = try #require(index(of: rig.store)?.record(for: rig.key))
+        let stored = try #require(record.receipts.first)
+        #expect(record.receipts.count == 1)
+        #expect(canonicalBytes(for: stored) == canonicalBytes(for: receipt))
+        #expect(stored.signature == receipt.signature, "a courier forwards, it never re-signs")
+        #expect(record.deliveryTarget == before, "an evidence write advances no delivery rung")
+
+        // A second arrival replaces by signer and grows nothing.
+        let again = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.recordingCustodyEvidence(item: rig.key, receipt: receipt, now: Fixture.now)
+        }
+        #expect(again.value?.isNew == false)
+        #expect(index(of: rig.store)?.record(for: rig.key)?.receipts.count == 1)
+    }
+
+    /// The evidence door applies the transfer door's identity equalities, in the same order.
+    @Test func recordingCustodyEvidenceRefusesAMismatchedReceipt() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let rig = try MeshRoutedCustodyFixtures.rig(scope: scope)
+        let receipt = try MeshRoutedCustodyFixtures.receipt(rig)
+        let before = try #require(index(of: rig.store)?.record(for: rig.key))
+
+        for broken in [
+            receipt.replacing(itemID: UUID()),
+            receipt.replacing(originFingerprint: "fp404"),
+            receipt.replacing(contentHash: Data(repeating: 0x77, count: 32)),
+            receipt.replacing(meshID: UUID())
+        ] {
+            let outcome = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+                rig.store.recordingCustodyEvidence(item: rig.key, receipt: broken, now: Fixture.now)
+            }
+            #expect(outcome.refusal == .manifestMismatch)
+        }
+        #expect(index(of: rig.store)?.record(for: rig.key) == before, "nothing is written on a refusal")
+
+        let unknown = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.recordingCustodyEvidence(
+                item: MeshRoutedItemKey(originFingerprint: "fp404", itemID: UUID()),
+                receipt: receipt, now: Fixture.now
+            )
+        }
+        #expect(unknown.refusal == .unknownItem)
+    }
+
+    @Test func recordingCustodyEvidenceRefusesPastTheReceiptCap() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let store = MeshRoutedStore(scope: scope)
+        let manifest = MeshRoutedManifestFixtures.manifest()
+        let full = (0..<MeshRoutedStoreFormat.maxReceiptsPerItem).map {
+            MeshCustodyReceiptFixtures.receipt().replacing(custodianFingerprint: "fpc\($0)")
+        }
+        try Fixture.plant(MeshRoutedIndex(items: [record(for: manifest, receipts: full)]), into: store)
+
+        let outcome = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            store.recordingCustodyEvidence(
+                item: MeshRoutedItemKey(manifest),
+                receipt: MeshCustodyReceiptFixtures.receipt().replacing(custodianFingerprint: "fpc999"),
+                now: Fixture.now
+            )
+        }
+        #expect(outcome.refusal == .capacityReceipts)
+        #expect(index(of: store)?.record(for: MeshRoutedItemKey(manifest))?.receipts.count
+                == MeshRoutedStoreFormat.maxReceiptsPerItem)
+
+        // Replacing an EXISTING custodian's receipt is not growth, so it is not refused.
+        let replaced = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            store.recordingCustodyEvidence(
+                item: MeshRoutedItemKey(manifest),
+                receipt: MeshCustodyReceiptFixtures.receipt().replacing(custodianFingerprint: "fpc0"),
+                now: Fixture.now
+            )
+        }
+        #expect(replaced.value?.isNew == false)
+    }
+
+    /// The refusal-helper split item 6 made must leave item 8's transfer door behaving exactly as it
+    /// did: identity, then destinations, then capacity — in that order.
+    @Test func recordingCustodyTransferIsUnchanged() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let rig = try MeshRoutedCustodyFixtures.rig(scope: scope)
+        let receipt = try MeshRoutedCustodyFixtures.receipt(rig)
+
+        // Identity outranks destinations: a receipt about another item refuses `manifestMismatch`
+        // even though the destination list is also wrong.
+        let both = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.recordingCustodyTransfer(
+                item: rig.key, for: ["fp404"],
+                receipt: receipt.replacing(itemID: UUID()), now: Fixture.now
+            )
+        }
+        #expect(both.refusal == .manifestMismatch)
+
+        let empty = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.recordingCustodyTransfer(
+                item: rig.key, for: [], receipt: receipt, now: Fixture.now
+            )
+        }
+        #expect(empty.refusal == .notADestination)
+
+        let applied = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.recordingCustodyTransfer(
+                item: rig.key, for: rig.otherDestinations, receipt: receipt, now: Fixture.now
+            )
+        }
+        let target = try #require(applied.value?.target)
+        for destination in rig.otherDestinations {
+            #expect(target.state(of: destination) == .custodied(by: receipt.custodianFingerprint))
+        }
+    }
+
     /// The store's admission outcome under a pinned install binding.
     private func admitting(
         _ manifest: MeshRoutedManifest,

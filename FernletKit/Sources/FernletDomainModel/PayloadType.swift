@@ -228,6 +228,23 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// is held. Additive: older builds park the token (`isUnknownPayloadType`) and still verify the
     /// envelope.
     case meshRoutedInventoryDigest = "fernlet.mesh.routed-inventory-digest.v1"
+    /// One device's signed answer to another's routed-inventory advertisement: the mesh, WHOSE
+    /// advertisement is being answered, WHICH advertisement (its own signed instant), and the single
+    /// bit "my delta against it is empty" (`MeshRoutedDrainAnswerPayload`, network migration P5
+    /// item 6, plan §11, §10.3). Same spelling as `Signature.meshRoutedDrainAnswerV1`: token, record
+    /// and signing domain are one vocabulary.
+    ///
+    /// **Not `meshRoutedInventoryDigest`.** That token says what a disk holds; this one says what
+    /// comparing two such statements produced — one Bool, no entry list, no member table, no item
+    /// id. Signed rather than unsigned because the merge window closes on quiescence, so a forged
+    /// `true` would close a window that should still be open.
+    ///
+    /// NOT in `sealingRequiredTypes`, on purpose: signed-and-unsealed is what lets a frame cross a
+    /// DIVERGENT pair, the same property that carries `meshInventoryDigest`, `meshEpochHeads` and
+    /// `meshRoutedInventoryDigest` over a reconciling tunnel. It carries no content, no destination
+    /// set and no type token. Additive: older builds park the token (`isUnknownPayloadType`) and
+    /// still verify the envelope.
+    case meshRoutedDrainAnswer = "fernlet.mesh.routed-drain-answer.v1"
     // Group encryption (Phase 3)
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"
