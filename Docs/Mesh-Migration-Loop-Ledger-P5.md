@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P5
 
 **Phase:** P5 (encrypted store-and-forward routing) · **Prompt:** [Next-Round-Prompt-Mesh-P5-2026-09-03.md](Next-Round-Prompt-Mesh-P5-2026-09-03.md)
-**Started:** 2026-09-03 · **Iteration:** 5 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
+**Started:** 2026-09-03 · **Iteration:** 6 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -12,11 +12,11 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 2 | MeshChunk on P2's existing stream lane | 1 | 1 | done | `5019e04` | origin-signed chunks + assembly-time contentHash check; chunkID derived, origin-free; Transport/ docs-only |
 | 3 | MeshCustodyReceipt, four-state sidecar + fifth wrinkle | 1 | 2 | done | `64e8c44` | MeshRoutedStore five-state floor; witness-gated receipt (durable-before-acknowledged as a type rule); wipe row + delete-all wired; keychain service com.fernlet.mesh-routed |
 | 4 | MeshRecipientReceipt, per-type ack stages | 1 | 3 | done | `fdabe2e` | stage resolved from the type token via ONE table (item 11's value); witness-gated; heart = judgements + ledger proof + itemID==giftID; routed index schema → 2 |
-| 5 | Routed content digest, own frozen token | 1 | 1 | in-flight | | do NOT collide with membership's inventory-digest.v1 |
-| 6 | The drain on the one merge path | 1 | 1, 5 | todo | | reconnect ≡ merge ≡ relay drain |
-| 7 | Merge-window redesign (2d comes due) | 1 | 6 | todo | | close only when every asked peer matched |
-| 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; increment 1's only relay hop; item 3's door is `recordingCustodyTransfer(item:for:receipt:now:)` (parked item answers manifestMismatch); `advancingAll` must choose skip-delivered vs refuse-batch (item 4 documented it by a passing test, not fixed) |
-| 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth; must COUNT parked manifest-less chunks (C10) and DROP a parked set whose manifest is refused; read `itemsReclaimableAsCustodian`, NEVER `isAcknowledgedLocally` (D-4.19) |
+| 5 | Routed content digest, own frozen token | 1 | 1 | done | `df1a48d` | MeshRoutedInventory (no 'Digest' stem), advertiser-signed, exact chunk bitmap + signer index lists; Delta.between → ask/offer/receipts; matched = quiescence |
+| 6 | The drain on the one merge path | 1 | 1, 5 | in-flight | | reconnect ≡ merge ≡ relay drain. From item 5: `peerRoutedInventories` (never `peerInventoryDigests`) holding the peer's inventory + its quiescence bit; its OWN once-per-peer-per-session set (not `reGossipedToFingerprints`); a per-peer per-session refused set for capacity refusals subtracted from the entitlement set; the routed answer inside `receiveInventoryDigest`'s single Task; a non-`.loaded` store sends NO digest, never an empty one |
+| 7 | Merge-window redesign (2d comes due) | 1 | 6 | todo | | close only when every asked peer matched; consumes `converged(local:peerReportsQuiescent:)` + the four deadlock regressions in MeshRoutedInventoryDeltaTests; must decide: transfer-length window holding, digests sent only as a link opens, the capacity-refusal contract |
+| 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; entitlement source 2 + the custody self-rule: the digest is the index, the signed receipt is the authority; `MeshCustodyHandoffSummary.handedOffItemCount` is the one field P5 fills; increment 1's only relay hop; item 3's door is `recordingCustodyTransfer(item:for:receipt:now:)` (parked item answers manifestMismatch); `advancingAll` must choose skip-delivered vs refuse-batch (item 4 documented it by a passing test, not fixed) |
+| 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth; must COUNT parked manifest-less chunks (C10) and DROP a parked set whose manifest is refused; read `itemsReclaimableAsCustodian`, NEVER `isAcknowledgedLocally` (D-4.19); MUST add the missing `capacityExceeded("chunkCount")` guard in `MeshRoutedItemRecord.init(from:)` (MeshRoutedIndex.swift ~410 — decodes a bare UInt32; item 5 residual) |
 | 10 | Locked-device handling | 1 | 3 | todo | | ciphertext-only custody; keychain protection unweakened; D-4.4/4.5 already split photos/text (ciphertext-only IS final) from hearts (custodied(by: self) until a foreground pass); FOREGROUNDNESS is the one unenforced leg on the heart path (D-4.16) — wire `MeshSessionState.activeForeground` here |
 | 11 | Type-token registry | 1 | 1 | todo | | unknown types rejected, not forwarded; feeds item 1's `acceptedTypeTokens`; with item 9, drop parked chunk sets on `unknownTypeToken` |
 | 12 | MeshFrameReplayWindow wired | 1 | 2 | todo | | against manifest/chunk ids, never epoch. CAVEAT: window bound is 64 frames × 8 senders = 512 ids but one maximal item is 1024 chunks → a legitimate 65th chunk hits `senderWindowFull`; resize/key per item, do not paper over (chunkID is origin-free, C3/C4); item 4 added a second derived id per (origin, item, member) for receipts |
@@ -24,6 +24,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 14 | P5 acceptance battery | 1 | 1–13 | todo | | extend MeshScheduleGenerator, not a new rig |
 
 ## Blocked on owner
+- (close-out flag) `MeshSessionContext.routingInventoryDigest` is provably dead as of item 5 (left nil) — delete at close-out or hand to P6.
 - (close-out flag) `CryptoFormatCensusTests` now has TWO sealed at-rest mesh surfaces outside its census (mesh-session from P3, mesh-routed from P5 item 3) — P3's precedent followed; owner decides whether the census grows.
 - (close-out flag) the duress pre-draw sweep names neither `com.fernlet.mesh-session` nor `com.fernlet.mesh-routed`; both die in the delete-all funnel — decide whether duress should pre-draw them too.
 - §18.2 partition UX copy — default: subtitle count only, no new string (unchanged from P4).
@@ -36,7 +37,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | Relay-retention, increment 1 | origin-only until departure (item 1 mints, no relay hop) | 2026-09-03 |
 | Merge window closing rule | (default: every asked peer matched) | — |
 | MeshDeliveryTarget persistence | inside MeshRoutedStore: restored from the SIGNED manifest + a sparse progress map (no stored destination list); type stays non-Codable; wipe row + delete-all in the same commit | 2026-09-03 |
-| Routed digest wire token | (default: fernlet.mesh.routed-inventory-digest.v1) | — |
+| Routed digest wire token | `fernlet.mesh.routed-inventory-digest.v1` = `Signature.meshRoutedInventoryDigestV1` + `PayloadType.meshRoutedInventoryDigest`; no Hash sibling; Swift types `MeshRoutedInventory*` (no 'Digest' stem) | 2026-09-04 |
 | Four-state sidecar model | MeshRoutedStore mirrors MeshSessionStore's LoadToken exactly (rawValue sets asserted equal) + §19.5 seal-refused; own schema, own keychain service; MeshSessionContext schema stays 2 | 2026-09-03 |
 | Departure delivery ack | (default: still no ack; drain carries custody instead) | — |
 | D1 recipient keys | mint takes caller-supplied verified `[fingerprint: X25519 pub]`; refuses by name if a destination lacks one | 2026-09-03 |
@@ -85,8 +86,20 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | D-4.17/4.18 delivered rung | split as item 3: `committingDelivery` writes record-level `deliveredAt` + witness; heart stage keeps the held-ciphertext precondition (`isComplete && isCustodied`) — a deliberate deviation from §11's letter | 2026-09-03 |
 | D-4.19 awaiting local ack | `itemsAwaitingLocalAck(at:for:)` = live items where this device is a destination and its OWN receipt is absent | 2026-09-03 |
 | Type tokens | `MeshRoutedTypeToken` photo / tempMessage / heart = `fernlet.mesh.routed-type.<x>.v1`, frozen and pinned by test | 2026-09-03 |
+| D-5.2/5.3 entry summary | two signer INDEX lists (custody / recipient receipt signers), no rollup hash; `==` over the canonical value is set equality | 2026-09-04 |
+| D-5.4 member table | `members: [String]` ≤ 16, sorted, distinct, MINIMAL + `UInt8` indices (minimality is load-bearing for canonical bytes) | 2026-09-04 |
+| D-5.5/5.6 what is advertised | live-only at an injected `now`; parked / delivered / unrestorable all advertised; custodySigners = stored custodians ∪ self iff custodied and origin ≠ self | 2026-09-04 |
+| D-5.7 over-cap | refused by name (`.overCapacity` / `.malformed`), never clamped or re-sorted | 2026-09-04 |
+| D-5.8 signed | advertiser-signed, `sentAt` bound in, five-check verifier, key from the admission ledger | 2026-09-04 |
+| D-5.9/5.15 matched (item 7) | QUIESCENCE, never equality; `isQuiescent` is strictly local; `converged(local:peerReportsQuiescent:)` needs BOTH sides — the peer's bit rides item 6's routed answer | 2026-09-04 |
+| D-5.10 comparison inputs | `Delta.between(local:remote:offerableToPeer:)`; only the OFFER lists take the entitlement set (two origin-signed sources) | 2026-09-04 |
+| D-5.11/5.12 no persistence, no replay window | no file/keychain/UserDefaults/wipe row; digest not admitted to `MeshFrameReplayWindow` — its replay defence is the signed `sentAt` | 2026-09-04 |
+| D-5.13/5.14 builder + bitmap | `init?` nil only past `maxReferencedMembers`; mint throws `tooManyReferencedMembers`; exact held-chunk bitmap ceil(chunkCount/8), frozen bit order, trailing zeros mandatory | 2026-09-04 |
+| D-5.16/5.17 delta safety | foreign-mesh pair → nil, never an empty delta (empty reads as matched = fail-open); signer sets compared as resolved fingerprints, never indices | 2026-09-04 |
+| D-5.18/5.19 review round | mint derives "this device" from `identity` alone (no `selfFingerprint` param); `ask`/`offer` are DISTINCT keys in canonical order | 2026-09-04 |
 
 ## Session notes
+- 2026-09-04 00:41: item 5's workflow hit the session usage limit mid-verify (implementer green, full suite 4232; 34 refuter votes + fix + gauntlet failed at spawn). Resumed from run wf_65b84324-d14 after the 12:40am reset — cached stages replay, only verify/fix/gauntlet re-run. If a workflow's agents fail with 'session limit', schedule a wake for after the reset instead of retrying.
 - 2026-09-03: Opus 4.8/5 were briefly down (item 1's workflow ran on the session model, Fable 5.1); owner confirmed Opus is back — later items use `model: "opus"` per the launcher. Ultracode on: each item runs as a small Workflow (understand → implement → adversarial verify → fix).
 
 ## Surprises worth not re-deriving
@@ -119,4 +132,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share this tree + sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` held by another session — never stage them.
 
 ## Next item
-5 (in-flight, iteration 5) — then 1a as a bundled small commit when convenient
+6 (in-flight, iteration 6) — then 1a as a bundled small commit when convenient
