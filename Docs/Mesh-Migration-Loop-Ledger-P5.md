@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P5
 
 **Phase:** P5 (encrypted store-and-forward routing) · **Prompt:** [Next-Round-Prompt-Mesh-P5-2026-09-03.md](Next-Round-Prompt-Mesh-P5-2026-09-03.md)
-**Started:** 2026-09-03 · **Iteration:** 3 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
+**Started:** 2026-09-03 · **Iteration:** 4 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -10,12 +10,12 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 1 | MeshRoutedManifest + MeshRecipientKeyWrap (§11) | 1 | — | done | `bf31f46` | trio additive, no golden moved; verifier splits departed (ok) vs removed (refused); acceptedTypeTokens is item 11's seam |
 | 1a | Pre-existing test-host crash: `unowned let store` in mesh rigs (MeshNetworkManager.swift:182, PresenceManager.swift:141) traps nondeterministically after mesh.merge.askedLateReconnect | 1 | — | todo | | seen in P4-era logs before item 1 existed; rig must own the store for the manager's lifetime; small, file-disjoint |
 | 2 | MeshChunk on P2's existing stream lane | 1 | 1 | done | `5019e04` | origin-signed chunks + assembly-time contentHash check; chunkID derived, origin-free; Transport/ docs-only |
-| 3 | MeshCustodyReceipt, four-state sidecar + fifth wrinkle | 1 | 2 | in-flight | | seal refused ≠ deferred |
-| 4 | MeshRecipientReceipt, per-type ack stages | 1 | 3 | todo | | hearts final only at foreground decrypt + commit |
+| 3 | MeshCustodyReceipt, four-state sidecar + fifth wrinkle | 1 | 2 | done | `64e8c44` | MeshRoutedStore five-state floor; witness-gated receipt (durable-before-acknowledged as a type rule); wipe row + delete-all wired; keychain service com.fernlet.mesh-routed |
+| 4 | MeshRecipientReceipt, per-type ack stages | 1 | 3 | in-flight | | hearts final only at foreground decrypt + commit |
 | 5 | Routed content digest, own frozen token | 1 | 1 | todo | | do NOT collide with membership's inventory-digest.v1 |
 | 6 | The drain on the one merge path | 1 | 1, 5 | todo | | reconnect ≡ merge ≡ relay drain |
 | 7 | Merge-window redesign (2d comes due) | 1 | 6 | todo | | close only when every asked peer matched |
-| 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; increment 1's only relay hop |
+| 8 | Custody-transfer-on-departure | 1 | 3, 6 | todo | | the load-bearing case; increment 1's only relay hop; item 3's door is `recordingCustodyTransfer(item:for:receipt:now:)` (parked item answers manifestMismatch) |
 | 9 | Backpressure at 256 MiB / 1024 items | 1 | 3 | todo | | bounded, visible refusal, never silent growth; must COUNT parked manifest-less chunks (C10) and DROP a parked set whose manifest is refused |
 | 10 | Locked-device handling | 1 | 3 | todo | | ciphertext-only custody; keychain protection unweakened |
 | 11 | Type-token registry | 1 | 1 | todo | | unknown types rejected, not forwarded; feeds item 1's `acceptedTypeTokens`; with item 9, drop parked chunk sets on `unknownTypeToken` |
@@ -24,6 +24,8 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 14 | P5 acceptance battery | 1 | 1–13 | todo | | extend MeshScheduleGenerator, not a new rig |
 
 ## Blocked on owner
+- (close-out flag) `CryptoFormatCensusTests` now has TWO sealed at-rest mesh surfaces outside its census (mesh-session from P3, mesh-routed from P5 item 3) — P3's precedent followed; owner decides whether the census grows.
+- (close-out flag) the duress pre-draw sweep names neither `com.fernlet.mesh-session` nor `com.fernlet.mesh-routed`; both die in the delete-all funnel — decide whether duress should pre-draw them too.
 - §18.2 partition UX copy — default: subtitle count only, no new string (unchanged from P4).
 - Legacy unsigned two-party removal's retirement — default: leave frozen (unchanged from P4).
 - CI gate lines for MeshP3/P4 AcceptanceTests — still not wired into s3-wall.yml.
@@ -33,9 +35,9 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 |---|---|---|
 | Relay-retention, increment 1 | origin-only until departure (item 1 mints, no relay hop) | 2026-09-03 |
 | Merge window closing rule | (default: every asked peer matched) | — |
-| MeshDeliveryTarget persistence | (default: inside routed store, own wipe row) | — |
+| MeshDeliveryTarget persistence | inside MeshRoutedStore: restored from the SIGNED manifest + a sparse progress map (no stored destination list); type stays non-Codable; wipe row + delete-all in the same commit | 2026-09-03 |
 | Routed digest wire token | (default: fernlet.mesh.routed-inventory-digest.v1) | — |
-| Four-state sidecar model | (default: mirrors MeshSessionContext's LoadToken + fifth wrinkle) | — |
+| Four-state sidecar model | MeshRoutedStore mirrors MeshSessionStore's LoadToken exactly (rawValue sets asserted equal) + §19.5 seal-refused; own schema, own keychain service; MeshSessionContext schema stays 2 | 2026-09-03 |
 | Departure delivery ack | (default: still no ack; drain carries custody instead) | — |
 | D1 recipient keys | mint takes caller-supplied verified `[fingerprint: X25519 pub]`; refuses by name if a destination lacks one | 2026-09-03 |
 | D2 contentHash/size | opaque SHA-256 over the CIPHERTEXT + complete sealed-blob size; item 1 computes neither | 2026-09-03 |
@@ -61,11 +63,22 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | C14 chunker | primitive = one chunk; bounded loop over it; guard chain (incl. full-blob hash) once per item | 2026-09-03 |
 | C15 pacing placeholders | `maxChunksInFlightPerPeer = maxConcurrentOutbound − 1` (3) and 256 KiB are tier-2 placeholders; measure with a concurrent photo transfer on the same tunnel | 2026-09-03 |
 | C16 Transport/ | no behavioural change; one docs-only amendment in MeshTransferStreamTable | 2026-09-03 |
+| D-3.1/3.2 store shape | five-state value with P3's load/save/quarantine/wipe floor; custody verbs a thin layer on top; sweeps are explicit calls, load() read-only | 2026-09-03 |
+| D-3.3/3.14 C13 by extraction | `MeshChunkAdmissionRule` per-chunk + binding verdicts shared by MeshChunkAssembly and the store | 2026-09-03 |
+| D-3.5 mint refusals | only the reachable ones (notTheCustodian, witnessForAnotherItem, contentHashMismatch, …); isWellFormed does not pre-check origin ≠ custodian | 2026-09-03 |
+| D-3.6 bad chunk file | missing/unauthenticated chunk file → item INCOMPLETE (descriptor dropped, index repaired), not a corrupt store | 2026-09-03 |
+| D-3.7 witness | `MeshCustodyDurabilityWitness` init fileprivate to MeshRoutedCustodyCommit.swift; LoadToken init fileprivate to MeshRoutedStore.swift — two gates, two files | 2026-09-03 |
+| D-3.8 refused | RETRYABLE (as P3); `MeshRoutedUnavailability` is an outcome value, deliberately not `Error` | 2026-09-03 |
+| D-3.9 delivered | no `delivered` rung written in item 3 — only the frozen spelling; item 4/6 write it | 2026-09-03 |
+| D-3.10/3.11 transfer + idempotence | transfer names destinations, custodian from the receipt; idempotent = re-streams + re-gates, never skips | 2026-09-03 |
+| D-3.12/3.13 caps | over-cap at rest = corrupt, never clamped; writer doors refuse by name; file cap counts the directory; an orphan-making writer removes it | 2026-09-03 |
 
 ## Session notes
 - 2026-09-03: Opus 4.8/5 were briefly down (item 1's workflow ran on the session model, Fable 5.1); owner confirmed Opus is back — later items use `model: "opus"` per the launcher. Ultracode on: each item runs as a small Workflow (understand → implement → adversarial verify → fix).
 
 ## Surprises worth not re-deriving
+- An EMPTY routed store's pre-first-unlock refusal arrives at `.seal`, not `.open` (a green field answers absent without consulting custody); a corrupt-quarantine test must establish the seal key before planting garbage (custody is classified before content).
+- `Result<_, MeshRoutedUnavailability>` will not compile and must not — the unavailability is an outcome value, not an `Error`.
 - **CryptoKit Ed25519 signatures are HEDGED (nondeterministic).** Never compare signed records by full `==`; compare canonical bytes + payload and verify both signatures. Two mints differ only in the 64 signature bytes; goldens exclude the signature.
 - `CryptographicWallScan` matches bare primitive names in COMMENTS too (`rawCryptographicCallsNameAPurpose`); don't name a sealing primitive in prose.
 - A non-existent suite in `-only-testing` matches zero tests and still prints `TEST EXECUTE SUCCEEDED` — always check `Test run with N tests` is non-zero (item 1's verifier suite is `MeshRoutedManifestSigningTests`; there is no `…VerifyTests`).
@@ -91,4 +104,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share this tree + sim fleet; `Localizable.xcstrings` + `xcschememanagement.plist` held by another session — never stage them.
 
 ## Next item
-3 (in-flight, iteration 3) — then 1a as a bundled small commit when convenient
+4 (in-flight, iteration 4) — then 1a as a bundled small commit when convenient
