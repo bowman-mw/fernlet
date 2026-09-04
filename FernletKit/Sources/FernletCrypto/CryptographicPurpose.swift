@@ -191,6 +191,21 @@ public nonisolated enum FernletCryptoPurpose {
         /// `custody-receipt-id.hash.v1` diverge at `.` vs `-`, so neither prefixes the other. Same
         /// framing reservation as ``meshRoutedManifestV1``.
         public static let meshCustodyReceiptV1 = CryptographicPurpose("fernlet.mesh.custody-receipt.v1", framing: .lengthPrefixed)
+        /// **Written since P5 item 4.** P5's RECIPIENT-RECEIPT signature (plan §11, §3.6): mesh,
+        /// item, the item's ORIGIN, its content hash, the RECIPIENT, the durable final-ack instant
+        /// and the item's expiry. Signed by the **destination**, about the origin's item, and
+        /// forwarded verbatim by relays, which never re-sign.
+        ///
+        /// Distinct from ``meshCustodyReceiptV1`` (`recipient-…` vs `custody-…`, diverging at the
+        /// first character after the mesh prefix) because the two receipts say different things
+        /// under two signer roles: a signature satisfying both would let "it reached me" be replayed
+        /// as "I am holding it", under the wrong key. Distinct from ``meshRoutedManifestV1`` and
+        /// ``meshRoutedChunkV1`` for the same reason the custody receipt is. Distinct from
+        /// ``FernletCryptoPurpose/Hash/meshRecipientReceiptIDV1``, which tags the bytes hashed into
+        /// the derived dedup id rather than the bytes that are signed; `recipient-receipt.v1` and
+        /// `recipient-receipt-id.hash.v1` diverge at `.` vs `-`, so neither prefixes the other. Same
+        /// framing reservation as ``meshRoutedManifestV1``.
+        public static let meshRecipientReceiptV1 = CryptographicPurpose("fernlet.mesh.recipient-receipt.v1", framing: .lengthPrefixed)
         public static let proximityQRIdentityV1 = CryptographicPurpose("fernlet.verify.qr.v1")
         public static let proximityQRResponseV1 = CryptographicPurpose("fernlet.verify.response.v1")
         public static let duressRecoveryRequestV1 = CryptographicPurpose("fernlet.duress.recovery.request.v1")
@@ -359,6 +374,19 @@ public nonisolated enum FernletCryptoPurpose {
         /// SIGNED and this one the bytes that are hashed, and the `-id.hash` infix keeps neither a
         /// prefix of the other.
         public static let meshCustodyReceiptIDV1 = CryptographicPurpose("fernlet.mesh.custody-receipt-id.hash.v1")
+        /// **Written since P5 item 4.** The domain a RECIPIENT receipt's DERIVED id is computed
+        /// under (plan §11, item 12's dedup key): SHA-256 over this tag, length-prefixed, then the
+        /// item id, the origin and the recipient, of which the first 16 bytes are read as a `UUID`.
+        ///
+        /// `receivedAt` is deliberately not an input: a re-mint of the same claim is the same claim,
+        /// and CryptoKit's Ed25519 signing is hedged, so the id is what stays stable across two
+        /// mints of one receipt. There is one id per `(recipient, item)`, which is the wire-level
+        /// statement that a recipient receipt is whole-item and never per chunk. Its own domain
+        /// rather than a reuse of ``FernletCryptoPurpose/Signature/meshRecipientReceiptV1``: that
+        /// one tags the bytes that are SIGNED and this one the bytes that are hashed, and the
+        /// `-id.hash` infix keeps neither a prefix of the other. Distinct from
+        /// ``meshCustodyReceiptIDV1`` so the two receipt families cannot collide on one id.
+        public static let meshRecipientReceiptIDV1 = CryptographicPurpose("fernlet.mesh.recipient-receipt-id.hash.v1")
         public static let recoveryContentKeyV1 = CryptographicPurpose("fernlet.lock.recovery.contentkey.v1")
     }
 }

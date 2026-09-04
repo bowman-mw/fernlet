@@ -396,9 +396,11 @@ struct MeshRoutedDeliveryPersistenceTests {
             manifest: manifest,
             firstSeenAt: MeshRoutedManifestFixtures.base,
             custodiedAt: nil,
+            deliveredAt: nil,
             chunks: [MeshRoutedStoreFixtures.descriptor(index: 0, count: 1, bytes: 16)],
             delivery: delivery,
-            receipts: []
+            receipts: [],
+            recipientReceipts: []
         )
     }
 
@@ -621,7 +623,8 @@ struct MeshRoutedCustodyEvidenceTests {
         let record = MeshRoutedItemRecord(
             key: MeshRoutedItemKey(chunk), contentHash: chunk.contentHash, chunkCount: count,
             expiresAt: chunk.expiresAt, manifest: nil, firstSeenAt: MeshRoutedManifestFixtures.base,
-            custodiedAt: nil, chunks: descriptors, delivery: nil, receipts: []
+            custodiedAt: nil, deliveredAt: nil, chunks: descriptors, delivery: nil,
+            receipts: [], recipientReceipts: []
         )
         #expect(record.chunks.count == MeshRoutedStoreFormat.maxChunksPerItem)
         try Fixture.plant(MeshRoutedIndex(items: [record]), into: store)
@@ -798,9 +801,11 @@ struct MeshRoutedCustodyEvidenceTests {
             manifest: manifest,
             firstSeenAt: MeshRoutedManifestFixtures.base,
             custodiedAt: nil,
+            deliveredAt: nil,
             chunks: [],
             delivery: MeshRoutedDeliveryRecord(contentID: manifest.itemID, progress: [:]),
-            receipts: receipts
+            receipts: receipts,
+            recipientReceipts: []
         )
     }
 }

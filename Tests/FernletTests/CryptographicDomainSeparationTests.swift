@@ -68,6 +68,7 @@ struct CryptographicDomainSeparationTests {
         Domain("Signature.meshRoutedManifestV1", FernletCryptoPurpose.Signature.meshRoutedManifestV1),
         Domain("Signature.meshRoutedChunkV1", FernletCryptoPurpose.Signature.meshRoutedChunkV1),
         Domain("Signature.meshCustodyReceiptV1", FernletCryptoPurpose.Signature.meshCustodyReceiptV1),
+        Domain("Signature.meshRecipientReceiptV1", FernletCryptoPurpose.Signature.meshRecipientReceiptV1),
         Domain("Signature.meshMemberDepartureV1", FernletCryptoPurpose.Signature.meshMemberDepartureV1),
         Domain("Signature.meshMemberRemovalV1", FernletCryptoPurpose.Signature.meshMemberRemovalV1),
         Domain("Signature.meshTerminatedV1", FernletCryptoPurpose.Signature.meshTerminatedV1),
@@ -128,6 +129,7 @@ struct CryptographicDomainSeparationTests {
         Domain("Hash.meshRoutedChunkV1", FernletCryptoPurpose.Hash.meshRoutedChunkV1),
         Domain("Hash.meshRoutedChunkIDV1", FernletCryptoPurpose.Hash.meshRoutedChunkIDV1),
         Domain("Hash.meshCustodyReceiptIDV1", FernletCryptoPurpose.Hash.meshCustodyReceiptIDV1),
+        Domain("Hash.meshRecipientReceiptIDV1", FernletCryptoPurpose.Hash.meshRecipientReceiptIDV1),
         Domain("Hash.recoveryContentKeyV1", FernletCryptoPurpose.Hash.recoveryContentKeyV1),
     ]
 

@@ -112,6 +112,7 @@ struct CryptographicPurposeBoundaryTests {
         // its golden and this case land in the same change — the 91c3956 pairing again.
         assertRoutedChunkFramingHolds()
         assertCustodyReceiptFramingHolds()
+        assertRecipientReceiptFramingHolds()
 
         // Still POSITIONAL, not a substring search: a length-prefixed purpose rejects its own raw
         // spelling. Accepting that would let a transcript carry the domain in an attacker-chosen
@@ -237,6 +238,33 @@ struct CryptographicPurposeBoundaryTests {
         #expect(chunkPurpose.signingBytes(receipt) == nil)
         #expect(receiptPurpose.signingBytes(chunk) == nil)
         #expect(receiptPurpose.signingBytes(receiptPurpose.data) == nil)  // positional self-rejection
+    }
+
+    /// The recipient receipt against its declared `.lengthPrefixed` framing, and against the custody
+    /// receipt's domain and BOTH routed domains — the two receipts are the same shape with two signer
+    /// roles, so a signature satisfying both would let "it reached me" be replayed as "I am holding
+    /// it", under the wrong key.
+    ///
+    /// Split out of ``canonicalSerializerTranscriptsMatchTheirDeclaredFraming()`` so neither function
+    /// grows past the 60-line rule; both halves run in the same test. Purposes are declared
+    /// function-local because sibling helpers cannot see each other's `let`s.
+    private func assertRecipientReceiptFramingHolds() {
+        let recipientPurpose = FernletCryptoPurpose.Signature.meshRecipientReceiptV1
+        let custodyPurpose = FernletCryptoPurpose.Signature.meshCustodyReceiptV1
+        let manifestPurpose = FernletCryptoPurpose.Signature.meshRoutedManifestV1
+        let chunkPurpose = FernletCryptoPurpose.Signature.meshRoutedChunkV1
+        let recipient = canonicalBytes(for: MeshRecipientReceiptFixtures.receipt())
+        let custody = canonicalBytes(for: MeshCustodyReceiptFixtures.receipt())
+        let manifest = canonicalBytes(for: MeshRoutedManifestFixtures.manifest())
+        let chunk = canonicalBytes(for: MeshChunkFixtures.chunk())
+        #expect(recipientPurpose.signingBytes(recipient) != nil)   // declared == emitted
+        #expect(custodyPurpose.signingBytes(recipient) == nil)     // cross-domain, both ways
+        #expect(recipientPurpose.signingBytes(custody) == nil)
+        #expect(manifestPurpose.signingBytes(recipient) == nil)
+        #expect(recipientPurpose.signingBytes(manifest) == nil)
+        #expect(chunkPurpose.signingBytes(recipient) == nil)
+        #expect(recipientPurpose.signingBytes(chunk) == nil)
+        #expect(recipientPurpose.signingBytes(recipientPurpose.data) == nil)  // positional
     }
 
     /// The raw-prefix family: transcripts that concatenate their domain directly. Rejecting a

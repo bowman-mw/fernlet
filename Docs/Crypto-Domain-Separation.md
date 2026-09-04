@@ -109,6 +109,7 @@ on the reasoning.
 | `meshRoutedManifestV1` | `fernlet.mesh.routed-manifest.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedManifest`, `MeshRoutedManifestVerifier` |
 | `meshRoutedChunkV1` | `fernlet.mesh.routed-chunk.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshChunker`, `MeshChunkVerifier` |
 | `meshCustodyReceiptV1` | `fernlet.mesh.custody-receipt.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshCustodyReceipt`, `MeshCustodyReceiptVerifier` |
+| `meshRecipientReceiptV1` | `fernlet.mesh.recipient-receipt.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRecipientReceipt`, `MeshRecipientReceiptVerifier` |
 
 #### KeyDerivation
 
@@ -170,6 +171,7 @@ on the reasoning.
 | `meshRoutedChunkV1` | `fernlet.mesh.routed-chunk.hash.v1` | `MeshRoutedContentDigest` (one chunk's payload — its own domain so a one-chunk item's two digests are not interchangeable) |
 | `meshRoutedChunkIDV1` | `fernlet.mesh.routed-chunk-id.hash.v1` | `MeshRoutedContentDigest` (the derived replay-window id item 12 keys on) |
 | `meshCustodyReceiptIDV1` | `fernlet.mesh.custody-receipt-id.hash.v1` | `MeshCustodyReceipt` (the derived dedup id — `(itemID, origin, custodian)`, excluding both the hedged signature and `custodiedAt`, so a re-mint of the same claim is the same id) |
+| `meshRecipientReceiptIDV1` | `fernlet.mesh.recipient-receipt-id.hash.v1` | `MeshRecipientReceipt` (the derived dedup id — `(itemID, origin, recipient)`, excluding both the hedged signature and `receivedAt`; ONE id per `(recipient, item)`, which is the wire-level statement that a recipient receipt is whole-item and never per chunk) |
 | `recoveryContentKeyV1` | `fernlet.lock.recovery.contentkey.v1` | `FernletLockService` |
 
 ### A drift note, 2026-09-03 (P5 item 3)
@@ -189,6 +191,22 @@ neighbour:
   and one install every `MeshRoutedChunks/<uuid>.chunk` blob authenticates in any slot. The binding of
   a file to a slot is restored by comparing the opened chunk's descriptor and payload length to the
   index's, on every read — a comparison that is not redundant and must not be removed as such.
+
+### A drift note, 2026-09-03 (P5 item 4)
+
+Two purposes were added together, and the pair that matters is the one between the two RECEIPT
+families:
+
+- `fernlet.mesh.recipient-receipt.v1` (Signature) vs `fernlet.mesh.custody-receipt.v1` (Signature):
+  the two records are the same shape with two signer roles — a custodian says "I am holding it", a
+  destination says "it reached me". A signature that satisfied both domains would let one be replayed
+  as the other under the wrong key, which is exactly the custody-is-not-delivery distinction plan §11
+  requires in every surface. They diverge at `r` vs `c`.
+- `fernlet.mesh.recipient-receipt.v1` vs `fernlet.mesh.recipient-receipt-id.hash.v1`: `.` vs `-`, so
+  neither prefixes the other. One tags the bytes that are SIGNED, the other the bytes hashed into the
+  derived dedup id — and that id is one per `(recipient, item)`, never one per chunk.
+- Two receipt id families now derive from an `(itemID, origin, member)` triple under two different
+  hash domains. **A future third receipt family must pick a third domain**, not reuse either.
 
 ### Two notes on the inventory
 

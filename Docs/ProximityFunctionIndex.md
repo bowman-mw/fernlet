@@ -790,13 +790,14 @@ copy has got, and which sealed payload file backs each chunk. No I/O, no crypto,
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshRoutedIndexSchema` | Version 1, its **own** from day one (`MeshSessionContext` stays at 2). Older or newer is `corrupt`, never migrated. |
+| `MeshRoutedIndexSchema` | Version **2** since P5 item 4 (the two durable ack fields), its **own** from day one (`MeshSessionContext` stays at 2). Older or newer is `corrupt`, never migrated — a schema-1 file would otherwise be reinterpreted into a record whose `deliveredAt`/`recipientReceipts` the next save silently drops. The at-rest **token** does not move: it is the key-derivation domain. |
 | `MeshRoutedStoreFormat` | `maxItems` 1024; `maxContentBytes` = `MeshRoutedManifestFormat.maxContentByteCount` (**reused** — moving it moves a WIRE bound, because `MeshChunkFormat.maxChunkCount` is derived from it); `maxChunksPerItem` = `MeshChunkFormat.maxChunkCount`; `maxHeldChunkFiles` 4096 (file count is not bounded by bytes); `maxReceiptsPerItem` = the roster cap. |
 | `MeshRoutedIndexDecodingError` | `unsupportedSchemaVersion(_:)` and `capacityExceeded(_:)`. At rest a cap violation is a **refusal**, never a clamp: clamping would silently drop a durable record whose payload files stay on disk, possibly one a receipt was already emitted for. |
 | `MeshRoutedItemKey` | The union key — the **signed pair** `(originFingerprint, itemID)` (D11). An item id alone lets an admitted member squat another origin's id under its own key and have it verify. |
 | `MeshRoutedChunkDescriptor` | The chunk's transcript fields, its payload length and the **opaque** `<uuid>.chunk` file name. A mirror, not a binding: the seal's AAD carries no file name, so every read compares the opened chunk against this. |
 | `MeshRoutedDeliveryProgress` / `MeshRoutedDeliveryRecord` | The persisted half of `MeshDeliveryTarget`: the sparse progress map only. `pending` is an absence; `departed` is never encoded and is refused on decode. The destination set is NOT stored — it comes back from the origin's signed manifest. |
-| `MeshRoutedItemRecord` | Key, content hash, chunk count, expiry, the manifest stored **whole** (nil ⇒ parked), receiver-local `firstSeenAt`, `custodiedAt` (written once, cleared by a repair), the held descriptors, the delivery record and other members' receipts. |
+| `MeshRoutedItemRecord` | Key, content hash, chunk count, expiry, the manifest stored **whole** (nil ⇒ parked), receiver-local `firstSeenAt`, `custodiedAt` (written once, cleared by a repair), `deliveredAt` (P5 item 4 — written once and **never** cleared by a repair, because an acknowledgement already given is a fact), the held descriptors, the delivery record, other members' custody receipts, and `recipientReceipts` — peers' AND this device's own, hard-decoded so a schema-2 record missing the key is corrupt rather than "no receipts held". |
+| `MeshRoutedIndex` (delivery, P5 item 4) | `itemsFullyDelivered(at:in:)` (every destination delivered or departed — **not** a reclaim list: a recipient's own inbox copy is fully delivered while it is still the only copy of the content), `itemsReclaimableAsCustodian(at:in:for:)` (fully delivered AND this device is not a destination — item 9's reclaim input, since the consumed-locally signal does not exist yet) and `itemsAwaitingLocalAck(at:for:)` (this device is a destination and its OWN receipt is not stored — deliberately not conditioned on the ack instant, completeness or custody, because each would hide a state a retry must reach). |
 | `MeshRoutedIndex` | The ordered records plus the counters item 9 reads (`itemCount`, `totalContentBytesHeld`, `heldChunkFileCount`), `firstSeenAt(of:)`, `heldChunkIndices(of:)`, and item 6/8's enumeration: `outstandingDestinations(for:in:)`, `outstandingReachable`/`outstandingUnreachable`, `outstandingItems(at:in:)`, `itemsAwaitingHandoff(at:in:)` and `handoffCandidateCount(at:in:)` (a **candidate** count — `handedOffItemCount` is filled after the transfers). Plus `itemsWithUnrestorableDelivery(at:)`: every enumerator above skips an item whose stored delivery map will not restore, so that item is **named** here rather than silently dropped from all of them (`MeshRoutedItemRef.deliveryRestoreRefused` is the same fact per item; a parked item is not one — it has no signed set to fail to restore). |
 
 ### `MeshRoutedStore.swift`
@@ -822,7 +823,7 @@ nothing silent.
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshRoutedUnavailability` | `deferred` / `corrupt` / `refused` / `notWritten`, each with a frozen `logToken`. `isRetryable` is true for all but `corrupt` — the SAME answer `MeshSessionRestoreOutcome.isRetryable` gives its own refusal, because the dominant cause here is the pre-first-unlock window that self-heals on unlock. Bounded by `MeshRoutedRetryBounds.maxAttempts` (reused from P3). |
-| `MeshRoutedStoreRefusal` | Thirteen frozen tokens: the four capacity refusals, `duplicateItemID`, `manifestMismatch`, `unknownItem`, `itemExpired`, `chunkCountMismatch`, `heldChunkLengthMismatch`, `notADestination`, `chunkFileMismatch`, `capacityReceipts`. |
+| `MeshRoutedStoreRefusal` | Fifteen frozen tokens: the four capacity refusals, `duplicateItemID`, `manifestMismatch`, `unknownItem`, `itemExpired`, `chunkCountMismatch`, `heldChunkLengthMismatch`, `notADestination`, `chunkFileMismatch`, `capacityReceipts`, plus P5 item 4's `capacityRecipientReceipts` (two evidence arrays with two signer roles want two log tokens) and `unknownTypeToken` (plan §11's "unknown type tokens are rejected, not forwarded", answered at the ack seam). |
 | `admittingManifest(_:now:)` | Binds a parked set through `MeshChunkAdmissionRule.bindingVerdict`, stamps `firstSeenAt` if new, creates the delivery record. Reserves **both** budgets — bytes and file slots — from the manifest's known chunk count, so an item that could never be finished is refused now rather than half-staged. |
 | `stagingChunk(_:now:)` | Verdict through the shared rule, then the file, then the index — never the reverse. A failed index save removes the file this call just wrote and audits either way. The file cap is checked against `max(index, directory)`, so an orphan cannot hide from the cap that bounds it. |
 | `recordingCustodyTransfer(item:for:receipt:now:)` | Advances each named destination to `custodied(by: receipt.custodianFingerprint)` and stores the receipt as evidence in **one** index write. There is no `to custodian:` parameter: the custodian IS the signer, so the durable state and the signature cannot disagree. Writes nothing on any refusal. |
@@ -843,6 +844,61 @@ compile error, which is what the grep-wall in `MeshRoutedStoreIsolationTests` ex
 | --- | --- |
 | `MeshCustodyDurabilityWitness` | Origin, item, the re-measured content hash, the custodian, and the STORED `custodiedAt` — not this pass's instant, so a re-mint's canonical bytes are byte-identical. |
 | `committingCustody(item:custodian:now:)` | **Always** re-streams every chunk file in index order through `MeshRoutedContentHasher`, compares each opened chunk against its slot's descriptor, and gates on size then content hash before any witness exists. Writes `custodiedAt` once. **Idempotent means "does not refuse", never "skips the check"**: an item whose file went away answers `incomplete`, mints nothing, and has its `custodiedAt` cleared. A failed stamp write mints no witness and reports the store's own `unavailability(from:)` classification — a refused seal is not an absent file (§19.5), so this writer flattens nothing the others keep apart. |
+
+### `MeshRoutedAck.swift`
+
+P5 item 4: plan §11's acknowledgement stages as VALUES — the column item 11 registers and item 14
+drives. No store extension, so tier 1 can build a stage with no disk root; no acceptance decision, so
+nothing here is a registry.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedAckStage` | `immediate` / `durableRecipientStorage` / `foregroundDecryptAndLedgerCommit` — plan §11's three clauses, frozen English and **never on the wire**. Deliberately unordered and rankless: a heart is not "further along" than a photo, and the monotone ladder is `MeshDeliveryState`'s. |
+| `MeshRoutedTypeToken` | The frozen `fernlet.mesh.routed-type.<kind>.v1` spellings: `photo`, `tempMessage`, `heart` (for which `itemID` **is** the gift id) and `control` — **reserved, not registered**, because a token nothing mints opens a door with no handler behind it. |
+| `MeshRoutedAckStageRow` / `MeshRoutedAckStageTable` | One row per type, keyed by the wire `String` because the token only ever exists as one at rest. `.increment1` is the three registered types; `stage(for:)` answers **nil** for anything else, and nil is a refusal at every door. Injected, never global — and a source wall keeps shipping code on the one value. |
+| `MeshRoutedHeartAck` | The heart's evidence: this gift judged exactly once **in this outcome** (per-GIFT, because `MeshHeartCommit.commit` is a batch door and a per-pass count would strand both hearts of a two-heart pass) plus the ledger's own `MeshHeartLedgerProof`. The `@MainActor` form asks the ledger synchronously, right after the commit. |
+| `MeshRoutedAckEvidence` / `MeshRoutedAckShortfall` / `MeshRoutedDeliveryCommitOutcome` | `.none` for the stages whose condition the store reads for itself; four named shortfalls (`itemIncomplete`, `custodyNotCommitted`, `ledgerJudgementMissing`, `evidenceForAnotherItem`), each written on nothing; and the acknowledged/unsatisfied answer. |
+
+### `MeshRecipientReceipt.swift`
+
+P5 item 4: a DESTINATION's signed statement that one routed item reached it, finally. The custody
+receipt's shape with the signer's role changed — and the ack STAGE is deliberately not a field.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRecipientReceiptFormat` | The three widths, **reused** from the routed family, never restated. |
+| `MeshRecipientReceipt` | mesh, item, the origin (SUBJECT), content hash, the recipient (SIGNER), the durable ack instant, expiry, signature. No stage, no epoch, no hop count, no chunk index or partial marker — destination-final is whole-item — and no schema integer: the `.v1` in the domain IS the version. Both doors floor the instants; nothing is clamped, so an over-long fingerprint stays a cheap `malformed`. |
+| `receiptID` | `UUID(SHA-256(lp(Hash.meshRecipientReceiptIDV1) ‖ uuid(itemID) ‖ lp(origin) ‖ lp(recipient))[0..<16])` — derived, never a wire field, stable across a re-mint (the signature and `receivedAt` are excluded), and **one per `(recipient, item)`**. Item 12's frame id. |
+| `signed(witness:manifest:identity:)` | Takes a `MeshRecipientDeliveryWitness`, so no argument list mints a receipt for an acknowledgement no durable write returned. `meshID`/`expiresAt` come off the MANIFEST and `receivedAt` off the WITNESS. Five reachable refusals; no `notADestination` and no `ackStageUnsatisfied`, both of which the store door already refused before a witness existed. |
+
+### `MeshRecipientReceiptVerifier.swift`
+
+P5 item 4: the receive-side door. `MeshCustodyReceiptVerifier`'s shape with one extra leg.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRecipientReceiptRejection` | Ten frozen tokens. `notADestination` is the leg custody has no analogue for: a courier need not be a recipient, but a signer the origin never addressed is claiming to close a destination that does not exist. |
+| `verify(_:)` | mesh → shape → recipient-is-origin → admitted key (by the RECEIPT's fingerprint, never the envelope sender) → not quorum-removed (**D14: a departed recipient's receipt still verifies**) → key/fingerprint → expiry EQUALITY → signature → (manifest held) the identity triple → (manifest held) the destination leg. Public material only, so it verifies on a locked device; no clock. |
+
+### `MeshRoutedDeliveryCommit.swift`
+
+P5 item 4: **one type and one function, on purpose** — the delivery twin of
+`MeshRoutedCustodyCommit.swift`, with the same two-`fileprivate`-gates-in-two-files arrangement.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRecipientDeliveryWitness` | Origin, item, content hash, the recipient, the STORED ack instant, and the stage that was satisfied (audit surface only, never on the wire). `fileprivate` init, so this file is the only construction site. |
+| `committingDelivery(item:recipient:stages:evidence:now:)` | Resolves the stage from the record's own origin-signed `typeToken` through the injected table, checks the stage's precondition, stamps `deliveredAt` **once**, and only then mints the witness. Writes **no** delivery rung — not this device's and certainly not a peer's — because `recipient:` is a caller's word and `delivered` is terminal. A record whose ack instant is already stamped does not need fresh stage evidence: the ledger cannot be asked twice, which is what makes the crash window recoverable. |
+
+### `MeshRoutedDeliveryIngest.swift`
+
+P5 item 4: the observer-side doors. Kept out of the commit file so that file's one-verb property —
+what makes `fileprivate` a real gate — stays true.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `recordingRecipientReceipt(item:receipt:now:)` | **The only writer of a `delivered` rung in the whole store**, and it advances exactly one destination: the receipt's own signer. No `for destinations:` parameter, deliberately — that would let one member's receipt mark somebody else delivered. Re-checks the identity triple, the mesh, the destination set and capacity; stores the receipt replace-by-signer in the SAME index write; writes nothing on any refusal; no expiry gate (a receipt for an expired item is still evidence). |
+| `forwardableRecipientReceipts(item:)` | The stored bytes verbatim, in signer order, **including this device's own** — the deliberate difference from custody, because a heart's final-ack condition is a one-shot ledger judgement the ledger refuses to repeat. |
 
 ### `MeshRoutedContentHasher.swift`
 
@@ -1307,6 +1363,7 @@ section rather than inside any one of them.
 | `pendingBubbleHeart` / `dismissBubble(id:)` | The Home bubble's undismissed heart, and its dismissal. |
 | `activeGlow(at:)` | The 24-hour health-bar glow decay. |
 | `isLoaded` / `retryLoad()` | Sidecar state. Persistence rides a `ProtectedSidecar` (`HeartLedger.json`, `.completeFileProtection`, never synced) and **fails closed while unloaded** — sends are refused and receives are left unrecorded, with the drop record deliberately left on the server for a later pass, rather than a locked-device read being mistaken for "no hearts". |
+| `MeshHeartLedgerProof` / `commitProof(for:)` | P5 item 4: the ledger's own answer, **read-only**, to "did the write land and is this gift in what was stored?" — non-nil only when the sidecar state is `.ready` (memory and disk agree) and the gift is in the STORED received hearts. The proof's initializer is `fileprivate` to this file, so a routed heart receipt cannot be minted on a caller-supplied `Bool` for a gift the ledger never stored. No write path, no second receive path, no rule re-derived. |
 | `clearAll()` | Wired from reset-everything. Retention is 48 h / 32 hearts. |
 
 ### `HeartDropService.swift`

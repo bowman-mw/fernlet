@@ -151,9 +151,11 @@ enum MeshRoutedStoreFixtures {
             manifest: nil,
             firstSeenAt: MeshRoutedManifestFixtures.base,
             custodiedAt: nil,
+            deliveredAt: nil,
             chunks: chunks,
             delivery: nil,
-            receipts: []
+            receipts: [],
+            recipientReceipts: []
         )
     }
 }
@@ -207,10 +209,15 @@ enum MeshRoutedCustodyFixtures {
     }
 
     /// A rig on `scope`, with the item minted but nothing staged yet.
+    ///
+    /// `typeToken` defaults to item 1's golden-fixture spelling — a token
+    /// ``MeshRoutedAckStageTable/increment1`` deliberately does not know, so a rig that does not name
+    /// one exercises the `unknownTypeToken` refusal rather than accidentally acquiring a stage.
     static func rig(
         scope: MeshRoutedStorageScope,
         memberCount: Int = 3,
-        byteCount: Int = blobByteCount
+        byteCount: Int = blobByteCount,
+        typeToken: String = MeshRoutedManifestFixtures.typeToken
     ) throws -> MeshRoutedCustodyRig {
         let members = try MeshDeliveryFixtures.rig(memberCount: memberCount)
         let names = members.fingerprints
@@ -223,7 +230,7 @@ enum MeshRoutedCustodyFixtures {
         let manifest = try MeshRoutedManifest.signed(
             meshID: members.meshID,
             target: target,
-            typeToken: MeshRoutedManifestFixtures.typeToken,
+            typeToken: typeToken,
             contentHash: MeshRoutedContentDigest.contentHash(of: payload),
             size: UInt64(payload.count),
             createdAt: MeshRoutedManifestFixtures.createdAt,
@@ -279,6 +286,72 @@ enum MeshRoutedCustodyFixtures {
         return try MeshCustodyReceipt.signed(
             witness: proof, manifest: rig.manifest, identity: rig.custodian
         )
+    }
+
+    /// Commits this device's final ack under a pinned install binding and returns the outcome
+    /// (P5 item 4). Nothing is staged or committed here — the caller decides how far the ladder has
+    /// got, which is the whole point of the per-stage matrix.
+    static func commitDelivery(
+        _ rig: MeshRoutedCustodyRig,
+        stages: MeshRoutedAckStageTable = .increment1,
+        evidence: MeshRoutedAckEvidence = .none,
+        install: Data = MeshRoutedStoreFixtures.installA,
+        now: Date = MeshRoutedStoreFixtures.now
+    ) -> MeshRoutedOutcome<MeshRoutedDeliveryCommitOutcome> {
+        DeviceBindingID.$testOverride.withValue(.identifier(install)) {
+            rig.store.committingDelivery(
+                item: rig.key, recipient: rig.custodian.localFingerprint,
+                stages: stages, evidence: evidence, now: now
+            )
+        }
+    }
+
+    /// The witness a successful delivery commit produced, or nil.
+    static func deliveryWitness(
+        _ outcome: MeshRoutedOutcome<MeshRoutedDeliveryCommitOutcome>
+    ) -> MeshRecipientDeliveryWitness? {
+        guard case .completed(.acknowledged(let witness)) = outcome else { return nil }
+        return witness
+    }
+
+    /// Stages everything, commits custody, commits the final ack, mints this device's recipient
+    /// receipt **and ingests it** — the whole delivery ladder in one call.
+    ///
+    /// The last step is not optional: the `delivered` rung is written only by
+    /// `recordingRecipientReceipt`, so a helper that stopped at the mint would leave every caller
+    /// asserting against a rung that had not moved.
+    static func recipientReceipt(
+        _ rig: MeshRoutedCustodyRig,
+        stages: MeshRoutedAckStageTable = .increment1,
+        evidence: MeshRoutedAckEvidence = .none
+    ) throws -> MeshRecipientReceipt {
+        stageAll(rig)
+        let custody = commit(rig)
+        #expect(witness(custody) != nil, "custody commit did not produce a witness: \(custody)")
+        let acknowledged = commitDelivery(rig, stages: stages, evidence: evidence)
+        let proof = try #require(deliveryWitness(acknowledged),
+                                 "delivery commit did not acknowledge: \(acknowledged)")
+        let receipt = try MeshRecipientReceipt.signed(
+            witness: proof, manifest: rig.manifest, identity: rig.custodian
+        )
+        let ingested = DeviceBindingID.$testOverride.withValue(.identifier(MeshRoutedStoreFixtures.installA)) {
+            rig.store.recordingRecipientReceipt(
+                item: rig.key, receipt: receipt, now: MeshRoutedStoreFixtures.now
+            )
+        }
+        #expect(ingested.value?.target != nil, "own receipt was not ingested: \(ingested)")
+        return receipt
+    }
+
+    /// The store's loaded index under a pinned install binding, or nil for the three writer-less
+    /// states.
+    static func loadedIndex(
+        _ store: MeshRoutedStore,
+        install: Data = MeshRoutedStoreFixtures.installA
+    ) -> MeshRoutedIndex? {
+        let load = DeviceBindingID.$testOverride.withValue(.identifier(install)) { store.load() }
+        guard case .loaded(let index, _) = load else { return nil }
+        return index
     }
 
     /// The `.chunk` files actually on disk under a scope.
@@ -494,14 +567,27 @@ struct MeshRoutedStoreLoadTests {
         #expect(corruption.detail == .unsupportedSchemaVersion(0))
     }
 
-    @Test func aSchemaTwoIndexIsCorruptToo() throws {
+    @Test func aSchemaThreeIndexIsCorruptToo() throws {
         let scope = Fixture.scope()
         defer { Fixture.tearDown(scope) }
         let store = MeshRoutedStore(scope: scope)
-        try Fixture.plant(WrongSchemaIndexWire(schemaVersion: 2), into: store)
+        try Fixture.plant(WrongSchemaIndexWire(schemaVersion: 3), into: store)
 
         let load = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
-        #expect(load == .corrupt(MeshRoutedCorruption(detail: .unsupportedSchemaVersion(2))))
+        #expect(load == .corrupt(MeshRoutedCorruption(detail: .unsupportedSchemaVersion(3))))
+    }
+
+    /// The 1 → 2 migration statement itself (P5 item 4): an item-3 file is refused **as a whole**,
+    /// never partially reinterpreted into a record whose two new durable fields the next save would
+    /// silently drop.
+    @Test func aSchemaOneIndexIsCorruptAfterTheBump() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let store = MeshRoutedStore(scope: scope)
+        try Fixture.plant(WrongSchemaIndexWire(schemaVersion: 1), into: store)
+
+        let load = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
+        #expect(load == .corrupt(MeshRoutedCorruption(detail: .unsupportedSchemaVersion(1))))
     }
 
     /// An at-rest cap violation is CORRUPTION with the cap named, never a clamp: clamping would
@@ -681,7 +767,7 @@ struct MeshRoutedVocabularyTests {
         #expect(MeshRoutedStoreFormat.maxReceiptsPerItem == MeshMembershipBounds.maxRosterMembers)
         #expect(MeshRoutedStoreFormat.maxItems == 1024)
         #expect(MeshRoutedStoreFormat.maxHeldChunkFiles == 4096)
-        #expect(MeshRoutedIndexSchema.current == 1)
+        #expect(MeshRoutedIndexSchema.current == 2, "P5 item 4 bumped the routed index schema")
         #expect(MeshRoutedIndexSchema.token == "fernlet.mesh.routed-store.v1")
         #expect(MeshSessionContextSchema.current == 2, "the routed sidecar must not move the session schema")
     }
