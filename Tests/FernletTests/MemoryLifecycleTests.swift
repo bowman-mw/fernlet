@@ -237,6 +237,43 @@ struct ProximityManagerDeallocationTests {
         await waitUntil { weakManager == nil }
         #expect(weakManager == nil, "ProximityRecipeShareManager must deallocate even when stop() was skipped")
     }
+
+    /// CONTROL for the cell below, in the PRODUCTION ownership shape the three cells above cannot
+    /// reach: the store owns the manager through its `lazy var`, and both must still release. If
+    /// this one goes red the harness is retaining test stores and the subject cell means nothing.
+    @Test func aStoreOwnedMeshManagerDeallocatesWithNothingArmed() async {
+        weak var weakStore: FernletStore?
+        weak var weakManager: MeshNetworkManager?
+        do {
+            let host = makeTestStore()
+            weakStore = host
+            weakManager = host.meshNetworkManager
+        }
+        await waitUntil { weakStore == nil && weakManager == nil }
+        #expect(weakManager == nil, "a store-owned mesh manager must release with nothing armed")
+        #expect(weakStore == nil, "…and so must the store that owns it")
+    }
+
+    /// SUBJECT (invariant HP2): the same, with the 20-second beacon loop RUNNING. `MeshNetworkManager`
+    /// reads its host `unowned`, and P5 item 1a pins that host inside every detached spawn — but a pin
+    /// taken for a STORED task's lifetime would close store → manager → handle → store and make both
+    /// objects immortal, which also puts the `isolated deinit` that ends this loop out of reach. This
+    /// cell is what stops `spawnHostPinned(_:)` from being copied onto `beaconTimer`.
+    @Test func aStoreOwnedMeshManagerDeallocatesWithTheBeaconLoopArmed() async {
+        weak var weakStore: FernletStore?
+        weak var weakManager: MeshNetworkManager?
+        do {
+            let host = makeTestStore()
+            weakStore = host
+            let manager = host.meshNetworkManager
+            weakManager = manager
+            manager.startBeaconLoopForTesting()
+            // Deliberately no leaveMesh()/stop(): the isolated deinit must end the loop itself.
+        }
+        await waitUntil { weakStore == nil && weakManager == nil }
+        #expect(weakManager == nil, "a store-owned mesh manager must release with its beacon loop armed")
+        #expect(weakStore == nil, "…and so must its store — a host pin on a STORED task is a cycle (HP2)")
+    }
 }
 
 // MARK: - MeshNetworkManager: evicted slots free their MC link

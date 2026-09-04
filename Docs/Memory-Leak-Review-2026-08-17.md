@@ -149,6 +149,17 @@ vacuously; every allowlist entry must be used and must state its invariant; plan
   - **ML2** — a file with a block-based `addObserver(forName:` must `removeObserver` (a retained
     block) or be allowlisted; exempt: `FernletStore`'s cooking-intent observer.
   - **ML3** — `withObservationTracking` lives only in `ObservationLoop.swift`.
+  - **ML4** *(added by P5 item 1a, not by this review)* — a file holding an `unowned` `ProximityHost`
+    may not contain an UNMARKED `Task` construction. Those managers read a host they do not own, so a
+    detached task outliving the host reads destroyed memory and `swift_abortRetainUnowned` kills the
+    whole test process. Spawns go through `spawnHostPinned(_:)`; a `Task` literal that stays carries a
+    `// host-pin:` marker of exactly one kind — `helper` (the one inside the helper), `timer —
+    <reason>` (a stored handle, which must never be pinned: that pin is a permanent cycle) or
+    `exempt — <reason>` (touches neither `self` nor the host). The scoped pin an async callee takes is
+    marked `scoped — <reason>` and sits on no `Task` line.
+  - **ML5** *(added by P5 item 1a)* — in the test tree, a proximity manager may not be constructed
+    over a host expression that is itself a call: `MeshNetworkManager(store: makeTestStore(), …)`
+    hands the manager a host that dies at the end of the expression — a dangling `unowned` from birth.
 
 ## 6. What was examined and found clean (condensed)
 

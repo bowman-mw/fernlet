@@ -434,12 +434,19 @@ struct MeshClothingShopTests {
 
         manager.proximityCoordinator(robin.coordinator, didReceive: requestEnvelope(displayName: "Robin"),
                                      plaintext: Data(), from: robin.identity)
+        // The immediate repeat is issued in the SAME synchronous run as the first request, with no
+        // `await` between them. `respondToShopCatalogRequest` stamps `shopCatalogRequestResponseAt`
+        // synchronously, before it spawns the send, so the limiter sees both requests regardless of
+        // when either send lands — and "immediate" stays immediate. Awaiting the first response in
+        // between (as this cell used to) measures the repeat against a 3-second WALL-CLOCK window
+        // while the main actor may be starved for longer than that: the cell's own duration has crept
+        // 4.9 s → 5.1 s → 6.4 s → 8.3 s across P5 rounds and reached 10.6 s in item 1a's full-suite
+        // run, at which point the "immediate" repeat became eligible again and was answered.
+        manager.proximityCoordinator(robin.coordinator, didReceive: requestEnvelope(displayName: "Robin"),
+                                     plaintext: Data(), from: robin.identity)
         await waitUntil { catalogSends == 2 }
         #expect(catalogSends == 2, "A committed peer's request re-sends past the once-per-slot guard")
 
-        // An immediate repeat request is dropped by the per-slot response rate limit.
-        manager.proximityCoordinator(robin.coordinator, didReceive: requestEnvelope(displayName: "Robin"),
-                                     plaintext: Data(), from: robin.identity)
         try? await Task.sleep(for: .milliseconds(80))
         #expect(catalogSends == 2, "Responses are rate-limited per slot")
     }

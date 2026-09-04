@@ -156,6 +156,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `JSONSidecarFile<FriendPhotoWallPreferences>.load()` | Loads persisted wall aggregation/cover/favorite preferences, or `nil` (caller substitutes defaults). Was `FriendPhotoWallPreferencesStore.load()`, now the shared sidecar helper in `Support/JSONSidecarFile.swift`. |
 | `JSONSidecarFile<FriendPhotoWallPreferences>.save(_:)` | Persists wall preferences with atomic protected file writes. Was `FriendPhotoWallPreferencesStore.save(_:)`. |
 | `init(store:)` | Provisions identity, initializes photo cache/preferences, loads cached photos, and configures mesh session callbacks. |
+| `spawnHostPinned(_:)` | **The mandatory spawn idiom** for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host (`swift_abortRetainUnowned` aborts the whole process). Every `Task { … }` here goes through it EXCEPT the spawns whose handle the manager stores — those form `store → manager → handle → store` if pinned (HP2) and stay plain literals with a `// host-pin: timer — <reason>` marker. `MemoryLifecycleBoundaryTests` rule ML4 fails an unmarked one. |
 | `isInSession` | Returns true when a mesh exists or any slot has a committed fingerprint. |
 | `filmRemaining` | Returns the remaining session photo quota, capped at zero. |
 | `localFingerprint` | Exposes the local identity fingerprint. |
@@ -270,7 +271,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `takeOverCoordinator()` | Schedules a recovered rotation time and broadcasts a takeover beacon. |
 | `scheduleRotationTimer(fireAt:)` | Schedules the next key rotation if local device is coordinator at fire time. |
 | `requestRotation(cause:)` | **The one entry point to rotation** (P3 item 5, plan §8.3): timer, roster change and merge all pass through `MeshRotationTriggerQueue`, which coalesces a burst and refuses re-entry. The coordinator check happens at fire time, not here. |
-| `armRotationDebounce(firingAt:)` / `runDebouncedRotation()` / `rearmDeferredRotation()` | The single armed window (cancel-and-replace), the claim-then-rotate step, and the re-arm for a trigger that arrived mid-rotation. |
+| `armRotationDebounce(firingAt:)` / `runDebouncedRotation()` / `rearmDeferredRotation()` | The single armed window (cancel-and-replace), the claim-then-rotate step, and the re-arm for a trigger that arrived mid-rotation. `runDebouncedRotation()` takes the **scoped host pin** (`let host = store` + `defer { withExtendedLifetime(host) {} }`, marked `// host-pin: scoped`): it is re-entered from a STORED task handle, which may not carry a task-lifetime pin (HP2), and it reads the host after `initiateRotation`'s ack window. |
 | `initiateRotation(cause:)` | Coordinator rotation, in the order that matters: plan the epoch, drain for acks, **persist the head**, then distribute. A `terminate` plan ends the session; a blocked save abandons the rotation. |
 | `plannedRotation()` / `presentedRotationRoster()` / `fullRotationRoster()` | The successor plan through `MeshRotationPolicy` + `MeshEpochAcceptance` — counted up from `rotationBasisHead`, i.e. `max + 1` over the FOLDED heads rather than `own + 1` (P4 item 3) — and the roster it is presented against — the full one (derived roster, else descriptor members + self), **intersected with the branch** while partitioned (P4 item 1, plan §10.2). The branch scoping lives here, once, so the presented roster and `epochCoordinatorFingerprint` cannot drift apart. |
 | `drainForRotation(closingEpoch:)` | Steps 1–2: announce the closing epoch, re-arm the 15-minute timer, collect drain acks. Returns nil when cancelled mid-drain, so nothing is distributed. |
@@ -318,12 +319,13 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `refreshBranchViewAfterMerge()` | A merge moves the roster underneath the branch-view snapshot, so a member whose departure record arrived in the union would keep answering `present`. Re-derives the view against the same reachable set — **no detector, no event, no clock**: a merge is not a reachability change. |
 | `foldEpochHeads(_:)` | Seals a reconnecting peer's heads into `epochHeads` through the single `persistSessionContext(addingEpochHead:)` writer. Same-counter divergent heads **coexist** until `requestMergeRotationForDivergentHeads()` mints the successor that retires them (P4 item 3); it counts nothing itself — the overflow past the cap of 8 is named in `droppedEpochHeadCount` **at the writer, after the seal** (`recordDroppedEpochHeads(_:)`), because the set the cap can bite is the set being written (plan §21.3). Never silently truncated. |
 | `rotateIfRosterChanged(from:)` | The roster-change trigger. A refused record, or one that moves no roster, spends no rotation. |
-| `handleRotationSync(_:)` | Non-coordinator sync response that waits for drain then sends key ack. |
+| `handleRotationSync(_:)` | Non-coordinator sync response that waits for drain then sends key ack. Takes the **scoped host pin** for the same reason as `runDebouncedRotation()`: `rotationSyncTask` is a stored handle, and the host read happens after the drain sleep. |
 | `handleKeyRotation(_:)` | Non-coordinator key application from elected coordinator and ack back to coordinator. |
 | `handleKeyAck(_:)` | Coordinator-side collection of sync-phase acks. |
 | `startObserving()` | Observes slot coordinator states/distances through the shared `ObservationLoop.start(on:tracking:onChange:)` and calls state/distance maintenance after each observed change. |
 | `checkCoordinatorStates()` | Commits newly connected slots with verified keys and removes stale uncommitted slots. |
 | `injectUITestStateIfNeeded()` | Seeds deterministic mesh/admission state from UI test environment variables. |
+| `broadcastCoordinatorBeaconForTesting(nextRotationAt:)` / `startBeaconLoopForTesting()` | Test seams for P5 item 1a. The first fires the per-slot beacon fan-out the crash reports name (`MeshHostPinTests` stages the host release against it); the second arms the 20-second beacon loop so `ProximityManagerDeallocationTests` can prove a store-owned manager still releases with its longest-lived stored task running (HP2). |
 
 ### `NetworkMeshFeasibilityProbe.swift` (DEBUG-only)
 
@@ -1419,6 +1421,7 @@ view-free so the session-end flows in `ConnectView` / `DisposableCameraView` sta
 | `ProximityRecipeShareDiagnosticEvent.init(...)` | Creates a timestamped diagnostic event. |
 | `ProximityRecipeShareDiagnostics.appending(_:to:maxCount:)` | Appends and caps diagnostics to the newest events. |
 | `init(store:)` | Provisions identity and configures recipe-share session callbacks. |
+| `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
 | `start()` | Starts recipe-share discovery/advertising and observation if not already running. |
 | `stop()` | Stops discovery/session, cancels tasks, clears recipients/connections/status. |
 | `refreshDiscovery()` | Restarts discovery while clearing peer and connection state. |
@@ -1586,6 +1589,7 @@ drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch 
 | Function Or Property | What It Does |
 | --- | --- |
 | `start()` / `stop()` | Lifecycle, owned by the app (opt-in setting + scene/tab/lock state) — not by this type. |
+| `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
 | `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster. |
 | `isReachable(fingerprint:)` | Whether a friend is currently tag-matched nearby. |
 | `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the 8-peer `MCSession` cap. |
@@ -1646,6 +1650,7 @@ at join, and roster convergence is max-version-wins.
 | Function | What It Does |
 | --- | --- |
 | `host(...)` / `endHosting(activityID:)` | Start and stop hosting an activity. |
+| `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. This type stores no `Task` handle at all, so every spawn in it goes through the helper. Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
 | `removeParticipant(activityID:fingerprint:)` | Host-side removal; bumps the roster version. |
 | `receiveOffer(_:fromFingerprint:verifiedHostSigningPublicKey:)` | Ingests an offer and pins the host key it will verify every later snapshot under. |
 | `receiveJoinRequest(...)` / `admitJoin(_:)` / `declineJoin(_:)` | Host side of joining. The grant is bound to the TRANSPORT-VERIFIED key, never the claimed one. |

@@ -250,7 +250,17 @@ final class FakePeerTransport: PeerTransport {
     /// This endpoint's own handle — what other endpoints address it by.
     let handle: PeerHandle
 
-    private unowned let network: FakePeerNetwork
+    /// The fabric this endpoint routes through — **`weak`, never `unowned`** (P5 item 1a).
+    ///
+    /// The fabric is owned by the rig that built the scenario, while an endpoint is handed to a
+    /// manager and lives in its `PeerSlot`. Since the manager now PINS its host for the lifetime of
+    /// every detached send (invariant HP1), a send queued at the end of a cell genuinely REACHES
+    /// this class after that rig — and its fabric — has gone. Held `unowned`, that read was
+    /// `swift_abortRetainUnowned`, i.e. the whole test process, which is the same trap one layer
+    /// down from the one item 1a closed. Weak makes the honest answer available instead: no fabric,
+    /// nothing carries, and the frame is recorded in ``fabricGoneFrames`` — deliberately NOT in
+    /// ``droppedFrames``, so a released rig can never satisfy a partition assertion.
+    private weak var network: FakePeerNetwork?
     private let stateSubject = CurrentValueSubject<PeerTransportState, Never>(.idle)
     private let inboundSubject = PassthroughSubject<InboundPeerFrame, Never>()
 
@@ -261,9 +271,20 @@ final class FakePeerTransport: PeerTransport {
     // MARK: Recorded calls
 
     private(set) var sentFrames: [(data: Data, peer: PeerHandle, mode: PeerDeliveryMode)] = []
-    /// Frames the fabric refused to carry, in send order. A dropped frame is the observable
+    /// Frames a LIVE fabric refused to carry, in send order. A dropped frame is the observable
     /// consequence of a partition, so it is recorded rather than thrown away.
+    ///
+    /// One cause only: ``FakePeerNetwork/carry(_:from:to:)`` returned false. A send that finds no
+    /// fabric at all is a rig-lifetime fact, not a partition, and lands in ``fabricGoneFrames``
+    /// instead (P5 item 1a review) — so a partition assertion can never be satisfied by a fabric
+    /// that simply deallocated mid-cell.
     private(set) var droppedFrames: [(data: Data, peer: PeerHandle, mode: PeerDeliveryMode)] = []
+    /// Frames sent after the fabric itself went away, in send order.
+    ///
+    /// Since ``network`` is `weak` (see its note), a send that outlives its rig reaches this class
+    /// with nothing to route through. That is a statement about the RIG's lifetime, so it is kept
+    /// apart from ``droppedFrames``, whose only meaning is "a live fabric refused to carry".
+    private(set) var fabricGoneFrames: [(data: Data, peer: PeerHandle, mode: PeerDeliveryMode)] = []
     private(set) var receivedFrames: [InboundPeerFrame] = []
     private(set) var lastServiceType: String?
     private(set) var lastDiscoveryInfo: [String: String]?
@@ -302,8 +323,16 @@ final class FakePeerTransport: PeerTransport {
 
     func send(_ data: Data, to peer: PeerHandle, mode: PeerDeliveryMode) async throws {
         sentFrames.append((data, peer, mode))
-        if !network.carry(data, from: handle, to: peer) {
+        // A gone fabric carries nothing, and neither does a partitioned one — but they are DIFFERENT
+        // facts, recorded apart. A pinned send may now outlive the rig that owned the fabric; that
+        // must never be able to impersonate the partition a cell is asserting on.
+        guard let network else {
+            fabricGoneFrames.append((data, peer, mode))
+            return
+        }
+        guard network.carry(data, from: handle, to: peer) else {
             droppedFrames.append((data, peer, mode))
+            return
         }
     }
 
@@ -335,6 +364,9 @@ final class FakePeerTransport: PeerTransport {
     }
 
     func deliverInbound(_ data: Data, from peer: PeerHandle) {
+        // Only the fabric calls this, so it is alive here; the guard is what `weak` costs, and it
+        // states the same fact as the send path rather than forcing an optional read.
+        guard let network else { return }
         let frame = InboundPeerFrame(
             peer: peer,
             data: data,

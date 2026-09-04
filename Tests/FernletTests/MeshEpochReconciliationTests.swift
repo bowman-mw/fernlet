@@ -556,7 +556,11 @@ struct MeshDivergentTunnelGateTests {
     /// The authority's answer is what opens the gate: a device holding a mesh AND a ledger can run
     /// the merge a reconciling tunnel exists for; one holding neither cannot, and keeps the refusal.
     @Test func onlyADeviceThatCanActuallyMergeMayReconcile() throws {
-        let bare = MeshNetworkManager(store: makeTestStore(), transport: FakeMeshTransportSession())
+        // The host must be held for the manager's whole life (invariant HP0): `store` is
+        // `unowned`, so an inline `makeTestStore()` would die at the end of this expression
+        // and leave `bare` born with a dangling reference. Rule ML5 keeps this hoisted.
+        let bareHost = makeTestStore()
+        let bare = MeshNetworkManager(store: bareHost, transport: FakeMeshTransportSession())
         #expect(!bare.mayReconcileDivergentEpochs, "no mesh, nothing to reconcile with")
 
         let meshID = UUID()

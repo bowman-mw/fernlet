@@ -148,6 +148,12 @@ struct MeshRoutedDrainRig {
     /// test PROCESS, taking every other suite's results with it. `consumePendingRotationForTesting`
     /// is the documented determinism seam for exactly this — it cancels the debounce and resets the
     /// triggers, and nothing after it asserts on either.
+    ///
+    /// P5 item 1a closed the process-abort hazard described above at the root: every detached spawn
+    /// in the manager now PINS its host for the operation's own lifetime (`spawnHostPinned(_:)`,
+    /// invariant HP1), so a late-landing send can no longer read a destroyed store. This order is
+    /// still the right one — it keeps a stray rotation out of the next cell's observations — but it
+    /// is now a determinism discipline rather than the only thing between a rig and a dead test host.
     func teardown() {
         // R2: bounded by the rig's own node count.
         for node in nodes { _ = node.manager.consumePendingRotationForTesting() }
@@ -164,6 +170,10 @@ struct MeshRoutedDrainRig {
     /// store **`unowned`** — one landing after this cell's store has gone traps the whole test
     /// PROCESS and takes every other suite's results with it. Yielding here drains them inside the
     /// cell's own lifetime, which is the only place they can safely land.
+    ///
+    /// Since P5 item 1a a late send pins its host, so landing outside the cell's lifetime is no
+    /// longer fatal (invariant HP1); draining here is still worth doing, because it keeps one cell's
+    /// leftover frames out of the next cell's channel recordings.
     ///
     /// Call it at the end of any cell that moved a roster; the `defer { teardown() }` stays as the
     /// failure path, and both are idempotent.
