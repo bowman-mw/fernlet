@@ -138,9 +138,104 @@ struct MeshRoutedDrainRig {
     }
 
     /// Ends every session, so nothing outlives the scenario.
+    ///
+    /// The pending rotation is consumed **before** the session ends, and that order is load-bearing.
+    /// A roster move arms a debounce that fires a couple of seconds later; a cell that finishes
+    /// sooner leaves it armed, and once `runDebouncedRotation` has started it is past every
+    /// cancellation point `leaveMesh` reaches — it goes on to `broadcastCoordinatorBeacon`, which
+    /// spawns one un-cancellable send `Task` per slot. Those tasks re-strengthen the manager, which
+    /// reads its host store **`unowned`**: one landing after this rig's store has gone traps the whole
+    /// test PROCESS, taking every other suite's results with it. `consumePendingRotationForTesting`
+    /// is the documented determinism seam for exactly this — it cancels the debounce and resets the
+    /// triggers, and nothing after it asserts on either.
     func teardown() {
         // R2: bounded by the rig's own node count.
+        for node in nodes { _ = node.manager.consumePendingRotationForTesting() }
         for node in nodes { node.manager.leaveMesh() }
+    }
+
+    /// Ends every session and then lets whatever the teardown could **not** cancel actually run,
+    /// while this rig's stores are still alive.
+    ///
+    /// `teardown()` cancels the armed debounce and empties the slots, but a rotation that had already
+    /// started is past every cancellation point it reaches: it goes on to
+    /// `broadcastCoordinatorBeacon`, which spawns one send `Task` per slot. Those tasks are not
+    /// cancellable, they re-strengthen the manager while they run, and the manager reads its host
+    /// store **`unowned`** — one landing after this cell's store has gone traps the whole test
+    /// PROCESS and takes every other suite's results with it. Yielding here drains them inside the
+    /// cell's own lifetime, which is the only place they can safely land.
+    ///
+    /// Call it at the end of any cell that moved a roster; the `defer { teardown() }` stays as the
+    /// failure path, and both are idempotent.
+    func quiesce() async {
+        teardown()
+        // R2: a hard constant ceiling. Each yield lets the main actor run one more queued send.
+        for _ in 0..<16 { await Task.yield() }
+    }
+
+    /// How many chunk slots one node holds for `key`.
+    func heldChunkCount(_ node: Int, _ key: MeshRoutedItemKey) -> Int {
+        routedIndex(nodes[node])?.record(for: key)?.chunks.count ?? 0
+    }
+
+    /// Delivers one already-minted routed frame from one node to another, through the real envelope
+    /// verification and the drain's own dispatch door — on an **injected** clock.
+    ///
+    /// The clock is the point: every admission, every `isLive(at:)` check and every `deliveredAt`
+    /// stamp downstream reads this one instant, and a fixture whose manifests expire on a fixed
+    /// calendar date would otherwise turn every hand-driven cell into a claim about the day the
+    /// suite ran. The settle-driven cells still take the manager's own `Date()` default.
+    ///
+    /// Hoisted onto the rig by P5 item 8, which needs it from its own file; `now` is resolved in the
+    /// body because a `@MainActor` static cannot be a default-argument value.
+    func deliver(
+        _ payload: some Encodable,
+        type: PayloadType,
+        sender: Int,
+        receiver: Int,
+        now: Date? = nil
+    ) async throws {
+        try dispatch(payload, type: type, sender: sender, receiver: receiver, now: now)
+        try await MeshDepartureRig.settle(nodes, on: fabric)
+    }
+
+    /// The same delivery **without** the settle, for a cell that hands over dozens of frames.
+    ///
+    /// The split is not cosmetic. `deliver` settles after every frame, which is right for a cell
+    /// driving one or two; a cell driving thirty-odd would hold the main actor for seconds, and every
+    /// other suite sharing this test process runs on it — including their managers' beacon and send
+    /// `Task`s, which read the manager's **`unowned` store**. One of those landing after its own rig
+    /// has been torn down traps the whole process, not just the cell that starved it. Settle once at
+    /// the end instead.
+    ///
+    /// Hoisted by P5 item 8's review round, which produced exactly that crash.
+    func dispatch(
+        _ payload: some Encodable,
+        type: PayloadType,
+        sender: Int,
+        receiver: Int,
+        now: Date? = nil
+    ) throws {
+        let now = now ?? MeshRoutedDrainRig.now
+        let frame = try FernletIdentityEnvelope.signed(
+            identityService: identities[sender], senderDisplayName: "drain",
+            recipientFingerprint: nodes[receiver].fingerprint,
+            payloadType: type, payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "routed"),
+            payload: try JSONEncoder().encode(payload),
+            createdAt: now
+        )
+        let node = nodes[receiver]
+        let coordinator = try #require(node.coordinators[nodes[sender].handle.endpoint])
+        let plaintext = try frame.verify(
+            identityService: node.manager.identityForTesting, replayCache: node.replayCache
+        )
+        let slot = node.manager.slots.first { $0.coordinator === coordinator }
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            node.manager.dispatchRoutedPayload(
+                type, plaintext: plaintext, decoder: JSONDecoder(), slot: slot, now: now
+            )
+        }
     }
 }
 
@@ -210,7 +305,7 @@ struct MeshRoutedDrainItem {
 struct MeshRoutedDrainTests {
 
     private func heldChunkCount(_ rig: MeshRoutedDrainRig, _ node: Int, _ key: MeshRoutedItemKey) -> Int {
-        rig.routedIndex(rig.nodes[node])?.record(for: key)?.chunks.count ?? 0
+        rig.heldChunkCount(node, key)
     }
 
     /// **The D-6.8 trap, pinned.** `receiveInventoryDigest` returns at its match branch before its
@@ -533,8 +628,18 @@ struct MeshRoutedDrainTests {
         let verdicts = capture.verdicts(
             of: "mesh.routedDrain.admitted", type: PayloadType.meshRoutedChunk.rawValue
         )
-        #expect(verdicts == ["admitted", "duplicate"],
-                "the admission line does not name its verdict: \(verdicts)")
+        // `FernletAuditLog` is PROCESS-GLOBAL and `.serialized` does not isolate across suites, so an
+        // exact list here is a claim about whatever else happened to be ingesting chunks in the same
+        // process — a latent flake P5 item 8's scenario suite made deterministic. The claim that
+        // matters survives whole: a re-sent chunk is NAMED a duplicate, and nothing outside the
+        // verdict vocabulary reaches the line. The fix is not an item id in the context: audit
+        // context is counts and frozen tokens, never content.
+        #expect(verdicts.contains("duplicate"),
+                "a re-sent chunk was logged as a plain admission: \(verdicts)")
+        let named = verdicts.allSatisfy { $0 == "admitted" || $0 == "duplicate" }
+        #expect(named, "an unnamed verdict reached the admission line: \(verdicts)")
+        #expect(heldChunkCount(rig, 1, item.key) == 1,
+                "the duplicate was named rather than staged a second time")
     }
 
     /// **D-6.15's negative.** A destination that holds a complete item addressed to {B, C} is not a
@@ -856,27 +961,7 @@ struct MeshRoutedDrainTests {
         receiver: Int,
         now: Date? = nil
     ) async throws {
-        let now = now ?? MeshRoutedDrainRig.now
-        let frame = try FernletIdentityEnvelope.signed(
-            identityService: rig.identities[sender], senderDisplayName: "drain",
-            recipientFingerprint: rig.nodes[receiver].fingerprint,
-            payloadType: type, payloadEncryption: .none,
-            payloadSummary: PayloadSummary(title: "routed"),
-            payload: try JSONEncoder().encode(payload),
-            createdAt: now
-        )
-        let node = rig.nodes[receiver]
-        let coordinator = try #require(node.coordinators[rig.nodes[sender].handle.endpoint])
-        let plaintext = try frame.verify(
-            identityService: node.manager.identityForTesting, replayCache: node.replayCache
-        )
-        let slot = node.manager.slots.first { $0.coordinator === coordinator }
-        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            node.manager.dispatchRoutedPayload(
-                type, plaintext: plaintext, decoder: JSONDecoder(), slot: slot, now: now
-            )
-        }
-        try await MeshDepartureRig.settle(rig.nodes, on: rig.fabric)
+        try await rig.deliver(payload, type: type, sender: sender, receiver: receiver, now: now)
     }
 }
 
@@ -975,7 +1060,25 @@ struct MeshRoutedDrainWallTests {
             #expect(!body.contains("sendRoutedInventory("),
                     "\(door) is not an ask: it must never carry routed bulk")
         }
+        #expect(source.components(separatedBy: "sendRoutedBulk(").count - 1 == 3,
+                "one declaration plus exactly two call sites: the drain answer and the hand-off push")
+        for door in Self.handoffDoors {
+            let body = try #require(Self.body(startingWith: door, in: source),
+                                    "\(door) is gone from MeshNetworkManager.swift")
+            #expect(!body.contains("sendInventoryDigest("),
+                    "\(door) asks nothing: a departure is not a merge exchange")
+            #expect(!body.contains("sendRoutedInventory("),
+                    "\(door) asks nothing: a departure is not a merge exchange")
+            #expect(body.components(separatedBy: "sendRoutedBulk(").count - 1 == 1,
+                    "\(door) moves bytes through the one extracted sender")
+        }
     }
+
+    /// The **third** door class, added by P5 item 8: the one-moment hand-off. It is neither an ask
+    /// door (it opens no exchange and sends no digest of either kind) nor a non-ask membership door
+    /// (it carries routed bulk, which those may never do), so it needs its own row rather than a
+    /// count that would stay green by accident. Increment 1 has exactly one of them.
+    private static let handoffDoors = ["private func pushCustodyToCustodians("]
 
     /// The two doors that send a membership digest WITHOUT opening an exchange: the post-merge proof
     /// (P5 item 7, D-7.8) and the joiner's post-adoption digest (D-7.33).

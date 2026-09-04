@@ -75,6 +75,95 @@ extension MeshConvergenceRun {
         return MeshRoutedItemKey(manifest)
     }
 
+    /// **P5 item 8's seam into the battery**: one member develops, on an injected clock, with no
+    /// randomness of its own.
+    ///
+    /// Deliberately **not** a new `MeshScheduleEvent` case — the vocabulary is item 14's to grow, and
+    /// adding one here would trip `theMatrixExecutesEveryEventInTheVocabulary`. The schedule already
+    /// carries `departure`; this is the routed half of what one costs.
+    ///
+    /// - Returns: what the development's custody transfer actually did.
+    @discardableResult
+    func routedDevelopmentEvent(
+        at member: MeshConvergenceMember, now: Date
+    ) async -> MeshCustodyHandoffResult {
+        let clock = MeshTerminationFixtures.SteppedClock(
+            [now, now.addingTimeInterval(3), now.addingTimeInterval(3)]
+        )
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await member.node.manager.leaveSessionAfterNotifyingPeers(clock: { clock.next() })
+        }
+        return member.node.manager.lastDevelopmentHandoff ?? .none
+    }
+
+    /// **The hop invariant** — the property a plausible-looking widening would silently remove — and
+    /// the positive fact every part of it depends on.
+    ///
+    /// Every device that carries a `custodied(by: self)` rung for an item it did not originate is a
+    /// device the leaver's own signed record **named** and one the origin **served the manifest to
+    /// directly** (§4.2a). There is no third courier, at any distance from the origin.
+    ///
+    /// The count is pinned first, and at least one courier is required to exist: a subset claim over
+    /// an empty set proves nothing, so a regression that suppressed the transfer entirely has to
+    /// fail here rather than pass vacuously.
+    func routedHandoffInvariants(
+        origin: MeshConvergenceMember, key: MeshRoutedItemKey, handoff: MeshCustodyHandoffResult
+    ) {
+        #expect(handoff.transferredItemCount == 1,
+                "the development transferred nothing, so every claim below would be vacuous")
+        let named = Set(origin.node.manager.lastDevelopmentPlan?.handoffTargets ?? [])
+        var couriers: Set<String> = []
+        // R2: bounded by the roster cap.
+        for member in members where member.index != origin.index {
+            guard let target = routedIndex(of: member)?.record(for: key)?.deliveryTarget else {
+                continue
+            }
+            let holders = Set(target.destinations.compactMap {
+                target.state(of: $0)?.custodianFingerprint
+            })
+            #expect(holders.subtracting(named).isEmpty,
+                    "a courier the leaver's own departure record never named: \(holders)")
+            if holders.contains(member.fingerprint) {
+                #expect(member.node.manager.originServedItemsForTesting.contains(key),
+                        "a courier the origin never served the manifest to — that is a second hop")
+            }
+            couriers.formUnion(holders)
+        }
+        #expect(couriers.isEmpty == false,
+                "no survivor carries a courier rung at all, so the subset claims proved nothing")
+    }
+
+    /// Drains `key` inside the ORIGIN's own branch only — the shape a development actually needs.
+    ///
+    /// The branch partner ends up holding the ciphertext and the origin holding its signed custody
+    /// receipt, while every destination on the far side of the split is still `pending`. Draining
+    /// the **whole** mesh first is what makes a development vacuous: with nothing outstanding the
+    /// transfer has no candidates at all, and every hand-off assertion then holds with the entire
+    /// mechanism removed.
+    ///
+    /// Bounded (R2), with an early exit the moment the origin holds a custody receipt.
+    func runBranchDrainRounds(origin: MeshConvergenceMember, key: MeshRoutedItemKey) async throws {
+        let branch = livingMembers.filter { $0.branch == origin.branch }
+        // R2: a hard constant ceiling.
+        for _ in 0..<Self.routedDrainRounds {
+            if routedIndex(of: origin)?.record(for: key)?.receipts.isEmpty == false { return }
+            DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+                // R2: bounded by the branch size, squared.
+                for (position, near) in branch.enumerated() {
+                    for far in branch.dropFirst(position + 1) {
+                        near.node.manager.applySessionEvent(
+                            .peerCommitted, committedPeer: far.fingerprint
+                        )
+                        far.node.manager.applySessionEvent(
+                            .peerCommitted, committedPeer: near.fingerprint
+                        )
+                    }
+                }
+            }
+            try await MeshDepartureRig.settle(branch.map(\.node), on: fabric)
+        }
+    }
+
     /// One living member's routed index, or nil for every non-`.loaded` state.
     func routedIndex(of member: MeshConvergenceMember) -> MeshRoutedIndex? {
         let load = DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
@@ -194,6 +283,55 @@ struct MeshRoutedDrainConvergenceTests {
         run.routedInvariants(origin, key)
         #expect(run.routedOutstanding(at: origin, key: key).isEmpty,
                 "a reachable survivor destination never reached delivered")
+    }
+
+    /// **P5 item 8 in the battery.** The origin drains **inside its own branch**, develops there, and
+    /// the hop invariant holds across every survivor: exactly one item transfers, the courier is one
+    /// the leaver named and served directly, and nothing else couriers anything.
+    ///
+    /// The development happens while the far branch is still owed the item, deliberately: a
+    /// development after a full heal-and-drain has no outstanding leg to hand, so the transfer would
+    /// have nothing to do and every assertion would hold with the mechanism deleted.
+    @Test func aDevelopmentHandsCustodyOnlyToTheCustodiansItNamed() async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
+        )
+        let run = try MeshConvergenceRun.build(schedule, label: "routed-handoff")
+        // The rotation is consumed BEFORE the sessions end: a development arms a debounce that fires
+        // seconds later, and once it has started it runs on to `broadcastCoordinatorBeacon`, which
+        // spawns un-cancellable send tasks that re-strengthen a manager whose host store has already
+        // gone. That traps the whole test process, not just this cell.
+        defer {
+            for node in run.livingNodes { _ = node.manager.consumePendingRotationForTesting() }
+            for node in run.livingNodes { node.manager.leaveMesh() }
+        }
+        try await run.runSplitEvents()
+
+        let origin = try #require(run.livingMembers.first { member in
+            run.livingMembers.filter { $0.branch == member.branch }.count >= 2
+        }, "the cell needs a branch of at least two survivors to hand custody inside")
+        let key = try run.routedCustodyEvent(
+            at: origin, chunks: 1, now: MeshP3Acceptance.base.addingTimeInterval(600)
+        )
+        try await run.runBranchDrainRounds(origin: origin, key: key)
+        #expect(run.routedIndex(of: origin)?.record(for: key)?.receipts.isEmpty == false,
+                "the branch partner must have taken the bytes and receipted for them")
+        #expect(run.routedOutstanding(at: origin, key: key).isEmpty == false,
+                "and the far branch must still be owed the item, or there is nothing to hand over")
+        let handoff = await run.routedDevelopmentEvent(
+            at: origin, now: MeshP3Acceptance.base.addingTimeInterval(900)
+        )
+        try await MeshDepartureRig.settle(run.livingNodes, on: run.fabric)
+        // A second pump, so anything the first one's rotation spawned runs INSIDE this cell.
+        try await MeshDepartureRig.settle(run.livingNodes, on: run.fabric)
+
+        run.routedHandoffInvariants(origin: origin, key: key, handoff: handoff)
+        // Ends the sessions and then lets whatever the teardown could not cancel actually run, while
+        // these stores are still alive — see `MeshRoutedDrainRig.quiesce()`.
+        for node in run.livingNodes { _ = node.manager.consumePendingRotationForTesting() }
+        for node in run.livingNodes { node.manager.leaveMesh() }
+        // R2: a hard constant ceiling.
+        for _ in 0..<16 { await Task.yield() }
     }
 
     /// The seed family is fixed and derived from the one root — never drawn at run time.

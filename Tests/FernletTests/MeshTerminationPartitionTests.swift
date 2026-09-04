@@ -87,7 +87,10 @@ enum MeshTerminationFixtures {
     }
 
     /// A clock that answers `instants` in order and then repeats the last one, for the injected
-    /// handoff window. A class so the manager's two reads advance the same cursor.
+    /// handoff window. A class so the manager's **three** reads — window open, custody transfer
+    /// (P5 item 8), outcome — advance the same cursor, plus one more per custodian inside the
+    /// departure push. Saturation is what keeps a two-instant list honest: a later read simply
+    /// re-reads the last instant rather than running off the end.
     final class SteppedClock {
 
         private let instants: [Date]
@@ -200,7 +203,8 @@ struct MeshDevelopmentPlanTests {
         )
         #expect(solo.handoffOutcome(finishedAt: base.addingTimeInterval(3)) == .noReachableCustodian)
         #expect(plan.handoffSummary.custodianFingerprints == [names[1]])
-        #expect(plan.handoffSummary.handedOffItemCount == 0, "the item count is P5's half")
+        #expect(plan.handoffSummary.handedOffItemCount == 0,
+                "the zero-argument summary is the nothing-transferred answer")
     }
 
     /// **Issuance is gated on the merged derived roster.** Two or fewer members may sign a
@@ -556,7 +560,10 @@ extension MeshTerminationSplitScenario {
         let departure = nodeB.manager.membershipVerifier?.ledger.departures.earliest
         #expect(departure?.custodyHandoff.custodianFingerprints == [nodeB.fingerprint],
                 "the record names the custodian the 15 s handoff went to")
-        #expect(departure?.custodyHandoff.handedOffItemCount == 0, "the item count is P5's half")
+        #expect(departure?.custodyHandoff.handedOffItemCount == 0,
+                "an empty routed store hands over nothing, and says so")
+        #expect(nodeA.manager.lastDevelopmentHandoff?.suppression == nil,
+                "held nothing is not the same claim as could not read, and this is the former")
 
         // B meets C, and only then C gossips onward to D. The order is load-bearing:
         // `reGossipRecords(to:)` answers a differing digest ONCE per peer per session, so a D that

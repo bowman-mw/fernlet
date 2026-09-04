@@ -974,7 +974,9 @@ struct MeshRoutedDeliveryIngestTests {
         #expect(Ack.ingest(peerReceipt, into: rig).value?.target != nil)
         let closed = try #require(MeshRoutedCustodyFixtures.loadedIndex(rig.store))
         #expect(closed.itemsFullyDelivered(at: Fixture.now, in: rig.rig.roster).map(\.key) == [rig.key])
-        #expect(closed.itemsAwaitingHandoff(at: Fixture.now, in: rig.rig.roster).isEmpty)
+        #expect(closed.itemsAwaitingHandoff(
+            at: Fixture.now, in: rig.rig.roster, originatedBy: rig.origin.localFingerprint
+        ).isEmpty)
     }
 
     /// A recipient's own inbox copy is "fully delivered" and is emphatically NOT reclaimable — the

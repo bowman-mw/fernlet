@@ -359,8 +359,10 @@ struct MeshRoutedDeliveryPersistenceTests {
 
         // The healthy item is enumerated by all of them…
         #expect(index.outstandingDestinations(for: healthyKey, in: rig.roster) == destinations)
-        #expect(index.itemsAwaitingHandoff(at: now, in: rig.roster).map(\.key) == [healthyKey])
-        #expect(index.handoffCandidateCount(at: now, in: rig.roster) == 1)
+        let origin = refusing.originFingerprint
+        #expect(index.itemsAwaitingHandoff(at: now, in: rig.roster, originatedBy: origin)
+                .map(\.key) == [healthyKey])
+        #expect(index.handoffCandidateCount(at: now, in: rig.roster, originatedBy: origin) == 1)
         #expect(index.outstandingItems(at: now, in: rig.roster).count == destinations.count)
 
         // …and the one that will not restore by none of them.
@@ -375,7 +377,9 @@ struct MeshRoutedDeliveryPersistenceTests {
         // It is named instead of dropped, and a parked item is NOT named — it has no signed set.
         #expect(index.itemsWithUnrestorableDelivery(at: now).map(\.key) == [refusedKey])
         #expect(index.itemsWithUnrestorableDelivery(at: now).allSatisfy { $0.deliveryRestoreRefused })
-        let healthyRef = try #require(index.itemsAwaitingHandoff(at: now, in: rig.roster).first)
+        let healthyRef = try #require(
+            index.itemsAwaitingHandoff(at: now, in: rig.roster, originatedBy: origin).first
+        )
         #expect(healthyRef.deliveryRestoreRefused == false)
         let parked = MeshRoutedIndex(items: [MeshRoutedStoreFixtures.record()])
         #expect(parked.itemsWithUnrestorableDelivery(at: now).isEmpty)
@@ -686,7 +690,7 @@ struct MeshRoutedCustodyEvidenceTests {
         let files = [
             "MeshRoutedStore.swift", "MeshRoutedCustody.swift", "MeshRoutedCustodyCommit.swift",
             "MeshRoutedIndex.swift", "MeshRoutedStoreKey.swift", "MeshRoutedContentHasher.swift",
-            "MeshChunkAdmissionRule.swift"
+            "MeshChunkAdmissionRule.swift", "MeshRoutedCustodyHandoff.swift"
         ]
         var scanned = 0
         var sealing: [String] = []
