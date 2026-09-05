@@ -503,6 +503,127 @@ struct MeshFrameReplayWindowTests {
         #expect(window.admit(frameID: UUID(), from: "0000000000000fff", meshID: Self.meshID,
                              expiresAt: Self.expiry, now: MeshEpochFixtures.base) == .senderWindowFull)
     }
+
+    // MARK: - P5 item 12: the routed instance's two axes
+
+    /// **The arithmetic the routed wiring rests on.** One maximal item's whole frame family — 1024
+    /// chunk ids plus its manifest — fits on ONE author's axis at the routed frame cap, so the 65th
+    /// chunk of a 16 MiB item is ordinary traffic rather than the `senderWindowFull` the pre-item-12
+    /// static would have answered.
+    @Test func aMaximalItemsFramesAllFitOneAuthorsAxis() {
+        var window = MeshFrameReplayWindow(
+            meshID: Self.meshID, framesPerSender: MeshRoutedDrainBounds.sessionFramesPerPeer
+        )
+        let author = MeshEpochFixtures.coordinatorA
+        var refusals = 0
+        // R2: bounded by the chunk format's own maximal item, plus its manifest.
+        for _ in 0...MeshChunkFormat.maxChunkCount {
+            let verdict = window.admit(frameID: UUID(), from: author, meshID: Self.meshID,
+                                       expiresAt: Self.expiry, now: MeshEpochFixtures.base)
+            if verdict != .admitted { refusals += 1 }
+        }
+        #expect(refusals == 0, "a maximal item's frame family did not fit one author's axis")
+        #expect(window.recordedCount(for: author) == MeshChunkFormat.maxChunkCount + 1)
+        #expect(MeshRoutedDrainBounds.sessionFramesPerPeer >= MeshChunkFormat.maxChunkCount + 1,
+                "the frame cap must carry a maximal item plus its manifest")
+    }
+
+    /// **The keying, from the other direction.** `MeshChunk.chunkID` deliberately omits the origin,
+    /// so two origins can present the identical id for the same `(itemID, index)` — and both are
+    /// admitted, because the window's own axis is the author.
+    @Test func twoOriginsMayPresentTheSameChunkID() {
+        var window = MeshFrameReplayWindow(meshID: Self.meshID)
+        let shared = MeshRoutedContentDigest.chunkID(itemID: Self.meshID, chunkIndex: 7)
+
+        #expect(window.admit(frameID: shared, from: MeshEpochFixtures.coordinatorA,
+                             meshID: Self.meshID, expiresAt: Self.expiry,
+                             now: MeshEpochFixtures.base) == .admitted)
+        #expect(window.admit(frameID: shared, from: MeshEpochFixtures.coordinatorB,
+                             meshID: Self.meshID, expiresAt: Self.expiry,
+                             now: MeshEpochFixtures.base) == .admitted)
+        #expect(window.admit(frameID: shared, from: MeshEpochFixtures.coordinatorA,
+                             meshID: Self.meshID, expiresAt: Self.expiry,
+                             now: MeshEpochFixtures.base) == .replayed)
+    }
+
+    /// A per-instance frame cap still refuses rather than growing — the bound holds under a hostile
+    /// author however the instance is sized.
+    @Test func aFullAuthorAxisRefusesRatherThanGrowing() {
+        var window = MeshFrameReplayWindow(meshID: Self.meshID, framesPerSender: 4)
+        let author = MeshEpochFixtures.coordinatorA
+        // R2: the instance's own cap.
+        for _ in 0..<4 {
+            #expect(window.admit(frameID: UUID(), from: author, meshID: Self.meshID,
+                                 expiresAt: Self.expiry, now: MeshEpochFixtures.base) == .admitted)
+        }
+        #expect(window.admit(frameID: UUID(), from: author, meshID: Self.meshID,
+                             expiresAt: Self.expiry, now: MeshEpochFixtures.base) == .senderWindowFull)
+        #expect(window.recordedCount(for: author) == 4, "a refusal must not grow the axis")
+    }
+
+    /// And one full author leaves every other author's axis untouched — the whole point of keying
+    /// per author rather than per session.
+    @Test func aFullAuthorAxisLeavesOtherAuthorsUnaffected() {
+        var window = MeshFrameReplayWindow(meshID: Self.meshID, framesPerSender: 4)
+        // R2: the instance's own cap, plus the one that overflows it.
+        for _ in 0..<5 {
+            _ = window.admit(frameID: UUID(), from: MeshEpochFixtures.coordinatorA,
+                             meshID: Self.meshID, expiresAt: Self.expiry, now: MeshEpochFixtures.base)
+        }
+        #expect(window.admit(frameID: UUID(), from: MeshEpochFixtures.coordinatorB,
+                             meshID: Self.meshID, expiresAt: Self.expiry,
+                             now: MeshEpochFixtures.base) == .admitted)
+    }
+
+    /// **The routed author population is the ADMISSION set, not the derived roster.** Every routed
+    /// verifier resolves its author's key from `ledger.admissions.all`, whose capacity is
+    /// `maxRecordsPerKind`; the roster cap of 8 is tighter, and a departed origin — whose content
+    /// stays valid and keeps moving under custody transfer — is not a roster member at all. At the
+    /// roster cap the 9th author's every frame would answer `senderWindowFull` and never be caught
+    /// on repeat, which is the defence silently off for exactly that traffic.
+    @Test func theAuthorAxisIsTheAdmissionCapNotTheRosterCap() {
+        var window = MeshFrameReplayWindow(
+            meshID: Self.meshID, maxSenders: MeshMembershipBounds.maxRecordsPerKind
+        )
+        let frame = UUID()
+        // R2: bounded by the admission-set capacity.
+        for index in 0..<MeshMembershipBounds.maxRecordsPerKind {
+            let author = String(format: "00000000000000%02x", index)
+            #expect(window.admit(frameID: frame, from: author, meshID: Self.meshID,
+                                 expiresAt: Self.expiry, now: MeshEpochFixtures.base) == .admitted)
+        }
+        let ninth = String(format: "00000000000000%02x", MeshMembershipBounds.maxRosterMembers)
+        #expect(window.admit(frameID: frame, from: ninth, meshID: Self.meshID,
+                             expiresAt: Self.expiry, now: MeshEpochFixtures.base) == .replayed,
+                "an author one past the ROSTER cap must still be tracked, and its repeat caught")
+        #expect(window.admit(frameID: UUID(), from: "0000000000000fff", meshID: Self.meshID,
+                             expiresAt: Self.expiry, now: MeshEpochFixtures.base) == .senderWindowFull,
+                "and the axis past the ADMISSION cap is where the refusal lands")
+        #expect(MeshMembershipBounds.maxRecordsPerKind >= MeshMembershipBounds.maxRosterMembers)
+    }
+
+    /// **The one thing the store can give back.** A chunk repair drops a slot and a peer re-offers
+    /// that exact chunk under the identical derived id, so the id must be un-recordable — and the
+    /// author's axis must survive it, because releasing an axis is the eviction primitive this type
+    /// refuses to offer.
+    @Test func aForgottenFrameIsReAdmittableAndKeepsItsAuthorsAxis() {
+        var window = MeshFrameReplayWindow(meshID: Self.meshID)
+        let author = MeshEpochFixtures.coordinatorA
+        let slot = MeshRoutedContentDigest.chunkID(itemID: Self.meshID, chunkIndex: 3)
+        let other = UUID()
+        _ = window.admit(frameID: slot, from: author, meshID: Self.meshID,
+                         expiresAt: Self.expiry, now: MeshEpochFixtures.base)
+        _ = window.admit(frameID: other, from: author, meshID: Self.meshID,
+                         expiresAt: Self.expiry, now: MeshEpochFixtures.base)
+
+        window.forget(frameID: slot, from: author)
+
+        #expect(window.admit(frameID: slot, from: author, meshID: Self.meshID,
+                             expiresAt: Self.expiry, now: MeshEpochFixtures.base) == .admitted)
+        #expect(window.admit(frameID: other, from: author, meshID: Self.meshID,
+                             expiresAt: Self.expiry, now: MeshEpochFixtures.base) == .replayed,
+                "forgetting one id must not clear the author's whole history")
+    }
 }
 
 // MARK: - MeshEpochKeyringHolder

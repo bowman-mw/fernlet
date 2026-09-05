@@ -639,9 +639,19 @@ struct MeshRoutedDrainTests {
     /// a re-sent chunk is `.completed(.duplicate)` and a peer offering different bytes for a slot
     /// this device holds is `.completed(.refused(.conflictingChunk))` — logging either as a plain
     /// admission satisfies "no drop is unnamed" in letter only.
+    ///
+    /// **P5 item 12 moved which re-sends reach the store, and this cell was re-aimed rather than
+    /// relaxed.** A byte-identical re-send from the same author is now answered `replayed` at the
+    /// door, before the store, so the store's own duplicate verdict is reached exactly when the
+    /// replay window falls through — the deliberate, named degradation at a full axis. The cell
+    /// therefore drives a window whose frame axis the manifest alone fills, which is the only path
+    /// on which a duplicate still arrives, and keeps all three of its claims: the verdict is
+    /// `duplicate`, nothing outside the vocabulary reaches the line, and the slot is not staged
+    /// twice.
     @Test func aReSentChunkIsLoggedAsADuplicateNotAnAdmission() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "drain-verdict")
         defer { rig.teardown() }
+        rig.nodes[1].manager.routedReplayCapacityForTesting = 1
         let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
         item.stage(into: rig, at: 0)
         rig.link(0, 1)
@@ -971,6 +981,506 @@ struct MeshRoutedDrainTests {
         #expect(causes.subtracting([.merge]).isEmpty, "the drain raised a rotation of its own")
     }
 
+    // MARK: - P5 item 12: the replay window, wired against routed content ids
+
+    /// **The manifest door answers a replay BEFORE the verifier.** The second frame carries a
+    /// tampered signature, so a verifier that ran first would name its own rejection; the window
+    /// names `replayed` instead, and the store still holds the first manifest's bytes.
+    @Test func aReplayedManifestIsAnsweredBeforeTheVerifier() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-manifest")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        rig.link(0, 1)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            from: rig, sender: 0, receiver: 1
+        )
+        let tampered = MeshRoutedManifestTamper.signatureByte.applied(to: item.manifest)
+        try await deliver(
+            MeshRoutedManifestPayload(manifest: tampered), type: .meshRoutedManifest,
+            from: rig, sender: 0, receiver: 1
+        )
+
+        let reasons = capture.reasons(
+            of: "mesh.routedDrain.rejected", type: PayloadType.meshRoutedManifest.rawValue
+        )
+        #expect(reasons.contains("replayed"),
+                "the replay was not answered before the signature check: \(reasons)")
+        #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.manifest == item.manifest,
+                "the tampered manifest reached the store")
+    }
+
+    /// **And a byte-identical replay never reaches the store at all.** The record's admission
+    /// instant and chunk set are the state read: only a second store pass could move either.
+    @Test func aReplayedManifestNeverReachesTheStore() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-manifest-twice")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        rig.link(0, 1)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            from: rig, sender: 0, receiver: 1
+        )
+        let first = try #require(rig.routedIndex(rig.nodes[1])?.record(for: item.key))
+        try await deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            from: rig, sender: 0, receiver: 1
+        )
+
+        let reasons = capture.reasons(
+            of: "mesh.routedDrain.rejected", type: PayloadType.meshRoutedManifest.rawValue
+        )
+        #expect(reasons.contains("replayed"), "the second manifest was not named a replay")
+        let second = try #require(rig.routedIndex(rig.nodes[1])?.record(for: item.key))
+        #expect(second.firstSeenAt == first.firstSeenAt, "the store ran a second admission")
+        #expect(second.chunks.count == first.chunks.count)
+    }
+
+    /// **The chunk door answers before its two SHA-256 passes.** The replayed chunk carries a
+    /// tampered payload — same derived `chunkID`, since the id is `H(itemID ‖ index)` — so a
+    /// verifier that ran first would answer `chunkHashMismatch` instead.
+    @Test func aReplayedChunkIsAnsweredBeforeItsTwoHashes() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-chunk")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        rig.link(0, 1)
+        let first = try #require(item.chunks.first)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try rig.dispatch(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            sender: 0, receiver: 1
+        )
+        try rig.dispatch(
+            MeshChunkPayload(chunk: first), type: .meshRoutedChunk, sender: 0, receiver: 1
+        )
+        var payload = first.payload
+        payload[payload.startIndex] ^= 0x01
+        try await deliver(
+            MeshChunkPayload(chunk: first.replacing(payload: payload)), type: .meshRoutedChunk,
+            from: rig, sender: 0, receiver: 1
+        )
+
+        let reasons = capture.reasons(
+            of: "mesh.routedDrain.rejected", type: PayloadType.meshRoutedChunk.rawValue
+        )
+        #expect(reasons.contains("replayed"), "the replayed chunk paid for its hashes: \(reasons)")
+        #expect(heldChunkCount(rig, 1, item.key) == 1)
+    }
+
+    /// **A replayed custody receipt is refused before the store.** The receipt is the one the drain
+    /// itself minted, replayed verbatim; the evidence set stays at one.
+    @Test func aReplayedCustodyReceiptIsRefusedBeforeTheStore() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-custody")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        item.stage(into: rig, at: 0)
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        try await rig.settle([0, 1], until: {
+            rig.routedIndex(rig.nodes[0])?.record(for: item.key)?.receipts.isEmpty == false
+        })
+        let receipt = try #require(rig.routedIndex(rig.nodes[0])?.record(for: item.key)?.receipts.first)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await deliver(
+            MeshCustodyReceiptPayload(receipt: receipt), type: .meshCustodyReceipt,
+            from: rig, sender: 1, receiver: 0
+        )
+
+        let reasons = capture.reasons(
+            of: "mesh.routedDrain.rejected", type: PayloadType.meshCustodyReceipt.rawValue
+        )
+        #expect(reasons.contains("replayed"), "a re-sent custody receipt reached the store")
+        #expect(rig.routedIndex(rig.nodes[0])?.record(for: item.key)?.receipts.count == 1)
+    }
+
+    /// **And a replayed recipient receipt likewise.** Three nodes, so the origin still owes node 2
+    /// and item 9's reclaim cannot drop the record out from under the claim.
+    @Test func aReplayedRecipientReceiptIsRefusedBeforeTheStore() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-recipient")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        item.stage(into: rig, at: 0)
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        try await rig.settle([0, 1], until: {
+            rig.routedIndex(rig.nodes[0])?.record(for: item.key)?.recipientReceipts.isEmpty == false
+        })
+        let receipt = try #require(
+            rig.routedIndex(rig.nodes[0])?.record(for: item.key)?.recipientReceipts.first
+        )
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await deliver(
+            MeshRecipientReceiptPayload(receipt: receipt), type: .meshRecipientReceipt,
+            from: rig, sender: 1, receiver: 0
+        )
+
+        let reasons = capture.reasons(
+            of: "mesh.routedDrain.rejected", type: PayloadType.meshRecipientReceipt.rawValue
+        )
+        #expect(reasons.contains("replayed"), "a re-sent recipient receipt reached the store")
+        #expect(rig.routedIndex(rig.nodes[0])?.record(for: item.key)?.recipientReceipts.count == 1)
+    }
+
+    /// **The axis is the ORIGIN, not the forwarding envelope's sender.** One origin's chunk offered
+    /// by two different couriers is one window row, so the second is a replay — which a window keyed
+    /// on `context.sender` would have admitted twice and caught never.
+    @Test func oneOriginsChunkForwardedByTwoCustodiansIsOneWindowRow() async throws {
+        let rig = try MeshRoutedDrainRig.build(4, label: "replay-couriers")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        rig.link(0, 3)
+        rig.link(1, 3)
+        rig.link(2, 3)
+        let first = try #require(item.chunks.first)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try rig.dispatch(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            sender: 0, receiver: 3
+        )
+        try rig.dispatch(
+            MeshChunkPayload(chunk: first), type: .meshRoutedChunk, sender: 1, receiver: 3
+        )
+        try await deliver(
+            MeshChunkPayload(chunk: first), type: .meshRoutedChunk, from: rig, sender: 2, receiver: 3
+        )
+
+        let reasons = capture.reasons(
+            of: "mesh.routedDrain.rejected", type: PayloadType.meshRoutedChunk.rawValue
+        )
+        #expect(reasons.contains("replayed"), "the second courier's copy was admitted a second time")
+        #expect(heldChunkCount(rig, 3, item.key) == 1)
+    }
+
+    /// **An epoch rotation does not release a routed frame.** The window knows nothing about epochs
+    /// by construction, and this is the cell that says so from the manager's side — item 13's
+    /// precondition, asserted rather than asserted-about.
+    ///
+    /// The rotation is driven so that it actually happens, and every step of that is load-bearing
+    /// (the review round that added them found the cell was a byte-identical duplicate of
+    /// ``aReplayedManifestNeverReachesTheStore`` in most runs):
+    ///
+    /// - **The coordinator is looked up, never assumed.** `initiateRotation` returns at
+    ///   `plannedRotation()` unless this device *is* `epochCoordinatorFingerprint`, which is the
+    ///   presented roster's `min()`; the rig's identities are freshly minted keypairs, so a fixed
+    ///   node index is the minimum about one run in three.
+    /// - **The mint runs under the rig's one pinned install binding**, the
+    ///   `MeshReconcileFixtures.mint` idiom: the rotation is abandoned at
+    ///   `persistSessionContext(addingEpochHead:)` — durable before acknowledged — when the seal has
+    ///   no `DeviceBindingID` to bind to, and abandons it silently.
+    /// - **The coordinator is the UNLINKED third node.** A coordinator holding an active slot spends
+    ///   the ten-second rotation ack window waiting on a peer that no pump is answering; this lane
+    ///   takes no wall-clock time, so the minted head is folded into the receiver through the same
+    ///   seam a merge would (`MeshDepartureRig.seedEpoch`) instead.
+    /// - **The receiver's own epoch must move**, from a real predecessor to the real successor, or
+    ///   the claim below is about a device whose epoch never changed.
+    @Test func anEpochRotationDoesNotReleaseARoutedFrame() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-epoch")
+        defer { rig.teardown() }
+        let minter = try #require(rig.nodes[0].manager.epochCoordinatorFingerprintForTesting)
+        let coordinator = try #require(rig.nodes.firstIndex { $0.fingerprint == minter })
+        let others = rig.nodes.indices.filter { $0 != coordinator }
+        #expect(others.count == 2, "the two non-coordinator nodes are this cell's link")
+        let origin = try #require(others.first)
+        let receiver = try #require(others.last)
+        let opening = try MeshReconcileFixtures.head(2, rig.identities[coordinator], rig.meshID)
+        MeshDepartureRig.seedEpoch(rig.nodes[coordinator], head: opening)
+        MeshDepartureRig.seedEpoch(rig.nodes[receiver], head: opening)
+        let item = try MeshRoutedDrainItem.mint(rig, origin: origin)
+        rig.link(origin, receiver)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            from: rig, sender: origin, receiver: receiver
+        )
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await rig.nodes[coordinator].manager.rotateNowForTesting(cause: .merge)
+        }
+        let minted = try #require(rig.nodes[coordinator].manager.epochKeyring?.head,
+                                  "the elected coordinator must actually mint a successor")
+        #expect(minted != opening, "a rotation that did not move the epoch proves nothing")
+        MeshDepartureRig.seedEpoch(rig.nodes[receiver], head: minted)
+        #expect(rig.nodes[receiver].manager.epochKeyring?.head == minted,
+                "the receiver must be on the new epoch, or the claim below is vacuous")
+
+        try await deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            from: rig, sender: origin, receiver: receiver
+        )
+
+        let reasons = capture.reasons(
+            of: "mesh.routedDrain.rejected", type: PayloadType.meshRoutedManifest.rawValue
+        )
+        #expect(reasons.contains("replayed"), "a rotation released a recorded routed frame")
+        #expect(rig.nodes[receiver].manager.routedReplayWindowForTesting?
+                    .recordedCount(for: rig.nodes[origin].fingerprint) == 1)
+    }
+
+    /// **Cleared at a session reset, and only there.** A new session is a new window; a partition
+    /// flap is not, which is what the wall asserts from the other side.
+    @Test func theWindowIsClearedAtASessionReset() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-reset")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        rig.link(0, 1)
+
+        try await deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            from: rig, sender: 0, receiver: 1
+        )
+        #expect(rig.nodes[1].manager.routedReplayWindowForTesting != nil,
+                "the window must exist before the reset, or the claim is vacuous")
+
+        rig.nodes[1].manager.leaveMesh()
+
+        #expect(rig.nodes[1].manager.routedReplayWindowForTesting == nil)
+    }
+
+    /// **A full axis is a named degradation, never a refusal.** Driven to a capacity of one, the
+    /// window answers `senderWindowFull` to the next distinct frame — and that frame still lands.
+    /// A window that refused here would wedge an origin for the whole session.
+    @Test func aFrameArrivingAtAFullWindowStillLands() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-full")
+        defer { rig.teardown() }
+        rig.nodes[1].manager.routedReplayCapacityForTesting = 1
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        rig.link(0, 1)
+        let first = try #require(item.chunks.first)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try rig.dispatch(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            sender: 0, receiver: 1
+        )
+        try await deliver(
+            MeshChunkPayload(chunk: first), type: .meshRoutedChunk, from: rig, sender: 0, receiver: 1
+        )
+
+        #expect(heldChunkCount(rig, 1, item.key) == 1,
+                "a legitimate frame was dropped by a full replay window")
+        #expect(capture.values(of: "mesh.routedDrain.replayWindowFull", key: "axis").contains("frames"),
+                "the full axis was not named")
+    }
+
+    /// **A frame the store could not take is not recorded.** Otherwise the peer's next honest
+    /// re-offer — which is exactly what the drain makes — would be answered `replayed` and the item
+    /// could never complete.
+    @Test func aFrameTheStoreCouldNotTakeIsNotRecorded() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-deferred")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        rig.link(0, 1)
+        let first = try #require(item.chunks.first)
+
+        try rig.dispatch(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            sender: 0, receiver: 1
+        )
+        try rig.dispatch(
+            MeshChunkPayload(chunk: first), type: .meshRoutedChunk, sender: 0, receiver: 1,
+            binding: .readError
+        )
+        #expect(heldChunkCount(rig, 1, item.key) == 0, "the locked pass must have staged nothing")
+
+        try await deliver(
+            MeshChunkPayload(chunk: first), type: .meshRoutedChunk, from: rig, sender: 0, receiver: 1
+        )
+
+        #expect(heldChunkCount(rig, 1, item.key) == 1,
+                "the honest re-offer was answered as a replay, so the item could never complete")
+    }
+
+    /// **And neither is a capacity-refused one.** Item 9's sweeps and reclaims free capacity
+    /// mid-session, so a refused frame must stay re-offerable for the rest of it.
+    @Test func aCapacityRefusedFrameStaysReOfferable() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-capacity")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        rig.link(0, 1)
+        let hog = MeshRoutedStoreFixtures.record(
+            chunks: [MeshRoutedStoreFixtures.descriptor(
+                index: 0, count: 1, bytes: Int(MeshRoutedStoreFormat.maxContentBytes)
+            )],
+            expiresAt: MeshRoutedManifest.expiry(afterHardDeadline: MeshRoutedDrainRig.hardDeadline)
+        )
+        try MeshRoutedStoreFixtures.plant(
+            MeshRoutedIndex(items: [hog]), into: rig.routedStore(rig.nodes[1]),
+            install: MeshP3Acceptance.install
+        )
+
+        try rig.dispatch(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            sender: 0, receiver: 1
+        )
+        #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key) == nil,
+                "the cell must start with a real capacity refusal")
+
+        try MeshRoutedStoreFixtures.plant(
+            MeshRoutedIndex(), into: rig.routedStore(rig.nodes[1]),
+            install: MeshP3Acceptance.install
+        )
+        try await deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            from: rig, sender: 0, receiver: 1
+        )
+
+        #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key) != nil,
+                "a capacity-refused frame was stranded for the session")
+    }
+
+    /// **A repaired slot is re-admittable.** The store gives a chunk slot back when its durable
+    /// bytes are gone — the index is authoritative over what this device has — and the drain then
+    /// makes a peer re-offer that exact chunk under the identical derived id. Without the un-record
+    /// the slot could never be refilled for the rest of the session: no complete item, no witness,
+    /// no receipt, no delivery.
+    ///
+    /// Driven through the production path, not a seam: the commit's own stream finds the missing
+    /// file, repairs the index, and `commitLocalCustody` un-records the item's whole derivable id
+    /// family on the way out.
+    @Test func aRepairedSlotIsReAdmittable() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-repair")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(
+            rig, origin: 0, byteCount: MeshChunkFormat.maxChunkPayloadBytes + 1_000
+        )
+        #expect(item.chunks.count == 2, "the cell needs a slot that can go missing before the last")
+        rig.link(0, 1)
+        let origin = rig.nodes[0].fingerprint
+        let (first, last) = (try #require(item.chunks.first), try #require(item.chunks.last))
+
+        try rig.dispatch(
+            MeshRoutedManifestPayload(manifest: item.manifest), type: .meshRoutedManifest,
+            sender: 0, receiver: 1
+        )
+        try rig.dispatch(
+            MeshChunkPayload(chunk: first), type: .meshRoutedChunk, sender: 0, receiver: 1
+        )
+        #expect(rig.nodes[1].manager.routedReplayWindowForTesting?.recordedCount(for: origin) == 2,
+                "the manifest and the first chunk must really be recorded, or nothing is proved")
+
+        // The durable bytes go. The next commit's stream is what notices and repairs the index.
+        Self.removeChunkFiles(of: rig.nodes[1])
+        try await deliver(
+            MeshChunkPayload(chunk: last), type: .meshRoutedChunk, from: rig, sender: 0, receiver: 1
+        )
+        #expect(heldChunkCount(rig, 1, item.key) == 1, "the cell must start from a real repair")
+
+        try await deliver(
+            MeshChunkPayload(chunk: first), type: .meshRoutedChunk, from: rig, sender: 0, receiver: 1
+        )
+
+        #expect(heldChunkCount(rig, 1, item.key) == 2,
+                "a repaired slot could never be refilled — the window outlived what the store gave back")
+        #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.custodiedAt != nil,
+                "and the refilled item never reached custody")
+    }
+
+    /// Every chunk file under one node's routed scope, removed — the durable half of a repair.
+    private static func removeChunkFiles(of node: MeshDepartureNode) {
+        let root = node.store.meshRoutedStorage.directory
+            .appendingPathComponent("MeshRoutedChunks", isDirectory: true)
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: nil
+        )) ?? []
+        // R2: bounded by the fixture's own chunk count.
+        for file in contents.prefix(MeshChunkFormat.maxChunkCount) {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    /// **A completing frame whose rung work did not settle is not recorded**, so the honest re-offer
+    /// is still the re-drive. Asserted as a PAIR, because the negative alone holds for a device that
+    /// simply never completed the item: the courier — admitted through the origin's own hand-off
+    /// disjunct, so not a destination and holding no handed-off leg — records only its manifest,
+    /// while the destination beside it records manifest and chunk both.
+    @Test func aCompletingFrameWhoseRungWorkDidNotSettleIsNotRecorded() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "replay-settled")
+        defer { rig.teardown() }
+        let narrowed = try Self.narrowedItem(rig, origin: 0, destination: 1)
+        rig.link(0, 1)
+        rig.link(0, 2)
+        let chunk = try #require(narrowed.chunks.first)
+        let origin = rig.nodes[0].fingerprint
+
+        // Node 2: not a destination, admitted only because the ORIGIN forwarded the manifest.
+        try rig.dispatch(
+            MeshRoutedManifestPayload(manifest: narrowed.manifest), type: .meshRoutedManifest,
+            sender: 0, receiver: 2
+        )
+        try rig.dispatch(
+            MeshChunkPayload(chunk: chunk), type: .meshRoutedChunk, sender: 0, receiver: 2
+        )
+        // Node 1: the destination, same two frames.
+        try rig.dispatch(
+            MeshRoutedManifestPayload(manifest: narrowed.manifest), type: .meshRoutedManifest,
+            sender: 0, receiver: 1
+        )
+        try await deliver(
+            MeshChunkPayload(chunk: chunk), type: .meshRoutedChunk, from: rig, sender: 0, receiver: 1
+        )
+
+        #expect(rig.nodes[2].manager.routedReplayWindowForTesting?.recordedCount(for: origin) == 1,
+                "a completing frame whose rungs never settled was recorded, so no re-offer can re-drive it")
+        #expect(rig.nodes[1].manager.routedReplayWindowForTesting?.recordedCount(for: origin) == 2,
+                "and the settled destination must record both, or the pair above proves nothing")
+    }
+
+    /// One item addressed to exactly one destination, minted on the rig's own mesh — the shape that
+    /// makes a third node a courier rather than a recipient.
+    private static func narrowedItem(
+        _ rig: MeshRoutedDrainRig, origin: Int, destination: Int
+    ) throws -> MeshRoutedDrainItem {
+        let signer = rig.identities[origin]
+        let pair = try MeshPartitionFixtures.ledger(
+            founder: signer, others: [rig.identities[destination]], meshID: rig.meshID
+        )
+        let target = MeshDeliveryTarget(
+            contentID: UUID(), roster: pair.derivedRoster, selfFingerprint: signer.localFingerprint
+        )
+        let payload = MeshRoutedCustodyFixtures.blob(byteCount: 1_500)
+        let manifest = try MeshRoutedManifest.signed(
+            meshID: rig.meshID,
+            target: target,
+            typeToken: MeshRoutedTypeToken.photo,
+            contentHash: MeshRoutedContentDigest.contentHash(of: payload),
+            size: UInt64(payload.count),
+            createdAt: MeshRoutedDrainRig.createdAt.addingTimeInterval(60),
+            hardDeadline: MeshRoutedDrainRig.hardDeadline,
+            contentKey: Data(repeating: 0x55, count: 32),
+            recipientKeys: [rig.nodes[destination].fingerprint:
+                                rig.identities[destination].localKeyAgreementPublicKey],
+            identity: signer
+        )
+        return MeshRoutedDrainItem(
+            manifest: manifest,
+            chunks: try MeshChunker.chunks(of: payload, for: manifest, identity: signer)
+        )
+    }
+
     /// The routed content frames one node received from another — what the peer's session frame
     /// budget is charged for, counted on the wire.
     private func contentFrames(_ rig: MeshRoutedDrainRig, at receiver: Int, from sender: Int) -> Int {
@@ -1037,6 +1547,22 @@ private final class MeshRoutedDrainAuditCapture {
         return storedLines
             .filter { $0.event == event && $0.context["type"] == type }
             .map { $0.context["verdict"] ?? "missing" }
+    }
+
+    /// Every `reason` value logged under `event` for one payload type, in order — the refusal lines
+    /// key on `reason`, not on `verdict`, so P5 item 12's `"replayed"` needs its own reader.
+    func reasons(of event: String, type: String) -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        return storedLines
+            .filter { $0.event == event && $0.context["type"] == type }
+            .map { $0.context["reason"] ?? "missing" }
+    }
+
+    /// Every value logged under `event` for one context key, whatever the payload type — the reader
+    /// the replay window's own `axis` token needs.
+    func values(of event: String, key: String) -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        return storedLines.filter { $0.event == event }.compactMap { $0.context[key] }
     }
 }
 
@@ -1285,10 +1811,167 @@ struct MeshRoutedDrainWallTests {
         }
     }
 
-    /// **Item 12 inherits a clean seam.** The replay window is still unwired: item 6 adds no property
-    /// and calls `admit(…)` nowhere.
-    @Test func theReplayWindowIsStillUnwired() throws {
-        #expect(try managerSource().contains("MeshFrameReplayWindow") == false)
+    // MARK: - P5 item 12: the replay window, wired
+
+    /// The four routed CONTENT doors, by declaration prefix — the only four the window is wired at.
+    private static let contentDoors = [
+        "private func ingestRoutedManifest(",
+        "private func ingestRoutedChunk(",
+        "private func ingestCustodyReceipt(",
+        "private func ingestRecipientReceipt("
+    ]
+
+    /// The two DIGEST doors, which are deliberately outside the window (D-5.12, D-6.10).
+    private static let digestDoors = [
+        "func receiveRoutedInventory(",
+        "private func receiveRoutedDrainAnswer("
+    ]
+
+    /// **W1 — the window is wired at every routed content door, and nowhere else.**
+    ///
+    /// Per door, so a count of four satisfied by four calls in the wrong four functions fails; and
+    /// manager-wide, so a fifth call site anywhere in the ~10 400-line file — including inside a
+    /// helper a digest door reaches, which the per-door half cannot see — fails here rather than in
+    /// the field. Five of each: four call sites plus one declaration.
+    @Test func theReplayWindowIsWiredAtEveryRoutedContentDoor() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        for door in Self.contentDoors {
+            let body = try #require(Self.body(startingWith: door, in: source),
+                                    "\(door) is gone from MeshNetworkManager.swift")
+            #expect(body.components(separatedBy: "routedFrameIsReplayed(").count - 1 == 1,
+                    "\(door) probes the replay window exactly once")
+            #expect(body.components(separatedBy: "noteRoutedFrame(").count - 1 == 1,
+                    "\(door) records into the replay window exactly once")
+        }
+        #expect(source.components(separatedBy: "routedFrameIsReplayed").count - 1 == 5,
+                "one declaration plus exactly the four content doors")
+        #expect(source.components(separatedBy: "noteRoutedFrame").count - 1 == 5,
+                "one declaration plus exactly the four content doors")
+    }
+
+    /// **W2 — the probe precedes the verifier AND the first store read**, which is the whole point:
+    /// a replayed frame must be refused before the signature work and before any sealed-index load.
+    @Test func theReplayProbePrecedesTheVerifierAndTheStore() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        for door in Self.contentDoors {
+            let body = try #require(Self.body(startingWith: door, in: source))
+            let probe = try #require(body.range(of: "routedFrameIsReplayed("),
+                                     "\(door) does not probe the window at all")
+            let expensive = ["Verifier(", "routedStore(", "store."]
+                .compactMap { body.range(of: $0)?.lowerBound }
+            #expect(expensive.isEmpty == false, "\(door) reads neither a verifier nor the store?")
+            for offset in expensive {
+                #expect(probe.lowerBound < offset,
+                        "\(door) pays for a verify or a store read before the replay probe")
+            }
+        }
+    }
+
+    /// **W3 — the digest family is not admitted** (D-5.12: an inventory digest's replay defence is
+    /// its slot binding and the per-peer frame budget, never a freshness check; D-6.10: a drain
+    /// answer is already bound to advertiser + `advertisedAt`). W1's manager-wide count is what
+    /// closes the helper-shaped escape from this one.
+    @Test func theDigestFamilyIsNotAdmittedToTheWindow() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        for door in Self.digestDoors {
+            let body = try #require(Self.body(startingWith: door, in: source),
+                                    "\(door) is gone from MeshNetworkManager.swift")
+            #expect(!body.contains("routedFrameIsReplayed("), "\(door) must not probe the window")
+            #expect(!body.contains("noteRoutedFrame("), "\(door) must not record into the window")
+        }
+    }
+
+    /// **W4 — cleared at the session resets and nowhere else.** Clearing on a partition flap would
+    /// hand an attacker the eviction primitive the window refuses to offer (D-6.6's argument, only
+    /// stronger here).
+    @Test func theReplayWindowIsClearedOnlyAtTheSessionResets() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let cleared = "routedReplayWindow = nil"
+        #expect(source.components(separatedBy: cleared).count - 1 == 1,
+                "the window is cleared at exactly one place in the manager")
+        let clear = try #require(
+            Self.functionBody("private func clearRoutedDrainState() {", in: source)
+        )
+        #expect(clear.contains(cleared), "and that place is the three session resets' one helper")
+        let abandon = try #require(
+            Self.functionBody("private func abandonMergeExchange() {", in: source)
+        )
+        #expect(!abandon.contains(cleared), "a partition is not a new session")
+        #expect(!abandon.contains("forget("), "and a flap is not an eviction primitive either")
+    }
+
+    /// **W5 — the frame axis is DERIVED, and carries a maximal item.** Aimed at the property rather
+    /// than the call, because the call can only name the property: the testing override lives there.
+    @Test func theRoutedReplayFrameBoundIsDerived() throws {
+        #expect(MeshRoutedDrainBounds.sessionFramesPerPeer >= MeshChunkFormat.maxChunkCount + 1,
+                "the routed replay window must hold a maximal item's chunks plus its manifest")
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let capacity = try #require(
+            Self.body(startingWith: "private var routedReplayCapacity: Int", in: source),
+            "routedReplayCapacity is gone from MeshNetworkManager.swift"
+        )
+        #expect(capacity.contains("MeshRoutedDrainBounds.sessionFramesPerPeer"),
+                "the frame cap must be derived from the session budget it mirrors")
+        #expect(capacity.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789")) == nil,
+                "a literal here is a second, undocumented bound")
+        let arguments = MeshSessionStoreIsolationTests.constructionArguments(
+            of: "MeshFrameReplayWindow(", in: source
+        )
+        #expect(arguments.count == 1, "the manager builds exactly one replay window")
+        #expect(arguments.first?.contains("framesPerSender: routedReplayCapacity") == true,
+                "the construction must take the derived capacity, not a literal")
+    }
+
+    /// **W6 — the routed window never forgets an AUTHOR.** A departed origin's content is exactly
+    /// what a custodian keeps forwarding after a departure hand-off, so releasing that axis would
+    /// hand an attacker a free replay of the content custody transfer exists to keep moving.
+    /// `forget(frameID:from:)` — the repaired-slot un-record — is a different verb and is permitted.
+    @Test func theRoutedWindowNeverForgetsASender() throws {
+        let section = try #require(Self.routedSection(in: try managerSource()))
+        #expect(section.contains("forget(senderFingerprint:") == false,
+                "the routed path must never release an author's axis")
+        #expect(section.contains("forget("), "and it must still un-record a repaired slot")
+    }
+
+    /// **W7 — the author axis is the ADMISSION cap, not the roster cap.** Every routed verifier
+    /// resolves its author's key from the admission set, whose capacity is `maxRecordsPerKind`; a
+    /// departed origin is not a roster member at all, so at the roster cap the ninth author's every
+    /// frame would answer `senderWindowFull` and never be caught on repeat.
+    @Test func theRoutedReplayAuthorBoundIsTheAdmissionCap() throws {
+        #expect(MeshMembershipBounds.maxRecordsPerKind >= MeshMembershipBounds.maxRosterMembers,
+                "the admission set is the wider population, and the window is sized on it")
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let arguments = MeshSessionStoreIsolationTests.constructionArguments(
+            of: "MeshFrameReplayWindow(", in: source
+        )
+        #expect(arguments.first?.contains("maxSenders: MeshMembershipBounds.maxRecordsPerKind") == true,
+                "the author cap must name the admission-set bound, never a literal or the roster cap")
+    }
+
+    /// **W8 — item 8's hop bound survives a replayed manifest.** The probe is sender-blind, so the
+    /// `originServedItems` write runs on the replayed path too; without it a courier's copy followed
+    /// by the origin's own would strand that leg at the origin's next departure.
+    @Test func theHopBoundSurvivesAReplayedManifest() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let door = try #require(
+            Self.body(startingWith: "private func ingestRoutedManifest(", in: source)
+        )
+        #expect(door.components(separatedBy: "noteOriginServed(").count - 1 == 2,
+                "the replayed path and the admitted path each write the hop bound")
+        let first = try #require(door.range(of: "noteOriginServed("))
+        let admitting = try #require(door.range(of: "admittingManifest("))
+        #expect(first.lowerBound < admitting.lowerBound,
+                "the replayed path's write must come first — it is the early return's own line")
+    }
+
+    /// The routed drain section's own source, sliced exactly as `theRoutedPathNamesNoEpochSymbol`
+    /// slices it, with whole-line comments removed.
+    private static func routedSection(in source: String) -> String? {
+        guard let start = source.range(of: "// MARK: - Routed drain (network migration P5 item 6")
+        else { return nil }
+        let rest = String(source[start.upperBound...])
+        let body = rest.range(of: "// MARK: -").map { String(rest[..<$0.lowerBound]) } ?? rest
+        return MeshRoutedSourceScan.codeOnly(body)
     }
 
     /// Every routed store site in the manager names an explicit scope — the host's, never the

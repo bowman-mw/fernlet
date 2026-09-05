@@ -287,6 +287,57 @@ extension MeshConvergenceRun {
         }
     }
 
+    /// **P5 item 12's seam into the battery**: one already-delivered routed frame, re-presented.
+    ///
+    /// Deliberately **not** a new `MeshScheduleEvent` case — the vocabulary is item 14's to grow, and
+    /// adding one here would change every seeded draw and trip
+    /// `theMatrixExecutesEveryEventInTheVocabulary`. Exactly the shape items 8 and 10 left.
+    ///
+    /// The frame is the SENDER's own stored manifest for `key`, re-dispatched through the real
+    /// envelope verification and the drain's own door on an injected clock — i.e. a replay of a
+    /// frame the receiver has already admitted, which is what an attacker on this link can mount.
+    ///
+    /// - Returns: whether a frame actually **reached the ingest door**, so a cell can refuse to pass
+    ///   vacuously. The committed slot is part of that contract, not an afterthought: a manifest and
+    ///   a coordinator are not enough, because `dispatchRoutedPayload` returns at its very first
+    ///   guard (`slot?.fingerprint`, `droppedUncommittedSlot`) when the receiver holds no committed
+    ///   slot for that coordinator — and a `true` returned over that return is exactly the vacuous
+    ///   pass the flag exists to prevent. So the slot is resolved with the manifest, before any
+    ///   signing work, and a missing one answers false.
+    @discardableResult
+    func routedReplayEvent(
+        at receiver: MeshConvergenceMember,
+        from sender: MeshConvergenceMember,
+        frame key: MeshRoutedItemKey,
+        now: Date
+    ) throws -> Bool {
+        guard let manifest = routedIndex(of: sender)?.record(for: key)?.manifest,
+              let coordinator = receiver.node.coordinators[sender.node.handle.endpoint],
+              let slot = receiver.node.manager.slots.first(where: { $0.coordinator === coordinator }),
+              slot.fingerprint != nil
+        else { return false }
+        let identity = sender.node.manager.identityForTesting
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: identity, senderDisplayName: "replay",
+            recipientFingerprint: receiver.fingerprint,
+            payloadType: .meshRoutedManifest, payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "routed"),
+            payload: try JSONEncoder().encode(MeshRoutedManifestPayload(manifest: manifest)),
+            createdAt: now
+        )
+        let plaintext = try envelope.verify(
+            identityService: receiver.node.manager.identityForTesting,
+            replayCache: receiver.node.replayCache
+        )
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            receiver.node.manager.dispatchRoutedPayload(
+                .meshRoutedManifest, plaintext: plaintext, decoder: JSONDecoder(),
+                slot: slot, now: now
+            )
+        }
+        return true
+    }
+
     /// The destinations the origin still owes, derived from its own index.
     func routedOutstanding(at origin: MeshConvergenceMember, key: MeshRoutedItemKey) -> [String] {
         guard let index = routedIndex(of: origin),
@@ -578,6 +629,44 @@ struct MeshRoutedDrainConvergenceTests {
         case .outstanding(let owed):
             Issue.record("a delivery never closed after the unlock: \(owed)")
         }
+    }
+
+    /// **P5 item 12 in the battery.** A replayed frame changes no rung and no receipt count: the
+    /// routed progress invariants still hold after one already-admitted manifest is re-presented on
+    /// a live link, and the receiver's index is byte-identical across the replay.
+    ///
+    /// One fixed seed, one replay, no new schedule-event case — item 14 decides whether a replay
+    /// becomes part of the vocabulary, which is a matrix-wide change.
+    @Test func aReplayedFrameChangesNoRungAndNoReceiptCount() async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
+        )
+        let run = try MeshConvergenceRun.build(schedule, label: "routed-replay")
+        defer { for node in run.livingNodes { node.manager.leaveMesh() } }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        try await run.runSplitEvents()
+
+        let origin = try #require(run.livingMembers.first, "the cell needs a surviving origin")
+        let now = MeshP3Acceptance.base.addingTimeInterval(600)
+        let key = try run.routedCustodyEvent(at: origin, chunks: 1, now: now)
+        try await run.runHeal()
+        try await run.runRoutedDrainRounds(origin: origin, key: key)
+
+        let victim = try #require(
+            run.livingMembers.first { $0.index != origin.index && run.routedIndex(of: $0) != nil },
+            "the cell needs a survivor whose store can be read"
+        )
+        let before = MeshRoutedStoreFixtures.snapshot(victim.node.store.meshRoutedStorage)
+        let dispatched = try run.routedReplayEvent(
+            at: victim, from: origin, frame: key, now: now.addingTimeInterval(60)
+        )
+        #expect(dispatched, "the replay never reached the door, so the claim below is vacuous")
+
+        #expect(MeshRoutedStoreFixtures.snapshot(victim.node.store.meshRoutedStorage) == before,
+                "a replayed manifest moved a rung or a receipt count")
+        run.routedInvariants(origin, key, audited: capture)
     }
 
     /// The seed family is fixed and derived from the one root — never drawn at run time.

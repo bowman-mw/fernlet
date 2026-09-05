@@ -1619,17 +1619,27 @@ struct MeshRoutedCustodyHandoffWallTests {
 
     /// **The hop bound.** The origin-served set has one writer, one reader and one clear. A second
     /// writer is increment 2 arriving without a decision.
+    ///
+    /// **Amended by P5 item 12, and strengthened in the same commit.** The wall used to count one
+    /// call site; the replay window's probe is sender-BLIND (author = the origin, id = the item), so
+    /// a courier's copy and the origin's own are indistinguishable to it, and leaving the write
+    /// inside the probe's early return would drop the origin's own hand-off copy as `replayed` and
+    /// strand that leg at the origin's next departure. The write therefore runs on the replayed path
+    /// too — so the count moved to two and the wall became **per door**: both call sites must sit
+    /// inside `ingestRoutedManifest`, which a bare count could never say.
     @Test func theOriginServedSetIsWrittenAtOneDoorAndDiesWithTheSession() throws {
         let source = try managerSource()
         #expect(source.components(separatedBy: "originServedItems.insert(").count - 1 == 1)
-        #expect(source.components(separatedBy: "noteOriginServed(").count - 1 == 2,
-                "one declaration plus exactly one call site")
+        #expect(source.components(separatedBy: "noteOriginServed(").count - 1 == 3,
+                "one declaration plus exactly two call sites")
         let writer = try #require(Self.body(startingWith: "private func noteOriginServed(", in: source))
         #expect(writer.contains("originServedItems.insert("))
         let manifestDoor = try #require(
             Self.body(startingWith: "private func ingestRoutedManifest(", in: source)
         )
         #expect(manifestDoor.contains("noteOriginServed(key)"))
+        #expect(manifestDoor.components(separatedBy: "noteOriginServed(").count - 1 == 2,
+                "BOTH writes live in the one door — the admitted path and the replayed one")
         let reader = try #require(
             Self.body(startingWith: "private func claimHandedOffCustody(", in: source)
         )
