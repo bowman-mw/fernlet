@@ -298,6 +298,15 @@ struct MeshRoutedStoreIsolationTests {
     /// between a caller and a table mapping `…routed-type.heart.v1` to `.durableRecipientStorage` —
     /// a heart reported delivered on ciphertext alone, with no foreground decrypt and no ledger
     /// commit. Unlike the witness and the ledger proof, the table has no `fileprivate` gate.
+    ///
+    /// **P5 item 11 moved the construction site, and the wall moved with it in the same commit.**
+    /// The table is now a PROJECTION of `MeshRoutedTypeRegistry`'s rows, so the one place a table is
+    /// built is the registry's own file — and the sentence above stays true word for word, with the
+    /// registry standing where the ack file used to. The member half is unchanged and stays that
+    /// way by design: no shipping file, the registry's included, names any
+    /// `MeshRoutedAckStageTable.` member but `.increment1` (which is why the registry declares its
+    /// own `maxEntries` rather than reading `maxRows` across — the equality is pinned from the test
+    /// target by `theRegistrysCapEqualsTheAckTablesCap`).
     @Test func shippingCodeNamesOneAckStageTable() throws {
         var constructionSites: [String] = []
         var otherValues: [String] = []
@@ -312,10 +321,179 @@ struct MeshRoutedStoreIsolationTests {
                 otherValues.append("\(file): …MeshRoutedAckStageTable.\(fragment.prefix(24))")
             }
         }
-        #expect(constructionSites == ["MeshRoutedAck.swift"],
+        #expect(constructionSites == ["MeshRoutedTypeRegistry.swift"],
                 "a second shipping `MeshRoutedAckStageTable(rows:)` is a second policy: \(constructionSites)")
         #expect(otherValues.isEmpty,
                 "shipping code names an ack-stage table other than `.increment1`: \(otherValues)")
+    }
+
+    /// Shipping code names exactly ONE routed type registry (P5 item 11).
+    ///
+    /// The ack-stage wall's exact shape, one level up. The registry is the single source of the
+    /// verifier's accepted-token set, the ack-stage projection, the mint's per-type guards and the
+    /// four forwarding gates — so a second shipping registry would be a second answer to "is this
+    /// type known", and that is the one question plan §11 says must have one answer everywhere.
+    ///
+    /// The member half is why `MeshNetworkManager.routedTypes` spells its fallback out in full
+    /// (`?? MeshRoutedTypeRegistry.increment1`), and why the mint's `types:` default is spelled the
+    /// same way: a leading-dot `.increment1` — or a future `.increment2` in either position — is
+    /// invisible to this scanner. `theTypeRegistryScannersMatchAcrossLines` fixtures that blind spot
+    /// from both sides, asserting both of those files still name the type in full.
+    @Test func shippingCodeNamesOneTypeRegistry() throws {
+        var constructionSites: [String] = []
+        var otherValues: [String] = []
+        for (file, code) in try Self.proximitySources() {
+            for _ in MeshSessionStoreIsolationTests.constructionArguments(
+                of: "MeshRoutedTypeRegistry(", in: code
+            ) {
+                constructionSites.append(file)
+            }
+            for fragment in code.components(separatedBy: "MeshRoutedTypeRegistry.").dropFirst()
+            where !fragment.hasPrefix("increment1") {
+                otherValues.append("\(file): …MeshRoutedTypeRegistry.\(fragment.prefix(24))")
+            }
+        }
+        #expect(constructionSites == ["MeshRoutedTypeRegistry.swift"],
+                "a second shipping `MeshRoutedTypeRegistry(entries:)` is a second policy: \(constructionSites)")
+        #expect(otherValues.isEmpty,
+                "shipping code names a type registry other than `.increment1`: \(otherValues)")
+    }
+
+    /// No shipping code branches on a routed type token — the registry IS the only per-type switch.
+    ///
+    /// The allowlist is **per substring**, not per file, because the two spelling needles have
+    /// different single-source rules. `MeshRoutedTypeToken.` may be named where the constants are
+    /// declared and where the three registry rows are built from them; the raw
+    /// `fernlet.mesh.routed-type.` literal may be named only where it is declared, because allowing
+    /// it in the registry file would let an implementer type a spelling straight into a row and give
+    /// one token two sources that drift silently.
+    ///
+    /// Legal by construction, and it must stay legal: passing `manifest.typeToken` as a **lookup
+    /// argument**, logging it as a context value, and branching on a **resolved** value
+    /// (`entry.requiresForegroundDecryptBeforeFinal`, `switch stage`, a retention comparison) are the
+    /// point of the registry, not violations of it.
+    ///
+    /// `MeshRoutedSourceScan.codeOnly` strips whole-line comments only, so string literals survive
+    /// (which is what makes the literal needle work at all) and so do trailing comments on code
+    /// lines — a `let x = y  // see fernlet.mesh.routed-type.photo.v1` would be a false positive
+    /// here. Noted rather than designed around: it fails loudly and the fix is to move the comment.
+    @Test func noShippingCodeBranchesOnARoutedTypeToken() throws {
+        var violations: [String] = []
+        for (file, code) in try Self.proximitySources() {
+            for (needle, files) in Self.routedTokenNeedles
+            where code.contains(needle) && !files.contains(file) {
+                violations.append("\(file): \(needle)")
+            }
+        }
+        #expect(violations.isEmpty,
+                "a per-type branch or a second token spelling outside the registry: \(violations)")
+    }
+
+    /// Wall 3's needles and their per-substring allowlists — **the wall's data, hoisted so the wall
+    /// and its fixture read the same dictionary.**
+    ///
+    /// Held here rather than inside `noShippingCodeBranchesOnARoutedTypeToken` because a fixture that
+    /// re-typed the needles as literals could not fail: deleting `"typeToken =="` from a local
+    /// dictionary would blind the wall while every `"…".contains("typeToken ==")` assertion stayed
+    /// green. `theTypeRegistryScannersMatchAcrossLines` drives THIS value, so removing or widening a
+    /// row is a test failure rather than a silent narrowing of what the wall catches.
+    private static let routedTokenNeedles: [String: Set<String>] = [
+        "MeshRoutedTypeToken.": ["MeshRoutedAck.swift", "MeshRoutedTypeRegistry.swift"],
+        "fernlet.mesh.routed-type.": ["MeshRoutedAck.swift"],
+        "typeToken ==": [],
+        "== manifest.typeToken": [],
+        "switch manifest.typeToken": [],
+        "typeToken.hasPrefix(": []
+    ]
+
+    /// The four bare per-type branch forms, each written so that EXACTLY ONE needle catches it.
+    ///
+    /// The uniqueness is the point. `if manifest.typeToken == MeshRoutedTypeToken.heart {` is caught
+    /// by `"MeshRoutedTypeToken."` as well, so a fixture built on it would stay green with all four
+    /// branch needles deleted. Each form here names a local instead, so the only thing that can catch
+    /// it is its own needle.
+    private static let routedTokenBranchForms: [String: String] = [
+        "typeToken ==": "if manifest.typeToken == token {",
+        "== manifest.typeToken": "if token == manifest.typeToken {",
+        "switch manifest.typeToken": "switch manifest.typeToken {",
+        "typeToken.hasPrefix(": "if manifest.typeToken.hasPrefix(prefix) {"
+    ]
+
+    /// The registry scanners themselves, fixtured — the matcher is the wall.
+    ///
+    /// Every fixture here drives a **shared** value, never a literal re-typed beside its own
+    /// assertion: the construction cases run `MeshSessionStoreIsolationTests.constructionArguments`,
+    /// and the needle cases run `Self.routedTokenNeedles`, the dictionary
+    /// `noShippingCodeBranchesOnARoutedTypeToken` scans with. So deleting `"typeToken =="` from that
+    /// dictionary, or widening `"fernlet.mesh.routed-type."`'s allowlist to admit the registry file,
+    /// fails HERE rather than silently narrowing what wall 3 catches.
+    ///
+    /// The member scanner's blind spot is fixtured from both sides: a leading-dot `?? .increment1` is
+    /// invisible to it (the negative), and the two shipping files that hold a registry value in a
+    /// **default or fallback position** are asserted to spell the type out in full (the positive) —
+    /// which is the only thing keeping the blind spot documented rather than occupied.
+    @Test func theTypeRegistryScannersMatchAcrossLines() throws {
+        let oneLine = "static let x = MeshRoutedTypeRegistry(entries: [row])"
+        let wrapped = """
+            static let x = MeshRoutedTypeRegistry(
+                entries: [row]
+            )
+            """
+        for (label, source) in [("one line", oneLine), ("wrapped", wrapped)] {
+            #expect(
+                MeshSessionStoreIsolationTests.constructionArguments(
+                    of: "MeshRoutedTypeRegistry(", in: source
+                ).count == 1,
+                "the registry scanner missed a \(label) construction"
+            )
+        }
+        let dotRead = "let y = MeshRoutedTypeRegistry.increment1.tokens"
+        #expect(
+            MeshSessionStoreIsolationTests.constructionArguments(
+                of: "MeshRoutedTypeRegistry(", in: dotRead
+            ).isEmpty,
+            "the registry scanner counted a dot-member read as a construction"
+        )
+        try Self.expectTheMemberScannersBlindSpotIsStillEmpty()
+        Self.expectTheWallsNeedlesStillDiscriminate()
+    }
+
+    /// The blind spot, both ways: the inferred form is invisible to the member scanner, and no
+    /// shipping value-position read has moved into it.
+    ///
+    /// `MeshNetworkManager.swift` (the `routedTypes` fallback) and `MeshRoutedManifest.swift` (the
+    /// mint's `types:` default) are the two places a registry value stands where a leading dot would
+    /// compile — and where `shippingCodeNamesOneTypeRegistry` would then see nothing at all.
+    private static func expectTheMemberScannersBlindSpotIsStillEmpty() throws {
+        let inferred = "routedTypeRegistryForTesting ?? .increment1"
+        #expect(inferred.components(separatedBy: "MeshRoutedTypeRegistry.").count == 1,
+                "the member scanner's blind spot moved: an inferred member is now visible to it")
+        let sources = try proximitySources()
+        for name in ["MeshNetworkManager.swift", "MeshRoutedManifest.swift"] {
+            let code = try #require(sources.first { $0.0 == name }?.1,
+                                    "the sweep no longer reaches a file that holds a registry value")
+            #expect(code.contains("MeshRoutedTypeRegistry.increment1"),
+                    "\(name) shortened its registry value to a member the one-registry wall cannot see")
+        }
+    }
+
+    /// Wall 3's needles, driven as data: each bare branch form is caught by exactly its own needle, a
+    /// registry lookup is caught by none, and the raw literal's allowlist is still the ack file alone.
+    private static func expectTheWallsNeedlesStillDiscriminate() {
+        for (needle, form) in routedTokenBranchForms {
+            #expect(routedTokenNeedles[needle]?.isEmpty == true,
+                    "the wall dropped the per-type branch needle \(needle), or allowlisted a file for it")
+            #expect(routedTokenNeedles.keys.filter { form.contains($0) } == [needle],
+                    "the wall's needles no longer catch exactly one per-type branch form: \(form)")
+        }
+        let lookup = "routedTypes.entry(for: manifest.typeToken)"
+        #expect(routedTokenNeedles.keys.contains { lookup.contains($0) } == false,
+                "a registry lookup is being read as a per-type branch")
+        let rawInRegistry = "let token = \"fernlet.mesh.routed-type.photo.v1\""
+        #expect(routedTokenNeedles.keys.contains { rawInRegistry.contains($0) },
+                "the raw-literal needle stopped matching a spelling written into a row")
+        #expect(routedTokenNeedles["fernlet.mesh.routed-type."] == ["MeshRoutedAck.swift"],
+                "the raw literal may now be typed straight into a registry row")
     }
 
     /// The ack-table scanner itself, fixtured BOTH ways — the wall's matcher is the wall.

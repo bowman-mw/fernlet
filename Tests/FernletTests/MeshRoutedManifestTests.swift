@@ -945,7 +945,12 @@ struct MeshRoutedManifestSigningTests {
         #expect(allRejectionsNamed)
         let mintErrors: [MeshRoutedManifestMintError] = [
             .noDestinations, .tooManyDestinations(count: 9), .originIsADestination, .invalidTypeToken,
-            .invalidContentHash, .invalidSize, .invalidContentKey, .missingRecipientKey(fingerprint: "fp999")
+            .invalidContentHash, .invalidSize, .invalidContentKey, .missingRecipientKey(fingerprint: "fp999"),
+            // P5 item 11's two registry refusals. `MeshRoutedManifestMintError` has associated
+            // values, so there is no `allCases` to catch a gap — a new case ships outside this
+            // census with a clean build unless it is added here in the same commit.
+            .sizeExceedsTypeCap(token: "fernlet.mesh.routed-type.golden-fixture.v1"),
+            .unsupportedDestinationSemantics(token: "fernlet.mesh.routed-type.golden-fixture.v1")
         ]
         let allMintErrorsNamed = mintErrors.allSatisfy { !$0.diagnosticDescription.isEmpty }
         #expect(allMintErrorsNamed)
