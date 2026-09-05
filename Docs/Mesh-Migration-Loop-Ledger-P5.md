@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P5
 
 **Phase:** P5 (encrypted store-and-forward routing) · **Prompt:** [Next-Round-Prompt-Mesh-P5-2026-09-03.md](Next-Round-Prompt-Mesh-P5-2026-09-03.md)
-**Started:** 2026-09-03 · **Iteration:** 14 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
+**Started:** 2026-09-03 · **Iteration:** 15 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -23,7 +23,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 10 | Locked-device handling | 1 | 3 | done | `9859817` | MeshRoutedAccessGate: data protection gates plaintext, app lock gates nothing in the mesh, custody ungated; push door applyRoutedAccessGate from six FernletApp sites; five-job re-entry (claims, deferred commits re-derived, suppressed sweeps, heart stage, P6 slot); no keychain class moved |
 | 11 | Type-token registry | 1 | 1 | done | `4b5e4ca` | MeshRoutedTypeRegistry.increment1 (3 rows = today's constants); ack table is its projection; entry(for:) == nil is 'unknown' at seven doors; .relayInFlight unregisterable; canonical-store slot = frozen token enum; one-registry + no-per-type-branch walls |
 | 12 | MeshFrameReplayWindow wired | 1 | 2 | done | `608f428` | keyed (meshID, author, contentID) at four content doors; verdict() before verify, admit() after the store settled; bounds derived (1056 frames/author, 16 authors); digest family stays out; W1–W8 walls |
-| 13 | Retire the three keyEpoch gates with the path | 1 | 1–7 | in-flight | | never loosen in place; re-check line numbers first |
+| 13 | Retire the three keyEpoch gates with the path | 1 | 1–7 | in-flight (pass A landed `9bba5ea`) | | pass A = the item sealer (AEAD.meshRoutedItemV1 written, FMRI1 blob, photo body framing, goldens) — NO gate touched; pass B = sender door + delivery projection + the three deletions + re-aimed legacy claims (design §(e)/(f), impl-notes' obligation list) — the gates fall only with pass B |
 | 14 | P5 acceptance battery | 1 | 1–13 | todo | | extend MeshScheduleGenerator, not a new rig. From item 10: `routedLockWindowEvent(at:closingAfter:now:sampling:)` shipped; whether a locked window becomes a `MeshScheduleEvent` case is a matrix-wide decision (changes every seeded draw). Seams already shipped: `routedCustodyEvent`, `routedOutstanding`, `routedInvariants`, `runRoutedDrainRounds` (item 6); `routedDevelopmentEvent`, `runBranchDrainRounds`, `routedHandoffInvariants` (item 8, one cell on the root seed). Owed: fold item 8 design §6.5's five invariants into `routedInvariants` (departure-free seeded cells otherwise assert them vacuously); run the development across more seeds and shapes; `mergeWindowForTesting` + `lastMergeClosureForTesting` for WHY a window closed (D-7.20); D-7.15's liveness disposition is the input |
 
 ## Blocked on owner
@@ -201,7 +201,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | Departure delivery ack | (default: still no ack; drain carries custody instead) | — |
 | D1 recipient keys | mint takes caller-supplied verified `[fingerprint: X25519 pub]`; refuses by name if a destination lacks one | 2026-09-03 |
 | D2 contentHash/size | opaque SHA-256 over the CIPHERTEXT + complete sealed-blob size; item 1 computes neither | 2026-09-03 |
-| D3 item seal | not item 1 and not item 2 — the seal is item 6 / P6's; `AEAD.meshRoutedItemV1` stays Reserved; content key from `makeContentKey()` | 2026-09-03 |
+| D3 item seal | not item 1 and not item 2; BUILT by item 13 pass A (`MeshRoutedItemSealer`, AEAD.meshRoutedItemV1 Written, FMRI1 blob); content key from `makeContentKey()` | 2026-09-03 → 2026-09-05 |
 | D4/D5 wrap | fresh ephemeral + nonce per wrap; AAD = purpose ‖ meshID ‖ itemID ‖ origin ‖ recipient (transplant-proof) | 2026-09-03 |
 | D6 expiry | receiver requires exact floored equality with own hardDeadline + 1200 s | 2026-09-03 |
 | D7 wraps ≡ destinations | wire-enforced; "roster − self" is mint policy, never a v2 trigger | 2026-09-03 |
@@ -271,6 +271,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | D-6.18 converged halves | `MeshRoutedPeerInventory` records BOTH: localQuiescent/quiescentLocalAsOf beside reportsQuiescent/quiescentAsOf | 2026-09-04 |
 
 ## Session notes
+- 2026-09-05: item 13's first workflow stopped after pass A (the implementer reported all-green with pass B untouched, so the script's second pass never fired). Pass A committed on its own; pass B runs as its own workflow. Lesson: when a design has a build order, make allGreen mean 'the whole order', not 'this pass'.
 - 2026-09-04 21:02: item 9's workflow hit the session limit after the review (implementer green: 1277 tests / 132 suites, wall check passed; 11 confirmed findings unapplied — fix + gauntlet failed at spawn). Resumed from run wf_b743b9a3-8f7 after the 9pm reset. Second occurrence; the limit resets at a fixed local hour — plan the longest workflow of the day to start right after a reset.
 - 2026-09-04 00:41: item 5's workflow hit the session usage limit mid-verify (implementer green, full suite 4232; 34 refuter votes + fix + gauntlet failed at spawn). Resumed from run wf_65b84324-d14 after the 12:40am reset — cached stages replay, only verify/fix/gauntlet re-run. If a workflow's agents fail with 'session limit', schedule a wake for after the reset instead of retrying.
 - 2026-09-03: Opus 4.8/5 were briefly down (item 1's workflow ran on the session model, Fable 5.1); owner confirmed Opus is back — later items use `model: "opus"` per the launcher. Ultracode on: each item runs as a small Workflow (understand → implement → adversarial verify → fix).
@@ -317,4 +318,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - A settle's `until:` fires **synchronously inside the pump**, so a predicate that becomes true in the same step that schedules a send returns before the frame exists. Assert on the frame count itself (`until: { received(...) >= 2 }`), not on the state change that provoked it.
 
 ## Next item
-13 (in-flight, iteration 14) → 14 → close-out; 1b and 6a as bundled small commits when convenient. A stray untracked PDF sits in Docs/ (owner's, not P5's — never stage it).
+13 pass B (in-flight, iteration 15) → 14 → close-out; 1b and 6a as bundled small commits when convenient. A stray untracked PDF sits in Docs/ (owner's, not P5's — never stage it).
