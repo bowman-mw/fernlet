@@ -329,13 +329,15 @@ public nonisolated enum FernletCryptoPurpose {
         /// wrap — the sealing half of the pair whose derivation half is
         /// ``FernletCryptoPurpose/KeyDerivation/meshRoutedContentKeyWrapV1``.
         public static let meshRoutedContentKeyWrapV1 = CryptographicPurpose("fernlet.mesh.routed.content-key.wrap.aead.v1")
-        /// **Reserved, not yet written.** Authenticated data for a routed item's own content-key
+        /// **Written since P5 item 13.** Authenticated data for a routed item's own content-key
         /// seal (plan §11 — "content encryption is independent of the group key"). Registered
         /// beside the wrap because the two are one review: a wrap purpose with no item purpose
         /// would leave P5 to invent the second spelling alone, which is how copy-paste collisions
-        /// enter a registry. **The seal is item 6 / P6's**: item 2 chunks an opaque blob and
-        /// deliberately does not seal, because `AES.GCM.seal` mints a random nonce and a sealing
-        /// chunker could therefore be neither a pure function of its inputs nor goldened.
+        /// enter a registry. Its consumer is `MeshRoutedItemSealer`, which authenticates this
+        /// domain together with the mesh, item, origin and routed type token, so a blob cannot be
+        /// transplanted between items and its type is authenticated by the same tag as its bytes.
+        /// The spelling is unchanged from the reservation: item 13 wrote a registered purpose, it
+        /// did not add one.
         public static let meshRoutedItemV1 = CryptographicPurpose("fernlet.mesh.routed.item.aead.v1")
         public static let heartDropSidecarV2 = CryptographicPurpose("fernlet.heartdrop.sidecar.aead.v2")
         public static let pendingNarrativeBufferV2 = CryptographicPurpose("fernlet.pending-narrative-buffer.aead.v2")

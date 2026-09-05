@@ -631,9 +631,9 @@ P5 item 1 (plan §11): the origin-signed description of one routed item, and the
 content-key wrap that rides inside it. Pure values, no clock; the only mint takes a
 `MeshDeliveryTarget`, so the destination set is the full roster at creation and never the connected
 set. Deliberately NOT in this file: persistence and its wipe row (item 3), dispatch/emission (item
-6), chunks (item 2) and the item seal under `AEAD.meshRoutedItemV1` (item 6 / P6 — item 2 chunks an
-opaque blob and deliberately does not seal), the type-token registry (item
-11), receipts (items 3/4).
+6), chunks (item 2) and the item seal under `AEAD.meshRoutedItemV1` (P5 item 13's
+`MeshRoutedItemSeal.swift` — item 2 chunks an opaque blob and deliberately does not seal), the
+type-token registry (item 11), receipts (items 3/4).
 
 | Type / Function | What It Does |
 | --- | --- |
@@ -668,14 +668,15 @@ reach a per-recipient static-key wrap (D14).
 P5 item 1 (plan §11, invariant §3.3): the per-recipient content-key wrap and its inverse —
 `IdentityService.encryptGroupKey` primitive for primitive with the routed purposes and a
 binding-carrying AAD. `nonisolated` and static: the recipient's private key never enters the file.
-Deliberately NOT here: the item seal (item 6 / P6 — item 2 chunks an opaque blob), any key from
-descriptor gossip or the trust vault.
+Deliberately NOT here: the item seal (`MeshRoutedItemSealer` — P5 item 13 shipped that seal and
+changed nothing here; item 2 chunks an opaque blob), any key from descriptor gossip or the trust
+vault.
 
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshRoutedWrapBinding` | What a wrap is bound to besides its recipient: `meshID`, `itemID`, `originFingerprint`. Part of the AEAD's authenticated data, so a wrap cannot be transplanted between manifests, meshes or origins. |
 | `MeshRoutedKeyWrapError` | `invalidRecipientKey(fingerprint:)`, `invalidContentKey`, `notAddressedToMe`, `malformed`, `openFailed` — one token for every CryptoKit refusal on purpose (distinguishing them would be an oracle). Frozen English diagnostics. |
-| `makeContentKey()` | 32 random bytes from the platform CSPRNG, as `Data` (no pointer API; item 6 / P6 builds the `SymmetricKey` at the seal — item 2 chunks an opaque blob and never sees a key). Minted BEFORE the item is sealed and hashed. |
+| `makeContentKey()` | 32 random bytes from the platform CSPRNG, as `Data` (no pointer API; `MeshRoutedItemSealer` builds the `SymmetricKey` at the seal, P5 item 13 — item 2 chunks an opaque blob and never sees a key). Minted BEFORE the item is sealed and hashed. |
 | `wrap(contentKey:recipientFingerprint:recipientKeyAgreementPublicKey:binding:)` | Fresh ephemeral X25519 + fresh GCM nonce per wrap → HKDF-SHA256 (salt `KeyDerivation.meshRoutedContentKeyWrapV1`, info eph ‖ recipient) → AES-256-GCM over the 32-byte key with `additionalData` authenticated. Public keys only. |
 | `unwrap(_:binding:localFingerprint:localKeyAgreementPublicKey:staticAgreement:)` | The inverse, refusing `notAddressedToMe` and `malformed` before any key agreement; the DH is a closure into `IdentityService.heartDropStaticAgreement(withEphemeralPublicKey:)` (the `HeartDropSealer.open` shape), whose own error propagates. Everything CryptoKit refuses is `openFailed`. |
 | `additionalData(binding:recipientFingerprint:)` | `AEAD.meshRoutedContentKeyWrapV1.data` (raw prefix) ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(recipient). Frozen wire-bearing bytes, pinned by an independently derived golden. |
@@ -686,7 +687,8 @@ P5 item 2 (plan §11): one origin-signed slice of a routed item's ciphertext, pl
 domain-tagged digests and the derived chunk id the routed family hashes under. Pure values, no
 clock; the payload is EXCLUDED from the signed transcript and bound through `chunkHash`.
 Deliberately NOT in this file: persistence (item 3, with its wipe row), dispatch/emission and the
-item seal (item 6 / P6 — item 2 chunks an opaque blob), any relay hop, custody transfer, hop count
+item seal (`MeshRoutedItemSealer` — P5 item 13 shipped that seal and changed nothing here; item 2
+chunks an opaque blob), any relay hop, custody transfer, hop count
 or TTL (item 8 / increment 2), the type-token registry (item 11), backpressure (item 9).
 
 | Type / Function | What It Does |
@@ -761,6 +763,41 @@ the extraction, which is the regression proof. Pure; nothing here reads a clock,
 | `MeshChunkSetShape` | The state one decision reads: identity triple, chunk count, `boundSize` (nil ⇒ parked), bytes held, the descriptor at the incoming index, and every held slot's payload length. Built from a chunk map on one side and from index records on the other. |
 | `MeshChunkAdmissionRule.verdict(for:payloadHash:in:receivedCount:)` | The one PER-CHUNK decision, in item 2's order: `foreignItem` → `countMismatch` → `indexOutOfRange` → duplicate/`conflictingChunk` → `chunkHashMismatch` → `sizeOverflow` → `payloadLengthMismatch`. The duplicate check is `descriptor(held) == descriptor(chunk) && payloadHash == held.chunkHash` — equivalent to item 2's transcript-plus-payload comparison, and it still answers `conflictingChunk` for a chunk whose payload does not hash to its own declared `chunkHash`. |
 | `MeshChunkAdmissionRule.bindingVerdict(for:in:)` | The one BINDING decision, in `MeshChunkAssembly.bind(to:)`'s order: identity triple ⇒ `foreignItem`; derived count ≠ the set's ⇒ `countMismatch`; any held slot the manifest's size makes the wrong length ⇒ `payloadLengthMismatch`. Mutates nothing, so a refusal leaves the parked set exactly as it was — on both sides. |
+
+### `MeshRoutedItemSeal.swift`
+
+P5 item 13 (plan §11, invariant §3.3): the ITEM seal — the reserved half of item 1's pair, written.
+AES-256-GCM under `AEAD.meshRoutedItemV1`, keyed by the manifest's single-use content key, with the
+mesh, item, origin and TYPE TOKEN authenticated. This is what makes branch and epoch stop deciding
+decryptability, and therefore what lets item 13 delete the three `keyEpoch` gates rather than loosen
+them. Pure: no actor, no clock, no I/O, no identity — the locked-device predicate is consulted by the
+delivery door that CALLS this, never by the primitive. Deliberately NOT here: the per-recipient key
+wrap and its private-key half (item 1), the mint door and the projection (item 13's pass B), any
+per-type size cap (P6, D-11.4).
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedItemSealFormat` | The blob's frozen widths: `marker` (ASCII `FMRI1`, 5 bytes, cleartext, required on read AND write), `nonceByteCount` (12, shared with the wrap family), `tagByteCount` (16), `overheadByteCount` (33), `maxResidentBlobByteCount` (10 MiB — `PrivateMediaStore`'s incoming-photo number, restated because it is `private` across the S3 wall) and `maxPlaintextByteCount`, **derived** from it so the seal refuses exactly what the open would (D-13.19). A local seam bound, deleted in favour of P6's registry cap when that lands — both ends together. |
+| `MeshRoutedItemSealError` | Frozen English, never `LocalizedError`: `emptyPlaintext`, `plaintextTooLarge(byteCount:)`, `invalidContentKey`, `retiredOrForeignFormat`, `malformed`, `blobTooLargeToOpen(byteCount:)`, `openFailed`. The last collapses wrong-key / moved-blob / tampered-bytes into ONE token on purpose: distinguishing them is an oracle. |
+| `seal(_:contentKey:binding:typeToken:)` | The only shipping seal site. Order: non-empty → plaintext bound → key width → the primitive. The nonce is minted INSIDE, per item, never injected and never derived. Returns `marker ‖ nonce ‖ ciphertext ‖ tag` — the complete blob a manifest measures. |
+| `open(_:contentKey:binding:typeToken:)` | Order: marker (so a retired or foreign format is NAMED, not reported as a generic failure) → minimum width → resident bound, **before** any plaintext is allocated → the primitive. Every AEAD refusal collapses to `openFailed`. |
+| `additionalData(binding:typeToken:)` | `AEAD.meshRoutedItemV1.data ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(typeToken)` — byte for byte the wrap's AAD with the type token in the recipient's slot. NOT `contentHash` and NOT `size`: both are functions of the sealed blob, so binding either would be circular (C12), and both already ride the origin's signature. NOT the recipient: one key, N wraps, one blob. Pinned by an independently derived 127-byte golden. |
+| `validatedPlaintext(_:contentKey:)` / `validateBlobShape(_:)` | Private guard chains, extracted in the `MeshChunker.validated(…)` idiom so no door into either direction skips one. |
+
+### `MeshRoutedItemBody.swift`
+
+P5 item 13 (plan §12's photo bullet): the PLAINTEXT a routed photo item carries. Carries **no
+epoch** and **no identity claim** — the sender's fingerprint comes from the manifest's signed
+`originFingerprint` and the signing key from the admission ledger's roster entry, which is strictly
+stronger than the legacy claim-plus-hash-check and removes two spoofable fields from the sealed
+contract. Deliberately NOT here: any key, store, clock or dispatch.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshRoutedItemBodyFormat` | The frozen framing: an 8-byte big-endian header length, and the two coder factories (sorted keys, unescaped slashes, dates as seconds since 1970) that make one header value produce one byte string everywhere. Changing an option is a wire decision and moves the golden. |
+| `MeshRoutedPhotoHeader` | `id` (MUST equal the manifest's item id), `addedAt`, `senderName`, `session`. Frozen JSON keys; unknown fields ignored on decode (invariant 8). |
+| `MeshRoutedPhotoBody.encoded()` | `u64BE(headerJSON.count) ‖ headerJSON ‖ imageData` — the image RAW, never base64. Encoding the whole struct as one `Codable` value would ship the JPEG at 4/3 its size, silently re-scaling `manifest.size`, the chunk count charged against item 9's caps, the per-peer frame budget, the resident bound, and the very number tier 2 exists to measure (D-13.20). |
+| `MeshRoutedPhotoBody.init(decoding:)` | Reads the `u64`, **bounds it against the remaining bytes before slicing** (a hostile prefix yields `malformed`, never a trap or a truncated read), decodes the header, and takes the rest as the image — no second length prefix, because the image runs to the end. |
 
 ### `MeshCustodyReceipt.swift`
 

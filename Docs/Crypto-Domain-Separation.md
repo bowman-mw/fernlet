@@ -150,7 +150,7 @@ on the reasoning.
 | `meshGroupPhotoV2` | `fernlet.mesh.group-photo.aead.v2` | `MeshNetworkManager` |
 | `meshEncryptedMetadataV2` | `fernlet.mesh.encrypted-metadata.aead.v2` | `MeshNetworkManager` |
 | `meshRoutedContentKeyWrapV1` | `fernlet.mesh.routed.content-key.wrap.aead.v1` | `MeshRoutedContentKeyWrapper` |
-| `meshRoutedItemV1` | `fernlet.mesh.routed.item.aead.v1` | — (reserved; P5 item 6 / P6 — item 2 chunks an opaque blob and deliberately does not seal, because an AEAD seal mints a random nonce and a sealing chunker could not be goldened) |
+| `meshRoutedItemV1` | `fernlet.mesh.routed.item.aead.v1` | `MeshRoutedItemSealer` (P5 item 13) |
 | `heartDropSidecarV2` | `fernlet.heartdrop.sidecar.aead.v2` | `HeartDropSidecarKey` |
 | `pendingNarrativeBufferV2` | `fernlet.pending-narrative-buffer.aead.v2` | `PendingNarrativeBuffer` |
 | `lockContentKeyWrapV2` | `fernlet.lock.content-key-wrap.aead.v2` | `FernletLockService` |
@@ -246,6 +246,34 @@ three tokens under one English word, and the pair that matters is the new one:
   `CryptographicPurposeBoundaryTests.assertRoutedDrainAnswerFramingHolds` are the mechanical halves,
   the second checking both digest domains against the answer's transcript in both directions.
 
+### A drift note, 2026-09-05 (P5 item 13)
+
+**No purpose was added — a reserved one was written.** `AEAD.meshRoutedItemV1` was registered by P5
+item 1 beside its wrap and left with an empty consumer column; item 13 built `MeshRoutedItemSealer`
+against it, so the row above names a consumer for the first time. The spelling did not move, the
+`allDomains` set did not move, and no `Hash`, `KeyDerivation` or `Signature` sibling was needed:
+
+- The item seal reuses the routed **content hash** (`fernlet.mesh.routed-content.hash.v1`) rather
+  than adding one, because C12 fixes `contentHash` and `size` as measurements of the COMPLETE sealed
+  blob — a second digest domain would let the origin's manifest field and a custodian's whole-item
+  check measure different things.
+- It needs **no derivation domain**: the content key is a single-use 256-bit CSPRNG value from
+  `MeshRoutedContentKeyWrapper.makeContentKey()`, so an HKDF at the seal would separate nothing the
+  authenticated data does not already separate.
+- It needs **no framing case**: an AEAD purpose never reaches `signingBytes(_:)`, so
+  `CryptographicPurposeBoundaryTests.canonicalSerializerTranscriptsMatchTheirDeclaredFraming` owes
+  it nothing. `MeshRoutedItemSealGoldenTests.theItemSealAddsNoSignatureFramingAndNoDomainRow`
+  asserts that as a **non-change**, in both directions, so "we forgot the trio" and "we grew the
+  registry" are both failures rather than silences.
+
+The pair to keep apart is the routed family's own two AEAD spellings:
+`fernlet.mesh.routed.content-key.wrap.aead.v1` (what seals the KEY, once per recipient) and
+`fernlet.mesh.routed.item.aead.v1` (what seals the ITEM, once). They are byte-identical in shape —
+purpose, mesh id, item id, origin, then one variable field — and differ only in that last slot: the
+wrap's is the recipient fingerprint, the item's is the routed type token. A shared domain would let a
+32-byte wrapped key be replayed as an item body at a shared key; they diverge at `c` vs `i`, the first
+character after `fernlet.mesh.routed.`, so neither prefixes the other.
+
 ### Two notes on the inventory
 
 **`meshProbeChannelIntroductionV1` is deliberately not a production domain.** It belongs to the
@@ -266,7 +294,8 @@ reuses `meshAdmissionTokenV2`, which is listed), `inventory-digest`, `epoch-head
 `allDomains` rows without a row here.
 P5 item 1 added only its own four routed rows (one signature, one derivation, two AEAD) and P5 item
 2 only its own four (one signature, three hash); both record the drift rather than backfilling it,
-and the test remains the authority on the SET.
+and the test remains the authority on the SET. P5 item 13 added **none**: it wrote one of item 1's
+two AEAD rows rather than registering a new spelling, so the count is unmoved in both directions.
 
 **`meshInventoryDigestV1` is absent from the Hash table for the same reason** (note added
 2026-09-03, P5 item 2): P3 item 3 added the constant and its `allDomains` row without a row here.
