@@ -371,11 +371,14 @@ struct MeshRoutedInventoryBuilderTests {
 
     /// A planted at-rest `chunkCount` never becomes an allocation size.
     ///
-    /// `MeshRoutedItemRecord`'s decode caps its three collections but not this scalar, and the
-    /// builder is the first consumer that turns it into a byte count — a bare `UInt32` would size a
-    /// half-gigabyte `Data` before any shape check ran. The bitmap comes back **empty** rather than
-    /// clamped, so the built inventory refuses its own shape check: the honest answer for malformed
-    /// durable state, and the same one a planted zero already gets.
+    /// The claim is about the **memberwise** path, which stays deliberately unguarded: the doors own
+    /// the caps, and the handoff/claim appliers only replace records already present. (P5 item 9 added
+    /// the fourth at-rest sibling, `capacityExceeded("chunkCount")`, so this value can no longer
+    /// arrive by DECODING one of our own sealed files — but `MeshRoutedIndex(items:)` still admits
+    /// it, and the builder is the first consumer that turns it into a byte count: a bare `UInt32`
+    /// would size a half-gigabyte `Data` before any shape check ran.) The bitmap comes back **empty**
+    /// rather than clamped, so the built inventory refuses its own shape check: the honest answer for
+    /// malformed durable state, and the same one a planted zero already gets.
     @Test func aChunkCountAboveTheCapIsNeverTurnedIntoABitmapAllocation() throws {
         let planted = Self.record(chunkCount: UInt32.max, heldIndices: [])
         let index = MeshRoutedIndex(items: [planted])

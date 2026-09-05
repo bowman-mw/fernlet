@@ -690,7 +690,8 @@ struct MeshRoutedCustodyEvidenceTests {
         let files = [
             "MeshRoutedStore.swift", "MeshRoutedCustody.swift", "MeshRoutedCustodyCommit.swift",
             "MeshRoutedIndex.swift", "MeshRoutedStoreKey.swift", "MeshRoutedContentHasher.swift",
-            "MeshChunkAdmissionRule.swift", "MeshRoutedCustodyHandoff.swift"
+            "MeshChunkAdmissionRule.swift", "MeshRoutedCustodyHandoff.swift",
+            "MeshRoutedCapacity.swift", "MeshRoutedDeliveryHold.swift"
         ]
         var scanned = 0
         var sealing: [String] = []

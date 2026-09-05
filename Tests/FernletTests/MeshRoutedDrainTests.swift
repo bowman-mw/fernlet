@@ -350,10 +350,18 @@ struct MeshRoutedDrainTests {
         item.stage(into: rig, at: 0)
         rig.link(0, 1)
         let destination = rig.nodes[1].fingerprint
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
 
         rig.commit(0, 1)
+        // The origin's own copy is reclaimable the moment its one destination is delivered, so the
+        // settle stops on EITHER the receipt landing or the record being reclaimed — waiting only for
+        // the receipt would race a drop that has already happened.
         try await rig.settle(until: {
-            rig.routedIndex(rig.nodes[0])?.record(for: item.key)?.recipientReceipts.isEmpty == false
+            guard let index = rig.routedIndex(rig.nodes[0]) else { return false }
+            guard let record = index.record(for: item.key) else { return true }
+            return !record.recipientReceipts.isEmpty
         })
 
         let atDestination = try #require(rig.routedIndex(rig.nodes[1])?.record(for: item.key))
@@ -361,11 +369,19 @@ struct MeshRoutedDrainTests {
         #expect(atDestination.manifest != nil)
         #expect(atDestination.recipientReceipts.contains { $0.recipientFingerprint == destination })
 
+        // P5 item 9's named consequence: the origin's copy becomes RECLAIMABLE the moment its one
+        // destination is positively `delivered` — an origin is never a destination, and its canonical
+        // copy lives outside the routed store — so the origin either still holds the receipt or has
+        // already reclaimed the record, and the audited drop is what says which.
         let atOrigin = try #require(rig.routedIndex(rig.nodes[0]))
-        #expect(atOrigin.record(for: item.key)?.recipientReceipts
-            .contains { $0.recipientFingerprint == destination } == true)
-        #expect(atOrigin.outstandingDestinations(for: item.key, in: rig.roster).contains(destination) == false,
-                "a delivered destination leaves every outstanding enumerator")
+        if let held = atOrigin.record(for: item.key) {
+            #expect(held.recipientReceipts.contains { $0.recipientFingerprint == destination })
+            #expect(atOrigin.outstandingDestinations(for: item.key, in: rig.roster).contains(destination) == false,
+                    "a delivered destination leaves every outstanding enumerator")
+        } else {
+            #expect(capture.values(of: "mesh.routedStore.itemDropped", key: "reason").contains("delivered"),
+                    "the origin's record vanished with no audited reclaim behind it")
+        }
     }
 
     /// A heart has no foreground evidence at the drain, so it stops at custody — the correct
@@ -1204,8 +1220,8 @@ struct MeshRoutedDrainWallTests {
                 "one declaration plus three call sites")
         for declaration in [
             "public func leaveMesh() {",
-            "func prepareMembershipLedger(meshID: UUID, founderSigningPublicKey: Data?) {",
-            "func armJoinerLedger(_ grant: MeshAdmissionGrantPayload) -> Bool {"
+            "func prepareMembershipLedger(meshID: UUID, founderSigningPublicKey: Data?, now: Date = Date()) {",
+            "func armJoinerLedger(_ grant: MeshAdmissionGrantPayload, now: Date = Date()) -> Bool {"
         ] {
             guard let body = Self.functionBody(declaration, in: source) else {
                 Issue.record("\(declaration) is gone from MeshNetworkManager.swift")

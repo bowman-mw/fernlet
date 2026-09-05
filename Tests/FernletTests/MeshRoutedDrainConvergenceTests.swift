@@ -173,12 +173,51 @@ extension MeshConvergenceRun {
         return index
     }
 
+    /// **One call into item 9's seam**: fills one member's routed store to the byte cap, so the next
+    /// admission at that member must refuse.
+    ///
+    /// One planted descriptor claiming the whole budget — no sealing at all — carrying the schedule's
+    /// own expiry, so the hog is live at the run's `now` and the refusal it exists to cause really
+    /// happens rather than being swept away first.
+    func routedCapacityEvent(at member: MeshConvergenceMember, now: Date) throws {
+        let deadline = MeshP3Acceptance.base.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
+        let hog = MeshRoutedStoreFixtures.record(
+            chunks: [MeshRoutedStoreFixtures.descriptor(
+                index: 0, count: 1, bytes: Int(MeshRoutedStoreFormat.maxContentBytes)
+            )],
+            expiresAt: MeshRoutedManifest.expiry(afterHardDeadline: deadline)
+        )
+        try MeshRoutedStoreFixtures.plant(
+            MeshRoutedIndex(items: [hog]),
+            into: MeshRoutedStore(scope: member.node.store.meshRoutedStorage),
+            install: MeshP3Acceptance.install
+        )
+    }
+
+    /// One member's state for `key` — the deletion-proof reading of "the origin owes nobody".
+    ///
+    /// P5 item 9's reclaim means a fully delivered item can DISAPPEAR from the origin's own index,
+    /// and `outstandingDestinations` answers `[]` for a missing record. A progress claim written
+    /// against that predicate alone is therefore satisfied by a deletion, which is exactly what a
+    /// property battery must not accept.
+    func routedDeliveryState(
+        at member: MeshConvergenceMember, key: MeshRoutedItemKey
+    ) -> MeshRoutedDeliveryProgressState {
+        guard let index = routedIndex(of: member) else { return .outstanding([]) }
+        guard index.record(for: key) != nil else { return .reclaimed }
+        guard let roster = member.node.manager.membershipVerifier?.roster else {
+            return .outstanding([])
+        }
+        let owed = index.outstandingDestinations(for: key, in: roster)
+        return owed.isEmpty ? .closed : .outstanding(owed)
+    }
+
     /// Commits every living pair again and settles, up to ``routedDrainRounds`` times, stopping the
-    /// moment the origin owes nobody.
+    /// moment the origin's copy is closed **or has been reclaimed**.
     func runRoutedDrainRounds(origin: MeshConvergenceMember, key: MeshRoutedItemKey) async throws {
         // R2: a hard constant ceiling.
         for _ in 0..<Self.routedDrainRounds {
-            if routedOutstanding(at: origin, key: key).isEmpty { return }
+            if routedDeliveryState(at: origin, key: key).isSettled { return }
             let living = livingMembers
             DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
                 // R2: bounded by the roster cap, squared.
@@ -206,14 +245,35 @@ extension MeshConvergenceRun {
 
     /// The routed half of §16.2's invariants, over the same survivors: nothing lost, nothing
     /// double-counted, and every outstanding delivery closed.
-    func routedInvariants(_ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey) {
+    ///
+    /// - Parameters:
+    ///   - origin: The member that minted the item.
+    ///   - key: The item.
+    ///   - capture: The run's audit capture. The third disjunct is read **through** it: a missing
+    ///     record is otherwise indistinguishable from a record that was never written, so an
+    ///     un-corroborated `.reclaimed` would satisfy "nothing lost" for any deletion at all.
+    func routedInvariants(
+        _ origin: MeshConvergenceMember,
+        _ key: MeshRoutedItemKey,
+        audited capture: MeshRoutedBackpressureAuditCapture
+    ) {
         let living = livingMembers
         let owed = Set(routedOutstanding(at: origin, key: key))
+        let audited = capture.values(of: "mesh.routedStore.itemDropped", key: "reason")
+            .contains("delivered")
         // R2: bounded by the roster cap.
         for member in living where member.index != origin.index {
             let record = routedIndex(of: member)?.record(for: key)
             let holdsSomething = (record?.chunks.isEmpty == false)
-            #expect(holdsSomething || owed.contains(member.fingerprint),
+            // The third disjunct is P5 item 9's: a PURE COURIER — a custodian that is not a
+            // destination — loses its copy at the first exchange after every destination delivered,
+            // so it holds nothing and is owed nothing, and both earlier disjuncts are false for a
+            // device that did exactly the right thing. It is accepted ONLY together with the audited
+            // drop that is the only thing allowed to have produced it — exactly the corroboration
+            // the origin's own progress claim requires — so a regression that deletes a record for
+            // any other reason still fails here.
+            let reclaimed = audited && routedDeliveryState(at: member, key: key) == .reclaimed
+            #expect(holdsSomething || owed.contains(member.fingerprint) || reclaimed,
                     "a destination neither holds the item nor is still owed it")
             guard let record else { continue }
             let custodians = record.receipts.map(\.custodianFingerprint)
@@ -228,6 +288,30 @@ extension MeshConvergenceRun {
 }
 
 // MARK: - The cells
+
+/// How far one member's copy of a routed item has got — the deletion-proof reading of the progress
+/// claim (P5 item 9).
+///
+/// `.closed` is a record that is present with nothing outstanding; `.reclaimed` is no record at all,
+/// which the reclaim can produce for the origin's own copy and for a pure courier's. `.outstanding`
+/// also covers "this device cannot say" (a store that is not `.loaded`), so an unreadable store keeps
+/// the rounds loop going and fails the final assertion rather than passing it vacuously.
+nonisolated enum MeshRoutedDeliveryProgressState: Equatable, Sendable {
+    /// Still owed to these destinations, or unreadable.
+    case outstanding([String])
+    /// The record is held and nothing is outstanding.
+    case closed
+    /// The record is gone — reclaimed, expired or dropped.
+    case reclaimed
+
+    /// Whether the drain has nothing further to do for this copy.
+    var isSettled: Bool {
+        switch self {
+        case .outstanding: return false
+        case .closed, .reclaimed: return true
+        }
+    }
+}
 
 /// One cell of the routed progress property: a fixed seed, and how many chunks its item carries.
 nonisolated struct MeshRoutedDrainCell: Sendable, CustomStringConvertible {
@@ -268,6 +352,9 @@ struct MeshRoutedDrainConvergenceTests {
         )
         let run = try MeshConvergenceRun.build(schedule, label: "routed-drain")
         defer { for node in run.livingNodes { node.manager.leaveMesh() } }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
         try await run.runSplitEvents()
 
         let origin = try #require(run.livingMembers.first, "the cell needs a surviving origin")
@@ -280,9 +367,55 @@ struct MeshRoutedDrainConvergenceTests {
         try await run.runHeal()
         try await run.runRoutedDrainRounds(origin: origin, key: key)
 
-        run.routedInvariants(origin, key)
-        #expect(run.routedOutstanding(at: origin, key: key).isEmpty,
-                "a reachable survivor destination never reached delivered")
+        run.routedInvariants(origin, key, audited: capture)
+        // P5 item 9: `outstandingDestinations` answers `[]` for a MISSING record, so the old
+        // assertion was satisfiable by a deletion. `.reclaimed` now passes only together with the
+        // audited drop that is the only thing allowed to have produced it.
+        switch run.routedDeliveryState(at: origin, key: key) {
+        case .closed:
+            break
+        case .reclaimed:
+            #expect(capture.values(of: "mesh.routedStore.itemDropped", key: "reason")
+                    .contains("delivered"),
+                    "the record vanished with no audited reclaim behind it")
+        case .outstanding(let owed):
+            Issue.record("a reachable survivor destination never reached delivered: \(owed)")
+        }
+    }
+
+    /// **P5 item 9 in the battery.** One survivor is at its byte cap when the drain reaches it, and a
+    /// capacity refusal is a **named closed state** rather than a silent stall: the item stays
+    /// outstanding at the origin, the origin's own record is intact, and the capped member says why.
+    ///
+    /// The hog carries the schedule's own expiry, so item 9's expiry sweep cannot free it before the
+    /// refusal happens — the fixture trap that would turn this cell green for the wrong reason.
+    @Test func aMemberAtCapacityLosesNoContent() async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
+        )
+        let run = try MeshConvergenceRun.build(schedule, label: "routed-capacity")
+        defer { for node in run.livingNodes { node.manager.leaveMesh() } }
+        try await run.runSplitEvents()
+
+        let origin = try #require(run.livingMembers.first, "the cell needs a surviving origin")
+        let capped = try #require(
+            run.livingMembers.dropFirst().first, "the cell needs a second survivor to fill"
+        )
+        let now = MeshP3Acceptance.base.addingTimeInterval(600)
+        try run.routedCapacityEvent(at: capped, now: now)
+        let key = try run.routedCustodyEvent(at: origin, chunks: 1, now: now)
+        #expect(run.routedOutstanding(at: origin, key: key).contains(capped.fingerprint),
+                "the cell must start with the capped member actually owed the item")
+
+        try await run.runHeal()
+        try await run.runRoutedDrainRounds(origin: origin, key: key)
+
+        #expect(run.routedOutstanding(at: origin, key: key).contains(capped.fingerprint),
+                "a capacity refusal must leave the delivery outstanding, never quietly closed")
+        #expect(run.routedIndex(of: origin)?.record(for: key) != nil,
+                "the origin's own copy is intact — backpressure is not data loss")
+        #expect(capped.node.manager.routedDeliveryHold?.cause == .storeFull,
+                "a refusal that names no state at all is the silent stall this battery exists to catch")
     }
 
     /// **P5 item 8 in the battery.** The origin drains **inside its own branch**, develops there, and

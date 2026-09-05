@@ -137,17 +137,23 @@ enum MeshRoutedStoreFixtures {
     }
 
     /// A synthetic held item with `chunks` descriptors and no manifest.
+    ///
+    /// `expiresAt` defaults to the manifest fixtures' anchor (1.7e9). Any rig running on the P3
+    /// acceptance anchor (1.8e9) MUST pass its own: a planted record stamped with the default is
+    /// already expired at that rig's `now`, so P5 item 9's expiry sweep frees it before the cell's
+    /// refusal can happen and the cell goes green for the wrong reason.
     static func record(
         origin: String = "fp001",
         itemID: UUID = UUID(),
         chunkCount: UInt32 = 1,
-        chunks: [MeshRoutedChunkDescriptor] = []
+        chunks: [MeshRoutedChunkDescriptor] = [],
+        expiresAt: Date = MeshRoutedManifestFixtures.expiresAt
     ) -> MeshRoutedItemRecord {
         MeshRoutedItemRecord(
             key: MeshRoutedItemKey(originFingerprint: origin, itemID: itemID),
             contentHash: MeshRoutedManifestFixtures.contentHash,
             chunkCount: chunkCount,
-            expiresAt: MeshRoutedManifestFixtures.expiresAt,
+            expiresAt: expiresAt,
             manifest: nil,
             firstSeenAt: MeshRoutedManifestFixtures.base,
             custodiedAt: nil,

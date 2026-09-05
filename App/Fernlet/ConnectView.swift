@@ -239,6 +239,8 @@ struct FriendsView: View {
                         .animation(.easeInOut(duration: 0.3), value: manager.isSearching)
                         .animation(.easeInOut(duration: 0.3), value: manager.slots.count)
 
+                    RoutedDeliveryHoldBanner(hold: manager.routedDeliveryHold)
+
                     displayNameHint
 
                     if manager.meshPhotos.isEmpty {
