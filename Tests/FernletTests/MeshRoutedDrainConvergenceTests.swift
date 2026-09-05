@@ -75,6 +75,61 @@ extension MeshConvergenceRun {
         return MeshRoutedItemKey(manifest)
     }
 
+    /// **P5 item 13's seam into the battery**: one member mints a REAL sealed photo item — framed
+    /// body, item seal, signed manifest, chunks — and stages it into its own routed store.
+    ///
+    /// Deliberately not ``routedCustodyEvent(at:chunks:now:)``: that stages an opaque fixture blob,
+    /// which every rung above the plaintext seam is happy with and no delivery projection can open.
+    /// A convergence claim about the WALL needs bytes a receiver can really decrypt.
+    ///
+    /// - Parameters:
+    ///   - member: The origin.
+    ///   - now: The injected instant the two store doors are charged at.
+    /// - Returns: the item's signed pair.
+    func routedSealedPhotoEvent(
+        at member: MeshConvergenceMember, now: Date
+    ) throws -> MeshRoutedItemKey {
+        let identity = member.node.manager.identityForTesting
+        guard let roster = member.node.manager.membershipVerifier?.roster else {
+            throw MeshMergeTestFailure.rosterTooSmall
+        }
+        let item = try MeshRoutedPhotoFixtures.item(
+            meshID: meshID,
+            roster: roster,
+            signer: identity,
+            recipientKeys: Dictionary(uniqueKeysWithValues: members.map {
+                ($0.fingerprint, $0.node.manager.identityForTesting.localKeyAgreementPublicKey)
+            }),
+            createdAt: MeshP3Acceptance.base.addingTimeInterval(60),
+            hardDeadline: MeshP3Acceptance.base.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
+        )
+        let store = MeshRoutedStore(scope: member.node.store.meshRoutedStorage)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            #expect(store.admittingManifest(item.manifest, now: now).value != nil)
+            // R2: bounded by the item's own chunk count.
+            for chunk in item.chunks {
+                #expect(store.stagingChunk(chunk, now: now).value != nil)
+            }
+        }
+        return MeshRoutedItemKey(item.manifest)
+    }
+
+    /// Opens every living member's access gate, which is what a device that is unlocked and
+    /// foregrounded looks like — and the precondition for any plaintext claim at all.
+    func openEveryRoutedGate(now: Date) {
+        // R2: bounded by the roster cap.
+        for member in livingMembers {
+            DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+                member.node.manager.applyRoutedAccessGate(
+                    MeshRoutedAccessGate(
+                        protectedDataAvailable: true, appIsForeground: true, duressActive: false
+                    ),
+                    now: now
+                )
+            }
+        }
+    }
+
     /// **P5 item 8's seam into the battery**: one member develops, on an injected clock, with no
     /// randomness of its own.
     ///
@@ -482,6 +537,40 @@ struct MeshRoutedDrainConvergenceTests {
                     "the record vanished with no audited reclaim behind it")
         case .outstanding(let owed):
             Issue.record("a reachable survivor destination never reached delivered: \(owed)")
+        }
+    }
+
+    /// **P-1 — P5 item 13 in the battery.** One REAL sealed photo, minted before the heal, reaches
+    /// every destination's wall exactly once under the fixed root seed.
+    ///
+    /// The property the earlier cells cannot state: they end at custody and receipts, which are
+    /// ciphertext facts, while this one ends at the canonical store the whole feature exists to
+    /// fill. Every instant is anchored to the injected clock rather than to a wall clock, and the
+    /// seed is the family's fixed root — a randomized seed is a flake generator, not a property test.
+    @Test func aSealedPhotoConvergesOnTheRootSeed() async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
+        )
+        let run = try MeshConvergenceRun.build(schedule, label: "routed-photo")
+        defer { for node in run.livingNodes { node.manager.leaveMesh() } }
+        try await run.runSplitEvents()
+
+        let origin = try #require(run.livingMembers.first, "the cell needs a surviving origin")
+        let now = MeshP3Acceptance.base.addingTimeInterval(600)
+        run.openEveryRoutedGate(now: now)
+        let key = try run.routedSealedPhotoEvent(at: origin, now: now)
+        #expect(run.routedOutstanding(at: origin, key: key).isEmpty == false,
+                "the cell must start with work actually outstanding")
+
+        try await run.runHeal()
+        try await run.runRoutedDrainRounds(origin: origin, key: key)
+
+        let destinations = run.livingMembers.filter { $0.index != origin.index }
+        #expect(destinations.isEmpty == false, "the cell needs at least one destination")
+        // R2: bounded by the roster cap.
+        for member in destinations {
+            #expect(member.node.manager.meshPhotos.filter { $0.id == key.itemID }.count == 1,
+                    "every destination's wall holds exactly one entry for the delivered item")
         }
     }
 

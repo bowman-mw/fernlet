@@ -732,22 +732,41 @@ extension MeshRoutedLockedDeviceTests {
         }
     }
 
-    /// The three qualified spellings a real routed decrypt or heart judgement has to write, each
-    /// with the one file it may legitimately appear in and the count pinned **there**. Everywhere
-    /// else in `ProximityKit` the count is zero.
+    /// The qualified spellings a real routed decrypt, canonical mutation or heart judgement has to
+    /// write, each with the one file it may legitimately appear in and the count pinned **there**.
+    /// Everywhere else in `ProximityKit` the count is zero.
     ///
     /// Pinned counts rather than per-file containment alone, because containment cannot fire where
     /// such a seam would actually land: `MeshNetworkManager.swift` **defines** all three predicates,
     /// so a decrypt written there would name one by construction and pass a containment check
-    /// automatically. A pin says the honest thing instead — *no such seam exists yet* — and fails
-    /// the build on the first one, wherever it is written.
+    /// automatically. A pin says the honest thing instead and fails the build on the first
+    /// unaccounted-for seam, wherever it is written.
     ///
-    /// The one non-zero pin is the stage precondition's own `guard case` in
-    /// `MeshRoutedDeliveryCommit.stageShortfall`: the **reader** of the evidence, which judges
-    /// nothing. A construction or a `evidence: .heartLedgerCommit(ack)` call site would be a second
-    /// occurrence, and that is the event this pin exists to catch.
+    /// **The counts are raw substring counts over comment-stripped source**, so a needle a target's
+    /// own DECLARATION also spells counts twice. The first two dodge that by construction (the
+    /// declarations read `static func unwrap(` and `static func open(` in other files); the third
+    /// does not, and its arithmetic is written out below rather than left to be re-derived.
+    ///
+    /// Row by row:
+    ///
+    /// * `MeshRoutedContentKeyWrapper.unwrap(` — **1**, in the delivery door. P5 item 13's one
+    ///   content-key unwrap. Not "≥ 1", and not a home of `""` with a raised count: `elsewhere == 0`
+    ///   is what makes the home load-bearing, so a second call site or the same call moved to
+    ///   another file still fails.
+    /// * `MeshRoutedItemSealer.open(` — **1**, beside it: the plaintext seam's other half.
+    /// * `routedCanonicalDispatch(` — **2** in the manager: the declaration plus its single call
+    ///   site in `projectRoutedItemIfPermitted`. This is W2(b), the canonical-mutation half item 10
+    ///   handed forward; a second, ungated mutation is now a build failure rather than a review
+    ///   catch.
+    /// * `MeshRoutedHeartAck(` — **0**, unchanged. If it moves, scope has drifted into P6.
+    /// * `.heartLedgerCommit(` — **1**, the stage precondition's own `guard case` in
+    ///   `MeshRoutedDeliveryCommit.stageShortfall`: the **reader** of the evidence, which judges
+    ///   nothing. A construction or an `evidence: .heartLedgerCommit(ack)` call site would be a
+    ///   second occurrence, and that is the event this pin exists to catch.
     private static let routedPlaintextSeams: [(needle: String, home: String, pinned: Int)] = [
-        ("MeshRoutedContentKeyWrapper.unwrap(", "", 0),
+        ("MeshRoutedContentKeyWrapper.unwrap(", "MeshRoutedItemDelivery.swift", 1),
+        ("MeshRoutedItemSealer.open(", "MeshRoutedItemDelivery.swift", 1),
+        ("routedCanonicalDispatch(", "MeshNetworkManager.swift", 2),
         ("MeshRoutedHeartAck(", "", 0),
         (".heartLedgerCommit(", "MeshRoutedDeliveryCommit.swift", 1)
     ]
@@ -787,19 +806,36 @@ extension MeshRoutedLockedDeviceTests {
 
     /// W2's containment half: whoever moves a pin in ``routedPlaintextSeams`` must name the gating
     /// predicate in the same file — ``MeshNetworkManager/mayDecryptRoutedContent`` for a decrypt,
+    /// ``MeshNetworkManager/mayMutateCanonicalStoreWithRoutedContent`` for a canonical mutation,
     /// ``MeshNetworkManager/mayCommitRoutedHeartLedgerJudgement`` for a heart judgement.
     ///
-    /// Vacuous while every pin stands at its declaring home; the counts are what fires today. Note
-    /// the deliberate pairing with W3(b), which exempts exactly the files this half matches — a new
-    /// decrypting file MUST name the decrypt predicate here, so W3(b) may not forbid the token there.
+    /// **The decrypt arm asks for a `guard`, not a mention** (P5 item 13, D-13.3 amended). A
+    /// decorative occurrence of the identifier would satisfy a `contains` while the file that
+    /// produces the plaintext never consulted the answer — the vacuity item 10 argued against — and
+    /// P6 adds two more callers to this same seam. `MeshRoutedItemDelivery` therefore takes the
+    /// predicate as a parameter under that exact spelling and guards on it as its first line.
+    ///
+    /// The manager arm is the mention, because containment there is vacuous by construction (it
+    /// DEFINES the predicates); the pinned count of `routedCanonicalDispatch(` is the enforcement
+    /// on that side, exactly as D-10.17 argued.
+    ///
+    /// Note the deliberate pairing with W3(b), which exempts exactly the files this half matches — a
+    /// new decrypting file MUST name the decrypt predicate here, so W3(b) may not forbid the token
+    /// there.
     private static func expectPlaintextSeamsNameTheirPredicate(
         _ sources: [(name: String, code: String)]
     ) {
         // R2: bounded by the module's own file list.
         for source in sources where source.name != "MeshRoutedContentKeyWrapper.swift" {
             guard source.code.contains("MeshRoutedContentKeyWrapper.unwrap(") else { continue }
-            #expect(source.code.contains("mayDecryptRoutedContent"),
-                    "a routed decrypt appeared in a file that never names the decrypt predicate")
+            #expect(source.code.contains("guard mayDecryptRoutedContent"),
+                    "a routed decrypt appeared in a file that does not GUARD on the decrypt predicate")
+        }
+        // R2: the same bound.
+        for source in sources {
+            guard source.code.contains("routedCanonicalDispatch(") else { continue }
+            #expect(source.code.contains("mayMutateCanonicalStoreWithRoutedContent"),
+                    "a routed canonical mutation appeared in a file that never names its predicate")
         }
         // R2: the same bound.
         for source in sources where !Self.heartEvidenceHomes.contains(source.name) {
@@ -850,6 +886,36 @@ extension MeshRoutedLockedDeviceTests {
             #expect(source.code.contains("mayDecryptRoutedContent") == false,
                     "the decrypt predicate spread beyond the manager and the gate's own file")
         }
+    }
+
+    /// **W3(c) — the decrypting file guards on its predicate, and W3(b)'s exemption is live.**
+    ///
+    /// Three claims in one place, because the interesting thing about them is that they hold
+    /// TOGETHER. `MeshRoutedItemDelivery.swift` performs the one routed unwrap and the one item
+    /// open; it names the decrypt predicate as a `guard`, not decoratively; and it therefore takes
+    /// W3(b)'s exemption, which until P5 item 13 no file did. An exemption nothing exercises is a
+    /// hole nobody would notice closing — so this asserts it is exercised by exactly the file W2's
+    /// containment half obliges to name the predicate.
+    @Test func theDecryptingFileGuardsOnItsPredicate() throws {
+        let code = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedItemDelivery.swift")
+        )
+        #expect(code.contains("MeshRoutedContentKeyWrapper.unwrap("),
+                "the delivery door no longer performs the unwrap W3(b) exempts it for")
+        #expect(code.contains("MeshRoutedItemSealer.open("),
+                "the delivery door no longer opens the item blob")
+        #expect(code.contains("guard mayDecryptRoutedContent"),
+                "the decrypting file must GUARD on the predicate, not merely mention it")
+
+        var exempted: [String] = []
+        for source in try Self.codeSources(under: "FernletKit/Sources/ProximityKit/Mesh")
+        where !["MeshRoutedAccessGate.swift", "MeshNetworkManager.swift"].contains(source.name) {
+            guard source.code.contains("MeshRoutedContentKeyWrapper.unwrap("),
+                  source.code.contains("mayDecryptRoutedContent") else { continue }
+            exempted.append(source.name)
+        }
+        #expect(exempted == ["MeshRoutedItemDelivery.swift"],
+                "W3(b)'s exemption must be exercised by exactly the routed delivery door: \(exempted)")
     }
 
     /// **W4.** No routed door collapses an outcome to a default.

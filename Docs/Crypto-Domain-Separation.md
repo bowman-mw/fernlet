@@ -147,8 +147,8 @@ on the reasoning.
 | `sealedPhotoBackupV3` | `fernlet.sealed-photo.aad.v3` | `SealedPhotoBackupService` |
 | `proximityTransportV2` | `fernlet.proximity.transport.aead.v2` | `IdentityService` |
 | `meshGroupKeyWrapV2` | `fernlet.mesh.groupkey.wrap.aead.v2` | `IdentityService` |
-| `meshGroupPhotoV2` | `fernlet.mesh.group-photo.aead.v2` | `MeshNetworkManager` |
-| `meshEncryptedMetadataV2` | `fernlet.mesh.encrypted-metadata.aead.v2` | `MeshNetworkManager` |
+| `meshGroupPhotoV2` | `fernlet.mesh.group-photo.aead.v2` | — (retired with the group-key photo path, P5 item 13) |
+| `meshEncryptedMetadataV2` | `fernlet.mesh.encrypted-metadata.aead.v2` | `MeshNetworkManager.decryptPayload` (the surviving receive half; the seal half retired with P5 item 13) |
 | `meshRoutedContentKeyWrapV1` | `fernlet.mesh.routed.content-key.wrap.aead.v1` | `MeshRoutedContentKeyWrapper` |
 | `meshRoutedItemV1` | `fernlet.mesh.routed.item.aead.v1` | `MeshRoutedItemSealer` (P5 item 13) |
 | `heartDropSidecarV2` | `fernlet.heartdrop.sidecar.aead.v2` | `HeartDropSidecarKey` |
@@ -265,6 +265,19 @@ against it, so the row above names a consumer for the first time. The spelling d
   it nothing. `MeshRoutedItemSealGoldenTests.theItemSealAddsNoSignatureFramingAndNoDomainRow`
   asserts that as a **non-change**, in both directions, so "we forgot the trio" and "we grew the
   registry" are both failures rather than silences.
+
+**And one purpose lost its last consumer, in the same commit** (D-13.26). `meshGroupPhotoV2`'s only
+two consumers were `MeshNetworkManager.encryptPhoto` / `decryptPhoto`, which retired with the whole
+group-key photo path; its row's consumer column is now `—`, the shape `columnDeviceBoundV3` already
+had. `meshEncryptedMetadataV2` lost its SEAL half with `sendEncryptedMetadata` — whose only two call
+sites were the photo manifest and request — and keeps its open half, so its row is narrowed to
+`decryptPayload` rather than emptied.
+
+**The count did not move in either direction, which is exactly why this has to be written down.**
+Item 13 both wrote one reserved purpose and emptied another's consumer column; `allDomains` is
+unchanged, so nothing mechanical would have noticed either. The spellings are **not** deleted: a
+retired AEAD domain stays registered and stays distinct, exactly as a parked wire token does, so no
+future purpose can reuse a string an older build's blobs were sealed under.
 
 The pair to keep apart is the routed family's own two AEAD spellings:
 `fernlet.mesh.routed.content-key.wrap.aead.v1` (what seals the KEY, once per recipient) and

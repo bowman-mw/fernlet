@@ -759,7 +759,8 @@ final class DuressRecoveryCoordinator {
     /// error exactly as they were; what this adds is the reason on that same line.
     ///
     /// **Why the reason rides the CONTEXT rather than a new event name**, unlike
-    /// `MeshNetworkManager.decryptedIncomingPhoto`'s `mesh.friendPhoto.droppedLegacyWireFormat`:
+    /// `MeshNetworkManager.handleEncryptedMetadata`'s `mesh.encryptedMetadata.droppedLegacyWireFormat`
+    /// (the friend-photo sibling this once named retired with the group-key photo path, P5 item 13):
     /// `FernletAuditLog` logs the event NAME with `.auto` privacy — it survives into a sysdiagnose —
     /// and the context with `.private`, redacted outside a connected debugger. This type's audit
     /// posture (see the type doc) is that no name it emits may hint a duress PIN exists on this

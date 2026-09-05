@@ -227,13 +227,18 @@ struct MeshRoutedDrainRig {
     /// wants. P5 item 10 made it a **parameter** because an inner `withValue` shadows an outer one:
     /// a cell that wrapped this call in `.withValue(.readError)` to drive a locked window would
     /// otherwise find the store perfectly `.loaded` for exactly the doors it meant to lock.
+    /// `committedSlot: false` seats the frame on the linked-but-**uncommitted** shape — a peer that
+    /// has been introduced and has not committed carries no fingerprint on its slot, which is the
+    /// pre-commit case `dispatchRoutedPayload` drops by name. The slot is otherwise the real one, so
+    /// a cell can hand the same frame both ways and assert the difference.
     func dispatch(
         _ payload: some Encodable,
         type: PayloadType,
         sender: Int,
         receiver: Int,
         now: Date? = nil,
-        binding: DeviceBindingID.TestOverride? = nil
+        binding: DeviceBindingID.TestOverride? = nil,
+        committedSlot: Bool = true
     ) throws {
         let binding = binding ?? .identifier(MeshP3Acceptance.install)
         let now = now ?? MeshRoutedDrainRig.now
@@ -250,7 +255,8 @@ struct MeshRoutedDrainRig {
         let plaintext = try frame.verify(
             identityService: node.manager.identityForTesting, replayCache: node.replayCache
         )
-        let slot = node.manager.slots.first { $0.coordinator === coordinator }
+        var slot = node.manager.slots.first { $0.coordinator === coordinator }
+        if !committedSlot { slot?.fingerprint = nil }
         DeviceBindingID.$testOverride.withValue(binding) {
             node.manager.dispatchRoutedPayload(
                 type, plaintext: plaintext, decoder: JSONDecoder(), slot: slot, now: now
@@ -1596,6 +1602,15 @@ struct MeshRoutedDrainWallTests {
     /// moved and the wall became **per function** instead — it now names WHICH functions may send
     /// each ask, which a count never could.
     ///
+    /// **P5 item 13 moved the BULK count, not the ask count.** All three ask doors fire as a link
+    /// OPENS, so an item minted mid-session with the links already open would wait for the next
+    /// reconnect — in a stable session, forever. The fix is a fourth `sendRoutedBulk(` site,
+    /// `pushOriginatedItem(_:to:now:)`, and deliberately **not** a fourth `sendRoutedInventory(`
+    /// one: an advertisement asks the PEER to push to this device, which is the opposite of what an
+    /// origination needs, and recording one would overwrite the `advertisedAt` an inbound quiescence
+    /// answer has to quote. So `sendRoutedInventory(` stands at four, `sendRoutedBulk(` at four, and
+    /// the new door gets its own class below beside item 8's hand-off.
+    ///
     /// Counted on the SYMBOL, not on a spelling: a call written `await sendRoutedInventory(…)` —
     /// the natural form for any same-actor caller, and the one the signature invites — would leave a
     /// `self?.`-prefixed count at three and the wall green.
@@ -1622,8 +1637,8 @@ struct MeshRoutedDrainWallTests {
             #expect(!body.contains("sendRoutedInventory("),
                     "\(door) is not an ask: it must never carry routed bulk")
         }
-        #expect(source.components(separatedBy: "sendRoutedBulk(").count - 1 == 3,
-                "one declaration plus exactly two call sites: the drain answer and the hand-off push")
+        #expect(source.components(separatedBy: "sendRoutedBulk(").count - 1 == 4,
+                "one declaration plus three sites: drain answer, hand-off push, origination push")
         for door in Self.handoffDoors {
             let body = try #require(Self.body(startingWith: door, in: source),
                                     "\(door) is gone from MeshNetworkManager.swift")
@@ -1634,7 +1649,26 @@ struct MeshRoutedDrainWallTests {
             #expect(body.components(separatedBy: "sendRoutedBulk(").count - 1 == 1,
                     "\(door) moves bytes through the one extracted sender")
         }
+        for door in Self.originationDoors {
+            let body = try #require(Self.body(startingWith: door, in: source),
+                                    "\(door) is gone from MeshNetworkManager.swift")
+            #expect(!body.contains("sendInventoryDigest("),
+                    "\(door) asks nothing: an origination is not a merge exchange")
+            #expect(!body.contains("sendRoutedInventory("),
+                    "\(door) asks nothing: an advertisement would ask the PEER to push to us")
+            #expect(!body.contains("recordRoutedAdvertisement("),
+                    "\(door) records nothing: recording would unbind an open exchange's answer")
+            #expect(body.components(separatedBy: "sendRoutedBulk(").count - 1 == 1,
+                    "\(door) moves bytes through the one extracted sender")
+        }
     }
+
+    /// The **fourth** door class, added by P5 item 13: the origination push. Like item 8's hand-off
+    /// it is neither an ask door nor a non-ask membership door — it opens no exchange, sends no
+    /// digest of either kind and records no advertisement — and it is the only routed send that
+    /// fires on a USER ACTION rather than on a link opening, which is exactly why it must not touch
+    /// the advertisement binding an open merge exchange is waiting on.
+    private static let originationDoors = ["private func pushOriginatedItem("]
 
     /// The **third** door class, added by P5 item 8: the one-moment hand-off. It is neither an ask
     /// door (it opens no exchange and sends no digest of either kind) nor a non-ask membership door
@@ -1793,8 +1827,80 @@ struct MeshRoutedDrainWallTests {
         return nil
     }
 
-    /// **Item 13's precondition.** The routed section names no epoch, group key, branch or partition
-    /// symbol: the routed path's authorisation is the origin's signature plus the per-recipient key
+    /// **W1 — the retired gates are gone and the survivors are pinned by count** (P5 item 13).
+    ///
+    /// A pin table, not a zero list, and the difference is the whole design. Two of the three
+    /// `keyEpoch` gates retired WITH the path that made them necessary and are pinned at zero. The
+    /// third — `handleEncryptedMetadata`'s compare — is deliberately RETAINED: its two content arms
+    /// retired, but its door survives with two control arms that have no routed successor, and
+    /// deleting the compare over those would be loosening a gate in place, which is the one move the
+    /// wall forbids. `decryptPayload` authenticates the metadata purpose alone, so a wrapper sealed
+    /// under the current key but stamped with a foreign epoch would otherwise open and dispatch;
+    /// `MeshEncryptionTests.aCurrentKeyWrapperStampedWithAForeignEpochIsRefused` is that case.
+    ///
+    /// The surviving `keyEpoch` occurrences are named line by line so a new one has to move a
+    /// number rather than hide in a total: `sanitizedIncomingPhoto`'s legacy-shape check
+    /// (`payload.keyEpoch > 0`) and its re-mint (the `keyEpoch:` label plus `payload.keyEpoch`, two
+    /// occurrences on one line), and the retained compare. `currentKeyEpoch` spells `KeyEpoch` and
+    /// does not match. `localJoinedEpoch` stands at seven: its declaration, two resets, the grant's
+    /// monotonicity compare, two assignments and the rotation fallback — the control plane, which
+    /// item 13 never touched.
+    ///
+    /// A zero list was tried first and could not pass: `.keyEpoch >` is literally contained in
+    /// `payload.keyEpoch > 0`, so the wall would have gone red on its own commit and the obvious
+    /// green-making move — widening the exemption — would quietly re-admit
+    /// `if x.keyEpoch > localJoinedEpoch` anywhere in the manager.
+    @Test func theRetiredEpochGatesAreGoneAndTheSurvivorsArePinned() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let pins: [(needle: String, pinned: Int)] = [
+            ("key.epoch == photo.keyEpoch", 0),
+            ("keyEpoch >= localJoinedEpoch", 0),
+            ("manifestAnnouncedPhotoAuthors", 0),
+            ("wrapper.keyEpoch == currentGroupKey?.epoch", 1),
+            ("keyEpoch", 4),
+            ("localJoinedEpoch", 7)
+        ]
+        // R2: six needles over one file.
+        for pin in pins {
+            let found = source.components(separatedBy: pin.needle).count - 1
+            #expect(found == pin.pinned,
+                    "\(pin.needle) stands at \(found), pinned at \(pin.pinned)")
+        }
+    }
+
+    /// **W2 — the retired photo transport is gone**, symbol by symbol (P5 item 13).
+    ///
+    /// Eleven names, one flow: the group-key photo decrypt and its author claim, the manifest pull
+    /// and its request answer, the closed-mode metadata SEAL half whose only two call sites were
+    /// that pull, and the two public statics that sealed and opened a photo under the group key.
+    /// A count is not enough here — a re-introduction under any of these names is the regression —
+    /// so each is pinned at zero by name.
+    @Test func theRetiredPhotoTransportIsGone() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let retired = [
+            "handleFriendPhotoEnvelope", "decryptedIncomingPhoto", "dispatchPhotoPayload",
+            "photoAuthorIsAcceptable", "handlePhotoManifest", "syncPhotoManifest",
+            "sendRequestedPhotos", "sendEncryptedMetadata", "encryptPhoto", "decryptPhoto",
+            "encryptPayload",
+            // The legacy per-sender RECEIVE quota and the two fields that served it. Its routed
+            // twin `allowIncomingRoutedPhoto` keys on the ITEM's mesh (D-13.23) where this one
+            // keyed on the live one, so a re-introduction would put two per-sender quotas with
+            // opposite mesh-keying in one file with nothing saying which is live.
+            "allowIncomingPhoto", "receivedPhotoIDsByFingerprint", "receiveQuotaMeshID"
+        ]
+        var scanned = 0
+        // R2: fourteen names over one file.
+        for symbol in retired {
+            scanned += 1
+            #expect(!source.contains(symbol), "\(symbol) came back to MeshNetworkManager.swift")
+        }
+        #expect(scanned == retired.count, "the retired-transport scan lost a symbol")
+    }
+
+    /// **Item 13's precondition, still green after item 13.** The routed section names no epoch,
+    /// group key, branch or partition symbol — and it now carries the sender door, the projection
+    /// and the re-entry projection pass, so the claim is about real content code rather than about
+    /// plumbing with nothing to gate: the routed path's authorisation is the origin's signature plus the per-recipient key
     /// wrap, which is what lets item 13 delete the three `keyEpoch` gates rather than loosen them.
     @Test func theRoutedPathNamesNoEpochSymbol() throws {
         let source = try managerSource()

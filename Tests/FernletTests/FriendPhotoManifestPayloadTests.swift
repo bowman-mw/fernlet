@@ -6,6 +6,16 @@ import FernletDomainModel
 
 // MARK: - FriendPhotoManifestPayload
 
+/// The manifest payload's PURE-VALUE claims, kept after P5 item 13 retired the pull protocol.
+///
+/// `FriendPhotoManifestPayload` and `FriendPhotoManifestEntry` are **parked**, not deleted (D-13.5):
+/// their wire tokens stay frozen and decodable so an older peer's frame is parked by name rather
+/// than mis-dispatched, and no token is ever reused for a new meaning. What retired is the transport
+/// around them — `syncPhotoManifest`, `handlePhotoManifest` and `sendRequestedPhotos` — so the three
+/// FILTER cells below now describe a shape nothing sends. Their successors on the routed path are
+/// the offer/ask filters (`MeshRoutedInventoryDelta.between`, which names no epoch) and the
+/// projection's own block check, asserted in `MeshRoutedPhotoDeliveryTests`
+/// (`aBlockedOriginsPhotoIsNotHandedToTheWall`, `aPhotoIsHandedToTheWallOnce`).
 @Suite @MainActor struct FriendPhotoManifestPayloadTests {
 
     // Each entry in the manifest carries a non-optional sender fingerprint,

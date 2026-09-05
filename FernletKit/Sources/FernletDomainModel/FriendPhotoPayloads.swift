@@ -9,8 +9,13 @@ import Foundation
 /// Encoded into `envelope.payload` and decoded from untrusted peer plaintext, so it is `Sendable`
 /// for off-main decode like the rest of the wire surface. `keyEpoch` 0 means legacy unencrypted
 /// `imageData`; epoch ≥ 1 carries `encryptedImageData` + `nonce`, decrypted by the receiving photo
-/// store which caches the result via `withDecryptedImageData(_:)`. `withoutImageData()` strips
-/// plaintext bytes for paths that must not hold them; `session` attaches the who/when metadata.
+/// store which caches the result via `withDecryptedImageData(_:)`. **Its `PayloadType` is parked
+/// since P5 item 13** — nothing sends or dispatches the sealed shape any more, because photo bytes
+/// ride the routed store under a per-recipient content-key wrap — but the struct itself is very much
+/// alive: it is what the wall, `cachePhoto` and `PrivateMediaStore` speak, and the routed delivery
+/// projection builds one (with the ORIGIN's signed attribution) to hand them.
+/// `withoutImageData()` strips plaintext bytes for paths that must not hold them; `session`
+/// attaches the who/when metadata.
 public struct FriendPhotoPayload: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let imageData: Data?               // non-nil for epoch-0 unencrypted or locally-decrypted photos
@@ -200,11 +205,15 @@ public enum FriendPhotoLimits {
 
 /// One row of a peer's photo manifest: photo id, sender fingerprint, and key epoch.
 ///
-/// The epoch lets a receiver skip requesting photos from epochs it could not decrypt anyway.
+/// **Parked with its payload since P5 item 13** (D-13.5). The epoch column existed so a receiver
+/// could skip requesting photos from epochs it could not decrypt — the `keyEpoch >= localJoinedEpoch`
+/// filter, one of the two gates item 13 retired **with** the path that made them necessary. The
+/// routed drain that replaced the pull names no epoch at all, so nothing reads this column now; the
+/// wire shape stays frozen and decodable so an older peer's frame is parked by name.
 public struct FriendPhotoManifestEntry: Codable, Equatable, Sendable {
     public let id: UUID
     public let senderFingerprint: String
-    public let keyEpoch: Int   // receiver skips requesting photos from epochs it cannot decrypt
+    public let keyEpoch: Int   // parked: the epoch filter it fed retired with P5 item 13
 
     public init(id: UUID, senderFingerprint: String, keyEpoch: Int = 0) {
         self.id = id

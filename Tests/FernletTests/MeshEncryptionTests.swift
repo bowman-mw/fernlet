@@ -41,70 +41,29 @@ struct MeshEncryptionTests {
         return bytes
     }
 
-    // MARK: - Photo encrypt / decrypt round-trip
-
-    @Test func photoEncryptDecryptRoundTrip() throws {
-        let key = makeGroupKey()
-        let original = Data("Hello Fernlet photo bytes".utf8)
-
-        let (ciphertext, nonce) = try MeshNetworkManager.encryptPhoto(original, key: key)
-        let decrypted = try MeshNetworkManager.decryptPhoto(ciphertext, nonce: nonce, key: key)
-
-        #expect(decrypted == original, "Decrypted bytes must equal the original image data")
-        #expect(ciphertext != original, "Ciphertext must differ from plaintext")
-    }
-
-    @Test func photoCiphertextIncludesTag() throws {
-        let key = makeGroupKey()
-        let original = Data(repeating: 0xAB, count: 1024)
-
-        let (ciphertext, _) = try MeshNetworkManager.encryptPhoto(original, key: key)
-        // `FMGP2` (5) + plaintext length + 16-byte GCM tag. The marker selects the typed AEAD
-        // purpose rather than overloading the unauthenticated nonce field beside it.
-        #expect(ciphertext.count == 5 + original.count + 16)
-    }
-
-    @Test func photoDecryptFailsWithWrongKey() throws {
-        let key1 = makeGroupKey(epoch: 1)
-        let key2 = makeGroupKey(epoch: 2)
-        let original = Data("secret image".utf8)
-
-        let (ciphertext, nonce) = try MeshNetworkManager.encryptPhoto(original, key: key1)
-        #expect(throws: (any Error).self) {
-            _ = try MeshNetworkManager.decryptPhoto(ciphertext, nonce: nonce, key: key2)
-        }
-    }
-
-    @Test func photoDecryptFailsWithTamperedCiphertext() throws {
-        let key = makeGroupKey()
-        let original = Data("tamper test".utf8)
-
-        var (ciphertext, nonce) = try MeshNetworkManager.encryptPhoto(original, key: key)
-        // Flip a bit INSIDE the sealed body, past the 5-byte `FMGP2` marker. Flipping byte 0
-        // corrupts the marker instead, which is now refused as a retired wire format before the
-        // AEAD is consulted at all — this test is about the tag, so it has to reach the tag.
-        ciphertext[ciphertext.startIndex + 5] ^= 0xFF
-
-        // The AEAD tag itself rejects this, so the error is CryptoKit's, not ours.
-        #expect(throws: (any Error).self) {
-            _ = try MeshNetworkManager.decryptPhoto(ciphertext, nonce: nonce, key: key)
-        }
-    }
+    // MARK: - Photo encrypt / decrypt round-trip — RE-AIMED (P5 item 13)
+    //
+    // The group-key photo seal retired with the three `keyEpoch` gates: photo bytes ride the routed
+    // store under a per-recipient content-key wrap, so `MeshNetworkManager.encryptPhoto` /
+    // `decryptPhoto` and their `FMGP2` marker no longer exist. Every claim they carried is asserted
+    // against `MeshRoutedItemSealer` instead — none was dropped:
+    //
+    //   * round trip returns the bytes  → `MeshRoutedItemSealTests.sealThenOpenReturnsThePlaintext`
+    //   * the declared layout           → `aSealedBlobIsTheMarkerNonceCiphertextAndTag`
+    //   * another key cannot open       → `aForeignContentKeyIsRefused`
+    //   * a flipped ciphertext byte     → `aTamperedCiphertextByteIsRefused`
+    //   * an unmarked blob is named     → `anUnmarkedBlobIsRefusedByName` (`FMRI1`)
+    //
+    // The group-key WRAP cells below are untouched: `IdentityService.encryptGroupKey` still carries
+    // live control traffic, which is the half plan §3.3 always kept separate from content.
 
     // MARK: - Phase 4: the retired (pre-marker) wire formats are refused BY NAME
 
-    /// The pre-`FMGP2` photo was opened with no AAD at all until the crypto standardization round's
-    /// Phase 4 deleted that reader. A peer still sending it must fail explicably — the mesh drops
-    /// photos silently, so an unnameable failure here is indistinguishable from a corrupt image.
-    @Test func photoDecryptRefusesUnmarkedLegacyBytesByName() throws {
-        let key = makeGroupKey()
-        let (ciphertext, nonce) = try MeshNetworkManager.encryptPhoto(Data("legacy".utf8), key: key)
-        let unmarked = Data(ciphertext.dropFirst(5))   // strip `FMGP2`: the pre-marker layout
-
-        #expect(throws: MeshEncryptionError.legacyWireFormat) {
-            _ = try MeshNetworkManager.decryptPhoto(unmarked, nonce: nonce, key: key)
-        }
-    }
+    // The pre-`FMGP2` photo cell retired with the whole group-key photo path (P5 item 13). Its
+    // claim — a retired wire format is refused BY NAME rather than joining the silent-drop pile —
+    // is asserted for the routed blob in `MeshRoutedItemSealTests.anUnmarkedBlobIsRefusedByName`
+    // (`retiredOrForeignFormat`, asserted by case) and for the surviving metadata wrapper in
+    // `encryptedMetadataRefusesUnmarkedLegacyBytesWithItsOwnAuditLine` below.
 
     /// The 92-byte group-key wrap is the ONE thing that separates an older peer's bundle from
     /// garbage, so the length stays recognised even though the open path is gone: a refusal that
@@ -126,19 +85,18 @@ struct MeshEncryptionTests {
         }
     }
 
-    // MARK: - Key isolation: wrong epoch cannot decrypt
-
-    @Test func epochKeyIsolation() throws {
-        let key5 = makeGroupKey(epoch: 5)
-        let key4 = makeGroupKey(epoch: 4)
-        let original = Data("epoch isolation".utf8)
-
-        let (ct, nonce) = try MeshNetworkManager.encryptPhoto(original, key: key5)
-        // A member holding only epoch-5 key cannot decrypt an epoch-4 ciphertext.
-        #expect(throws: (any Error).self) {
-            _ = try MeshNetworkManager.decryptPhoto(ct, nonce: nonce, key: key4)
-        }
-    }
+    // MARK: - Key isolation: wrong epoch cannot decrypt — SPLIT (P5 item 13)
+    //
+    // `epochKeyIsolation` asserted one thing about two different mechanisms, and the two parted
+    // company when the photo path stopped using the group key:
+    //
+    //   * the CONTENT half — "another key does not open these bytes" — is now
+    //     `MeshRoutedItemSealTests.aForeignContentKeyIsRefused`, whose routed twin is a wrap minted
+    //     for one recipient failing for another;
+    //   * the EPOCH half is still live on the surviving group-key seam, and is asserted below
+    //     through the public inbound door in `anOtherEpochMetadataWrapperStillYieldsNothing` and
+    //     `aCurrentKeyWrapperStampedWithAForeignEpochIsRefused` — the second being the case only
+    //     the RETAINED `wrapper.keyEpoch == currentGroupKey?.epoch` compare catches (D-13.5b).
 
     // MARK: - Epoch-0 backward compatibility
 
@@ -228,21 +186,14 @@ struct MeshEncryptionTests {
         }.jpegData(compressionQuality: 0.6)!
     }
 
-    // MARK: - Epoch filtering on manifest
-
-    @Test func manifestEpochFilterSkipsOldEpochs() {
-        let entries = [
-            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: "fp1", keyEpoch: 1),
-            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: "fp2", keyEpoch: 2),
-            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: "fp3", keyEpoch: 3),
-            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: "fp4", keyEpoch: 4),
-        ]
-        let localJoinedEpoch = 3
-
-        let requestable = entries.filter { $0.keyEpoch >= localJoinedEpoch }
-        #expect(requestable.count == 2, "Only epochs 3 and 4 should be requestable")
-        #expect(requestable.allSatisfy { $0.keyEpoch >= localJoinedEpoch })
-    }
+    // MARK: - Epoch filtering on manifest — RE-AIMED AS ITS NEGATION (P5 item 13)
+    //
+    // `manifestEpochFilterSkipsOldEpochs` re-derived the retired `keyEpoch >= localJoinedEpoch`
+    // filter inline and stated it as a RULE. The rule is gone: `MeshRoutedInventoryDelta.between`
+    // names no epoch, so an item minted in the other branch of a split is offered, asked for and
+    // delivered. The successor claim is `MeshRoutedPhotoDeliveryTests`'
+    // `otherBranchContentIsDeliveredAfterAHeal`, and the source half — that the filter really is
+    // gone — is `MeshRoutedDrainWallTests.theRetiredEpochGatesAreGoneAndTheSurvivorsArePinned`.
 
     // MARK: - Group key wrap / unwrap (IdentityService)
 
@@ -301,9 +252,10 @@ struct MeshEncryptionTests {
 
         #expect(localJoinedEpoch == 5)
         #expect(keyData == groupKey.keyBytes)
-        // A member who joined at epoch 5 must not request photos from epochs < 5.
-        let oldEpochEntry = FriendPhotoManifestEntry(id: UUID(), senderFingerprint: "fp", keyEpoch: 4)
-        #expect(oldEpochEntry.keyEpoch < localJoinedEpoch)
+        // The photo-request half of this cell ("a member who joined at epoch 5 must not request
+        // photos from epochs < 5") retired with the pull protocol in P5 item 13 and is re-asserted
+        // as its OPPOSITE on the routed path — see the note above the group-key wrap cells. What
+        // survives here is the monotonicity claim, which still guards the grant itself.
     }
 
     // MARK: - FriendPhotoManifestEntry backward compat
@@ -419,7 +371,149 @@ struct MeshEncryptionTests {
                 "Only the unmarked wrapper is a retired wire format — a tampered marked one is not")
     }
 
+    /// **L-3c — the metadata door no longer dispatches its two CONTENT arms** (P5 item 13).
+    ///
+    /// One cell, two counts, and the control is what makes it non-vacuous: a correctly sealed,
+    /// correctly stamped wrapper carrying an oversized MESH DESCRIPTOR is still dispatched and still
+    /// named, while the same wrapper carrying an oversized PHOTO MANIFEST reaches nothing at all.
+    /// The arms retired with the pull protocol the routed drain replaced; the door and its compare
+    /// did not.
+    @Test func theMetadataDoorNoLongerDispatchesTheTwoContentArms() async throws {
+        let store = makeTestStore()
+        defer { withExtendedLifetime(store) {} }
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: meshPeer(name: "Member"),
+                                  fingerprint: "fp-member")
+        let keyBytes = makeRandomBytes()
+        try joinMesh(manager, on: coordinator, admitter: makeIdentity(), keyBytes: keyBytes, epoch: 5)
+
+        let capture = MeshMetadataAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try deliverInner(oversizedManifestInner(), keyBytes: keyBytes, epoch: 5,
+                         to: manager, on: coordinator)
+        try deliverInner(oversizedDescriptorInner(), keyBytes: keyBytes, epoch: 5,
+                         to: manager, on: coordinator)
+        await waitUntil { capture.count(Self.droppedOversizedDescriptor) > 0 }
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(capture.count(Self.droppedOversizedDescriptor) == 1,
+                "the surviving control arm still dispatches — this cell is not vacuous")
+        #expect(capture.count(Self.droppedOversizedManifest) == 0,
+                "the friend-photo manifest arm retired with the pull protocol")
+    }
+
+    /// **L-3 — an other-epoch wrapper still yields nothing.**
+    ///
+    /// The epoch half of the retired `epochKeyIsolation`, delivered through the public inbound seam.
+    /// Two mechanisms agree here and the cell says so: the retained compare drops it first, and the
+    /// AEAD would refuse the foreign key anyway.
+    @Test func anOtherEpochMetadataWrapperStillYieldsNothing() async throws {
+        let store = makeTestStore()
+        defer { withExtendedLifetime(store) {} }
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: meshPeer(name: "Member"),
+                                  fingerprint: "fp-member")
+        try joinMesh(manager, on: coordinator, admitter: makeIdentity(),
+                     keyBytes: makeRandomBytes(), epoch: 5)
+
+        let capture = MeshMetadataAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        // Sealed under ANOTHER epoch's key and stamped with that epoch: the other branch's wrapper.
+        try deliverInner(oversizedDescriptorInner(), keyBytes: makeRandomBytes(), epoch: 4,
+                         to: manager, on: coordinator)
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(capture.count(Self.droppedOversizedDescriptor) == 0,
+                "an other-epoch wrapper dispatches nothing at all")
+    }
+
+    /// **L-3b — the case only the RETAINED compare catches** (D-13.5b).
+    ///
+    /// The wrapper is sealed under the CURRENT key and marked correctly, so `decryptPayload` — which
+    /// authenticates the metadata AEAD purpose alone and takes the key it is handed — would open it
+    /// and dispatch the inner payload, including into `handleAdmissionGrant`. Only
+    /// `wrapper.keyEpoch == currentGroupKey?.epoch` refuses it. This is why the third gate retired
+    /// by its ARMS and kept its clause: the redundancy argument for deleting it is not even complete.
+    @Test func aCurrentKeyWrapperStampedWithAForeignEpochIsRefused() async throws {
+        let store = makeTestStore()
+        defer { withExtendedLifetime(store) {} }
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: meshPeer(name: "Member"),
+                                  fingerprint: "fp-member")
+        let keyBytes = makeRandomBytes()
+        try joinMesh(manager, on: coordinator, admitter: makeIdentity(), keyBytes: keyBytes, epoch: 5)
+
+        let capture = MeshMetadataAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        // The SAME bytes twice: stamped 6 (refused by the compare), then stamped 5 (dispatched).
+        try deliverInner(oversizedDescriptorInner(), keyBytes: keyBytes, epoch: 6,
+                         to: manager, on: coordinator)
+        try deliverInner(oversizedDescriptorInner(), keyBytes: keyBytes, epoch: 5,
+                         to: manager, on: coordinator)
+        await waitUntil { capture.count(Self.droppedOversizedDescriptor) > 0 }
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(capture.count(Self.droppedOversizedDescriptor) == 1,
+                "the current-key wrapper with a foreign epoch stamp is the one that was dropped")
+    }
+
     // MARK: - Encrypted-metadata fixtures
+
+    private static let droppedOversizedDescriptor = "mesh.descriptor.droppedOversizedMembership"
+    private static let droppedOversizedManifest = "mesh.photoManifest.droppedOversized"
+
+    /// An inner `.meshDescriptor` payload whose membership is over the manager's cap, so its arm
+    /// announces itself with one audit line when — and only when — it is really dispatched.
+    private func oversizedDescriptorInner() throws -> Data {
+        let now = Date()
+        let members = (0..<64).map { index in
+            MeshMember(fingerprint: "fp-\(index)", displayName: "M\(index)",
+                       signingPublicKey: Data([UInt8(index)]),
+                       keyAgreementPublicKey: Data([UInt8(index)]), joinedAt: now)
+        }
+        let descriptor = MeshDescriptor(
+            meshID: UUID(), name: "Oversized", mode: .open, members: members,
+            nameSetAt: now, nameSetBy: "fp-0", modeSetAt: now, modeSetBy: "fp-0", createdAt: now
+        )
+        return try JSONEncoder().encode(EncryptedMetadataInner(
+            payloadType: PayloadType.meshDescriptor.rawValue,
+            payload: try JSONEncoder().encode(MeshStateChangePayload(descriptor: descriptor))
+        ))
+    }
+
+    /// The retired twin: an inner `.friendPhotoManifest` whose entry list is over the session cap.
+    /// Its arm used to answer with `mesh.photoManifest.droppedOversized`; nothing dispatches it now.
+    private func oversizedManifestInner() throws -> Data {
+        let entries = (0..<512).map { index in
+            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: "fp-\(index)")
+        }
+        return try JSONEncoder().encode(EncryptedMetadataInner(
+            payloadType: PayloadType.friendPhotoManifest.rawValue,
+            payload: try JSONEncoder().encode(FriendPhotoManifestPayload(entries: entries))
+        ))
+    }
+
+    /// Seals one inner payload under `keyBytes` and delivers it stamped with `epoch`.
+    private func deliverInner(
+        _ inner: Data,
+        keyBytes: Data,
+        epoch: Int,
+        to manager: MeshNetworkManager,
+        on coordinator: ProximityCoordinator
+    ) throws {
+        let (ciphertext, nonce) = try sealMetadata(inner, keyBytes: keyBytes)
+        try deliverMetadata(ciphertext, nonce: nonce, epoch: epoch, to: manager, on: coordinator)
+    }
+
 
     /// Builds current (`FMGM2`-marked) metadata bytes by hand, because `encryptPayload` is `private`.
     /// The spelling must track `MeshNetworkManager.encryptPayload`: marker, then AES-256-GCM under

@@ -393,28 +393,24 @@ struct MeshNetworkManagerTests {
         #expect(handlerCalled == false, "An uncommitted slot must never reach a feature handler")
     }
 
-    // MARK: - Committed-slot gate: photos and descriptors (M5)
+    // MARK: - Committed-slot gate: descriptors (M5), and the parked photo tokens (P5 item 13)
 
-    /// M5: the friend-photo family reaches the PERSISTENT wall, so it is member business. The
-    /// coordinator dispatches with `connectedIdentity ?? pendingPeerIdentity`, so without a
-    /// committed-slot gate a peer that has only introduced itself can write the wall.
-    @Test func preCommitFriendPhotoIsDropped() {
-        let manager = MeshNetworkManager(store: store)
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Pending"), fingerprint: nil)
-
-        let payload = makePhotoPayload(author: authorIdentity)
-        let plaintext = try! JSONEncoder().encode(payload)
-        manager.proximityCoordinator(coordinator,
-                                     didReceive: inboundEnvelope(payloadType: .friendPhoto, plaintext: plaintext),
-                                     plaintext: plaintext,
-                                     from: peerIdentity(for: authorIdentity))
-
-        #expect(manager.meshPhotos.isEmpty, "An uncommitted slot must never reach the photo wall")
-    }
-
-    /// The positive control for the gate above — over-tightening must fail loudly.
-    @Test func committedSlotFriendPhotoIsCached() {
+    /// **W5 — the three friend-photo tokens are parked, never dispatched.**
+    ///
+    /// `preCommitFriendPhotoIsDropped` and its positive control `committedSlotFriendPhotoIsCached`
+    /// were the committed-slot gate on the photo family. That family has no dispatch at all since
+    /// P5 item 13: photo content rides the routed store, so the negative claim is now stronger than
+    /// the gate (nobody reaches the wall through this token, committed or not) and the positive
+    /// control moved to `MeshRoutedPhotoDeliveryTests.aSharedPhotoReachesTheDestinationsWall`.
+    ///
+    /// The tokens themselves stay decodable on purpose (D-13.5, invariant 8): an older peer's frame
+    /// is parked by name rather than mis-dispatched, and no wire token is ever reused for a new
+    /// meaning.
+    @Test func theRetiredPhotoTokensAreParkedNeverDispatched() {
+        for raw in ["fernlet.friend.photo.v1", "fernlet.friend.photo.manifest.v1",
+                    "fernlet.friend.photo.request.v1", "fernlet.mesh.encrypted.meta.v1"] {
+            #expect(PayloadType(rawValue: raw) != nil, "a parked wire token stopped decoding")
+        }
         let manager = MeshNetworkManager(store: store)
         let coordinator = throwawayCoordinator()
         let author = authorIdentity
@@ -422,16 +418,16 @@ struct MeshNetworkManagerTests {
         manager.addSlotForTesting(coordinator: coordinator,
                                   peer: makePeer(name: "Committed"),
                                   fingerprint: fingerprint)
+        manager.recordSessionParticipant(displayName: "Author",
+                                         fingerprint: fingerprint,
+                                         signingPublicKey: author.localSigningPublicKey,
+                                         keyAgreementPublicKey: author.localKeyAgreementPublicKey)
 
         let payload = makePhotoPayload(author: author)
-        let plaintext = try! JSONEncoder().encode(payload)
-        manager.proximityCoordinator(coordinator,
-                                     didReceive: inboundEnvelope(payloadType: .friendPhoto, plaintext: plaintext),
-                                     plaintext: plaintext,
-                                     from: peerIdentity(for: author))
+        deliverPhoto(payload, to: manager, on: coordinator, relayer: fingerprint)
 
-        #expect(manager.meshPhotos.contains { $0.id == payload.id },
-                "A committed slot's own photo must still reach the wall")
+        #expect(manager.meshPhotos.isEmpty,
+                "a parked photo token must reach no wall, on a committed slot or otherwise")
     }
 
     /// M5: a descriptor adopts a whole mesh identity, so it too requires a committed slot.
@@ -688,87 +684,29 @@ struct MeshNetworkManagerTests {
                                      from: peerIdentity(for: sender))
     }
 
-    // MARK: - Photo author binding (M6)
-
-    /// The envelope signature authenticates only the RELAYER; the author fields are an unsigned
-    /// claim. A photo with no claim at all is un-attributable — it can be neither blocked nor
-    /// honestly displayed — so it is rejected rather than displayed under the relayer's name.
-    @Test func photoWithNilSenderFingerprintIsRejected() {
-        let manager = MeshNetworkManager(store: store)
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
-
-        let payload = FriendPhotoPayload(imageData: makeTinyJPEG(), senderName: "Mallory",
-                                         senderFingerprint: nil, senderSigningPublicKey: nil)
-        deliverPhoto(payload, to: manager, on: coordinator, relayer: "fp-relayer")
-
-        #expect(manager.meshPhotos.isEmpty, "An un-attributable photo must never reach the wall")
-    }
-
-    /// A relayer must not be able to launder a blocked peer's photo by claiming it for them.
-    @Test func photoClaimingABlockedAuthorIsRejected() {
-        let manager = MeshNetworkManager(store: store)
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
-
-        let author = authorIdentity
-        store.proximityTrustVault.block(signingPublicKey: author.localSigningPublicKey)
-
-        deliverPhoto(makePhotoPayload(author: author), to: manager, on: coordinator, relayer: "fp-relayer")
-
-        #expect(manager.meshPhotos.isEmpty, "A photo claiming a blocked author must be dropped")
-    }
-
-    /// The claim has to be internally consistent, or the block list keys on nothing: the claimed
-    /// fingerprint must be the hash of the claimed signing key.
-    @Test func photoWhoseClaimedKeyDoesNotHashToItsFingerprintIsRejected() {
-        let manager = MeshNetworkManager(store: store)
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
-
-        let payload = FriendPhotoPayload(imageData: makeTinyJPEG(), senderName: "Mallory",
-                                         senderFingerprint: "fp-relayer",
-                                         senderSigningPublicKey: authorIdentity.localSigningPublicKey)
-        deliverPhoto(payload, to: manager, on: coordinator, relayer: "fp-relayer")
-
-        #expect(manager.meshPhotos.isEmpty, "A fingerprint that does not hash from the claimed key is a forged claim")
-    }
-
-    /// A well-formed claim about somebody this session has never heard of is still a claim about
-    /// a stranger — there is nothing to attribute it to.
-    @Test func photoClaimingAnUnknownAuthorIsRejected() {
-        let manager = MeshNetworkManager(store: store)
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
-
-        deliverPhoto(makePhotoPayload(author: authorIdentity), to: manager, on: coordinator, relayer: "fp-relayer")
-
-        #expect(manager.meshPhotos.isEmpty, "An author absent from the mesh, roster and manifests is unknown")
-    }
-
-    /// The relay positive control: A's photo relayed by B is cached WITH A's original attribution,
-    /// once A is a roster participant. Stamping the relayer over the fields would be a correctness
-    /// regression on the wall, not a fix.
-    @Test func relayedPhotoFromAKnownMeshMemberIsCachedWithItsOriginalAttribution() {
-        let manager = MeshNetworkManager(store: store)
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
-
-        let author = authorIdentity
-        let authorFP = IdentityService.fingerprint(of: author.localSigningPublicKey)
-        manager.recordSessionParticipant(displayName: "Author",
-                                         fingerprint: authorFP,
-                                         signingPublicKey: author.localSigningPublicKey,
-                                         keyAgreementPublicKey: author.localKeyAgreementPublicKey)
-
-        let payload = makePhotoPayload(author: author)
-        deliverPhoto(payload, to: manager, on: coordinator, relayer: "fp-relayer")
-
-        let cached = manager.meshPhotos.first { $0.id == payload.id }
-        #expect(cached != nil, "A relayed photo from a known author must still reach the wall")
-        #expect(cached?.senderFingerprint == authorFP,
-                "The relay must keep the AUTHOR's attribution, not the relayer's")
-    }
+    // MARK: - Photo author binding (M6) — RE-AIMED ONTO THE ROUTED DOOR (P5 item 13)
+    //
+    // These five cells guarded an UNSIGNED author claim carried inside `FriendPhotoPayload`, on a
+    // path where the envelope signature authenticated only the relayer. The routed body carries no
+    // identity claim at all: the author is `manifest.originFingerprint`, inside the origin's
+    // signature, and the signing key is the receiver's own admission ledger. Two of the five are
+    // therefore structurally impossible rather than merely guarded — which is a stronger answer, not
+    // a dropped claim. Every one has a successor in `MeshRoutedPhotoDeliveryTests`:
+    //
+    //   * `photoWithNilSenderFingerprintIsRejected` → structurally impossible; the positive form is
+    //     `theWallEntryCarriesTheOriginsAttributionNotTheCouriers` (the entry's fingerprint IS
+    //     `manifest.originFingerprint`).
+    //   * `photoClaimingABlockedAuthorIsRejected` → `aBlockedOriginsPhotoIsNotHandedToTheWall`,
+    //     which additionally asserts the block runs BEFORE any unwrap.
+    //   * `photoWhoseClaimedKeyDoesNotHashToItsFingerprintIsRejected` → structurally impossible;
+    //     `theWallEntryCarriesTheOriginsAttributionNotTheCouriers`' second `#expect` asserts where
+    //     the key does come from (the ledger's roster entry for the signed origin).
+    //   * `photoClaimingAnUnknownAuthorIsRejected` → the manifest verifier refuses a non-roster
+    //     origin at ingest, and `aProjectionWithNoResolvableOriginRefusesAndKeepsCustody` asserts
+    //     the projection's own fail-closed half.
+    //   * `relayedPhotoFromAKnownMeshMemberIsCachedWithItsOriginalAttribution` →
+    //     `theWallEntryCarriesTheOriginsAttributionNotTheCouriers`, on a real courier-forwarded
+    //     delivery rather than a claimed one.
 
     // MARK: - Photo/author test fixtures
 

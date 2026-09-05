@@ -46,6 +46,21 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// in one place and `MeshMembershipEventWireTests` holds it.
     case sessionGoodbye        = "fernlet.session.bye.v1"
     // Friends
+    /// **Frozen and parked: decoded, never dispatched, never emitted** (network migration P5 item
+    /// 13, D-13.5 — the ``sessionGoodbye`` precedent).
+    ///
+    /// The three friend-photo tokens carried the group-key photo transport: an envelope sealed under
+    /// the mesh group key (`friendPhoto`), the announce of what a peer held (`friendPhotoManifest`)
+    /// and the ask for what it lacked (`friendPhotoRequest`). Photo content now rides the routed
+    /// store — a per-recipient X25519 wrap of a single-use content key under a signed manifest with
+    /// an immutable destination set — so branch and epoch no longer decide decryptability, which is
+    /// what let item 13 delete two of the three `keyEpoch` gates rather than loosen them.
+    ///
+    /// They keep their declarations, their frozen `rawValue`s and their `sealingRequiredTypes`
+    /// membership, and ``FriendPhotoPayload`` / ``FriendPhotoManifestPayload`` /
+    /// ``FriendPhotoRequestPayload`` stay decodable, so an older peer's frame is **parked by name**
+    /// rather than mis-dispatched or failing a session. Nothing registers them in the handler
+    /// registry; a wire token is never reused for a new meaning.
     case friendPhoto           = "fernlet.friend.photo.v1"
     case friendPhotoManifest   = "fernlet.friend.photo.manifest.v1"
     case friendPhotoRequest    = "fernlet.friend.photo.request.v1"
@@ -251,6 +266,13 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
     case meshKeyAck            = "fernlet.mesh.key.ack.v1"
     case meshRotationSync      = "fernlet.mesh.rotation.sync.v1"
+    /// The closed-mode wrapper: an inner control payload sealed under the group key.
+    ///
+    /// **Received, never sent, since P5 item 13.** Its seal half went with `sendEncryptedMetadata`,
+    /// whose only two call sites were the retired photo-manifest pull; the receive door survives
+    /// with its two CONTROL arms (`meshDescriptor`/`meshStateChange`, `meshAdmissionGrant`) and with
+    /// its `keyEpoch` compare deliberately retained (D-13.5b) — the two CONTENT arms are what
+    /// retired, and deleting a compare over the arms that remain would be loosening a gate in place.
     case meshEncryptedMetadata = "fernlet.mesh.encrypted.meta.v1"
     case meshCoordinatorBeacon = "fernlet.mesh.coordinator.beacon.v1"
     // Diagnostic

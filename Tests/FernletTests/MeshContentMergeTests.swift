@@ -26,10 +26,12 @@
 // that touches disk (``ProximityHeartLedger``) gets a per-instance temp root, per the shared-disk-root
 // flake family.
 //
-// **`keyEpoch` (plan §21.5, the P5 handoff).** These tests deliberately sit at the model seam
-// *below* `MeshNetworkManager`'s three `keyEpoch` gates. `contentFromTheOtherBranchKeepsItsEpoch`
-// names exactly which of them would reject a photo minted in the other branch of a split; none of
-// them is loosened here.
+// **`keyEpoch` (plan §21.5, and what P5 item 13 did with it).** These tests sit at the model seam
+// *below* where `MeshNetworkManager`'s three `keyEpoch` gates used to stand.
+// `contentFromTheOtherBranchKeepsItsEpoch` is now the record of which of them was retired with
+// which path: two are GONE with the group-key photo transport they gated, and the third kept its
+// compare over the control arms it still guards. None was ever loosened in place — the assertions
+// here are unchanged, because this seam never had an epoch judgement of its own to relax.
 
 import Foundation
 import Testing
@@ -277,13 +279,19 @@ struct MeshContentPhotoMergeTests {
 
     @Test("Content from the other branch keeps its own keyEpoch through the union (plan §21.5)")
     func contentFromTheOtherBranchKeepsItsEpoch() {
-        // The union adds NO epoch judgement of its own — the three gates that would reject this
-        // photo all live in `MeshNetworkManager` and retire with the path P5 replaces:
-        //   * `handlePhotoManifest`'s `.filter { $0.keyEpoch >= localJoinedEpoch }`
-        //   * `handleFriendPhotoEnvelope`'s `key.epoch == photo.keyEpoch`
-        //   * `handleEncryptedMetadata`'s `wrapper.keyEpoch == currentGroupKey?.epoch`
+        // The union adds NO epoch judgement of its own, and since P5 item 13 the live path adds
+        // none either for CONTENT. What became of the three gates this comment used to list:
+        //   * `handlePhotoManifest`'s `.filter { $0.keyEpoch >= localJoinedEpoch }` — RETIRED with
+        //     the pull protocol itself; the routed drain is push-only and names no epoch.
+        //   * `handleFriendPhotoEnvelope`'s `key.epoch == photo.keyEpoch` — RETIRED with the
+        //     group-key photo decrypt; a routed item carries a per-recipient content-key wrap, so
+        //     branch and epoch no longer decide decryptability.
+        //   * `handleEncryptedMetadata`'s `wrapper.keyEpoch == currentGroupKey?.epoch` — KEPT, and
+        //     deliberately: its two CONTENT arms retired, but the door survives with two control
+        //     arms that have no routed successor, and deleting the compare over those would be
+        //     loosening a gate in place (D-13.5b).
         // A photo minted at epoch 7 in the other branch, merged into a member sitting at epoch 3,
-        // survives the union byte-identical; only the live path would refuse it.
+        // survives the union byte-identical — and now reaches that member's wall as well.
         let ours = MeshContentSet([F.photo(1, epoch: 3, addedAt: 10)])
         let theirs = MeshContentSet([F.photo(2, epoch: 7, addedAt: 20)])
         let merged = ours.merging(theirs)
