@@ -214,12 +214,24 @@ extension MeshConvergenceRun {
 
     /// Commits every living pair again and settles, up to ``routedDrainRounds`` times, stopping the
     /// moment the origin's copy is closed **or has been reclaimed**.
-    func runRoutedDrainRounds(origin: MeshConvergenceMember, key: MeshRoutedItemKey) async throws {
+    ///
+    /// `binding` is a **parameter** (P5 item 10): an inner `withValue` shadows an outer one, so a
+    /// caller that wrapped this in `.withValue(.readError)` to drive a locked window would otherwise
+    /// find every store `.loaded` for exactly the commit pumps the routed work happens in — the
+    /// window would be vacuous and the cell would pass for the wrong reason. It defaults to `nil`
+    /// rather than to the install itself because a `@MainActor` static cannot be a default-argument
+    /// value — the rig's own `dispatch(_:type:sender:receiver:now:binding:)` resolves it the same way.
+    func runRoutedDrainRounds(
+        origin: MeshConvergenceMember,
+        key: MeshRoutedItemKey,
+        binding: DeviceBindingID.TestOverride? = nil
+    ) async throws {
+        let binding = binding ?? .identifier(MeshP3Acceptance.install)
         // R2: a hard constant ceiling.
         for _ in 0..<Self.routedDrainRounds {
             if routedDeliveryState(at: origin, key: key).isSettled { return }
             let living = livingMembers
-            DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            DeviceBindingID.$testOverride.withValue(binding) {
                 // R2: bounded by the roster cap, squared.
                 for (position, near) in living.enumerated() {
                     for far in living.dropFirst(position + 1) {
@@ -232,7 +244,46 @@ extension MeshConvergenceRun {
                     }
                 }
             }
-            try await MeshDepartureRig.settle(livingNodes, on: fabric)
+            try await MeshDepartureRig.settle(livingNodes, on: fabric, binding: binding)
+        }
+    }
+
+    /// **P5 item 10's seam into the battery**: a locked window, sampled, then the unlock edge.
+    ///
+    /// 1. the member's gate is pushed **closed** and the drain runs with every store unreadable
+    ///    (`.readError` ⇒ `deferred`, the state a device is in before its first post-boot unlock);
+    /// 2. `sample` runs while the window is still shut — the only place the "nothing moved" half can
+    ///    honestly be read, and the rig's own "sample right after a synchronous pump" discipline;
+    /// 3. the device unlocks: the open gate is pushed under the pinned install binding, which is the
+    ///    re-entry's own edge.
+    ///
+    /// The binding is a **parameter** of the rounds rather than a wrapper around them: an inner
+    /// `withValue` shadows an outer one, so wrapping would leave every store `.loaded` for exactly
+    /// the commit pumps the routed work happens in, and the window would be vacuous.
+    ///
+    /// - Parameters:
+    ///   - member: The device that locks.
+    ///   - key: The item whose progress the window is judged against.
+    ///   - now: The injected instant.
+    ///   - sample: Read inside the window, before the unlock.
+    /// - Returns: what the unlock's re-entry did.
+    @discardableResult
+    func routedLockWindowEvent(
+        at member: MeshConvergenceMember,
+        closingAfter key: MeshRoutedItemKey,
+        now: Date,
+        sampling sample: () -> Void = {}
+    ) async throws -> MeshRoutedReentryReport? {
+        member.node.manager.applyRoutedAccessGate(.closed, now: now)
+        try await runRoutedDrainRounds(origin: member, key: key, binding: .readError)
+        sample()
+        return DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            member.node.manager.applyRoutedAccessGate(
+                MeshRoutedAccessGate(
+                    protectedDataAvailable: true, appIsForeground: true, duressActive: false
+                ),
+                now: now
+            )
         }
     }
 
@@ -465,6 +516,68 @@ struct MeshRoutedDrainConvergenceTests {
         for node in run.livingNodes { node.manager.leaveMesh() }
         // R2: a hard constant ceiling.
         for _ in 0..<16 { await Task.yield() }
+    }
+
+    /// **P5 item 10 in the battery.** A locked window loses nothing, and the unlock converges it.
+    ///
+    /// Inside the window every store answers `deferred`, which is the state a device is in before
+    /// its first post-boot unlock: no index is overwritten, no receipt and no `delivered` rung
+    /// appears anywhere, and nothing is dropped. After the unlock edge the whole routed progress
+    /// property holds again — every outstanding delivery reaches `delivered` or a **named** closed
+    /// state, with `.reclaimed` still accepted only alongside its audited drop.
+    ///
+    /// **Non-vacuity is asserted inside the window**: at least one audited line must carry a
+    /// `deferred:` token, so a window that was silently `.loaded` fails rather than passes.
+    @Test(arguments: MeshRoutedDrainCells.all)
+    func aLockedWindowLosesNothingAndConvergesAfterTheUnlock(cell: MeshRoutedDrainCell) async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: cell.seed, shape: .twoTwo, preferQuorum: false
+        )
+        let run = try MeshConvergenceRun.build(schedule, label: "routed-lock")
+        defer { for node in run.livingNodes { node.manager.leaveMesh() } }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        try await run.runSplitEvents()
+
+        let origin = try #require(run.livingMembers.first, "the cell needs a surviving origin")
+        let now = MeshP3Acceptance.base.addingTimeInterval(600)
+        let key = try run.routedCustodyEvent(at: origin, chunks: cell.chunks, now: now)
+        #expect(run.routedOutstanding(at: origin, key: key).isEmpty == false,
+                "the cell must start with work actually outstanding")
+        let window = MeshRoutedBackpressureAuditCapture()
+        window.install()
+        defer { window.uninstall() }
+        let before = MeshRoutedStoreFixtures.snapshot(origin.node.store.meshRoutedStorage)
+
+        try await run.routedLockWindowEvent(at: origin, closingAfter: key, now: now) {
+            #expect(MeshRoutedStoreFixtures.snapshot(origin.node.store.meshRoutedStorage) == before,
+                    "an index was overwritten while every store was deferred")
+            #expect(window.values(of: "mesh.routedStore.readSuppressed", key: "state")
+                    .contains { $0.hasPrefix("deferred:") },
+                    "the window was silently loaded, so it proved nothing")
+            // R2: bounded by the roster cap.
+            for member in run.livingMembers where member.index != origin.index {
+                #expect(run.routedIndex(of: member)?.record(for: key) == nil,
+                        "content moved to a peer whose store could not say what it holds")
+            }
+            #expect(run.routedIndex(of: origin)?.record(for: key)?.recipientReceipts.isEmpty == true,
+                    "a receipt was emitted for state a restart would have lost")
+        }
+        try await run.runHeal()
+        try await run.runRoutedDrainRounds(origin: origin, key: key)
+
+        run.routedInvariants(origin, key, audited: capture)
+        switch run.routedDeliveryState(at: origin, key: key) {
+        case .closed:
+            break
+        case .reclaimed:
+            #expect(capture.values(of: "mesh.routedStore.itemDropped", key: "reason")
+                    .contains("delivered"),
+                    "the record vanished with no audited reclaim behind it")
+        case .outstanding(let owed):
+            Issue.record("a delivery never closed after the unlock: \(owed)")
+        }
     }
 
     /// The seed family is fixed and derived from the one root — never drawn at run time.

@@ -686,12 +686,17 @@ struct MeshRoutedCustodyEvidenceTests {
 
     /// The store never names a decryption seam: no unwrap, no content key, no key-agreement key —
     /// which is what makes custody ciphertext-only on a locked device by construction.
+    ///
+    /// `MeshRoutedAccessGate.swift` joined the list at P5 item 10: it is the file that answers
+    /// *whether plaintext may exist*, so it is precisely the file a future "just decrypt it here"
+    /// would be tempted into — and it must stay as free of a decryption seam as the store itself.
     @Test func theRoutedStoreNamesNoDecryptionSeam() throws {
         let files = [
             "MeshRoutedStore.swift", "MeshRoutedCustody.swift", "MeshRoutedCustodyCommit.swift",
             "MeshRoutedIndex.swift", "MeshRoutedStoreKey.swift", "MeshRoutedContentHasher.swift",
             "MeshChunkAdmissionRule.swift", "MeshRoutedCustodyHandoff.swift",
-            "MeshRoutedCapacity.swift", "MeshRoutedDeliveryHold.swift"
+            "MeshRoutedCapacity.swift", "MeshRoutedDeliveryHold.swift",
+            "MeshRoutedAccessGate.swift"
         ]
         var scanned = 0
         var sealing: [String] = []

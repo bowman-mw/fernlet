@@ -203,10 +203,13 @@ struct MeshRoutedDrainRig {
         type: PayloadType,
         sender: Int,
         receiver: Int,
-        now: Date? = nil
+        now: Date? = nil,
+        binding: DeviceBindingID.TestOverride? = nil
     ) async throws {
-        try dispatch(payload, type: type, sender: sender, receiver: receiver, now: now)
-        try await MeshDepartureRig.settle(nodes, on: fabric)
+        try dispatch(payload, type: type, sender: sender, receiver: receiver, now: now, binding: binding)
+        // The settle runs under the SAME binding as the dispatch: a cell driving a locked window
+        // would otherwise find every store `.loaded` for the pumps that follow its one locked frame.
+        try await MeshDepartureRig.settle(nodes, on: fabric, binding: binding)
     }
 
     /// The same delivery **without** the settle, for a cell that hands over dozens of frames.
@@ -219,13 +222,20 @@ struct MeshRoutedDrainRig {
     /// the end instead.
     ///
     /// Hoisted by P5 item 8's review round, which produced exactly that crash.
+    ///
+    /// `binding` defaults to the rig's one pinned install, which is what every loaded-store cell
+    /// wants. P5 item 10 made it a **parameter** because an inner `withValue` shadows an outer one:
+    /// a cell that wrapped this call in `.withValue(.readError)` to drive a locked window would
+    /// otherwise find the store perfectly `.loaded` for exactly the doors it meant to lock.
     func dispatch(
         _ payload: some Encodable,
         type: PayloadType,
         sender: Int,
         receiver: Int,
-        now: Date? = nil
+        now: Date? = nil,
+        binding: DeviceBindingID.TestOverride? = nil
     ) throws {
+        let binding = binding ?? .identifier(MeshP3Acceptance.install)
         let now = now ?? MeshRoutedDrainRig.now
         let frame = try FernletIdentityEnvelope.signed(
             identityService: identities[sender], senderDisplayName: "drain",
@@ -241,7 +251,7 @@ struct MeshRoutedDrainRig {
             identityService: node.manager.identityForTesting, replayCache: node.replayCache
         )
         let slot = node.manager.slots.first { $0.coordinator === coordinator }
-        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+        DeviceBindingID.$testOverride.withValue(binding) {
             node.manager.dispatchRoutedPayload(
                 type, plaintext: plaintext, decoder: JSONDecoder(), slot: slot, now: now
             )

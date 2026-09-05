@@ -5,6 +5,7 @@ import FernletLock
 import HealthKitGateway
 import LocalPersistence
 import PrivateStoreCore
+import ProximityKit
 import UserNotifications
 #if canImport(UIKit)
 import UIKit
@@ -173,6 +174,113 @@ struct FernletApp: App {
     }
     #endif
 
+    /// The live iOS data-protection fact.
+    ///
+    /// Read **only** where it is a genuine sample — the two scene branches and the launch mount.
+    /// `protectedDataWillBecomeUnavailable` is posted *shortly before* lockdown precisely so an app
+    /// can finish its reads, so this property still answers `true` inside that handler; reading it
+    /// there would make the falling leg unobservable and every later rising leg impossible.
+    private var protectedDataAvailableNow: Bool {
+        #if canImport(UIKit)
+        UIApplication.shared.isProtectedDataAvailable
+        #else
+        false
+        #endif
+    }
+
+    /// Pushes the three lock facts into the mesh manager (network migration P5 item 10).
+    ///
+    /// The app is the only place all three live: the OS device lock (data protection), the scene,
+    /// and `FernletLockService`'s duress session — ProximityKit deliberately observes no lifecycle
+    /// and cannot import `FernletLock`. P7's `ProximityRunPolicy` replaces every call site below
+    /// with one policy call; this seam does not move.
+    ///
+    /// - Parameters:
+    ///   - store: The loaded store, whose mesh manager holds the gate.
+    ///   - protectedData: Whether protected data is available — passed **literally** from the two
+    ///     notifications, sampled at the scene sites.
+    ///   - foreground: Whether the scene is active.
+    private func pushRoutedAccessGate(
+        _ store: FernletStore, protectedData: Bool, foreground: Bool
+    ) {
+        store.meshNetworkManager.applyRoutedAccessGate(
+            MeshRoutedAccessGate(
+                protectedDataAvailable: protectedData,
+                appIsForeground: foreground,
+                duressActive: lockService.isDuressSessionActive
+            ),
+            now: Date()
+        )
+    }
+
+    /// Everything one scene transition owes: the snapshot flush and relock on background, the
+    /// keychain re-derivation and store self-heals on activation, and P5 item 10's two foreground
+    /// legs of the routed access gate.
+    ///
+    /// A method rather than an inline closure so `body` stays inside the 60-line rule after item
+    /// 10's push; the ordering inside it is load-bearing and unchanged — the gate is pushed on
+    /// activation only AFTER `refreshStateFromKeychain()`, so the duress fact it carries is the
+    /// current one.
+    ///
+    /// - Parameter newPhase: The phase the scene just entered.
+    private func handleScenePhaseChange(_ newPhase: ScenePhase) {
+        if newPhase == .background {
+            if case .ready(let store) = loader.phase {
+                store.flushPendingSnapshotSave()
+                // P5 item 10: the foreground falling leg. Custody keeps running on
+                // ciphertext; plaintext stops here.
+                pushRoutedAccessGate(
+                    store, protectedData: protectedDataAvailableNow, foreground: false
+                )
+            }
+            lockService.lock(reason: .background)
+        } else if newPhase == .active {
+            // A launch that could not read the keychain (background relaunch / pre-first-unlock
+            // prewarm) failed CLOSED to `.locked`, which is right but sticky: on an
+            // UNCONFIGURED device it paints "unlock Fernlet" over a lock that does not exist
+            // for the whole process. Activation means protected data is readable, so re-derive
+            // the real state here. A no-op while unlocked, and while the state is already right.
+            lockService.refreshStateFromKeychain()
+            // Self-heal a sealed store whose rebuild could not re-add it — the dominant
+            // cause is the device auto-locking mid-wipe, and writing anything again means
+            // unlocking the device, which lands here. Without this the coordinator stays
+            // storeless for the whole session and every sealed write fails.
+            do {
+                try PrivatePersistenceController.shared.reloadStoreIfNeeded()
+            } catch {
+                // Benign in isolation — the next foreground activation retries — but a
+                // chronically storeless session (every sealed write failing) must be visible.
+                FernletAuditLog.log("privatePersistence.reloadStoreIfNeeded.failed", context: [
+                    "trigger": "sceneActive",
+                    "errorType": "\(type(of: error))"
+                ])
+            }
+            // Pick up a guided-workout finish or set/rest advance made from the Live Activity
+            // while the app was backgrounded — even if the Move tab isn't the one on screen.
+            // Roll the day FIRST (a foreground can cross local midnight without onAppear), so a
+            // finish reconciled here anchors/back-dates to the correct day.
+            if case .ready(let store) = loader.phase {
+                store.refreshCurrentDayIfNeeded()
+                store.reconcileGuidedRunFromAppGroup()
+                // Same for a cooking Next/Finish made from the Live Activity / Siri while
+                // backgrounded — reconcile even if the Food tab isn't the one on screen, so an
+                // orphan cooking activity is retired and the walker/card stay in step.
+                store.reconcileCookingRunFromAppGroup()
+                // Phase-6 gate retry: a launch that reached readyContent while the
+                // preferences keychain was unreadable (pre-first-unlock prewarm /
+                // background relaunch) DEFERRED the backup-exclusion resolution; every
+                // foreground activation retries until it resolves. A no-op once
+                // `didResolveBackupExclusionDefault` is set.
+                resolveBackupExclusionDefaultIfNeeded()
+                // P5 item 10: the foreground rising leg, pushed AFTER
+                // `refreshStateFromKeychain()` so the duress fact is the current one.
+                pushRoutedAccessGate(
+                    store, protectedData: protectedDataAvailableNow, foreground: true
+                )
+            }
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ZStack {
@@ -186,53 +294,7 @@ struct FernletApp: App {
             }
             .onOpenURL { _ = FernletMessagesRecipeImportRequest.request(from: $0) }
             // Relock on background and on device lock
-            .onChange(of: scenePhase) { _, newPhase in
-                if newPhase == .background {
-                    if case .ready(let store) = loader.phase {
-                        store.flushPendingSnapshotSave()
-                    }
-                    lockService.lock(reason: .background)
-                } else if newPhase == .active {
-                    // A launch that could not read the keychain (background relaunch / pre-first-unlock
-                    // prewarm) failed CLOSED to `.locked`, which is right but sticky: on an
-                    // UNCONFIGURED device it paints "unlock Fernlet" over a lock that does not exist
-                    // for the whole process. Activation means protected data is readable, so re-derive
-                    // the real state here. A no-op while unlocked, and while the state is already right.
-                    lockService.refreshStateFromKeychain()
-                    // Self-heal a sealed store whose rebuild could not re-add it — the dominant
-                    // cause is the device auto-locking mid-wipe, and writing anything again means
-                    // unlocking the device, which lands here. Without this the coordinator stays
-                    // storeless for the whole session and every sealed write fails.
-                    do {
-                        try PrivatePersistenceController.shared.reloadStoreIfNeeded()
-                    } catch {
-                        // Benign in isolation — the next foreground activation retries — but a
-                        // chronically storeless session (every sealed write failing) must be visible.
-                        FernletAuditLog.log("privatePersistence.reloadStoreIfNeeded.failed", context: [
-                            "trigger": "sceneActive",
-                            "errorType": "\(type(of: error))"
-                        ])
-                    }
-                    // Pick up a guided-workout finish or set/rest advance made from the Live Activity
-                    // while the app was backgrounded — even if the Move tab isn't the one on screen.
-                    // Roll the day FIRST (a foreground can cross local midnight without onAppear), so a
-                    // finish reconciled here anchors/back-dates to the correct day.
-                    if case .ready(let store) = loader.phase {
-                        store.refreshCurrentDayIfNeeded()
-                        store.reconcileGuidedRunFromAppGroup()
-                        // Same for a cooking Next/Finish made from the Live Activity / Siri while
-                        // backgrounded — reconcile even if the Food tab isn't the one on screen, so an
-                        // orphan cooking activity is retired and the walker/card stay in step.
-                        store.reconcileCookingRunFromAppGroup()
-                        // Phase-6 gate retry: a launch that reached readyContent while the
-                        // preferences keychain was unreadable (pre-first-unlock prewarm /
-                        // background relaunch) DEFERRED the backup-exclusion resolution; every
-                        // foreground activation retries until it resolves. A no-op once
-                        // `didResolveBackupExclusionDefault` is set.
-                        resolveBackupExclusionDefaultIfNeeded()
-                    }
-                }
-            }
+            .onChange(of: scenePhase) { _, newPhase in handleScenePhaseChange(newPhase) }
             #if canImport(UIKit)
             .onReceive(
                 NotificationCenter.default.publisher(
@@ -240,6 +302,14 @@ struct FernletApp: App {
                 )
             ) { _ in
                 lockService.lock(reason: .protectedDataUnavailable)
+                // P5 item 10: the notification IS the fact. `isProtectedDataAvailable` still
+                // answers `true` here — this is posted before lockdown so an app can finish its
+                // reads — so the literal is the only honest value.
+                if case .ready(let store) = loader.phase {
+                    pushRoutedAccessGate(
+                        store, protectedData: false, foreground: scenePhase == .active
+                    )
+                }
             }
             .onReceive(
                 NotificationCenter.default.publisher(
@@ -251,6 +321,26 @@ struct FernletApp: App {
                 // the keychain actually holds. Scene activation retries the same call, but a background
                 // relaunch may never become active.
                 lockService.refreshStateFromKeychain()
+                // P5 item 10: the unlock edge, literal for the same reason, and the one that fires
+                // while the app is BACKGROUNDED — the ciphertext jobs the re-entry owes run there.
+                if case .ready(let store) = loader.phase {
+                    pushRoutedAccessGate(
+                        store, protectedData: true, foreground: scenePhase == .active
+                    )
+                }
+            }
+            .onChange(of: lockService.isDuressSessionActive) { _, _ in
+                // P5 item 10: duress is entered at an already-foreground lock screen and cleared by
+                // a real-passcode unlock in the same foreground — it moves at NEITHER a scene nor a
+                // protected-data transition, so it needs its own observer or the stored gate would
+                // report `duressActive: false` for the whole duress session.
+                if case .ready(let store) = loader.phase {
+                    pushRoutedAccessGate(
+                        store,
+                        protectedData: protectedDataAvailableNow,
+                        foreground: scenePhase == .active
+                    )
+                }
             }
             .onReceive(
                 NotificationCenter.default.publisher(
@@ -281,6 +371,17 @@ struct FernletApp: App {
                     // does nothing — the mesh manager is not even built — and in release it is a
                     // compiled-out no-op.
                     .task { MeshRejectionMatrixHarness.install(manager: store.meshNetworkManager) }
+                    // P5 item 10's launch push. `.onChange(of: scenePhase)` carries no `initial:`,
+                    // and on a cold launch the loader reaches `.ready` AFTER the
+                    // `.inactive → .active` edge — without this the gate would sit fail-closed for
+                    // the whole foreground session and the re-entry would never run.
+                    .onAppear {
+                        pushRoutedAccessGate(
+                            store,
+                            protectedData: protectedDataAvailableNow,
+                            foreground: scenePhase == .active
+                        )
+                    }
             case .failed(let error):
                 LaunchFailureView(error: error) {
                     Task { await loader.retry(healthKitService: healthKitService) }

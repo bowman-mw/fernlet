@@ -242,8 +242,11 @@ enum MeshDepartureRig {
     ///
     /// - Returns: How many frames were moved.
     @discardableResult
-    static func pump(_ node: MeshDepartureNode) throws -> Int {
+    static func pump(
+        _ node: MeshDepartureNode, binding: DeviceBindingID.TestOverride? = nil
+    ) throws -> Int {
         var moved = 0
+        let binding = binding ?? .identifier(MeshP3Acceptance.install)
         let frames = node.channel.receivedFrames
         while node.delivered < frames.count, moved < maxPumpedFrames {
             let frame = frames[node.delivered]
@@ -254,7 +257,7 @@ enum MeshDepartureRig {
             let plaintext = try envelope.verify(
                 identityService: node.manager.identityForTesting, replayCache: node.replayCache
             )
-            DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            DeviceBindingID.$testOverride.withValue(binding) {
                 node.manager.proximityCoordinator(
                     coordinator, didReceive: envelope, plaintext: plaintext, from: nil
                 )
@@ -269,18 +272,23 @@ enum MeshDepartureRig {
     ///   - nodes: Every end still participating.
     ///   - fabric: The medium to advance.
     ///   - sample: Recorded immediately after each node's pump, before anything can suspend.
+    ///   - binding: The install binding every pumped receive runs under; defaults to the rig's one
+    ///     pinned install. A **parameter** since P5 item 10: an inner `withValue` shadows an outer
+    ///     one, so a cell that meant to drive a LOCKED window would otherwise find every store
+    ///     `.loaded` for exactly the receives it meant to lock.
     ///   - isDone: Ends the settle early once the scenario has what it is waiting for.
     static func settle(
         _ nodes: [MeshDepartureNode],
         on fabric: FakePeerNetwork,
         sampling sample: MeshRotationSample? = nil,
+        binding: DeviceBindingID.TestOverride? = nil,
         until isDone: () -> Bool = { false }
     ) async throws {
         for _ in 0..<settleRounds {
             for _ in 0..<yieldsPerRound { await Task.yield() }
             fabric.clock.advance(by: .milliseconds(50))
             for node in nodes {
-                try pump(node)
+                try pump(node, binding: binding)
                 sample?.record(node)
             }
             if isDone() { return }
