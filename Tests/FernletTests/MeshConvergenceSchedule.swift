@@ -26,6 +26,15 @@
 //
 // Nothing here touches a manager, a store, a transport or a clock; `MeshConvergencePropertyTests`
 // executes what this file plans.
+//
+// **P5 item 14 adds a second, salted plan and no new base draw.** `MeshRoutedScheduleOverlay` is
+// the routed delivery vocabulary — custody, receipts, capacity, developments, locked windows,
+// replays, unknown types — planned from `seed ^ routedSalt`, in the idiom `resplit(for:)` already
+// uses. Deliberately **not** a new `MeshScheduleEvent` case (D-14.1): one more element in `kinds`
+// is one more swap draw plus one more performer draw, which re-phases `interleave` and `healSteps`
+// for every shape and seed and voids P4's §10.10 evidence and its named regression fixtures.
+// Everything above `healSteps` is untouched by item 14; `MeshRoutedDrainConvergenceTests` executes
+// the overlay.
 
 import Foundation
 import Testing
@@ -724,6 +733,249 @@ nonisolated enum MeshScheduleGenerator {
         let pick = fresh.isEmpty ? nil : fresh[random.index(below: fresh.count)]
         guard let pick else { return fallback }
         return (pick.near, pick.far)
+    }
+
+    // MARK: The routed overlay (P5 item 14)
+
+    /// The salt P5's **routed overlay** is seeded from.
+    ///
+    /// A separate generator rather than more draws from the schedule's, for the reason
+    /// ``resplitSalt`` gives and one more of its own (D-14.1): P4's 80 membership cells and their
+    /// named regression fixtures are byte-identical to the seed they were found on, and one extra
+    /// `random.next()` inside `schedule(seed:shape:preferQuorum:)` would quietly rewrite all of
+    /// them. So the routed events are an overlay on the **same** seeds and the same five shapes,
+    /// never a new ``MeshScheduleEvent`` case. Frozen constant, never displayed.
+    static let routedSalt: UInt64 = 0x524F_5554_4544_0000
+
+    /// Plans P5's routed side-schedule for an already-generated schedule.
+    ///
+    /// - Parameter schedule: The cell the overlay hangs off. Its survivors and branches decide
+    ///   every resolution; its seed (salted) decides every draw.
+    /// - Returns: the resolved overlay — never a raw draw, so ``MeshRoutedScheduleOverlay/plannedTokens``
+    ///   is a pure function of the value.
+    static func routedOverlay(for schedule: MeshConvergenceSchedule) -> MeshRoutedScheduleOverlay {
+        var random = MeshScheduleRandom(
+            seed: schedule.seed ^ routedSalt ^ routedShapeSalt(schedule.shape)
+        )
+        return routedOverlay(for: schedule, using: &random)
+    }
+
+    /// The shape's own contribution to the overlay seed.
+    ///
+    /// **Load-bearing, and it was found by a probe rather than reasoned out.** `resplit(for:)` can
+    /// salt on the seed alone because its *resolution* is a function of the branches, so five shapes
+    /// of one seed give five different plans out of one draw sequence. The routed overlay's first
+    /// three fields — the chunk count and the sealed flag especially — are **not** functions of the
+    /// branches, so seeding on the seed alone gave the 40-cell rectangle only **8 distinct plans**
+    /// and the first probe found no cell at all carrying a multi-chunk opaque mint. Folding the
+    /// shape in restores 40. Frozen constant, never displayed.
+    private static func routedShapeSalt(_ shape: MeshPartitionShape) -> UInt64 {
+        let ordinal = MeshPartitionShape.matrix.firstIndex(of: shape) ?? 0
+        return 0x0101_0101_0101_0101 &* UInt64(ordinal + 1)
+    }
+
+    /// The seeded half of ``routedOverlay(for:)``.
+    ///
+    /// **Every draw is unconditional and every stored field is resolved.** A gate that passes with
+    /// no legal subject stores nil; a `Bool` whose precondition the schedule cannot meet stores
+    /// false. That is what stops a later field from re-phasing an earlier one, and what makes the
+    /// coverage wall arithmetic over the built overlays rather than a second execution of them.
+    private static func routedOverlay(
+        for schedule: MeshConvergenceSchedule, using random: inout MeshScheduleRandom
+    ) -> MeshRoutedScheduleOverlay {
+        let survivors = schedule.survivors
+        let originSlot = random.index(below: survivors.count)
+        let origin = survivors.isEmpty ? 0 : survivors[originSlot]
+        let chunks = 1 + random.index(below: 3)
+        let sealed = random.index(below: 2) == 0
+        let others = survivors.filter { $0 != origin }
+        let capacity = routedSubject(others, gateBelow: 4, using: &random)
+        let lock = routedSubject(others, gateBelow: 2, using: &random)
+        let replayGate = random.index(below: 2) == 0
+        let develops = random.index(below: 2) == 0 && routedCanDevelop(schedule, origin: origin)
+        let unknown = routedSubject(others, gateBelow: 4, using: &random)
+        // A replay needs a receiver that ALREADY admitted the manifest. Where this cell plants a
+        // refusal at every one of its own live destinations, no receiver ever admits anything, and
+        // a re-presented frame would be a FIRST admission dressed up as a replay — it would move
+        // bytes and rungs legitimately, and I-11 would red for the one reason that is not a defect.
+        // Resolved here rather than skipped at run time, so `plannedTokens` stays a pure function
+        // of the overlay and the skip is visible in the coverage wall instead of in a cell.
+        let blocked = !others.isEmpty
+            && others.allSatisfy { $0 == capacity || $0 == unknown }
+        let replays = replayGate && survivors.count >= 2 && !blocked
+        return MeshRoutedScheduleOverlay(
+            seed: schedule.seed, origin: origin, chunks: chunks, sealed: sealed,
+            capacityMember: capacity, lockMember: lock, replays: replays, develops: develops,
+            unknownTypeMember: unknown,
+            farBranchMint: routedIsFarBranch(schedule, origin: origin)
+        )
+    }
+
+    /// One optional subject over `pool`, drawn as **two** unconditional draws — one subject, one
+    /// gate — and resolved to nil when the gate is shut or the pool is empty.
+    private static func routedSubject(
+        _ pool: [Int], gateBelow bound: Int, using random: inout MeshScheduleRandom
+    ) -> Int? {
+        let slot = random.index(below: pool.count)
+        let open = random.index(below: bound) == 0
+        guard open, !pool.isEmpty, pool.indices.contains(slot) else { return nil }
+        return pool[slot]
+    }
+
+    /// Whether the ORIGIN can develop: only a device's own items are handed over at a departure
+    /// (`MeshCustodyHandoffPlan`'s `originatedBy:`), so a drawn non-origin developer would transfer
+    /// nothing and every hand-off claim would hold with the mechanism deleted.
+    ///
+    /// Its branch needs a second living member, because the branch drain that makes the transfer
+    /// non-vacuous is what puts the ciphertext at a partner.
+    private static func routedCanDevelop(_ schedule: MeshConvergenceSchedule, origin: Int) -> Bool {
+        guard schedule.departingMember != origin else { return false }
+        let survivors = Set(schedule.survivors)
+        guard let branch = schedule.branches.first(where: { $0.contains(origin) }) else { return false }
+        return branch.filter(survivors.contains).count >= 2
+    }
+
+    /// Whether the mint lands in a branch **other** than the lowest-indexed survivor's.
+    ///
+    /// The rig's own "first survivor" is `livingMembers.first`, i.e. the lowest global index, so
+    /// that member's branch is the near one and any other is a far-branch mint — the shape clause
+    /// (k) is about, reached by field 1's own draw rather than by a second field.
+    private static func routedIsFarBranch(_ schedule: MeshConvergenceSchedule, origin: Int) -> Bool {
+        let survivors = schedule.survivors
+        guard let near = survivors.first,
+              let nearBranch = schedule.branches.firstIndex(where: { $0.contains(near) }),
+              let originBranch = schedule.branches.firstIndex(where: { $0.contains(origin) })
+        else { return false }
+        return nearBranch != originBranch
+    }
+}
+
+// MARK: - MeshRoutedEventToken
+
+/// One event of **P5's own delivery vocabulary** — the overlay's counterpart to
+/// ``MeshScheduleEvent``, kept deliberately separate from it (D-14.1).
+///
+/// §16.2's vocabulary is "events during split" for the *membership* property; custody, receipts,
+/// backpressure, locked devices and replays are §11's *delivery* property, and folding them into
+/// ``MeshScheduleEvent`` would re-phase every one of P4's 80 seeded cells. Frozen English tokens:
+/// logged and compared verbatim, never display copy.
+nonisolated enum MeshRoutedEventToken: String, CaseIterable, Equatable, Sendable {
+
+    /// An opaque routed item minted at the origin (`routedCustodyEvent`).
+    case custody
+
+    /// A REAL sealed photo item minted at the origin (`routedSealedPhotoEvent`, item 13).
+    case sealedItem
+
+    /// The bounded full-mesh drain rounds (`runRoutedDrainRounds`, item 6).
+    case receiptDrain
+
+    /// One destination filled to its byte cap before the drain reaches it (item 9).
+    case capacity
+
+    /// The origin develops and hands custody on, mid-branch-drain (item 8).
+    case development
+
+    /// A gate closed across a drain and re-opened (`routedLockWindowEvent`, item 10).
+    case lockWindow
+
+    /// An already-admitted frame re-presented on a live link (`routedReplayEvent`, item 12).
+    case replay
+
+    /// One receiver whose registry does not know the item's type token (item 11).
+    case unknownType
+
+    /// The mint happened in a branch other than the lowest-indexed survivor's.
+    case farBranchMint
+
+    /// Every token an overlay can plan — the coverage target the rectangle asserts it reached.
+    static let vocabulary: [String] = allCases.map(\.rawValue)
+}
+
+// MARK: - MeshRoutedScheduleOverlay
+
+/// P5's routed side-plan for one already-generated ``MeshConvergenceSchedule`` — the whole of item
+/// 14's event vocabulary, salted away from the base schedule so not one membership draw moves.
+///
+/// Every field is **resolved**, never raw: a gate that passed with no legal subject is nil, and a
+/// flag whose precondition the schedule cannot meet is false. That is what makes ``plannedTokens``
+/// a pure function of this value, which in turn is what lets the coverage wall be arithmetic over
+/// the 40 built overlays instead of a second execution of them.
+nonisolated struct MeshRoutedScheduleOverlay: Hashable, Sendable, CustomStringConvertible {
+
+    /// The seed the overlay was salted from — carried so a failure names its own replay.
+    let seed: UInt64
+
+    /// The survivor that mints the item, as a global member index.
+    let origin: Int
+
+    /// How many chunks an opaque mint is sliced into, 1…3. Meaningless when ``sealed``, whose
+    /// fixture does its own chunking.
+    let chunks: Int
+
+    /// Whether the mint is item 13's real sealed photo rather than an opaque blob.
+    let sealed: Bool
+
+    /// A non-origin survivor filled to its byte cap before the drain reaches it, or nil.
+    let capacityMember: Int?
+
+    /// A non-origin survivor whose access gate closes across a drain and re-opens, or nil.
+    let lockMember: Int?
+
+    /// Whether the cell re-presents one already-admitted frame after the heal.
+    let replays: Bool
+
+    /// Whether the origin develops mid-branch-drain (pipeline 2 only).
+    let develops: Bool
+
+    /// A non-origin survivor whose type registry does not know the item's token, or nil.
+    let unknownTypeMember: Int?
+
+    /// Whether the mint lands outside the lowest-indexed survivor's branch.
+    let farBranchMint: Bool
+
+    /// A replayable label: the seed and the resolved plan, in frozen English.
+    var description: String {
+        var text = "routed \(String(seed, radix: 16)) o\(origin) x\(chunks)"
+        text += sealed ? " sealed" : " blob"
+        if let capacityMember { text += " cap\(capacityMember)" }
+        if let lockMember { text += " lock\(lockMember)" }
+        if replays { text += " replay" }
+        if develops { text += " develops" }
+        if let unknownTypeMember { text += " unknown\(unknownTypeMember)" }
+        if farBranchMint { text += " far" }
+        return text
+    }
+
+    /// The tokens the **full-heal** pipeline executes — rectangles A, B, D, E and F.
+    ///
+    /// The development is deliberately absent: a development after a full heal and drain has no
+    /// outstanding leg to hand, so it runs on its own pipeline and its own cells.
+    var fullHealTokens: Set<String> {
+        var tokens: Set<String> = [mintToken, MeshRoutedEventToken.receiptDrain.rawValue]
+        if capacityMember != nil { tokens.insert(MeshRoutedEventToken.capacity.rawValue) }
+        if lockMember != nil { tokens.insert(MeshRoutedEventToken.lockWindow.rawValue) }
+        if replays { tokens.insert(MeshRoutedEventToken.replay.rawValue) }
+        if unknownTypeMember != nil { tokens.insert(MeshRoutedEventToken.unknownType.rawValue) }
+        if farBranchMint { tokens.insert(MeshRoutedEventToken.farBranchMint.rawValue) }
+        return tokens
+    }
+
+    /// The tokens the **development** pipeline executes — rectangle C: mint, branch drain, depart.
+    var developmentTokens: Set<String> {
+        var tokens: Set<String> = [mintToken, MeshRoutedEventToken.development.rawValue]
+        if farBranchMint { tokens.insert(MeshRoutedEventToken.farBranchMint.rawValue) }
+        return tokens
+    }
+
+    /// Every token this overlay plans, across both pipelines — the coverage wall's generated side.
+    var plannedTokens: Set<String> {
+        develops ? fullHealTokens.union(developmentTokens) : fullHealTokens
+    }
+
+    /// Which mint this overlay plans.
+    private var mintToken: String {
+        sealed ? MeshRoutedEventToken.sealedItem.rawValue : MeshRoutedEventToken.custody.rawValue
     }
 }
 
