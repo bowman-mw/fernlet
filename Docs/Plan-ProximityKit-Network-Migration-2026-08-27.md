@@ -1703,16 +1703,33 @@ at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log
    argument, including item 14's. Making it once-per-window is a transport decision whose blast radius
    is all 80 membership cells **and** all 40 routed cells, and **both** pinned digests move with it.
    Pinned by a wire cell so nobody "fixes" a hang by loosening the closing rule instead.
-4. **Three routed door refusals are replayable without bound** (item 12, D-12.14).
-   `notADestinationOrHandoff` (1 Ed25519 verify + 1 fingerprint hash per replay),
-   `unknownItemNotFromOrigin` and `unregisteredTypeChunk` (1 sealed-index load each) sit **before**
-   their store verb, so the replay window never records them. Two fire before their verifier, where
-   the author is only a claim; the third is sender-dependent, so recording a courier's refused copy
-   would drop the origin's own hand-off copy tomorrow. **Cost:** a bounded-per-frame but
-   unbounded-in-count work channel for a member of the mesh. Closing it needs a per-sender
-   pre-verification budget — a different mechanism with its own DoS question — and was deliberately
-   not half-built; it is stated in `dispatchRoutedContent`'s doc comment and named in item 14's
-   honesty clause.
+4. **Three routed door refusals were replayable without bound** (item 12, D-12.14) — **CLOSED
+   2026-09-06 by the post-close review's correction pass.** `notADestinationOrHandoff` (1 Ed25519
+   verify + 1 fingerprint hash per replay), `unknownItemNotFromOrigin` and `unregisteredTypeChunk`
+   (1 sealed-index load each) sit **before** their store verb, so the replay window never records
+   them. Two fire before their verifier, where the author is only a claim; the third is
+   sender-dependent, so recording a courier's refused copy would drop the origin's own hand-off copy
+   tomorrow. The review also found the channel wider than three: every verifier rejection at the four
+   content doors, an undecodable frame, and — behind the manifest door's `unknownTypeToken` — the
+   parked-set drop's index load on an unsigned claim, all sit before a store verb too.
+   **What closed it:** `MeshRoutedRefusalBudget`, a per-**sender** budget (the committed slot the
+   envelope signature authenticated, never the frame's claimed author) charged at every pre-store
+   refusal through the one door `refuseRoutedFrameBeforeStore`, capped at
+   `MeshRoutedDrainBounds.sessionFramesPerPeer` (1056) — which an honest peer cannot reach, because
+   that is already the most frames the drain lets it make this device serve — and reset with the
+   drain state at the three session resets only, never on a disconnect or a partition flap (the
+   attacker's reset lever). A spent sender's routed content is dropped at `dispatchRoutedContent`
+   before the decode, silently after the one `mesh.routedDrain.refusalBudgetSpent` line. The two
+   digest doors stay outside it by D-5.12/D-6.10. **One exemption, found by the adversarial review of
+   the pass itself:** a courier facing a FULL receiver re-offers a manifest plus up to 64 chunks every
+   exchange; the manifest is a store refusal (never charged) but each chunk would have been a charged
+   `unknownItemNotFromOrigin`, starving an honest courier in ~16 exchanges — so a frame for an item
+   this device already capacity-refused from this sender (`routedRefusedKeys`) is named but not
+   charged. The sender axis is the admission set's 16 (`maxRecordsPerKind`), the replay window's
+   reasoning, so a session with departures and rejoins can never fill it.
+   `MeshRoutedRefusalBudgetTests` is the table, three drain cells and the wall; `unregisteredTypeChunk`
+   is unreachable in one shipping build (the manifest door admits only registered tokens) and is
+   charged anyway.
 5. **Two smaller replay/digest residuals, both named, neither closed.** (i) D-12.15: a custody
    `receiptID` excludes `custodiedAt`, so a receipt re-minted after a repaired slot carries an id
    peers already recorded and their windows answer `replayed` — they keep the **earlier** receipt.
@@ -1724,20 +1741,26 @@ at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log
    The guard is handed forward because it changes items 5/6's door and the stamp item 7's window rule
    reads: a behaviour change, not a wiring change.
 6. **Item 9's six app display literals — and item 13's in-package refusal sentence — are unwritten,
-   and the string catalog is unsynced.**
+   and the string catalog is unsynced.** *Amended 2026-09-06 by the post-close review's correction
+   pass: the refusal sentence left the package — `MeshNetworkManager.routedShareRefusal` publishes the
+   frozen `MeshRoutedShareRefusal` token and the app forks it into `LocalizedStringKey` copy in
+   `RoutedShareRefusalCopy` (one sentence per case, presented on the camera's existing session alert)
+   — and the app catalog was synced with the banner's six keys, the dismiss label and the refusal
+   sentences. The WORDING is still the owner's; the mechanism is no longer a defect.*
    `RoutedDeliveryHoldBanner.swift` ships `LocalizedStringKey` copy — one sentence pair per cause,
    with **no count interpolated into any key**, so no plural variation is owed as it stands; if the
    owner wants the number in the copy, that key needs a `variations.plural` block **plus** a
-   `pluralRuledKeys` entry at catalog-sync time (D-9.5). `Localizable.xcstrings` is held by another
-   session and was deliberately never staged; `Scripts/sync-string-catalogs.sh` has not been run.
-   **Item 13 adds a seventh string to the same pass, inside the package:** the routed share refusal's
-   sentence — "Couldn't share that photo with the mesh — it's saved on your own wall." — is composed
-   on the existing `meshError` seam and therefore renders in English in every language (D-13.15,
-   *inherited*: `addPhoto` already composed `mesh.photo.encryptFailed` the same way, so this is no new
-   mechanism). Answer it together with D-10.9 — whether a device that could hold nothing all session should say
-   so, and in what words (declined for now, so locked-device visibility ships as counts and frozen
-   tokens). **Cost:** the banner shows English placeholders until the copy lands, and localizing after
-   the copy changes means doing it twice.
+   `pluralRuledKeys` entry at catalog-sync time (D-9.5). At close, `Localizable.xcstrings` was held by
+   another session and deliberately never staged and `Scripts/sync-string-catalogs.sh` had not been
+   run; on 2026-09-06 the sync was run against `HEAD`'s catalog and staged as a blob, leaving that
+   working copy untouched. **Item 13 had added a seventh string inside the package** — the routed
+   share refusal's sentence, composed on the `meshError` seam and therefore English in every language
+   (D-13.15, *inherited*: `addPhoto` already composed `mesh.photo.encryptFailed` the same way) — and
+   that is the string the correction pass moved into the app as `RoutedShareRefusalCopy`. Still to
+   answer, together with D-10.9 — whether a device that could hold nothing all session should say so,
+   and in what words (declined for now, so locked-device visibility ships as counts and frozen
+   tokens): the final wording. **Cost, as it stands:** placeholder English wording until the owner
+   writes the copy; the mechanism no longer needs redoing.
 7. **Two close-out flags on sealed-surface bookkeeping.** (i) `CryptoFormatCensusTests` now has
    **two** sealed at-rest mesh surfaces outside its census — mesh-session (P3) and mesh-routed (P5
    item 3). P3's precedent was followed, and item 13's routed item blob deliberately gets no census
@@ -1794,7 +1817,11 @@ at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log
     proximity-join pairwise phase now has no photo transport at all** (D-13.18): a two-device auto-dwell
     stays `currentMesh == nil` until a second peer commits, so there is no meshID, no membership ledger
     and therefore no destination set — a capture there is cached on the user's own wall and shared with
-    **nobody** until the session promotes (`startNewMesh` sessions are unaffected). The inadmissible
+    **nobody**, with no notice, and nothing re-shares it when the session promotes (the post-close
+    review found the source comment claiming otherwise false and corrected it). `startNewMesh` sessions
+    are unaffected but **unreachable from the app** — `startJoin()` is the only session entry — so this
+    is the default two-device path, and it is the first thing a two-device hardware validation will
+    hit. The inadmissible
     "fix" is keeping the legacy pairwise path alive, which would keep `handlePhotoManifest` and
     `sendRequestedPhotos` in the tree and make the retirement a fiction. (ii) **A mint refuses whenever
     any destination lacks a handshake-verified X25519 key** (D-13.1/D-13.22): destinations are
@@ -1836,7 +1863,7 @@ scenario on the shipping seams so CI can gate one line per clause:
 | (h) relay scope | `MeshP5RelayScopeAcceptanceTests` | 3 | a development hands custody only to custodians it **named AND served**, with both branch-drain preconditions asserted per cell; `handedOffItemCount` read off the **signed departure record** (D-14.11); **no third-party courier** appears while the origin is alive |
 | (i) replay/dedup | `MeshP5ReplayAcceptanceTests` | 2 | a replayed manifest moves no byte, no rung and no receipt count; the window holds both of its axes |
 | (k) other-branch content | `MeshP5OtherBranchDeliveryAcceptanceTests` | 2 | a **real sealed photo** minted at a far-branch survivor reaches the near branch's `meshPhotos` wall exactly once after the heal — the clause the three `keyEpoch` gates were retired **for** — plus the sealed rectangle's cross-pins |
-| (j) honesty | `MeshP5HonestyAcceptanceTests` | 2 | the rectangle whole at **40 of 40** with `deferred` asserted **empty as a positive claim**; and what the battery deliberately does not claim, named — tier 2, D-7.15's liveness, D-12.14's three unbounded pre-store refusals, D-12.15's staleness and item 9's never-reclaimed all-departed item, with the three refusal tokens pinned mechanically (D-14.14) |
+| (j) honesty | `MeshP5HonestyAcceptanceTests` | 2 | the rectangle whole at **40 of 40** with `deferred` asserted **empty as a positive claim**; and what the battery deliberately does not claim, named — tier 2, D-7.15's liveness, D-12.14's three pre-store refusals (bounded per authenticated sender by `MeshRoutedRefusalBudget` since the post-close review, the `mesh.routedDrain.refusalBudgetSpent` line pinned beside the three tokens), D-12.15's staleness and item 9's never-reclaimed all-departed item, with the three refusal tokens pinned mechanically (D-14.14) |
 | (j) determinism | `MeshP5DeterminismAcceptanceTests` | 5 (4 at `ed9aebd`) | the salt and root seed pinned by value and the overlay replaying from them across all 40 cells; one whole routed cell replaying identically as an ordered token trace **and** an index-projected rung digest; the grep-wall on the third convergence file; the two pinned digests; and, added by `3f323e9`, the rolling fixture anchor's own contract (`theRoutedFixtureAnchorHoldsItsContract`) |
 
 - **The battery: 33 tests in 12 suites green, 11.027 s alone**, twelve `◇ Suite` starts against twelve
@@ -1912,13 +1939,16 @@ scenario on the shipping seams so CI can gate one line per clause:
 - **Owed, and not run: tier 2** — §11.3 finding 10. Recorded as corroboration owed on the owner's sim
   fleet, never as the gate.
 
-#### CI lines still to wire
+#### CI lines — wired 2026-09-06 (see §23.4)
 
-`.github/workflows/s3-wall.yml` gates **none** of the three phases' batteries. These go after the
-key-custody step (lines 186–188, the workflow's last step today), in the same form as the boundary
-suites. Every one of the twelve `MeshP5*` names below was verified against a run showing a **non-zero
-per-suite count** — the caveat that matters, because a line naming a non-existent suite, or a *file*
-rather than a `@Suite` struct, matches zero tests and still prints `TEST EXECUTE SUCCEEDED`:
+*Historical record of the hand-over; the lines below have been in `.github/workflows/s3-wall.yml`
+since the post-close review's correction pass, in the "Mesh acceptance batteries" step, together
+with P3's four and P4's nine suites and the two convergence suites — 28 suites, run through
+`Scripts/run-gated-suites.sh`, which refuses a green run under the step's test-count floor, so the
+zero-tests caveat below is now enforced mechanically rather than by reading the log.* Every one of
+the twelve `MeshP5*` names below was verified against a run showing a **non-zero per-suite count** —
+the caveat that matters, because a line naming a non-existent suite, or a *file* rather than a
+`@Suite` struct, matches zero tests and still prints `TEST EXECUTE SUCCEEDED`:
 
 ```
 -only-testing:FernletTests/MeshP5ManifestAcceptanceTests
@@ -1941,8 +1971,10 @@ plus the routed property battery, whose isolated run is quoted above:
 -only-testing:FernletTests/MeshRoutedDrainConvergenceTests
 ```
 
-P4's nine `MeshP4*AcceptanceTests` lines (§10.10) and P3's four `MeshP3*AcceptanceTests` lines are
-still owed beside them — **three phases ungated**, flagged at three consecutive phase boundaries.
+P4's nine `MeshP4*AcceptanceTests` lines (§10.10) and P3's four `MeshP3*AcceptanceTests` lines were
+owed beside them — **three phases ungated**, flagged at three consecutive phase boundaries — until
+2026-09-06, when all 28 landed in one step; `CIGateSelectorBoundaryTests` now fails CI for any
+`MeshP<n>*AcceptanceTests` suite declared in the tree but not named there.
 
 ---
 
@@ -2804,11 +2836,13 @@ those five.*
   on the routed window. **Owed, and explicitly NOT taken by item 14:** the manager-level cell for
   `sendRoutedChunks`' slot un-record on a **departed origin's custodian forwarding** — rectangle C's
   pipeline ends at the hand-off assertions and holds no forwarding leg, so it needs a second rig and
-  was handed on by name rather than left unclaimed. **D-12.14 is open and named, not half-closed:** three door refusals sit
-  *before* their store verb and stay replayable without bound (`notADestinationOrHandoff`,
-  `unknownItemNotFromOrigin`, `unregisteredTypeChunk`); closing them needs a per-sender
-  pre-verification budget with its own DoS question, and P6 adding routed types adds traffic to that
-  channel.
+  was handed on by name rather than left unclaimed. **D-12.14 was CLOSED 2026-09-06** by the
+  post-close review's correction pass (§11.3 item 4): `MeshRoutedRefusalBudget` charges every
+  pre-store refusal — the three named door refusals, every verifier rejection, undecodable frames —
+  to the authenticated envelope sender, capped at `sessionFramesPerPeer`, with a spent sender dropped
+  at `dispatchRoutedContent`; P6 adding routed types adds traffic to a channel that is now bounded,
+  and a new door's pre-store exits must go through `refuseRoutedFrameBeforeStore` (the wall in
+  `MeshRoutedRefusalBudgetTests` counts them).
 - **Which `keyEpoch` gates actually retired, and how.** Two were **deleted with their handlers**
   (`0a33bc7`): `handlePhotoManifest`'s `keyEpoch >= localJoinedEpoch` filter went with the pull path,
   and `handleFriendPhotoEnvelope`'s `key.epoch == photo.keyEpoch` went with the group-key photo
@@ -2925,8 +2959,8 @@ projection. **So P6's first sim observation of the routed path costs a harness c
 a lane photo failure is now a *routed* failure, because the legacy pull path is gone. Three new
 lane-visible refusals to expect, all by name and all deliberate: the **pairwise pre-promotion phase
 has no photo transport at all** (D-13.18 — a two-device auto-dwell stays `currentMesh == nil`, so
-there is no meshID, no ledger and no destination set; `startNewMesh` runs are unaffected, so promote
-first); **a mint refuses whenever any destination lacks a handshake-verified X25519 key**
+there is no meshID, no ledger and no destination set; `startNewMesh` runs are unaffected but the app
+never calls it, so promote first); **a mint refuses whenever any destination lacks a handshake-verified X25519 key**
 (D-13.1/D-13.22 — a **star** topology where two members never link, a roster above `maxTotalSlots` 5,
 and **any** resumption: restart, idle-lapse resume or rejoin restores the ledger but not the session
 roster); and a capped destination raises a visible `routedDeliveryHold`.
@@ -2960,27 +2994,35 @@ Carried from §22.4, with what P5 added:
 - **Hardware, unchanged:** the Lane A report, Lane B's double-dial row (§7.7 finding 6), the **AWDL
   half** of item 11, and **Lane D — the production transport over Wi-Fi with the cable OUT**; check
   afterwards that no ready line names a USB-side interface (`anpi0`/`en8`).
-- **The CI gate lines, now for THREE phases' batteries** — flagged at every P5 close and still not in
-  `.github/workflows/s3-wall.yml`. P5 hands over **twelve verified `-only-testing:` lines**
-  (`MeshP5{Manifest, CustodyAndReceipt, AckStage, Backpressure, LockedDevice, PartitionDrain,
-  TypeRegistry, RelayScope, Replay, OtherBranchDelivery, Honesty, Determinism}AcceptanceTests`) plus
-  `MeshRoutedDrainConvergenceTests`; `MeshP3*` and `MeshP4*` are still ungated. Every name was
-  verified against a run showing a non-zero per-suite count, because **a line naming a non-existent
-  suite runs zero tests under a green banner**.
+- ~~**The CI gate lines, now for THREE phases' batteries**~~ — **DONE 2026-09-06** by the post-close
+  review's correction pass: `.github/workflows/s3-wall.yml` gains a "Mesh acceptance batteries" step
+  naming all 28 suites (4 `MeshP3*`, 9 `MeshP4*` + the two convergence suites, 12 `MeshP5*` +
+  `MeshRoutedDrainConvergenceTests`; 101 tests, ~106 s), and **every** test step now runs through
+  `Scripts/run-gated-suites.sh`, which writes a result bundle and refuses a green run whose
+  `totalTestCount` is under the step's floor — so a line naming a non-existent suite can no longer
+  pass under a green banner. `CIGateSelectorBoundaryTests` is the static half: every named suite must
+  be declared, every `MeshP<n>*AcceptanceTests` / convergence suite declared in the tree must be
+  named, and no step may bypass the script. Still the owner's: the first push is the first time CI
+  builds P4/P5 code at all (main is unpushed), and the 1c load flake is unmeasured on hosted runners.
 - **Tier-2 items 11–14 from P4**, plus P5's own list in §23.2 (QUIC chunk pacing, control-stream
   starvation, whether relay increment 2 is needed at all, 6b's main-actor drain I/O, item 9's two
   numbers, the sealed index file's uncounted size).
-- **F-1, SERIOUS and outside P5:** `IdentityService.loadExistingDeviceIdentity()`
-  (`IdentityService.swift` ~574–582) uses the nil-collapsing `KeychainItem.load`, so after first
-  unlock a **transient** keychain read error falls through to the mint — and `KeychainItem.store`
-  deletes before adding, destroying the real identity. Fix shape: a `loadDistinguishingAbsence` that
-  refuses to mint on an error.
+- ~~**F-1, SERIOUS and outside P5**~~ — **FIXED 2026-09-06** by the post-close review's correction
+  pass: `loadExistingDeviceIdentity()` and Case 3's legacy read now use
+  `KeychainItem.loadDistinguishingAbsence`; any status other than `errSecItemNotFound` throws the new
+  `IdentityError.keychainReadFailed(OSStatus)` and mints nothing (the decision is the pure
+  `classifyDeviceIdentityRows`, tabled in `IdentityProvisioningReadTests`, with a wall that the two
+  identity rows are never read nil-collapsing again). A present-but-unparseable row is still minted
+  over — the key it held can never be used — but is now named by an audit line first.
 - **Six new app display literals** in `RoutedDeliveryHoldBanner.swift` plus the routed share
-  refusal's sentence, their final wording and their catalog sync — `App/Fernlet/Localizable.xcstrings`
-  was deliberately not touched, and whether the copy carries the count buys a `variations.plural`
-  block plus a `pluralRuledKeys` entry. **§18.2's partition UX copy** rides with them (default: the
-  subtitle count only, no new string). Also owner's: **whether a device that could hold nothing all
-  session should say so** (D-10.9, declined here as counts + frozen tokens).
+  refusal's sentences — their final **wording** is still the owner's, but as of 2026-09-06 the
+  mechanism is done: the refusal is a frozen token forked in the app (`RoutedShareRefusalCopy`) and
+  the committed `App/Fernlet/Localizable.xcstrings` carries every key (synced from `HEAD`'s catalog,
+  leaving the other session's uncommitted working copy untouched). Whether the hold copy carries the
+  count still buys a `variations.plural` block plus a `pluralRuledKeys` entry. **§18.2's partition
+  UX copy** rides with them (default: the subtitle count only, no new string). Also owner's:
+  **whether a device that could hold nothing all session should say so** (D-10.9, declined here as
+  counts + frozen tokens).
 - **Option (b) for `handleEncryptedMetadata`** — delete the receive-only door whole and park
   `PayloadType.meshEncryptedMetadata`, retiring the last `keyEpoch ==` compare in the tree along with
   the five consumers §23.1 names, plus four re-aimed test claims (L-3/3b/3c/4). A wire/interop decision, same class as **the legacy unsigned two-party
