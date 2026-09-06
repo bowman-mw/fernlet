@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P5
 
 **Phase:** P5 (encrypted store-and-forward routing) · **Prompt:** [Next-Round-Prompt-Mesh-P5-2026-09-03.md](Next-Round-Prompt-Mesh-P5-2026-09-03.md)
-**Started:** 2026-09-03 · **Iteration:** 18 · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
+**Started:** 2026-09-03 · **Iteration:** 18 done · **PHASE CLOSED 2026-09-05** — close-out `848f202` (plan §11 BUILT, §11.1–§11.4, §23 P6 handoff) · **not pushed** · **Tree at seed:** main = `b31b7c0` (pushed; launcher commit on top of `6bc98ee`)
 
 ## Items
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
@@ -365,4 +365,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - A settle's `until:` fires **synchronously inside the pump**, so a predicate that becomes true in the same step that schedules a send returns before the frame exists. Assert on the frame count itself (`until: { received(...) >= 2 }`), not on the state change that provoked it.
 
 ## Next item
-All 14 items + 1a/1b/6a done. Next: CLOSE-OUT per launcher §8 (in flight as a draft → adversarial verify → apply Workflow): plan §11 BUILT + §11.1–§11.4, P6 handoff §23, memory note; then STOP the loop. A stray untracked PDF sits in Docs/ (owner's — never stage it).
+None — P5 is CLOSED at `848f202`. Every item, 1a/1b/6a and the close-out are on main (not pushed). Open by name: 1c (P4 quorum cell load flake), 6b (main-actor drain I/O, tier 2), and the owner list in §11.3 / §23.4 — F-1 (identity-mint hazard) first, then the CI gate lines for three phases' batteries, then option (b). The next session writes the P6 launcher from §23 (as b31b7c0 did for P5 from §22). A stray untracked PDF sits in Docs/ (owner's — never stage it).
