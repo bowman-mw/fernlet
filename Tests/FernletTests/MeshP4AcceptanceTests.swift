@@ -1027,6 +1027,13 @@ struct MeshP4DeferralAcceptanceTests {
 /// — checked by a grep-wall, because that is the failure mode with no compiler half. A `Date()` or
 /// a `.randomElement()` slipped into the generator would keep every cell green and quietly make the
 /// suite unreplayable.
+///
+/// **The one clock either file may reach is walled too, in P5's suite.** `MeshConvergenceRun.anchor`
+/// takes `MeshRoutedFixtureClock.createdAt` from routed callers, and that file *does* spell
+/// `Date()` — so the token being absent here would mean nothing on its own. It is on
+/// `MeshP5DeterminismAcceptanceTests.scannedFiles` with a single exactly-named exception, and its
+/// floor/forward-roll/one-instant-per-process contract is asserted by
+/// `theRoutedFixtureAnchorHoldsItsContract`. A wall satisfied by indirection is not a wall.
 @MainActor
 @Suite(.serialized)
 struct MeshP4DeterminismAcceptanceTests {

@@ -201,10 +201,20 @@ enum MeshDepartureRig {
     }
 
     /// Puts a node into a live session on a seeded ledger.
+    ///
+    /// `createdAt` is the mesh's signed creation instant — the manager derives its routed hard
+    /// deadline from it, so a routed rig passes `MeshRoutedFixtureClock.createdAt` and its
+    /// manifests' expiry rolls with the mesh (P5 item 6a). Membership-only callers omit it, keep
+    /// the pinned anchor, and are byte-identical. It is `Date?` because a default argument is
+    /// evaluated in the caller's isolation and the anchor is `@MainActor`.
     static func start(
-        _ node: MeshDepartureNode, ledger: MeshMembershipLedger, founderKey: Data, meshID: UUID
+        _ node: MeshDepartureNode, ledger: MeshMembershipLedger, founderKey: Data, meshID: UUID,
+        createdAt: Date? = nil
     ) {
-        MeshMergeWire.start(node.manager, ledger: ledger, founderKey: founderKey, meshID: meshID)
+        MeshMergeWire.start(
+            node.manager, ledger: ledger, founderKey: founderKey, meshID: meshID,
+            createdAt: createdAt
+        )
     }
 
     /// Puts a node on a named epoch without spending a rotation.

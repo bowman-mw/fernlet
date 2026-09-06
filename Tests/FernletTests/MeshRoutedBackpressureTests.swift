@@ -7,7 +7,9 @@
 //
 // Tier 1 only, on item 6's existing `MeshRoutedDrainRig` — never a parallel rig. The three fixture
 // facts that file states apply verbatim: one pinned install binding (`MeshP3Acceptance.install`), one
-// time anchor (`MeshRoutedDrainRig.createdAt`, 1.8e9), and joiner-shaped nodes with no session
+// time anchor (`MeshRoutedDrainRig.createdAt` — exactly 1.8e9 until 2026-12-16, a month before
+// that instant falls due, and the wall clock plus that month from the crossover on (item 6a); it
+// is also the anchor the development instants below take), and joiner-shaped nodes with no session
 // ceiling.
 //
 // **The expiry trap, which is not hypothetical.** `MeshRoutedStoreFixtures.record()` stamps the
@@ -460,7 +462,7 @@ struct MeshRoutedBackpressureTests {
     @Test func unplacedItemKeysReachTheObservable() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "backpressure-unplaced")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         let orphan = try MeshRoutedDrainItem.mint(scenario.rig, origin: 0, byteCount: 1_500)

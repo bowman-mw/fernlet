@@ -84,8 +84,8 @@ extension MeshConvergenceRun {
             typeToken: typeToken,
             contentHash: MeshRoutedContentDigest.contentHash(of: payload),
             size: UInt64(payload.count),
-            createdAt: MeshP3Acceptance.base.addingTimeInterval(60),
-            hardDeadline: MeshP3Acceptance.base.addingTimeInterval(MeshSessionCeiling.ceilingSeconds),
+            createdAt: anchor.addingTimeInterval(60),
+            hardDeadline: anchor.addingTimeInterval(MeshSessionCeiling.ceilingSeconds),
             contentKey: Data(repeating: 0x51, count: 32),
             recipientKeys: Dictionary(uniqueKeysWithValues: members.map {
                 ($0.fingerprint, $0.node.manager.identityForTesting.localKeyAgreementPublicKey)
@@ -129,8 +129,8 @@ extension MeshConvergenceRun {
             recipientKeys: Dictionary(uniqueKeysWithValues: members.map {
                 ($0.fingerprint, $0.node.manager.identityForTesting.localKeyAgreementPublicKey)
             }),
-            createdAt: MeshP3Acceptance.base.addingTimeInterval(60),
-            hardDeadline: MeshP3Acceptance.base.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
+            createdAt: anchor.addingTimeInterval(60),
+            hardDeadline: anchor.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
         )
         let store = MeshRoutedStore(scope: member.node.store.meshRoutedStorage)
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
@@ -340,7 +340,7 @@ extension MeshConvergenceRun {
     /// own expiry, so the hog is live at the run's `now` and the refusal it exists to cause really
     /// happens rather than being swept away first.
     func routedCapacityEvent(at member: MeshConvergenceMember, now: Date) throws {
-        let deadline = MeshP3Acceptance.base.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
+        let deadline = anchor.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
         let hog = MeshRoutedStoreFixtures.record(
             chunks: [MeshRoutedStoreFixtures.descriptor(
                 index: 0, count: 1, bytes: Int(MeshRoutedStoreFormat.maxContentBytes)
@@ -1245,7 +1245,7 @@ struct MeshRoutedCellRun {
 enum MeshRoutedPipeline {
 
     /// The injected instant every mint, plant and window is charged at.
-    static var mintInstant: Date { MeshP3Acceptance.base.addingTimeInterval(600) }
+    static var mintInstant: Date { MeshRoutedFixtureClock.createdAt.addingTimeInterval(600) }
 
     /// Pipeline 1 — every non-developing cell.
     static func fullHeal(
@@ -1253,7 +1253,9 @@ enum MeshRoutedPipeline {
         typeToken: String = MeshRoutedTypeToken.photo
     ) async throws -> MeshRoutedCellRun {
         let overlay = cell.overlay
-        let run = try MeshConvergenceRun.build(cell.schedule, label: label)
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: label, anchor: MeshRoutedFixtureClock.createdAt
+        )
         guard let origin = run.participant(global: overlay.origin) else {
             throw MeshRoutedCellFailure.originNotLiving
         }
@@ -1382,7 +1384,9 @@ enum MeshRoutedPipeline {
         _ cell: MeshRoutedConvergenceCell, label: String
     ) async throws -> MeshRoutedCellRun {
         let overlay = cell.overlay
-        let run = try MeshConvergenceRun.build(cell.schedule, label: label)
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: label, anchor: MeshRoutedFixtureClock.createdAt
+        )
         guard let origin = run.participant(global: overlay.origin) else {
             throw MeshRoutedCellFailure.originNotLiving
         }
@@ -1471,7 +1475,9 @@ struct MeshRoutedDrainConvergenceTests {
     func aLockedWindowLosesNothingAndConvergesAfterTheUnlock(
         cell: MeshRoutedConvergenceCell
     ) async throws {
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "routed-lock")
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: "routed-lock", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshRoutedPipeline.teardown(run) }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -1547,7 +1553,9 @@ struct MeshRoutedDrainConvergenceTests {
     func aSealedPhotoConvergesAcrossThePartitionTree(
         cell: MeshRoutedConvergenceCell
     ) async throws {
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "routed-tree")
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: "routed-tree", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshRoutedPipeline.teardown(run) }
         try await run.runSplitEvents()
 
@@ -1578,7 +1586,9 @@ struct MeshRoutedDrainConvergenceTests {
         let schedule = MeshScheduleGenerator.schedule(
             seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
         )
-        let run = try MeshConvergenceRun.build(schedule, label: "routed-photo")
+        let run = try MeshConvergenceRun.build(
+            schedule, label: "routed-photo", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshRoutedPipeline.teardown(run) }
         try await run.runSplitEvents()
 
@@ -1611,7 +1621,9 @@ struct MeshRoutedDrainConvergenceTests {
         let schedule = MeshScheduleGenerator.schedule(
             seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
         )
-        let run = try MeshConvergenceRun.build(schedule, label: "routed-capacity")
+        let run = try MeshConvergenceRun.build(
+            schedule, label: "routed-capacity", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshRoutedPipeline.teardown(run) }
         try await run.runSplitEvents()
 
@@ -1643,7 +1655,9 @@ struct MeshRoutedDrainConvergenceTests {
         let schedule = MeshScheduleGenerator.schedule(
             seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
         )
-        let run = try MeshConvergenceRun.build(schedule, label: "routed-replay")
+        let run = try MeshConvergenceRun.build(
+            schedule, label: "routed-replay", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshRoutedPipeline.teardown(run) }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()

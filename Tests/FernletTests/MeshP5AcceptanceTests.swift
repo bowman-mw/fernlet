@@ -246,7 +246,7 @@ struct MeshP5ManifestAcceptanceTests {
             #expect(held == origin, "a survivor holds a manifest the origin never signed")
             let verifier = MeshRoutedManifestVerifier(
                 meshID: run.meshID,
-                hardDeadline: MeshP3Acceptance.base
+                hardDeadline: run.anchor
                     .addingTimeInterval(MeshSessionCeiling.ceilingSeconds),
                 ledger: member.node.manager.membershipVerifier?.ledger ?? .empty,
                 acceptedTypeTokens: MeshRoutedTypeRegistry.increment1.tokens
@@ -283,9 +283,11 @@ struct MeshP5ManifestAcceptanceTests {
 
     /// **The expiry is the hard deadline plus the development grace, on the injected clock.**
     ///
-    /// Anchored to `MeshP3Acceptance.base + MeshSessionCeiling.ceilingSeconds` rather than to a
-    /// wall clock or to item 6a's 2027 fixture anchor — a new fixture re-introducing that anchor is
-    /// exactly what this pin catches.
+    /// Anchored to the run's own `anchor + MeshSessionCeiling.ceilingSeconds` — the mesh's signed
+    /// creation instant plus the ceiling, which is what the verifier pins a manifest's expiry to —
+    /// rather than to a literal. A new fixture that re-pins the mint to a fixed date while the mesh
+    /// rolls fails the first expectation; a fixture that pins BOTH to a stale date (item 6a's 2027
+    /// bomb) fails the last, which is the check that would have caught 6a on the day it landed.
     @Test func theExpiryIsTheHardDeadlinePlusTheDevelopmentGrace() async throws {
         let cell = try MeshP5Acceptance.rootCell(.twoTwo)
         let outcome = try await MeshP5Acceptance.converged(cell, label: "p5a-expiry")
@@ -294,14 +296,16 @@ struct MeshP5ManifestAcceptanceTests {
             .record(for: outcome.key)?.manifest else {
             throw MeshP5AcceptanceFailure.recordMissing
         }
-        let deadline = MeshP3Acceptance.base.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
+        let deadline = outcome.run.anchor.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
         #expect(manifest.expiresAt == MeshRoutedManifest.expiry(afterHardDeadline: deadline),
                 "the expiry is the injected hard deadline plus the development grace")
         #expect(manifest.expiresAt.timeIntervalSince(MeshRoutedManifest.floored(deadline))
                 == MeshRoutedManifestFormat.developmentGraceSeconds,
                 "and the grace is exactly the registered twenty minutes")
-        #expect(manifest.expiresAt > MeshP3Acceptance.base,
+        #expect(manifest.expiresAt > outcome.run.anchor,
                 "the expiry is anchored to the injected clock, not to a stale fixture date")
+        #expect(manifest.expiresAt > Date(),
+                "the anchor must roll with the wall clock, never sit on a date it walks past")
     }
 }
 
@@ -444,7 +448,9 @@ struct MeshP5AckStageAcceptanceTests {
     func aHeartStopsAtCustodyUntilItsLedgerJudgement(
         cell: MeshRoutedConvergenceCell
     ) async throws {
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "p5c-heart")
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: "p5c-heart", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshP5Acceptance.teardown(run) }
         try await run.runSplitEvents()
         let origin = try #require(run.livingMembers.first, "the clause needs a surviving origin")
@@ -473,7 +479,9 @@ struct MeshP5AckStageAcceptanceTests {
     /// rather than an "it never delivers" claim.
     @Test func aHeartClosesOnceItsLedgerJudgementStands() async throws {
         let cell = try MeshP5Acceptance.rootCell(.twoTwo)
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "p5c-heartcommit")
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: "p5c-heartcommit", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshP5Acceptance.teardown(run) }
         try await run.runSplitEvents()
         let origin = try #require(run.livingMembers.first, "the clause needs a surviving origin")
@@ -626,7 +634,9 @@ struct MeshP5LockedDeviceAcceptanceTests {
     /// `deferred:` state — a window that was silently `.loaded` proves nothing.
     @Test func aLockedWindowMovesNoByteAndSaysItDeferred() async throws {
         let cell = try MeshP5Acceptance.rootCell(.twoTwo)
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "p5e-window")
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: "p5e-window", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshP5Acceptance.teardown(run) }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -652,7 +662,9 @@ struct MeshP5LockedDeviceAcceptanceTests {
     /// binding apart, answers two different states — the discrimination invariant 7 is about.
     @Test func aDeferredStoreIsDistinctFromAnAbsentOne() async throws {
         let cell = try MeshP5Acceptance.rootCell(.twoTwo)
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "p5e-deferred")
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: "p5e-deferred", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshP5Acceptance.teardown(run) }
         try await run.runSplitEvents()
         let origin = try #require(run.livingMembers.first, "the clause needs a surviving origin")
@@ -680,7 +692,9 @@ struct MeshP5LockedDeviceAcceptanceTests {
     /// discards the returned report; the clause is what makes "it ran once" a fact.
     @Test func theUnlockEdgeReportsExactlyOneReentryPass() async throws {
         let cell = try MeshP5Acceptance.rootCell(.twoTwo)
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "p5e-reentry")
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: "p5e-reentry", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshP5Acceptance.teardown(run) }
         try await run.runSplitEvents()
         let origin = try #require(run.livingMembers.first, "the clause needs a surviving origin")
@@ -970,7 +984,9 @@ struct MeshP5OtherBranchDeliveryAcceptanceTests {
     /// **A far-branch sealed photo reaches the near branch's wall, exactly once.**
     @Test func aFarBranchSealedPhotoReachesTheNearBranchWallExactlyOnce() async throws {
         let cell = try MeshP5Acceptance.rootCell(.twoTwo)
-        let run = try MeshConvergenceRun.build(cell.schedule, label: "p5k-farbranch")
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: "p5k-farbranch", anchor: MeshRoutedFixtureClock.createdAt
+        )
         defer { MeshP5Acceptance.teardown(run) }
         try await run.runSplitEvents()
         let near = try #require(run.livingMembers.first, "the clause needs a near-branch survivor")
@@ -1083,8 +1099,10 @@ struct MeshP5HonestyAcceptanceTests {
 /// Launcher §6: *"a randomized seed is a flake generator, not a property test."* Four halves make
 /// that true and keep it true here: the routed overlay replays byte-identically from its salted
 /// seed; one whole routed cell replays byte-identically as an ordered token trace and a rung digest;
-/// the routed convergence file consults no system RNG and no wall clock; and **two literal digests**
-/// pin the 80 generated membership schedules and the 40 generated overlays.
+/// the routed convergence file **and the fixture anchor it reads its instants from** consult no
+/// system RNG and no wall clock, bar that anchor's one named `Date()` whose contract is pinned by
+/// assertion rather than left to a comment; and **two literal digests** pin the 80 generated
+/// membership schedules and the 40 generated overlays.
 ///
 /// The digests are the only artefact that can go red for "a draw was added inside `schedule(…)`".
 /// `MeshP4DeterminismAcceptanceTests.everyCellOfTheMatrixReplaysIdentically` cannot: it generates
@@ -1096,8 +1114,28 @@ struct MeshP5HonestyAcceptanceTests {
 @Suite(.serialized)
 struct MeshP5DeterminismAcceptanceTests {
 
-    /// The routed convergence file this suite greps. P4's two files are walled by P4's own suite.
-    private static let scannedFiles = ["Tests/FernletTests/MeshRoutedDrainConvergenceTests.swift"]
+    /// The files this suite greps, each with the floor on non-comment lines that proves the scan
+    /// actually read something. P4's two convergence files are walled by P4's own suite.
+    ///
+    /// The fixture anchor joined the list in item 6a's review: the convergence file stopped
+    /// spelling `Date()` by **reading a symbol that does**, and a wall satisfied by indirection is
+    /// not a wall. It is a fourteen-line file, so it carries its own floor rather than inheriting
+    /// the thousand-line file's.
+    private static let scannedFiles = [
+        (path: "Tests/FernletTests/MeshRoutedDrainConvergenceTests.swift", minimumCodeLines: 100),
+        (path: "Tests/FernletTests/MeshRoutedFixtureClock.swift", minimumCodeLines: 10)
+    ]
+
+    /// The ONE code line in the walled set allowed to spell a banned token, and the file it may
+    /// appear in: the routed fixture anchor's single wall-clock read, matched whole and trimmed.
+    ///
+    /// Named by its exact code rather than waved through by file, and asserted to appear exactly
+    /// once — so a **second** clock read in that file, or this one rewritten into some other
+    /// expression, fails the wall instead of passing silently behind the exception.
+    private static let allowedTokenLines = [
+        "Tests/FernletTests/MeshRoutedFixtureClock.swift":
+            "MeshP3Acceptance.base, Date().addingTimeInterval(aheadMarginSeconds)"
+    ]
 
     /// Tokens that would make a cell irreproducible. Spelled as they appear in source.
     private static let bannedTokens = [
@@ -1149,21 +1187,63 @@ struct MeshP5DeterminismAcceptanceTests {
         #expect(firstDigest.isEmpty == false, "an empty digest would compare nothing")
     }
 
-    /// **The grep-wall, now on the third convergence file.** A `Date()` or a `.randomElement()`
-    /// slipped into the routed cells would keep every one of them green and quietly make the
-    /// rectangle unreplayable.
+    /// **The grep-wall, on the third convergence file and on the anchor it reads.** A `Date()` or a
+    /// `.randomElement()` slipped into the routed cells would keep every one of them green and
+    /// quietly make the rectangle unreplayable — and so would a second one slipped into the fixture
+    /// anchor, which is why the anchor's own file is scanned with one exactly-named exception
+    /// rather than trusted for being small.
     @Test func theRoutedConvergenceFileConsultsNoSystemRNGOrWallClock() throws {
         // R2: bounded by the scanned-file list.
-        for path in Self.scannedFiles {
-            let lines = try MeshP5Acceptance.codeLines(of: path)
-            #expect(lines.count > 100, "an empty scan is a wall that stopped looking")
+        for file in Self.scannedFiles {
+            let lines = try MeshP5Acceptance.codeLines(of: file.path)
+            #expect(lines.count > file.minimumCodeLines,
+                    "\(file.path): an empty scan is a wall that stopped looking")
+            let allowed = Self.allowedTokenLines[file.path]
+            if let allowed {
+                let excused = lines.filter { $0.trimmingCharacters(in: .whitespaces) == allowed }
+                #expect(excused.count == 1,
+                        "\(file.path): the excused clock line appears \(excused.count)×, not once")
+            }
             // R2: bounded by the banned-token list.
             for token in Self.bannedTokens {
-                let offenders = lines.filter { $0.contains(token) }
+                let offenders = lines.filter {
+                    $0.contains(token) && $0.trimmingCharacters(in: .whitespaces) != allowed
+                }
                 #expect(offenders.isEmpty,
-                        "the routed convergence file uses a token that makes a cell unreplayable")
+                        "\(file.path) uses `\(token)`, which makes a cell unreplayable: \(offenders)")
             }
         }
+    }
+
+    /// **The routed fixture anchor's own contract, pinned positively.**
+    ///
+    /// The grep-wall above can only say the walled files spell no clock of their own. These lines
+    /// are what keep item 6a's remedy honest, and each is a property the anchor's header claims:
+    ///
+    /// - the **`max` floor** — an anchor below `MeshP3Acceptance.base` inverts the sibling P4
+    ///   fixtures pinned at 1.8e9 (`MeshDepartureRig.seedEpoch`, `MeshTerminationFixtures.base`),
+    ///   measured at seven red custody cells, not assumed;
+    /// - the **forward roll** — the whole routed family is `anchor + offset` while the settle path
+    ///   reads the shipping `Date()` default, so the injected instants must LEAD the wall clock;
+    /// - **one instant per process** — a `static let`, never a computed `var`, or
+    ///   `oneRoutedCellReplaysIdentically` would be comparing two different clocks.
+    ///
+    /// `MeshRoutedDrainRig.createdAt` is asserted beside it because that is the routed family's
+    /// entry point: re-pinning it to a literal is exactly how the 2027 bomb was planted, and this
+    /// is the line that catches that for every routed suite, not only the convergence route.
+    @Test func theRoutedFixtureAnchorHoldsItsContract() {
+        #expect(MeshRoutedFixtureClock.createdAt >= MeshP3Acceptance.base,
+                "the max floor: an anchor below 1.8e9 inverts the P4 fixtures pinned there")
+        #expect(MeshRoutedFixtureClock.createdAt > Date(),
+                "the anchor must lead the wall clock, never sit on a date it has walked past")
+        #expect(MeshRoutedDrainRig.createdAt > Date(),
+                "and the routed family's own anchor with it, not just the convergence route")
+        let first = MeshRoutedFixtureClock.createdAt
+        let second = MeshRoutedFixtureClock.createdAt
+        #expect(first == second, "one instant per process: a static let, never a computed var")
+        #expect(MeshRoutedDrainRig.createdAt == first, "and the rig reads that same one instant")
+        #expect(MeshRoutedFixtureClock.aheadMarginSeconds >= 24 * 60 * 60,
+                "a margin one run could outlive would flip regime halfway through that run")
     }
 
     /// **The two pinned digests.** A draw added anywhere inside `schedule(…)` re-phases every base

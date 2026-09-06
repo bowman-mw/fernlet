@@ -13,10 +13,14 @@
 //   `MeshRoutedStoreFixtures.installA` (0xA7): the routed writes happen inside the manager's receive
 //   path, which every rig pump wraps in the former. Mixing them yields a seal refusal, not an empty
 //   store.
-// - **One time anchor.** `MeshP3Acceptance.base` (1.8e9), with `hardDeadline` derived from
-//   `MeshSessionCeiling.ceilingSeconds` — never `MeshRoutedManifestFixtures.hardDeadline` (1.7e9).
-//   The manifest verifier demands `expiresAt == floor(hardDeadline) + grace` exactly, so getting
-//   this wrong looks like a signing bug.
+// - **One time anchor.** `MeshRoutedFixtureClock.createdAt` — exactly `MeshP3Acceptance.base`
+//   (1.8e9) until 2026-12-16, a month before that instant falls due, and the wall clock plus that
+//   month from the crossover on (item 6a) — with `hardDeadline` derived
+//   from `MeshSessionCeiling.ceilingSeconds`, never `MeshRoutedManifestFixtures.hardDeadline`
+//   (1.7e9). The same anchor is handed to `MeshDepartureRig.start` so the MESH rolls with it: the
+//   manifest verifier demands `expiresAt == floor(hardDeadline) + grace` exactly, and the deadline
+//   is the mesh's own `createdAt + ceiling`, so moving one route without the other looks like a
+//   signing bug.
 // - **The rig's nodes are JOINER-shaped**: `MeshMergeWire.start` applies `.founded`/`.peerCommitted`
 //   and never calls `startNewMesh`, so no node has a `sessionCeiling`. That is deliberate — a drain
 //   that guarded its ingest on `sessionCeiling?.hardDeadline` would drop every routed frame here,
@@ -42,8 +46,10 @@ import FernletFoundation
 @MainActor
 struct MeshRoutedDrainRig {
 
-    /// The mesh's signed creation instant. Every routed instant derives from it.
-    static let createdAt = MeshP3Acceptance.base
+    /// The mesh's signed creation instant. Every routed instant derives from it — and so does the
+    /// mesh itself, which `build` hands the same value (item 6a: the verifier pins the manifest's
+    /// expiry to the mesh's own deadline, so the two can never be anchored separately).
+    static let createdAt = MeshRoutedFixtureClock.createdAt
 
     /// The ceiling the manager itself derives — never a literal.
     static var hardDeadline: Date { createdAt.addingTimeInterval(MeshSessionCeiling.ceilingSeconds) }
@@ -104,7 +110,8 @@ struct MeshRoutedDrainRig {
         for (label, identity) in zip(labels, identities) {
             let node = MeshDepartureRig.node(label, identity: identity, on: fabric)
             MeshDepartureRig.start(
-                node, ledger: ledger, founderKey: founder.localSigningPublicKey, meshID: meshID
+                node, ledger: ledger, founderKey: founder.localSigningPublicKey, meshID: meshID,
+                createdAt: createdAt
             )
             #expect(MeshMergeFixtures.roster(node.manager).count == count,
                     "the roster size is this rig's hard precondition")

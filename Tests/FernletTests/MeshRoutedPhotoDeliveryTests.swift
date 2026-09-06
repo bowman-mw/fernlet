@@ -728,7 +728,8 @@ struct MeshRoutedPhotoDeliveryTests {
         rig.nodes[1].manager.leaveMesh()
         MeshDepartureRig.start(
             rig.nodes[1], ledger: secondLedger,
-            founderKey: rig.identities[0].localSigningPublicKey, meshID: secondMeshID
+            founderKey: rig.identities[0].localSigningPublicKey, meshID: secondMeshID,
+            createdAt: MeshRoutedDrainRig.createdAt
         )
         #expect(rig.nodes[1].manager.currentMesh?.meshID == secondMeshID,
                 "the precondition: the device really is on another mesh")

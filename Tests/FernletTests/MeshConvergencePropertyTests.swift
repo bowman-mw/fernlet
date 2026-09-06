@@ -63,7 +63,9 @@
 // regression for it.
 //
 // **No wall-clock sleeps.** Every settle is `MeshDepartureRig.settle`'s
-// bounded yield-and-pump; every instant is `MeshP3Acceptance.base` plus a fixed offset; every
+// bounded yield-and-pump; every instant is the run's own `anchor` plus a fixed offset (that anchor
+// is `MeshP3Acceptance.base` for every membership cell here, and the rolling
+// `MeshRoutedFixtureClock.createdAt` for a routed caller — item 6a); every
 // rotation claim is sampled inside a pump or immediately after a synchronous call, never after an
 // `await` (ledger "(P4 i3)"). No new seam was added to `MeshNetworkManager`: everything this file
 // needs already exists in its `#if DEBUG` extension.
@@ -366,6 +368,16 @@ final class MeshConvergenceRun {
     /// Every member, in global index order.
     let members: [MeshConvergenceMember]
 
+    /// The instant this run's mesh was created at, and the base every instant it injects is written
+    /// as an offset from.
+    ///
+    /// A membership cell keeps `MeshP3Acceptance.base`. A **routed** caller passes
+    /// `MeshRoutedFixtureClock.createdAt` and gets the same value today — but one that starts
+    /// rolling with the wall clock on 2026-12-16, a month BEFORE the old literal falls due, so its
+    /// manifests never expire out from under it (item 6a). Mesh and manifest must share it: the
+    /// verifier pins a manifest's expiry to the mesh's own `createdAt + ceiling`.
+    let anchor: Date
+
     /// What each node's rotation queue held, sampled inside the pump.
     let sample = MeshRotationSample()
 
@@ -443,12 +455,13 @@ final class MeshConvergenceRun {
 
     private init(
         schedule: MeshConvergenceSchedule, fabric: FakePeerNetwork, meshID: UUID,
-        members: [MeshConvergenceMember]
+        members: [MeshConvergenceMember], anchor: Date
     ) {
         self.schedule = schedule
         self.fabric = fabric
         self.meshID = meshID
         self.members = members
+        self.anchor = anchor
         branchCounters = Array(repeating: 0, count: schedule.branches.count)
     }
 
@@ -456,7 +469,15 @@ final class MeshConvergenceRun {
 
     /// Builds the roster, asserts the preconditions that would make every later claim vacuous, links
     /// each branch internally, raises §10.2's split, and seeds each branch's own epoch.
-    static func build(_ schedule: MeshConvergenceSchedule, label: String) throws -> MeshConvergenceRun {
+    ///
+    /// - Parameter anchor: The mesh's creation instant, and the base every injected instant offsets
+    ///   from. Routed callers pass `MeshRoutedFixtureClock.createdAt` (item 6a); membership cells
+    ///   omit it, keep the pinned anchor, and are byte-identical. `Date?` because a default
+    ///   argument is evaluated in the caller's isolation and the anchor is `@MainActor`.
+    static func build(
+        _ schedule: MeshConvergenceSchedule, label: String, anchor: Date? = nil
+    ) throws -> MeshConvergenceRun {
+        let anchor = anchor ?? MeshP3Acceptance.base
         let fabric = FakePeerNetwork()
         let meshID = UUID()
         let size = schedule.shape.rosterSize
@@ -474,7 +495,8 @@ final class MeshConvergenceRun {
         for index in 0..<size {
             let node = MeshDepartureRig.node(labels[index], identity: identities[index], on: fabric)
             MeshDepartureRig.start(
-                node, ledger: ledger, founderKey: founder.localSigningPublicKey, meshID: meshID
+                node, ledger: ledger, founderKey: founder.localSigningPublicKey, meshID: meshID,
+                createdAt: anchor
             )
             #expect(MeshMergeFixtures.roster(node.manager).count == size,
                     "roster \(size) is this cell's hard precondition")
@@ -484,7 +506,7 @@ final class MeshConvergenceRun {
             members.append(MeshConvergenceMember(index: index, branch: branch, node: node))
         }
         let run = MeshConvergenceRun(
-            schedule: schedule, fabric: fabric, meshID: meshID, members: members
+            schedule: schedule, fabric: fabric, meshID: meshID, members: members, anchor: anchor
         )
         run.linkBranches()
         run.raiseSplit()
@@ -514,7 +536,7 @@ final class MeshConvergenceRun {
                 for index in branch {
                     let manager = members[index].node.manager
                     #expect(manager.evaluatePartition(
-                        reachable: reachable, now: MeshP3Acceptance.base
+                        reachable: reachable, now: anchor
                     ) == .linksLost)
                     #expect(manager.branchView?.rosterMemberCount == schedule.shape.rosterSize,
                             "a split never shrinks a roster")
@@ -804,7 +826,7 @@ extension MeshConvergenceRun {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             #expect(manager.branchView?.isAlone == true, "an idle lapse is a partition of ONE (§10.2)")
             #expect(manager.evaluateIdleLapse(
-                now: MeshP3Acceptance.base.addingTimeInterval(Self.idleWindowSeconds)
+                now: anchor.addingTimeInterval(Self.idleWindowSeconds)
             ), "the 30-minute window ends")
         }
         #expect(manager.sessionState == .localIdleStop)
@@ -819,7 +841,7 @@ extension MeshConvergenceRun {
         }
         let plan = MeshDevelopmentPlan(
             roster: roster, branch: performer.node.manager.branchView,
-            selfFingerprint: performer.fingerprint, startedAt: MeshP3Acceptance.base
+            selfFingerprint: performer.fingerprint, startedAt: anchor
         )
         #expect(plan.ending == (roster.isFinalPair ? .termination : .departure),
                 "\(performer.node.label): the ending is judged on the MERGED roster")
@@ -936,7 +958,7 @@ extension MeshConvergenceRun {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             for member in living {
                 _ = member.node.manager.evaluatePartition(
-                    reachable: reachable, now: MeshP3Acceptance.base
+                    reachable: reachable, now: anchor
                 )
                 #expect(member.node.manager.branchView?.isPartitioned == false,
                         "\(member.node.label): roster names an unreachable member: \(diagnostic(member))")
@@ -986,7 +1008,7 @@ extension MeshConvergenceRun {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             for member in living {
                 _ = member.node.manager.evaluatePartition(
-                    reachable: reachable, now: MeshP3Acceptance.base
+                    reachable: reachable, now: anchor
                 )
             }
             for (position, near) in living.enumerated() {
@@ -1021,7 +1043,7 @@ extension MeshConvergenceRun {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             for (member, peer) in [(near, far), (far, near)] {
                 _ = member.node.manager.evaluatePartition(
-                    reachable: reachableFingerprints(from: member), now: MeshP3Acceptance.base
+                    reachable: reachableFingerprints(from: member), now: anchor
                 )
                 if member.hasLapsed {
                     member.node.manager.applySessionEvent(.resumedAfterLapse)
@@ -1173,7 +1195,7 @@ extension MeshConvergenceRun {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             for member in livingMembers {
                 let verdict = member.node.manager.evaluatePartition(
-                    reachable: reachableFingerprints(from: member), now: MeshP3Acceptance.base
+                    reachable: reachableFingerprints(from: member), now: anchor
                 )
                 #expect(verdict == .linksLost,
                         "\(member.node.label): a re-split is a NEW partition, not an unchanged one")

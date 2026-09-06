@@ -571,7 +571,7 @@ struct MeshRoutedTypeRegistryDoorTests {
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
         defer { capture.uninstall() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         let custodian = scenario.rig.nodes[MeshCustodyHandoffScenario.custodian].manager

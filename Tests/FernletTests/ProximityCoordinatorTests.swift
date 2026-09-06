@@ -76,10 +76,19 @@ struct ProximityCoordinatorTests {
         let data = try JSONEncoder().encode(signedIntroduction(from: remote))
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // Both steps of the handshake are fire-and-forget `Task` hops off a Combine sink, so a
+        // fixed sleep sizes the wait against wall-clock luck, not against scheduling actually
+        // received. Poll the state each step lands on instead (house idiom: deadline + poll floor).
+        // Trainer mode auto-advances the tap gate on connect, so `.awaitingIdentityIntroduction`
+        // is the settled state here and the `tapToConfirm()` below stays the documented no-op it
+        // already is; if the gate ever stopped auto-advancing, `waitUntil` gives up at the floor
+        // and that tap still advances it — exactly today's behaviour.
+        await waitUntil { if case .awaitingIdentityIntroduction = coordinator.state { return true }; return false }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // The intro handler sets the pending identity, acknowledges, then transitions — so the
+        // state below is the observable that says `confirmPeerIdentity()` has something to confirm.
+        await waitUntil { if case .awaitingUserConfirmation = coordinator.state { return true }; return false }
         await coordinator.confirmPeerIdentity()
         return peer
     }
@@ -848,7 +857,12 @@ struct ProximityCoordinatorTests {
         let unknown = try signedUnknownTypeEnvelope(from: remote)
         let data = try JSONEncoder().encode(unknown)
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // Inbound handling is a fire-and-forget MainActor hop off the transport's Combine sink; a
+        // fixed 10 ms sleep raced it and lost once under full-suite load (the recorded red had no
+        // parked event at all — the hop simply had not run yet). Poll the exact line the
+        // expectation below asserts: the wait observes the condition instead of guessing at it,
+        // and if the event never arrives the expectation still fails, unrelaxed.
+        await waitUntil { inspector.events.contains("parked unknown payload type fernlet.future.sparkle.v1") }
 
         guard case .connected = coordinator.state else {
             Issue.record("Unknown payload type must not fail the session, got \(coordinator.state)")
@@ -859,7 +873,7 @@ struct ProximityCoordinatorTests {
         // Replay protection recorded the parked envelope: the same bytes again are a replay,
         // handled exactly like a replayed known-type envelope.
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { if case .failed = coordinator.state { return true }; return false }
         guard case .failed(let reason) = coordinator.state else {
             Issue.record("Expected replay rejection, got \(coordinator.state)")
             return

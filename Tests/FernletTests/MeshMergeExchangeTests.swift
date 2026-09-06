@@ -134,14 +134,22 @@ enum MeshMergeWire {
     ///   - ledger: The records it begins with.
     ///   - founderKey: The signing key its verifier will bootstrap from.
     ///   - meshID: The mesh both ends are in.
+    ///   - createdAt: The mesh's signed creation instant, which is also what
+    ///     `MeshNetworkManager.routedHardDeadline` derives the session ceiling from. `nil` — the
+    ///     default — is the pinned membership anchor; a routed rig passes
+    ///     `MeshRoutedFixtureClock.createdAt` so its manifests' expiry and its mesh's deadline roll
+    ///     together (P5 item 6a). Spelled `nil` rather than defaulted to the anchor itself because
+    ///     a default argument is evaluated in the CALLER's isolation, and the anchor is
+    ///     `@MainActor`.
     static func start(
         _ manager: MeshNetworkManager,
         ledger: MeshMembershipLedger,
         founderKey: Data,
-        meshID: UUID
+        meshID: UUID,
+        createdAt: Date? = nil
     ) {
         manager.currentMesh = MeshP3Acceptance.mesh(
-            for: manager, meshID: meshID, createdAt: MeshP3Acceptance.base
+            for: manager, meshID: meshID, createdAt: createdAt ?? MeshP3Acceptance.base
         )
         manager.seedMembershipLedgerForTesting(
             meshID: meshID, founderSigningPublicKey: founderKey, ledger: ledger

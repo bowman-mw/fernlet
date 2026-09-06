@@ -12,6 +12,12 @@
 // transfer, at exactly one moment, a development — at the custodians the leaver's own signed
 // departure record names AND served the manifest to. Never between two live connected members, and
 // never a second hop.
+//
+// **One anchor, and it is the rig's** (item 6a). Every `let base` below is
+// `MeshRoutedDrainRig.createdAt`, not a second pinned literal: the items these cells develop are
+// minted at `MeshRoutedDrainRig.now` (= that anchor + 600), and a development instant anchored
+// somewhere else drifts away from the mint the moment the rig's anchor rolls. Measured: with the
+// two anchors split, seven cells in this family fail on the hand-off count.
 
 import Foundation
 import Testing
@@ -380,7 +386,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aCustodianServesTheOriginsExactBytes() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-exact")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         try await scenario.developInsideTheWindow(at: base)
@@ -402,7 +408,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func theCustodianHoldsTheRungTheOriginWrote() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-rung")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         try await scenario.developInsideTheWindow(at: base)
@@ -417,7 +423,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func theCustodyReceiptAndTheRecipientReceiptBothLand() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-receipts")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         try await scenario.developInsideTheWindow(at: base)
@@ -440,7 +446,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func theDepartureRecordCountsWhatActuallyTransferred() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-count")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         // A second candidate the custodian has never seen: live, complete at the origin, with two
@@ -463,7 +469,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aTransferInsideTheWindowCompletes() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-window")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         try await scenario.developInsideTheWindow(at: base)
@@ -480,7 +486,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func anExpiredWindowTransfersNothingAndSaysSo() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-expired")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         let expired = base.addingTimeInterval(15)
@@ -506,7 +512,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aCustodianThatNeverTookTheBytesIsNotCounted() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-nobytes")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         // No drain: the custodian holds nothing, so the origin stores no receipt from it.
         try await scenario.developInsideTheWindow(at: base)
@@ -523,7 +529,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aStoreThatCannotSayWhatItHoldsTransfersNothingAndSaysSo() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-unreadable")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         try MeshRoutedStoreFixtures.writeRaw(
@@ -546,7 +552,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func nothingTransfersWhenNobodyIsReachable() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-alone")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         try await scenario.drainToTheCustodian()
         scenario.rig.raisePartition([[0], [1], [2]], at: base)
         await scenario.rig.develop(
@@ -598,7 +604,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aDepartingCustodianHandsOffNothing() async throws {
         let scenario = try MeshCustodyChainScenario.build(label: "h8-second")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         try await scenario.drainToTheFirstHop()
         try await scenario.developNamingEveryone(at: base)
         let rig = scenario.rig
@@ -643,7 +649,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aSecondDevelopmentTransfersNothing() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-once")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         let store = scenario.rig.routedStore(
@@ -675,7 +681,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aDeliveredLegIsNotWalkedBackwardsByTheHandoff() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-delivered")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         let before = scenario.rig.target(MeshCustodyHandoffScenario.origin, scenario.key)?
@@ -698,7 +704,7 @@ struct MeshRoutedCustodyHandoffTests {
         defer { audit.uninstall() }
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-norefusal")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         try await scenario.developInsideTheWindow(at: base)
@@ -728,7 +734,7 @@ struct MeshRoutedCustodyHandoffTests {
         try await rig.settle([0, 1], until: {
             rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.isComplete == true
         })
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         // Node 2 leaves the mesh for real, so the origin's roster no longer names it.
         rig.link(0, 2)
         rig.commit(0, 2)
@@ -751,7 +757,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aCustodianNamedByARemovedMembersRecordClaimsNothing() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-removed")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         let custodianNode = scenario.rig.nodes[MeshCustodyHandoffScenario.custodian]
@@ -807,7 +813,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func theCustodianClaimIsIdempotent() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-idempotent")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         try await scenario.developInsideTheWindow(at: base)
@@ -845,7 +851,7 @@ struct MeshRoutedCustodyHandoffTests {
         let cap = MeshRoutedDrainBounds.increment1.maxItems
         let rig = try MeshRoutedDrainRig.build(3, label: "h8-deferred")
         defer { rig.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         rig.link(0, 1)
         var keys: [MeshRoutedItemKey] = []
         // R2: bounded by the per-evaluation cap plus one — exactly one item more than a single
@@ -907,7 +913,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func theTransferNeverWaitsOnAMembershipWindowClosing() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-window-open")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         scenario.rig.commit(MeshCustodyHandoffScenario.origin, MeshCustodyHandoffScenario.custodian)
@@ -928,7 +934,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aSecondHopHolderClaimsNothing() async throws {
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-hop")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         try await scenario.developInsideTheWindow(at: base)
@@ -958,7 +964,7 @@ struct MeshRoutedCustodyHandoffTests {
     @Test func aSecondHopHolderNamedACustodianStillClaimsNothing() async throws {
         let scenario = try MeshCustodyChainScenario.build(label: "h8-chain")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         try await scenario.drainToTheFirstHop()
         try await scenario.developNamingEveryone(at: base)
         try await scenario.serveTheSecondHop()
@@ -1001,7 +1007,7 @@ struct MeshRoutedCustodyHandoffTests {
         defer { audit.uninstall() }
         let scenario = try MeshCustodyChainScenario.build(label: "h8-ejected")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         try await scenario.drainToTheFirstHop()
         let rig = scenario.rig
         let custodian = rig.nodes[MeshCustodyChainScenario.first]
@@ -1059,7 +1065,7 @@ struct MeshRoutedCustodyHandoffTests {
         rig.link(0, 1)
         rig.commit(0, 1)
         try await rig.settle([0, 1])
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         rig.raisePartition([[0, 1], [2]], at: base)
         await rig.develop(0, clock: [base, base.addingTimeInterval(1), base.addingTimeInterval(2)])
         try await rig.settle([1], until: {
@@ -1114,7 +1120,7 @@ struct MeshRoutedCustodyHandoffTests {
         defer { audit.uninstall() }
         let scenario = try MeshCustodyHandoffScenario.build(label: "h8-fourth")
         defer { scenario.teardown() }
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         scenario.splitAwayTheDestination(at: base)
         try await scenario.drainToTheCustodian()
         let custodianNode = scenario.rig.nodes[MeshCustodyHandoffScenario.custodian]
@@ -1172,7 +1178,7 @@ struct MeshRoutedCustodyHandoffTests {
         rig.commit(0, 1)
         rig.commit(0, 2)
         try await rig.settle([0, 1, 2])
-        let base = MeshTerminationFixtures.base
+        let base = MeshRoutedDrainRig.createdAt
         rig.raisePartition([[0, 1, 2], [3]], at: base)
         await rig.develop(0, clock: [
             base, base.addingTimeInterval(1), base.addingTimeInterval(2),
