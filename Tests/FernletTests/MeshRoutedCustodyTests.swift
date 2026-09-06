@@ -696,7 +696,7 @@ struct MeshRoutedCustodyEvidenceTests {
             "MeshRoutedIndex.swift", "MeshRoutedStoreKey.swift", "MeshRoutedContentHasher.swift",
             "MeshChunkAdmissionRule.swift", "MeshRoutedCustodyHandoff.swift",
             "MeshRoutedCapacity.swift", "MeshRoutedDeliveryHold.swift",
-            "MeshRoutedAccessGate.swift"
+            "MeshRoutedAccessGate.swift", "MeshRoutedRefusalBudget.swift"
         ]
         var scanned = 0
         var sealing: [String] = []

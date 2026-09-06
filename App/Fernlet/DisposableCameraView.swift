@@ -1862,6 +1862,15 @@ private struct SessionPromptsModifier: ViewModifier {
     @Binding var showInfo: Bool
     let beginDevelop: () -> Void
 
+    /// The session alert's sentence: a refused routed share forks its frozen cause into localized
+    /// copy (P5 review finding 5); the legacy `meshError` `String` renders as it always has.
+    private var sessionAlertMessage: Text {
+        if let refusal = manager.routedShareRefusal {
+            return Text(RoutedShareRefusalCopy.message(refusal))
+        }
+        return Text(manager.meshError ?? "")
+    }
+
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: Binding(
@@ -1874,13 +1883,23 @@ private struct SessionPromptsModifier: ViewModifier {
             )) {
                 admissionSheet
             }
-            .alert("Session", isPresented: Binding(
-                get: { manager.meshError != nil },
-                set: { if !$0 { manager.meshError = nil } }
+            .alert(RoutedShareRefusalCopy.title, isPresented: Binding(
+                get: { manager.meshError != nil || manager.routedShareRefusal != nil },
+                set: { isPresented in
+                    // Dismiss only the notice that was on screen (the refusal shows ahead of a
+                    // legacy String), so a rotation notice written behind a refusal is re-presented
+                    // rather than swallowed by one tap.
+                    guard !isPresented else { return }
+                    if manager.routedShareRefusal != nil {
+                        manager.clearRoutedShareRefusal()
+                    } else {
+                        manager.meshError = nil
+                    }
+                }
             )) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(manager.meshError ?? "")
+                sessionAlertMessage
             }
             .modifier(SessionRemovalPromptsModifier(
                 manager: manager,

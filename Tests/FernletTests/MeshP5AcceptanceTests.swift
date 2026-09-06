@@ -1059,15 +1059,16 @@ struct MeshP5HonestyAcceptanceTests {
     /// progress under its own bounded schedule and why a window that closed closed — never "every
     /// window closes".
     ///
-    /// **P5's own deferrals, named so no reader takes a bound that does not exist.** D-12.14 leaves
-    /// three **unbounded pre-store refusal channels** — `notADestinationOrHandoff`,
-    /// `unknownItemNotFromOrigin` and `unregisteredTypeChunk`: each is refused before anything is
-    /// stored, so the work per refused frame is bounded but the *number* of them a peer may send in
-    /// a session is not, and this battery asserts no such bound. D-12.15 leaves a receipt re-mint
-    /// staleness (a re-minted custody receipt can quote an instant older than the frame that
-    /// prompted it). Item 9's reclaim never fires for an item **all** of whose destinations
-    /// departed, so such an item is held to its expiry rather than dropped. None of the four is
-    /// asserted here, and none is asserted away either.
+    /// **P5's own deferrals, named so no reader takes a bound that does not exist.** D-12.14 left
+    /// three **pre-store refusal channels** — `notADestinationOrHandoff`,
+    /// `unknownItemNotFromOrigin` and `unregisteredTypeChunk` — unbounded in count; the P5 review's
+    /// correction bounded them per authenticated sender (`MeshRoutedRefusalBudget`, asserted in
+    /// `MeshRoutedRefusalBudgetTests`, not here), and the three names still stand in the source as
+    /// the refusals that budget charges. D-12.15 leaves a receipt re-mint staleness (a re-minted
+    /// custody receipt can quote an instant older than the frame that prompted it). Item 9's
+    /// reclaim never fires for an item **all** of whose destinations departed, so such an item is
+    /// held to its expiry rather than dropped. Neither of those two is asserted here, and neither
+    /// is asserted away either.
     @Test func theBatteryNamesWhatItDoesNotClaim() throws {
         #expect(MeshRoutedEventToken.vocabulary.count == 9,
                 "the routed vocabulary is nine tokens; a tenth needs its own planned draw")
@@ -1078,8 +1079,10 @@ struct MeshP5HonestyAcceptanceTests {
         #expect(MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.control) == nil,
                 "the control token is reserved and deliberately unregistered")
         // The three refusal channels are named in the shipping source, not in an enum this file can
-        // read, so the deferral is pinned the way the grep-wall pins the other unassertable facts:
-        // a rename or a deletion moves this line, and the doc comment above stops being true.
+        // read, so the record is pinned the way the grep-wall pins the other unassertable facts:
+        // a rename or a deletion moves this line, and the doc comment above stops being true. Since
+        // the P5 review's correction each is charged to the sender's budget, whose spend line is
+        // pinned beside them.
         let source = try MeshP5Acceptance.codeLines(
             of: "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"
         ).joined(separator: "\n")
@@ -1087,8 +1090,10 @@ struct MeshP5HonestyAcceptanceTests {
         for reason in ["notADestinationOrHandoff", "unknownItemNotFromOrigin",
                        "unregisteredTypeChunk"] {
             #expect(source.contains(reason),
-                    "a pre-store refusal D-12.14 defers a bound for is no longer named")
+                    "a pre-store refusal D-12.14 named is no longer named")
         }
+        #expect(source.contains("mesh.routedDrain.refusalBudgetSpent"),
+                "the per-sender bound the review added to D-12.14's channels is gone")
     }
 }
 

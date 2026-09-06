@@ -25,6 +25,7 @@
 import CryptoKit
 import Foundation
 import Security
+import SwiftUI
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
@@ -968,5 +969,50 @@ extension MeshRoutedLockedDeviceTests {
                 "the did-become-available handler must pass the fact literally")
         #expect(code.contains("onChange(of: lockService.isDuressSessionActive)"),
                 "duress moves at neither a scene nor a protected-data transition")
+    }
+
+    /// **W7.** Foreground means NOT BACKGROUNDED, and it is decided in one place.
+    ///
+    /// `.inactive` — Control Center, a call banner, a system prompt, the app's own Face ID sheet,
+    /// iPad Split View — is a foreground state: the device is unlocked, the user is present and the
+    /// process is live, which is exactly what the leg exists to tell apart from a backgrounded
+    /// (CPT-continued) mesh. Before the P5 review four of the six push sites compared `== .active`
+    /// while the scene handler fell only on `.background`, so the stored gate for one physical state
+    /// depended on which event pushed last. Now every site routes through
+    /// `FernletApp.routedGateForeground(for:)`, and no raw phase compare or literal fact may decide
+    /// it.
+    @Test func foregroundMeansNotBackgroundedAndIsDecidedOnce() throws {
+        #expect(FernletApp.routedGateForeground(for: .active))
+        #expect(FernletApp.routedGateForeground(for: .inactive),
+                "an inactive scene is a foreground scene: the device is unlocked and the process is live")
+        #expect(!FernletApp.routedGateForeground(for: .background))
+        let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
+        #expect(!code.contains("scenePhase == .active"),
+                "a raw phase compare decides the foreground fact outside the one mapping")
+        #expect(!code.contains("foreground: true") && !code.contains("foreground: false"),
+                "a literal foreground fact bypasses the one mapping")
+        let routed = code.components(separatedBy: "foreground: Self.routedGateForeground(for:").count - 1
+        #expect(routed == 6, "every push site routes its foreground fact through the one mapping")
+    }
+
+    /// **W7b.** An `.active → .inactive → .active` bounce moves no leg, so it runs no re-entry pass:
+    /// the mapping is what keeps a Control Center pull or a Face ID prompt from costing three
+    /// sealed-index loads on the main actor.
+    @Test func anInactiveBounceIsNotAnEdge() {
+        func gate(_ phase: ScenePhase) -> MeshRoutedAccessGate {
+            MeshRoutedAccessGate(
+                protectedDataAvailable: true,
+                appIsForeground: FernletApp.routedGateForeground(for: phase),
+                duressActive: false
+            )
+        }
+        let down = MeshRoutedAccessEdge(from: gate(.active), to: gate(.inactive))
+        let up = MeshRoutedAccessEdge(from: gate(.inactive), to: gate(.active))
+        #expect(!down.runsPass && !up.runsPass, "an inactive bounce is not an edge")
+        #expect(gate(.active) == gate(.inactive), "the same gate value, so the push is a silent no-op")
+        let leave = MeshRoutedAccessEdge(from: gate(.inactive), to: gate(.background))
+        let resume = MeshRoutedAccessEdge(from: gate(.background), to: gate(.active))
+        #expect(!leave.foregroundRose && resume.foregroundRose,
+                "only the background leg moves the foreground fact")
     }
 }

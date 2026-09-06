@@ -188,6 +188,33 @@ struct FernletApp: App {
         #endif
     }
 
+    /// The routed access gate's foreground fact for one scene phase (P5 item 10, D-10.4; the P5
+    /// review's finding 1).
+    ///
+    /// **Foreground means not backgrounded.** `.active` and `.inactive` both answer `true`:
+    /// `.inactive` is Control Center or the notification shade pulled over the app, the app
+    /// switcher, a call banner, a system or permission prompt, the app's own Face ID sheet
+    /// (`FernletLockGate` treats that bounce as transient too), or iPad Split View — the device is
+    /// unlocked, the user is present and the process is live, which is exactly the state this leg
+    /// exists to tell apart from a backgrounded (P8: CPT-continued) mesh that must decrypt nothing.
+    /// Closing on `.inactive` would run the main-actor re-entry pass on every one of those bounces
+    /// and leave a visible-but-inactive iPad Fernlet unable to project all session, for no
+    /// plaintext it would not hold a moment later while `.active`. Device lock always traverses
+    /// `.inactive → .background`, and data protection has its own leg.
+    ///
+    /// Every gate push in this file routes its `foreground:` argument through here, so the six
+    /// sites cannot disagree about what foreground means — before the review four of them compared
+    /// `== .active` while the scene handler fell only on `.background`, so the stored gate for one
+    /// physical state depended on which event pushed last. `!=` rather than a `switch`:
+    /// `ScenePhase` is not frozen, and an `@unknown default` under warnings-as-errors would have to
+    /// pick a side for a phase that does not exist yet.
+    ///
+    /// - Parameter phase: The scene phase.
+    /// - Returns: `false` for `.background`, `true` otherwise.
+    nonisolated static func routedGateForeground(for phase: ScenePhase) -> Bool {
+        phase != .background
+    }
+
     /// Pushes the three lock facts into the mesh manager (network migration P5 item 10).
     ///
     /// The app is the only place all three live: the OS device lock (data protection), the scene,
@@ -199,7 +226,8 @@ struct FernletApp: App {
     ///   - store: The loaded store, whose mesh manager holds the gate.
     ///   - protectedData: Whether protected data is available — passed **literally** from the two
     ///     notifications, sampled at the scene sites.
-    ///   - foreground: Whether the scene is active.
+    ///   - foreground: Whether the scene is not backgrounded — always
+    ///     ``routedGateForeground(for:)``'s answer, never a raw phase compare.
     private func pushRoutedAccessGate(
         _ store: FernletStore, protectedData: Bool, foreground: Bool
     ) {
@@ -215,7 +243,8 @@ struct FernletApp: App {
 
     /// Everything one scene transition owes: the snapshot flush and relock on background, the
     /// keychain re-derivation and store self-heals on activation, and P5 item 10's two foreground
-    /// legs of the routed access gate.
+    /// legs of the routed access gate. `.inactive` is deliberately not a leg — see
+    /// ``routedGateForeground(for:)``.
     ///
     /// A method rather than an inline closure so `body` stays inside the 60-line rule after item
     /// 10's push; the ordering inside it is load-bearing and unchanged — the gate is pushed on
@@ -230,7 +259,8 @@ struct FernletApp: App {
                 // P5 item 10: the foreground falling leg. Custody keeps running on
                 // ciphertext; plaintext stops here.
                 pushRoutedAccessGate(
-                    store, protectedData: protectedDataAvailableNow, foreground: false
+                    store, protectedData: protectedDataAvailableNow,
+                    foreground: Self.routedGateForeground(for: newPhase)
                 )
             }
             lockService.lock(reason: .background)
@@ -275,7 +305,8 @@ struct FernletApp: App {
                 // P5 item 10: the foreground rising leg, pushed AFTER
                 // `refreshStateFromKeychain()` so the duress fact is the current one.
                 pushRoutedAccessGate(
-                    store, protectedData: protectedDataAvailableNow, foreground: true
+                    store, protectedData: protectedDataAvailableNow,
+                    foreground: Self.routedGateForeground(for: newPhase)
                 )
             }
         }
@@ -307,7 +338,8 @@ struct FernletApp: App {
                 // reads — so the literal is the only honest value.
                 if case .ready(let store) = loader.phase {
                     pushRoutedAccessGate(
-                        store, protectedData: false, foreground: scenePhase == .active
+                        store, protectedData: false,
+                        foreground: Self.routedGateForeground(for: scenePhase)
                     )
                 }
             }
@@ -325,7 +357,8 @@ struct FernletApp: App {
                 // while the app is BACKGROUNDED — the ciphertext jobs the re-entry owes run there.
                 if case .ready(let store) = loader.phase {
                     pushRoutedAccessGate(
-                        store, protectedData: true, foreground: scenePhase == .active
+                        store, protectedData: true,
+                        foreground: Self.routedGateForeground(for: scenePhase)
                     )
                 }
             }
@@ -338,7 +371,7 @@ struct FernletApp: App {
                     pushRoutedAccessGate(
                         store,
                         protectedData: protectedDataAvailableNow,
-                        foreground: scenePhase == .active
+                        foreground: Self.routedGateForeground(for: scenePhase)
                     )
                 }
             }
@@ -379,7 +412,7 @@ struct FernletApp: App {
                         pushRoutedAccessGate(
                             store,
                             protectedData: protectedDataAvailableNow,
-                            foreground: scenePhase == .active
+                            foreground: Self.routedGateForeground(for: scenePhase)
                         )
                     }
             case .failed(let error):

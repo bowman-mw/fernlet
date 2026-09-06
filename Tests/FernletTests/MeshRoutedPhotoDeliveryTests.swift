@@ -252,6 +252,7 @@ struct MeshRoutedPhotoSenderTests {
         #expect(record.chunkCount >= 1 && record.chunkCount <= 2, "a resized photo is one or two chunks")
         #expect(record.key.originFingerprint == rig.nodes[0].fingerprint)
         #expect(rig.nodes[0].manager.meshError == nil, "a staged item is silent")
+        #expect(rig.nodes[0].manager.routedShareRefusal == nil, "and publishes no refusal")
         #expect(rig.nodes[0].manager.meshPhotos.count == 1, "and the echo is on the sender's own wall")
     }
 
@@ -277,6 +278,7 @@ struct MeshRoutedPhotoSenderTests {
         #expect(manager.meshPhotos.count == 1, "the echo is unconditional")
         #expect(manager.photosAddedThisSession == 1, "and so is the session counter")
         #expect(manager.meshError == nil, "sending to nobody is not an error")
+        #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
         var absent = false
         if case .absent = MeshRoutedStore(scope: store.meshRoutedStorage).load() { absent = true }
         #expect(absent, "nothing was staged, because there was nothing to stage for")
@@ -292,13 +294,19 @@ struct MeshRoutedPhotoSenderTests {
 
         rig.capturePhoto(at: 0)
 
-        #expect(rig.nodes[0].manager.meshError != nil, "a mint that failed must reach the user")
+        #expect(rig.nodes[0].manager.routedShareRefusal == .destinationNotAddressable,
+                "a mint that failed must reach the user, as its frozen cause")
+        #expect(rig.nodes[0].manager.meshError == nil,
+                "and no English sentence is composed in the package (P5 review finding 5)")
         #expect(rig.routedIndex(rig.nodes[0]) == nil, "nothing was staged")
         #expect(capture.values(of: "mesh.routedShare.refused", key: "reason")
                 == ["destinationNotAddressable"],
                 "the refusal is named once, by its frozen token")
         #expect(rig.nodes[0].manager.meshPhotos.count == 1,
                 "the echo still runs: only the transport is conditional")
+        rig.nodes[0].manager.leaveMesh()
+        #expect(rig.nodes[0].manager.routedShareRefusal == nil,
+                "a refusal about a session that ended has no reader")
     }
 
     /// **R-16.** The ledger-scoped/session-scoped divergence, asserted rather than met on device.
@@ -318,7 +326,8 @@ struct MeshRoutedPhotoSenderTests {
         #expect(rig.nodes[0].manager.membershipVerifier?.roster.memberCount == 2,
                 "the precondition: the LEDGER survived the reset")
         #expect(rig.routedIndex(rig.nodes[0]) == nil, "nothing was staged")
-        #expect(rig.nodes[0].manager.meshError != nil, "and the outage is visible, not silent")
+        #expect(rig.nodes[0].manager.routedShareRefusal == .destinationNotAddressable,
+                "and the outage is visible, not silent")
     }
 
     /// **R-13.** An own item the capacity caps refuse raises item 9's existing `.storeFull` hold.
@@ -342,7 +351,7 @@ struct MeshRoutedPhotoSenderTests {
 
         #expect(rig.nodes[0].manager.routedDeliveryHold?.cause == .storeFull,
                 "an origin's own refusal rides the surface item 9 already built")
-        #expect(rig.nodes[0].manager.meshError != nil, "and it is visible, never silent")
+        #expect(rig.nodes[0].manager.routedShareRefusal == .storeRefused, "and it is visible, never silent")
         #expect(rig.routedIndex(rig.nodes[0])?.items.count == 1, "only the hog is held")
         #expect(rig.nodes[0].manager.meshPhotos.count == 1, "the echo is still on the sender's wall")
     }
