@@ -26,6 +26,8 @@
 /Tests/FernletTests/PowerOfTenBoundaryTests.swift        @bowman-mw
 /Tests/FernletTests/LocalizationBoundaryTests.swift      @bowman-mw
 /Tests/FernletTests/CodeOwnersResolutionTests.swift      @bowman-mw
+/Tests/FernletTests/CIGateSelectorBoundaryTests.swift     @bowman-mw
+/Tests/FernletTests/IdentityProvisioningReadTests.swift   @bowman-mw
 
 # Wall scripts, hooks, and CI. The Power-of-10 scanner and its allowlist gate that wall's CI
 # job the same way the shell scripts gate the S3 wall — an allowlist entry is a sanctioned
@@ -35,6 +37,7 @@
 /Scripts/install-git-hooks.sh                 @bowman-mw
 /Scripts/git-hooks/                           @bowman-mw
 /Scripts/release-checksum.sh                  @bowman-mw
+/Scripts/run-gated-suites.sh                  @bowman-mw
 /Scripts/power-of-10-scan.py                  @bowman-mw
 /Scripts/power-of-10-allowlist.json           @bowman-mw
 /.github/workflows/s3-wall.yml                @bowman-mw

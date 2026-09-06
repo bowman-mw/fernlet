@@ -29,6 +29,12 @@
 # Power-of-10 mechanical checks (PowerOfTenBoundaryTests) runs below next to the other grep-walls;
 # the Python scanner itself runs in power-of-10.yml on a cheap runner.
 #
+# Every test step runs through Scripts/run-gated-suites.sh, which writes a result bundle and
+# refuses a green run that executed fewer tests than the step's floor: `-only-testing:` matches
+# suite names exactly and matches NOTHING on a misspelling, so a bare xcodebuild line can name a
+# suite that no longer exists and stay green forever. Tests/FernletTests/CIGateSelectorBoundaryTests
+# is the static half (every named suite is declared; every mesh battery is named).
+#
 # Make this a REQUIRED status check in branch protection so the wall cannot be merged around.
 
 name: S3 Wall
@@ -123,11 +129,7 @@ jobs:
       - name: Grep-wall (S3BoundaryTests)
         run: |
           set -euo pipefail
-          xcodebuild test-without-building \
-            -project App/Fernlet.xcodeproj \
-            -scheme Fernlet \
-            -destination "$FERNLET_DESTINATION" \
-            -only-testing:FernletTests/S3BoundaryTests
+          Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
@@ -135,11 +137,7 @@ jobs:
         # even when the S3 steps above pass. See Docs/No-Tracking-Wall.md.
         run: |
           set -euo pipefail
-          xcodebuild test-without-building \
-            -project App/Fernlet.xcodeproj \
-            -scheme Fernlet \
-            -destination "$FERNLET_DESTINATION" \
-            -only-testing:FernletTests/NoTrackingBoundaryTests
+          Scripts/run-gated-suites.sh no-tracking 1 NoTrackingBoundaryTests
 
       - name: Power-of-10 grep-wall (PowerOfTenBoundaryTests)
         # The Swift port of Scripts/power-of-10-scan.py (Docs/Power-of-10-Swift.md): function
@@ -148,11 +146,7 @@ jobs:
         # Reads the same allowlist as the scanner, so the two cannot disagree about an exemption.
         run: |
           set -euo pipefail
-          xcodebuild test-without-building \
-            -project App/Fernlet.xcodeproj \
-            -scheme Fernlet \
-            -destination "$FERNLET_DESTINATION" \
-            -only-testing:FernletTests/PowerOfTenBoundaryTests
+          Scripts/run-gated-suites.sh power-of-10 1 PowerOfTenBoundaryTests
 
       - name: Localization wall
         # Also a no-compiler-half wall, and every failure it catches is SILENT in ordinary
@@ -163,11 +157,7 @@ jobs:
         # in an English simulator run, which is why it has to run on every push.
         run: |
           set -euo pipefail
-          xcodebuild test-without-building \
-            -project App/Fernlet.xcodeproj \
-            -scheme Fernlet \
-            -destination "$FERNLET_DESTINATION" \
-            -only-testing:FernletTests/LocalizationBoundaryTests
+          Scripts/run-gated-suites.sh localization 1 LocalizationBoundaryTests
 
       - name: Key-custody + at-rest-format tripwires
         # Same shape as the no-tracking wall: no compiler half, so these suites ARE the
@@ -176,13 +166,57 @@ jobs:
         # KeyCustodyBoundaryTests drives the production key stores against per-test UUID
         # keychain services (plus the simulator's own data-protection keychain for the two
         # well-known rows) and pins the one passcode-gated class in source, so no device
-        # passcode is needed. The remaining suites are pure crypto format pins.
+        # passcode is needed. The remaining suites are pure crypto format pins, plus
+        # IdentityProvisioningReadTests (F-1, 2026-09-06): the fail-closed identity read whose
+        # source wall keeps a transient keychain error from minting over a live identity.
         run: |
           set -euo pipefail
-          xcodebuild test-without-building \
-            -project App/Fernlet.xcodeproj \
-            -scheme Fernlet \
-            -destination "$FERNLET_DESTINATION" \
-            -only-testing:FernletTests/KeyCustodyBoundaryTests \
-            -only-testing:FernletTests/ColumnCryptoDeviceBindingTests \
-            -only-testing:FernletTests/SealedBackupFormatPinTests
+          Scripts/run-gated-suites.sh key-custody 1 \
+            KeyCustodyBoundaryTests \
+            ColumnCryptoDeviceBindingTests \
+            SealedBackupFormatPinTests \
+            IdentityProvisioningReadTests
+
+      - name: Mesh acceptance batteries (P3 / P4 / P5) + the CI selector wall
+        # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
+        # §11.4, §23.4) ran only by hand until 2026-09-06. Tier 1 throughout: FakePeerNetwork, an
+        # injected clock, no radio, no wall-clock sleeps — ~2 minutes on a hosted runner. The floor is
+        # the battery's measured count (101 at 24f6051) plus CIGateSelectorBoundaryTests' own 4 and
+        # MeshRoutedRefusalBudgetTests' 8 (the per-sender pre-store refusal bound the post-close
+        # review added); RAISE it when a battery grows. CIGateSelectorBoundaryTests is the static half
+        # of this guard — every suite named on any run-gated-suites.sh line must be a declared suite,
+        # and every MeshP<n>*AcceptanceTests / convergence battery declared in the tree must be named
+        # here — and it also runs on the first wall step, so editing this step cannot silence it.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh mesh-batteries 113 \
+            CIGateSelectorBoundaryTests \
+            MeshRoutedRefusalBudgetTests \
+            MeshP3SessionAcceptanceTests \
+            MeshP3RotationAcceptanceTests \
+            MeshP3RestoreMatrixAcceptanceTests \
+            MeshP3InteropAcceptanceTests \
+            MeshConvergenceScheduleTests \
+            MeshConvergencePropertyTests \
+            MeshP4ScenarioMatrixAcceptanceTests \
+            MeshP4ConvergencePropertyAcceptanceTests \
+            MeshP4QuorumAcceptanceTests \
+            MeshP4WorkedExampleAcceptanceTests \
+            MeshP4EpochAcceptanceTests \
+            MeshP4ContentAcceptanceTests \
+            MeshP4LedgerCommitAcceptanceTests \
+            MeshP4DeferralAcceptanceTests \
+            MeshP4DeterminismAcceptanceTests \
+            MeshRoutedDrainConvergenceTests \
+            MeshP5ManifestAcceptanceTests \
+            MeshP5CustodyAndReceiptAcceptanceTests \
+            MeshP5AckStageAcceptanceTests \
+            MeshP5BackpressureAcceptanceTests \
+            MeshP5LockedDeviceAcceptanceTests \
+            MeshP5PartitionDrainAcceptanceTests \
+            MeshP5TypeRegistryAcceptanceTests \
+            MeshP5RelayScopeAcceptanceTests \
+            MeshP5ReplayAcceptanceTests \
+            MeshP5OtherBranchDeliveryAcceptanceTests \
+            MeshP5HonestyAcceptanceTests \
+            MeshP5DeterminismAcceptanceTests

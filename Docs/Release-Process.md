@@ -13,11 +13,18 @@ On `main`, enable branch protection with:
 
 1. **Require status checks to pass before merging**, with
    [`s3-wall.yml`](../.github/workflows/s3-wall.yml) as a **required** check. That workflow runs
-   the S3 enforcement self-test plus exactly seven wall suites — `S3BoundaryTests`,
+   the S3 enforcement self-test plus the seven wall suites — `S3BoundaryTests`,
    `NoTrackingBoundaryTests`, `PowerOfTenBoundaryTests`, `LocalizationBoundaryTests`,
    `KeyCustodyBoundaryTests`, `ColumnCryptoDeviceBindingTests`, and `SealedBackupFormatPinTests`
    — so a cross-wall import, tracking, Power-of-10, localization-bundle, key-custody, or
-   at-rest-format regression cannot merge green. (Everything else in `FernletTests`, `FernletLockCryptoTests`
+   at-rest-format regression cannot merge green — and, since 2026-09-06, the three mesh-migration
+   acceptance batteries (28 `MeshP3*` / `MeshP4*` / `MeshP5*` and convergence suites) plus
+   `CIGateSelectorBoundaryTests`. **Every test step runs through `Scripts/run-gated-suites.sh`**,
+   which reads the step's result bundle and refuses a green run that executed fewer tests than the
+   step's floor: `-only-testing:` matches suite names exactly, matches nothing on a misspelling or a
+   deleted suite, and would otherwise print `TEST EXECUTE SUCCEEDED` over zero tests.
+   `CIGateSelectorBoundaryTests` is the static half — every named suite must be declared, and every
+   mesh battery declared in the tree must be named. (Everything else in `FernletTests`, `FernletLockCryptoTests`
    included, is gated by the per-release full-suite run in §2, not per-merge.) The workflow needs
    a macOS runner carrying the **iOS 26.5 SDK or newer** (`runs-on: macos-26`), because the app
    uses API introduced in that SDK; it selects the newest Xcode 26+ on the image and fails fast

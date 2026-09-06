@@ -80,6 +80,14 @@ xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet 
 > Suite identifiers are matched **exactly**, with no prefix matching, so a file declaring several
 > suites needs each one named. The `-only-testing:` fragments in the table below all assume the
 > `xcodebuild test-without-building -project … -scheme Fernlet -destination …` prefix above.
+>
+> **Since 2026-09-06 the zero-tests failure mode is refused mechanically in CI**, not merely warned
+> about: every test step in `s3-wall.yml` runs through `Scripts/run-gated-suites.sh`, which writes a
+> result bundle and fails the step unless `xcresulttool`'s `totalTestCount` reaches the step's floor
+> (1 for the wall suites, the measured battery count for the mesh batteries), and
+> `CIGateSelectorBoundaryTests` pins every named suite to a declared type. Use the same script
+> locally — `Scripts/run-gated-suites.sh check 1 NoTrackingBoundaryTests` — and it will refuse the
+> green banner over nothing for you too.
 
 | Claim | Verification |
 |---|---|
