@@ -1429,7 +1429,43 @@ each a self-contained scenario on the shipping seams so CI can gate one line per
 
 ---
 
-## 11. Phase P5 — encrypted store-and-forward routing
+## 11. Phase P5 — encrypted store-and-forward routing — **BUILT** (2026-09-05)
+
+**Landed on `main`, oldest first** (`b31b7c0..3f323e9` — the launcher commit exclusive through the
+phase's last shipping commit, 34 commits) — every shipping commit of the phase, each followed in
+history by its own ledger commit. `Docs/Mesh-Migration-Loop-Ledger-P5.md` is the decision record; the
+`D-…` ids cited throughout §11.1–§11.4 are its rows, except for a handful the phase recorded only in
+the shipping doc comment that carries them — D-4.9, D-4.10, D-4.18, D-7.2, D-7.8, D-7.9, D-13.1,
+D-13.18 and D-13.22 are grep-able in the tree, not in the ledger.
+
+| SHA | Item | What it is |
+|---|---|---|
+| `bf31f46` | 1 | `MeshRoutedManifest` + `MeshRecipientKeyWrap` — the origin-signed routed manifest with per-recipient X25519 content-key wrap, full wire trio |
+| `5019e04` | 2 | `MeshChunk` on P2's existing stream lane — origin-signed ≤ 256 KiB chunks with index/count/per-chunk hash, bounded chunker and assembler |
+| `64e8c44` | 3 | `MeshCustodyReceipt` + the sealed five-state routed store — durable-before-acknowledged as a *type* rule, wipe row and delete-all wiring in the same commit |
+| `fdabe2e` | 4 | `MeshRecipientReceipt` (destination-final) + the per-type ack-stage table — photos/text final on durable storage, hearts only after foreground decrypt + ledger commit, control immediate |
+| `df1a48d` | 5 | the routed content digest — `MeshRoutedInventory` on its own frozen token, advertiser-signed, with the builder over the routed store and the pure delta the drain consumes |
+| `b2a09fd` | 6 | the drain on the one merge path — routed inventory rides the merge door, push-only plan from the delta, per-peer session frame budget, origin-retains at both receive doors |
+| `97ded8e` | 7 | the merge window as an explicit value — closes only when every asked peer has matched, "answered" never closes anything; 2d retired, all 80 P4 cells at full strictness |
+| `86d57c4` | 8 | custody-transfer-on-departure — the leaver hands outstanding custody to the custodians it named **and** served, exactly once, at the development; `handedOffItemCount` is real |
+| `e9f2282` | 1a | the pre-existing unowned-store test-host crash fixed at the root: every in-flight send `Task` pins its host |
+| `9f52323` | 9 | backpressure — one injectable cap value at every custody door, refused by name; bounded sweeps reclaim delivered and expired items; a user-visible routed delivery hold |
+| `9859817` | 10 | locked-device handling — custody stays ciphertext-only and ungated, plaintext waits on one explicit access gate, a bounded re-entry pass on unlock/foreground; no keychain class moved |
+| `4b5e4ca` | 11 | the routed type-token registry — one value declaring size cap, destination semantics, relay-retention, final-ack and expiry per type; unknown tokens answer nil at seven doors |
+| `608f428` | 12 | `MeshFrameReplayWindow` wired at the four routed content doors — keyed on `(meshID, author, contentID)`, never an epoch; probe before verify, record after the store settled |
+| `9bba5ea` | 13 pass A | the routed item sealer and photo body framing — `AEAD.meshRoutedItemV1` written, goldens derived from the format; no gate touched |
+| `0a33bc7` | 13 pass B | the `keyEpoch` gates retired **with** the path: friend photos originate as sealed routed items, project to the photo wall behind the access gate, two content gates and their handlers deleted |
+| `ed9aebd` | 14 | the acceptance battery — a 40-cell routed overlay on the fixed seed family, `MeshP5AcceptanceTests` one serialized suite per §11 clause, non-vacuity proven by reverted mutations |
+| `3f323e9` | 1b + 6a | the fixed-deadline coordinator flake re-aimed to the deadline + poll-floor helper; the routed rigs' mesh instant rolls with the injected clock, so no fixture manifest carries a 2027 expiry |
+
+Ledger commits, in the same order: `09b4443`, `5483f8f`, `95151c9`, `324f160`, `d63ab47`, `dd0fb46`,
+`8c5cd69`, `8b41395`, `3934b4e`, `07ae11a`, `c1debe3`, `8e0dd2c`, `1ad9343`, `9050c21`, `3b5714c`,
+`586cdfd`, `aeda552`, `be4f4a5`. The range above is 17 `Mesh P5` commits + 17 `Ledger P5` commits;
+`be4f4a5` is `3f323e9`'s own ledger commit and sits one past the range's end (`b31b7c0..be4f4a5` is
+35), which is why eighteen ledger SHAs are listed against a 34-commit range.
+
+*(§11's specification text — the testing-lane paragraph through the relay scope note — is unchanged
+below this block; §11.1–§11.4 follow it.)*
 
 **Testing lane (re-tiered 2026-09-01, §7.8).** Custody, receipts, dedup, backpressure and the drain
 are tier 1. The questions that are genuinely about a real radio — chunk pacing at 256 KiB, whether a
@@ -1463,6 +1499,450 @@ Relay scope note: v1's general A–B–C live chunk relaying is **staged**. Incr
 origin-retains + custody-transfer-on-departure (the load-bearing case — §10.6); live third-party relay
 of in-flight chunks (hop count ≤ roster, TTL) is increment 2, gated on device measurements showing it
 is actually needed at roster ≤ 8 on shared Wi-Fi.
+
+### 11.1 What landed
+
+**Result:** routed content is one origin-signed object graph that relays forward **verbatim**. An
+item is sealed once at the origin under `AEAD.meshRoutedItemV1` (`MeshRoutedItemSeal.swift:52`,
+blob = `FMRI1 ‖ nonce ‖ ciphertext ‖ tag`), described by a signed `MeshRoutedManifest` whose
+destination set is the full roster at creation and whose expiry is the mesh hard deadline plus the
+20-minute development grace, carried as signed `MeshChunk`s, held in a sealed five-state store whose
+own key lives on `com.fernlet.mesh-routed`, and acknowledged in two kinds — `MeshCustodyReceipt`
+("durable ciphertext here") and `MeshRecipientReceipt` ("final"), where *final* means what the type's
+own registry row says it means. Delivery is not a new protocol: the drain rides the **one merge
+path** P4 built, so `reconnect ≡ merge ≡ relay drain` is now literally true — the routed inventory is
+advertised from exactly the three ask doors the membership digest uses, the answer is a push-only plan
+built from the pure delta, and the merge window that decides "the exchange is finished" was rebuilt
+as an explicit value in the same phase.
+
+**Increment 1's invariant, as built:** *no device but the origin ever holds custody of an item while
+the origin is present, and the only custody hop is the departure hop.* It is enforced twice, at the
+receive doors (`ingestRoutedManifest` / `ingestRoutedChunk` admit only `self ∈ destinations` or
+`sender == origin`, D-6.16) and at the offer gate (a non-origin offers only what it holds as
+`custodied(by: self)`, D-6.15) — and the departure hop is bounded not by the signed departure record
+(which names the whole roster) but by the memory-only **origin-served set**: a device may claim
+handed-off legs only for an item whose manifest it admitted **from the origin itself**
+(`MeshNetworkManager.swift:2239` declaration, one write site at `:5233`, cleared with the session at
+`:1590`; D-8.17). A second-hop holder therefore claims nothing, which is what makes "increment 2 is
+not built" a checkable statement rather than an omission.
+
+| # | Work | SHA |
+|---|---|---|
+| 1 | **The manifest and the key wrap.** `MeshRoutedManifest` / `MeshRoutedManifestFormat` / `MeshRoutedManifestPayload` (item id, frozen type token, ciphertext hash, size 1 … 256 MiB at `MeshRoutedManifest.swift:53`, immutable destination set, floored whole-second expiry), `MeshRecipientKeyWrap` + `MeshRoutedContentKeyWrapper` (fresh X25519 ephemeral **and** fresh nonce per wrap; AAD binds purpose ‖ meshID ‖ itemID ‖ origin ‖ recipient, so a wrap cannot be transplanted — D4/D5), and `MeshRoutedManifestVerifier`'s ten guards — seven before the signature, three after — with the origin key taken from the **admission ledger**. The load-bearing split is D9: `verify` uses public material only, `unwrap` takes the private agreement key through a closure — which is what let item 10 gate plaintext without touching custody. D14: a *departed* origin still verifies; a quorum-**removed** origin is refused by name | `bf31f46` |
+| 2 | **Chunks on the lane that already existed.** `MeshChunk`, `MeshChunkVerifier`, `MeshChunker`, `MeshChunkAssembly` — origin-signed ≤ 256 KiB chunks with explicit index/count and a per-chunk hash, moved on P2's `MeshTransferStreamTable` with no transport change (C16). Integrity is **both** (C1/C2): a per-chunk origin signature over the transcript *and* an assembly-time `contentHash` check over the reassembled blob. `chunkID` is derived, not a wire field, and deliberately origin-free (C3/C4) — the replay window separates by author, so putting the origin in the id would have collided two custodians' copies of one origin's chunk. A manifest-less chunk is **parked**, never silently dropped (C10) | `5019e04` |
+| 3 | **Custody, and the store that makes it durable.** `MeshRoutedStore` mirrors `MeshSessionStore`'s `LoadToken` exactly — `loaded`/`absent`/`deferred`/`corrupt` plus §19.5's seal-refused wrinkle, `rawValue` sets asserted equal — with its own `ColumnCrypto` V3 key on its own keychain service and a `DeviceBindingID`. The rule that shapes everything after it is a **type** rule, not a check: `committingCustody` is the only minter of `MeshCustodyDurabilityWitness` (`fileprivate` init), and `MeshCustodyReceipt.signed` *requires* the witness, so no receipt can exist for state a restart would lose (D-3.7). `MeshDeliveryTarget` is persisted as the signed manifest plus a sparse progress map, so no destination list is stored and the type stays non-`Codable` (§22.3's default, taken). Wipe row, `wipeManifest` token, `FernletStore.meshRoutedStorage` and the delete-all writer all land in this commit (`Docs/PrivacyWipeCoverage.md:201`) | `64e8c44` |
+| 4 | **Destination-final, per type.** `MeshRecipientReceipt` + verifier (recipient-signed, about the origin's item, one per `(recipient, item)`, forwarded verbatim), and `MeshRoutedAck`: `MeshRoutedAckStage`, the frozen `MeshRoutedTypeToken` spellings, and `MeshRoutedAckStageTable` — the registrable value item 11 later took over. **The stage is not on the wire** (D-4.1): a receipt means "final", and both sides resolve *what final meant* from the manifest's origin-signed token through one table. Item 3's type rule is repeated exactly one level up — `committingDelivery` writes `deliveredAt` durably and only then mints `MeshRecipientDeliveryWitness`, which `MeshRecipientReceipt.signed` requires. A heart's final ack needs three fail-closed legs (D-4.8/4.9/4.10): judged exactly once in this `MeshHeartCommitOutcome`, a committed-ledger proof, and `itemID == giftID` frozen for the heart token | `fdabe2e` |
+| 5 | **The routed content digest, on its own token.** `MeshRoutedInventory` / `Entry` / `Payload` / `Builder` / `Delta` / `Verifier`: bounded ID lists keyed on the signed pair `(origin, itemID)` with a parked flag, an **exact** held-chunk bitmap (frozen bit order, trailing zeros mandatory) and two signer index lists over a minimal sorted member table — no rollup hash, because at the 1024-item cap the list *is* the digest. Advertiser-signed with `sentAt` bound in. The wire token is its own (`fernlet.mesh.routed-inventory-digest.v1`, `CryptographicPurpose.swift:225`, `PayloadType.swift:245`) and no routed *inventory* type carries the `InventoryDigest` stem while `MeshInventoryDigest` carries no `Routed` (`theDigestNamesDoNotCollide`), so nothing can be confused with P4's membership digest. D-5.9: "matched" is **quiescence**, never equality — `isQuiescent` is strictly local and `converged(local:peerReportsQuiescent:)` needs both sides | `df1a48d` |
+| 6 | **The drain, on the one merge path.** `sendRoutedInventory` has exactly the three **ask** doors `sendInventoryDigest(to:)` had at item 6 — `beginMergeExchange`, `askOneReconnectedPeer`, the admission-grant reply — grep-walled so no second reconnect path can appear (D-6.3). It stays at three for the rest of the phase: item 7's proof door and D-7.33's joiner reply are membership-only, and items 8 and 13 push **bulk** (`sendRoutedBulk`) rather than advertise, so the wall grew door *classes* rather than a looser count (D-8.10, D-13.28). The answer is its own frame (`fernlet.mesh.routed-drain-answer.v1`, `PayloadType.swift:264`) carrying the peer's quiescence bit bound to advertiser + advertisedAt, plus the frames `MeshRoutedDrainPlan` names. The plan is **push-only** — there is no ask frame, and `delta.ask` is diagnostic (D-6.4) — and it is paced by a per-peer **session frame budget**, `sessionFramesPerPeer` = `maxChunkCount + 2 × maxRecordsPerKind` = 1056 (`MeshRoutedDrainPlan.swift:148`), which overturned the once-per-peer boolean the sketch implied (D-6.5) | `b2a09fd` |
+| 7 | **The merge window as a value.** New `MeshMergeWindow.swift` (pure, `nonisolated`, no clock): `asked` / `answered` / `matched` plus the digests peers sent while it was open, closing iff `pending = (asked ∪ answered) ∩ reachable ∖ matched` is empty. `answered ⊆ pending`, so answering a mismatch can never close a window on either side; a peer's later mismatching digest **un-matches** it (D-7.4/7.27); an unasked peer's match closes nothing — that is 2d's fix; a late re-ask un-matches (D-7.32). Reachability is **every committed slot ∩ derived roster**, explicitly not `activeSlots` (a UWB distance rank capped at 3 of 5, D-7.6). The strict rule needed an occasion the sketch never named: `readvertiseMergeProof(to:)` (`MeshNetworkManager.swift:3192`), a fourth `sendInventoryDigest(` site that re-advertises a moved local digest to the pending set captured **at entry** (D-7.28), capped at `maxProofs` = 49. `awaitingResumeMerge` is now computed (`:6390`), and P4's 2d deferral is retired with all 80 cells at full strictness | `97ded8e` |
+| 8 | **Custody-transfer-on-departure.** `MeshCustodyHandoffPlan` (pure planner, scope, suppression incl. `windowExpired`, result) + `MeshRoutedCustodyHandoff` (two batch store doors, one load / N updates / one save). The custodian's authority is the leaver's `SignedDepartureRecord` — **no new frame, purpose, golden or framing case** (D-8.1): the missing half was never a signature, it was a writer. Legs handed = `outstanding ∩ pending` minus the custodian (D-8.5); the claim is **one idempotent derivation** called from four doors, never four event hooks (D-8.13); the merge door runs the roster verdict **first**, so a merge delivering this device's own removal ejects before it writes rungs (D-8.37); and the hop bound is the origin-served set (D-8.17), pinned by a negative cell on a four-node no-partition chain (D-8.32). `MeshDevelopmentPlan.handoffSummary(handedOffItemCount:)` fills the field P4 hard-coded to `0` | `86d57c4` |
+| 1a | **The unowned-store host crash, fixed at the root.** Pre-existing since before item 1 and non-deterministic; since item 8 it reproduced in the 121-suite subset (D-8.42). `MeshNetworkManager`, `PresenceManager`, `ProximityRecipeShareManager` and `ProximityActivityManager` hold their host store `unowned` and spawned detached send/beacon `Task`s that outlived a rig's store. One five-line `spawnHostPinned(_:)` per host-holding manager; 52 spawns converted, 12 timer spawns deliberately not pinned, `store` stays `unowned let` and no assertion was relaxed. `MeshHostPinTests` reproduces the race deterministically and `MemoryLifecycleBoundaryTests` gained rules ML4/ML5 so a new unmarked `Task` in a host-holding manager fails a test rather than a review. **The second domino:** with the host pinned the send reached `FakePeerTransport`, which held its fabric `unowned` and trapped there — now `weak`. Every gauntlet after this one is a single invocation | `e9f2282` |
+| 9 | **Backpressure that is one value and one visible fact.** `MeshRoutedCapacity` (`.production` defined **as** `MeshRoutedStoreFormat`, injectable via `MeshRoutedStore.init(scope:capacity:)` and read back by everything that accounts — D-9.1), `MeshRoutedCapacityUsage` (parked items, over-commit named as `uncompletableItemCount`, unrestorable deliveries counted and never repaired) and `MeshRoutedParkedDrop`. `hasRoomToAdmit` measures exactly what the chunk door measures, and an unlistable directory answers **false**, never "room" (D-9.14). Sweeps are budgeted once per peer per session and the budget is spent **after** the store answered, so a deferred store no longer strands the reclaim for the session (D-9.15). Visibility is one observed `MeshRoutedDeliveryHold` raised only by the three *store-level* caps (D-9.17) with `RoutedDeliveryHoldBanner` in the app, its dismissal keyed to the **fact** rather than a flag (D-9.16) and a frozen a11y id (`RoutedDeliveryHoldBanner.swift:43`) | `9f52323` |
+| 10 | **Locked device: three predicates, one gate, five jobs.** `MeshRoutedAccessGate` is pure vocabulary; the rule is D-10.3 — **iOS data protection gates plaintext** (decrypt + canonical-store mutation) and store readability, **Fernlet's app lock gates nothing in the mesh**, with one clause: a duress session closes the gate, observed on its own `.onChange` because it moves at neither a scene nor a protected-data transition. "May seal custody" is answered by the store's five states, never by the gate (D-10.2). The predicates are `mayDecryptRoutedContent` (`MeshNetworkManager.swift:6340`), `mayMutateCanonicalStoreWithRoutedContent` (`:6347`) at the **same** strength, and `mayCommitRoutedHeartLedgerJudgement` (`:6362`) = those two AND `sessionState == .activeForeground`. One public push door driven from six `FernletApp` sites (D-10.1/D-10.14) runs a bounded, idempotent, audited five-job re-entry on a rising ciphertext leg or the duress falling edge. **No keychain class moved** (D-10.8): strengthening the routed seal key to `WhenUnlocked*` would make every background custody write unsealable, i.e. delete the feature | `9859817` |
+| 11 | **The type-token registry.** `MeshRoutedTypeRegistry` / `MeshRoutedTypeEntry` — §11's registry sentence as one immutable value with four frozen column enums plus a derived foreground-decrypt requirement and a canonical-store slot shipped as a **frozen token enum**, never a closure (D-11.11). `increment1` (`MeshRoutedTypeRegistry.swift:263`) carries three rows whose every column *is* the constant already shipped, and `MeshRoutedAckStageTable.increment1` becomes its projection, so accepted tokens and ack stages cannot drift (D-11.1). `entry(for:) == nil` is the **one** definition of "unknown" at seven doors (D-11.3), three of which had no type check at all before — the drain offer, the answer builder's receipt+ask half, and the hand-off claim (D-11.14/D-11.18). Unreachable by construction: `.relayInFlight` and an out-of-bound cap are dropped at registration (D-11.7/D-11.17); `.singleRecipient` is registerable but mint-refused. An at-rest unregistered record is **held, never grown** — its chunks are refused (D-11.21) — and collected by expiry, never dropped | `4b5e4ca` |
+| 12 | **Replay, keyed on the author.** `MeshFrameReplayWindow` — built and unwired since P4 — is admitted at the four routed content doors on `(meshID, author, contentID)`: manifest `itemID` → origin, chunk `chunkID` → origin, both receipt ids → their signer. Never an epoch, never the forwarding envelope's sender (D-12.1). **Two calls, not one** (D-12.2): a new non-mutating `verdict(…)` is each door's first statement, before the verifier and before the first sealed-index load — safe on an unverified frame because it records nothing — and `admit(…)` records only when the store's **outer** outcome is `.completed` and this device's rung work settled (D-12.3/D-12.4), so a deferred store, every capacity refusal and an unfinished rung stay re-offerable. Bounds are derived, not picked: 1056 frames per author, 16 authors — the **admission set's** capacity, not the roster cap, because a departed origin's content keeps moving under item 8 (D-12.5). Only `.replayed` is actionable; `senderWindowFull` is a named degradation the frame falls through (D-12.6) | `608f428` |
+| 13 A | **The item sealer.** `MeshRoutedItemSealFormat` / `Error` / `Sealer`: AES-256-GCM under the previously reserved `AEAD.meshRoutedItemV1`, authenticating `purpose ‖ meshID ‖ itemID ‖ origin ‖ typeToken` (`MeshRoutedItemSeal.swift:201`) — byte for byte item 1's wrap AAD with the **type token in the recipient's slot** — so a blob cannot be transplanted between items, meshes, origins or types. Blob = `FMRI1 ‖ nonce ‖ ciphertext ‖ tag`, self-contained per C12, so `contentHash` and `size` measure the complete blob. One derived bound (D-13.19): `maxPlaintextByteCount = maxResidentBlobByteCount − 33` (`:75`/`:79`), refused at the **mint**, so no recipient can receipt an item it would later decline to open. `MeshRoutedItemBody` frames a photo as a length-prefixed JSON header ‖ raw image with the coder options frozen (D-13.20/D-13.20a) — never one `Codable` blob, which would have base64'd the JPEG and silently re-scaled `manifest.size`, the chunk count and every cap built on them | `9bba5ea` |
+| 13 B | **The gates retired with the path.** `MeshRoutedOrigination` is the sender door (seal → hash → mint under the registry cap → stage as own custody → chunk files → the drain offers) and `MeshRoutedItemDelivery` the receiver-side projection, behind the item 10 predicates, resolving the author from the **admission set** so a departed origin still projects and a removed one is refused by name (D-13.33). `addPhoto` now originates a routed item; `handlePhotoManifest`, `handleFriendPhotoEnvelope`, `syncPhotoManifest`, `sendRequestedPhotos` and `sendEncryptedMetadata` are **deleted**, and with them two of the three `keyEpoch` gates. The third survives narrowed to its two **control** arms (`MeshNetworkManager.swift:9598`) on a receive-only door nothing in the build sends to (D-13.5b; the orchestrator took option (a)). The origination door pushes **bulk**, not a fourth inventory advertisement — an advertisement would have made the *peer* answer with the peer's own items and never moved the new one (D-13.28) | `0a33bc7` |
+| 14 | **The acceptance battery.** `MeshRoutedScheduleOverlay` — a **salted side-plan** over P4's same seeds and same five shapes rather than a new `MeshScheduleEvent` case, because one more element in `kinds` re-phases every one of P4's 80 membership cells and voids their provenance (D-14.1); salt = `seed ^ 0x524F_5554_4544_0000 ^ shapeSalt(shape)`, the shape term found by a probe (D-14.2). `MeshRoutedDrainConvergenceTests` becomes twelve named claims behind one façade with no relaxed variant, over a 40-cell rectangle plus a 12-cell lock rectangle, development cells on their own pipeline, 5 sealed-photo cells and 2 corner cells (rectangle F). `MeshP5AcceptanceTests.swift` adds **twelve serialized suites / 33 tests**, one per §11 clause. Zero shipping edits, at both passes. The review pass replaced every process-global `audited` excuse with a per-device reading (D-14.10) and deleted two assertions that could not fail | `ed9aebd` |
+| 1b + 6a | **Two test-side defects, both of a known family.** 1b: `ProximityCoordinatorTests.phase1_unknownPayloadTypeIsParkedWithoutFailingSession` waited on a fixed wall-clock deadline and went red once under load; it now polls the exact settled observable through the file's own deadline + min-poll-floor helper, with no deadline lengthened and no assertion touched. 6a: every routed fixture manifest inherited a fixed 2027-01-15 expiry anchor — a fixture time bomb. `MeshRoutedFixtureClock.createdAt = max(MeshP3Acceptance.base, Date() + 30 days)` is now the single wall-clock read, in its own file so the determinism grep-walls stay honest, threaded additively into 26 routed sites; identical value today, so both pinned digests and every golden are byte-identical, and the roll was proven by forcing the anchor past the bomb (2028, `aheadMarginSeconds` 30 d → 500 d: 29 suites / 247 tests green) | `3f323e9` |
+
+**Wire.** Six additive frames, each with its full trio in the same commit — frozen token,
+`PayloadType` case, crypto purpose + domain-separation row, canonical bytes, an independently derived
+golden, and a framing-transcript case in
+`CryptographicPurposeBoundaryTests.canonicalSerializerTranscriptsMatchTheirDeclaredFraming`:
+`fernlet.mesh.routed-manifest.v1` (`PayloadType.swift:189`), `fernlet.mesh.routed-chunk.v1` (`:202`),
+`fernlet.mesh.custody-receipt.v1` (`:214`), `fernlet.mesh.recipient-receipt.v1` (`:225`),
+`fernlet.mesh.routed-inventory-digest.v1` (`:245`) and `fernlet.mesh.routed-drain-answer.v1`
+(`:264`), plus one AEAD purpose flipped Reserved → Written (`AEAD.meshRoutedItemV1`, item 13 A).
+**No existing golden moved in this entire phase** — each item re-derived the prior goldens
+byte-for-byte before writing its own — and items 7–14 added no wire vocabulary at all. **One** new
+persisted surface exists and it is paperwork-complete: the sealed routed store (schema 2 after item 4,
+one `Docs/PrivacyWipeCoverage.md` row at `:201`, delete-all writer, keychain service
+`com.fernlet.mesh-routed`) — and nothing else. `MeshSessionContext` stayed at **schema 2** for the
+whole phase; items 5, 6, 7, 9, 10 and 12 each state "nothing persisted, no wipe row" as a decision
+(D-5.11, D-6.14, D-7.21, D-9.10, D-10.10, D-12.11), and items 11 and 14 added no persisted surface
+either — `Docs/PrivacyWipeCoverage.md` gained exactly one row in the entire phase.
+
+| | |
+|---|---|
+| New (ProximityKit `Mesh/`) | `MeshRoutedManifest.swift`, `MeshRoutedManifestVerifier.swift`, `MeshRoutedContentKeyWrapper.swift`; `MeshChunk.swift`, `MeshChunkVerifier.swift`, `MeshChunker.swift`, `MeshChunkAssembly.swift`, `MeshChunkAdmissionRule.swift`; `MeshRoutedStore.swift`, `MeshRoutedStoreKey.swift`, `MeshRoutedIndex.swift`, `MeshRoutedCustody.swift`, `MeshRoutedCustodyCommit.swift`, `MeshRoutedContentHasher.swift`, `MeshCustodyReceipt.swift`, `MeshCustodyReceiptVerifier.swift`; `MeshRecipientReceipt.swift`, `MeshRecipientReceiptVerifier.swift`, `MeshRoutedAck.swift`, `MeshRoutedDeliveryCommit.swift`, `MeshRoutedDeliveryIngest.swift`; `MeshRoutedInventory.swift`, `MeshRoutedInventoryBuilder.swift`, `MeshRoutedInventoryDelta.swift`, `MeshRoutedInventoryVerifier.swift`; `MeshRoutedDrainPlan.swift`, `MeshRoutedDrainAnswer.swift`, `MeshRoutedDrainAnswerVerifier.swift`; `MeshMergeWindow.swift`; `MeshCustodyHandoffPlan.swift`, `MeshRoutedCustodyHandoff.swift`; `MeshRoutedCapacity.swift`, `MeshRoutedDeliveryHold.swift`; `MeshRoutedAccessGate.swift`; `MeshRoutedTypeRegistry.swift`; `MeshRoutedItemSeal.swift`, `MeshRoutedItemBody.swift`, `MeshRoutedOrigination.swift`, `MeshRoutedItemDelivery.swift` — **39 files** |
+| New (app) | `App/Fernlet/RoutedDeliveryHoldBanner.swift` (item 9), mounted with one line in `ConnectView` |
+| Changed (ProximityKit) | `MeshNetworkManager` (items 6–13: the drain's send and receive doors, the merge window, the four claim doors and the departure push, the capacity hold, the access gate + five-job re-entry, the registry reads, the replay probes, the origination and projection doors, and the deletion of five legacy photo handlers); `MeshFrameReplayWindow` (`forget(frameID:from:)`); `MeshDeliveryTarget`, `MeshDevelopmentPlan`, `MeshMembershipRecords`, `MeshContentIngest`, `MeshContentMerge`, `MeshSessionStore`, `ProximityHost`, `ProximityHeartLedger` (`commitProof(for:)`), `SessionMessageStore`, `MeshClothingShop`, `MeshTransferStreamTable` (docs-only, C16); `CanonicalSignatureSerializer` (`Wire/`); and, for item 1a, `PresenceManager`, `ProximityRecipeShareManager`, `ProximityActivityManager` |
+| Changed (FernletCrypto / FernletDomainModel) | `CryptographicPurpose` (FernletCrypto — the six new signature purposes plus item 13's Reserved → Written AEAD flip); `PayloadType` and `FriendPhotoPayloads` (FernletDomainModel) — the three cross-wall files the phase touched |
+| Changed (app) | `FernletStore` (item 3's `meshRoutedStorage` + delete-all writer), `FernletApp` (item 10's six push sites, `body` split to stay under 60 lines), `ConnectView`, `DuressRecoveryCoordinator` |
+| Test seams (ProximityKit, `@testable`) | **Thirteen new seams**, and two of them are **injection points** rather than accessors (P4's were accessors only): `routedTypeRegistryForTesting` and `routedReplayCapacityForTesting`, beside `MeshRoutedStore.init(scope:capacity:)`'s injectable `MeshRoutedCapacity`. The accessors are `originServedItemsForTesting`, `mergeWindowForTesting`, `lastMergeClosureForTesting`, `routedReplayWindowForTesting`, `routedDrainFramesSpentForTesting`, `routedSweptFingerprintsForTesting`, `routedSweepsDeferredFingerprintsForTesting`, `deferredCustodyCommitCountForTesting`, `claimHandedOffCustodyForTesting(now:)`, `broadcastCoordinatorBeaconForTesting` and `startBeaconLoopForTesting`. They are `internal` for `@testable`, **not** `#if DEBUG`-guarded — `routedTypeRegistryForTesting` is declared at `MeshNetworkManager.swift:10318`, well above the file's first `#if DEBUG` at `:10600`. **No env hook added** (the twelve `FERNLET_MESH_*` variables are P2–P4's) |
+| Tests | **29 new files** in `Tests/FernletTests/`: `MeshRoutedManifestTests`, `MeshRecipientKeyWrapTests`, `MeshChunkTests`, `MeshChunkerTests`, `MeshChunkAssemblyTests`, `MeshCustodyReceiptTests`, `MeshRoutedStoreTests`, `MeshRoutedStoreIsolationTests`, `MeshRoutedCustodyTests`, `MeshRecipientReceiptTests`, `MeshRoutedDeliveryAckTests`, `MeshRoutedInventoryTests`, `MeshRoutedInventoryBuilderTests`, `MeshRoutedInventoryDeltaTests`, `MeshRoutedDrainTests`, `MeshRoutedDrainPlanTests`, `MeshRoutedDrainAnswerTests`, `MeshMergeWindowTests`, `MeshRoutedCustodyHandoffTests`, `MeshHostPinTests`, `MeshRoutedCapacityTests`, `MeshRoutedBackpressureTests`, `MeshRoutedLockedDeviceTests`, `MeshRoutedTypeRegistryTests`, `MeshRoutedItemSealTests`, `MeshRoutedPhotoDeliveryTests`, `MeshRoutedFixtureClock`, `MeshRoutedDrainConvergenceTests`, `MeshP5AcceptanceTests` — several carry more than one `@Suite` (e.g. `MeshRoutedManifestTests.swift:361/:519` are `MeshRoutedManifestGoldenTests` and `MeshRoutedManifestSigningTests`; `MeshMergeWindowTests.swift:33/:647` are the state and wire suites), which is why a `-only-testing` line must name the **struct**, never the file. Extended in place (21 files): `MeshEpochModelTests.swift` (which is where the `MeshFrameReplayWindowTests` suite lives), `MemoryLifecycleBoundaryTests` (rules ML4/ML5) and `MemoryLifecycleTests`, `FakePeerTransport` (item 1a's `weak` fabric), `MeshConvergenceSchedule` (item 14's overlay, item 6a's anchor), `MeshEncryptionTests`, `MeshContentMergeTests`, `MeshNetworkManagerTests`, `FriendPhotoManifestPayloadTests`, `MeshClothingShopTests`, `MeshConvergencePropertyTests`, `MeshDepartureRecoveryTests`, `MeshEpochReconciliationTests`, `MeshMergeExchangeTests`, `MeshTerminationPartitionTests`, `MeshP4AcceptanceTests`, `ProximityCoordinatorTests` (item 1b), `CryptographicPurposeBoundaryTests`, `CryptographicDomainSeparationTests`, `DeleteAllDataTests`, `PrivacyWipeCoverageTests` |
+| Docs | `Docs/ProximityFunctionIndex.md` and the ProximityKit DocC landing page in the same commit as each item that added a shipping type; `Docs/FileIndex.md` rows for every new file; `Docs/PrivacyWipeCoverage.md:201` (item 3, amended in place by item 4); `Docs/Crypto-Domain-Separation.md` (item 13, both passes); `Docs/Proximity-Security-Followups-2026-08-18.md` §1 closed by item 13's deletions (D-13.38) — the section itself survives, rewritten and headed **CLOSED by P5 item 13 (2026-09-05)**, with its §2 (sealed-introduction 3DH) untouched and still open; `Docs/Memory-Leak-Review-2026-08-17.md` (item 1a, `e9f2282`) |
+
+**The gauntlet, item by item:** 3859 at the P4 boundary (`73e9755`) → 3917, 3986, 4074, 4157, 4236,
+4305, 4343, 4387, 4392 (item 1a), 4444, 4467, 4501, 4528, 4558, 4576, 4614, **4615** (`3f323e9`) —
+every item green at its own landing, with `power-of-10-scan.py` at 0 violations and
+`doc-coverage-scan.py` at 0 undocumented type declarations throughout, and `spm-wall-check.sh` PASSED
+at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log).
+
+### 11.2 Deviations from the sketch, and why
+
+- **The routed digest got its own frozen token, and the two type-name families are pinned apart.** §11
+  names the structure `MeshInventoryDigest`, which is the *membership* digest's name
+  (`fernlet.mesh.inventory-digest.v1`, P3). Shipping a second structurally different digest under a
+  colliding name is cheap to avoid and expensive to untangle after a golden ships, so the frame is
+  `fernlet.mesh.routed-inventory-digest.v1` and the types are `MeshRoutedInventory*` — with
+  `theDigestNamesDoNotCollide` pinning both tokens *and* the narrower type-name rule the tree actually
+  holds: no routed **inventory** type carries the `InventoryDigest` stem, and `MeshInventoryDigest`
+  carries no `Routed`. (Item 2's chunk hasher `MeshRoutedContentDigest` is a different family and is
+  deliberately outside that rule.) §22.3's default, taken as written.
+- **"Matched" is quiescence, not equality — and the routed half gates nothing.** §11 leaves "the
+  digests agree" undefined. Equality is the wrong predicate: two devices with different entitlements
+  legitimately advertise different lists forever. `isQuiescent` is strictly local and
+  `converged(local:peerReportsQuiescent:)` needs both sides, the peer's bit riding item 6's answer
+  frame (D-5.9/D-5.15/D-6.18). Then D-7.11: the **membership** digest gates the merge window and
+  routed quiescence is recorded, logged and gates nothing — because item 9's capacity-refusal
+  contract deliberately leaves a refused pair non-quiescent for the session, so a routed-gated window
+  would never close again.
+- **Pacing is a per-peer session frame budget, not a once-per-peer boolean.** The merge exchange's
+  own idiom (`reGossipedToFingerprints`, once per peer per session) does not transfer to content: one
+  maximal item is 1024 chunks and cannot cross in one answer. `sessionFramesPerPeer` = 1056 is derived
+  as "exactly one maximal item plus its manifests and receipts", with `maxChunksPerAnswer` = 64 per
+  exchange (D-6.5, `MeshRoutedDrainPlan.swift:148`). A budget that cannot complete the chunk format's
+  own maximal item would be a starvation bug wearing a bound's name.
+- **The merge window became an explicit value, and needed a new *occasion* the sketch never named.**
+  §22.3 asked for "every asked peer matched"; encoding that as a counter would have been unreadable
+  and un-negatable, so `MeshMergeWindow` carries the three sets and the closing law is one expression
+  (D-7.1/7.2/7.3). The genuine discovery is D-7.28: a device whose fold both catches it up *and*
+  empties its pending set must still tell its peer, so the proof is owed to the pending set captured
+  **at entry**, before re-evaluation and before the verdict — "only if still open" silences exactly
+  the device that just converged. It rides the existing frame: **no new frame, field, purpose or
+  golden** (D-7.7/7.8/7.9). **D-7.15's disposition:** P4 i11's liveness residual is *fixed for the
+  bidirectional-mismatch shape P4 named*, and narrows to three named shapes — an asked, reachable,
+  silent peer; a peer that grew and stopped speaking after being un-matched; and a pair whose
+  per-session re-gossip budget is spent (D-7.30). A window is therefore **not guaranteed to close**,
+  which item 14 takes as an input rather than papering over: an open window is never failed for
+  staying open, but is held to `proofCount <= MeshMergeWindow.maxProofs` (D-14.14).
+- **The custody hop is bounded by the origin-served set, not by the departure record.** §11 says
+  custody transfers to the custodians the plan names. In every production departure
+  `custodianFingerprints` is the whole roster − self, so the record alone would let content walk
+  A→B→C→D — increment 2 wearing increment 1's name. A device may claim only for an item whose
+  manifest it admitted from the origin itself (D-8.17): memory-only, one write site, cleared with the
+  session, with the residual stated (a restart before claiming forfeits that claim, fail-closed and
+  audited) rather than closed by persisting a friend-graph fact (D-10.7).
+- **The item seal was built by item 13, not by item 6 or P6.** D3 was taken twice: item 1 and item 2
+  deliberately did not seal (the blob stays opaque to both, C11/C12), and the original disposition
+  parked the sealer in "item 6 / P6". It was **amended on 2026-09-05**: retiring the `keyEpoch` gates
+  requires a routed path that actually carries a friend photo end to end, and that path needs a
+  sealer — so `MeshRoutedItemSealer` landed in item 13 pass A, and pass B could then delete the
+  legacy handlers instead of leaving them beside a half-built successor.
+- **The sealer's AAD is item 1's wrap AAD with the type token in the recipient's slot, and the blob
+  is a marker-prefixed layout, not `SealedBox.combined`.** AAD =
+  `AEAD.meshRoutedItemV1.data ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(typeToken)`
+  (`MeshRoutedItemSeal.swift:201`), so one binding shape serves both the content key wrap and the
+  item seal and a blob cannot be transplanted across items, meshes, origins **or types**. The blob is
+  rebuilt as `marker ‖ nonce ‖ ciphertext ‖ tag` (`:52`, `:65`) rather than read from
+  `SealedBox.combined`, which is `Data?` — reading it would have needed a force-unwrap (Power of 10
+  R5) or invented a "sealFailed" token (D-13.25). The open deliberately does **not** distinguish a
+  wrong-width key: it collapses into `openFailed` with every other AEAD refusal, oracle-free
+  (D-13.24).
+- **The third `keyEpoch` gate is narrowed, not deleted.** §21.5 said all three retire with the path.
+  Two did, with their flows. The third (`handleEncryptedMetadata`,
+  `MeshNetworkManager.swift:9598`) is a **receive-only** door nothing in the build sends to, and its
+  two surviving arms are *control* frames (`.meshDescriptor`/`.meshStateChange`,
+  `.meshAdmissionGrant`) that ride the group key and have no routed successor in P5. Narrowing it
+  (D-13.5b) keeps an older peer's control frame working; option (b) — deleting the door whole and
+  parking the `PayloadType` case — is a wire/interop decision with five other retirements attached
+  and is the owner's (§11.3 finding 2). The orchestrator took **(a)** deliberately, and the survivor
+  is pinned exactly once by `theRetiredEpochGatesAreGoneAndTheSurvivorsArePinned`.
+- **Every default in the launcher's decision table was taken as written**, and each is now a shipped
+  fact rather than an assumption: relay-retention is origin-only until departure (item 1 mints, no
+  relay hop; enforced at both receive doors); the merge window closes on *every asked peer matched*
+  with the responder rule "answered **and** the peer's next digest matched" (item 7);
+  `MeshDeliveryTarget` is persisted inside the routed store's own sealed surface from the signed
+  manifest plus a sparse progress map, non-`Codable`, with its wipe row and delete-all writer in the
+  same commit (item 3); the routed digest's token is `fernlet.mesh.routed-inventory-digest.v1` (item
+  5); the four-state sidecar mirrors `MeshSessionStore`'s `LoadToken` / `MeshSessionLoad` exactly —
+  the launcher's default says `MeshSessionContext`, but the token lives on the store — plus §19.5's
+  seal-refused fifth state (item 3); departure delivery still has **no transport ack** — the drain
+  carries custody for routed content instead (item 8); and `MeshFrameReplayWindow` is keyed on
+  content ids, never an epoch (item 12). None was overridden.
+- **Two smaller places where §11's letter and the shipping shape differ.** (i) §11 says hearts are
+  "final only after foreground decrypt + ledger commit"; the stage additionally keeps a held-ciphertext
+  precondition (`isComplete && isCustodied`), so a heart cannot be acknowledged from evidence alone —
+  a deliberate strengthening (D-4.17/4.18), and the residual is named: a heart not judged before the
+  mesh ends expires as `custodied(by: self)` (D-10.12). (ii) §11 says unknown type tokens are
+  "rejected, not forwarded"; item 11 makes an at-rest unregistered record **held, never grown** — its
+  chunks are refused (D-11.21) — because staging chunks toward an item this build can never ack,
+  offer, forward or claim spends the 256 MiB / 1024-item caps against types that *are* registered.
+- **The battery is a salted overlay, not a new schedule event.** §11's acceptance asks for a property
+  test over the delivery property. Adding a routed case to `MeshScheduleEvent` re-phases every one of
+  P4's 80 membership cells — voiding §10.10's evidence *and its provenance* — so the routed rectangle
+  rides the **same seeds and same five shapes** through a salted side-plan (D-14.1/D-14.2), and P4's
+  cells are asserted byte-identical by a pinned digest rather than by a self-consistency check
+  (D-14.7).
+
+### 11.3 Findings for the owner — real, and deliberately NOT fixed here
+
+1. **`IdentityService.loadExistingDeviceIdentity()` can mint over a live identity** (ledger F-1,
+   found by item 10, `IdentityService.swift` ~574–582). It uses the nil-collapsing `KeychainItem.load`,
+   so after first unlock a **transient** keychain read error falls through to the mint path — and
+   `KeychainItem.store` deletes before adding. **Cost:** the worst outcome in the tree: a device that
+   silently becomes a stranger to every mesh it belongs to, losing its trust vault relationships, with
+   no error surfaced. It is not P5's store and not a routed defect, which is exactly why it is written
+   here rather than fixed in passing. Fix shape: a `loadDistinguishingAbsence` that refuses to mint on
+   an error rather than on an absence. **Owner's, and the highest-value item on this list.**
+2. **Option (b) for `handleEncryptedMetadata` is unexercised** (item 13, D-13.5b). Nothing in the
+   build sends `.meshEncryptedMetadata`; deleting the door whole and parking the `PayloadType` case
+   would also retire `decryptPayload`'s last caller, `AEAD.meshEncryptedMetadataV2`'s last consumer
+   and its domain-separation row, the `droppedLegacyWireFormat` audit line,
+   `DuressRecoveryCoordinator`'s pointer and four re-aimed claims. **Cost:** one narrowed `keyEpoch`
+   compare survives on a receive-only door, and an older peer's sealed *control* frame keeps working —
+   which is precisely the interop question that makes it the owner's, the same class as the legacy
+   unsigned removal's retirement (§22.3).
+3. **The membership re-gossip budget is per session and is not refunded** (item 7, D-7.30).
+   `reGossipedToFingerprints` clears only at `leaveMesh` / `prepareMembershipLedger` /
+   `armJoinerLedger`, so on a **second** heal of the same pair inside one session no records cross, no
+   digest moves, no proof is emitted and neither window can close. **Cost:** not a regression — the
+   old rule converged no better — but it is the unstated precondition of every merge-liveness
+   argument, including item 14's. Making it once-per-window is a transport decision whose blast radius
+   is all 80 membership cells **and** all 40 routed cells, and **both** pinned digests move with it.
+   Pinned by a wire cell so nobody "fixes" a hang by loosening the closing rule instead.
+4. **Three routed door refusals are replayable without bound** (item 12, D-12.14).
+   `notADestinationOrHandoff` (1 Ed25519 verify + 1 fingerprint hash per replay),
+   `unknownItemNotFromOrigin` and `unregisteredTypeChunk` (1 sealed-index load each) sit **before**
+   their store verb, so the replay window never records them. Two fire before their verifier, where
+   the author is only a claim; the third is sender-dependent, so recording a courier's refused copy
+   would drop the origin's own hand-off copy tomorrow. **Cost:** a bounded-per-frame but
+   unbounded-in-count work channel for a member of the mesh. Closing it needs a per-sender
+   pre-verification budget — a different mechanism with its own DoS question — and was deliberately
+   not half-built; it is stated in `dispatchRoutedContent`'s doc comment and named in item 14's
+   honesty clause.
+5. **Two smaller replay/digest residuals, both named, neither closed.** (i) D-12.15: a custody
+   `receiptID` excludes `custodiedAt`, so a receipt re-minted after a repaired slot carries an id
+   peers already recorded and their windows answer `replayed` — they keep the **earlier** receipt.
+   **Cost:** staleness, never a lost delivery; a cross-device un-record would be a wire change.
+   (ii) D-12.12 (amended): `recordPeerRoutedInventory` overwrites the peer's inventory with no
+   `sentAt` monotonicity guard, so that peer's own replayed older digest regresses this device's view
+   and re-stamps `quiescentLocalAsOf` from a stale instant. **Cost:** a stale delta — wasted,
+   budget-bounded offers — never a lost or double-counted delivery, and only that peer can cause it.
+   The guard is handed forward because it changes items 5/6's door and the stamp item 7's window rule
+   reads: a behaviour change, not a wiring change.
+6. **Item 9's six app display literals — and item 13's in-package refusal sentence — are unwritten,
+   and the string catalog is unsynced.**
+   `RoutedDeliveryHoldBanner.swift` ships `LocalizedStringKey` copy — one sentence pair per cause,
+   with **no count interpolated into any key**, so no plural variation is owed as it stands; if the
+   owner wants the number in the copy, that key needs a `variations.plural` block **plus** a
+   `pluralRuledKeys` entry at catalog-sync time (D-9.5). `Localizable.xcstrings` is held by another
+   session and was deliberately never staged; `Scripts/sync-string-catalogs.sh` has not been run.
+   **Item 13 adds a seventh string to the same pass, inside the package:** the routed share refusal's
+   sentence — "Couldn't share that photo with the mesh — it's saved on your own wall." — is composed
+   on the existing `meshError` seam and therefore renders in English in every language (D-13.15,
+   *inherited*: `addPhoto` already composed `mesh.photo.encryptFailed` the same way, so this is no new
+   mechanism). Answer it together with D-10.9 — whether a device that could hold nothing all session should say
+   so, and in what words (declined for now, so locked-device visibility ships as counts and frozen
+   tokens). **Cost:** the banner shows English placeholders until the copy lands, and localizing after
+   the copy changes means doing it twice.
+7. **Two close-out flags on sealed-surface bookkeeping.** (i) `CryptoFormatCensusTests` now has
+   **two** sealed at-rest mesh surfaces outside its census — mesh-session (P3) and mesh-routed (P5
+   item 3). P3's precedent was followed, and item 13's routed item blob deliberately gets no census
+   case (one format from day one, nothing migrated, D-13.6). (ii) The **duress pre-draw sweep** names
+   neither `com.fernlet.mesh-session` nor `com.fernlet.mesh-routed`; both die in the delete-all
+   funnel. **Cost:** none today — nothing is unwiped and nothing is uncounted at rest — but both are
+   judgement calls about what those two mechanisms are *for*, and both are the owner's.
+8. **Four app-side types still hold their host `unowned` on item 1a's pattern** (H-1a.3):
+   `MealResolutionService`, `HealthSyncCoordinator`, `JournalSealingCoordinator`,
+   `OwnPhotoBackupCoordinator` — same fix shape, app target, outside `MemoryLifecycleBoundaryTests`'
+   ML4 scope. And (H-1a.4) `stopSearching()` / `leaveMesh()` still do not cancel the detached fan-out;
+   it is **safe now** because every send pins its host, but it is pinned, not cancelled. **Cost:** the
+   same non-deterministic host-destroyed trap 1a spent a whole item chasing, waiting in four places
+   the wall cannot see.
+9. **Two P5 sub-items are open by name.** **1c**: `MeshP4QuorumAcceptanceTests.aTwoTwoSplitOfAFourRosterRemovesNobodyAtTheManagerSeam`
+   expired after 605 s in-cell in one full-suite run, green solo and on the rerun — the
+   MainActor-starvation family under a 461-suite load, seen once (a per-instance scope for
+   `MeshRoutedBackpressureAuditCapture`'s process-global audit handler is the sibling hazard,
+   D-6a.10). **6b**: the drain's store I/O runs on the **main actor** — a rising re-entry pass costs
+   three index loads plus conditional claim/mint reads, a reclaim batch one load and one seal, and
+   `committingCustody` can hash up to 256 MiB. **Cost:** 1c is one flaky cell under load, not an
+   attributable failure; 6b is bounded per answer but is a real main-thread cost whose two numbers
+   (`maxChunksPerAnswer` 64, `maxChunksInFlightPerPeer`) only tier 2 can re-measure. P6/P7 may move it
+   off-main.
+10. **Tier 2 is owed and was never the gate.** Real QUIC chunk pacing at 256 KiB across 3–6
+    Simulators; whether a large transfer starves the control stream; **and therefore whether relay
+    increment 2 is needed at all** — §11 gates increment 2 on exactly that measurement; item 6b's
+    main-actor I/O; item 9's `maxChunksPerAnswer` / `maxChunksInFlightPerPeer` re-measurement and the
+    sealed index file's own **uncounted** size (~5 MB worst case, bounded but outside the byte cap);
+    plus P4's still-owed tier-2 items 11–14. **Cost:** every tier-1 claim in §11.4 is about the fake
+    fabric; no routed byte has crossed a real radio in a partition shape, and the one design question
+    §11 explicitly defers cannot be answered without this lane.
+11. **Three phases' acceptance batteries are still not CI-gated** — `MeshP3*`, `MeshP4*` and now
+    `MeshP5*AcceptanceTests` plus `MeshRoutedDrainConvergenceTests`. This has been flagged at three
+    consecutive phase boundaries. The lines are written out verbatim in §11.4. **Cost:** the batteries
+    this plan cites as its acceptance run only when somebody runs them by hand — and the failure mode
+    is silent: a `-only-testing` line naming a non-existent suite, or a *file* rather than a `@Suite`
+    struct, matches zero tests and still prints `TEST EXECUTE SUCCEEDED`.
+12. **What P5 hands P6, deliberately unbuilt.** A projection that **refuses** (blocked origin,
+    unresolvable origin) is not marked projected, so a refusing set larger than the 16-item re-entry
+    allowance can starve new items — it needs a retryable-vs-final distinction. Adding a dispatch arm
+    for `.sessionTranscript` / `.heartLedger` means adding that store to
+    `projectableRoutedTypeTokens` **in the same edit**, and extending wall W2(b) to the first real
+    canonical-mutation verb in the same commit; `reentryFinishLocalAcks` / `reentryHeartStage` are
+    counted no-ops until then. Item 11 owes, in one commit with P6's first narrowed per-type cap, the
+    receiver-side size check, its new `MeshRoutedManifestRejection` case and that case's
+    **non-dropping** arm in `MeshRoutedParkedDrop.reason`; the registry's `expiry` column has no
+    discriminating test until a second `MeshRoutedExpiryRule` case exists (D-11.22). Item 12's
+    manager-level cell for a departed origin's custodian forwarding is explicitly **not taken** (it
+    needs a second rig). And `MeshSessionContext.routingInventoryDigest` has been provably dead since
+    item 5 (left nil) — delete it or hand it on. **Cost:** none today; each is a named obligation with
+    the commit it must land in already stated.
+13. **Item 13's retirement left two named feature outages, both owner-gated.** (i) **The
+    proximity-join pairwise phase now has no photo transport at all** (D-13.18): a two-device auto-dwell
+    stays `currentMesh == nil` until a second peer commits, so there is no meshID, no membership ledger
+    and therefore no destination set — a capture there is cached on the user's own wall and shared with
+    **nobody** until the session promotes (`startNewMesh` sessions are unaffected). The inadmissible
+    "fix" is keeping the legacy pairwise path alive, which would keep `handlePhotoManifest` and
+    `sendRequestedPhotos` in the tree and make the retirement a fiction. (ii) **A mint refuses whenever
+    any destination lacks a handshake-verified X25519 key** (D-13.1/D-13.22): destinations are
+    ledger-scoped and durable while the wrap keys are session-scoped, so a **star** topology (A admits
+    B, B admits C, B never links to C), a roster above `maxTotalSlots` 5, and **any** resumption —
+    process restart, idle-lapse resume or rejoin, each of which restores the ledger but not the session
+    roster — refuse visibly by name, the third asserted by `R-16` rather than left to be met on device.
+    **Cost:** two real, user-visible losses, taken deliberately rather than kept alive beside a
+    half-built successor. One fix closes both: a signed key-advertisement wire family
+    (`fernlet.mesh.key-agreement.v1` — each member signs its own X25519 key under its admitted Ed25519
+    key, gossiped as a grow-only set, full trio), plus a mesh identity for the pairwise phase (promote
+    at one committed peer, or mint a two-member ledger). Both are strictly bigger than a P5 item.
+14. **Unchanged from P4, and still the owner's.** §18.2's partition UX copy (default: the subtitle
+    count only, no new localized string) — P5 is the first phase that must *show* a delivery state, so
+    the question is now concrete. The legacy **unsigned** two-party removal stays frozen beside the
+    signed family; P5 touched neither path. Item 9's deliberate non-shipment stands beside them: an
+    item whose destinations have **all departed** is not reclaimed and waits for expiry, because a
+    departed destination and an unmerged roster are indistinguishable at the reclaim instant.
+    **Cost:** nothing mechanical for the two halves carried from P4; for the never-reclaimed item, its
+    share of the store's 256 MiB / 1024-item caps is held until `hardDeadline + 20 min` with no
+    user-visible reason given.
+
+### 11.4 Acceptance evidence
+
+§11's clauses, one serialized suite each, in `Tests/FernletTests/MeshP5AcceptanceTests.swift`
+(`ed9aebd`) — **twelve suites, 33 tests at `ed9aebd`; 34 after `3f323e9` added
+`theRoutedFixtureAnchorHoldsItsContract` to `MeshP5DeterminismAcceptanceTests`** — each a self-contained
+scenario on the shipping seams so CI can gate one line per clause:
+
+| Clause | Suite | Tests | Scenario |
+|---|---|---|---|
+| (a) manifest | `MeshP5ManifestAcceptanceTests` | 3 | the manifest a converged run **delivered**: byte-identical at every survivor and verifying at each survivor's own `MeshRoutedManifestVerifier` (relays forward the origin's exact signed object, never re-sign); the destination set is the full roster at creation and never moves; the expiry is the injected hard deadline + the 20-minute development grace |
+| (b) chunks + custody + inventory | `MeshP5CustodyAndReceiptAcceptanceTests` | 3 | a **multi-chunk** item converging with every chunk inside the 256 KiB wire bound; custody and delivery as two distinct receipt kinds on one record, bytes re-measured from the sealed chunk files; the digest bounded by the 1024-item cap and the healed pair **converged** — a non-empty pair, entitlement computed per direction, `converged(local:peerReportsQuiescent:)` as the predicate (D-14.12) |
+| (c) ack stages | `MeshP5AckStageAcceptanceTests` | 3 | a heart routed across a partition **stops at custody** — durable ciphertext is not enough — on two fixed seeds; it closes the moment a real `ProximityHeartLedger` judgement stands behind it (driven at the store door, because item 10's re-entry heart stage is a counted no-op until P6, D-14.8); a photo is final on durable ciphertext with no decrypt in the path |
+| (d) backpressure | `MeshP5BackpressureAcceptanceTests` | 3 | a capped destination refuses **visibly** (`routedDeliveryHold.cause == .storeFull`), the origin keeps its copy and the leg stays outstanding; the hold is bounded by the store's own item cap; the over-cap admission is refused rather than absorbed |
+| (e) locked device | `MeshP5LockedDeviceAcceptanceTests` | 3 | a lock window moves no byte at **any** member's store, with its own gate shut and work still outstanding (D-14.9); `deferred` is distinct from `absent` at the same store one binding apart; the unlock edge runs its re-entry once, reports it, and the same gate pushed twice runs no second pass |
+| (f) partition drain | `MeshP5PartitionDrainAcceptanceTests` | 3 | the widest shape (roster 8, `4/2/2`) drains to convergence under all twelve invariants; a routed item survives a **nested re-split mid-merge**; a closed merge window names its own reason, and an open one is never failed for staying open but is held to its proof cap |
+| (g) type registry | `MeshP5TypeRegistryAcceptanceTests` | 2 | an unregistered token at one receiver is refused and the run still converges; the refusal is neither a delivery nor a forward |
+| (h) relay scope | `MeshP5RelayScopeAcceptanceTests` | 3 | a development hands custody only to custodians it **named AND served**, with both branch-drain preconditions asserted per cell; `handedOffItemCount` read off the **signed departure record** (D-14.11); **no third-party courier** appears while the origin is alive |
+| (i) replay/dedup | `MeshP5ReplayAcceptanceTests` | 2 | a replayed manifest moves no byte, no rung and no receipt count; the window holds both of its axes |
+| (k) other-branch content | `MeshP5OtherBranchDeliveryAcceptanceTests` | 2 | a **real sealed photo** minted at a far-branch survivor reaches the near branch's `meshPhotos` wall exactly once after the heal — the clause the three `keyEpoch` gates were retired **for** — plus the sealed rectangle's cross-pins |
+| (j) honesty | `MeshP5HonestyAcceptanceTests` | 2 | the rectangle whole at **40 of 40** with `deferred` asserted **empty as a positive claim**; and what the battery deliberately does not claim, named — tier 2, D-7.15's liveness, D-12.14's three unbounded pre-store refusals, D-12.15's staleness and item 9's never-reclaimed all-departed item, with the three refusal tokens pinned mechanically (D-14.14) |
+| (j) determinism | `MeshP5DeterminismAcceptanceTests` | 5 (4 at `ed9aebd`) | the salt and root seed pinned by value and the overlay replaying from them across all 40 cells; one whole routed cell replaying identically as an ordered token trace **and** an index-projected rung digest; the grep-wall on the third convergence file; the two pinned digests; and, added by `3f323e9`, the rolling fixture anchor's own contract (`theRoutedFixtureAnchorHoldsItsContract`) |
+
+- **The battery: 33 tests in 12 suites green, 11.027 s alone**, twelve `◇ Suite` starts against twelve
+  `✔ Suite` at `ed9aebd` (`item14/logs/batt8.log`, against the final bundle `item14/logs/build15.log`;
+  every log path in this subsection is this session's scratch under `scratchpad/p5/…`, so the SHA
+  beside each figure is what survives it).
+- **The routed property: `MeshRoutedDrainConvergenceTests`, 12 test functions / ~73 cases green,
+  48.330 s alone** at `ed9aebd` (`item14/logs/prop5.log`) — rectangle A 40 cells, rectangle B 12 lock cells, rectangle C's
+  development cells derived from the overlays on their own pipeline, rectangle D 5 sealed-photo cells,
+  three named cells and five non-vacuity pins. Isolated cost is 48.3 s against a 180 s budget, so
+  **nothing was cut**; any larger figure inside a full-suite run is contention, not cost.
+- **Full `FernletTests`: 4615 tests in 461 suites green, EXIT=0, in ONE invocation** at `3f323e9`
+  (1128.589 s, `fixes-1b-6a/logs/gauntlet-test-b1.log`) — 4615 = item 14's 4614 plus 6a's new
+  `theRoutedFixtureAnchorHoldsItsContract`. Item 14's own full run was 4614 tests in 461 suites,
+  995.559 s, 461 `◇` against 461 `✔` and **0 `✘`** (`item14/logs/full1.log`), taken against the same bundle as
+  every other number in its block. The P4 boundary was 3859.
+- **P4's and P3's evidence re-run on the final bundle and unmoved:** `MeshConvergencePropertyTests` +
+  `MeshConvergenceScheduleTests` + the nine `MeshP4*AcceptanceTests` → 42 tests in 11 suites, 43.081 s
+  (`item14/logs/p4regress2.log`); the four `MeshP3*AcceptanceTests` → 13 tests in 4 suites, 10.496 s
+  (`item14/logs/p3acc2.log`) — both at `ed9aebd`'s final bundle.
+- **The matrix line: 40 routed cells declared** (5 shapes × 8 fixed seeds — the quorum preference is
+  deliberately **not** a routed dimension, and that is itself a test), **all run, nothing deferred**,
+  with `MeshRoutedConvergenceMatrix.deferred` empty *as a positive claim*. P4's 80 membership cells are
+  reported honestly: the generator files are untouched in item 14's diff and the byte-identity claim
+  rests on the pinned literal digest, not on `everyCellOfTheMatrixReplaysIdentically`, which is cited
+  as the self-consistency check it is.
+- **Seed discipline.** Root seed `0x00F32B1C00090002` in `MeshConvergenceSeeds.root`, the family of
+  eight **re-derived by the generator's own SplitMix64 in the test**, never copied. The routed overlay
+  is salted `seed ^ 0x524F_5554_4544_0000 ^ routedShapeSalt(shape)` — the shape term is load-bearing
+  and was found by a probe: seed-only salting collapsed the 40-cell rectangle to 8 distinct plans with
+  no multi-chunk cell at all (D-14.2). Two pinned SHA-256 digests, and a digest failure is a
+  **decision**, not a re-pin — the literal moves only with a ledger row naming the generator change:
+
+  ```
+  schedule (80 membership cells)  ca898bcc9ec7eb099c20bf0b1557e8d450d2d6747d103d899883aef06d466930
+  overlay  (40 routed overlays)   f1cc626d4421a8845839ac41be3c4fa418e98dd2047ad92865306e40d1693ff9
+  ```
+
+  The grep-wall banning every system RNG, `Date`, shuffle and random call now names **three**
+  convergence files. Since `3f323e9` the fixtures' one wall-clock read is
+  `MeshRoutedFixtureClock.createdAt = max(MeshP3Acceptance.base, Date() + 30 days)`, in its own file
+  so those walls stay honest, and it is negative-tested (anchor forced to 2028 through the real code
+  path, `aheadMarginSeconds` 30 d → 500 d: 29 suites / 247 tests green) — the fixed 2027-01-15 expiry anchor cannot come back without failing
+  `theRoutedFixtureAnchorHoldsItsContract`.
+- **Non-vacuity, proved by seven deliberate mutations of the SHIPPING seams — all reverted:**
+
+  | Invariant | Mutation | Result |
+  |---|---|---|
+  | I-6 `deferred` ≠ `absent` | `MeshRoutedStore.openIndex`'s `DeviceBindingID.ReadError` catch returns `.absent` | `MeshP5LockedDeviceAcceptanceTests` red, 2 issues |
+  | I-10 the capacity hold is visible | `refreshRoutedDeliveryHold` writes `nil` in place of the `.storeFull` hold | `MeshP5BackpressureAcceptanceTests` red, 2 issues |
+  | I-1 / I-8 progress by name | `commitLocalDelivery`'s destination guard inverted (no device files its own recipient receipt) | `MeshP5PartitionDrainAcceptanceTests` + `MeshP5AckStageAcceptanceTests` red, 16 issues |
+  | D-14.9 the window's gate claim | `MeshRoutedAccessGate.permits(_:)` returns `true` for `.decryptContent` / `.mutateCanonicalStore` | `MeshRoutedDrainConvergenceTests` + `MeshP5LockedDeviceAcceptanceTests` red, **36 issues**, every one `routedWindowIsShut` |
+  | D-14.11 clause (h) is no longer a tautology | `handoffSummary(handedOffItemCount: 0)` | `MeshP5RelayScopeAcceptanceTests` red, 1 issue — the *withdrawn* form stayed green under this |
+  | D-14.12 the entitlement is real | `MeshRoutedIndex.outstandingItems(at:in:)` iterates `destinations` instead of `outstanding(in:)` | `theInventoryStaysInsideItsCapAndTheHealedPairIsQuiescent` red, 1 issue — the `offerableToPeer: []` form could not see it |
+  | D-14.10 the narrowed arms still bite | the destination guard inverted again, on the **final** source | the same two suites red, the same 16 issues — the narrowing cost no falsifiability |
+
+  A narrowing cannot itself be proved by a mutation — it removes a *false green*, not a failure — so
+  what stands behind D-14.10 is the rectangle staying green with the excuse strictly stronger, plus
+  the last mutation showing the arms it guards still red when the delivery seam really breaks. Every
+  probe was reverted with `git checkout --` and the tree rebuilt before the gate runs: a
+  `test-without-building` over a stale bundle produced 11 red suites once and is the reason the
+  rebuild is stated rather than assumed.
+- **Repository gates.** At item 14's final bundle, `python3 Scripts/power-of-10-scan.py` → **497
+  files, 0 violations**, 21 allowlisted, assertion density 0.771 against a 0.68 floor
+  (`item14/logs/pot3.log`), and `python3 Scripts/doc-coverage-scan.py` → **0 undocumented type
+  declarations** (`item14/logs/doc3.log`); both were re-run at `3f323e9` and are still 0 and 0.
+  `xcodebuild build-for-testing` at full strictness
+  (`DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR SUPPRESS_WARNINGS=NO
+  SWIFT_TREAT_WARNINGS_AS_ERRORS=YES`) → **BUILD SUCCEEDED, EXIT=0**. `Scripts/spm-wall-check.sh`
+  PASSED at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log); **no module
+  DAG moved in the phase** — `FernletKit/Package.swift` and the pbxproj are byte-identical to the
+  launcher's `b31b7c0`.
+- **Owed, and not run: tier 2** — §11.3 finding 10. Recorded as corroboration owed on the owner's sim
+  fleet, never as the gate.
+
+#### CI lines still to wire
+
+`.github/workflows/s3-wall.yml` gates **none** of the three phases' batteries. These go after the
+key-custody step (lines 186–188, the workflow's last step today), in the same form as the boundary
+suites. Every one of the twelve `MeshP5*` names below was verified against a run showing a **non-zero
+per-suite count** — the caveat that matters, because a line naming a non-existent suite, or a *file*
+rather than a `@Suite` struct, matches zero tests and still prints `TEST EXECUTE SUCCEEDED`:
+
+```
+-only-testing:FernletTests/MeshP5ManifestAcceptanceTests
+-only-testing:FernletTests/MeshP5CustodyAndReceiptAcceptanceTests
+-only-testing:FernletTests/MeshP5AckStageAcceptanceTests
+-only-testing:FernletTests/MeshP5BackpressureAcceptanceTests
+-only-testing:FernletTests/MeshP5LockedDeviceAcceptanceTests
+-only-testing:FernletTests/MeshP5PartitionDrainAcceptanceTests
+-only-testing:FernletTests/MeshP5TypeRegistryAcceptanceTests
+-only-testing:FernletTests/MeshP5RelayScopeAcceptanceTests
+-only-testing:FernletTests/MeshP5ReplayAcceptanceTests
+-only-testing:FernletTests/MeshP5OtherBranchDeliveryAcceptanceTests
+-only-testing:FernletTests/MeshP5HonestyAcceptanceTests
+-only-testing:FernletTests/MeshP5DeterminismAcceptanceTests
+```
+
+plus the routed property battery, whose isolated run is quoted above:
+
+```
+-only-testing:FernletTests/MeshRoutedDrainConvergenceTests
+```
+
+P4's nine `MeshP4*AcceptanceTests` lines (§10.10) and P3's four `MeshP3*AcceptanceTests` lines are
+still owed beside them — **three phases ungated**, flagged at three consecutive phase boundaries.
 
 ---
 
@@ -2174,6 +2654,8 @@ first, keep `STAGGER=1`, and re-harvest identities after any test run.
 
 Carried from §21.4, with what P4 added:
 
+*Spent at the P5 boundary — this list is carried forward, with what P5 added, in §23.4.*
+
 - **Hardware, unchanged:** the Lane A report, Lane B's double-dial row (§7.7 finding 6), the **AWDL half**
   of item 11 (its Local Network prompt half is observed granted), and **Lane D — the production transport
   over Wi-Fi with the cable OUT**; check afterwards that no ready line names a USB-side interface
@@ -2218,3 +2700,371 @@ Carried from §21.4, with what P4 added:
   partition detection as well as the ceiling and the idle lapse.
 - **The P8 boundary is unchanged.** Background continuation, battery and thermal remain irreducibly
   physical — hardware only, per §15. Nothing P4 built moves that line, and nothing P5 builds will.
+
+---
+
+## 23. P6 handoff — written at the P5 boundary, 2026-09-05
+
+P0–P5 are **BUILT** (§5, §6, §7, §8, §10, §11). This is what a fresh session needs to start P6 and
+nothing more; **§12 is the specification** and §11's routed store is the surface every feature now
+routes through. One line of §12 is already done: **photos ride the routed path end to end** (P5 item
+13 pass B, `0a33bc7`) — `addPhoto` frames a sealed routed item, the drain moves it, and the delivery
+projection feeds the photo wall behind the access gate. **P6's remaining §12 rows are temporary text
+and hearts**, plus the receiver-side per-type cap the registry is waiting for.
+
+### 23.1 What P6 inherits
+
+*Every file line number in this section is current at `be4f4a5`. A `D-…` id cited here that
+`Docs/Mesh-Migration-Loop-Ledger-P5.md` does not carry — D-7.8, D-13.1, D-13.18, D-13.21, D-13.22 —
+is recorded in the shipping doc comment that cites it, so grep the tree rather than the ledger for
+those five.*
+
+- **The drain's actual shape: three ask doors, two membership-only doors, two bulk doors — and a wall
+  that fails if P6 adds a fifth of anything.** `theDrainFiresOnlyFromTheMergeDoor`
+  (`MeshRoutedDrainTests.swift:1624`) counts `sendRoutedInventory(` at **4** (one declaration + three
+  ask sites) and `sendInventoryDigest(` at **6**, then asserts each door by name from a brace-matched
+  body. The three **ask doors** carry both halves — `beginMergeExchange(entry:)`,
+  `askOneReconnectedPeer(_:)`, `handleAdmissionGrant(` (lines 3057 / 6547 / 8920, current at
+  `be4f4a5`). The two **non-ask membership doors** send a digest and must never carry routed bulk:
+  `readvertiseMergeProof(to:)` (item 7's post-merge proof, D-7.8) and
+  `attemptLedgerAdoption(ownAdmission:)` (the joiner's post-adoption digest, D-7.33). The two **bulk
+  doors** open no exchange, send no digest of either kind, record no advertisement, and each moves
+  bytes through the single extracted `sendRoutedBulk(_:to:now:)`: `pushCustodyToCustodians(`
+  (departure, item 8) and `pushOriginatedItem(_:to:now:)` (item 13's origination, the only routed
+  send that fires on a **user action**). **A routed advertisement is not a way to deliver anything**
+  (D-13.28): the drain is push-only and inverted — X advertising to Y makes *Y* answer with *Y's*
+  bulk, so an origin that advertises its new item causes the peer to push its backlog back and the
+  new item never moves. P6's text and heart origination reuses `pushOriginatedItem`, not a new
+  advertisement.
+- **The window semantics the drain runs inside.** `MeshMergeWindow` is an explicit value
+  (`Mesh/MeshMergeWindow.swift`, `nonisolated`, pure, no clock): it closes iff
+  `pending = (asked ∪ answered) ∩ reachable ∖ matched` is empty (`:278`), `answered ⊆ pending`, a
+  peer's later mismatching digest **un-matches** it (D-7.4/7.27), a late re-ask un-matches too
+  (D-7.32), and an unasked match is recorded but never promoted into `asked` (D-7.5 — that is 2d's
+  fix). `reachable` is **every committed slot ∩ derived roster**, never `activeSlots` (a UWB distance
+  rank capped at 3 of 5) and never `reachableRosterFingerprints()`. `maxProofs` = 49 =
+  `maxRecordsPerKind * 3 + maxTerminationRecords` = `maxReGossipFrames`, pinned by assertion. **D-7.15
+  is the liveness statement P6 must not re-derive:** the bidirectional-mismatch shape P4 named is
+  fixed by the proof door, and three named residuals remain — an asked, reachable, silent peer; a peer
+  that grew and stopped speaking after being un-matched; a pair whose per-session re-gossip budget is
+  spent (D-7.30) — so **a window is not guaranteed to close**, and the acceptance battery never fails
+  one for staying open (it is held to `proofCount <= maxProofs` instead, D-14.14). **Routed quiescence
+  is recorded and logged and gates nothing** (D-7.11): the capacity-refusal contract leaves a refused
+  pair non-quiescent for the session, so a gated window would never close again.
+- **The per-peer session frame budget, which is what paces everything.**
+  `MeshRoutedDrainBounds.sessionFramesPerPeer` = `maxChunkCount + 2 * maxRecordsPerKind` = **1056** —
+  exactly one maximal (256 MiB) item plus its receipts — charged by each plan's `frameCount`, not a
+  once-per-peer boolean (D-6.5). `increment1` caps one answer at `maxItems` 16 items /
+  `maxChunksPerAnswer` **64** chunks / 16 receipts. A truncated answer leaves the remainder for the
+  **next** exchange, and exchanges happen only as a link opens: a genuinely maximal item needs ~16
+  exchanges inside one session, which is what the session budget is sized for.
+- **The type-token registry is THE seam every new routed type registers through, and the walls make
+  it the only one.** `Mesh/MeshRoutedTypeRegistry.swift`: `MeshRoutedTypeEntry` has **seven declared
+  columns** — `token`, `maxItemByteCount`, `destinations`, `relayRetention`, `finalAck`, `expiry`,
+  `canonicalStore` — plus one derived (`requiresForegroundDecryptBeforeFinal ==
+  (finalAck == .foregroundDecryptAndLedgerCommit)`, never a stored column). `increment1` is **three
+  rows** (photo / tempMessage / heart), all `.fullRosterAtCreation`,
+  `.originRetainsUntilDeparture`, `.meshHardDeadlinePlusGrace`, all at the wire cap; only the heart
+  row is `.foregroundDecryptAndLedgerCommit`. `MeshRoutedAckStageTable.increment1` and the verifier's
+  `acceptedTypeTokens` are **projections of those rows** (D-11.1), so they cannot drift.
+  `entry(for:) == nil` **is** "unknown", the one answer at **seven doors** (verifier, ack door +
+  re-entry, drain offer — which the departure push inherits, the answer builder's receipt + ask half,
+  the hand-off claim, the chunk door). `init(entries:)` enforces the bounds by construction: it drops
+  `.relayInFlight` (increment 2, unregisterable) and any row outside
+  `1 … MeshRoutedManifestFormat.maxContentByteCount`. **Canonical-store slots ship as a frozen token
+  enum** — `.friendPhotoWall` / `.sessionTranscript` / `.heartLedger` — never a closure or a store
+  type, and `MeshRoutedTypeRegistry.token(forCanonicalStore:)` is how the *sender* names its token
+  (D-13.31): a manager that types `MeshRoutedTypeToken.heart` trips
+  `noShippingCodeBranchesOnARoutedTypeToken`. **`projectableRoutedTypeTokens`
+  (`MeshNetworkManager.swift:2178`) is the list P6 grows**: adding a `.sessionTranscript` or
+  `.heartLedger` dispatch arm means adding that store to it **in the same edit** (D-13.34), because
+  the re-entry projection filters on it. Two things P6 owes here, both from item 11: **the
+  receiver-side per-type size check, its new `MeshRoutedManifestRejection` case, and that case's
+  NON-dropping arm in `MeshRoutedParkedDrop.reason` — all in one commit with P6's first narrowed cap**
+  (D-11.4; increment 1 cannot produce the condition because every per-type cap equals the wire cap);
+  and **the `expiry` column's first discriminating test**, which is impossible until a second
+  `MeshRoutedExpiryRule` case exists to inject (D-11.22 — the existing cell is honestly named
+  `theMintsExpiryIsStillTheOneSharedFormula`, and D6's floored equality is re-checked without a
+  registry lookup at **four** shipping verifiers that must move together).
+- **`MeshFrameReplayWindow`'s final wiring, and the one channel it deliberately leaves open.** Keyed
+  `(meshID, AUTHOR, contentID)` at **four** content doors — manifest `itemID` → `originFingerprint`,
+  chunk `chunkID` → `chunk.originFingerprint`, custody `receiptID` → `custodianFingerprint`,
+  recipient `receiptID` → `recipientFingerprint` — **never an epoch, group key, branch, roster version
+  or forwarding sender** (D-12.1). **Two calls, not one:** `verdict(…)` is each door's first
+  statement, non-mutating, before the verifier and before the first sealed-index load; `admit(…)`
+  records afterwards, on the author the verifier authenticated, and only when the outer outcome is
+  `.completed` **and** `settled` (D-12.2/12.3) — `settled` being `finishLocalRungs`' `Bool`. Bounds
+  are **derived, not chosen**: `framesPerSender = sessionFramesPerPeer` (1056 ≥ 1024 chunks +
+  manifest + both receipt kinds) and `maxSenders = MeshMembershipBounds.maxRecordsPerKind` (**16**,
+  the admission set's capacity, not the roster cap of 8 — all four routed verifiers resolve the
+  author from `ledger.admissions.all` and a departed origin's content keeps moving). `senderWindowFull`
+  is a **named degradation, never a refusal**; the digest family (`receiveRoutedInventory`,
+  `receiveRoutedDrainAnswer`) stays out (D-12.12); `forget(frameID:from:)` exists for exactly one
+  reason — a repaired chunk slot must be refillable — and `forget(senderFingerprint:)` is never called
+  on the routed window. **Owed, and explicitly NOT taken by item 14:** the manager-level cell for
+  `sendRoutedChunks`' slot un-record on a **departed origin's custodian forwarding** — rectangle C's
+  pipeline ends at the hand-off assertions and holds no forwarding leg, so it needs a second rig and
+  was handed on by name rather than left unclaimed. **D-12.14 is open and named, not half-closed:** three door refusals sit
+  *before* their store verb and stay replayable without bound (`notADestinationOrHandoff`,
+  `unknownItemNotFromOrigin`, `unregisteredTypeChunk`); closing them needs a per-sender
+  pre-verification budget with its own DoS question, and P6 adding routed types adds traffic to that
+  channel.
+- **Which `keyEpoch` gates actually retired, and how.** Two were **deleted with their handlers**
+  (`0a33bc7`): `handlePhotoManifest`'s `keyEpoch >= localJoinedEpoch` filter went with the pull path,
+  and `handleFriendPhotoEnvelope`'s `key.epoch == photo.keyEpoch` went with the group-key photo
+  decrypt — both handlers are gone from the tree; grep confirms zero occurrences. **The third
+  survives, narrowed:** `handleEncryptedMetadata` (`MeshNetworkManager.swift:9598`) still reads
+  `wrapper.keyEpoch == currentGroupKey?.epoch`, but its two **content** arms retired and only the
+  control arms remain, on a **receive-only** door nothing sends to any more (D-13.5b, orchestrator
+  took (a)). **Option (b) — deleting the door whole and parking
+  `PayloadType.meshEncryptedMetadata` — is owner-gated and still open** (it also retires
+  `decryptPayload`'s last caller, `AEAD.meshEncryptedMetadataV2`'s last consumer and its
+  Crypto-Domain-Separation row, the `droppedLegacyWireFormat` audit line and
+  `DuressRecoveryCoordinator`'s pointer). `theRoutedPathNamesNoEpochSymbol` is green and is what makes
+  the retirement a deletion rather than a loosening: **P6 must not reintroduce an epoch into the
+  window, into `admit`'s inputs, or into any routed door.**
+- **The routed store API P6 calls.** *Origination:* `originateRoutedItem(body:typeToken:itemID:now:)`
+  (`:4664`) → `stageOwnRoutedItem` → `pushOriginatedItem`, answering
+  `MeshRoutedOriginationOutcome` (`.staged` / `.skipped(MeshRoutedShareSkip)` /
+  `.refused(MeshRoutedShareRefusal)`); `shareRoutedPhoto` (`:1807`) is the three-line pattern
+  P6's text and heart callers copy — encode the body, ask
+  `routedTypes.token(forCanonicalStore:)` for the token, call the door, surface only a refusal.
+  D-13.30: the push is **narrowed to the newly minted key**, so sharing one item never re-pushes the
+  session's backlog. *Projection:* `projectRoutedItemIfPermitted(key:manifest:)` →
+  `routedCanonicalDispatch(_:author:manifest:)` — one arm today (`.friendPhotoWall`); the author is
+  resolved from **`admissions − removals`**, never the derived roster, and a removed origin is refused
+  under `mesh.routedProjection.originRemoved` (D-13.33); a refusal at a missing dispatch arm is
+  `mesh.routedProjection.noDispatchArm`, and every instant written is the origin's signed `addedAt`
+  (D-13.36 — the projection takes no clock). *Delivery:*
+  `MeshRoutedStore.committingDelivery(item:recipient:stages:evidence:now:)` takes the **table**
+  (D-4.7), and `MeshRoutedIndex.itemsAwaitingLocalAck(at:for:)` /
+  `itemsAwaitingLocalProjection(at:for:types:)` are the two retry enumerators. *Backpressure:* the
+  observed `routedDeliveryHold` (`MeshNetworkManager.swift:194`) is raised by exactly the three
+  **store-level** capacity refusals (`.capacityItems` / `.capacityBytes` / `.capacityChunkFiles`,
+  D-9.17), under a fixed precedence, with the count saturating at the store's own item cap rather
+  than lying. Copy is app-side `LocalizedStringKey` and **no count is interpolated into any key**.
+- **The unlocks a working relay hands P6 — and exactly what each still needs.** The P5 launcher's
+  road-to-TestFlight table (`Docs/Next-Round-Prompt-Mesh-P5-2026-09-03.md` §9 — this plan's §9 is
+  "Roster and capacity bounds") says of P6 that the routed path "also unlocks the hearts/moderation
+  ceremonies P2 could not reach."
+  It does, at the transport layer only: those ceremonies failed for an **app-state** reason (§7.7
+  finding 2) — both need mutual trust-vault rows, which need a *second* session — and P5 changed
+  nothing about that. What P5 *did* build for them: **(1) the heart stage's foreground ceremony is
+  wired and fail-closed.** `mayCommitRoutedHeartLedgerJudgement` = `mayDecryptRoutedContent` **and**
+  `mayMutateCanonicalStoreWithRoutedContent` **and** `sessionState == .activeForeground` (D-10.12) —
+  three predicates, each defined once and grep-walled to one definition. A **photo or text** decrypt is
+  a different, later read of already-final bytes (D-4.4): it takes `mayDecryptRoutedContent` **alone**
+  — the gate, no session leg, because those bytes outlive the mesh — and is never a precondition of the
+  ack. **(2) `itemID == giftID` is
+  frozen** for `fernlet.mesh.routed-type.heart.v1` (item 4's decision; it is in neither the ledger nor
+  a doc comment — the enforcement is `MeshRoutedAck.swift:219`'s `guard proof.giftID == giftID`), so
+  the routed item id *is* the gift id.
+  **(3) `ProximityHeartLedger.commitProof(for:)`** (`HeartSharing/ProximityHeartLedger.swift:284`)
+  answers a read-only `MeshHeartLedgerProof` with a `fileprivate` init;
+  `MeshRoutedHeartAck(outcome:giftID:proof:)` is `nil` unless the gift was judged **exactly once** in
+  this `MeshHeartCommitOutcome` *and* `proof.giftID == giftID` — three fail-closed legs (D-4.8/4.9).
+  **(4) The re-entry's job 4c and job 5 are the hooks.** `reentryFinishLocalAcks` (`:5019`) splits
+  three ways — 4a stamped-but-unstored, 4b unstamped/complete/`durableRecipientStorage`, **4c hearts
+  → `reentryHeartStage`, a documented counted no-op** that logs
+  `mesh.routedAccess.heartStageEvaluable` / `…heartStageDeferred` and nothing else (`:5099`); job 5 is
+  `reentryProjectRoutedContent` (`:5071`), bounded by `MeshRoutedDrainBounds.increment1.maxItems`
+  (**16**) *after* subtracting the already-projected (D-13.32). **P6 supplies unwrap → ledger commit →
+  `MeshRoutedAckEvidence.heartLedgerCommit` behind the same predicate.** **(5) W2's pins are the test failure that tells P6 it has arrived.** `everyRoutedPlaintextSeamNamesItsPredicate`
+  (`MeshRoutedLockedDeviceTests.swift:790`) sweeps all of `FernletKit/Sources/ProximityKit` and pins
+  five spellings with `elsewhere == 0`: `MeshRoutedContentKeyWrapper.unwrap(` = **1**
+  (`MeshRoutedItemDelivery.swift`), `MeshRoutedItemSealer.open(` = **1** (same file),
+  `routedCanonicalDispatch(` = **2** (`MeshNetworkManager.swift`: declaration + its one call site),
+  `MeshRoutedHeartAck(` = **0** ("if it moves, scope has drifted into P6"), `.heartLedgerCommit(` =
+  **1** (the stage precondition's `guard case`, which reads evidence and judges nothing). **Every one
+  of those five moves when P6 lands hearts or text — move the pin and name the predicate in the same
+  commit** (W3(b) exempts a file that performs a routed decrypt, so the seam may live in a new `Mesh/`
+  file rather than being herded into the manager). Inherited residual: **a heart never foregrounded
+  before the mesh ends cannot reach `delivered` and expires at `hardDeadline + 20 min` as
+  `custodied(by: self)`** — D-4.5's documented shape, bounded by expiry, handed on unchanged.
+- **The fixture idioms, each of which cost an iteration.** **`MeshRoutedFixtureClock`
+  (`Tests/FernletTests/MeshRoutedFixtureClock.swift`) is the one rolling anchor every routed fixture
+  uses** — `MeshRoutedDrainRig.createdAt`, `MeshConvergenceRun.anchor` on a routed run,
+  `MeshRoutedPipeline.mintInstant`, 26 sites. It is `max(MeshP3Acceptance.base, Date() + margin)`, a
+  `static let` (one instant per process, so a cell that replays twice sees one value), and it must
+  stay **ahead** of the wall clock — an anchor behind it was measured and fails seven custody/hand-off
+  cells. Nothing moves today (`base` is still in the future); it starts tracking at
+  2026-12-16T08:00:00Z. **P6's new fixtures anchor to it, never to a literal** —
+  `theRoutedFixtureAnchorHoldsItsContract` and
+  `MeshP5ManifestAcceptanceTests.theExpiryIsTheHardDeadlinePlusTheDevelopmentGrace` are the two cells
+  that fail a ninth hardcoded copy. **The seeded overlay** is `seed ^ routedSalt ^
+  routedShapeSalt(shape)` with `routedSalt = 0x524F_5554_4544_0000`
+  (`MeshConvergenceSchedule.swift:748`), riding P4's root seed `0x00F32B1C00090002` across the same
+  five shapes as a **40-cell** rectangle; P4's 80 membership schedules are byte-identical beside it
+  (D-14.1: no routed event became a `MeshScheduleEvent` case, because one more element re-phases every
+  shape and seed and voids §10.10's evidence *and its provenance*). **P6 grows the overlay by
+  appending fields after field 8**, every draw unconditional, every field storing a **resolved** value
+  — that re-phases nothing and moves only the overlay digest, deliberately. Two SHA-256 digests are
+  pinned in `MeshP5DeterminismAcceptanceTests` and **a digest failure is a decision, not a re-pin**.
+  **And the suites-list lesson, twice-paid:** a `-only-testing:` line naming a non-existent suite, or
+  a *file* rather than a `@Suite` struct, matches zero tests and still prints
+  `TEST EXECUTE SUCCEEDED`. P5 hit it twice, and the corrected 143-name list it worked from lived only
+  in that session's scratch — so **regenerate the list** from the `@Suite` declarations under
+  `Tests/FernletTests` rather than inheriting one, and **count `◇ Suite` starts against `✔ Suite`
+  passes** on every run instead of trusting the banner.
+
+### 23.2 The sim↔sim lane, as it actually is
+
+**§21.2's table still stands, and P5 ran no lane work at all** — all fourteen items are tier 1 on
+`FakePeerNetwork`. Three Simulators form a full mesh since 0b was fixed (`871b7ee`), the pair row is
+proven over real QUIC, and the four ≥ 3-node asks (a 2/2 or 3/1 split, a departure learned by
+re-gossip, a real quorum, `MeshLedgerAdoption`'s rebase) remain reachable and **not yet run** —
+tier-2 items 11–14, owed, never the gate. §22.2's one behaviour change (`fa1becd`: a two-node run with
+`FERNLET_MESH_LEAVE_AFTER` emits `fernlet.mesh.terminated.v1`) is unchanged.
+
+**What P5 changed for this lane, without touching the harness.** P5 added **no env hook** (the twelve
+`FERNLET_MESH_*` variables are P2–P4's), yet `MeshFlowDriver`'s existing `.photo` flow now drives the
+whole routed path: `addPhoto` frames a `MeshRoutedPhotoBody`, seals it (`AEAD.meshRoutedItemV1`,
+`FMRI1`), mints an origin-signed manifest with per-recipient wraps, chunks it and pushes it through
+`pushOriginatedItem`; the receiver's `photosIn` still counts the wall, now fed by the delivery
+projection. **So P6's first sim observation of the routed path costs a harness change of zero** — and
+a lane photo failure is now a *routed* failure, because the legacy pull path is gone. Three new
+lane-visible refusals to expect, all by name and all deliberate: the **pairwise pre-promotion phase
+has no photo transport at all** (D-13.18 — a two-device auto-dwell stays `currentMesh == nil`, so
+there is no meshID, no ledger and no destination set; `startNewMesh` runs are unaffected, so promote
+first); **a mint refuses whenever any destination lacks a handshake-verified X25519 key**
+(D-13.1/D-13.22 — a **star** topology where two members never link, a roster above `maxTotalSlots` 5,
+and **any** resumption: restart, idle-lapse resume or rejoin restores the ledger but not the session
+roster); and a capped destination raises a visible `routedDeliveryHold`.
+
+**Tier-2 owed, and it is P5's whole physical question.** The re-tier's own words: chunk pacing at
+256 KiB, whether a large transfer starves the control stream, and **therefore whether relay increment
+2 is needed at all**, run over real QUIC between 3–6 Simulators via the Lane C harness. Added to that
+list by P5: **6b** — the drain's store I/O runs on the **main actor** (a rising access-gate re-entry
+pass costs **three** index `load()`s, each a file read + keychain fetch + AES-GCM open; up to a
+256 MiB hash in `committingCustody`; up to 64 sealed-file opens per answer) — **item 9's
+`maxChunksPerAnswer` (64) and `maxChunksInFlightPerPeer` (3) re-measurement**, and **the sealed index
+file's own ~5 MB worst-case size, which is bounded but uncounted by the byte cap**. Plan tier 1 first,
+keep `STAGGER=1`, and re-harvest identities after any test run.
+
+### 23.3 Decisions with defaults — take them deliberately, at the start
+
+| Decision | Default if the owner is silent | Why |
+|---|---|---|
+| **How text and hearts originate** | **The same three lines photos use:** `routedTypes.token(forCanonicalStore:)` → encode the body → `originateRoutedItem(body:typeToken:itemID:now:)`, delivered by `pushOriginatedItem`. No new send door, no advertisement, no second per-type source. | D-13.31: a sender that types a token spelling is a second per-type source free to drift from the row that decides what the receiver does. `noShippingCodeBranchesOnARoutedTypeToken` fails the build on the alternative, and D-13.28 proves an advertisement door delivers nothing. |
+| **The legacy path each new row replaces** | **Delete it with the row, in the same commit, and add its symbols to a zero-list wall** — as item 13 did for photos (`theRetiredPhotoTransportIsGone`, 11 → 14 names). `sendTempMessage` still fans a sealed `.tempMessage` envelope per slot (`MeshNetworkManager.swift:9339`); the legacy heart is different — a **single-recipient** sealed `.friendHeart` send (`:834`, the module's one call site) inside `sendSessionHeart`, with a fingerprint-keyed in-flight claim, a per-recipient `heartLedger.canSendHeart(to:)` cooldown and a presence-path fallback — so the heart row changes **destination semantics** too (`.fullRosterAtCreation`), not just transport. | Keeping both alive is what makes a retirement a fiction (D-13.18's inadmissible fix, verbatim). A wall makes re-introduction a test failure rather than a review catch. |
+| **The receiver-side per-type size cap** | **Land it in ONE commit with P6's first narrowed cap**: the check, its new `MeshRoutedManifestRejection` case, and that case's **non-dropping** arm in `MeshRoutedParkedDrop.reason`. The photo row's narrowed cap is `PrivateMediaStore.maxIncomingPhotoBytes` — **widen its access rather than restating 10 MB**, and keep the ciphertext-vs-plaintext bound distinction in the registry doc. | D-11.4. Increment 1 cannot produce the condition (every per-type cap equals the wire cap), so adding the case earlier would force `MeshRoutedParkedDrop`'s exhaustive switch to re-decide D-9.3's origin-bound drop rule for an unreachable condition. |
+| **Durable attribution after the mesh ends** | **Keep it fail-closed, for text and hearts too:** a projection whose `manifest.originFingerprint` the admission ledger cannot resolve is refused, custody kept, one audit line — never a nil/empty or body-supplied signing key (D-13.21). | The real answer is a signed key/identity advertisement family (`fernlet.mesh.key-agreement.v1`, full trio), which is a **new wire family** and owner-gated (§23.4). Text and hearts want the same answer photos wanted; deciding it once, on the wire, beats three fail-open guesses. |
+| **The projection's retryable-vs-final distinction** | **Build it when P6 adds its second projectable type**, not before. A refused projection is deliberately still not marked projected, so a refusing set larger than the 16-item allowance can starve new items (D-13.32). | With one dispatch arm the starvation needs 16 simultaneously-refusing photos; with three arms it is ordinary. The distinction needs a durable place item 13 did not have, and P6 is opening that surface anyway. |
+| **The `sentAt` monotonicity guard on `recordPeerRoutedInventory`** | **Take it, with the property battery asserting it** (`inventorySentAt` never moves backwards). Today a peer's own replayed older digest regresses this device's view of that peer's holdings and re-stamps `quiescentLocalAsOf` from the stale instant. | D-12.12 (amended): item 12 named it in three places and did **not** close it, because the fix changes items 5/6's door behaviour and the stamp item 7's window rule reads. That is a behaviour change, and P6 is the first phase with a reason to open that door. Cost today is a stale delta — wasted, budget-bounded offers — never a lost or double-counted delivery. |
+| **Body framing for text and hearts** | **Copy `MeshRoutedItemBodyFormat`'s frozen pair or state why not:** `[.sortedKeys, .withoutEscapingSlashes]` on the encoder and `.secondsSince1970` on **both** ends, length-prefixed header ‖ raw payload — never one `Codable` blob. | D-13.20/13.20a. `JSONEncoder` base64s a `Data` property, inflating the payload by a third and silently re-scaling `manifest.size`, the chunk count, item 9's caps, the frame budget and the number tier 2 exists to measure. All three hostile framing shapes must land on the one frozen `malformed` token (D-13.27). |
+
+### 23.4 Still owed by the owner, and not blocking P6
+
+Carried from §22.4, with what P5 added:
+
+- **Hardware, unchanged:** the Lane A report, Lane B's double-dial row (§7.7 finding 6), the **AWDL
+  half** of item 11, and **Lane D — the production transport over Wi-Fi with the cable OUT**; check
+  afterwards that no ready line names a USB-side interface (`anpi0`/`en8`).
+- **The CI gate lines, now for THREE phases' batteries** — flagged at every P5 close and still not in
+  `.github/workflows/s3-wall.yml`. P5 hands over **twelve verified `-only-testing:` lines**
+  (`MeshP5{Manifest, CustodyAndReceipt, AckStage, Backpressure, LockedDevice, PartitionDrain,
+  TypeRegistry, RelayScope, Replay, OtherBranchDelivery, Honesty, Determinism}AcceptanceTests`) plus
+  `MeshRoutedDrainConvergenceTests`; `MeshP3*` and `MeshP4*` are still ungated. Every name was
+  verified against a run showing a non-zero per-suite count, because **a line naming a non-existent
+  suite runs zero tests under a green banner**.
+- **Tier-2 items 11–14 from P4**, plus P5's own list in §23.2 (QUIC chunk pacing, control-stream
+  starvation, whether relay increment 2 is needed at all, 6b's main-actor drain I/O, item 9's two
+  numbers, the sealed index file's uncounted size).
+- **F-1, SERIOUS and outside P5:** `IdentityService.loadExistingDeviceIdentity()`
+  (`IdentityService.swift` ~574–582) uses the nil-collapsing `KeychainItem.load`, so after first
+  unlock a **transient** keychain read error falls through to the mint — and `KeychainItem.store`
+  deletes before adding, destroying the real identity. Fix shape: a `loadDistinguishingAbsence` that
+  refuses to mint on an error.
+- **Six new app display literals** in `RoutedDeliveryHoldBanner.swift` plus the routed share
+  refusal's sentence, their final wording and their catalog sync — `App/Fernlet/Localizable.xcstrings`
+  was deliberately not touched, and whether the copy carries the count buys a `variations.plural`
+  block plus a `pluralRuledKeys` entry. **§18.2's partition UX copy** rides with them (default: the
+  subtitle count only, no new string). Also owner's: **whether a device that could hold nothing all
+  session should say so** (D-10.9, declined here as counts + frozen tokens).
+- **Option (b) for `handleEncryptedMetadata`** — delete the receive-only door whole and park
+  `PayloadType.meshEncryptedMetadata`, retiring the last `keyEpoch ==` compare in the tree along with
+  the five consumers §23.1 names, plus four re-aimed test claims (L-3/3b/3c/4). A wire/interop decision, same class as **the legacy unsigned two-party
+  removal's retirement** (still frozen) and **transcript `sid`** (§18 decision 7), which P5's routed
+  frames make dearer again.
+- **A signed key-advertisement wire family** (`fernlet.mesh.key-agreement.v1`: each member signs its
+  own X25519 key under its admitted Ed25519 key, gossiped as a grow-only set, full trio) — the real
+  fix for D-13.22's three named mint refusals, and **the fix for the pairwise phase having no mesh
+  identity** (D-13.18: promote at one committed peer, or mint a two-member ledger for the pairwise
+  phase). Both are strictly bigger than a P6 item.
+- **D-7.30's per-session re-gossip budget.** `reGossipedToFingerprints` is per session and is not
+  refunded by `abandonMergeExchange`, so a **second** heal of the same pair inside one session crosses
+  no records and neither window can close. Not a regression — today's rule converges no better — but
+  making it once-per-window is a transport decision whose blast radius is **all 80 membership cells,
+  all 40 routed cells and both pinned digests**.
+- **Two census/duress questions:** `CryptoFormatCensusTests` now has **two** sealed at-rest mesh
+  surfaces outside its census (`com.fernlet.mesh-session` from P3, `com.fernlet.mesh-routed` from P5
+  item 3) — P3's precedent was followed, and whether the census grows is the owner's; and the duress
+  pre-draw sweep names **neither** keychain service, though both die in the delete-all funnel.
+- **The one-line `sync-string-catalogs.sh` write** on a quiet tree (nine stale keys) — known-red, **do
+  not bisect it**; and **the `HeartDrop` CloudKit record type is missing from the container**.
+- **§17.3's `PrivacyInfo` / privacy-copy paragraph** by the first TestFlight build — P5 made it
+  concrete and P6 makes it plural: nearby devices briefly holding *text and hearts* they cannot read
+  is now the drain too. Also **downgrade `browsed peers=` from `.notice`/`.public`** before QUIC ships.
+- **Three P5 residuals recorded in §11.3 and assigned to nobody.** `MeshSessionContext.routingInventoryDigest` has been provably dead since item 5 (always nil) but is still a live decoded field of the schema-2 blob (`MeshSessionContext.swift:224`, `:321`) — the ledger's close-out flag said "delete at close-out or hand to P6" and **neither happened**, so its disposal is the owner's; **D-12.15**, a custody receipt re-minted after a repaired slot carries a `receiptID` peers already recorded, so their windows answer `replayed` and they keep the **earlier** receipt (staleness, never a lost delivery — a cross-device un-record would be a wire change); and item 9's deliberately unreclaimed **all-departed** item, which holds its share of the 256 MiB / 1024-item caps until expiry.
+- **Unowed cleanup, close-out or P6:** deleting the derived `MeshRoutedAckStageTable.increment1` alias and re-pointing item 4's pins at the registry; `MeshRoutedTypeRegistry.maxEntries` restates the ack table's 16, and the equality is test-pinned (D-11.16) rather than read across.
+- **Two open sub-items P5 did not close:** **1c**, a load flake
+  (`MeshP4QuorumAcceptanceTests.aTwoTwoSplitOfAFourRosterRemovesNobodyAtTheManagerSeam` expired after
+  605 s in-cell under a 461-suite load, green solo and on re-run — the MainActor-starvation family),
+  with a per-instance scope for `MeshRoutedBackpressureAuditCapture`'s process-global audit handler as
+  its sibling hazard; and **6b** (above). Plus **H-1a.3**: four app-side types hold their host
+  `unowned` on the same detached-Task pattern item 1a fixed in ProximityKit —
+  `MealResolutionService`, `HealthSyncCoordinator`, `JournalSealingCoordinator`,
+  `OwnPhotoBackupCoordinator` — and **H-1a.4**, `stopSearching()` / `leaveMesh()` still do not cancel
+  the detached fan-out (pinned, so safe; not cancelled).
+- **Closed; do not re-audit:** `MeshTunnelConvergence` and the id-vs-endpoint family (`96337a3`,
+  `2f273a9`); the crypto-purpose / `PayloadType` / record-kind spellings, walled by
+  `CryptographicPurposeBoundaryTests`; plan §10.7–§10.10; and
+  `Docs/Proximity-Security-Followups-2026-08-18.md` **§1** (friend-photo author signature), **closed**
+  by item 13 — the origin-signed manifest plus the ledger lookup *is* the durable fix, so **no
+  `authorSignature` field is owed and no wire-compat flip is pending**. §2 of that file
+  (sealed-introduction 3DH) is still open. Beside it,
+  `Docs/Security-Review-External-Surfaces-2026-08-18.md` still names the photo symbols deleted at
+  `0a33bc7` (`handlePhotoManifest`, `sendRequestedPhotos`, `sendEncryptedMetadata`) and was left as a
+  **dated historical record**, not live surface — do not read it as one.
+
+### 23.5 What P5 learned that re-tiers P6–P8 further
+
+- **The property battery is already built for P6's rows, and the way to grow it is written into it.**
+  P4's lesson held: the routed overlay is 40 cells over the same five shapes and the same root seed,
+  and every drain event is **one call into an existing seam** (`routedCustodyEvent`,
+  `routedReplayEvent`, `routedLockWindowEvent`, `runRoutedDrainRounds`) — so a text or heart event is a
+  new *case in the overlay*, not a new rig. Two disciplines are load-bearing: **append after field 8,
+  every draw unconditional, every field resolved** (a conditional draw re-phases everything), and
+  **never add a `MeshScheduleEvent` case** (D-14.1 — that rewrites P4's §10.10 numbers and moves both
+  pinned digests). Write P6's cells beside its first row, not after all three.
+- **Tier 1 now carries 4615 tests in 461 suites in ONE invocation** (`3f323e9`, 1128.6 s; P4's boundary
+  was 3859), because item 1a's host pin fixed the `unowned` store trap at the root — so a gauntlet no
+  longer costs a second invocation **to that crash**. The `hung before establishing connection` runner
+  flake is **not** retired: the same `3f323e9` gauntlet lost 2 invocations to it (0 suites started,
+  ~360 s each), so still budget retries. A drain across a 4/2/2 with pending custody on both sides, a locked window mid-drain, a
+  replayed frame and a departure hand-off are all **tier-1** cells today.
+- **P6's first sim observation is free, and its second is still an app-state problem.** The Lane C
+  `.photo` flow drives the routed path end to end with no harness change (§23.2), so P6's text row will
+  too the moment `sendTempMessage` originates. But **hearts and moderation still need two sequential
+  sessions** — commit, end, complete `pendingFriendReview` on both sides, reconnect (§12) — and P5
+  changed nothing there. Scripting that pair of sessions across two Simulators remains P6's first real
+  lane job, and it is still a sim-lane job: **no hardware is implied by it.**
+- **P7 is unchanged in scope and one step closer to wired.** `applyRoutedAccessGate(_:now:)` is already
+  the `apply(_:)`-shaped door P7's `ProximityRunPolicy` becomes the single writer of — the **six**
+  `FernletApp.swift` call sites collapse into one call without the seam moving — and the gate says what
+  may be **decrypted**, never which radios run. Nothing in shipping code still raises
+  `evaluatePartition(reachable:now:)`, so P7's poller keeps its three consumers.
+- **The P8 boundary is unchanged, and P5 wrote down where it will disagree.** Item 10 does **not** fire
+  `.backgrounded`/`.foregrounded` — that would assert a CPT is running, which is P8's claim — so the
+  pushed foreground leg is documented **inert-until-P8**, and when `.continuingInBackground` becomes
+  real the pushed leg and the heart predicate's `sessionState` leg **disagree deliberately**: a
+  CPT-continued mesh custodies ciphertext and decrypts nothing. Background, battery and thermal remain
+  irreducibly physical (§15); nothing P5 built moves that line.
+- **A P6 row that lands in two passes needs its gate re-tiered.** A design with a **build order**
+  must make "all green" mean *the whole order*: item 13's first workflow reported green with pass B
+  untouched, because the script's second pass never fired. P6's rows are two-pass by shape too — a
+  sender/format pass and a retirement pass — so the gate has to assert the later pass **ran**, not just
+  that the run exited 0. (A scheduling note that belongs to the session and not to this plan: the usage
+  limit resets at a fixed local hour, so the longest workflow of the day goes right after a reset, and a
+  mid-run failure waits for the reset rather than retrying — cached stages replay, only
+  verify/fix/gauntlet re-run.)
