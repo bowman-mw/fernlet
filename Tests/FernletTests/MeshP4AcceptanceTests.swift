@@ -177,13 +177,28 @@ enum MeshP4Acceptance {
         return MeshP4Branch(fabric: fabric, meshID: meshID, nodes: nodes)
     }
 
-    /// §10.4's verdict as `node` counts it, re-derived on that node's own merged roster.
+    /// §10.4's verdict as `node` counts it, re-derived on that node's own merged roster, **at the
+    /// instant that node opened the window**.
     ///
-    /// The clock is the real one, as in `MeshQuorumManagerSeamTests`: this reads who counted what,
-    /// and the five-minute window is settled on an injected clock over there.
+    /// The read is driven from the proposal's own `firstSeenAt` — the injected instant the manager
+    /// stamped at acceptance — and never from `Date()` (P6 1c). What these clauses assert is the
+    /// arithmetic: who counted, on which roster, against which threshold. `.expired` is not one of
+    /// the answers any of them is about; the five-minute window is settled on an injected clock in
+    /// `MeshQuorumPartitionTests`' value cells, where `firstSeenAt ± proposalLifetime` is the
+    /// subject. A read at `Date()` made every clause below depend on the **harness's own wall
+    /// duration** instead: the window is real time (`MeshRemovalQuorumBounds.proposalLifetime`,
+    /// 300 s) while these rigs measure progress in `Task.yield()`s, and under a full-suite load —
+    /// where every proximity suite is `@MainActor` and hundreds of cells contend for it — one
+    /// cell's own elapsed time can pass five minutes between the propose and the read. The verdict
+    /// then answered `.expired` with the votes correctly counted and the roster intact, which is
+    /// the 1c flake. `firstSeenAt` is inside the window by construction, so what is left is the
+    /// tally and nothing else.
     static func verdict(_ node: MeshDepartureNode, _ proposalID: UUID) -> MeshRemovalQuorumVerdict {
-        guard let roster = node.manager.membershipVerifier?.roster else { return .unknown }
-        return node.manager.removalQuorum.verdict(for: proposalID, roster: roster, at: Date())
+        guard let roster = node.manager.membershipVerifier?.roster,
+              let open = node.manager.removalQuorum.proposal(proposalID) else { return .unknown }
+        return node.manager.removalQuorum.verdict(
+            for: proposalID, roster: roster, at: open.firstSeenAt
+        )
     }
 
     /// How many removal records `node` has filed.
@@ -193,6 +208,13 @@ enum MeshP4Acceptance {
 
     /// Opens a proposal at `proposer` and casts every other connected member's vote, settling
     /// between so each vote is cast on a proposal that member actually holds.
+    ///
+    /// **Both settles end on a predicate** (P6 1c). The closing one used to run all
+    /// `MeshDepartureRig.settleRounds` rounds unconditionally, which left thirty-two `Task.yield()`s
+    /// of scheduling exposure between the last vote being counted and the caller's read — the
+    /// stretch the five-minute window was closing in. It now ends the moment the proposer has
+    /// counted every connected voter, or the moment quorum completed and closed the proposal, which
+    /// is the only other way there is nothing left to wait for.
     ///
     /// - Returns: The proposal, so the caller can read the verdict it produced.
     static func vote(
@@ -211,7 +233,12 @@ enum MeshP4Acceptance {
                     "\(node.label) must hold the proposal before it can vote on it")
             _ = node.manager.voteOnSignedRemoval(proposal.proposalID)
         }
-        try await MeshDepartureRig.settle(connected, on: fabric)
+        try await MeshDepartureRig.settle(connected, on: fabric) {
+            guard let open = proposer.manager.removalQuorum.proposal(proposal.proposalID) else {
+                return true
+            }
+            return open.voterFingerprints.count == connected.count
+        }
         return proposal
     }
 

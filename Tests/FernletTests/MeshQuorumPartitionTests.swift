@@ -864,15 +864,29 @@ struct MeshQuorumManagerSeamTests {
             connected.allSatisfy { $0.manager.removalQuorum.proposal(proposal.proposalID) != nil }
         }
         _ = connected[1].manager.voteOnSignedRemoval(proposal.proposalID)
-        try await MeshDepartureRig.settle(connected, on: scenario.fabric)
+        // Ends on the observable the assertions below are about, rather than running every settle
+        // round out (P6 1c): the rounds it used to burn unconditionally were `Task.yield()`s, and
+        // under a full-suite load each one can cost real seconds against a five-minute window.
+        try await MeshDepartureRig.settle(connected, on: scenario.fabric) {
+            connected.allSatisfy {
+                $0.manager.removalQuorum.proposal(proposal.proposalID)?.voterFingerprints.count == 2
+            }
+        }
         for (index, node) in connected.enumerated() {
             #expect(MeshPartitionFixtures.recordCounts(node.manager.membershipVerifier?.ledger)
                     == before[index], "\(node.label): an incomplete proposal writes no record")
             #expect(MeshMergeFixtures.roster(node.manager).count == 4, "\(node.label): roster intact")
+            // Judged at the instant THIS node opened its window, never at `Date()` (P6 1c). The
+            // claim is the tally — two of the three a roster of four needs — and the window's
+            // expiry is settled on an injected clock by this file's own value cells. Read at
+            // `Date()`, the claim silently depended on how long the harness took to get here, and
+            // answered `.expired` under load with the votes counted and the ledger untouched.
+            let open = try #require(node.manager.removalQuorum.proposal(proposal.proposalID),
+                                    "\(node.label): the proposal must still be open to be judged")
             let verdict = node.manager.removalQuorum.verdict(
                 for: proposal.proposalID,
                 roster: node.manager.membershipVerifier?.roster ?? .empty,
-                at: Date()
+                at: open.firstSeenAt
             )
             #expect(verdict == .pending(required: 3, counted: 2), "\(node.label): two of three")
         }
