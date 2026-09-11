@@ -51,7 +51,8 @@ enum MeshSessionStoreFixtures {
     /// rather than an empty one.
     static func context(
         developedLocally: Bool = false,
-        epochHeads: [MeshEpochRef] = [MeshEpochFixtures.ref(1)]
+        epochHeads: [MeshEpochRef] = [MeshEpochFixtures.ref(1)],
+        keyAdvertisements: MeshKeyAgreementAdvertisementSet = .empty
     ) -> MeshSessionContext {
         var ledger = MeshMembershipLedger(
             admissions: MeshMembershipRecordSet([
@@ -68,7 +69,8 @@ enum MeshSessionStoreFixtures {
             ledger: ledger,
             epochHeads: epochHeads,
             lastExternalHeartbeat: MeshMembershipFixtures.base.addingTimeInterval(60),
-            developedLocally: developedLocally
+            developedLocally: developedLocally,
+            keyAdvertisements: keyAdvertisements
         )
     }
 
@@ -379,6 +381,11 @@ struct MeshSessionStoreLoadStateTests {
     /// phase, so no build that wrote a v1 file has ever run on a device. `corrupt` is the state
     /// that refuses to overwrite a file this build cannot account for — the right answer for a
     /// context whose `epochHeads` may hold strings that are not canonical `MeshEpochRef`s.
+    ///
+    /// **This cell proves nothing about a LATER bump**, and it is worth saying so where a reader
+    /// will look: a v1 blob was already refused before P6 item 1 moved `current` to 3, so it stays
+    /// green whatever the current version is. The v2 blob next door is the cell that actually
+    /// guards that bump.
     @Test func aVersionOneContextIsCorruptRatherThanMigrated() throws {
         let scope = Fixture.scope()
         defer { Fixture.tearDown(scope) }
@@ -395,9 +402,66 @@ struct MeshSessionStoreLoadStateTests {
         try Fixture.writeRaw(probe, into: store)
 
         let load = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
-        #expect(MeshSessionContextSchema.current == 2, "the bump this test guards")
+        #expect(MeshSessionContextSchema.current == 3, "two bumps on from the one this cell guards")
         #expect(load == .corrupt(MeshSessionCorruption(detail: .unsupportedSchemaVersion(1))))
         #expect(Fixture.token(load) == nil, "a v1 file must vend no write token")
+    }
+
+    /// The schema-3 bump (P6 item 1) treats a **v2** file as corrupt rather than migrating it, and
+    /// this is the cell that guards it.
+    ///
+    /// The bump is a policy act: a v2 context has no key advertisements, so a device that restored
+    /// one would resume addressable to nobody and then refuse every mint to a member it was not
+    /// linked to at that instant — the exact outage the field closes, re-created by a stale file and
+    /// invisible. `corrupt` makes it loud, vends no write token, and refuses to overwrite the bytes.
+    @Test func aVersionTwoContextIsCorruptRatherThanMigrated() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let store = MeshSessionStore(scope: scope)
+        try Fixture.save(Fixture.context(), into: store)
+        guard case .available(let key) = MeshSessionSealKey.forSeal(service: scope.keychainService) else {
+            Issue.record("could not read the seal key the save just minted")
+            return
+        }
+        let probe = try DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            try ColumnCrypto(purpose: FernletCryptoPurpose.KeyDerivation.meshSessionContextV1)
+                .seal(SchemaVersionProbe(schemaVersion: 2), contentKey: key)
+        }
+        try Fixture.writeRaw(probe, into: store)
+
+        let load = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
+        #expect(load == .corrupt(MeshSessionCorruption(detail: .unsupportedSchemaVersion(2))))
+        #expect(Fixture.token(load) == nil, "a v2 file must vend no write token")
+        #expect(FileManager.default.fileExists(atPath: store.fileURL.path),
+                "corrupt refuses to overwrite; it does not destroy")
+    }
+
+    /// The advertisement set survives the seal, which is the whole point of putting it here: a
+    /// resumption restores the ledger and the addressing together, out of one sealed value.
+    @Test func aSealedContextCarriesItsKeyAdvertisementsAndConflicts() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let store = MeshSessionStore(scope: scope)
+        let set = MeshKeyAgreementAdvertisementSet(
+            advertisements: [
+                MeshKeyAgreementFixtures.unverifiedRow(0, meshID: MeshMembershipFixtures.meshID),
+                MeshKeyAgreementFixtures.unverifiedRow(1, meshID: MeshMembershipFixtures.meshID)
+            ],
+            conflictedFingerprints: ["fp005"]
+        )
+        try Fixture.save(Fixture.context(keyAdvertisements: set), into: store)
+
+        let load = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
+        guard case .loaded(let context, _) = load else {
+            Issue.record("the sealed context must load back, got \(load)")
+            return
+        }
+        // Decoded VALUES, never sealed bytes: the column crypto re-nonces every write.
+        #expect(context.keyAdvertisements == set)
+        #expect(context.keyAdvertisements.count == 2)
+        #expect(context.keyAdvertisements.isConflicted("fp005"))
+        #expect(context.keyAdvertisements.keyAgreementPublicKey(for: "fp005") == nil)
+        #expect(context.schemaVersion == MeshSessionContextSchema.current)
     }
 
     /// A context sealed on another install opens for nobody here. It is the ciphertext that is

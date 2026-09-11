@@ -416,7 +416,7 @@ BEFORE the record reaches a ledger a roster is derived from.
 | --- | --- |
 | `MeshMembershipRecordSet<Record>` | One kind's bounded grow-only set: deduplicated by member (earliest wins), sorted by the total order, capped on init/insert/merge AND decode. |
 | `…RecordSet.merging(_:)` / `.inserting(_:)` | Set union. Commutative, associative and idempotent INCLUDING the cap — keeping the earliest *k* of a set is the same answer whether you cap before or after merging, which is what makes convergence independent of who connected first. |
-| `MeshMembershipLedger` | The four record sets, their union-merge, and `derivedRoster`. The union-mergeable half of plan §8.1's `MeshSessionContext` (the clock, the routing digest and the persistence story are the store's, not this). |
+| `MeshMembershipLedger` | The four record sets, their union-merge, and `derivedRoster`. The union-mergeable half of plan §8.1's `MeshSessionContext` (the clock, the key advertisements — which refuse a conflict rather than merging it — and the persistence story are the store's, not this). |
 | `MeshDerivedRoster.init(ledger:)` | The derivation: admitted (earliest 8) − departed − removed, then the termination rule. |
 | `…DerivedRoster.quorumThreshold` | ⌊&#124;roster&#124;/2⌋ + 1 (plan §10.4), never zero. |
 | `…DerivedRoster.coordinatorFingerprint` | Lowest fingerprint present — the deterministic election plan §8.4 assumes each partition can run alone. |
@@ -433,7 +433,7 @@ share one frozen English spelling per event, so a grep for the token finds every
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshMembershipEventFormat` | Widths and caps every frame is checked against BEFORE a signature is verified: 64-byte signature, 32-byte digest, 64-char fingerprint ceiling. |
+| `MeshMembershipEventFormat` | Widths and caps every frame is checked against BEFORE a signature is verified: 64-byte signature, 32-byte digest, 32-byte key-agreement key (P6 item 1, its own constant rather than borrowed from the signing-key width), 64-char fingerprint ceiling. |
 | `MeshRecordIdentity` | One record's kind + the four fields of its total order, so the digest is computed over a kind-tagged flattening of all four sets rather than four separate hashes. |
 | `MeshInventoryDigest` | Counts + SHA-256 over the sorted identities, under `Hash.meshInventoryDigestV1`. A pure function of the record SET — a hint that decides whether a full record exchange is worth its bytes, never an authority. |
 | `MeshMemberDeparturePayload` / `MeshMemberRemovalPayload` / `MeshTerminationPayload` | The three record frames. Each carries the signed record and nothing else — a second unsigned copy of the same fact is a second thing that can disagree, and the receiver re-derives quorum from its own roster anyway. The removal's voter list is clamped to §9's cap on decode as well as on init. |
@@ -444,6 +444,24 @@ share one frozen English spelling per event, so a grep for the token finds every
 | `MeshEpochHeadsPayload.signed(…)` | Signs this device's live head set under `Signature.meshEpochHeadsV1`. |
 | `MeshMembershipGoodbyeInterop` | The legacy `fernlet.session.bye.v1` rule: **parsed, never emitted**, and `departureRecord(forGoodbyeFrom:)` is ALWAYS nil — an unsigned frame must not be able to subtract a member from a signed roster (disconnect ≠ removal, §8.2). |
 | `MeshLegacyGoodbyeOutcome` | One case, `.disconnected`. The strongest statement an unsigned goodbye can support. |
+
+### `MeshKeyAgreementAdvertisement.swift`
+
+P6 item 1 (plan §11.3 item 13(ii)): **addressing, not membership**. A member signs its own durable
+key-agreement public key; the statement verifies against `ledger.admissions` and is folded into a
+bounded, grow-only, conflict-refusing set on the sealed session context, so a resumption — restart,
+idle-lapse resume or rejoin — can address every roster member rather than only the ones this device
+happens to be linked to (D-13.22). Not a fifth `MeshMembershipRecordKind`: a fifth kind would move
+the membership digest's golden and the pinned `maxProofs == maxReGossipFrames == 49` budget.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `SignedKeyAgreementAdvertisement` | The signed statement: mesh + member fingerprint (subject AND author) + the raw 32-byte key + `advertisedAt` + signature, with `isWellFormed` checked on untrusted bytes first. `meshID` is bound into the transcript, the key is bound as OPAQUE length-prefixed bytes (never a string), and `advertisedAt` is bound so a replay cannot be re-dated into the set's earliest-wins winner. |
+| `SignedKeyAgreementAdvertisement.signed(…)` | `@MainActor` mint over `IdentityService` under `Signature.meshKeyAgreementV1`; always advertises the device's OWN key. The self row goes through the same verify door as any other — there is no privileged insert. |
+| `MeshKeyAgreementAdvertisementSet` | The durable set: capped at `MeshMembershipBounds.maxRecordsPerKind` (16), deduped by member, deterministically ordered, and carrying its conflict marks as part of the SAME value so a refused seal rolls both back together. `keyAgreementPublicKey(for:)` answers nil for an absent **or conflicted** member — fail closed. Declares no `merging(_:)` at all, and its two mutating doors take a `MeshVerifiedKeyAgreementAdvertisement`. |
+| `MeshKeyAdvertisementFoldOutcome` | `folded` / `alreadyHeld` / `conflicted` / `refusedSetFull` / `refused(rejection)`, each with its frozen audit token (`mesh.keyAgreement.folded`, `…conflicted`, `…setFull`, `…rejected`; an honest replay audits nothing). The bound is refused BY NAME rather than dropping a row — and it is unreachable honestly, because the roster cap (8) is tighter than the record cap (16). |
+| `MeshKeyAdvertisementFold.folding(_:into:verifiedBy:)` | The one door. Cheap idempotence pre-filter (identical to a row already verified ⇒ skip, which is what bounds a replayed batch), then **verification**, then the three-way decision. A refusal never aborts the batch: a relayed set legitimately carries rows this device refuses. |
+
 
 ### `MeshMembershipRecordVerifier.swift`
 
@@ -460,6 +478,7 @@ with a low timestamp crowds a real removal out on every device it reaches.
 | `insert(_: SignedTerminationRecord)` | Requires a CURRENT member — a departed, removed or unknown signer cannot end a mesh it is not in. Whether it terminates or downgrades stays `MeshDerivedRoster`'s read-time decision. |
 | `merge(_:)` | Imports a peer's ledger ONE RECORD AT A TIME through the same door, so a peer that forged one record cannot import all of them. |
 | `verify(_: MeshEpochHeadsPayload)` | The same five checks under the head set's own domain (P4 item 3). A verified set that DIVERGES is the signal, not an error — but an unattributable one is refused, because the heads decide the counter a merge mints at. |
+| `verify(_: SignedKeyAgreementAdvertisement)` | The same five checks under the key advertisement's own domain (P6 item 1), answering a `MeshKeyAgreementVerification` rather than an optional rejection: the accepting case carries a `MeshVerifiedKeyAgreementAdvertisement`, whose `fileprivate` init is the compile fence under "verification happens BEFORE any conflict decision". A departed or removed signer is refused `signerNotAMember` — a mint's destinations come from the derived roster, which subtracts both, so no path needs their key. No new rejection case. |
 | `verify(_: SignedRemovalProposal)` / `verify(_: SignedRemovalVote)` | The same five checks under the quorum's two domains (P4 item 5). **Quorum is NOT checked here** — a proposal carries one vote and the arithmetic belongs to `MeshRemovalQuorum`, re-derived on the roster of the moment. The target is refused as a signer in both, so "the target cannot vote" is enforced twice.
 | `verify(_: MeshInventoryDigestPayload)` / `matchesLocalInventory(_:)` | Verifies a peer's digest, then answers whether it matches. A DIFFERING verified digest is the signal, not an error. |
 | `admittedSigningKey(for:)` (private) | The single lookup that turns "well-formed" into "signed by somebody entitled to sign it". |
@@ -556,8 +575,9 @@ events arrive from the wire.
 ### `MeshBranchPresence.swift`
 
 P4 item 1 (plan §10.2): what a device can **see**, held apart from what it can **prove**. Nothing
-here reaches `MeshMembershipLedger`, and nothing here is `Codable` — presence is never sealed and
-`MeshSessionContextSchema.current` stays at 2.
+here reaches `MeshMembershipLedger`, and nothing here is `Codable` — presence is never sealed, so
+this item moved no schema version (`MeshSessionContextSchema.current` was 2 then; it is 3 since P6
+item 1's key advertisements).
 
 | Type / Function | What It Does |
 | --- | --- |
@@ -586,7 +606,7 @@ value derived before anything is signed.
 
 P4 item 7 (plan §10.3, §21.3): the **content** half of the merge — ID-keyed union, deterministic
 re-derivation, and the ingestion gates re-run at the receiving member. Pure values, nothing
-persisted (`MeshSessionContext` schema stays 2), nothing on the wire. P5 owns the routed store and
+persisted (this item moved no `MeshSessionContext` schema version), nothing on the wire. P5 owns the routed store and
 the drain; this file owns only the rules.
 
 | Type / Function | What It Does |
@@ -607,7 +627,7 @@ the drain; this file owns only the rules.
 
 P4 item 8 (plan §10.1, launcher §5(c)): **who content is for**, held apart from **how far each copy
 has got** — the vocabulary P5's `MeshRoutedManifest` expresses its destination set in. Pure value,
-no clock, nothing persisted (`MeshSessionContext` schema stays 2), nothing on the wire. P5 persists
+no clock, nothing persisted (this item moved no `MeshSessionContext` schema version), nothing on the wire. P5 persists
 targets inside its routed store; this file owns only the rule.
 
 | Type / Function | What It Does |
@@ -868,7 +888,7 @@ copy has got, and which sealed payload file backs each chunk. No I/O, no crypto,
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshRoutedIndexSchema` | Version **2** since P5 item 4 (the two durable ack fields), its **own** from day one (`MeshSessionContext` stays at 2). Older or newer is `corrupt`, never migrated — a schema-1 file would otherwise be reinterpreted into a record whose `deliveredAt`/`recipientReceipts` the next save silently drops. The at-rest **token** does not move: it is the key-derivation domain. |
+| `MeshRoutedIndexSchema` | Version **2** since P5 item 4 (the two durable ack fields), its **own** from day one — the two move on independent axes, and `MeshSessionContext` is at **3** since P6 item 1. Older or newer is `corrupt`, never migrated — a schema-1 file would otherwise be reinterpreted into a record whose `deliveredAt`/`recipientReceipts` the next save silently drops. The at-rest **token** does not move: it is the key-derivation domain. |
 | `MeshRoutedStoreFormat` | `maxItems` 1024; `maxContentBytes` = `MeshRoutedManifestFormat.maxContentByteCount` (**reused** — moving it moves a WIRE bound, because `MeshChunkFormat.maxChunkCount` is derived from it); `maxChunksPerItem` = `MeshChunkFormat.maxChunkCount`; `maxHeldChunkFiles` 4096 (file count is not bounded by bytes); `maxReceiptsPerItem` = the roster cap. |
 | `MeshRoutedIndexDecodingError` | `unsupportedSchemaVersion(_:)` and `capacityExceeded(_:)`. At rest a cap violation is a **refusal**, never a clamp: clamping would silently drop a durable record whose payload files stay on disk, possibly one a receipt was already emitted for. |
 | `MeshRoutedItemKey` | The union key — the **signed pair** `(originFingerprint, itemID)` (D11). An item id alone lets an admitted member squat another origin's id under its own key and have it verify. |

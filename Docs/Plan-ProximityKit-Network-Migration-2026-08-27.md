@@ -1810,8 +1810,8 @@ at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log
     **non-dropping** arm in `MeshRoutedParkedDrop.reason`; the registry's `expiry` column has no
     discriminating test until a second `MeshRoutedExpiryRule` case exists (D-11.22). Item 12's
     manager-level cell for a departed origin's custodian forwarding is explicitly **not taken** (it
-    needs a second rig). And `MeshSessionContext.routingInventoryDigest` has been provably dead since
-    item 5 (left nil) — delete it or hand it on. **Cost:** none today; each is a named obligation with
+    needs a second rig). And `MeshSessionContext.routingInventoryDigest` had been provably dead since
+    item 5 (left nil) — **deleted by P6 item 1, in the same commit as the schema 2 → 3 bump.** **Cost:** none today; each is a named obligation with
     the commit it must land in already stated.
 13. **Item 13's retirement left two named feature outages, both owner-gated.** (i) **The
     proximity-join pairwise phase now has no photo transport at all** (D-13.18): a two-device auto-dwell
@@ -3047,7 +3047,7 @@ Carried from §22.4, with what P5 added:
 - **§17.3's `PrivacyInfo` / privacy-copy paragraph** by the first TestFlight build — P5 made it
   concrete and P6 makes it plural: nearby devices briefly holding *text and hearts* they cannot read
   is now the drain too. Also **downgrade `browsed peers=` from `.notice`/`.public`** before QUIC ships.
-- **Three P5 residuals recorded in §11.3 and assigned to nobody.** `MeshSessionContext.routingInventoryDigest` has been provably dead since item 5 (always nil) but is still a live decoded field of the schema-2 blob (`MeshSessionContext.swift:224`, `:321`) — the ledger's close-out flag said "delete at close-out or hand to P6" and **neither happened**, so its disposal is the owner's; **D-12.15**, a custody receipt re-minted after a repaired slot carries a `receiptID` peers already recorded, so their windows answer `replayed` and they keep the **earlier** receipt (staleness, never a lost delivery — a cross-device un-record would be a wire change); and item 9's deliberately unreclaimed **all-departed** item, which holds its share of the 256 MiB / 1024-item caps until expiry.
+- **Three P5 residuals recorded in §11.3 and assigned to nobody.** `MeshSessionContext.routingInventoryDigest` had been provably dead since item 5 (always nil) and was still a live decoded field of the schema-2 blob — **retired by P6 item 1, in the same commit as the schema 2 → 3 bump, under the P6 launcher's stated default** (its disposal is therefore no longer owed to the owner; a zero-list cell in `MeshKeyAgreementSchemaTests` stops the field coming back by copy-paste); **D-12.15**, a custody receipt re-minted after a repaired slot carries a `receiptID` peers already recorded, so their windows answer `replayed` and they keep the **earlier** receipt (staleness, never a lost delivery — a cross-device un-record would be a wire change); and item 9's deliberately unreclaimed **all-departed** item, which holds its share of the 256 MiB / 1024-item caps until expiry.
 - **Unowed cleanup, close-out or P6:** deleting the derived `MeshRoutedAckStageTable.increment1` alias and re-pointing item 4's pins at the registry; `MeshRoutedTypeRegistry.maxEntries` restates the ack table's 16, and the equality is test-pinned (D-11.16) rather than read across.
 - **Two open sub-items P5 did not close:** **1c**, a load flake
   (`MeshP4QuorumAcceptanceTests.aTwoTwoSplitOfAFourRosterRemovesNobodyAtTheManagerSeam` expired after

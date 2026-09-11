@@ -119,6 +119,10 @@ struct CryptographicPurposeBoundaryTests {
         // serializer, its golden and this case land in the same change — the 91c3956 pairing again.
         assertRoutedDrainAnswerFramingHolds()
 
+        // The KEY ADVERTISEMENT (network migration P6 item 1). Its purpose, its serializer, its
+        // golden and this case land in the same change — the 91c3956 pairing again.
+        assertKeyAgreementFramingHolds()
+
         // Still POSITIONAL, not a substring search: a length-prefixed purpose rejects its own raw
         // spelling. Accepting that would let a transcript carry the domain in an attacker-chosen
         // field and still reach the identity key.
@@ -332,6 +336,164 @@ struct CryptographicPurposeBoundaryTests {
         #expect(manifestPurpose.signingBytes(answer) == nil)
         #expect(answerPurpose.signingBytes(manifest) == nil)
         #expect(answerPurpose.signingBytes(answerPurpose.data) == nil)  // positional
+    }
+
+    /// The key advertisement against its declared `.lengthPrefixed` framing, and against the
+    /// **departure**'s domain in both directions — the two are the only pair in the family that are
+    /// the same shape with the same author in the same position (a self-signed statement over mesh,
+    /// fingerprint and instant), so only the domain keeps them apart. A signature satisfying both
+    /// would let "here is my key" be replayed as "I have left", which is a permanent, grow-only
+    /// eviction. Also against the digest's and the head set's, which it travels the same link-open
+    /// moment as.
+    ///
+    /// Split out of ``canonicalSerializerTranscriptsMatchTheirDeclaredFraming()`` so neither
+    /// function grows past the 60-line rule; both halves run in the same test.
+    private func assertKeyAgreementFramingHolds() {
+        let keyPurpose = FernletCryptoPurpose.Signature.meshKeyAgreementV1
+        let departurePurpose = FernletCryptoPurpose.Signature.meshMemberDepartureV1
+        let inventoryPurpose = FernletCryptoPurpose.Signature.meshInventoryDigestV1
+        let epochHeadsPurpose = FernletCryptoPurpose.Signature.meshEpochHeadsV1
+        let advertisement = canonicalBytes(for: MeshMembershipEventFixtures.keyAdvertisement())
+        let departure = canonicalBytes(for: MeshMembershipEventFixtures.departure())
+        let inventory = canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload())
+        let epochHeads = canonicalBytes(for: MeshMembershipEventFixtures.epochHeadsPayload())
+        #expect(keyPurpose.signingBytes(advertisement) != nil)       // declared == emitted
+        #expect(departurePurpose.signingBytes(advertisement) == nil) // the pair, both ways
+        #expect(keyPurpose.signingBytes(departure) == nil)
+        #expect(inventoryPurpose.signingBytes(advertisement) == nil)
+        #expect(keyPurpose.signingBytes(inventory) == nil)
+        #expect(epochHeadsPurpose.signingBytes(advertisement) == nil)
+        #expect(keyPurpose.signingBytes(epochHeads) == nil)
+        #expect(keyPurpose.signingBytes(keyPurpose.data) == nil)     // positional self-rejection
+    }
+
+    // MARK: - Which purposes this file actually holds to a framing
+
+    /// Every signature purpose the registry declares is **named** in this file's coverage table.
+    ///
+    /// This suite is otherwise a hand-written list of transcripts, purposes and cross-domain pairs,
+    /// with no `allCases` and no source scan anywhere: a new purpose could land with an
+    /// `allDomains` row (which `CryptographicDomainSeparationTests` does force) and **no framing
+    /// case at all**, and every test here would stay green. That is not theoretical — the
+    /// registry's framing argument defaults to `.rawPrefix`, and a `CanonicalByteWriter` transcript
+    /// that forgets `framing: .lengthPrefixed` is precisely the `91c3956` outage: every signature
+    /// threw at the signing boundary and every verify returned false.
+    ///
+    /// So the framing half gets the same treatment the inventory half has: the input is discovered
+    /// from disk with a hard floor, and a purpose that appears in neither table below fails here
+    /// with the two tables named. Moving a purpose into ``framingHeldElsewhere`` is then a
+    /// deliberate act with a written reason, which is the standard every other allowlist in this
+    /// repo is held to.
+    @Test func everySignaturePurposeIsHeldToADeclaredFraming() throws {
+        let source = try RepoRoot.source("FernletKit/Sources/FernletCrypto/CryptographicPurpose.swift")
+        let declared = Self.declaredSignatureRawValues(in: source)
+        #expect(
+            declared.count >= Self.minimumSignaturePurposes,
+            """
+            Found only \(declared.count) signature purposes (floor \(Self.minimumSignaturePurposes)) —
+            the registry moved or the `enum Signature` block's shape changed, and this scan is now
+            reading nothing. The whole check would pass vacuously.
+            """
+        )
+        let covered = Self.framingHeldInThisFile.union(Set(Self.framingHeldElsewhere.keys))
+        let uncovered = declared.subtracting(covered)
+        #expect(
+            uncovered.isEmpty,
+            """
+            \(uncovered.count) signature purpose(s) are declared but held to NO framing assertion.
+            Add a transcript case to this file and list the spelling in `framingHeldInThisFile`, or
+            — if the transcript is asserted somewhere else — add it to `framingHeldElsewhere` with
+            the reason:
+            \(uncovered.sorted().joined(separator: "\n"))
+            """
+        )
+        let stale = covered.subtracting(declared)
+        #expect(stale.isEmpty, "no longer declared: \(stale.sorted().joined(separator: ", "))")
+    }
+
+    /// Floor for the source scan (28 signature purposes at the time of writing).
+    static let minimumSignaturePurposes = 20
+
+    /// The spellings whose transcripts this file asserts a framing for.
+    static let framingHeldInThisFile: Set<String> = [
+        "fernlet.canonical.identity-envelope.v2",
+        "fernlet.canonical.moderation-report.v2",
+        "fernlet.mesh.channel-introduction.v1",
+        "fernlet.mesh.member-departure.v1",
+        "fernlet.mesh.member-removal.v1",
+        "fernlet.mesh.terminated.v1",
+        "fernlet.mesh.inventory-digest.v1",
+        "fernlet.mesh.epoch-heads.v1",
+        "fernlet.mesh.removal-proposal.v1",
+        "fernlet.mesh.removal-vote.v1",
+        "fernlet.mesh.routed-manifest.v1",
+        "fernlet.mesh.routed-chunk.v1",
+        "fernlet.mesh.custody-receipt.v1",
+        "fernlet.mesh.recipient-receipt.v1",
+        "fernlet.mesh.routed-inventory-digest.v1",
+        "fernlet.mesh.routed-drain-answer.v1",
+        "fernlet.mesh.key-agreement.v1",
+        "fernlet.verify.response.v1"
+    ]
+
+    /// The spellings deliberately NOT asserted here, each with the reason. Every entry is a claim
+    /// that the framing is held somewhere; none is "we did not get round to it".
+    static let framingHeldElsewhere: [String: String] = [
+        "fernlet.canonical.identity-envelope.v1":
+            "legacy `.absent` read purpose — held by legacyPurposesAcceptUntaggedTranscripts()",
+        "fernlet.canonical.mesh-admission-token.v1":
+            "legacy `.absent` read purpose — held by legacyPurposesAcceptUntaggedTranscripts()",
+        "fernlet.canonical.mesh-admission-token.v2":
+            "held by the admission-token round-trip and verify suites, which sign and verify real tokens",
+        "fernlet.canonical.activity-descriptor.v2":
+            "held by the group-activity signing suites, which sign and verify real descriptors",
+        "fernlet.canonical.activity-join-token.v2":
+            "held by the group-activity signing suites",
+        "fernlet.canonical.activity-roster-snapshot.v2":
+            "held by the group-activity signing suites",
+        "fernlet.mesh.probe.channel-introduction.v1":
+            "DEBUG-only feasibility transcript; it has no shipping serializer to hold",
+        "fernlet.verify.qr.v1":
+            "raw-prefix QR transcript, held by the proximity-verify suites",
+        "fernlet.duress.recovery.request.v1":
+            "raw-prefix duress transcript, held by the duress recovery suites",
+        "fernlet.duress.recovery.reply.v1":
+            "raw-prefix duress transcript, held by the duress recovery suites"
+    ]
+
+    /// Every `CryptographicPurpose("…")` spelling declared inside the registry's `enum Signature`
+    /// block, and nothing from the other four families.
+    static func declaredSignatureRawValues(in source: String) -> Set<String> {
+        var found: Set<String> = []
+        var inSignatureBlock = false
+        // R2: bounded by the file's line count.
+        for line in source.components(separatedBy: "\n") {
+            if line.contains("enum Signature {") {
+                inSignatureBlock = true
+                continue
+            }
+            if inSignatureBlock, line.contains("enum "), line.contains("{") { break }
+            guard inSignatureBlock, let head = line.range(of: "CryptographicPurpose(\"") else { continue }
+            let rest = line[head.upperBound...]
+            guard let close = rest.firstIndex(of: "\"") else { continue }
+            found.insert(String(rest[..<close]))
+        }
+        return found
+    }
+
+    /// Fixture: the block scanner reads the `Signature` family and stops at the next one, so a
+    /// KDF or AEAD spelling can never be counted as a transcript owing a framing case.
+    @Test func theSignatureBlockScannerStopsAtTheNextFamily() {
+        let sample = """
+            public nonisolated enum Signature {
+                public static let one = CryptographicPurpose("fernlet.a.v1", framing: .lengthPrefixed)
+            }
+            public nonisolated enum KeyDerivation {
+                public static let two = CryptographicPurpose("fernlet.b.v1")
+            }
+            """
+        #expect(Self.declaredSignatureRawValues(in: sample) == ["fernlet.a.v1"])
+        #expect(Self.declaredSignatureRawValues(in: "no enum here").isEmpty)
     }
 
     /// The raw-prefix family: transcripts that concatenate their domain directly. Rejecting a

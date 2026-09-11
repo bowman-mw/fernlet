@@ -163,6 +163,25 @@ enum MeshMembershipEventFixtures {
         )
     }
 
+    /// The 32-byte key-agreement public key the P6 item 1 vector advertises. A fixed pattern, and
+    /// deliberately not the signature blob's `0xAB`, so a transposed field would move the golden.
+    static let keyAgreementKey = Data(
+        repeating: 0x5A, count: MeshMembershipEventFormat.keyAgreementByteCount
+    )
+
+    /// The `fernlet.mesh.key-agreement.v1` statement (P6 item 1): `fp001` naming its own durable
+    /// key-agreement public key. `advertisedAt` continues the same one-minute story the records
+    /// above tell, so every byte in the pinned hex is traceable to a line here.
+    static func keyAdvertisement() -> SignedKeyAgreementAdvertisement {
+        SignedKeyAgreementAdvertisement(
+            meshID: meshID,
+            memberFingerprint: "fp001",
+            keyAgreementPublicKey: keyAgreementKey,
+            advertisedAt: base.addingTimeInterval(480),
+            signature: opaqueSignature
+        )
+    }
+
     static func hex(_ data: Data) -> String {
         data.map { String(format: "%02x", $0) }.joined()
     }
@@ -220,6 +239,19 @@ struct MeshMembershipEventGoldenTests {
 
     static let goldenRemovalVoteHex = "000000000000001c6665726e6c65742e6d6573682e72656d6f76616c2d766f74652e76311f1f1f1f2e2e4d4d8c8c0b0b0b0b0b0b4e4e4e4e5f5f4a4a9b9b2c2c2c2c2c2c0000000000000005667030303400000000000000056670303032000000006553f2a4"
 
+    /// P6 item 1's vector: a member's own signed key-agreement public key, derived by the same
+    /// independent re-implementation of the FORMAT that minted ``goldenEpochHeadsHex`` —
+    /// length-prefixed domain, 16 raw UUID bytes, length-prefixed UTF-8 strings, a length-prefixed
+    /// OPAQUE 32-byte key, an i64 floored-seconds date, signature excluded — and proved honest the
+    /// same way: that re-implementation first parsed and re-emitted ``goldenEpochHeadsHex`` and
+    /// reproduced ``goldenInventoryHex`` byte-for-byte, and only then minted this one.
+    ///
+    /// The frame is **additive**. Nothing above it moves, and nothing above it could: an
+    /// advertisement is not a ``MeshMembershipRecord``, so it cannot enter the membership digest's
+    /// kind-tagged flattening even by accident — which is what keeps ``goldenInventoryHex`` and
+    /// ``goldenRecordsHashHex`` still.
+    static let goldenKeyAgreementHex = "000000000000001d6665726e6c65742e6d6573682e6b65792d61677265656d656e742e76311f1f1f1f2e2e4d4d8c8c0b0b0b0b0b0b0000000000000005667030303100000000000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a000000006553f2e0"
+
     @Test func aDepartureRecordIsGoldenStable() {
         let actual = MeshMembershipEventFixtures.hex(canonicalBytes(for: MeshMembershipEventFixtures.departure()))
         #expect(actual == Self.goldenDepartureHex, "actual departure golden hex = \(actual)")
@@ -259,6 +291,78 @@ struct MeshMembershipEventGoldenTests {
     @Test func aTerminationRecordIsGoldenStable() {
         let actual = MeshMembershipEventFixtures.hex(canonicalBytes(for: MeshMembershipEventFixtures.termination()))
         #expect(actual == Self.goldenTerminationHex, "actual termination golden hex = \(actual)")
+    }
+
+    /// P6 item 1's vector.
+    @Test func aKeyAgreementAdvertisementIsGoldenStable() {
+        let advertisement = MeshMembershipEventFixtures.keyAdvertisement()
+        #expect(
+            advertisement.keyAgreementPublicKey.count == MeshMembershipEventFormat.keyAgreementByteCount,
+            "the vector must carry the format's fixed key width"
+        )
+        let actual = MeshMembershipEventFixtures.hex(canonicalBytes(for: advertisement))
+        #expect(actual == Self.goldenKeyAgreementHex, "actual key-agreement golden hex = \(actual)")
+    }
+
+    /// The signature is the OUTPUT of signing these bytes, so it cannot be one of them. Asserted
+    /// directly rather than inferred from the golden, because Ed25519 signing is hedged: two
+    /// signatures over the same advertisement differ, and any comparison of signed records by full
+    /// `==` would be a flake waiting for a re-sign.
+    @Test func aKeyAgreementAdvertisementExcludesItsOwnSignature() {
+        let advertisement = MeshMembershipEventFixtures.keyAdvertisement()
+        let reSigned = SignedKeyAgreementAdvertisement(
+            meshID: advertisement.meshID,
+            memberFingerprint: advertisement.memberFingerprint,
+            keyAgreementPublicKey: advertisement.keyAgreementPublicKey,
+            advertisedAt: advertisement.advertisedAt,
+            signature: Data(repeating: 0x11, count: MeshMembershipEventFormat.signatureByteCount)
+        )
+        #expect(canonicalBytes(for: reSigned) == canonicalBytes(for: advertisement))
+        #expect(reSigned != advertisement, "the two values differ; only their transcripts match")
+    }
+
+    /// Every field the transcript binds, moved one at a time. A field that is bound but *not*
+    /// bound distinctly — the fingerprint and the key transposed, say — would pass a
+    /// "the golden is stable" test and still let a relay rewrite the pair.
+    @Test func everyBoundKeyAgreementFieldMovesTheTranscript() {
+        let base = MeshMembershipEventFixtures.keyAdvertisement()
+        let golden = canonicalBytes(for: base)
+        let variants = [
+            SignedKeyAgreementAdvertisement(
+                meshID: MeshMembershipEventFixtures.proposalID,
+                memberFingerprint: base.memberFingerprint,
+                keyAgreementPublicKey: base.keyAgreementPublicKey,
+                advertisedAt: base.advertisedAt, signature: base.signature
+            ),
+            SignedKeyAgreementAdvertisement(
+                meshID: base.meshID, memberFingerprint: "fp002",
+                keyAgreementPublicKey: base.keyAgreementPublicKey,
+                advertisedAt: base.advertisedAt, signature: base.signature
+            ),
+            SignedKeyAgreementAdvertisement(
+                meshID: base.meshID, memberFingerprint: base.memberFingerprint,
+                keyAgreementPublicKey: Data(
+                    repeating: 0x5B, count: MeshMembershipEventFormat.keyAgreementByteCount
+                ),
+                advertisedAt: base.advertisedAt, signature: base.signature
+            ),
+            SignedKeyAgreementAdvertisement(
+                meshID: base.meshID, memberFingerprint: base.memberFingerprint,
+                keyAgreementPublicKey: base.keyAgreementPublicKey,
+                advertisedAt: base.advertisedAt.addingTimeInterval(1), signature: base.signature
+            )
+        ]
+        #expect(variants.count == 4, "one variant per bound field")
+        for variant in variants {
+            #expect(canonicalBytes(for: variant) != golden)
+        }
+    }
+
+    /// The frame property a record's own golden cannot prove: the signed bytes survive the wire.
+    @Test func aKeyAgreementAdvertisementSurvivesItsOwnWireForm() throws {
+        let wire = try JSONEncoder().encode(MeshMembershipEventFixtures.keyAdvertisement())
+        let decoded = try JSONDecoder().decode(SignedKeyAgreementAdvertisement.self, from: wire)
+        #expect(MeshMembershipEventFixtures.hex(canonicalBytes(for: decoded)) == Self.goldenKeyAgreementHex)
     }
 
     @Test func anInventoryDigestMessageIsGoldenStable() {

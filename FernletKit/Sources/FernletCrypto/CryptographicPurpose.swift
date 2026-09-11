@@ -150,6 +150,26 @@ public nonisolated enum FernletCryptoPurpose {
         /// never validate as one, or a member could re-point somebody else's proposal at a
         /// different target. Length-prefixed, like every other `CanonicalByteWriter` transcript.
         public static let meshRemovalProposalV1 = CryptographicPurpose("fernlet.mesh.removal-proposal.v1", framing: .lengthPrefixed)
+        /// **Written since P6 item 1.** A member's signature over its own
+        /// `SignedKeyAgreementAdvertisement` — "this mesh, this fingerprint, this durable
+        /// key-agreement public key, at this instant" (plan §11.3 item 13(ii)). Self-signed: the
+        /// subject is the author, so the worst a bad signature costs is the signer's own
+        /// addressability.
+        ///
+        /// Its own domain, and the one it must be distinct from is the **departure**'s: both are
+        /// self-signed statements over `(meshID, fingerprint, date)`, so only the domain keeps them
+        /// apart — a signature satisfying both would let "here is my key" be replayed as "I have
+        /// left", which is a permanent, grow-only eviction. Distinct from the inventory digest's and
+        /// the head set's for the same reason those two are distinct from each other: they travel
+        /// the same link-open moment.
+        ///
+        /// No prefix relation in either direction with any registered purpose: the nearest
+        /// neighbours are `fernlet.mesh.groupkey.v1` (diverging at `g` vs `k`) and the
+        /// frame-only spellings `fernlet.mesh.key.rotation.v1` / `fernlet.mesh.key.ack.v1`
+        /// (diverging at `-` vs `.` after `key`). Length-prefixed, like every other
+        /// `CanonicalByteWriter` transcript — the registry's framing default is `.rawPrefix`, and a
+        /// canonical transcript that forgets to say `.lengthPrefixed` is the `91c3956` outage.
+        public static let meshKeyAgreementV1 = CryptographicPurpose("fernlet.mesh.key-agreement.v1", framing: .lengthPrefixed)
         /// **Written since P4 item 5.** A voter's signature over a `SignedRemovalVote` (plan
         /// §10.4). Distinct from the removal record's domain: a vote is *live* state that expires
         /// after five minutes and never reaches a ledger, while `meshMemberRemovalV1` signs the

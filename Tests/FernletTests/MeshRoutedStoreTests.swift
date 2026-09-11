@@ -775,7 +775,13 @@ struct MeshRoutedVocabularyTests {
         #expect(MeshRoutedStoreFormat.maxHeldChunkFiles == 4096)
         #expect(MeshRoutedIndexSchema.current == 2, "P5 item 4 bumped the routed index schema")
         #expect(MeshRoutedIndexSchema.token == "fernlet.mesh.routed-store.v1")
-        #expect(MeshSessionContextSchema.current == 2, "the routed sidecar must not move the session schema")
+        #expect(
+            MeshSessionContextSchema.current == 3,
+            """
+            P6 item 1 moved the session schema (the key advertisements). The routed sidecar still must
+            not move it: this pin is here so a routed-index bump cannot ride along on one.
+            """
+        )
     }
 }
 

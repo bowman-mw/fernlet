@@ -432,8 +432,11 @@ struct MeshPartitionDetectionTests {
             Issue.record("the sealed context must load back")
             return
         }
-        #expect(MeshSessionContextSchema.current == 2, "this item persists nothing new")
-        #expect(context.schemaVersion == 2)
+        #expect(
+            MeshSessionContextSchema.current == 3,
+            "P6 item 1 bumped it; partition detection itself still persists nothing new"
+        )
+        #expect(context.schemaVersion == 3)
         let text = String(decoding: try JSONEncoder().encode(context), as: UTF8.self)
         for token in ["temporarilyDisconnected", "present", "branch", "reachable", "unreachable"] {
             #expect(text.contains(token) == false, "the sealed shape must not name \(token)")

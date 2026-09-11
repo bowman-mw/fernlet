@@ -112,6 +112,7 @@ on the reasoning.
 | `meshRecipientReceiptV1` | `fernlet.mesh.recipient-receipt.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRecipientReceipt`, `MeshRecipientReceiptVerifier` |
 | `meshRoutedInventoryDigestV1` | `fernlet.mesh.routed-inventory-digest.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedInventory`, `MeshRoutedInventoryVerifier` |
 | `meshRoutedDrainAnswerV1` | `fernlet.mesh.routed-drain-answer.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshRoutedDrainAnswer`, `MeshRoutedDrainAnswerVerifier` |
+| `meshKeyAgreementV1` | `fernlet.mesh.key-agreement.v1` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshKeyAgreementAdvertisement`, `MeshMembershipRecordVerifier` |
 
 #### KeyDerivation
 
@@ -313,6 +314,45 @@ two AEAD rows rather than registering a new spelling, so the count is unmoved in
 **`meshInventoryDigestV1` is absent from the Hash table for the same reason** (note added
 2026-09-03, P5 item 2): P3 item 3 added the constant and its `allDomains` row without a row here.
 Item 2's three routed hash rows above are listed; the inventory's is still owed.
+
+### A drift note, 2026-09-11 (P6 item 1) — one purpose added, and §6's seven steps answered
+
+`Signature.meshKeyAgreementV1` / `fernlet.mesh.key-agreement.v1`: a member's signature over its own
+`SignedKeyAgreementAdvertisement` — this mesh, this fingerprint, this durable key-agreement public
+key, at this instant. Self-signed (subject == author). It is **listed in §3's Signature table
+above**, so this addition does not grow the eight-spelling backlog the note before it records; the
+backlog itself is untouched, which is a deliberate choice not to backfill seven unrelated rows in a
+commit about one new domain.
+
+§6 step 7's checklist, answered:
+
+- **Frozen from this commit forward?** Yes. Nothing had ever been signed under it (the spelling
+  appeared nowhere in the repo), and from the first advertisement it is a wire format.
+- **Prefix relations, both directions?** None against any of the registry's signature, derivation,
+  HMAC, AEAD or hash spellings. The nearest neighbours are `fernlet.mesh.groupkey.v1` (diverging at
+  `g` vs `k` immediately after `fernlet.mesh.`) and the frame-only `PayloadType` spellings
+  `fernlet.mesh.key.rotation.v1` / `fernlet.mesh.key.ack.v1`, which diverge at `-` vs `.` after
+  `key` — byte-for-byte the divergence §2 already blesses. No purpose is spelled
+  `fernlet.mesh.key.` at all.
+- **Reachable from user or peer input?** No. The constant is selected in two places — the signing
+  factory and the verifier — and never assembled from a field.
+- **Legacy read path?** None needed: it replaces no domain. A peer that does not speak the family
+  parks the frame and stays on the handshake-verified sources, so the fallback is the old *visible*
+  refusal rather than a silent downgrade. There is deliberately no capability negotiation.
+- **Does the primitive call actually pass it?** Yes, at both ends, and the pairing is walled rather
+  than asserted in prose: `CryptographicPurposeBoundaryTests.assertKeyAgreementFramingHolds()`
+  checks the declared framing against the real transcript and cross-checks it against the
+  **departure**'s domain in both directions (the two are the only same-shape, same-author pair in
+  the family, so only the domain stops "here is my key" being replayable as the permanent "I have
+  left").
+
+That same commit closed a hole in step 4's enforcement:
+`CryptographicPurposeBoundaryTests.everySignaturePurposeIsHeldToADeclaredFraming()` now reads the
+registry's `Signature` block off disk with a hard floor and requires every spelling to be named
+either in this file's framing coverage set or in a written exemption list. Until then the framing
+half was a **hand-written list with no exhaustiveness check of any kind**, so a purpose could land
+with an `allDomains` row (which *is* forced) and no framing case at all — and with the framing
+argument defaulting to `.rawPrefix`, that is precisely the `91c3956` shape.
 
 ## 4. Transcript framing
 

@@ -78,6 +78,7 @@ struct CryptographicDomainSeparationTests {
         Domain("Signature.meshEpochHeadsV1", FernletCryptoPurpose.Signature.meshEpochHeadsV1),
         Domain("Signature.meshRemovalProposalV1", FernletCryptoPurpose.Signature.meshRemovalProposalV1),
         Domain("Signature.meshRemovalVoteV1", FernletCryptoPurpose.Signature.meshRemovalVoteV1),
+        Domain("Signature.meshKeyAgreementV1", FernletCryptoPurpose.Signature.meshKeyAgreementV1),
         Domain("Signature.proximityQRIdentityV1", FernletCryptoPurpose.Signature.proximityQRIdentityV1),
         Domain("Signature.proximityQRResponseV1", FernletCryptoPurpose.Signature.proximityQRResponseV1),
         Domain("Signature.duressRecoveryRequestV1", FernletCryptoPurpose.Signature.duressRecoveryRequestV1),
