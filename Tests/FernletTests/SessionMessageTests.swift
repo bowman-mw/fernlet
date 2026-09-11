@@ -112,32 +112,35 @@ struct SessionMessageTests {
         return (envelope, plaintext)
     }
 
-    /// Registers a COMMITTED slot and drives a message through the full production dispatch path
-    /// (registry commit gate → blocked drop → store receive).
-    @discardableResult
-    private func deliverMessage(
+    /// Registers a COMMITTED slot and hands it an envelope carrying the **parked** `.tempMessage`
+    /// payload — the shape an older peer still emits. Nothing may dispatch it (P6 item 4).
+    private func deliverParkedMessageEnvelope(
         via manager: MeshNetworkManager,
         text: String,
-        id: UUID = UUID(),
-        sentAt: Date? = nil,
         senderName: String = "Robin",
         senderSigningKey: Data = Data([1, 2, 3])
     ) throws -> ProximityCoordinator.PeerIdentity {
         let coordinator = throwawayCoordinator()
         let identity = makePeerIdentity(name: senderName, signingPublicKey: senderSigningKey)
-        if !manager.slots.contains(where: { $0.fingerprint == identity.fingerprint }) {
-            manager.addSlotForTesting(
-                coordinator: coordinator,
-                peer: makePeerHandle(name: senderName),
-                fingerprint: identity.fingerprint,
-                peerCapabilities: messagesCap
-            )
-        }
-        let (envelope, plaintext) = try messageEnvelope(text: text, id: id, sentAt: sentAt, senderName: senderName)
-        // The coordinator argument must be the one owning the committed slot for the manager to find it.
-        let slotCoordinator = manager.slots.first { $0.fingerprint == identity.fingerprint }!.coordinator
-        manager.proximityCoordinator(slotCoordinator, didReceive: envelope, plaintext: plaintext, from: identity)
+        manager.addSlotForTesting(
+            coordinator: coordinator,
+            peer: makePeerHandle(name: senderName),
+            fingerprint: identity.fingerprint,
+            peerCapabilities: messagesCap
+        )
+        let (envelope, plaintext) = try messageEnvelope(text: text, senderName: senderName)
+        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: identity)
         return identity
+    }
+
+    /// Seeds the transcript the way the SENDER does, for the cells whose subject is the CLEAR
+    /// rather than the transport. The routed receive path has its own suite
+    /// (`MeshRoutedTextDeliveryTests`) and drives a real pair end to end.
+    private func seedTranscript(via manager: MeshNetworkManager, text: String) {
+        manager.sessionMessages.appendOutgoing(
+            id: UUID(), senderFingerprint: manager.localFingerprint,
+            senderDisplayName: "Local", text: text, sentAt: day
+        )
     }
 
     // MARK: - Wire codec
@@ -149,71 +152,22 @@ struct SessionMessageTests {
         #expect(decoded == original)
     }
 
-    // MARK: - Registry dispatch
+    // MARK: - The retired transport, parked
 
-    @Test func committedSlotMessageIsReceived() throws {
+    /// `PayloadType.tempMessage` is **parked, not deleted** (P6 item 4, the `.friendPhoto`
+    /// precedent): the token and its payload still decode, so an older peer's frame is refused by
+    /// name rather than mis-dispatched or failing the session — and NOTHING dispatches it, so the
+    /// transcript stays empty even for a fully committed, unblocked, capability-advertising peer.
+    ///
+    /// This is the cell that would have gone green for the wrong reason if the retirement had been
+    /// forgotten: before P6 item 4 the same call filled the transcript.
+    @Test func aParkedTempMessageEnvelopeFromACommittedPeerIsNeverDispatched() throws {
         let manager = store.meshNetworkManager
-        let robin = try deliverMessage(via: manager, text: "hello")
-        #expect(manager.sessionMessages.messages.count == 1)
-        let message = try #require(manager.sessionMessages.messages.first)
-        #expect(message.text == "hello")
-        #expect(message.senderFingerprint == robin.fingerprint)   // transport-verified, not a wire claim
-        #expect(!message.isOutgoing)
-    }
-
-    @Test func messageFromUncommittedSlotIsDroppedByTheRegistryGate() throws {
-        let manager = store.meshNetworkManager
-        let coordinator = throwawayCoordinator()
-        let identity = makePeerIdentity(name: "Pending", signingPublicKey: Data([9, 9, 1]))
-        // fingerprint: nil models a pre-dwell (uncommitted) candidate — the registry gate must drop it.
-        manager.addSlotForTesting(coordinator: coordinator, peer: makePeerHandle(name: "Pending"), fingerprint: nil)
-        let (envelope, plaintext) = try messageEnvelope(text: "sneaky", senderName: "Pending")
-        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: identity)
-
-        #expect(manager.sessionMessages.messages.isEmpty, "Feature payloads are for committed session members only")
-    }
-
-    @Test func messageFromBlockedFingerprintIsDropped() throws {
-        let manager = store.meshNetworkManager
-        let signingKey = Data([7, 7, 7])
-        let identity = makePeerIdentity(name: "Blocked", signingPublicKey: signingKey)
-        // Block mirrors .friendPhoto: trust then block so the vault holds the fingerprint.
-        store.proximityTrustVault.trust(identity, mode: .friend)
-        store.proximityTrustVault.block(signingPublicKey: signingKey)
-
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(
-            coordinator: coordinator,
-            peer: makePeerHandle(name: "Blocked"),
-            fingerprint: identity.fingerprint,
-            peerCapabilities: messagesCap
-        )
-        let (envelope, plaintext) = try messageEnvelope(text: "blocked text", senderName: "Blocked")
-        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: identity)
-
-        #expect(manager.sessionMessages.messages.isEmpty)
-    }
-
-    /// The rendered sender name must come from the handshake-verified identity, not the per-message
-    /// wire claim — otherwise a committed member could set envelope.senderDisplayName to another
-    /// member's name and impersonate them in the transcript.
-    @Test func messageSenderNameUsesVerifiedIdentityNotWireClaim() throws {
-        let manager = store.meshNetworkManager
-        let identity = makePeerIdentity(name: "Bob", signingPublicKey: Data([4, 2, 4]))
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(
-            coordinator: coordinator,
-            peer: makePeerHandle(name: "Bob"),
-            fingerprint: identity.fingerprint,
-            peerCapabilities: messagesCap
-        )
-        // Bob signs the envelope (his key) but claims to be "Robin" in the wire display-name field.
-        let (envelope, plaintext) = try messageEnvelope(text: "hi", senderName: "Robin")
-        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: identity)
-
-        let msg = try #require(manager.sessionMessages.messages.first)
-        #expect(msg.senderDisplayName == "Bob", "Transcript must show the verified identity name, not the wire claim")
-        #expect(msg.senderFingerprint == identity.fingerprint)
+        _ = try deliverParkedMessageEnvelope(via: manager, text: "hello")
+        #expect(manager.sessionMessages.messages.isEmpty, """
+            the legacy `.tempMessage` handler is gone — chat arrives as a routed item and nothing \
+            else may write the transcript
+            """)
     }
 
     // MARK: - Store hostile-input guards
@@ -222,77 +176,147 @@ struct SessionMessageTests {
         let s = SessionMessageStore()
         // Length cap.
         let long = String(repeating: "a", count: SessionMessageStore.maxTextLength + 50)
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp1", senderDisplayName: "R", text: long, sentAt: day, now: day))
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp1", senderDisplayName: "R",
+                                  text: long, sentAt: day, seenAt: day) == .appended)
         #expect(s.messages.first?.text.count == SessionMessageStore.maxTextLength)
 
         // Control / invisible / bidi scalars stripped; whitespace collapsed.
         let dirty = "hi\u{202E}\u{200B}   there\n\n"
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp2", senderDisplayName: "R", text: dirty, sentAt: day, now: day))
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp2", senderDisplayName: "R",
+                                  text: dirty, sentAt: day.addingTimeInterval(1),
+                                  seenAt: day.addingTimeInterval(1)) == .appended)
         #expect(s.messages.last?.text == "hi there")
 
-        // Empty-after-sanitize is dropped entirely.
+        // Empty-after-sanitize is refused BY NAME rather than collapsed into a bare `false`.
         let before = s.messages.count
-        #expect(!s.receiveIncoming(id: UUID(), senderFingerprint: "fp3", senderDisplayName: "R", text: "\u{200B}\n\t ", sentAt: day, now: day))
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp3", senderDisplayName: "R",
+                                  text: "\u{200B}\n\t ", sentAt: day, seenAt: day)
+                    == .emptyAfterSanitizing)
         #expect(s.messages.count == before)
     }
 
     @Test func receiveDedupesById() {
         let s = SessionMessageStore()
         let id = UUID()
-        #expect(s.receiveIncoming(id: id, senderFingerprint: "fp", senderDisplayName: "R", text: "once", sentAt: day, now: day))
-        // A re-send of the same id is dropped even well past the rate-limit window.
-        #expect(!s.receiveIncoming(id: id, senderFingerprint: "fp", senderDisplayName: "R", text: "twice", sentAt: day, now: day.addingTimeInterval(60)))
+        #expect(s.receiveIncoming(id: id, senderFingerprint: "fp", senderDisplayName: "R",
+                                  text: "once", sentAt: day, seenAt: day) == .appended)
+        // A re-send of the same id is refused as already held, however much later it arrives.
+        #expect(s.receiveIncoming(id: id, senderFingerprint: "fp", senderDisplayName: "R",
+                                  text: "twice", sentAt: day.addingTimeInterval(60),
+                                  seenAt: day.addingTimeInterval(60)) == .alreadyHeld)
         #expect(s.messages.count == 1)
         #expect(s.messages.first?.text == "once")
     }
 
-    @Test func receiveToleratesNormalBurstsButThrottlesAFlood() {
+    /// The per-sender token bucket retired with the transport it belonged to (P6 item 4): a drain
+    /// answer carries up to 16 items, so a burst allowance of 5 would flood-DROP 11 legitimate
+    /// messages out of one backlog, and a fixed per-item `firstSeenAt` would never refill it. The
+    /// replacement is the routed path's own per-origin, per-session quota
+    /// (`allowIncomingRoutedText`), which `MeshRoutedTextDeliveryTests` covers.
+    @Test func aBurstFromOneSenderIsNoLongerRateLimited() {
         let s = SessionMessageStore()
-        // Normal human double-/triple-texting (well within the burst allowance) all arrives —
-        // the old flat 1/sec window silently dropped these.
-        for i in 0..<5 {
-            #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "R",
-                                      text: "burst\(i)", sentAt: day, now: day.addingTimeInterval(0.1 * Double(i))),
-                    "A burst of \(Int(SessionMessageStore.burstAllowance)) messages must all be accepted")
+        // R2: bounded loop, one more than the retired burst allowance of 5 twice over.
+        for index in 0..<12 {
+            #expect(s.receiveIncoming(
+                id: UUID(), senderFingerprint: "fp", senderDisplayName: "R",
+                text: "burst\(index)", sentAt: day.addingTimeInterval(Double(index) * 0.1),
+                seenAt: day
+            ) == .appended, "message \(index) of one drained backlog must not be rate-dropped")
         }
-        // The bucket is now empty; a further message in the same instant is throttled.
-        #expect(!s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "R",
-                                   text: "flood", sentAt: day, now: day.addingTimeInterval(0.5)),
-                "Beyond the burst allowance, a same-instant flood message is dropped")
-        // After the bucket refills (>= 1 s later) it is accepted again.
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "R",
-                                  text: "later", sentAt: day, now: day.addingTimeInterval(2)),
-                "Once the bucket refills the sender can send again")
-
-        // A different sender has an independent bucket — not throttled by the first sender's flood.
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "other", senderDisplayName: "A",
-                                  text: "hi", sentAt: day, now: day.addingTimeInterval(0.5)))
+        #expect(s.messages.count == 12)
     }
 
     @Test func droppedMessageDoesNotPoisonALaterLegitimateOne() {
         let s = SessionMessageStore()
         let id = UUID()
-        // An empty-after-sanitize message is dropped and must NOT record its id (dedup) or rate-limit key.
-        #expect(!s.receiveIncoming(id: id, senderFingerprint: "fp", senderDisplayName: "R", text: "\u{200B}", sentAt: day, now: day))
-        // Same sender, immediately after: a real message is still accepted (no rate-limit poisoning).
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "R", text: "real", sentAt: day, now: day))
+        // An empty-after-sanitize message is refused and must NOT record its id (dedup).
+        #expect(s.receiveIncoming(id: id, senderFingerprint: "fp", senderDisplayName: "R",
+                                  text: "\u{200B}", sentAt: day, seenAt: day)
+                    == .emptyAfterSanitizing)
+        // Same sender, immediately after: a real message is still accepted.
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "R",
+                                  text: "real", sentAt: day, seenAt: day) == .appended)
         #expect(s.messages.count == 1)
+    }
+
+    // MARK: - The transcript is a derivation (plan §10.3, §12)
+
+    /// §10.3's order, re-derived rather than appended: a backlog drains in INDEX order —
+    /// `(originFingerprint, itemID)` — so arrival order is not send order on the routed path, and a
+    /// device joining a chat in progress would otherwise see the transcript grouped by sender.
+    ///
+    /// The inversion is the non-vacuity: the later-claimed message is delivered FIRST.
+    @Test func theTranscriptIsOrderedBySentAtAcrossSendersNotByArrival() {
+        let s = SessionMessageStore()
+        let seen = day
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "zeta", senderDisplayName: "Z",
+                                  text: "third", sentAt: day.addingTimeInterval(30),
+                                  seenAt: seen) == .appended)
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "alpha", senderDisplayName: "A",
+                                  text: "first", sentAt: day.addingTimeInterval(10),
+                                  seenAt: seen) == .appended)
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "zeta", senderDisplayName: "Z",
+                                  text: "second", sentAt: day.addingTimeInterval(20),
+                                  seenAt: seen) == .appended)
+        #expect(s.messages.map(\.text) == ["first", "second", "third"], """
+            two members interleaved and delivered out of order must still read in send order — \
+            appended order would have given ["third", "first", "second"]
+            """)
+    }
+
+    /// A forged claim is CLAMPED to ±10 minutes of first-seen rather than trusted or dropped, and
+    /// the clamped instant is what is stored: the UI renders relative times, so a message claiming
+    /// 1999 must not render as 1999.
+    @Test func aClaimedSentAtBeyondTheWindowIsClampedForOrdering() throws {
+        let s = SessionMessageStore()
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "honest", senderDisplayName: "H",
+                                  text: "now", sentAt: day, seenAt: day) == .appended)
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "forger", senderDisplayName: "F",
+                                  text: "ancient", sentAt: Date(timeIntervalSince1970: 0),
+                                  seenAt: day) == .appended)
+        let ancient = try #require(s.messages.first { $0.text == "ancient" })
+        #expect(ancient.sentAt == day.addingTimeInterval(-MeshMergedMessage.claimWindow),
+                "the claim is pulled to the edge of its window, not accepted and not discarded")
+        #expect(s.messages.map(\.text) == ["ancient", "now"],
+                "so it sorts before an honest message and no further back than ten minutes")
+    }
+
+    /// The gates are a **view filter over an unmutated union** (§21.3's decision), so a block that
+    /// arrives after delivery hides a row, and lifting it shows the row again with no second
+    /// delivery. The rows were never destroyed — that is what makes the derivation shape worth it.
+    @Test func aGateClosingHidesRowsAndReopeningShowsThemWithNoSecondDelivery() {
+        let s = SessionMessageStore()
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "keep", senderDisplayName: "K",
+                                  text: "kept", sentAt: day, seenAt: day) == .appended)
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "hide", senderDisplayName: "H",
+                                  text: "hidden", sentAt: day.addingTimeInterval(1),
+                                  seenAt: day) == .appended)
+
+        s.refreshGates(chatAllowed: true) { $0 == "hide" }
+        #expect(s.messages.map(\.text) == ["kept"], "a blocked sender's rows are filtered out")
+
+        s.refreshGates(chatAllowed: false) { _ in false }
+        #expect(s.messages.isEmpty, "and the age gate empties the whole transcript")
+
+        s.refreshGates(chatAllowed: true) { _ in false }
+        #expect(s.messages.map(\.text) == ["kept", "hidden"],
+                "both come back on re-derivation — nothing was mutated, so nothing was lost")
     }
 
     // MARK: - Session-end clearing (every path) + formation
 
-    @Test func leaveSessionClearsTheTranscript() throws {
+    @Test func leaveSessionClearsTheTranscript() {
         let manager = store.meshNetworkManager
-        try deliverMessage(via: manager, text: "in-session")
+        seedTranscript(via: manager, text: "in-session")
         #expect(!manager.sessionMessages.messages.isEmpty)
 
         manager.leaveSession()   // → leaveMesh → stopSearching teardown funnel
         #expect(manager.sessionMessages.messages.isEmpty, "Messages vanish at session end")
     }
 
-    @Test func leaveMeshClearsTheTranscript() throws {
+    @Test func leaveMeshClearsTheTranscript() {
         let manager = store.meshNetworkManager
-        try deliverMessage(via: manager, text: "in-session")
+        seedTranscript(via: manager, text: "in-session")
         #expect(!manager.sessionMessages.messages.isEmpty)
 
         manager.leaveMesh()
@@ -301,11 +325,19 @@ struct SessionMessageTests {
 
     @Test func lastSlotEvictionClearsTheTranscript() throws {
         let manager = store.meshNetworkManager
-        let robin = try deliverMessage(via: manager, text: "in-session")
-        let slotID = try #require(manager.slots.first { $0.fingerprint == robin.fingerprint }?.id)
+        let coordinator = throwawayCoordinator()
+        let identity = makePeerIdentity(name: "Robin", signingPublicKey: Data([1, 2, 3]))
+        manager.addSlotForTesting(
+            coordinator: coordinator, peer: makePeerHandle(name: "Robin"),
+            fingerprint: identity.fingerprint, peerCapabilities: messagesCap
+        )
+        seedTranscript(via: manager, text: "in-session")
+        let slotID = try #require(manager.slots.first { $0.fingerprint == identity.fingerprint }?.id)
         #expect(!manager.sessionMessages.messages.isEmpty)
 
-        manager.evictSlotForTesting(peerID: slotID)   // removeSlot funnel — the last committed slot is gone
+        // The LEDGERLESS shape (no mesh was ever founded here), which is door 4 of `isSessionLive`
+        // and still means "the last committed slot going away is the session ending".
+        manager.evictSlotForTesting(peerID: slotID)   // removeSlot funnel
         #expect(!manager.isInSession)
         #expect(manager.sessionMessages.messages.isEmpty)
     }
@@ -313,10 +345,12 @@ struct SessionMessageTests {
     @Test func newSessionFormationStartsWithAnEmptyTranscript() throws {
         let manager = store.meshNetworkManager
         // A stale message lingering in the store (no live session).
-        #expect(manager.sessionMessages.receiveIncoming(id: UUID(), senderFingerprint: "fp",
-                                                       senderDisplayName: "Ghost", text: "stale",
-                                                       sentAt: day, now: day))
+        #expect(manager.sessionMessages.receiveIncoming(
+            id: UUID(), senderFingerprint: "fp", senderDisplayName: "Ghost", text: "stale",
+            sentAt: day, seenAt: day
+        ) == .appended)
         #expect(!manager.sessionMessages.messages.isEmpty)
+        let generationBefore = manager.transcriptGeneration
 
         // First slot COMMIT (session formation) clears it.
         let coordinator = throwawayCoordinator()
@@ -327,6 +361,10 @@ struct SessionMessageTests {
         manager.noteSlotCommittedForShop(slot: slot, identity: identity)
 
         #expect(manager.sessionMessages.messages.isEmpty, "A new session forms with a clean transcript")
+        #expect(manager.transcriptGeneration > generationBefore, """
+            and the formation clear BUMPS the generation, so a routed text item custodied under the \
+            previous one can never project into this transcript (item 2 fix review P2-3)
+            """)
     }
 
     // MARK: - Never persisted
@@ -339,8 +377,8 @@ struct SessionMessageTests {
         let sentinel = "SECRET-CHAT-SENTINEL-9x7q"
         #expect(persistStore.meshNetworkManager.sessionMessages.receiveIncoming(
             id: UUID(), senderFingerprint: "fp-robin", senderDisplayName: "Robin",
-            text: sentinel, sentAt: day, now: day
-        ))
+            text: sentinel, sentAt: day, seenAt: day
+        ) == .appended)
         #expect(!persistStore.meshNetworkManager.sessionMessages.messages.isEmpty)
 
         // Force the store to persist everything it CAN persist.
@@ -352,58 +390,73 @@ struct SessionMessageTests {
         #expect(!json.contains(sentinel), "A session message must never reach the persisted snapshot")
     }
 
-    // MARK: - Capability-gated send
+    // MARK: - The send, now a routed mint
 
-    /// The room broadcast is sealed per active committed slot and skips peers that don't advertise the
-    /// `messages` capability (a legacy / photos-only peer would park-and-drop it anyway). The local echo
-    /// is appended exactly once regardless.
-    @Test func sendBroadcastsOnlyToMessagesCapablePeers() {
+    /// The destination set is the DERIVED ROSTER, not the `messages` capability (P6 item 4).
+    ///
+    /// The retired transport sealed one envelope per active committed slot that advertised the
+    /// capability, so a legacy or photos-only peer was skipped and an admitted member who was not
+    /// linked at that instant got nothing, ever. A routed mint addresses the roster: the manifest
+    /// binds wraps ≡ destinations, so a destination cannot be skipped, and an unlinked one is
+    /// custodied. With no mesh and no ledger there is no roster at all — which is exactly the
+    /// answer this asserts, by name, rather than a silent nothing.
+    @Test func theDestinationSetIsTheDerivedRosterNotTheCapability() {
         let manager = store.meshNetworkManager
-        var sentSlotIDs: [UUID] = []
-        manager.onTempMessageSendForTesting = { sentSlotIDs.append($0) }
+        var outcomes: [MeshTextSendOutcome] = []
+        manager.onTextSendForTesting = { outcomes.append($0) }
 
-        // One messages-capable committed peer, one photos-only, one legacy (nil capabilities).
-        let capable = makePeerHandle(name: "Capable")
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: capable, fingerprint: "fp-capable",
-            verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: messagesCap
-        )
-        let photosOnly = makePeerHandle(name: "PhotosOnly")
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: photosOnly, fingerprint: "fp-photos",
-            verifiedKeyAgreementPublicKey: Data([2]), peerCapabilities: [ProximityCapability.photos.rawValue]
-        )
-        let legacy = makePeerHandle(name: "Legacy")
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: legacy, fingerprint: "fp-legacy",
-            verifiedKeyAgreementPublicKey: Data([3]), peerCapabilities: nil
-        )
+        // Three committed slots, one per capability shape the legacy fan-out used to sort on.
+        for (index, capabilities) in [messagesCap, [ProximityCapability.photos.rawValue], nil].enumerated() {
+            manager.addSlotForTesting(
+                coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Peer\(index)"),
+                fingerprint: "fp-peer-\(index)", verifiedKeyAgreementPublicKey: Data([UInt8(index + 1)]),
+                peerCapabilities: capabilities
+            )
+        }
 
-        manager.sendTempMessage("hello everyone")
-
-        #expect(sentSlotIDs == [capable.id], "Only the messages-capable peer receives the broadcast")
-        // Local echo appended exactly once.
-        let outgoing = manager.sessionMessages.messages.filter { $0.isOutgoing }
-        #expect(outgoing.count == 1)
-        #expect(outgoing.first?.text == "hello everyone")
+        #expect(manager.sendTempMessage("hello everyone") == .noDestinations, """
+            slots are not destinations: with no mesh and no membership ledger the derived roster \
+            names nobody, and the capability column no longer decides anything
+            """)
+        #expect(outcomes == [.noDestinations], "reported exactly once, and not silently")
+        #expect(manager.sessionMessages.messages.isEmpty, """
+            and NOTHING is echoed for a message that reached nobody — destinations are frozen at \
+            the mint and there is no offline queue, so the echo would be a claim that never comes true
+            """)
     }
 
     @Test func sendDropsEmptyOrWhitespaceOnlyText() {
         let manager = store.meshNetworkManager
-        var sends = 0
-        manager.onTempMessageSendForTesting = { _ in sends += 1 }
+        var outcomes: [MeshTextSendOutcome] = []
+        manager.onTextSendForTesting = { outcomes.append($0) }
         manager.addSlotForTesting(
             coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
             fingerprint: "fp-capable", verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: messagesCap
         )
 
-        manager.sendTempMessage("   \n\t ")
-        #expect(sends == 0)
+        #expect(manager.sendTempMessage("   \n\t ") == .empty)
+        #expect(outcomes == [.empty])
         #expect(manager.sessionMessages.messages.isEmpty, "Nothing is echoed for an empty message")
     }
 
-    /// There is still no user-facing opt-out for messages — session membership is the consent gate —
-    /// but the 13+ age gate does withhold the capability, which is what this now pins.
+    /// The byte bound can empty a message the `Character` cap admitted — one base plus four
+    /// thousand combining marks is a SINGLE `Character` and 8 001 bytes — and minting that would
+    /// echo an empty row the user cannot dismiss (the design check's finding A3b).
+    @Test func aCombiningMarkFloodIsByteBoundedAndMintsNothingWhenItEmpties() {
+        let manager = store.meshNetworkManager
+        var outcomes: [MeshTextSendOutcome] = []
+        manager.onTextSendForTesting = { outcomes.append($0) }
+        let flood = "a" + String(repeating: "\u{0301}", count: 4_000)
+        #expect(flood.count == 1, "the whole flood is ONE Character, which is the trap")
+        #expect(flood.utf8.count > MeshRoutedTextBody.maxTextUTF8ByteCount)
+
+        #expect(manager.sendTempMessage(flood) == .empty)
+        #expect(outcomes == [.empty])
+        #expect(manager.sessionMessages.messages.isEmpty)
+    }
+
+    // MARK: - Capability advertisement
+
     @Test func localCapabilitiesAdvertiseMessagesOnlyAboveTheAgeGate() {
         let manager = store.meshNetworkManager
         #expect(manager.localCapabilities().contains(ProximityCapability.messages.rawValue))

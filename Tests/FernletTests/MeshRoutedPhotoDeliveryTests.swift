@@ -1103,13 +1103,18 @@ struct MeshRoutedPhotoDeliveryTests {
     /// **R-19** (found reviewing pass B). A routed type this build cannot dispatch does not spend
     /// the projection allowance, so nothing sorted behind it is stranded.
     ///
-    /// `.tempMessage` and `.heart` are registered, admitted, custodied and complete today with **no**
-    /// dispatch arm behind them — P6 lands those. They are therefore permanently "awaiting local
-    /// projection", and `MeshRoutedIndex.items` is ordered by ``MeshRoutedItemKey``, i.e. by origin
-    /// fingerprint first: an origin whose fingerprint sorts low can fill one pass's whole item
-    /// allowance with items nobody can finish, and every photo behind them waits until expiry. The
-    /// remedy is R-18's, one layer out — the list is narrowed to what this build can finish before
-    /// the allowance is spent.
+    /// `MeshRoutedIndex.items` is ordered by ``MeshRoutedItemKey``, i.e. by origin fingerprint
+    /// first, so an origin whose fingerprint sorts low can fill one pass's whole item allowance
+    /// with items this device cannot finish, and every photo behind them waits until expiry. The
+    /// remedy is R-18's, one layer out — the list is narrowed before the allowance is spent.
+    ///
+    /// **What makes `.tempMessage` unfinishable here changed at P6 item 4**, and the claim is the
+    /// same either way. It used to be that the token had no dispatch arm at all; now it has one, and
+    /// what keeps it out of the allowance on THIS rig is the other half of the same rule — the
+    /// narrowed set is "one token per store this build has an arm for **and may write**", and these
+    /// managers have no `chatAllowedProvider`, so the 13+ gate is shut and fail-closed. `.heart` is
+    /// still the no-arm case until item 6. A device that could finish these items would project
+    /// them, which is the behaviour, not a hole in this cell.
     @Test func aTypeWithNoDispatchArmDoesNotSpendTheProjectionAllowance() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "photo-noarm")
         defer { rig.teardown() }

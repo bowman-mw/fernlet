@@ -302,8 +302,13 @@ struct MeshRoutedDeliveryAckTests {
     @Test func aTextItemUsesTheSameStageAsAPhoto() throws {
         let scope = Fixture.scope()
         defer { Fixture.tearDown(scope) }
+        // A blob inside the TEXT row's own cap (P6 item 4 narrowed it to 9 065 B): the shared
+        // `blobByteCount` is two chunks' worth and now trips `sizeExceedsTypeCap` at the manifest
+        // door — which is item 3's check doing its job, not a regression in this claim.
         let rig = try MeshRoutedCustodyFixtures.rig(
-            scope: scope, typeToken: MeshRoutedTypeToken.tempMessage
+            scope: scope,
+            byteCount: MeshRoutedTextBody.maxSealedBlobByteCount,
+            typeToken: MeshRoutedTypeToken.tempMessage
         )
         MeshRoutedCustodyFixtures.stageAll(rig)
         _ = MeshRoutedCustodyFixtures.commit(rig)

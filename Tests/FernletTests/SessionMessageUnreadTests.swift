@@ -17,26 +17,43 @@ struct SessionMessageUnreadTests {
 
     private let day = Date(timeIntervalSince1970: 1_780_000_000)
 
+    /// `receiveIncoming` answers a three-way ``SessionMessageStore/Acceptance`` since P6 item 4;
+    /// these cells are about the unread BADGE, so they only ever need "did it land".
+    private func receive(
+        into store: SessionMessageStore,
+        id: UUID,
+        senderFingerprint: String,
+        senderDisplayName: String,
+        text: String,
+        sentAt: Date,
+        seenAt: Date
+    ) -> Bool {
+        store.receiveIncoming(
+            id: id, senderFingerprint: senderFingerprint, senderDisplayName: senderDisplayName,
+            text: text, sentAt: sentAt, seenAt: seenAt
+        ) == .appended
+    }
+
     @Test func inboundMessageIncrementsUnreadWhileClosed() {
         let s = SessionMessageStore()
         #expect(s.unreadCount == 0)
         #expect(!s.hasUnread)
 
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                  text: "hi", sentAt: day, now: day))
+        #expect(receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "hi", sentAt: day, seenAt: day))
         #expect(s.unreadCount == 1)
         #expect(s.hasUnread)
 
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                  text: "again", sentAt: day, now: day.addingTimeInterval(1)))
+        #expect(receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "again", sentAt: day, seenAt: day.addingTimeInterval(1)))
         #expect(s.unreadCount == 2)
     }
 
     @Test func noIncrementWhileViewing() {
         let s = SessionMessageStore()
         s.beginViewing()
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                  text: "seen live", sentAt: day, now: day))
+        #expect(receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "seen live", sentAt: day, seenAt: day))
         #expect(s.unreadCount == 0, "A message that arrives while the panel is open is read live, never unread")
         #expect(!s.hasUnread)
         // The message itself is still in the transcript — only the badge is suppressed.
@@ -45,16 +62,16 @@ struct SessionMessageUnreadTests {
 
     @Test func beginViewingClearsStandingUnreadThenSuppresses() {
         let s = SessionMessageStore()
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                  text: "one", sentAt: day, now: day))
+        #expect(receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "one", sentAt: day, seenAt: day))
         #expect(s.unreadCount == 1)
 
         s.beginViewing()   // opening the panel clears the badge...
         #expect(s.unreadCount == 0)
 
         // ...and keeps it at zero for messages that arrive while it stays open.
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                  text: "two", sentAt: day, now: day.addingTimeInterval(1)))
+        #expect(receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "two", sentAt: day, seenAt: day.addingTimeInterval(1)))
         #expect(s.unreadCount == 0)
     }
 
@@ -62,15 +79,15 @@ struct SessionMessageUnreadTests {
         let s = SessionMessageStore()
         s.beginViewing()
         s.endViewing()   // panel dismissed
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                  text: "after close", sentAt: day, now: day))
+        #expect(receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "after close", sentAt: day, seenAt: day))
         #expect(s.unreadCount == 1, "Once the panel closes, later inbound messages are unread again")
     }
 
     @Test func markAllReadClearsTheBadge() {
         let s = SessionMessageStore()
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                  text: "one", sentAt: day, now: day))
+        #expect(receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "one", sentAt: day, seenAt: day))
         #expect(s.hasUnread)
         s.markAllRead()
         #expect(s.unreadCount == 0)
@@ -88,15 +105,15 @@ struct SessionMessageUnreadTests {
     @Test func droppedInboundDoesNotIncrementUnread() {
         let s = SessionMessageStore()
         // Empty-after-sanitize is dropped entirely — it must not bump the badge.
-        #expect(!s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                   text: "\u{200B}\n ", sentAt: day, now: day))
+        #expect(!receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                   text: "\u{200B}\n ", sentAt: day, seenAt: day))
         #expect(s.unreadCount == 0)
     }
 
     @Test func clearResetsUnread() {
         let s = SessionMessageStore()
-        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
-                                  text: "one", sentAt: day, now: day))
+        #expect(receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "one", sentAt: day, seenAt: day))
         #expect(s.hasUnread)
         s.clear()   // session end / new-session formation
         #expect(s.unreadCount == 0)

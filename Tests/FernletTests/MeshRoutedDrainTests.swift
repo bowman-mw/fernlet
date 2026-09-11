@@ -1964,6 +1964,66 @@ struct MeshRoutedDrainWallTests {
         #expect(scanned == retired.count, "the retired-transport scan lost a symbol")
     }
 
+    /// **W2 — the retired TEXT transport is gone**, symbol by symbol (P6 item 4).
+    ///
+    /// The same shape as the photo wall's zero-list, and owed for the same reason: keeping both
+    /// paths alive is what makes a retirement a fiction. Seven names, one flow — the registered
+    /// `.tempMessage` handler, the payload the fan-out minted, the per-slot capability read that
+    /// chose who got one, the per-slot send seam, the retired per-sender token bucket, and the
+    /// audit-token family the whole thing logged under.
+    ///
+    /// The needles are deliberately NARROW. `MeshRoutedTypeToken.tempMessage` is a **live**
+    /// registered routed type with the same last component, so a bare `.tempMessage` needle would
+    /// be unsatisfiable: the token the routed path mints under is exactly the one whose legacy
+    /// wire twin is retired here.
+    @Test func theRetiredTextTransportIsGone() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let retired = [
+            "registerSessionMessageHandler", "TempMessagePayload", "for: .tempMessage",
+            "mesh.tempMessage.", "onTempMessageSendForTesting",
+            // The capability column decided who received a legacy fan-out. A routed manifest binds
+            // wraps ≡ destinations, so a destination cannot be skipped; re-introducing this read
+            // would put a second, weaker destination rule beside the roster's.
+            "supports(.messages)",
+            // The live-arrival token bucket, retired WITH its transport (a policy act): a drain
+            // answer carries up to 16 items, so burst 5 would flood-drop 11 legitimate messages,
+            // and a fixed per-item `firstSeenAt` never refills it. Its replacement is
+            // `allowIncomingRoutedText`, the photo quota's twin, keyed on the ITEM's mesh.
+            "rateBucketBySender"
+        ]
+        var scanned = 0
+        // R2: seven names over one file.
+        for symbol in retired {
+            scanned += 1
+            #expect(!source.contains(symbol), "\(symbol) came back to MeshNetworkManager.swift")
+        }
+        #expect(scanned == retired.count, "the retired-text-transport scan lost a symbol")
+    }
+
+    /// The other half of the retirement: `PayloadType.tempMessage` is **parked, not deleted**.
+    ///
+    /// The `.friendPhoto` precedent (D-13.5, itself `.sessionGoodbye`'s): the case, its frozen
+    /// `rawValue` and its `sealingRequiredTypes` membership all stay, and `TempMessagePayload`
+    /// stays decodable, so an older peer's frame parks by name rather than being mis-dispatched or
+    /// failing a session. Six unrelated suites also use the token as their sealing-required
+    /// CONTROL, so deleting it would drag them into this item.
+    @Test func theLegacyTextPayloadTypeIsParkedNotDeleted() throws {
+        #expect(PayloadType(rawValue: "fernlet.message.temp.v1") == .tempMessage,
+                "the wire token still decodes — a parked type is not an unknown one")
+        let wire = try RepoRoot.source("FernletKit/Sources/ProximityKit/Wire/FernletIdentityEnvelope.swift")
+        let sealingLine = try #require(
+            MeshRoutedSourceScan.codeOnly(wire)
+                .split(separator: "\n")
+                .first(where: { $0.contains("sealingRequiredTypes: Set<PayloadType>") }),
+            "sealingRequiredTypes moved — update this scan"
+        )
+        #expect(sealingLine.contains(".tempMessage"),
+                "and it keeps its sealing requirement, so an unsealed legacy frame is still refused")
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        #expect(!source.contains("registerPayloadHandler(for: .tempMessage)"),
+                "while NOTHING registers a handler for it")
+    }
+
     /// **Item 13's precondition, still green after item 13.** The routed section names no epoch,
     /// group key, branch or partition symbol — and it now carries the sender door, the projection
     /// and the re-entry projection pass, so the claim is about real content code rather than about

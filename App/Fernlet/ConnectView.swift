@@ -110,6 +110,28 @@ struct FriendsView: View {
         }
     }
 
+    /// Whether ANY of this surface's three presenters is up right now — the one predicate that
+    /// stands between "a cover is showing" and a second presentation request SwiftUI silently drops
+    /// (P6 item 2 fix review, finding P2-2).
+    ///
+    /// **Three, not two.** `body` hangs a celebration `fullScreenCover`
+    /// (`$showConnectionAnimation`), two session-end `.sheet`s (`$disconnectReviewPresented`,
+    /// `$keepFriendsPromptPresented`) and the album photo feed's `fullScreenCover`
+    /// (`$selectedAlbumPostID`) off ONE anchor. The heal arm special-cased only the two sheets, so a
+    /// commit while a wall photo was open took the celebrate branch: two `fullScreenCover`s cannot
+    /// both present from one anchor, the celebration never appeared, nothing reset
+    /// `showConnectionAnimation`, and `.accessibilityHidden(showConnectionAnimation)` on the whole
+    /// `ZStack` latched VoiceOver and Switch Control out of the entire Friends surface until the
+    /// next peer loss or session end. The celebration's own flag is deliberately absent from the
+    /// list: it is what the heal arm is deciding whether to raise, so including it would make the
+    /// predicate read its own output.
+    ///
+    /// Read by the heal arm and by ``presentDisconnectReviewIfNeeded()``, which is the other site
+    /// that requests a presentation and therefore the other site that can lose one.
+    private var aPresentationIsUp: Bool {
+        disconnectReviewPresented || keepFriendsPromptPresented || selectedAlbumPostID != nil
+    }
+
     /// The **layout** half of the session transition: what surface the Social tab draws.
     ///
     /// `isInSession`, because that is the predicate `body`'s own swap reads and the predicate
@@ -141,7 +163,8 @@ struct FriendsView: View {
     /// session also loses the committed peer, because every terminal transition carries
     /// `.stopParticipation`.
     ///
-    /// The heal arm dismisses **either** standing sheet, and both non-celebrating exits clear
+    /// The heal arm reads ``aPresentationIsUp`` — all THREE presenters, not the two session-end
+    /// sheets (fix review finding P2-2) — and both non-celebrating exits clear
     /// `showConnectionAnimation` (review finding P2-4). Both halves are load-bearing: a heal is
     /// seconds away in the same room, the photo review is the blip's common case and not the keep
     /// prompt, and nothing else ever resets `showConnectionAnimation` once the cover fails to
@@ -150,7 +173,7 @@ struct FriendsView: View {
     /// of the whole Friends surface for the rest of the session.
     private func handleCommittedPeerChange(hadPeer: Bool, hasPeer: Bool) {
         if !hadPeer && hasPeer {
-            if keepFriendsPromptPresented || disconnectReviewPresented {
+            if aPresentationIsUp {
                 // A session became live again while a session-end sheet was up: dismiss WITHOUT
                 // consuming — the batch persists and re-presents (merged) at the next real
                 // teardown, and unkept session photos stay in `manager.sessionPhotos`. Clearing
@@ -670,7 +693,10 @@ struct FriendsView: View {
     /// or the ceremony is only half re-pointed.
     private func presentDisconnectReviewIfNeeded() {
         guard !manager.isSessionLive else { return }
-        guard !disconnectReviewPresented, !keepFriendsPromptPresented else { return }
+        // ``aPresentationIsUp``, not the two sheet flags: a `.sheet` requested while the album's
+        // `fullScreenCover` is up is one of the two presentations SwiftUI drops (fix review P2-2),
+        // and a review that silently never appears is a batch the user never gets to answer.
+        guard !aPresentationIsUp else { return }
         let batch = manager.pendingFriendReview
         let hasPhotos = !manager.sessionPhotos.isEmpty
         guard batch != nil || hasPhotos else { return }

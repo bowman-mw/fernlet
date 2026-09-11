@@ -200,21 +200,31 @@ jobs:
         # injected clock, no radio, no wall-clock sleeps — ~2 minutes on a hosted runner. The floor is
         # the battery's measured count (101 at 24f6051) plus CIGateSelectorBoundaryTests' own 4,
         # MeshRoutedRefusalBudgetTests' 8 (the per-sender pre-store refusal bound the post-close
-        # review added) and MeshPairwiseFoundingTests' 25 (P6 item 2: the proximity-join founding —
+        # review added) and MeshPairwiseFoundingTests' 27 (P6 item 2: the proximity-join founding —
         # the app's ONLY session entry, and the only suite that drives the real commit/founding/
         # admission/delivery path with nothing seeded; 18 at 921441a, plus the 7 the session-end fix
         # added — the four doors of `isSessionLive`, the two blip cells and the discovery-entry
-        # table); RAISE it when a battery grows.
+        # table — plus the 2 its fix review added: door 3's clock, armed in the MANAGER at the
+        # slot-loss edge, ending a blipped session with no tab bounce and cancelled by a re-link),
+        # and P6 item 4's three text suites (15 + 3 + 9 = 27: the routed text body's framing,
+        # its four hostile shapes and its cap formula; the sender's outcome table; and text delivered
+        # and PROJECTED end to end through the real founding path — the first text-over-routed
+        # exercise in the project, and ungated it would never run, since
+        # CIGateSelectorBoundaryTests only REQUIRES MeshP<n>*AcceptanceTests);
+        # RAISE it when a battery grows.
         # CIGateSelectorBoundaryTests is the static half of this guard — every suite named on any
         # run-gated-suites.sh line must be a declared suite, and every MeshP<n>*AcceptanceTests /
         # convergence battery declared in the tree must be named here — and it also runs on the first
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 138 \
+          Scripts/run-gated-suites.sh mesh-batteries 167 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
+            MeshRoutedTextBodyTests \
+            MeshRoutedTextSenderTests \
+            MeshRoutedTextDeliveryTests \
             MeshP3SessionAcceptanceTests \
             MeshP3RotationAcceptanceTests \
             MeshP3RestoreMatrixAcceptanceTests \

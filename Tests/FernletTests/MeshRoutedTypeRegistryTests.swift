@@ -219,11 +219,14 @@ struct MeshRoutedTypeRegistryTests {
             MeshRoutedTypeToken.tempMessage: .durableRecipientStorage,
             MeshRoutedTypeToken.heart: .foregroundDecryptAndLedgerCommit
         ]
-        // P6 item 3 narrowed the photo row to the seal formula; the other two are still the shared
-        // wire bound and narrow when items 4 and 6 land their bodies.
+        // P6 item 3 narrowed the photo row to the seal formula and P6 item 4 narrowed the TEXT row
+        // to its own body's (the sanitized maximum's byte bound + this family's framed header
+        // allowance + the seal's overhead). The heart row is still the shared wire bound and
+        // narrows when item 6 lands its body. Each is read from the type that owns it — a literal
+        // here would be the second copy the formula exists to prevent.
         let caps: [String: UInt64] = [
             MeshRoutedTypeToken.photo: UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
-            MeshRoutedTypeToken.tempMessage: MeshRoutedManifestFormat.maxContentByteCount,
+            MeshRoutedTypeToken.tempMessage: UInt64(MeshRoutedTextBody.maxSealedBlobByteCount),
             MeshRoutedTypeToken.heart: MeshRoutedManifestFormat.maxContentByteCount
         ]
         for token in registry.tokens {
@@ -332,6 +335,49 @@ struct MeshRoutedTypeRegistryTests {
                 "the manifest door's cap and the projection's resident-blob guard must be one number")
         #expect(photo.maxItemByteCount < MeshRoutedManifestFormat.maxContentByteCount,
                 "a row still at the wire bound is not a narrowed cap")
+    }
+
+    /// **The SECOND narrowed cap** (P6 item 4), and the claim item 3's cell could not make with one
+    /// row: two registered types now carry two DIFFERENT caps, so the registry is really per-type
+    /// rather than one number wearing three hats.
+    ///
+    /// The text row is narrower than the photo row by three orders of magnitude, which is the whole
+    /// value of a per-type cap: a chat message that measured up to 10 MB of ciphertext would be
+    /// admitted, chunked, custodied and acknowledged before anything looked at it.
+    @Test func theTextRowsCapIsItsOwnBodyFormulaAndIsNarrowerThanThePhotoRows() throws {
+        let registry = MeshRoutedTypeRegistry.increment1
+        let text = try #require(registry.entry(for: MeshRoutedTypeToken.tempMessage))
+        let photo = try #require(registry.entry(for: MeshRoutedTypeToken.photo))
+        let formula = MeshRoutedTextBody.maxTextUTF8ByteCount
+            + MeshRoutedItemBodyFormat.maxFramedTextHeaderByteCount
+            + MeshRoutedItemSealFormat.overheadByteCount
+        #expect(text.maxItemByteCount == UInt64(formula),
+                "the row is not the sanitized maximum's byte bound plus the framing it rides under")
+        #expect(text.maxItemByteCount == UInt64(MeshRoutedTextBody.maxSealedBlobByteCount),
+                "and it is defined AS the body's own constant, never as a copy of the formula")
+        #expect(text.maxItemByteCount < photo.maxItemByteCount,
+                "two registered types, two caps — which is what makes the column per-type")
+        #expect(text.maxItemByteCount < MeshRoutedManifestFormat.maxContentByteCount,
+                "a row still at the wire bound is not a narrowed cap")
+    }
+
+    /// The per-origin projection quotas, pinned as constants rather than left to a cell that spends
+    /// one (P6 item 4; item 1's rule that every new bound owes a cell).
+    ///
+    /// The TEXT quota is a policy act: a per-second token bucket became a per-session TOTAL, because
+    /// one drain answer carries up to `MeshRoutedDrainBounds.increment1.maxItems` items and a
+    /// burst-5 bucket would flood-drop the rest of a single legitimate backlog.
+    @Test func theProjectionQuotasAreBoundedOnBothAxes() {
+        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession == 200)
+        #expect(MeshNetworkManager.maxPhotosPerSenderPerSession == 10)
+        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession
+                    > MeshRoutedDrainBounds.increment1.maxItems,
+                "a quota below one drain answer's item allowance would refuse a legitimate backlog")
+        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession
+                    <= SessionMessageStore.maxSeenIDs,
+                "and it stays inside the dedup set, so a spent quota is never reached via a forgotten id")
+        #expect(MeshRoutedStoreFormat.maxItems == 1024,
+                "the other axis: at most 1024 (mesh, origin) keys, so the worst case is 1024 x 200 ids")
     }
 
     /// The allowance the formula reserves for the framed header is MEASURED against the widest

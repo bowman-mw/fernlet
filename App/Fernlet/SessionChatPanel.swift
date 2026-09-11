@@ -6,15 +6,24 @@ import FernletUI
 /// Presented from the in-session disposable-camera surface. Reads the observable
 /// `manager.sessionMessages` transcript and sends via `manager.sendTempMessage(_:)`.
 ///
-/// Session-scoped by construction: the transcript is memory-only and the manager clears it at session
-/// end (messages VANISH — nothing retained, nothing synced), so this list empties when the outing ends.
-/// Sending outside a session is a no-op (there are no active committed slots), so the compose bar simply
-/// goes quiet rather than erroring.
+/// Session-scoped by construction: the VISIBLE transcript is memory-only and the manager clears it
+/// at session end, so this list empties when the outing ends. Since P6 item 4 the messages
+/// themselves ride the routed store as sealed ciphertext beneath it, held until the item expires —
+/// which is what lets a message reach an admitted member who is not linked at that instant.
+///
+/// A send that did not stage is said **in place**, under the compose bar, with the draft kept: the
+/// compose bar is deliberately not gated on "is there anybody to send to", because that would need
+/// a second published mirror of the mint's own answer and would flicker on every link blip.
 struct SessionChatPanel: View {
     var manager: MeshNetworkManager
     var onDone: () -> Void
 
     @State private var draft = ""
+    /// The inline notice for a send that did not stage (P6 item 4). In place, beneath the compose
+    /// bar, rather than on `routedShareRefusal`'s alert: that alert belongs to
+    /// `DisposableCameraView`, which this panel is presented OVER, so firing it here would present
+    /// on a covered presenter and its copy is photo-worded in every arm.
+    @State private var sendNotice: LocalizedStringKey?
     @FocusState private var composeFocused: Bool
 
     private var messages: [SessionMessageStore.Message] { manager.sessionMessages.messages }
@@ -129,7 +138,20 @@ struct SessionChatPanel: View {
 
     // MARK: - Compose
 
+    @ViewBuilder
     private var composeBar: some View {
+        if let sendNotice {
+            Text(sendNotice)
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.terracotta)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .background(Color.parchment)
+                .accessibilityIdentifier("session.chat.sendNotice")
+        }
         HStack(spacing: 10) {
             TextField("Message", text: $draft, axis: .vertical)
                 .font(.fernlet(.body))
@@ -176,7 +198,14 @@ struct SessionChatPanel: View {
     private func send() {
         let text = draft
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        manager.sendTempMessage(text)
+        // The outcome is READ, never discarded: an unread one is a message the user believes was
+        // sent. `.noDestinations` is the real case that makes this necessary — the founding window
+        // (commit → found → grant → adopt) is a second or two in which the roster names nobody
+        // else, and destinations are frozen at the mint, so the item can never acquire one later.
+        let outcome = manager.sendTempMessage(text)
+        sendNotice = RoutedShareRefusalCopy.chatNotice(outcome)
+        // The draft survives anything but a staged send, so "send again" is the retry.
+        guard outcome == .staged else { return }
         draft = ""
     }
 }

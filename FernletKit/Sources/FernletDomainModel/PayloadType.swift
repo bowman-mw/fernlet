@@ -86,11 +86,25 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// confidentiality layer, and the opener only ever parses bytes it unsealed itself. Never
     /// dispatched on a live radio — no mesh/presence payload handler registers it.
     case friendHeartDrop       = "fernlet.friend.heart.drop.v1"
-    /// A live-session temporary chat message (`TempMessagePayload`, mesh redesign Phase 5). Exchanged
-    /// ONLY while a friend session is active and VANISHES at session end — nothing retained on device,
-    /// nothing synced, no dead-drop, no offline queue (owner decision). Always sealed to the recipient
-    /// (in `sealingRequiredTypes`) — messages are private. Registered on the mesh via the Phase-1
-    /// payload registry + the `messages` capability; additive-safe post-Phase-1 (older clients park it).
+    /// **Frozen and parked: decoded, never dispatched, never emitted** (network migration P6 item
+    /// 4 — the ``friendPhoto`` precedent, itself the ``sessionGoodbye`` one).
+    ///
+    /// This token carried the live-session chat transport: one `TempMessagePayload` sealed per
+    /// committed slot that advertised the `messages` capability, with no offline queue, so a
+    /// message only ever reached peers linked at that instant. Chat now rides the routed store —
+    /// a per-recipient X25519 wrap of a single-use content key under a signed manifest with an
+    /// immutable destination set — so a message to an admitted member who is not linked right now
+    /// is custodied and drained later instead of being dropped.
+    ///
+    /// It keeps its declaration, its frozen `rawValue` and its `sealingRequiredTypes` membership,
+    /// and ``TempMessagePayload`` stays decodable, so an older peer's frame is **parked by name**
+    /// rather than mis-dispatched or failing a session. Nothing registers it in the handler
+    /// registry; a wire token is never reused for a new meaning.
+    ///
+    /// The name is load-bearing twice over and the two must not be confused: `PayloadType
+    /// .tempMessage` is this parked wire token, while `MeshRoutedTypeToken.tempMessage`
+    /// (`fernlet.mesh.routed-type.temp-message.v1`) is the LIVE registered routed type that
+    /// replaced it.
     case tempMessage           = "fernlet.message.temp.v1"
     /// A one-hop content-moderation report bundle (`ModerationReportPayload`): the sender's OWN
     /// Ed25519-signed report rows about shop items, handed to a vault-trusted friend in person so the

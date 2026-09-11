@@ -371,15 +371,15 @@ struct AgeGateWiringTests {
     @Test func sendingIsRefusedBelowTheChatGate() {
         let store = makeStore("age-gate-chat-send")
         let manager = store.meshNetworkManager
-        var sends = 0
-        manager.onTempMessageSendForTesting = { _ in sends += 1 }
+        var outcomes: [MeshTextSendOutcome] = []
+        manager.onTextSendForTesting = { outcomes.append($0) }
 
         store.ageAssurance.applyDetermination(
             lowerBound: nil, upperBound: AgeGate.chat.minimumAge, provenance: .guardianDeclared
         )
-        manager.sendTempMessage("hello")
+        #expect(manager.sendTempMessage("hello") == .ageGated)
 
-        #expect(sends == 0)
+        #expect(outcomes == [.ageGated], "the gate refuses BY NAME, before any mint")
         #expect(manager.sessionMessages.messages.isEmpty,
                 "Not even the local echo — a transcript below the gate must stay empty")
         #expect(!manager.isChatAllowed)
@@ -390,8 +390,8 @@ struct AgeGateWiringTests {
     @Test func communicationLimitsCloseTheChatTransport() {
         let store = makeStore("age-gate-chat-parental")
         let manager = store.meshNetworkManager
-        var sends = 0
-        manager.onTempMessageSendForTesting = { _ in sends += 1 }
+        var outcomes: [MeshTextSendOutcome] = []
+        manager.onTextSendForTesting = { outcomes.append($0) }
 
         store.ageAssurance.applyDetermination(
             lowerBound: AgeGate.adult.minimumAge, upperBound: nil,
@@ -400,8 +400,8 @@ struct AgeGateWiringTests {
 
         #expect(!manager.isChatAllowed)
         #expect(!manager.localCapabilities().contains(ProximityCapability.messages.rawValue))
-        manager.sendTempMessage("hello")
-        #expect(sends == 0)
+        #expect(manager.sendTempMessage("hello") == .ageGated)
+        #expect(outcomes == [.ageGated])
         #expect(manager.sessionMessages.messages.isEmpty)
         // The restriction is scoped to contacting people — intimacy is untouched.
         #expect(store.isIntimateLoggingAllowed)

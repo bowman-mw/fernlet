@@ -123,8 +123,15 @@ struct ConnectReviewKeepTests {
     /// `.accessibilityHidden(showConnectionAnimation)` is on the whole Friends surface, so
     /// VoiceOver and Switch Control lost it for the rest of the session. Both non-celebrating
     /// exits of the arm now clear the flag.
+    /// **Amended by the fix review (finding P2-2):** the heal arm's special case must be the ONE
+    /// predicate over all THREE presenters. The album photo feed is a second `fullScreenCover` on
+    /// the same anchor, so a commit while a wall photo was open took the celebrate branch, the
+    /// celebration never presented, and the a11y latch closed again — one presentation conflict
+    /// away from the two the original fix closed. So this now pins the predicate's membership by
+    /// name, and reads CODE rather than raw source (finding P3-8: a doc comment satisfied the
+    /// `>= 2` count and the `isSessionLive` needle).
     @Test func connectViewSource_healArmHandlesBothSheets_andClearsTheAccessibilityCover() throws {
-        let source = try RepoRoot.source("App/Fernlet/ConnectView.swift")
+        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
         let armDecl = try #require(source.range(of: "func handleCommittedPeerChange"),
                                    "FriendsView.handleCommittedPeerChange is the lifecycle arm — renamed?")
         let nextDecl = try #require(source.range(of: "private var disconnectReviewSheet"),
@@ -133,6 +140,12 @@ struct ConnectReviewKeepTests {
                      "Expected the arm to be declared before the review sheet — update this scan if they moved")
         let armBody = source[armDecl.upperBound..<nextDecl.lowerBound]
 
+        #expect(armBody.contains("aPresentationIsUp"),
+                """
+                The heal arm must branch on the ONE predicate over every presenter, not on a \
+                hand-listed subset: the two session-end sheets AND the album photo feed can each \
+                be up when a peer commits.
+                """)
         #expect(armBody.contains("disconnectReviewPresented"),
                 """
                 The heal arm must dismiss the PHOTO REVIEW sheet as well as the keep prompt: it is \
@@ -144,10 +157,38 @@ struct ConnectReviewKeepTests {
                 cover that never presented latches .accessibilityHidden(true) on the whole \
                 Friends surface for the rest of the session.
                 """)
-        #expect(source.contains("guard !manager.isSessionLive else { return }"),
+
+        let predicateDecl = try #require(source.range(of: "private var aPresentationIsUp: Bool {"),
+                                         "the one-presentation predicate is gone — renamed?")
+        let predicateEnd = try #require(source.range(of: "}", range: predicateDecl.upperBound..<source.endIndex))
+        let predicateBody = source[predicateDecl.upperBound..<predicateEnd.lowerBound]
+        for presenter in ["disconnectReviewPresented", "keepFriendsPromptPresented", "selectedAlbumPostID"] {
+            #expect(predicateBody.contains(presenter),
+                    """
+                    \(presenter) is one of the three presenters hung off this view's single anchor, \
+                    so it must be named in aPresentationIsUp — a presenter missing from the \
+                    predicate is a presentation SwiftUI drops with nothing resetting the a11y latch.
+                    """)
+        }
+
+        let reviewDecl = try #require(source.range(of: "private func presentDisconnectReviewIfNeeded()"),
+                                      "the review presenter is gone — renamed?")
+        let reviewEnd = try #require(
+            source.range(of: "private func finalizeFriendKeeps", range: reviewDecl.upperBound..<source.endIndex),
+            "finalizeFriendKeeps is declared right after the review presenter — reordered?"
+        )
+        let reviewBody = source[reviewDecl.upperBound..<reviewEnd.lowerBound]
+        #expect(reviewBody.contains("guard !manager.isSessionLive else { return }"),
                 """
                 And the review presents only once the SESSION has ended: on hasCommittedPeer a \
-                link blip showed a sheet whose primary action signs a termination on a live mesh.
+                link blip showed a sheet whose primary action signs a termination on a live mesh. \
+                The needle is scoped to this function's body (finding P3-8).
+                """)
+        #expect(reviewBody.contains("guard !aPresentationIsUp else { return }"),
+                """
+                And it refuses while any presenter is up: a .sheet requested over the album's \
+                fullScreenCover is dropped, and a review that never appears is a batch the user \
+                never answers.
                 """)
     }
 }

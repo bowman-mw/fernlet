@@ -767,7 +767,10 @@ extension MeshRoutedLockedDeviceTests {
     private static let routedPlaintextSeams: [(needle: String, home: String, pinned: Int)] = [
         ("MeshRoutedContentKeyWrapper.unwrap(", "MeshRoutedItemDelivery.swift", 1),
         ("MeshRoutedItemSealer.open(", "MeshRoutedItemDelivery.swift", 1),
-        ("routedCanonicalDispatch(", "MeshNetworkManager.swift", 2),
+        // 2 → 4 at P6 item 4: a second OVERLOAD for `MeshRoutedTextBody` plus its call site. The
+        // alternative — one verb over a body enum, keeping the pin at 2 — was rejected because the
+        // pin would then be blind to a third arm, and item 6 has to move it either way.
+        ("routedCanonicalDispatch(", "MeshNetworkManager.swift", 4),
         ("MeshRoutedHeartAck(", "", 0),
         (".heartLedgerCommit(", "MeshRoutedDeliveryCommit.swift", 1)
     ]
@@ -815,6 +818,13 @@ extension MeshRoutedLockedDeviceTests {
     /// produces the plaintext never consulted the answer — the vacuity item 10 argued against — and
     /// P6 adds two more callers to this same seam. `MeshRoutedItemDelivery` therefore takes the
     /// predicate as a parameter under that exact spelling and guards on it as its first line.
+    ///
+    /// **And this half cannot see a SECOND entry point in an already-guarding file** (P6 item 4).
+    /// The scan is a whole-FILE `contains`, so `openTextBody` could have skipped the guard entirely
+    /// while `openPhotoBody`'s occurrence kept the file green. That is closed by structure rather
+    /// than by a wall: both doors reach the ciphertext through one private `openPlaintext(…)` whose
+    /// first line is the guard, which is also what keeps the `unwrap(` / `open(` pins at 1 as P6
+    /// adds callers. Anyone adding a third body family adds it there or writes a second guard.
     ///
     /// The manager arm is the mention, because containment there is vacuous by construction (it
     /// DEFINES the predicates); the pinned count of `routedCanonicalDispatch(` is the enforcement

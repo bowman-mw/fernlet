@@ -8,6 +8,12 @@
 // before rendered verbatim in every language, the live defect of the `meshError` seam.
 //
 // One place, so it can be tested — a view's private computed property cannot be.
+//
+// P6 item 4 added a SECOND fork for chat (`chatNotice` / `chatMessage`). Not a reworded first one:
+// every photo sentence ends "stayed on your own wall", which for a message is both false and
+// unactionable, and the photo path's `routedShareRefusal` alert lives on the view the chat panel
+// covers. Both forks switch exhaustively over the same frozen cause, so a new case is a build error
+// in each.
 
 import SwiftUI
 import ProximityKit
@@ -40,6 +46,54 @@ enum RoutedShareRefusalCopy {
             return "Fernlet is holding all it can, so that photo stayed on your own wall."
         case .storeUnavailable:
             return "Fernlet couldn't reach its shared-photo storage, so that photo stayed on your own wall."
+        }
+    }
+
+    /// The inline notice the chat panel shows beneath its compose bar, or nil when there is nothing
+    /// to say (P6 item 4).
+    ///
+    /// **A second fork rather than a reworded first one.** Every sentence above says "that photo
+    /// stayed on your own wall", which is both wrong and unactionable for a message — and the photo
+    /// path publishes its refusal on `routedShareRefusal`, whose one consumer is a session `.alert`
+    /// on `DisposableCameraView`, the view the chat panel is presented *over*. So chat neither
+    /// shares the copy nor shares the surface: `sendTempMessage(_:)` returns its outcome and this
+    /// turns it into one sentence, shown in place, with the draft kept so sending again is the retry.
+    ///
+    /// Two outcomes say nothing on purpose: `.staged`, because the row appearing in the transcript
+    /// IS the feedback, and `.empty`, because the send control is already disabled for it.
+    ///
+    /// - Parameter outcome: What the send decided.
+    /// - Returns: a `LocalizedStringKey`, or nil for the two silent outcomes.
+    static func chatNotice(_ outcome: MeshTextSendOutcome) -> LocalizedStringKey? {
+        switch outcome {
+        case .staged, .empty:
+            return nil
+        case .noDestinations:
+            return "Nobody has joined this session yet — that message wasn't sent. Try again in a moment."
+        case .ageGated:
+            return "Messages are turned off for this account."
+        case .refused(let refusal):
+            return chatMessage(refusal)
+        }
+    }
+
+    /// The sentence for one refused chat send — the exhaustive twin of ``message(_:)``, so a new
+    /// `MeshRoutedShareRefusal` case is a build error in both forks until it has copy in each.
+    ///
+    /// - Parameter refusal: The frozen cause the mint answered.
+    /// - Returns: a `LocalizedStringKey`, never a `String`.
+    static func chatMessage(_ refusal: MeshRoutedShareRefusal) -> LocalizedStringKey {
+        switch refusal {
+        case .sealFailed, .mintFailed:
+            return "Couldn't send that message. Nothing left this phone."
+        case .destinationNotAddressable:
+            return "Fernlet can't reach everyone here yet, so that message wasn't sent."
+        case .keyMismatch:
+            return "Fernlet couldn't confirm who it was sending to, so that message wasn't sent."
+        case .storeRefused:
+            return "Fernlet is holding all it can, so that message wasn't sent."
+        case .storeUnavailable:
+            return "Fernlet couldn't reach its message storage, so that message wasn't sent."
         }
     }
 }

@@ -1037,6 +1037,17 @@ xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
 | --- | --- | --- |
 | `FERNLET_MESH_FLOWS` | `MeshMatrixDebugOptions` → `MeshFlowDriver` (app target) | No flow is driven and no poll runs: the harness seeds and joins exactly as it did before flows existed. |
 
+**`.chat` is a ROUTED flow since 2026-09-11 (P6 item 4), at a harness change of zero.** The driver
+still calls `sendTempMessage`, but that call now mints a routed item instead of fanning a sealed
+`.tempMessage` envelope per capability-advertising slot, and `reportPayloads` still reads
+`sessionMessages.messages`, which the routed projection fills. Two consequences for reading a lane
+log. The driver now echoes `chat outcome=…`, so a message that reached nobody is visible instead of
+inferred — and `.noDestinations` in the founding window is the expected answer for a message sent in
+the first second or two of a pair, not a failure. And a chat failure is now a **routed** failure: the
+same three refusals a lane photo can hit apply to text (a destination with no verified X25519 key, a
+capped destination raising `routedDeliveryHold`), plus the recipient's own 13+ gate at the
+projection. The rows themselves are item 10a's to re-record.
+
 Its tokens are `commit`, `capabilities`, `chat`, `chatAgeGated`, `photo`, `shop`. Committing is
 unconditional once *any* flow is asked for — every other flow needs a committed slot — so `commit`
 names a run that wants only that. Two seams the driver sets, both **before** `startJoin()` because a

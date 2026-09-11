@@ -1820,13 +1820,20 @@ struct ContentView: View {
         if entry.armsDiscoveryTimeout { armDiscoveryTimeout() }
     }
 
-    /// Ends the session after five minutes of finding nobody — for a resumed partitioned mesh
-    /// exactly as for a fresh search.
+    /// Ends the session after five minutes of finding nobody — the TAB's half of door 3, for the
+    /// case the tab really owns: a search this visit started that has never had a peer.
     ///
-    /// The guard is `hasCommittedPeer`, not `isInSession` (P6 item 2): a founded mesh outlives its
-    /// links, so on `isInSession` this timeout would stop firing altogether and the radios would run
-    /// until the user tapped End Session. It is not `isSessionLive` either — the question here is
-    /// whether the search found anybody, which is what "no committed peer" says.
+    /// **This function itself guards nothing** (fix review finding P3-11): the decision moved into
+    /// `endSessionAfterDiscoveryTimeout()`, which refuses while a peer is committed. Which entries
+    /// arm it at all is `FriendsDiscoveryEntry.armsDiscoveryTimeout`'s answer, pinned there.
+    ///
+    /// **And it is no longer the only arm** (fix review finding P2-1). It fires only from
+    /// `startFriendsDiscovery()` — tab entry or scene-active — and bails on `isSearching`, so it is
+    /// single-shot per visit: a pair that blipped more than five minutes into a visit got no door 3
+    /// from here at all. The manager now arms the same interval at the slot-loss doors, where the
+    /// peer is actually lost (`MeshNetworkManager.discoveryGiveUpInterval`, read below so the two
+    /// clocks cannot drift apart). This arm stays because a session that never had a peer never
+    /// loses one, so the manager's edge never fires for it.
     ///
     /// It calls `endSessionAfterDiscoveryTimeout()` rather than `stopJoin()` (the P6 item 2 fix):
     /// since the session-end ceremony moved off slot loss, this is one of the four doors that ends
@@ -1836,7 +1843,7 @@ struct ContentView: View {
         discoveryTimeoutTask?.cancel()
         discoveryTimeoutTask = Task { @MainActor in
             do {
-                try await Task.sleep(for: .seconds(5 * 60))
+                try await Task.sleep(for: .seconds(MeshNetworkManager.discoveryGiveUpInterval))
             } catch {
                 // Cancellation means the timeout was superseded (`stopFriendsDiscovery`, or a new
                 // discovery start), so returning WITHOUT ending anything is the intended behavior.

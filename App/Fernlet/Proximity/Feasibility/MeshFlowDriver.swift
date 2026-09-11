@@ -351,7 +351,10 @@ enum MeshFlowDriver {
             echo("armed \(verb.rawValue)")
         case .chat, .chatAgeGated:
             echo("sending chat isChatAllowed=\(manager.isChatAllowed)")
-            manager.sendTempMessage("\(chatText)-\(MeshMatrixDebugOptions.label)")
+            // Since P6 item 4 this is a ROUTED flow: the send mints an item and answers what it
+            // did, so the lane log carries the outcome instead of inferring it from silence.
+            let outcome = manager.sendTempMessage("\(chatText)-\(MeshMatrixDebugOptions.label)")
+            echo("chat outcome=\(outcome)")
         case .photo:
             guard let data = noiseJPEG(side: noiseImageSide) else {
                 echo("photo NOT sent: the synthesized image could not be encoded")

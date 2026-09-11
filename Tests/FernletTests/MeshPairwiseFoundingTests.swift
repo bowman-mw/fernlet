@@ -1210,6 +1210,78 @@ struct MeshPairwiseFoundingTests {
         #expect(manager.isSessionLive, "the resume un-ends a search this device gave up on")
     }
 
+    /// Door 3's CLOCK, armed where the peer is actually lost (fix review finding P2-1).
+    ///
+    /// Before this, `armDiscoveryTimeout()` was the only arm and it fires once per visit from
+    /// `startFriendsDiscovery()` (tab entry / scene-active, bailing on `isSearching`). So a pair
+    /// that blipped more than five minutes into a visit had **no** door 3 at all, and
+    /// `isSessionLive` stayed true for the rest of the process unless the user bounced the Social
+    /// tab and then stayed on it for five uninterrupted minutes — the review, the shop window and
+    /// the transcript clear all deferred that whole time.
+    ///
+    /// Driven with an injected instant and **no sleep**: the deadline is the decision and
+    /// `evaluateSessionGiveUp(now:)` is the only thing that reads it, so a wake that never comes
+    /// and a wake that comes late are the same cell.
+    @Test func aBlipArmsTheGiveUpClockInTheManagerAndEndsTheSessionFiveMinutesLater() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "give-up-clock")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        try Self.armTheThreeHooks(on: manager, peer: rig.identities[1], label: "Peer")
+        #expect(!manager.isSessionGiveUpClockArmed, "a linked pair is not counting down to anything")
+
+        let slot = try #require(manager.slots.first, "the commit must have seated a slot")
+        let blipAt = Date()
+        manager.evictSlotForTesting(peerID: slot.id)
+
+        #expect(manager.isSessionLive, "a blip is still not an ending — that is item 2's fix")
+        #expect(manager.isSessionGiveUpClockArmed, """
+            but the give-up clock is now running, armed by the manager at the slot-loss door and \
+            NOT by a tab the user may never re-enter
+            """)
+        #expect(manager.pendingFriendReview == nil, "and nothing has promoted yet")
+
+        // Four minutes in — no tab bounce, no ending.
+        manager.evaluateSessionGiveUp(now: blipAt.addingTimeInterval(4 * 60))
+        #expect(manager.isSessionLive, "four minutes of searching is not five")
+        #expect(!manager.sessionMessages.messages.isEmpty, "and the transcript is untouched")
+
+        // Six minutes in: the deadline passed, so the session ends here with no tab involvement.
+        manager.evaluateSessionGiveUp(now: blipAt.addingTimeInterval(6 * 60))
+        #expect(!manager.isSessionLive, "five minutes of finding nobody ends the session")
+        #expect(!manager.isSessionGiveUpClockArmed, "and the clock stands down with it")
+        #expect(manager.pendingFriendReview != nil, "the keep-as-friend batch promoted")
+        #expect(manager.sessionMessages.messages.isEmpty, "the transcript vanished")
+        #expect(manager.clothingShop.window != nil, "and the shop window opened")
+    }
+
+    /// The other half of the same clock: a re-link INSIDE the window cancels the ending outright
+    /// rather than deferring it — the session never ended, so nothing downstream may see an ending.
+    @Test func aReLinkInsideTheGiveUpWindowCancelsTheEnding() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "give-up-cancel")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        try Self.armTheThreeHooks(on: manager, peer: rig.identities[1], label: "Peer")
+
+        let slot = try #require(manager.slots.first, "the commit must have seated a slot")
+        let blipAt = Date()
+        manager.evictSlotForTesting(peerID: slot.id)
+        #expect(manager.isSessionGiveUpClockArmed, "the blip armed the clock")
+
+        rig.reseat(0, toward: 1)
+        rig.commit(0, 1)
+        #expect(manager.hasCommittedPeer, "the link healed")
+        #expect(!manager.isSessionGiveUpClockArmed, "so the clock is cancelled, not deferred")
+
+        // And a wake that arrives after the original deadline finds nothing to end.
+        manager.evaluateSessionGiveUp(now: blipAt.addingTimeInterval(6 * 60))
+        #expect(manager.isSessionLive, "a healed session is not ended by the clock it outran")
+        #expect(manager.pendingFriendReview == nil, "and nothing promoted")
+    }
+
     /// Door 4: **slot loss, and only with no mesh** — the legacy pairwise ceremony, kept.
     ///
     /// Reachable by any session that never founded (and by every rig that seats a committed slot
