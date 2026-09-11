@@ -34,6 +34,8 @@ enum RoutedShareRefusalCopy {
             return "Couldn't share that photo with the mesh. It's saved on your own wall."
         case .destinationNotAddressable:
             return "Fernlet can't reach everyone here yet, so that photo stayed on your own wall."
+        case .keyMismatch:
+            return "Fernlet couldn't confirm who it was sending to, so that photo stayed on your own wall."
         case .storeRefused:
             return "Fernlet is holding all it can, so that photo stayed on your own wall."
         case .storeUnavailable:

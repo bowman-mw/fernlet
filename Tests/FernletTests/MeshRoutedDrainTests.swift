@@ -1621,13 +1621,31 @@ struct MeshRoutedDrainWallTests {
     /// Counted on the SYMBOL, not on a spelling: a call written `await sendRoutedInventory(…)` —
     /// the natural form for any same-actor caller, and the one the signature invites — would leave a
     /// `self?.`-prefixed count at three and the wall green.
+    ///
+    /// **P6 item 1 moved the MEMBERSHIP half, not the routed half.** The key-advertisement frame
+    /// (`fernlet.mesh.key-agreement.v1`) is addressing, not bulk: it opens no exchange, carries no
+    /// content and is never an occasion to push any, so the three routed counts (4 / 6 / 4) do not
+    /// move and the hand-off and origination doors must never name it. It rides every door that is
+    /// a LINK-OPEN — the three asks, the two non-ask membership doors, and the admitter's grant,
+    /// which is the one link-open no other door covers (`openBlipMergeIfReconnected(_:from:peer:)`
+    /// opens no exchange for a peer that was not already on the roster, so on a fresh pair the
+    /// admitter would otherwise tell the joiner nothing). This wall is the only thing that knows
+    /// that: a new send is invisible to a count of three other symbols, which is exactly how
+    /// `sendEpochHeads(` drifted uncounted for two phases — **closed here in the same amendment**,
+    /// with its own shape stated (ask + *answer*, never a hand-off or an origination).
     @Test func theDrainFiresOnlyFromTheMergeDoor() throws {
         let source = MeshRoutedSourceScan.codeOnly(try managerSource())
         let routed = source.components(separatedBy: "sendRoutedInventory(").count - 1
         let membership = source.components(separatedBy: "sendInventoryDigest(").count - 1
+        let heads = source.components(separatedBy: "sendEpochHeads(").count - 1
+        let addressing = source.components(separatedBy: "sendKeyAdvertisements(").count - 1
         #expect(routed == 4, "one declaration plus three ask sites, found \(routed)")
         #expect(membership == 6,
                 "those three plus the proof and adoption doors, found \(membership)")
+        #expect(heads == 4,
+                "one declaration, two ask sites and the digest ANSWER, found \(heads)")
+        #expect(addressing == 7,
+                "one declaration, three asks, two non-asks and the grant, found \(addressing)")
         for door in Self.askDoors {
             let body = try #require(Self.body(startingWith: door, in: source),
                                     "\(door) is gone from MeshNetworkManager.swift")
@@ -1635,6 +1653,8 @@ struct MeshRoutedDrainWallTests {
                     "\(door) asks with exactly one membership digest")
             #expect(body.components(separatedBy: "sendRoutedInventory(").count - 1 == 1,
                     "\(door) carries exactly one routed twin")
+            #expect(body.components(separatedBy: "sendKeyAdvertisements(").count - 1 == 1,
+                    "\(door) carries exactly one addressing half")
         }
         for door in Self.nonAskDoors {
             let body = try #require(Self.body(startingWith: door, in: source),
@@ -1643,6 +1663,20 @@ struct MeshRoutedDrainWallTests {
                     "\(door) sends exactly one membership digest")
             #expect(!body.contains("sendRoutedInventory("),
                     "\(door) is not an ask: it must never carry routed bulk")
+            #expect(body.components(separatedBy: "sendKeyAdvertisements(").count - 1 == 1,
+                    "\(door) carries exactly one addressing half")
+        }
+        for door in Self.grantDoors {
+            let body = try #require(Self.body(startingWith: door, in: source),
+                                    "\(door) is gone from MeshNetworkManager.swift")
+            #expect(body.components(separatedBy: "sendKeyAdvertisements(").count - 1 == 1,
+                    "\(door) tells the member it just admitted this device's own addressing")
+            #expect(!body.contains("sendInventoryDigest("),
+                    "\(door) asks nothing: an admission is not a merge exchange")
+            #expect(!body.contains("sendRoutedInventory("),
+                    "\(door) asks nothing: an admission is not a merge exchange")
+            #expect(!body.contains("sendRoutedBulk("),
+                    "\(door) moves no bytes: the drain is push-only and this is not a push")
         }
         #expect(source.components(separatedBy: "sendRoutedBulk(").count - 1 == 4,
                 "one declaration plus three sites: drain answer, hand-off push, origination push")
@@ -1653,6 +1687,10 @@ struct MeshRoutedDrainWallTests {
                     "\(door) asks nothing: a departure is not a merge exchange")
             #expect(!body.contains("sendRoutedInventory("),
                     "\(door) asks nothing: a departure is not a merge exchange")
+            #expect(!body.contains("sendKeyAdvertisements("),
+                    "\(door) is not a link-open: a departure states no addressing")
+            #expect(!body.contains("sendEpochHeads("),
+                    "\(door) is not a link-open: a departure answers no head set")
             #expect(body.components(separatedBy: "sendRoutedBulk(").count - 1 == 1,
                     "\(door) moves bytes through the one extracted sender")
         }
@@ -1665,6 +1703,10 @@ struct MeshRoutedDrainWallTests {
                     "\(door) asks nothing: an advertisement would ask the PEER to push to us")
             #expect(!body.contains("recordRoutedAdvertisement("),
                     "\(door) records nothing: recording would unbind an open exchange's answer")
+            #expect(!body.contains("sendKeyAdvertisements("),
+                    "\(door) is not a link-open: an origination states no addressing")
+            #expect(!body.contains("sendEpochHeads("),
+                    "\(door) is not a link-open: an origination answers no head set")
             #expect(body.components(separatedBy: "sendRoutedBulk(").count - 1 == 1,
                     "\(door) moves bytes through the one extracted sender")
         }
@@ -1682,6 +1724,13 @@ struct MeshRoutedDrainWallTests {
     /// (it carries routed bulk, which those may never do), so it needs its own row rather than a
     /// count that would stay green by accident. Increment 1 has exactly one of them.
     private static let handoffDoors = ["private func pushCustodyToCustodians("]
+
+    /// The **fifth** door class, added by P6 item 1: the admitter's grant. It is a link-open no
+    /// other door on this list covers — a brand-new member is not a reconnect, so
+    /// `openBlipMergeIfReconnected(_:from:peer:)` opens no exchange for it — and it is the only
+    /// door that carries addressing WITHOUT any digest, because the joiner has nothing to
+    /// reconcile: it is being told, not asked.
+    private static let grantDoors = ["private func grantAdmission(to request:"]
 
     /// The two doors that send a membership digest WITHOUT opening an exchange: the post-merge proof
     /// (P5 item 7, D-7.8) and the joiner's post-adoption digest (D-7.33).

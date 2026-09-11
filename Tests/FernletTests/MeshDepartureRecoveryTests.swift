@@ -186,16 +186,26 @@ enum MeshDepartureRig {
     /// The injection is not hygiene: `IdentityService()` is keyed on one process-wide keychain
     /// service, so four default managers in one process would be the same device four times over
     /// and every roster assertion below would be vacuous rather than wrong.
+    /// - Parameters:
+    ///   - label: The diagnostic label, and the endpoint's name.
+    ///   - identity: The injected identity.
+    ///   - fabric: The medium.
+    ///   - manager: An EXISTING manager to seat on a fresh endpoint, for the one scenario that
+    ///     needs it: a **relaunch**, where a new manager comes up over a dead node's store and the
+    ///     link has to re-form. Its store is the one it was built with, so the caller keeps that
+    ///     alive (`MeshNetworkManager` holds its host `unowned`). Defaults to nil — every other
+    ///     caller gets a fresh store and a fresh manager.
     static func node(
-        _ label: String, identity: IdentityService, on fabric: FakePeerNetwork
+        _ label: String, identity: IdentityService, on fabric: FakePeerNetwork,
+        manager: MeshNetworkManager? = nil, store: FernletStore? = nil
     ) -> MeshDepartureNode {
-        let store = makeTestStore()
-        let manager = MeshNetworkManager(
-            store: store, transport: FakeMeshTransportSession(), identity: identity
+        let nodeStore = store ?? makeTestStore()
+        let nodeManager = manager ?? MeshNetworkManager(
+            store: nodeStore, transport: FakeMeshTransportSession(), identity: identity
         )
         let endpoint = fabric.addEndpoint(named: label)
         return MeshDepartureNode(
-            label: label, store: store, manager: manager,
+            label: label, store: nodeStore, manager: nodeManager,
             channel: endpoint.transport, handle: endpoint.handle
         )
     }

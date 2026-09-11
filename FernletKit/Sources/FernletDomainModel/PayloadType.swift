@@ -162,6 +162,22 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// input to the successor a merge mints, and an unsigned one could push a mesh toward its
     /// counter cap.
     case meshEpochHeads        = "fernlet.mesh.epoch-heads.v1"
+    /// A batch of members' signed statements of their own durable key-agreement public keys — the
+    /// **addressing half** of the membership family (`MeshKeyAgreementPayload`, network migration
+    /// P6 item 1).
+    ///
+    /// Same spelling as the signature domain `Signature.meshKeyAgreementV1`, because each ELEMENT
+    /// is signed by its own subject under its admitted Ed25519 key; the frame itself is not signed
+    /// and its `senderFingerprint` is audit-only. It buys nothing an attacker could not get by
+    /// relaying a genuine frame, and — unlike `meshInventoryDigest` — it spends no budget of the
+    /// receiver's, so there is nothing for a forged envelope to spend.
+    ///
+    /// **Addressing, never membership.** It carries no record, cannot create, end or revoke a
+    /// membership, and is verified against the admission set the ledger already holds, so it is
+    /// deliberately not a fifth membership record kind. Not in `sealingRequiredTypes`, for the
+    /// reason every other membership frame is not: signed gossip has to cross a divergent pair
+    /// verbatim, and a public key is public by definition. Additive — older clients park it.
+    case meshKeyAgreement      = "fernlet.mesh.key-agreement.v1"
     /// A member's **signed** proposal to remove another member, which is also the proposer's own
     /// vote (`SignedRemovalProposal`, plan §10.4, network migration P4 item 5).
     ///

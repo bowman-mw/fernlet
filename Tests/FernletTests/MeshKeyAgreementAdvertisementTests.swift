@@ -106,16 +106,26 @@ enum MeshKeyAgreementFixtures {
     }
 
     /// A placeholder-signed row for `index` — the at-rest door's input, never the fold's.
+    ///
+    /// - Parameters:
+    ///   - index: The member index, which becomes `fp%03d` and, by default, the instant.
+    ///   - meshID: The mesh the row claims.
+    ///   - keyIndex: A different key than `index`'s, so "a second, DIFFERENT key" is expressible.
+    ///   - secondsIn: The instant, when a cell needs the alphabetical order and the instant order
+    ///     to DISAGREE — the shape that separates a mark derived from the surviving rows from one
+    ///     truncated alphabetically.
     static func unverifiedRow(
         _ index: Int,
         meshID: UUID,
-        keyIndex: Int? = nil
+        keyIndex: Int? = nil,
+        secondsIn: Int? = nil
     ) -> SignedKeyAgreementAdvertisement {
         SignedKeyAgreementAdvertisement(
             meshID: meshID,
             memberFingerprint: String(format: "fp%03d", index),
             keyAgreementPublicKey: key(keyIndex ?? index),
-            advertisedAt: MeshMembershipEventFixtures.base.addingTimeInterval(TimeInterval(index)),
+            advertisedAt: MeshMembershipEventFixtures.base
+                .addingTimeInterval(TimeInterval(secondsIn ?? index)),
             signature: Data(repeating: 0xAB, count: MeshMembershipEventFormat.signatureByteCount)
         )
     }
@@ -363,6 +373,44 @@ struct MeshKeyAgreementFoldTests {
         #expect(twice.outcomes.first?.auditToken == nil, "an honest replay writes no audit line")
     }
 
+    /// The idempotence pre-filter compares the WHOLE value, so a near-miss is still verified.
+    ///
+    /// Pass A review, finding 3: a pre-filter that compared only fingerprint, key and instant
+    /// reported a foreign-mesh row — or one carrying garbage where a signature belongs — as
+    /// `alreadyHeld`, which is unaudited, not a refusal, and free of any per-sender charge. An
+    /// attacker echoing known triples could therefore buy unlimited unbudgeted fold work.
+    @Test func aNearMissOfAHeldRowIsVerifiedRatherThanAssumedHeld() throws {
+        let (founder, service) = try MeshKeyAgreementFixtures.identity()
+        defer { KeychainItem.deleteAll(service: service) }
+        let meshID = UUID()
+        let verifier = try MeshKeyAgreementFixtures.verifier(founder: founder, meshID: meshID)
+        let held = try MeshKeyAgreementFixtures.advertisement(of: founder, meshID: meshID)
+        let once = MeshKeyAdvertisementFold.folding([held], into: .empty, verifiedBy: verifier)
+        let foreign = SignedKeyAgreementAdvertisement(
+            meshID: UUID(),
+            memberFingerprint: held.memberFingerprint,
+            keyAgreementPublicKey: held.keyAgreementPublicKey,
+            advertisedAt: held.advertisedAt,
+            signature: held.signature
+        )
+        let junkSignature = SignedKeyAgreementAdvertisement(
+            meshID: held.meshID,
+            memberFingerprint: held.memberFingerprint,
+            keyAgreementPublicKey: held.keyAgreementPublicKey,
+            advertisedAt: held.advertisedAt,
+            signature: Data(repeating: 0x11, count: MeshMembershipEventFormat.signatureByteCount)
+        )
+
+        let result = MeshKeyAdvertisementFold.folding(
+            [foreign, junkSignature], into: once.set, verifiedBy: verifier
+        )
+        #expect(result.outcomes == [.refused(.foreignMesh), .refused(.signatureInvalid)],
+                "both are refusals the verifier names, not an assumed replay")
+        #expect(!result.changed)
+        let bothAudited = result.outcomes.allSatisfy { $0.auditToken == "mesh.keyAgreement.rejected" }
+        #expect(bothAudited, "and both are audited under the rejection token")
+    }
+
     /// The same key at a later instant is an honest re-advertisement after a reconnect: earliest
     /// wins, nothing changes, and it is emphatically not a conflict.
     @Test func aReAdvertisementOfTheSameKeyKeepsTheEarliestRow() throws {
@@ -494,7 +542,11 @@ struct MeshKeyAgreementFoldTests {
         )
         #expect(full.isAtCapacity)
         #expect(full.count == MeshKeyAgreementAdvertisementSet.capacity)
-        let mine = try MeshKeyAgreementFixtures.advertisement(of: founder, meshID: meshID)
+        // `secondsIn: 0` is load-bearing (pass A review, finding 5). The incumbents sit at
+        // `base + 1 ... base + 16`, so a row minted LATER would be the one a silent truncation
+        // dropped and "nothing was evicted" would hold whatever the guard did. Minted EARLIEST, a
+        // truncation evicts an incumbent instead, and all three assertions can fail.
+        let mine = try MeshKeyAgreementFixtures.advertisement(of: founder, meshID: meshID, secondsIn: 0)
 
         let result = MeshKeyAdvertisementFold.folding([mine], into: full, verifiedBy: verifier)
         #expect(result.outcomes == [.refusedSetFull(founder.localFingerprint)])
@@ -532,25 +584,73 @@ struct MeshKeyAgreementFoldTests {
         #expect(decoded.memberFingerprints.count == MeshKeyAgreementAdvertisementSet.capacity)
     }
 
+    /// A conflict mark survives exactly as long as its row does — the two caps are ONE cap.
+    ///
+    /// The shape that separates the two rules (pass A review, finding 1): seventeen conflicting
+    /// pairs whose instant order is the REVERSE of their alphabetical order. The row cap keeps the
+    /// sixteen earliest — `fp017` down to `fp002` — while an alphabetically-truncated mark list
+    /// would keep `fp001…fp016`, dropping `fp017`'s mark while its row survived and making a
+    /// conflicted member addressable again.
+    @Test func aMarkIsKeptForEverySurvivingRowAndOnlyForThose() {
+        let meshID = UUID()
+        let pairs = MeshKeyAgreementAdvertisementSet.capacity + 1
+        var rows: [SignedKeyAgreementAdvertisement] = []
+        // R2: bounded by the set's capacity plus one.
+        for index in 1...pairs {
+            let instant = pairs + 1 - index
+            rows.append(MeshKeyAgreementFixtures.unverifiedRow(
+                index, meshID: meshID, keyIndex: index, secondsIn: instant
+            ))
+            rows.append(MeshKeyAgreementFixtures.unverifiedRow(
+                index, meshID: meshID, keyIndex: index + 100, secondsIn: instant
+            ))
+        }
+
+        let set = MeshKeyAgreementAdvertisementSet(advertisements: rows)
+
+        #expect(set.count == MeshKeyAgreementAdvertisementSet.capacity)
+        #expect(set.conflictedFingerprints.count == MeshKeyAgreementAdvertisementSet.capacity,
+                "one mark per surviving row, because every pair conflicted")
+        #expect(set.isConflicted("fp017"),
+                "the alphabetically-last member survived the row cap, so its mark must survive too")
+        #expect(set.keyAgreementPublicKey(for: "fp017") == nil, "and it stays unaddressable")
+        #expect(set.advertisement(for: "fp001") == nil, "the latest row is the one the cap dropped")
+        #expect(!set.isConflicted("fp001"), "and a mark with no row is dropped with it")
+    }
+
     /// The set has no silent merge door, and nothing outside its own file may hand it a row.
     ///
     /// `MeshMembershipRecordSet.merging(_:)`/`.inserting(_:)` dedup earliest-wins and silently keep
     /// ONE of two conflicting rows — for a key that is a fail-open every cell above would pass
     /// straight through, because they all drive the per-element door. So the type declares no
     /// `merging` at all, and its two mutating doors take a value only the verifier can mint.
+    ///
+    /// **The at-rest constructor is the third door, and it is walled here too** (pass A review,
+    /// finding 1): it takes RAW rows and normalization marks conflicts from them, so shipping code
+    /// that reached for `MeshKeyAgreementAdvertisementSet(advertisements: payload.advertisements)`
+    /// would make conflict decisions on unverified bytes with nothing to stop it. Only the
+    /// declaring file — the decoder and the two verified doors — may name it. `markingConflicted(`
+    /// is walled on the same principle from the other side: only the fold may mark a member
+    /// unaddressable, whatever receiver name a caller gives the set.
     @Test func theAdvertisementSetNamesNoSilentMergeDoor() throws {
-        let source = try RepoRoot.source(
-            "FernletKit/Sources/ProximityKit/Mesh/MeshKeyAgreementAdvertisement.swift"
-        )
+        let declaring = "FernletKit/Sources/ProximityKit/Mesh/MeshKeyAgreementAdvertisement.swift"
+        let source = try RepoRoot.source(declaring)
         #expect(source.count > 2_000, "the source scan must not be reading an empty file")
-        #expect(!source.contains("func merging("), "the set must not grow a union door")
+        // R2: bounded by the needle list.
+        for spelling in ["func merging(", "func folded(", "func union(", "func combining("] {
+            #expect(!source.contains(spelling), "the set must not grow a union door: \(spelling)")
+        }
         var namedElsewhere: [String] = []
         // R2: bounded by the shipping source file list.
         for url in try CryptographicWallScan.sourceFiles() {
+            let path = CryptographicWallScan.repoRelativePath(url)
+            guard path != declaring else { continue }
             let text = try String(contentsOf: url, encoding: .utf8)
             guard text.contains("keyAdvertisements.merging(")
-                    || text.contains("keyAdvertisements.inserting(") else { continue }
-            namedElsewhere.append(CryptographicWallScan.repoRelativePath(url))
+                    || text.contains("keyAdvertisements.inserting(")
+                    || text.contains("MeshKeyAgreementAdvertisementSet(advertisements:")
+                    || text.contains("markingConflicted(") else { continue }
+            namedElsewhere.append(path)
         }
         #expect(
             namedElsewhere.isEmpty,
@@ -594,14 +694,19 @@ struct MeshKeyAgreementSchemaTests {
                 MeshKeyAgreementFixtures.unverifiedRow(1, meshID: meshID),
                 MeshKeyAgreementFixtures.unverifiedRow(2, meshID: meshID)
             ],
-            conflictedFingerprints: ["fp004"]
+            // A mark for a member the set holds a row for: normalization derives the marks from
+            // the SURVIVING rows, so a mark for an absent fingerprint is dropped (and would prove
+            // nothing — an absent member is unaddressable either way).
+            conflictedFingerprints: ["fp002"]
         )
         let wire = try JSONEncoder().encode(Self.context(keyAdvertisements: set))
         let decoded = try JSONDecoder().decode(MeshSessionContext.self, from: wire)
 
         #expect(decoded.keyAdvertisements == set)
         #expect(decoded.keyAdvertisements.count == 2)
-        #expect(decoded.keyAdvertisements.isConflicted("fp004"))
+        #expect(decoded.keyAdvertisements.isConflicted("fp002"))
+        #expect(decoded.keyAdvertisements.keyAgreementPublicKey(for: "fp002") == nil,
+                "a conflicted member survives the round trip unaddressable")
         #expect(decoded.schemaVersion == 3)
     }
 

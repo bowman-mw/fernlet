@@ -509,7 +509,9 @@ struct MeshRoutedItemSealGoldenTests {
     /// non-change, in both directions, so "we forgot the trio" and "we grew the registry" are both
     /// failures rather than silences.
     @Test func theItemSealAddsNoSignatureFramingAndNoDomainRow() throws {
-        #expect(CryptographicDomainSeparationTests.allDomains.count == 74)
+        // 75 since P6 item 1 added `Signature.meshKeyAgreementV1` — the one domain the key
+        // advertisement owns. This count is a tripwire on the registry, not on the item seal.
+        #expect(CryptographicDomainSeparationTests.allDomains.count == 75)
         let rows = CryptographicDomainSeparationTests.allDomains.filter {
             $0.purpose.rawValue == FernletCryptoPurpose.AEAD.meshRoutedItemV1.rawValue
         }

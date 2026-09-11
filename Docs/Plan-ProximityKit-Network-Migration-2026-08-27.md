@@ -1834,6 +1834,13 @@ at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log
     (`fernlet.mesh.key-agreement.v1` — each member signs its own X25519 key under its admitted Ed25519
     key, gossiped as a grow-only set, full trio), plus a mesh identity for the pairwise phase (promote
     at one committed peer, or mint a two-member ledger). Both are strictly bigger than a P5 item.
+    **The first half landed in P6 item 1 (2026-09-11).** Exactly one of the three refusals became a
+    delivery — the **resumption**, which `R-16` now asserts end to end (a real frame, a real reload
+    from disk, a real delivery) — while the **star** and the **over-cap roster** became a successful
+    mint whose delivery waits for a link or a departure hand-off, because a destination never
+    forwards an item it holds (`relayInFlight` is increment 2's). `R-12` asserts that mint and the
+    explicit negative beside it; `R-17` is untouched, being the solo case. The pairwise mesh
+    identity is still owed, as P6 item 2.
 14. **Unchanged from P4, and still the owner's.** §18.2's partition UX copy (default: the subtitle
     count only, no new localized string) — P5 is the first phase that must *show* a delivery state, so
     the question is now concrete. The legacy **unsigned** two-party removal stays frozen beside the
@@ -3031,11 +3038,17 @@ Carried from §22.4, with what P5 added:
   the five consumers §23.1 names, plus four re-aimed test claims (L-3/3b/3c/4). A wire/interop decision, same class as **the legacy unsigned two-party
   removal's retirement** (still frozen) and **transcript `sid`** (§18 decision 7), which P5's routed
   frames make dearer again.
-- **A signed key-advertisement wire family** (`fernlet.mesh.key-agreement.v1`: each member signs its
-  own X25519 key under its admitted Ed25519 key, gossiped as a grow-only set, full trio) — the real
-  fix for D-13.22's three named mint refusals, and **the fix for the pairwise phase having no mesh
-  identity** (D-13.18: promote at one committed peer, or mint a two-member ledger for the pairwise
-  phase). Both are strictly bigger than a P6 item.
+- ~~**A signed key-advertisement wire family**~~ — **BUILT in P6 item 1, 2026-09-11**
+  (`fernlet.mesh.key-agreement.v1`: each member signs its own X25519 key under its admitted Ed25519
+  key, relayed as a whole grow-only set on its own additive unsigned frame at six link-open doors,
+  re-proved against the adopted ledger on restore, and read by the mint as a second verified KIND of
+  source behind the handshake, with `keyMismatch` as the fail-closed refusal when two verified
+  sources disagree). **What it converts, exactly:** of D-13.22's three named mint refusals the
+  **resumption** becomes a delivery, and the **star** and **over-cap roster** become a successful
+  mint whose delivery waits for a link or a departure hand-off — a destination never forwards an
+  item it holds. Still owed alongside it: **the pairwise phase having no mesh identity** (D-13.18:
+  promote at one committed peer, or mint a two-member ledger for the pairwise phase), which is P6
+  item 2.
 - **D-7.30's per-session re-gossip budget.** `reGossipedToFingerprints` is per session and is not
   refunded by `abandonMergeExchange`, so a **second** heal of the same pair inside one session crosses
   no records and neither window can close. Not a regression — today's rule converges no better — but

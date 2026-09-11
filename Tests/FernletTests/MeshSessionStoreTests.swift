@@ -447,7 +447,11 @@ struct MeshSessionStoreLoadStateTests {
                 MeshKeyAgreementFixtures.unverifiedRow(0, meshID: MeshMembershipFixtures.meshID),
                 MeshKeyAgreementFixtures.unverifiedRow(1, meshID: MeshMembershipFixtures.meshID)
             ],
-            conflictedFingerprints: ["fp005"]
+            // A mark for a member the set HOLDS a row for. A mark for an absent fingerprint would
+            // be dropped by normalization (pass A review, finding 1: the marks are derived from
+            // the surviving rows) and would prove nothing anyway — `keyAgreementPublicKey(for:)`
+            // answers nil for an absent member whether it is marked or not.
+            conflictedFingerprints: ["fp001"]
         )
         try Fixture.save(Fixture.context(keyAdvertisements: set), into: store)
 
@@ -459,8 +463,11 @@ struct MeshSessionStoreLoadStateTests {
         // Decoded VALUES, never sealed bytes: the column crypto re-nonces every write.
         #expect(context.keyAdvertisements == set)
         #expect(context.keyAdvertisements.count == 2)
-        #expect(context.keyAdvertisements.isConflicted("fp005"))
-        #expect(context.keyAdvertisements.keyAgreementPublicKey(for: "fp005") == nil)
+        #expect(context.keyAdvertisements.isConflicted("fp001"))
+        #expect(context.keyAdvertisements.advertisement(for: "fp001") != nil,
+                "a conflicted member keeps its row: the set only grows")
+        #expect(context.keyAdvertisements.keyAgreementPublicKey(for: "fp001") == nil,
+                "and is unaddressable anyway, which is the fact that survived the seal")
         #expect(context.schemaVersion == MeshSessionContextSchema.current)
     }
 

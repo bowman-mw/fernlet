@@ -177,6 +177,23 @@ jobs:
             SealedBackupFormatPinTests \
             IdentityProvisioningReadTests
 
+      - name: Crypto domain + framing + membership-golden tripwires
+        # The third wall with no compiler half. `CryptographicPurposeBoundaryTests` carries the
+        # framing trio — including `everySignaturePurposeIsHeldToADeclaredFraming`, which reads the
+        # Signature block off disk and fails any purpose not held to a declared framing, the check
+        # P6 item 1's new signature domain is the first to rely on. `CryptographicDomainSeparationTests`
+        # is the auto-failing inventory (every declared purpose has a row, no purpose is a prefix of
+        # another) and `MeshMembershipEventGoldenTests` pins the membership wire vectors, which must
+        # never be re-pinned. All three ran only when somebody remembered to run the full suite
+        # locally until 2026-09-11. Floor = the measured count at that date; RAISE it when a vector
+        # or a purpose is added.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh crypto-goldens 38 \
+            CryptographicPurposeBoundaryTests \
+            CryptographicDomainSeparationTests \
+            MeshMembershipEventGoldenTests
+
       - name: Mesh acceptance batteries (P3 / P4 / P5) + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
         # §11.4, §23.4) ran only by hand until 2026-09-06. Tier 1 throughout: FakePeerNetwork, an
