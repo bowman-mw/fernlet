@@ -757,15 +757,32 @@ struct MeshKeyAgreementFoldTests {
     /// The line at `index`, collapsed, with its continuation folded in when the module's house form
     /// split a construction across two lines.
     ///
-    /// The continuation is appended only when the collapsed line **ends at an open paren**, which is
-    /// exactly the shape that defeated the per-line scan (`self.init(` with `advertisements:`
+    /// The continuation is appended only while the collapsed window **ends at an open paren**, which
+    /// is exactly the shape that defeated the per-line scan (`self.init(` with `advertisements:`
     /// below). Extending every line unconditionally would report one site twice — once at its own
     /// line and once at the signature line above it, whose return type names the same set.
+    ///
+    /// **The fold walks forward rather than taking exactly one line** (final review P3). A blank
+    /// line or a whole-line comment between the paren and the first label collapses to the empty
+    /// string, so a single-line fold left the window still ending at `(` and matched nothing — a
+    /// two-character edit that took a construction site out of the allowlist's sight entirely. The
+    /// walk is bounded at ``constructionFoldLimit`` lines, which is more than the house form can
+    /// produce and far less than the next declaration.
     private static func constructionWindow(at index: Int, in lines: [String]) -> String {
-        let line = Self.collapsed(lines[index])
-        guard line.hasSuffix("("), lines.indices.contains(index + 1) else { return line }
-        return line + Self.collapsed(lines[index + 1])
+        var window = Self.collapsed(lines[index])
+        var next = index + 1
+        // R2: bounded by the fold limit and by the file's own line count.
+        while window.hasSuffix("("), next < lines.count, next - index <= Self.constructionFoldLimit {
+            window += Self.collapsed(lines[next])
+            next += 1
+        }
+        return window
     }
+
+    /// How many following lines a construction window may fold in while it still ends at an open
+    /// paren. Four: the house form needs one, and a blank line or a comment between the paren and
+    /// the first label needs the rest.
+    private static let constructionFoldLimit = 4
 
     /// The enclosing type and declaration of the line at `index`, as `"Type / declaration"` — the
     /// key the allowlist is written in.
