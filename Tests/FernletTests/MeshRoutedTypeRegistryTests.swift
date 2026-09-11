@@ -32,6 +32,7 @@ import Testing
 @testable import FernletCrypto
 import FernletDomainModel
 import FernletFoundation
+import PrivateMediaStore
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -85,6 +86,50 @@ enum MeshRoutedTypeRegistryFixtures {
     /// A registry holding only the probe row.
     static func onlyProbe(_ entry: MeshRoutedTypeEntry? = nil) -> MeshRoutedTypeRegistry {
         MeshRoutedTypeRegistry(entries: [entry ?? probeEntry()])
+    }
+
+    /// The shipping registry with ONE row's `maxItemByteCount` replaced — P6 item 3's narrowing,
+    /// driven to a number a 1,500-byte fixture item can exceed. Every other column is that row's
+    /// own, read back out of the shipping registry so no cell restates a column.
+    static func capped(_ token: String, at maxItemByteCount: UInt64) -> MeshRoutedTypeRegistry {
+        MeshRoutedTypeRegistry(entries: shippingRows.map { row in
+            guard row.token == token else { return row }
+            return MeshRoutedTypeEntry(
+                token: row.token,
+                maxItemByteCount: maxItemByteCount,
+                destinations: row.destinations,
+                relayRetention: row.relayRetention,
+                finalAck: row.finalAck,
+                expiry: row.expiry,
+                canonicalStore: row.canonicalStore
+            )
+        })
+    }
+
+    /// The widest WELL-FORMED routed photo header: a UUID, an instant anchored to the routed
+    /// fixture clock, a display name at the shared name bound, and a full session — every
+    /// `FriendPhotoLimits.maxParticipants` slot filled, each with a name at that same bound and a
+    /// fingerprint wider than `IdentityService` mints.
+    ///
+    /// The point of the fixture is to MEASURE the header allowance P6 item 3's cap formula reserves
+    /// rather than assert it: nothing in the framing bounds a header, so the allowance is only
+    /// honest if the widest header a sender can honestly build fits well inside it.
+    static func maximalPhotoHeader() -> MeshRoutedPhotoHeader {
+        let name = String(repeating: "W", count: ItemNameModeration.maxNameLength)
+        let fingerprint = String(repeating: "f", count: 64)
+        // R2: bounded by the wire cap on participants.
+        let participants = (0..<FriendPhotoLimits.maxParticipants).map { _ in
+            FriendPhotoSessionParticipant(fingerprint: fingerprint, displayName: name)
+        }
+        return MeshRoutedPhotoHeader(
+            id: UUID(),
+            addedAt: MeshRoutedDrainRig.createdAt,
+            senderName: name,
+            session: FriendPhotoSessionMetadata(
+                id: UUID(), meshID: UUID(), meshName: name,
+                startedAt: MeshRoutedDrainRig.createdAt, participants: participants
+            )
+        )
     }
 
     /// Commits one node's own durable custody of a staged item, the way `finishLocalRungs` would
@@ -174,9 +219,16 @@ struct MeshRoutedTypeRegistryTests {
             MeshRoutedTypeToken.tempMessage: .durableRecipientStorage,
             MeshRoutedTypeToken.heart: .foregroundDecryptAndLedgerCommit
         ]
+        // P6 item 3 narrowed the photo row to the seal formula; the other two are still the shared
+        // wire bound and narrow when items 4 and 6 land their bodies.
+        let caps: [String: UInt64] = [
+            MeshRoutedTypeToken.photo: UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
+            MeshRoutedTypeToken.tempMessage: MeshRoutedManifestFormat.maxContentByteCount,
+            MeshRoutedTypeToken.heart: MeshRoutedManifestFormat.maxContentByteCount
+        ]
         for token in registry.tokens {
             let entry = try #require(registry.entry(for: token), "\(token)")
-            #expect(entry.maxItemByteCount == MeshRoutedManifestFormat.maxContentByteCount, "\(token)")
+            #expect(entry.maxItemByteCount == caps[token], "\(token)")
             #expect(entry.destinations == .fullRosterAtCreation, "\(token)")
             #expect(entry.relayRetention == .originRetainsUntilDeparture, "\(token)")
             #expect(entry.expiry == .meshHardDeadlinePlusGrace, "\(token)")
@@ -260,6 +312,76 @@ struct MeshRoutedTypeRegistryTests {
     @Test func theCanonicalStoreSlotNamesTheThreeP6Stores() {
         #expect(MeshRoutedCanonicalStore.allCases.map(\.rawValue)
                 == ["friendPhotoWall", "sessionTranscript", "heartLedger"])
+    }
+
+    // MARK: - P6 item 3: the first narrowed cap, and it is a formula
+
+    /// **D-11.4.** The photo row is the first cap below the shared wire bound, and it is the FORMULA
+    /// stated in the registry's unit caveat — payload plaintext bound + framed header allowance +
+    /// seal overhead — never a literal and never a second copy of the seam bound.
+    @Test func thePhotoRowsCapIsTheSealFormulaAndIsBelowTheWireBound() throws {
+        let photo = try #require(
+            MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.photo)
+        )
+        let formula = PrivateMediaStore.maxIncomingPhotoBytes
+            + MeshRoutedItemBodyFormat.maxFramedHeaderByteCount
+            + MeshRoutedItemSealFormat.overheadByteCount
+        #expect(photo.maxItemByteCount == UInt64(formula),
+                "the row is not the payload bound plus the framing it rides under")
+        #expect(photo.maxItemByteCount == UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
+                "the manifest door's cap and the projection's resident-blob guard must be one number")
+        #expect(photo.maxItemByteCount < MeshRoutedManifestFormat.maxContentByteCount,
+                "a row still at the wire bound is not a narrowed cap")
+    }
+
+    /// The allowance the formula reserves for the framed header is MEASURED against the widest
+    /// well-formed header, not asserted: nothing in the frozen framing bounds a header, so a
+    /// reserved figure that a real header could exceed would be a cap that refuses honest items.
+    @Test func theHeaderAllowanceCoversAMaximalHeader() throws {
+        let json = try MeshRoutedItemBodyFormat.headerEncoder()
+            .encode(MeshRoutedTypeRegistryFixtures.maximalPhotoHeader())
+        #expect(json.count <= MeshRoutedItemBodyFormat.maxHeaderJSONByteCount / 4,
+                "the widest well-formed header leaves no headroom: \(json.count) bytes")
+        #expect(MeshRoutedItemBodyFormat.maxFramedHeaderByteCount
+                == MeshRoutedItemBodyFormat.headerLengthPrefixByteCount
+                + MeshRoutedItemBodyFormat.maxHeaderJSONByteCount)
+    }
+
+    /// The formula, end to end: a maximal photo body — the photo wall's entire plaintext bound under
+    /// the widest well-formed header — seals to a blob that FITS the row's cap, so a sender can mint
+    /// everything the wall will accept. And the first byte the seal refuses is also a byte the row
+    /// refuses, so the two bounds cannot leave a band where an item mints and never opens (D-13.19).
+    @Test func aMaximalPhotoBodySealsInsideThePhotoRowsCap() throws {
+        let photo = try #require(
+            MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.photo)
+        )
+        let body = MeshRoutedPhotoBody(
+            header: MeshRoutedTypeRegistryFixtures.maximalPhotoHeader(),
+            imageData: Data(repeating: 0x5A, count: PrivateMediaStore.maxIncomingPhotoBytes)
+        )
+        let plaintext = try body.encoded()
+        #expect(plaintext.count > PrivateMediaStore.maxIncomingPhotoBytes,
+                "the framed header is exactly what the formula reserves room for")
+        let blob = try MeshRoutedItemSealer.seal(
+            plaintext,
+            contentKey: MeshRoutedItemSealFixtures.contentKey,
+            binding: MeshRoutedItemSealFixtures.binding,
+            typeToken: MeshRoutedTypeToken.photo
+        )
+        #expect(UInt64(blob.count) <= photo.maxItemByteCount,
+                "a photo the wall would accept cannot be minted under its own row")
+
+        let overBound = MeshRoutedItemSealFormat.maxPlaintextByteCount + 1
+        #expect(throws: MeshRoutedItemSealError.plaintextTooLarge(byteCount: overBound)) {
+            _ = try MeshRoutedItemSealer.seal(
+                Data(repeating: 0x5A, count: overBound),
+                contentKey: MeshRoutedItemSealFixtures.contentKey,
+                binding: MeshRoutedItemSealFixtures.binding,
+                typeToken: MeshRoutedTypeToken.photo
+            )
+        }
+        #expect(UInt64(overBound + MeshRoutedItemSealFormat.overheadByteCount) > photo.maxItemByteCount,
+                "one byte over the plaintext bound must not fit the row either")
     }
 }
 

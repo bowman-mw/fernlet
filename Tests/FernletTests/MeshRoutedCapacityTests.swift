@@ -608,7 +608,7 @@ struct MeshRoutedCapacityTests {
 
 // MARK: - The parked-set drop rule
 
-/// The ONE clause that turns a refused manifest into dropped bytes, and the nine that do not.
+/// The ONE clause that turns a refused manifest into dropped bytes, and the ten that do not.
 @MainActor
 @Suite(.serialized)
 struct MeshRoutedParkedDropTests {
@@ -621,7 +621,7 @@ struct MeshRoutedParkedDropTests {
             )
             let expected: MeshRoutedParkedDrop.Reason? =
                 rejection == .unknownTypeToken ? .unknownTypeToken : nil
-            #expect(fromOrigin == expected, "the ten-case table is the whole rule")
+            #expect(fromOrigin == expected, "the eleven-case table is the whole rule")
         }
     }
 

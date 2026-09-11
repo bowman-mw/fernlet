@@ -48,8 +48,17 @@ public struct PrivateMediaStore {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    // Reject incoming photos larger than this to prevent decompression-bomb OOM.
-    private static let maxIncomingPhotoBytes = 10 * 1024 * 1024  // 10 MB
+    /// The largest incoming photo this store will accept, in **plaintext** bytes — the
+    /// decompression-bomb byte cap, paired with ``isWithinSafePixelBounds(_:)``'s pixel check
+    /// because a tiny, highly-compressed image can still decode to a multi-gigabyte bitmap.
+    ///
+    /// `public` since P6 item 3 so the routed mesh path can **derive** its per-type ciphertext cap
+    /// from this one number instead of restating it: `ProximityKit` owns this store as its
+    /// photowall cache and already depends on the module, and the S3 wall it sits behind is about
+    /// which targets may import `PrivateMediaStore` at all (the AI providers may not) — never about
+    /// the visibility of a byte bound inside it. Two restatements of "10 MB" that could drift is the
+    /// larger risk; see `MeshRoutedItemSealFormat.maxResidentBlobByteCount`.
+    public static let maxIncomingPhotoBytes = 10 * 1024 * 1024  // 10 MB
     private static let thumbnailMaxPixelSize = 400
     // A small, highly-compressed JPEG can decode to a multi-gigabyte bitmap, so the byte cap
     // above is not sufficient. Reject by pixel dimensions/area before the full-resolution bytes

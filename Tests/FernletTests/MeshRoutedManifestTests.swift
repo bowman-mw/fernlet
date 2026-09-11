@@ -940,7 +940,7 @@ struct MeshRoutedManifestSigningTests {
     }
 
     @Test func everyRejectionHasAFrozenDiagnostic() {
-        #expect(MeshRoutedManifestRejection.allCases.count == 10)
+        #expect(MeshRoutedManifestRejection.allCases.count == 11)
         let allRejectionsNamed = MeshRoutedManifestRejection.allCases.allSatisfy { !$0.diagnosticDescription.isEmpty }
         #expect(allRejectionsNamed)
         let mintErrors: [MeshRoutedManifestMintError] = [

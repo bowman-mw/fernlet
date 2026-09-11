@@ -205,7 +205,7 @@ struct MeshRoutedRefusalBudgetTests {
         let doors = String(code[doorsStart.lowerBound..<doorsEnd.lowerBound])
         #expect(!doors.contains(token), "a content door spells the rejected token instead of charging the sender")
         let doorCalls = doors.components(separatedBy: "refuseRoutedFrameBeforeStore(").count - 1
-        #expect(doorCalls == 7, "manifest ×2, chunk ×3, custody ×1, recipient ×1; found \(doorCalls)")
+        #expect(doorCalls == 8, "manifest ×3, chunk ×3, custody ×1, recipient ×1; found \(doorCalls)")
 
         let dispatchStart = try #require(code.range(of: "private func dispatchRoutedContent("))
         let dispatchEnd = try #require(code.range(of: "private struct RoutedIngestContext"))

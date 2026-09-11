@@ -529,6 +529,54 @@ struct MeshRoutedParkedDropDoorTests {
         #expect(rig.routedIndex(rig.nodes[1])?.heldChunkFileCount == 0)
     }
 
+    /// **P6 item 3, the positive half.** A manifest above the cap its own registry row declares is
+    /// refused at the door **by name**, and the parked bytes that rode ahead of it STAY — the
+    /// asymmetry with `unknownTypeToken` one line above. A cap is a number one build chose and a
+    /// later build may loosen; a dropped parked set cannot be recovered.
+    ///
+    /// Self-controlled: the same signed manifest, from the same origin, over the same parked set, is
+    /// admitted the moment the narrowed row is unset — so the registry row is the only thing that
+    /// refused it.
+    @Test func anOverCapManifestIsRefusedByNameAndKeepsItsParkedBytes() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "parked-cap")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        let item = try MeshRoutedDrainItem.mint(
+            rig, origin: 0, typeToken: MeshRoutedTypeToken.photo, byteCount: 1_500
+        )
+        try await park(item, into: rig, at: 1, from: 0)
+        let held = rig.heldChunkCount(1, item.key)
+        #expect(held > 0, "the cell needs bytes at risk for 'kept' to mean anything")
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        rig.nodes[1].manager.routedTypeRegistryForTesting = MeshRoutedTypeRegistryFixtures.capped(
+            MeshRoutedTypeToken.photo, at: item.manifest.size - 1
+        )
+        try await rig.deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest),
+            type: .meshRoutedManifest, sender: 0, receiver: 1
+        )
+
+        #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.manifest == nil,
+                "an over-cap manifest was admitted")
+        #expect(capture.values(of: "mesh.routedDrain.rejected", key: "reason")
+                .contains(MeshRoutedManifestRejection.sizeExceedsTypeCap.rawValue),
+                "the cap refusal was silent")
+        #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.isParked == true,
+                "a cap refusal dropped the parked set — only an unknown token from the origin may")
+        #expect(rig.heldChunkCount(1, item.key) == held, "its bytes went with it")
+
+        rig.nodes[1].manager.routedTypeRegistryForTesting = nil
+        try await rig.deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest),
+            type: .meshRoutedManifest, sender: 0, receiver: 1
+        )
+        #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.manifest != nil,
+                "the row, not the plumbing, is what refused the manifest")
+    }
+
     /// The delete lever, closed: the SAME rejection from a third party drops nothing.
     @Test func aRefusedTypeTokenFromAThirdPartyDropsNothing() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "parked-lever")
