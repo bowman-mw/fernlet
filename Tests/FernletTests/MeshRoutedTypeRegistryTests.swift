@@ -337,11 +337,15 @@ struct MeshRoutedTypeRegistryTests {
     /// The allowance the formula reserves for the framed header is MEASURED against the widest
     /// well-formed header, not asserted: nothing in the frozen framing bounds a header, so a
     /// reserved figure that a real header could exceed would be a cap that refuses honest items.
+    ///
+    /// The floor is **8×**, which is the multiple the allowance's own doc claims — a measured
+    /// ~4.2 KB header inside a 64 KiB allowance is ~15× today, and pinning the doc's figure rather
+    /// than a looser one keeps the claim and the pin the same statement.
     @Test func theHeaderAllowanceCoversAMaximalHeader() throws {
         let json = try MeshRoutedItemBodyFormat.headerEncoder()
             .encode(MeshRoutedTypeRegistryFixtures.maximalPhotoHeader())
-        #expect(json.count <= MeshRoutedItemBodyFormat.maxHeaderJSONByteCount / 4,
-                "the widest well-formed header leaves no headroom: \(json.count) bytes")
+        #expect(json.count <= MeshRoutedItemBodyFormat.maxHeaderJSONByteCount / 8,
+                "the widest header leaves under the documented 8×: \(json.count) bytes")
         #expect(MeshRoutedItemBodyFormat.maxFramedHeaderByteCount
                 == MeshRoutedItemBodyFormat.headerLengthPrefixByteCount
                 + MeshRoutedItemBodyFormat.maxHeaderJSONByteCount)
@@ -351,37 +355,76 @@ struct MeshRoutedTypeRegistryTests {
     /// the widest well-formed header — seals to a blob that FITS the row's cap, so a sender can mint
     /// everything the wall will accept. And the first byte the seal refuses is also a byte the row
     /// refuses, so the two bounds cannot leave a band where an item mints and never opens (D-13.19).
+    ///
+    /// **Where the boundary is, and where it is not.** A wall-maximal photo lands *below* the cap,
+    /// and the gap is not slack in the formula: it is exactly the header allowance this particular
+    /// header did not spend, which is asserted rather than tolerated. The blob that lands ON the cap
+    /// is the one whose plaintext is the seal's own bound — it seals, and it seals to the cap to the
+    /// byte, which is the mint side of the `size <= cap` boundary the door enforces
+    /// (`aManifestExactlyAtItsRowsCapIsAdmitted` is the receive side).
     @Test func aMaximalPhotoBodySealsInsideThePhotoRowsCap() throws {
         let photo = try #require(
             MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.photo)
         )
+        let header = MeshRoutedTypeRegistryFixtures.maximalPhotoHeader()
+        let json = try MeshRoutedItemBodyFormat.headerEncoder().encode(header)
         let body = MeshRoutedPhotoBody(
-            header: MeshRoutedTypeRegistryFixtures.maximalPhotoHeader(),
+            header: header,
             imageData: Data(repeating: 0x5A, count: PrivateMediaStore.maxIncomingPhotoBytes)
         )
         let plaintext = try body.encoded()
         #expect(plaintext.count > PrivateMediaStore.maxIncomingPhotoBytes,
                 "the framed header is exactly what the formula reserves room for")
-        let blob = try MeshRoutedItemSealer.seal(
+        let blob = try Self.seal(plaintext)
+        #expect(UInt64(blob.count) <= photo.maxItemByteCount,
+                "a photo the wall would accept cannot be minted under its own row")
+        #expect(photo.maxItemByteCount - UInt64(blob.count)
+                == UInt64(MeshRoutedItemBodyFormat.maxHeaderJSONByteCount - json.count),
+                "the gap to the cap is not the header allowance this header did not spend")
+
+        let padding = MeshRoutedItemSealFormat.maxPlaintextByteCount
+            - (MeshRoutedItemBodyFormat.headerLengthPrefixByteCount + json.count)
+        let atTheCap = try Self.seal(
+            try MeshRoutedPhotoBody(
+                header: header, imageData: Data(repeating: 0x5A, count: padding)
+            ).encoded()
+        )
+        #expect(UInt64(atTheCap.count) == photo.maxItemByteCount,
+                "the largest plaintext the sealer takes must seal to exactly the row's cap")
+
+        let overBound = MeshRoutedItemSealFormat.maxPlaintextByteCount + 1
+        #expect(throws: MeshRoutedItemSealError.plaintextTooLarge(byteCount: overBound)) {
+            _ = try Self.seal(Data(repeating: 0x5A, count: overBound))
+        }
+    }
+
+    /// **The value behind the formula is a recorded receive-policy choice, not a storage detail.**
+    ///
+    /// The photo row is *defined* as the formula, which is right — but every term of it is read
+    /// from somewhere else, so lowering `PrivateMediaStore.maxIncomingPhotoBytes` (a perfectly
+    /// plausible local-cache decision inside a sealed store) silently narrows what **every**
+    /// receiver on this build will admit at the manifest door, and no formula-shaped assertion can
+    /// notice. These two absolute pins are the ratchet: they make such a change a review event with
+    /// a red test and a ledger row, rather than a drive-by. Moving them is a decision about what
+    /// this build accepts from the mesh; the formula above is what keeps the decision in one place.
+    @Test func theReceivePolicyBytesAreAPinnedChoiceNotADriveBy() throws {
+        let photo = try #require(
+            MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.photo)
+        )
+        #expect(PrivateMediaStore.maxIncomingPhotoBytes == 10 * 1024 * 1024,
+                "the photo wall's plaintext bound is the receive policy's payload term")
+        #expect(photo.maxItemByteCount == 10_551_337,
+                "the ciphertext every receiver admits for a routed photo changed")
+    }
+
+    /// The one seal every cell here drives, with the fixture key and binding.
+    private static func seal(_ plaintext: Data) throws -> Data {
+        try MeshRoutedItemSealer.seal(
             plaintext,
             contentKey: MeshRoutedItemSealFixtures.contentKey,
             binding: MeshRoutedItemSealFixtures.binding,
             typeToken: MeshRoutedTypeToken.photo
         )
-        #expect(UInt64(blob.count) <= photo.maxItemByteCount,
-                "a photo the wall would accept cannot be minted under its own row")
-
-        let overBound = MeshRoutedItemSealFormat.maxPlaintextByteCount + 1
-        #expect(throws: MeshRoutedItemSealError.plaintextTooLarge(byteCount: overBound)) {
-            _ = try MeshRoutedItemSealer.seal(
-                Data(repeating: 0x5A, count: overBound),
-                contentKey: MeshRoutedItemSealFixtures.contentKey,
-                binding: MeshRoutedItemSealFixtures.binding,
-                typeToken: MeshRoutedTypeToken.photo
-            )
-        }
-        #expect(UInt64(overBound + MeshRoutedItemSealFormat.overheadByteCount) > photo.maxItemByteCount,
-                "one byte over the plaintext bound must not fit the row either")
     }
 }
 

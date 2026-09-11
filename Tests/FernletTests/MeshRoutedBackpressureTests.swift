@@ -551,6 +551,8 @@ struct MeshRoutedParkedDropDoorTests {
         capture.install()
         defer { capture.uninstall() }
 
+        let charged = rig.nodes[1].manager
+            .routedRefusalBudgetForTesting.refusals[rig.nodes[0].fingerprint] ?? 0
         rig.nodes[1].manager.routedTypeRegistryForTesting = MeshRoutedTypeRegistryFixtures.capped(
             MeshRoutedTypeToken.photo, at: item.manifest.size - 1
         )
@@ -564,8 +566,12 @@ struct MeshRoutedParkedDropDoorTests {
         #expect(capture.values(of: "mesh.routedDrain.rejected", key: "reason")
                 .contains(MeshRoutedManifestRejection.sizeExceedsTypeCap.rawValue),
                 "the cap refusal was silent")
+        #expect((rig.nodes[1].manager
+                 .routedRefusalBudgetForTesting.refusals[rig.nodes[0].fingerprint] ?? 0)
+                == charged + 1,
+                "a cap refusal is a pre-store refusal and must cost the sender that offered it")
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.isParked == true,
-                "a cap refusal dropped the parked set — only an unknown token from the origin may")
+                "a drop was added to the cap branch (the ARM is the table cell's to guard)")
         #expect(rig.heldChunkCount(1, item.key) == held, "its bytes went with it")
 
         rig.nodes[1].manager.routedTypeRegistryForTesting = nil
@@ -575,6 +581,86 @@ struct MeshRoutedParkedDropDoorTests {
         )
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.manifest != nil,
                 "the row, not the plumbing, is what refused the manifest")
+    }
+
+    /// **P6 item 3, the boundary itself.** The door is `size <= cap`, so a row capped **at** the
+    /// manifest's own size must ADMIT it. The refusal cell above only ever probes `size == cap + 1`,
+    /// and the control it runs uses a cap far above the size, so neither half sits on the boundary:
+    /// an off-by-one there (`<=` → `<`) would refuse exactly the genuinely-maximal item the cap
+    /// formula exists to permit, and would go unnoticed. This cell is the equal half.
+    @Test func aManifestExactlyAtItsRowsCapIsAdmitted() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "parked-cap-edge")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        let item = try MeshRoutedDrainItem.mint(
+            rig, origin: 0, typeToken: MeshRoutedTypeToken.photo, byteCount: 1_500
+        )
+        try await park(item, into: rig, at: 1, from: 0)
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        let registry = MeshRoutedTypeRegistryFixtures.capped(
+            MeshRoutedTypeToken.photo, at: item.manifest.size
+        )
+        #expect(registry.entry(for: MeshRoutedTypeToken.photo)?.maxItemByteCount == item.manifest.size,
+                "the cell means to sit ON the boundary, not near it")
+        rig.nodes[1].manager.routedTypeRegistryForTesting = registry
+        try await rig.deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest),
+            type: .meshRoutedManifest, sender: 0, receiver: 1
+        )
+
+        #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.manifest != nil,
+                "a manifest exactly at its row's cap was refused — the door must admit size == cap")
+        #expect(!capture.values(of: "mesh.routedDrain.rejected", key: "reason")
+                .contains(MeshRoutedManifestRejection.sizeExceedsTypeCap.rawValue),
+                "the boundary value was named over-cap")
+    }
+
+    /// **P6 item 3's documented order, made observable.** The cap check runs **before** the
+    /// destination/hand-off gate, so a custodian's copy and a destination's copy of an over-cap item
+    /// are refused identically — and that ordering is what keeps the refusal NAME stable for a third
+    /// party. The frame here trips both guards at once: an origin is never in its own destination
+    /// set (the set is the roster minus the origin), so a courier handing the origin back its own
+    /// over-cap manifest is neither a destination nor a hand-off, and only the order decides which
+    /// refusal fires. Moving the check below the gate keeps every other cell green.
+    @Test func theCapRefusalIsNamedAheadOfTheDestinationGate() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "parked-cap-order")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        let item = try MeshRoutedDrainItem.mint(
+            rig, origin: 0, typeToken: MeshRoutedTypeToken.photo, byteCount: 1_500
+        )
+        #expect(!item.manifest.destinations.contains(rig.nodes[0].fingerprint),
+                "an origin is never its own destination — that is what makes this frame ungated")
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        rig.nodes[0].manager.routedTypeRegistryForTesting = MeshRoutedTypeRegistryFixtures.capped(
+            MeshRoutedTypeToken.photo, at: item.manifest.size - 1
+        )
+        try await rig.deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest),
+            type: .meshRoutedManifest, sender: 1, receiver: 0
+        )
+        let capReasons = capture.values(of: "mesh.routedDrain.rejected", key: "reason")
+        #expect(capReasons.contains(MeshRoutedManifestRejection.sizeExceedsTypeCap.rawValue),
+                "the cap did not answer first")
+        #expect(!capReasons.contains("notADestinationOrHandoff"),
+                "the destination gate answered an over-cap manifest — the cap check moved below it")
+
+        // The control: with the row un-narrowed the SAME frame draws the gate's refusal, so the
+        // claim above is about ORDER and not about a receiver that would have admitted it anyway.
+        rig.nodes[0].manager.routedTypeRegistryForTesting = nil
+        try await rig.deliver(
+            MeshRoutedManifestPayload(manifest: item.manifest),
+            type: .meshRoutedManifest, sender: 1, receiver: 0
+        )
+        #expect(capture.values(of: "mesh.routedDrain.rejected", key: "reason")
+                .contains("notADestinationOrHandoff"),
+                "this receiver would have admitted the frame, so the order claim proves nothing")
     }
 
     /// The delete lever, closed: the SAME rejection from a third party drops nothing.
