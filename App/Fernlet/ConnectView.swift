@@ -10,13 +10,14 @@ import FernletUI
 /// The Friends tab root: the shared photo album when idle, the in-session disposable camera when live.
 ///
 /// Swaps to ``DisposableCameraView`` once `MeshNetworkManager.isInSession` flips and the
-/// ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the lifecycle half of that
+/// ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the "is there a peer right now"
 /// predicate (P6 item 2) — completes; otherwise it renders the album layout — the
 /// post-session shop-window card, the nearby-peer banner (with the QR verify ceremony on manual
 /// commits), and the searchable photo wall. It also owns the session-end review flow:
 /// `presentDisconnectReviewIfNeeded()` presents either the full photo review or the compact
 /// keep-as-friends prompt off observable model state (`pendingFriendReview` + post-teardown
-/// `sessionPhotos`), so a review promoted while no instance existed still presents on the next
+/// `sessionPhotos`), gated on `isSessionLive` so it presents once the SESSION has ended and never
+/// on a link blip, and so a review promoted while no instance existed still presents on the next
 /// appearance. Kept friends are minted one-sided via ``FernletStore``'s `keepProximityFriends`,
 /// and the presented batch is consumed with `completeFriendReview` — never by clearing the live
 /// roster, which would clobber the next session's entries.
@@ -134,22 +135,34 @@ struct FriendsView: View {
     /// choreography at all. The model half and the presenting half must read the SAME predicate or
     /// the ceremony is only half re-pointed.
     ///
-    /// Named residual: with the camera staying up across a blip, the review sheet now presents
-    /// **over** a live camera. That sheet is the one a pair has always been shown when its only peer
-    /// goes away; what item 2 changed is only the surface behind it. Delaying it instead would
-    /// re-break the ceremony this commit exists to revive.
+    /// The review sheet no longer presents on a blip at all — `presentDisconnectReviewIfNeeded()`
+    /// gates on `isSessionLive`, so it presents only once the session has really ended (the fix for
+    /// this commit's P1). This arm is still the right TRIGGER for it: every door that ends a
+    /// session also loses the committed peer, because every terminal transition carries
+    /// `.stopParticipation`.
+    ///
+    /// The heal arm dismisses **either** standing sheet, and both non-celebrating exits clear
+    /// `showConnectionAnimation` (review finding P2-4). Both halves are load-bearing: a heal is
+    /// seconds away in the same room, the photo review is the blip's common case and not the keep
+    /// prompt, and nothing else ever resets `showConnectionAnimation` once the cover fails to
+    /// present — `sessionReady` is set inside the cover's own completion — so
+    /// `.accessibilityHidden(showConnectionAnimation)` would latch VoiceOver and Switch Control out
+    /// of the whole Friends surface for the rest of the session.
     private func handleCommittedPeerChange(hadPeer: Bool, hasPeer: Bool) {
         if !hadPeer && hasPeer {
-            if keepFriendsPromptPresented {
-                // A new session became ready while the compact keep prompt was up: dismiss
-                // WITHOUT consuming — the batch persists and re-presents (merged) at the
-                // next teardown. Clearing reviewBatch first turns the sheet's onDismiss
-                // finalize into a no-op, and skipping the fullScreenCover avoids presenting
-                // it in the same transaction as a sheet dismissal (one of the two would drop).
+            if keepFriendsPromptPresented || disconnectReviewPresented {
+                // A session became live again while a session-end sheet was up: dismiss WITHOUT
+                // consuming — the batch persists and re-presents (merged) at the next real
+                // teardown, and unkept session photos stay in `manager.sessionPhotos`. Clearing
+                // reviewBatch first turns the keep sheet's onDismiss finalize into a no-op, and
+                // skipping the fullScreenCover avoids presenting it in the same transaction as a
+                // sheet dismissal (one of the two would drop).
                 reviewBatch = nil
                 friendCandidates = []
                 keptFriendFingerprints = []
                 keepFriendsPromptPresented = false
+                disconnectReviewPresented = false
+                showConnectionAnimation = false
                 sessionReady = true
             } else {
                 connectionPeerName = connectedPeerName()
@@ -157,6 +170,14 @@ struct FriendsView: View {
                 withAnimation { showConnectionAnimation = true }
             }
         } else if hadPeer && !hasPeer {
+            // A celebration cover still up over a session that just lost its peer has nothing left
+            // to celebrate: take it down and hand the surface to what is behind it — for a blipped
+            // pair the camera it keeps, and `handleSessionSurfaceChange` owns the ended case.
+            // Leaving the flag set is the a11y latch above.
+            if showConnectionAnimation {
+                showConnectionAnimation = false
+                sessionReady = true
+            }
             presentDisconnectReviewIfNeeded()
         }
     }
@@ -639,12 +660,16 @@ struct FriendsView: View {
     /// presentation time, against the live trust vault — so peers trusted or blocked mid-session
     /// never reach the prompt.
     ///
-    /// The gate is `hasCommittedPeer`, not `isInSession` (P6 item 2): a founded mesh outlives its
-    /// links, so on `isInSession` this sheet would never present again for a proximity pair — the
-    /// manager would promote the batch and nothing would ever show it. The model half and the
-    /// presenting half must read the SAME predicate or the ceremony is only half re-pointed.
+    /// The gate is `isSessionLive` — neither `isInSession` nor `hasCommittedPeer` (P6 item 2 and
+    /// its fix): a founded mesh outlives its links, so on `isInSession` this sheet would never
+    /// present again for a proximity pair (the manager would promote the batch and nothing would
+    /// show it), and on `hasCommittedPeer` a two-second blip presented it **over a live session** —
+    /// where both of its actions call `leaveSessionAfterNotifyingPeers()`, which for a pair signs a
+    /// termination and a permanent rejoin bar on a mesh the pair could still have resumed. The
+    /// model half (the manager's three hooks) and this presenting half must read the SAME predicate
+    /// or the ceremony is only half re-pointed.
     private func presentDisconnectReviewIfNeeded() {
-        guard !manager.hasCommittedPeer else { return }
+        guard !manager.isSessionLive else { return }
         guard !disconnectReviewPresented, !keepFriendsPromptPresented else { return }
         let batch = manager.pendingFriendReview
         let hasPhotos = !manager.sessionPhotos.isEmpty

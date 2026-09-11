@@ -1796,13 +1796,12 @@ struct ContentView: View {
     /// expire) and would also drop this session's photos, film quota and removal set. Guarding on
     /// `hasCommittedPeer` alone does exactly that, and guarding on `isInSession` alone leaves a
     /// founded pair that blipped with its radios down and no way back — the two predicates stopped
-    /// agreeing at item 2, and this is the one site that reads both:
+    /// agreeing at item 2, and this is the one site that reads both.
     ///
-    /// - **no session** ⇒ `startJoin()`, a fresh search cycle;
-    /// - **a mesh with no committed peer** (a blip, or a tab bounce after one) ⇒
-    ///   `resumeSearchingForPartitionedMesh()` — the radios come back with the mesh, the ledger and
-    ///   the ceiling untouched, so the re-formed link merges rather than founds;
-    /// - **a live session** ⇒ nothing.
+    /// The three-way lives in ``FriendsDiscoveryEntry`` rather than here (review finding P2-5):
+    /// `private` in the app target, it was the whole user-facing claim of item 2's P1 and deleting
+    /// it reddened nothing. Its truth table — including which entries arm the timeout — is pinned
+    /// there.
     ///
     /// Clearing the mesh in `startJoin()` was the other half of the choice and stays rejected:
     /// `leaveMesh()` drops the membership verifier and the routed drain state, so a pair that
@@ -1810,21 +1809,29 @@ struct ContentView: View {
     private func startFriendsDiscovery() {
         let manager = store.meshNetworkManager
         guard !manager.isSearching else { return }
-        if manager.isInSession {
-            guard !manager.hasCommittedPeer else { return }
-            manager.resumeSearchingForPartitionedMesh()
-        } else {
-            manager.startJoin()
+        let entry = FriendsDiscoveryEntry.entry(
+            isInSession: manager.isInSession, hasCommittedPeer: manager.hasCommittedPeer
+        )
+        switch entry {
+        case .fresh: manager.startJoin()
+        case .resume: manager.resumeSearchingForPartitionedMesh()
+        case .none: break
         }
-        armDiscoveryTimeout()
+        if entry.armsDiscoveryTimeout { armDiscoveryTimeout() }
     }
 
-    /// Stands the radios down after five minutes of finding nobody — for a resumed partitioned mesh
+    /// Ends the session after five minutes of finding nobody — for a resumed partitioned mesh
     /// exactly as for a fresh search.
     ///
     /// The guard is `hasCommittedPeer`, not `isInSession` (P6 item 2): a founded mesh outlives its
     /// links, so on `isInSession` this timeout would stop firing altogether and the radios would run
-    /// until the user tapped End Session.
+    /// until the user tapped End Session. It is not `isSessionLive` either — the question here is
+    /// whether the search found anybody, which is what "no committed peer" says.
+    ///
+    /// It calls `endSessionAfterDiscoveryTimeout()` rather than `stopJoin()` (the P6 item 2 fix):
+    /// since the session-end ceremony moved off slot loss, this is one of the four doors that ends
+    /// a session, and standing the radios down silently would leave a pair whose peer never came
+    /// back with no review, no shop window and no way to keep its photos short of End Session.
     private func armDiscoveryTimeout() {
         discoveryTimeoutTask?.cancel()
         discoveryTimeoutTask = Task { @MainActor in
@@ -1832,12 +1839,10 @@ struct ContentView: View {
                 try await Task.sleep(for: .seconds(5 * 60))
             } catch {
                 // Cancellation means the timeout was superseded (`stopFriendsDiscovery`, or a new
-                // discovery start), so returning WITHOUT `stopJoin()` is the intended behavior.
+                // discovery start), so returning WITHOUT ending anything is the intended behavior.
                 return
             }
-            let manager = store.meshNetworkManager
-            guard !manager.hasCommittedPeer else { return }
-            manager.stopJoin()
+            store.meshNetworkManager.endSessionAfterDiscoveryTimeout()
         }
     }
 

@@ -3063,7 +3063,12 @@ Carried from §22.4, with what P5 added:
   content path and not a pairwise special case — `promoteToMesh()` armed no ledger at any roster
   size and `startNewMesh` had no shipping caller. Rides with it: the newborn-yield repair for the
   double mint, ONE auto-granted admission while the roster is one (the 15 cm dwell as consent), and
-  `hasCommittedPeer` as the session-end predicate `isInSession` can no longer be.
+  `isSessionLive` as the session-end predicate neither `isInSession` nor `hasCommittedPeer` can be:
+  session end means the MESH ending (End Session, a termination or completed departure, the
+  five-minute discovery timeout with no peer, or slot loss while no mesh is held), never a lost
+  link — a blip clears no transcript, promotes no batch, opens no shop window and presents no sheet
+  whose primary action would sign a termination on a mesh the pair can still resume (pass B review
+  P1, fixed 2026-09-11).
 - **The conflicted-member blast radius** (P6 item 1 pass B review, finding 5). A member that signs
   two different key-agreement keys and hands one to each of two peers makes the mint refuse
   `keyMismatch` **whole** — the resolver answers on the first bad destination, so that origin shares

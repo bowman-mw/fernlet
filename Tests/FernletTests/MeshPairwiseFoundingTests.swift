@@ -512,7 +512,8 @@ struct MeshPairwiseFoundingTests {
         // The prompt is KEPT for the third device: the admitter's roster is 2, not 1.
         #expect(rig.nodes[1].manager.pendingAdmissionRequests.count == 1,
                 "a third device is a stranger joining an established mesh, so it is prompted")
-        guard let queued = rig.nodes[1].manager.pendingAdmissionRequests.first else { return }
+        let queued = try #require(rig.nodes[1].manager.pendingAdmissionRequests.first,
+                                  "the prompt queue must hold the third device's request")
         // Inside the pinned install: `allowAdmission` SPAWNS the grant, and the spawned task
         // inherits the task-local binding from here — the grant files a record durably, so a bare
         // call would seal against whatever the simulator's real install row happens to be.
@@ -700,13 +701,18 @@ struct MeshPairwiseFoundingTests {
         #expect(!manager.hasCommittedPeer, "a seated, uncommitted slot is not a committed peer")
         rig.commit(0, 1)
         #expect(manager.hasCommittedPeer, "the dwell commit is what makes it one")
-        #expect(manager.isInSession, "both predicates agree while the link is up")
+        #expect(manager.isInSession, "all three predicates agree while the link is up")
+        #expect(manager.isSessionLive, "including the lifecycle one")
 
-        guard let slot = manager.slots.first else { return }
+        let slot = try #require(manager.slots.first, "the commit must have seated a slot")
         manager.evictSlotForTesting(peerID: slot.id)
-        #expect(!manager.hasCommittedPeer, "the last committed slot going away ends the session")
+        #expect(!manager.hasCommittedPeer, "the last committed slot going away loses the peer")
         #expect(manager.isInSession,
                 "while `isInSession` stays true, because the founded mesh outlived the link")
+        #expect(manager.isSessionLive, """
+            and so does `isSessionLive`: a lost slot is a BLIP, not a session end — the mesh, its \
+            ledger and its ceiling are all still here and the pair can resume
+            """)
     }
 
     /// **The P1 of pass A's review.** A founded pair whose link dropped can get its radios back —
@@ -757,12 +763,18 @@ struct MeshPairwiseFoundingTests {
         #expect(manager.photosAddedThisSession == 1, "the session has a spent film shot to lose")
 
         // The link drops, and then the user leaves the tab: exactly the shipping sequence.
-        guard let slot = manager.slots.first else { return }
+        let slot = try #require(manager.slots.first, "the commit must have seated a slot")
         manager.evictSlotForTesting(peerID: slot.id)
         manager.stopJoin()
         #expect(!manager.isSearching, "the radios really are down")
         #expect(manager.isInSession, "while the mesh outlived the link, which is the trap")
         #expect(!manager.hasCommittedPeer, "and no peer is committed, which is the way out of it")
+        #expect(manager.currentGroupKey == nil, """
+            the loss the resume cannot avoid, named because the doc enumerates `startJoin`'s \
+            resets and this one is `stopSearching`'s: `clearGroupKeyState()` has already taken the \
+            group key, the epoch keyring and the rotation/beacon timers, so the resumed session is \
+            keyless until the heal's merge or the next rotation re-keys it
+            """)
 
         manager.resumeSearchingForPartitionedMesh()
 
@@ -803,18 +815,105 @@ struct MeshPairwiseFoundingTests {
         let manager = rig.nodes[0].manager
         #expect(manager.isInSession && manager.hasCommittedPeer, "both true at the first commit")
 
-        guard let slot = manager.slots.first else { return }
+        let slot = try #require(manager.slots.first, "the commit must have seated a slot")
         manager.evictSlotForTesting(peerID: slot.id)
         #expect(manager.isInSession, "the blip does not move the layout predicate")
-        #expect(!manager.hasCommittedPeer, "and does move the lifecycle one")
+        #expect(!manager.hasCommittedPeer, "and does move the peer-presence one")
+        #expect(manager.isSessionLive, "and does NOT move the lifecycle one — a blip is not an end")
 
         rig.reseat(0, toward: 1)
         rig.commit(0, 1)
         #expect(manager.isInSession, "the heal does not move the layout predicate either")
         #expect(manager.hasCommittedPeer, """
-            so the heal's edge exists ONLY on the lifecycle predicate — the arm that abandons a \
-            standing keep prompt has to read this one or it never fires for a pair
+            so the heal's edge exists ONLY on the peer-presence predicate — the arm that abandons \
+            a standing session-end sheet has to read this one or it never fires for a pair
             """)
+    }
+
+    // MARK: Session end means MESH end (the pass-B review's P1)
+
+    /// **The P1 of pass B's review.** A link BLIP runs no part of the session-end ceremony.
+    ///
+    /// Before the fix every slot loss did: `removeSlot` fired all three hooks on
+    /// `!hasCommittedPeer` alone, so a two-second drop promoted the keep-as-friend batch, cleared
+    /// the live chat transcript and opened the post-session shop window — and `ConnectView`'s
+    /// committed-peer arm presented the photo-review sheet over the still-live camera, whose BOTH
+    /// actions call `leaveSessionAfterNotifyingPeers()`. For a pair that is
+    /// `MeshDevelopmentPlan.ending == .termination`: a signed termination plus a permanent rejoin
+    /// bar, on a mesh item 2 deliberately keeps alive so the pair can resume — asymmetric,
+    /// irreversible, one tap, and the peer (unreachable at that instant) never hears about it.
+    ///
+    /// The ceremony now fires from ``MeshNetworkManager/isSessionLive`` going false, which for a
+    /// mesh-holding session means the MESH ended. The three hooks keep their call sites: slot loss
+    /// still ends a session that has no mesh to outlive it.
+    @Test func aBlipPresentsNothingAndClearsNothing() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "blip-quiet")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        try Self.armTheThreeHooks(on: manager, peer: rig.identities[1], label: "Peer")
+
+        let slot = try #require(manager.slots.first, "the commit must have seated a slot")
+        manager.evictSlotForTesting(peerID: slot.id)
+
+        #expect(manager.isSessionLive, "the mesh is untouched, so the session did not end")
+        #expect(manager.pendingFriendReview == nil, """
+            nothing to present: the review sheet is gated on `isSessionLive`, and its primary \
+            action would have signed a termination on a mesh this pair can still resume
+            """)
+        #expect(!manager.sessionMessages.messages.isEmpty, "the live transcript is still the room's")
+        #expect(manager.clothingShop.window == nil, "and the post-session shop window stays shut")
+        #expect(!manager.sessionRoster.isEmpty, "with the review candidate still in the live roster")
+    }
+
+    /// The other half of the blip: what the pair gets back. The transcript the blip did not clear is
+    /// still there after the radios come back and the link re-forms.
+    @Test func aBlipAResumeAndAReLinkKeepThePreBlipTranscript() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "blip-resume")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        try Self.armTheThreeHooks(on: manager, peer: rig.identities[1], label: "Peer")
+        let before = manager.sessionMessages.messages.map(\.text)
+
+        let slot = try #require(manager.slots.first, "the commit must have seated a slot")
+        manager.evictSlotForTesting(peerID: slot.id)
+        manager.stopJoin()
+        manager.resumeSearchingForPartitionedMesh()
+        rig.reseat(0, toward: 1)
+        rig.commit(0, 1)
+
+        #expect(manager.hasCommittedPeer, "the pair is linked again")
+        #expect(manager.isSessionLive, "on the session it never left")
+        #expect(manager.sessionMessages.messages.map(\.text) == before, """
+            and the room's messages are the pre-blip ones: a tab bounce over a live mesh runs \
+            `stopSearching()`, whose transcript hook is now gated on the session having ENDED
+            """)
+        #expect(manager.pendingFriendReview == nil, "with no batch promoted along the way")
+        #expect(manager.clothingShop.window == nil, "and no shop window opened along the way")
+    }
+
+    /// Gives all three session-end hooks something to do, so a cell asserting they did not fire is
+    /// not green over nothing: a live transcript, a held shop catalog, and a review candidate (the
+    /// commit itself records that one).
+    private static func armTheThreeHooks(
+        on manager: MeshNetworkManager, peer: IdentityService, label: String
+    ) throws {
+        manager.sessionMessages.appendOutgoing(
+            id: UUID(), senderFingerprint: manager.localFingerprint,
+            senderDisplayName: "Local", text: "hello", sentAt: Date()
+        )
+        manager.clothingShop.isSharingEnabledProvider = { true }
+        let catalog = try Self.catalogEnvelope(displayName: label)
+        manager.clothingShop.receiveCatalog(
+            catalog.envelope, plaintext: catalog.plaintext,
+            verifiedFingerprint: peer.localFingerprint, now: Date()
+        )
+        #expect(!manager.sessionRoster.isEmpty, "the commit recorded a review candidate")
+        #expect(!manager.sessionMessages.messages.isEmpty, "there is a transcript to clear")
+        #expect(manager.clothingShop.window == nil, "and no shop window while the session is live")
     }
 
     /// A second entry into the founding for one session is refused and named, rather than minting a
@@ -892,45 +991,140 @@ struct MeshPairwiseFoundingTests {
                 "so the control the user touched still reads closed")
         #expect(rig.nodes[yielder].manager.currentDiscoveryInfo()["meshID"] == nil,
                 "and the TXT publishes no mesh identifiers, which is what closing is for")
+
+        // The other device, which is where pass B's fix stopped (review findings P2-2 and P2-3).
+        try await rig.settle(until: { rig.nodes[winner].manager.currentMesh?.mode == .closed })
+        #expect(rig.nodes[winner].manager.currentMesh?.mode == .closed, """
+            the WINNER goes closed too — which needs the re-assert's stamp to be monotonic in the \
+            descriptor it answers: on a bare `Date()` the yielder stamps in the past of the \
+            winner's own clock and the close is discarded at the winner's merge door
+            """)
+        #expect(!rig.nodes[winner].manager.isSessionOpen, "and its own control reads closed")
+        let winnerRadio = try #require(
+            rig.nodes[winner].manager.transportForTesting as? FakeMeshTransportSession
+        )
+        #expect(winnerRadio.republishedDiscoveryInfo.last?["meshID"] == nil, """
+            and its RADIO stopped advertising the mesh: `handleMeshDescriptor` published nothing at \
+            all before the fix, so the winner's model said closed while its Bonjour TXT kept \
+            carrying meshID / meshName / memberCount for the rest of the session
+            """)
+        #expect(winnerRadio.republishedDiscoveryInfo.last?["memberCount"] == nil,
+                "nor the member count")
     }
 
-    @Test func theOnlyPeerLeavingEndsTheSessionForTheReviewShopAndTranscript() async throws {
+    /// A session the user CLOSED is not re-opened by a later descriptor, however it is stamped
+    /// (review finding P2-3).
+    ///
+    /// The mode merges last-write-wins on `modeSetAt`, and an incoming stamp is clamped only from
+    /// ABOVE (`Date() + 60`) — so a peer whose clock runs ahead wins every merge, and the very next
+    /// descriptor after a close silently re-opens the mesh on the device whose user closed it. A
+    /// monotonic local stamp cannot fix that half: the peer's next descriptor is honestly later
+    /// still. The choice is therefore a sticky LOCAL policy, re-applied after every merge.
+    @Test func aSessionTheUserClosedIsNotReOpenedByASkewedDescriptor() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "sticky-closed")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        let mesh = try #require(manager.currentMesh, "the commit founds the mesh under test")
+        manager.setSessionOpen(false)
+        #expect(manager.currentMesh?.mode == .closed, "the user closed this session")
+
+        // The peer's descriptor for the SAME mesh, re-opening it with a stamp 50 s in this device's
+        // future — inside `sanitizedDescriptor`'s +60 s clamp, so it wins LWW outright.
+        var reopened = mesh
+        reopened.mode = .open
+        reopened.modeSetAt = Date().addingTimeInterval(50)
+        reopened.modeSetBy = rig.identities[1].localFingerprint
+        let coordinator = try #require(rig.nodes[0].coordinators[rig.nodes[1].handle.endpoint])
+        try Self.deliverDescriptor(
+            reopened, to: manager, from: rig.identities[1], over: coordinator
+        )
+
+        #expect(manager.currentMesh?.mode == .closed, """
+            the merge took the skewed stamp and the sticky local choice took it back — a device \
+            whose user closed the session never re-opens by gossip, it re-broadcasts its close
+            """)
+        #expect(!manager.isSessionOpen, "so the control the user touched still reads closed")
+        #expect(manager.currentDiscoveryInfo()["meshID"] == nil, "and nothing is advertised")
+        let radio = try #require(manager.transportForTesting as? FakeMeshTransportSession)
+        #expect(radio.republishedDiscoveryInfo.last?["meshID"] == nil,
+                "on the radio as well as in the model")
+        let stamp = try #require(manager.currentMesh?.modeSetAt)
+        #expect(stamp > reopened.modeSetAt, """
+            and the re-assert is stamped STRICTLY LATER than the descriptor it answers, which is \
+            the half a sticky flag cannot carry: on a bare `Date()` this device's close is behind \
+            the skewed stamp it is answering, every other member's merge door discards it by LWW, \
+            and the choice never leaves the device that made it. One rig, one clock — so this \
+            assertion is the only thing here that can see a non-monotonic stamp at all
+            """)
+
+        // And the user's own re-open is honoured: the flag is the same control, not a latch.
+        manager.setSessionOpen(true)
+        #expect(manager.currentMesh?.mode == .open, "re-opening is that user's own tap")
+    }
+
+    /// Delivers one signed `.meshDescriptor` through the production receive door with the sender's
+    /// verified `PeerIdentity`, so a cell can hand a committed peer's descriptor any shape it likes
+    /// — a stamp in this device's future, in particular.
+    private static func deliverDescriptor(
+        _ descriptor: MeshDescriptor,
+        to manager: MeshNetworkManager,
+        from sender: IdentityService,
+        over coordinator: ProximityCoordinator
+    ) throws {
+        let plaintext = try JSONEncoder().encode(MeshStateChangePayload(descriptor: descriptor))
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: sender,
+            senderDisplayName: "Peer",
+            payloadType: .meshDescriptor,
+            payloadSummary: PayloadSummary(title: "Mesh"),
+            payload: plaintext
+        )
+        let identity = ProximityCoordinator.PeerIdentity(
+            id: UUID(),
+            displayName: "Peer",
+            signingPublicKey: sender.localSigningPublicKey,
+            keyAgreementPublicKey: sender.localKeyAgreementPublicKey,
+            fingerprint: sender.localFingerprint,
+            rangingMode: .rssi,
+            firstSeenAt: Date(),
+            capabilities: ProximityCapability.allCases.map(\.rawValue)
+        )
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            manager.proximityCoordinator(
+                coordinator, didReceive: envelope, plaintext: plaintext, from: identity
+            )
+        }
+    }
+
+    /// Door 1: **End Session**. The ceremony fires, and fires exactly once.
+    ///
+    /// `leaveMesh()` is the teardown funnel every End Session path reaches (`beginDevelop` →
+    /// `leaveSessionAfterNotifyingPeers()` → `leaveSession()` → here), and it nils the mesh before
+    /// `stopSearching()` runs the hooks — so the ledgerless leg of ``MeshNetworkManager/isSessionLive``
+    /// is what answers, and answers "ended".
+    ///
+    /// The "exactly once" half is load-bearing: the app runs the same three hooks again on the very
+    /// next tab exit, so "the session ended" must not be answerable twice. The mechanism is
+    /// `sessionRoster.removeAll()` — the promotion is once per POPULATION, not once per predicate
+    /// edge.
+    @Test func endingTheSessionFiresTheReviewShopAndTranscriptHooksExactlyOnce() async throws {
         let rig = try MeshFoundingRig.build(2, label: "session-end")
         defer { rig.teardown() }
         rig.link(0, 1)
         rig.commit(0, 1)
         let manager = rig.nodes[0].manager
         #expect(manager.currentMesh != nil, "the founding is the precondition for the regression")
+        try Self.armTheThreeHooks(on: manager, peer: rig.identities[1], label: "Peer")
 
-        // The three hooks each need something to do, or the cell is green over nothing.
-        manager.sessionMessages.appendOutgoing(
-            id: UUID(), senderFingerprint: rig.identities[0].localFingerprint,
-            senderDisplayName: "Local", text: "hello", sentAt: Date()
-        )
-        manager.clothingShop.isSharingEnabledProvider = { true }
-        let catalog = try Self.catalogEnvelope(displayName: "Peer")
-        manager.clothingShop.receiveCatalog(
-            catalog.envelope, plaintext: catalog.plaintext,
-            verifiedFingerprint: rig.identities[1].localFingerprint, now: Date()
-        )
-        #expect(!manager.sessionRoster.isEmpty, "the commit recorded a review candidate")
-        #expect(!manager.sessionMessages.messages.isEmpty, "there is a transcript to clear")
-        #expect(manager.clothingShop.window == nil, "and no shop window while the session is live")
+        manager.leaveMesh()
 
-        guard let slot = manager.slots.first else { return }
-        manager.evictSlotForTesting(peerID: slot.id)
-
-        #expect(manager.currentMesh != nil,
-                "the mesh is STILL there — which is the whole reason `isInSession` cannot be the test")
+        #expect(!manager.isSessionLive, "End Session is the ending")
         #expect(manager.pendingFriendReview != nil, "the keep-as-friend batch promoted")
         #expect(manager.sessionMessages.messages.isEmpty, "the transcript vanished at session end")
         #expect(manager.clothingShop.window != nil, "and the post-session shop window opened")
 
-        // EXACTLY once. The app runs the same three hooks again on the very next tab exit
-        // (`stopJoin()` → `stopSearching()`), and for a founded pair that second run arrives with
-        // `currentMesh` still set — so "the session ended" must not be answerable twice. The
-        // mechanism is `sessionRoster.removeAll()`: the promotion is once per POPULATION, not once
-        // per predicate edge.
         let batchID = try #require(manager.pendingFriendReview?.id)
         let window = manager.clothingShop.window
         manager.stopJoin()
@@ -938,7 +1132,6 @@ struct MeshPairwiseFoundingTests {
                 "the second run promotes no second batch — the roster it drained is empty")
         #expect(manager.clothingShop.window == window, "and re-opens no second shop window")
         #expect(manager.sessionMessages.messages.isEmpty, "the transcript stays cleared")
-        #expect(manager.currentMesh != nil, "and none of it touched the mesh")
 
         // The routed half is sane too: this session minted nothing, so there is nothing held and
         // nothing refused — a session-end ceremony must not invent either.
@@ -946,6 +1139,141 @@ struct MeshPairwiseFoundingTests {
         #expect(manager.routedShareRefusal == nil, "and no share refusal")
         #expect(rig.routedIndex(0) == nil,
                 "with the routed store never written, because nothing was ever staged")
+    }
+
+    /// Door 2: **a termination record**, with the mesh still held.
+    ///
+    /// Driven through the machine, which is where the door actually is: every terminal edge
+    /// (`departed` / `terminated` / `expired`, this device's own signed ending or a peer's verified
+    /// `terminated.v1`) carries `.stopParticipation`, and `applySessionEvent` assigns
+    /// `sessionState` BEFORE it performs the effects — so `stopSearching()`'s hooks see an ended
+    /// session while `currentMesh` is still set. That ordering is the whole reason no new hook call
+    /// site was needed for this door.
+    @Test func aTerminationRecordEndsTheSessionForTheCeremony() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "terminated")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        try Self.armTheThreeHooks(on: manager, peer: rig.identities[1], label: "Peer")
+
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            manager.applySessionEvent(.terminationVerified)
+        }
+
+        #expect(manager.sessionState == .terminated, "the machine took the terminal edge")
+        #expect(manager.currentMesh != nil, """
+            with the mesh object still held — so this really is the mesh-end leg answering and not \
+            the ledgerless one
+            """)
+        #expect(!manager.isSessionLive, "a terminated mesh is an ended session")
+        #expect(manager.pendingFriendReview != nil, "the keep-as-friend batch promoted")
+        #expect(manager.sessionMessages.messages.isEmpty, "the transcript vanished")
+        #expect(manager.clothingShop.window != nil, "and the shop window opened")
+    }
+
+    /// Door 3: **the five-minute discovery timeout with no committed peer**.
+    ///
+    /// The app's timeout used to call `stopJoin()`, which stands the radios down and leaves
+    /// everything else alone — so once the ceremony moved off slot loss, a pair whose peer never
+    /// came back would have sat on a mesh with no radios, no peer and no review. The door says the
+    /// ending out loud instead, and refuses outright while a peer is committed.
+    @Test func theDiscoveryTimeoutWithNoPeerEndsTheSession() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "gave-up")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        try Self.armTheThreeHooks(on: manager, peer: rig.identities[1], label: "Peer")
+
+        // The negative first, on the same shape: a timeout that fires while the pair is linked is
+        // not an ending at all.
+        manager.endSessionAfterDiscoveryTimeout()
+        #expect(manager.isSessionLive, "a committed peer refuses the door by name")
+        #expect(manager.pendingFriendReview == nil, "so nothing promoted")
+
+        let slot = try #require(manager.slots.first, "the commit must have seated a slot")
+        manager.evictSlotForTesting(peerID: slot.id)
+        manager.endSessionAfterDiscoveryTimeout()
+
+        #expect(!manager.isSessionLive, "five minutes of finding nobody ends the session")
+        #expect(!manager.isSearching, "with the radios down")
+        #expect(manager.currentMesh != nil, "and the mesh still held, for the review's own action")
+        #expect(manager.pendingFriendReview != nil, "the keep-as-friend batch promoted")
+        #expect(manager.sessionMessages.messages.isEmpty, "the transcript vanished")
+        #expect(manager.clothingShop.window != nil, "and the shop window opened")
+
+        // Re-entering the tab re-arms the radios over the same mesh, which un-ends it: otherwise a
+        // resumed pair would be permanently "ended" and its healed link would project into a
+        // transcript nothing keeps.
+        manager.resumeSearchingForPartitionedMesh()
+        #expect(manager.isSessionLive, "the resume un-ends a search this device gave up on")
+    }
+
+    /// Door 4: **slot loss, and only with no mesh** — the legacy pairwise ceremony, kept.
+    ///
+    /// Reachable by any session that never founded (and by every rig that seats a committed slot
+    /// without driving the founding): there is no mesh to outlive the link, so the last committed
+    /// slot going away is the session ending, exactly as it was before item 2.
+    @Test func aLedgerlessPairKeepsItsLegacySlotLossCeremony() async throws {
+        let store = makeTestStore()
+        let local = try MeshPartitionFixtures.identity("ledgerless-local")
+        let peer = try MeshPartitionFixtures.identity("ledgerless-peer")
+        let manager = MeshNetworkManager(
+            store: store, transport: FakeMeshTransportSession(), identity: local
+        )
+        defer { manager.leaveMesh() }
+        manager.addSlotForTesting(
+            coordinator: MeshP3Acceptance.coordinator(),
+            peer: PeerHandle(
+                id: UUID(), displayHint: "iPhone", discoveryInfo: ["v": "1"],
+                advertisedFingerprint: nil, endpoint: PeerEndpointKey()
+            ),
+            fingerprint: peer.localFingerprint
+        )
+        #expect(manager.currentMesh == nil, "the ledgerless shape: a committed slot and no mesh")
+        #expect(manager.hasCommittedPeer, "with a peer")
+        #expect(manager.isSessionLive, "which is the whole of this session's liveness")
+        manager.sessionMessages.appendOutgoing(
+            id: UUID(), senderFingerprint: local.localFingerprint,
+            senderDisplayName: "Local", text: "hello", sentAt: Date()
+        )
+        manager.clothingShop.isSharingEnabledProvider = { true }
+        let catalog = try Self.catalogEnvelope(displayName: "Peer")
+        manager.clothingShop.receiveCatalog(
+            catalog.envelope, plaintext: catalog.plaintext,
+            verifiedFingerprint: peer.localFingerprint, now: Date()
+        )
+
+        let committed = try #require(manager.slots.first, "the seated slot")
+        manager.evictSlotForTesting(peerID: committed.id)
+
+        #expect(!manager.isSessionLive, "no mesh, no peer, no session")
+        #expect(manager.sessionMessages.messages.isEmpty, "so the transcript vanishes on slot loss")
+        #expect(manager.clothingShop.window != nil, "and the shop window opens on slot loss")
+    }
+
+    /// The app's discovery entry, as a table rather than as two private lines nothing could redden
+    /// (review finding P2-5). `ContentView.startFriendsDiscovery()` switches on this value and
+    /// arms its five-minute timeout off `armsDiscoveryTimeout`.
+    @Test func theFriendsDiscoveryEntryTableIsTotal() {
+        #expect(FriendsDiscoveryEntry.entry(isInSession: false, hasCommittedPeer: false) == .fresh,
+                "no session at all is a fresh `startJoin()` cycle")
+        #expect(FriendsDiscoveryEntry.entry(isInSession: true, hasCommittedPeer: false) == .resume,
+                "a mesh that outlived its links resumes — `startJoin()` would nil its ceiling")
+        #expect(FriendsDiscoveryEntry.entry(isInSession: true, hasCommittedPeer: true) == .none,
+                "a live session's radios are already up")
+        #expect(FriendsDiscoveryEntry.entry(isInSession: false, hasCommittedPeer: true) == .none, """
+            the unrepresentable row (`hasCommittedPeer ⇒ isInSession`) is ANSWERED, not trapped: a \
+            committed peer means the radios have somebody
+            """)
+        #expect(FriendsDiscoveryEntry.fresh.armsDiscoveryTimeout, "a fresh search can find nobody")
+        #expect(FriendsDiscoveryEntry.resume.armsDiscoveryTimeout, """
+            and so can a resumed one — the timeout rides the resume arm too, which is the half \
+            that had no failing mutation at all
+            """)
+        #expect(!FriendsDiscoveryEntry.none.armsDiscoveryTimeout,
+                "while a no-op must not arm a second timeout behind the first")
     }
 
     @Test func aCommittedPeerAppearsInSessionParticipantsBeforeItIsAdmitted() async throws {
@@ -964,7 +1292,7 @@ struct MeshPairwiseFoundingTests {
 
         // A11: the pairwise removal shortcut fires only with exactly one other participant, so the
         // union is what keeps "remove the only other person" reachable at all.
-        guard let peer = others.first else { return }
+        let peer = try #require(others.first, "the union must hold the committed peer")
         manager.proposeRemoval(of: peer)
         #expect(manager.pendingRemovalProposals.isEmpty,
                 "so removing the only peer ends the session instead of opening a vote nobody can win")
@@ -1041,7 +1369,7 @@ struct MeshPairwiseFoundingTests {
     /// captures, deliberately: a destination never forwards an item it holds (relay increment 2 is
     /// not built), so an unlinked third member is a successful MINT whose delivery waits for a link
     /// — which `MeshRoutedPhotoAddressingTests`' star cell is the claim for, not this one.
-    @Test func aPhotoReachesEveryMemberOfAThreeDeviceFoundedMeshAfterAYield() async throws {
+    @Test func aPhotoReachesBothDestinationsAfterAYieldWhenTheOriginIsLinkedToBoth() async throws {
         let rig = try MeshFoundingRig.build(3, label: "trio-deliver")
         defer { rig.teardown() }
         for node in 0..<3 { rig.openGate(at: node) }

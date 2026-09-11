@@ -109,6 +109,47 @@ struct ConnectReviewKeepTests {
                 is what used to turn a Photos permission denial into losing the in-app photos.
                 """)
     }
+
+    /// P6 item 2's pass-B review finding P2-4, as a source wall because both halves live in
+    /// SwiftUI state transitions no tier-1 cell can drive.
+    ///
+    /// Half one: the heal arm special-cased only the compact keep prompt, and the blip's common
+    /// case is the **photo review** sheet — so a pair that healed seconds later (the same room,
+    /// always) presented the celebration `fullScreenCover` in the same transaction as a standing
+    /// sheet, which the arm's own comment says drops one of the two.
+    ///
+    /// Half two: nothing ever reset `showConnectionAnimation` if the cover failed to present —
+    /// `sessionReady` is set only inside the cover's own completion — and
+    /// `.accessibilityHidden(showConnectionAnimation)` is on the whole Friends surface, so
+    /// VoiceOver and Switch Control lost it for the rest of the session. Both non-celebrating
+    /// exits of the arm now clear the flag.
+    @Test func connectViewSource_healArmHandlesBothSheets_andClearsTheAccessibilityCover() throws {
+        let source = try RepoRoot.source("App/Fernlet/ConnectView.swift")
+        let armDecl = try #require(source.range(of: "func handleCommittedPeerChange"),
+                                   "FriendsView.handleCommittedPeerChange is the lifecycle arm — renamed?")
+        let nextDecl = try #require(source.range(of: "private var disconnectReviewSheet"),
+                                    "the review sheet is declared right after the arm — reordered?")
+        try #require(armDecl.lowerBound < nextDecl.lowerBound,
+                     "Expected the arm to be declared before the review sheet — update this scan if they moved")
+        let armBody = source[armDecl.upperBound..<nextDecl.lowerBound]
+
+        #expect(armBody.contains("disconnectReviewPresented"),
+                """
+                The heal arm must dismiss the PHOTO REVIEW sheet as well as the keep prompt: it is \
+                the blip's common case, and a heal arrives seconds later in the same room.
+                """)
+        #expect(armBody.components(separatedBy: "showConnectionAnimation = false").count - 1 >= 2,
+                """
+                Both non-celebrating exits of the arm must clear showConnectionAnimation, or a \
+                cover that never presented latches .accessibilityHidden(true) on the whole \
+                Friends surface for the rest of the session.
+                """)
+        #expect(source.contains("guard !manager.isSessionLive else { return }"),
+                """
+                And the review presents only once the SESSION has ended: on hasCommittedPeer a \
+                link blip showed a sheet whose primary action signs a termination on a live mesh.
+                """)
+    }
 }
 
 // MARK: - Helpers
