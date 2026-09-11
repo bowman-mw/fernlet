@@ -1230,6 +1230,17 @@ and a joiner needs an admitter — but a stranger cannot ask, because an empty d
 its tunnel before any app frame (the P2 "first-meeting stranger admission" row). Giving Lane C a
 founder/joiner shape is therefore a **prerequisite** for loop item 9, not a detail of it.
 
+> **Amended 2026-09-11 (P6 item 2).** The shipping app now founds a mesh **with a ledger** at the
+> FIRST proximity commit: `onSlotConnected` → `promoteToMesh()` → `foundMesh(_:now:)` runs the same
+> `prepareMembershipLedger` + `seedFounderAdmission` + ceiling + state-machine steps
+> `startNewMesh(name:)` does, and the founding pair's one admission is auto-granted. So the
+> paragraph above is now specific to a **seeded** run: a flows-only Lane C run started with **no**
+> `FERNLET_MESH_MATRIX_MEMBERS` seed and no seeded descriptor would form a real mesh on its own, with
+> a derived (records) roster, and could answer the derived-roster question without
+> `armFounderLedgerForHarness()` at all. Nothing about a seeded run changes — the harness arms its
+> ledger *before* `startJoin`, so `currentMesh != nil` and the founding is never entered (A28) — and
+> nothing here has been observed on a radio yet: P6 tier-2 item 10 is the run that would.
+
 #### Fixed (0b) — the root cause was the owner's link gate, not the transport
 
 Both failure shapes were one flag. `MeshNetworkManager.isSessionOpen` carries the mesh-wide "this

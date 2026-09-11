@@ -1789,21 +1789,43 @@ struct ContentView: View {
 
     /// Arms the friend radios, unless a session is already live.
     ///
-    /// The re-entry guard stays on `isInSession` — **not** `hasCommittedPeer` — and that is a
-    /// decision, not an oversight (P6 item 2). `startJoin()` resets the session state machine and
-    /// the live roster but deliberately does not clear `currentMesh` or the membership ledger, and
-    /// the founding fires only on `currentMesh == nil`. So pointing this guard at
-    /// `hasCommittedPeer` would let a tab bounce run `startJoin()` straight over a founded,
-    /// partitioned mesh: the mesh would lose its ceiling and never re-found, which is a session
-    /// that can no longer expire. The cost is the named residual — **a partitioned pair cannot
-    /// re-arm its radios until End Session** — and End Session is one tap away on the same screen.
-    /// Clearing the mesh in `startJoin()` is the other half of the choice and was rejected here:
+    /// **Three cases, not two** (P6 item 2). `startJoin()` resets the session state machine and the
+    /// live roster but deliberately does not clear `currentMesh` or the membership ledger, and the
+    /// founding fires only on `currentMesh == nil` — so running it over a founded, partitioned mesh
+    /// would nil the ceiling on a mesh that can never re-found (a session that can no longer
+    /// expire) and would also drop this session's photos, film quota and removal set. Guarding on
+    /// `hasCommittedPeer` alone does exactly that, and guarding on `isInSession` alone leaves a
+    /// founded pair that blipped with its radios down and no way back — the two predicates stopped
+    /// agreeing at item 2, and this is the one site that reads both:
+    ///
+    /// - **no session** ⇒ `startJoin()`, a fresh search cycle;
+    /// - **a mesh with no committed peer** (a blip, or a tab bounce after one) ⇒
+    ///   `resumeSearchingForPartitionedMesh()` — the radios come back with the mesh, the ledger and
+    ///   the ceiling untouched, so the re-formed link merges rather than founds;
+    /// - **a live session** ⇒ nothing.
+    ///
+    /// Clearing the mesh in `startJoin()` was the other half of the choice and stays rejected:
     /// `leaveMesh()` drops the membership verifier and the routed drain state, so a pair that
     /// auto-left could never deliver its custodied photo when the peer came back.
     private func startFriendsDiscovery() {
         let manager = store.meshNetworkManager
-        guard !manager.isInSession, !manager.isSearching else { return }
-        manager.startJoin()
+        guard !manager.isSearching else { return }
+        if manager.isInSession {
+            guard !manager.hasCommittedPeer else { return }
+            manager.resumeSearchingForPartitionedMesh()
+        } else {
+            manager.startJoin()
+        }
+        armDiscoveryTimeout()
+    }
+
+    /// Stands the radios down after five minutes of finding nobody — for a resumed partitioned mesh
+    /// exactly as for a fresh search.
+    ///
+    /// The guard is `hasCommittedPeer`, not `isInSession` (P6 item 2): a founded mesh outlives its
+    /// links, so on `isInSession` this timeout would stop firing altogether and the radios would run
+    /// until the user tapped End Session.
+    private func armDiscoveryTimeout() {
         discoveryTimeoutTask?.cancel()
         discoveryTimeoutTask = Task { @MainActor in
             do {
@@ -1813,9 +1835,7 @@ struct ContentView: View {
                 // discovery start), so returning WITHOUT `stopJoin()` is the intended behavior.
                 return
             }
-            // `hasCommittedPeer`, not `isInSession` (P6 item 2): a founded mesh outlives its links,
-            // so on `isInSession` the discovery timeout would stop firing altogether and the radios
-            // would run until the user tapped End Session.
+            let manager = store.meshNetworkManager
             guard !manager.hasCommittedPeer else { return }
             manager.stopJoin()
         }

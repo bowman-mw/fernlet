@@ -85,6 +85,11 @@ struct MeshFoundingRig {
         seat(far, toward: near)
     }
 
+    /// Re-seats ONE direction of an already-connected pair, for the cell that stands one end's
+    /// radios down (`stopJoin()` empties `slots`) and brings them back while the other end never
+    /// moved. `link` would double-seat the end that still holds its slot.
+    func reseat(_ index: Int, toward peer: Int) { seat(index, toward: peer) }
+
     /// Seats one direction: a slot with **no** fingerprint, which is what a pre-dwell candidate is.
     private func seat(_ index: Int, toward peer: Int) {
         let node = nodes[index]
@@ -189,6 +194,55 @@ struct MeshFoundingRig {
     /// The derived roster at one node, re-derived exactly as shipping code does.
     func roster(_ index: Int) -> [String] {
         nodes[index].manager.membershipVerifier?.roster.memberFingerprints ?? []
+    }
+
+    // MARK: The routed content path, on a mesh nothing seeded
+
+    /// Captures one photo at `node` through the real public API, under the pinned install binding.
+    ///
+    /// The whole point of the delivery cells: `addPhoto` → `shareRoutedPhoto` →
+    /// `originateRoutedItem` is the app's own path, and before item 2 its first guard
+    /// (`membershipVerifier?.roster`) skipped every capture a proximity session ever made.
+    func capturePhoto(at node: Int) {
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            nodes[node].manager.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG())
+        }
+    }
+
+    /// One node's loaded routed index under the pinned install binding, or nil for every
+    /// non-`.loaded` state. Built per use, exactly as the manager builds its own.
+    func routedIndex(_ node: Int) -> MeshRoutedIndex? {
+        let load = DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            MeshRoutedStore(scope: nodes[node].store.meshRoutedStorage).load()
+        }
+        guard case .loaded(let index, _) = load else { return nil }
+        return index
+    }
+
+    /// Opens one node's routed access gate, which is what lets a delivered item be decrypted and
+    /// projected onto the wall.
+    func openGate(at node: Int) {
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            _ = nodes[node].manager.applyRoutedAccessGate(
+                MeshRoutedDrainRig.openGate, now: Date()
+            )
+        }
+    }
+
+    /// How many wall entries `node` holds for one item id — the assertion made at the RECIPIENT,
+    /// which is the only one that separates a delivery from a successful mint.
+    func wallEntries(at node: Int, itemID: UUID) -> Int {
+        nodes[node].manager.meshPhotos.filter { $0.id == itemID }.count
+    }
+
+    /// The item id of the routed item `node` staged as its OWN origin, or nil.
+    ///
+    /// Keyed on the origin fingerprint rather than `items.first`: once delivery starts, a node's
+    /// index holds inbound items too, and "the item I minted" is the only one a sender claim is
+    /// about.
+    func stagedOwnItemID(at node: Int) -> UUID? {
+        let fingerprint = nodes[node].fingerprint
+        return routedIndex(node)?.items.first { $0.key.originFingerprint == fingerprint }?.key.itemID
     }
 
     /// Ends every session, so nothing outlives the scenario. Same order and same reason as
@@ -305,6 +359,12 @@ struct MeshPairwiseFoundingTests {
         #expect(founder.currentGroupKey == nil, "and no group key")
         #expect(founder.keyAdvertisements.all.isEmpty, "and no addressing")
         #expect(founder.hasCommittedPeer, "the SLOT is still committed — only the mesh is gone")
+        // "An abandoned founding is never silent" (P3 item 6) — and the unwind must not erase its
+        // own diagnosis. `clearGroupKeyState()` nils this field, so `unwindNewbornMesh()` carries
+        // it across; without that carry, the seal refusal that abandoned the founding is
+        // unexplainable and `MeshSessionStateMachineTests.aRefusedSealAbandonsTheFounding` goes red.
+        #expect(founder.lastRotationBlockReason != nil,
+                "and the reason the founding was abandoned survives the unwind that abandoned it")
     }
 
     // MARK: The pair, end to end through the real doors
@@ -330,6 +390,17 @@ struct MeshPairwiseFoundingTests {
                 "the founding pair's one admission needed no tap")
     }
 
+    /// The yield, and the **whole** unwind — over a yielder that really is carrying key state.
+    ///
+    /// Pass A's version of this cell asserted `localJoinedEpoch == 0` in a rig where no rotation can
+    /// fire (the first one is scheduled 15 minutes out on the real clock while the rig advances only
+    /// `fabric.clock`), so it was green over nothing: deleting `clearGroupKeyState()` from
+    /// `unwindNewbornMesh()` failed no assertion in the file. The newborn mesh is now put on a real
+    /// epoch **before** the settle, which is what a yielder whose 15-minute rotation had already
+    /// fired looks like — and `roster(yielder).count == 2` becomes the failing assertion, because
+    /// the winner's keyless grant carries epoch 0 and `handleAdmissionGrant`'s monotonicity guard
+    /// drops it `droppedStaleEpoch` against a standing epoch-1 key. The device could then never join
+    /// anything for the rest of the session.
     @Test func aSymmetricCommitLeavesOneMeshIDAndFullyUnwindsTheYielder() async throws {
         let rig = try MeshFoundingRig.build(2, label: "pair-yield")
         defer { rig.teardown() }
@@ -339,23 +410,34 @@ struct MeshPairwiseFoundingTests {
         let minted = [rig.nodes[0].manager.currentMesh?.meshID, rig.nodes[1].manager.currentMesh?.meshID]
         #expect(Set(minted.compactMap { $0 }).count == 2, "both halves really did mint a mesh")
 
-        try await rig.settle(until: {
-            rig.roster(0).count == 2 && rig.roster(1).count == 2
-        })
-
+        // Roles, not indices: the identities are freshly provisioned, so the election decides which
+        // half yields per run.
         let lowerFounds = MeshNetworkManager.foundsPairwiseMesh(
             local: rig.identities[0].localFingerprint, peer: rig.identities[1].localFingerprint
         )
         let winner = lowerFounds ? 0 : 1
         let yielder = lowerFounds ? 1 : 0
+        MeshDepartureRig.seedEpoch(rig.nodes[yielder], head: MeshEpochRef(
+            counter: 1, epochID: UUID(),
+            coordinatorFingerprint: rig.identities[yielder].localFingerprint
+        ))
+        #expect(rig.nodes[yielder].manager.currentGroupKey?.epoch == 1,
+                "the newborn mesh the yield is about to unwind really holds a key")
+
+        try await rig.settle(until: {
+            rig.roster(0).count == 2 && rig.roster(1).count == 2
+        })
+
         #expect(rig.nodes[yielder].manager.currentMesh?.meshID == minted[winner],
                 "the side the order names keeps its mesh and the other adopts it")
-        // The unwind, in full: a yielder carrying a stale epoch would be refused droppedStaleEpoch
-        // by the grant it then needs, and could never join anything for the rest of the session.
+        // The unwind, in full: a yielder carrying a stale epoch is refused droppedStaleEpoch by the
+        // grant it then needs, so this assertion is the one that fails without clearGroupKeyState().
         #expect(rig.roster(yielder).count == 2,
                 "which is only observable because the yielder went on to be admitted")
         #expect(rig.nodes[yielder].manager.localJoinedEpoch == 0,
                 "the yielded mesh's epoch state went with it")
+        #expect(rig.nodes[yielder].manager.currentGroupKey == nil,
+                "and so did its group key, which is what let the keyless grant through")
     }
 
     @Test func aMeshWithARosterOfTwoNeverYields() async throws {
@@ -400,6 +482,10 @@ struct MeshPairwiseFoundingTests {
     }
 
     @Test func aThirdCommitMergesIntoTheFoundedMeshAndInheritsItsAdvertisements() async throws {
+        let capture = MeshFoundingAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
         let rig = try MeshFoundingRig.build(3, label: "third-commit")
         defer { rig.teardown() }
         rig.link(0, 1)
@@ -457,6 +543,11 @@ struct MeshPairwiseFoundingTests {
         #expect(rig.nodes[pairJoiner].manager.keyAdvertisements.advertisement(
             for: rig.identities[pairFounder].localFingerprint
         ) != nil, "and the joiner holds its admitter's, parked at the grant and proved at adoption")
+        #expect(capture.count(of: "mesh.keyAgreement.parked") > 0, """
+            named as the MECHANISM, not inferred from the row: a row that was never sent would \
+            satisfy the assertion above, and a row that verified straight away would mean the \
+            refusal this scenario exists for never happened
+            """)
         #expect(rig.nodes[2].manager.keyAdvertisements.advertisement(
             for: rig.identities[2].localFingerprint
         ) != nil, "a third device arms its own row at its join")
@@ -618,6 +709,191 @@ struct MeshPairwiseFoundingTests {
                 "while `isInSession` stays true, because the founded mesh outlived the link")
     }
 
+    /// **The P1 of pass A's review.** A founded pair whose link dropped can get its radios back —
+    /// and gets them back without re-founding, re-resetting or re-arming anything.
+    ///
+    /// The outage the seam closes is three moves long and every move ships: a link drop deletes the
+    /// committed slot outright (no re-invite retry — that path is guarded on the slot never having
+    /// committed), a tab exit or a scene change then runs `stopJoin()` → `stopSearching()` (radios
+    /// off, `isProximityJoin` false, slots emptied), and on return `startFriendsDiscovery`'s
+    /// `!isInSession` guard passes over it because the founded mesh outlived the link. There was no
+    /// other shipping re-arm: `startSearching()` is private. The user was left looking at a live
+    /// camera over a session with no radios, with End Session the only escape.
+    ///
+    /// What the cell pins is why the answer is not "point that guard at `hasCommittedPeer`":
+    /// `startJoin()` nils the session ceiling (through `resetSessionStateMachine`) on a mesh that
+    /// can never re-found — `promoteToMesh()` fires only on `currentMesh == nil` — which is a
+    /// session that can no longer expire, and it also clears `sessionPhotos`, the film quota and the
+    /// removal set. So the ceiling, the ledger, the meshID and the photo count are all asserted
+    /// AFTER the resume, and a re-formed link is asserted to MERGE rather than found.
+    ///
+    /// Driven on the election's **winner**, by role and never by index, because the ceiling claim
+    /// belongs to the side that kept the mesh it founded: a yielder's `unwindNewbornMesh()` nils its
+    /// ceiling and `handleAdmissionGrant` arms no new one, so the yielder ends with a mesh and no
+    /// ceiling — asserted below as the named residual it is (P7's `ProximityRunPolicy` owns the
+    /// poller that would read it; nothing today does). Written as `nodes[0]` this cell passed or
+    /// failed on which of two random fingerprints was lower.
+    @Test func aPartitionedPairReArmsItsRadiosWithoutReFoundingItsMesh() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "re-arm")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        let lowerFounds = MeshNetworkManager.foundsPairwiseMesh(
+            local: rig.identities[0].localFingerprint, peer: rig.identities[1].localFingerprint
+        )
+        let winner = lowerFounds ? 0 : 1
+        let yielder = lowerFounds ? 1 : 0
+        let manager = rig.nodes[winner].manager
+        #expect(rig.nodes[yielder].manager.sessionCeiling == nil, """
+            named residual, not a claim about the fix: a yielder ends with a mesh and NO ceiling, \
+            exactly as every proximity joiner has since P3 — latent only because \
+            `enforceSessionCeiling` still has no shipping caller (P7's poller)
+            """)
+        rig.capturePhoto(at: winner)
+        let founded = try #require(manager.currentMesh?.meshID)
+        let ceiling = try #require(manager.sessionCeiling)
+        #expect(manager.photosAddedThisSession == 1, "the session has a spent film shot to lose")
+
+        // The link drops, and then the user leaves the tab: exactly the shipping sequence.
+        guard let slot = manager.slots.first else { return }
+        manager.evictSlotForTesting(peerID: slot.id)
+        manager.stopJoin()
+        #expect(!manager.isSearching, "the radios really are down")
+        #expect(manager.isInSession, "while the mesh outlived the link, which is the trap")
+        #expect(!manager.hasCommittedPeer, "and no peer is committed, which is the way out of it")
+
+        manager.resumeSearchingForPartitionedMesh()
+
+        #expect(manager.isSearching, "the radios come back")
+        #expect(manager.isProximityJoin, "in proximity-join mode, so a discovered peer is invited")
+        #expect(manager.currentMesh?.meshID == founded, "over the SAME mesh — nothing re-founded")
+        #expect(rig.roster(winner).count == 2, "with the membership ledger untouched")
+        #expect(manager.sessionCeiling?.hardDeadline == ceiling.hardDeadline,
+                "and the ceiling still armed, which `startJoin()` would have nilled for good")
+        #expect(manager.photosAddedThisSession == 1, "the film quota is not handed back")
+        #expect(manager.sessionPhotos.count == 1, "and the session's photos are still there")
+
+        // The peer comes back. `onSlotConnected` must fall through the founding, not re-enter it.
+        rig.reseat(winner, toward: yielder)
+        rig.commit(winner, yielder)
+        #expect(manager.currentMesh?.meshID == founded,
+                "a re-formed link merges into the mesh it left, it does not found a second one")
+        #expect(manager.hasCommittedPeer, "and the session is live again")
+        #expect(rig.roster(winner).count == 2, "on the same derived roster")
+    }
+
+    /// The edge each half of `ConnectView`'s split transition handler hangs off (review finding
+    /// P2-4): `hasCommittedPeer` moves in BOTH directions across a blip and a heal while
+    /// `isInSession` never moves at all.
+    ///
+    /// That asymmetry is why the two readers at that one `.onChange` had to be split. The layout
+    /// swap and the camera chrome read `isInSession`, so a blipped pair keeps its camera — it still
+    /// holds a mesh with a ledger, and a capture during the blip is sealed into custody and drained
+    /// at the heal. The keep-as-friend ceremony and the connection choreography read
+    /// `hasCommittedPeer`, because on `isInSession` their `!was && now` arm is **dead** for a
+    /// founded pair: a standing keep prompt would never be abandoned across a heal, and
+    /// `finalizeFriendKeeps` would mint friends and consume the batch mid-session on dismissal.
+    @Test func aBlipAndAHealMoveTheCommittedPeerEdgeWhileIsInSessionNeverMoves() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "blip-edge")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        #expect(manager.isInSession && manager.hasCommittedPeer, "both true at the first commit")
+
+        guard let slot = manager.slots.first else { return }
+        manager.evictSlotForTesting(peerID: slot.id)
+        #expect(manager.isInSession, "the blip does not move the layout predicate")
+        #expect(!manager.hasCommittedPeer, "and does move the lifecycle one")
+
+        rig.reseat(0, toward: 1)
+        rig.commit(0, 1)
+        #expect(manager.isInSession, "the heal does not move the layout predicate either")
+        #expect(manager.hasCommittedPeer, """
+            so the heal's edge exists ONLY on the lifecycle predicate — the arm that abandons a \
+            standing keep prompt has to read this one or it never fires for a pair
+            """)
+    }
+
+    /// A second entry into the founding for one session is refused and named, rather than minting a
+    /// second descriptor over a live mesh (review finding P3-7).
+    ///
+    /// The refusal matters because `prepareMembershipLedger` replaces the verifier outright for a
+    /// different meshID: a second founding would take the session's whole ledger with it, silently.
+    /// Driven through the real trigger — a second slot committing on a mesh this device founded —
+    /// which is the shape a third device joining a pair actually produces.
+    @Test func aSecondFoundingForOneSessionIsRefusedAndNamed() async throws {
+        let capture = MeshFoundingAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        let rig = try MeshFoundingRig.build(3, label: "promote-once")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        let founded = try #require(manager.currentMesh?.meshID)
+        let verifier = try #require(manager.membershipVerifier)
+
+        rig.link(0, 2)
+        rig.commit(0, 2)
+
+        #expect(manager.currentMesh?.meshID == founded, "the founding fired exactly once")
+        #expect(manager.membershipVerifier?.meshID == verifier.meshID,
+                "and the session's ledger is the one the founding armed")
+        #expect(rig.roster(0) == [rig.identities[0].localFingerprint],
+                "a second commit is not an admission, so the derived roster did not move")
+        #expect(capture.count(of: "mesh.promotion.refusedExistingMesh") == 0,
+                "the caller's own `currentMesh == nil` gate is what kept it out")
+        // And the guard inside the function refuses when it IS reached directly.
+        #expect(!manager.promoteToMeshForTesting(),
+                "the invariant lives with the function, not only with its one caller")
+        #expect(capture.count(of: "mesh.promotion.refusedExistingMesh") == 1, "and it is named")
+        #expect(manager.currentMesh?.meshID == founded, "with nothing touched")
+    }
+
+    /// A user who CLOSED the session and then LOST the founder election keeps their choice (review
+    /// finding P2-5).
+    ///
+    /// Before the fix `handleMeshDescriptor`'s `isSessionOpen = currentMesh?.mode == .open` simply
+    /// replaced it with the winner's, and an open mesh's TXT publishes `meshID` / `meshName` /
+    /// `memberCount` — which is precisely what closing opts out of. Whether the choice survived was
+    /// a coin flip on two fingerprints. Re-applying it is a legitimate member act: `setMeshMode` is
+    /// `public`, gates on nothing but holding a mesh, and the descriptor merge resolves `mode` by
+    /// last-write-wins with no founder check.
+    @Test func aYielderThatHadClosedItsSessionStaysClosedAfterAdopting() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "yield-closed")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        let lowerFounds = MeshNetworkManager.foundsPairwiseMesh(
+            local: rig.identities[0].localFingerprint, peer: rig.identities[1].localFingerprint
+        )
+        let yielder = lowerFounds ? 1 : 0
+        let winner = lowerFounds ? 0 : 1
+        rig.nodes[yielder].manager.setSessionOpen(false)
+        #expect(rig.nodes[yielder].manager.currentMesh?.mode == .closed,
+                "the user closed the mesh they founded")
+        #expect(rig.nodes[winner].manager.currentMesh?.mode == .open, "the other side did not")
+
+        try await rig.settle(until: {
+            rig.nodes[yielder].manager.currentMesh?.meshID
+                == rig.nodes[winner].manager.currentMesh?.meshID
+        })
+
+        #expect(rig.nodes[yielder].manager.currentMesh?.meshID
+                == rig.nodes[winner].manager.currentMesh?.meshID, "the yield happened")
+        #expect(rig.nodes[yielder].manager.currentMesh?.mode == .closed,
+                "and the yielder re-applied its own closed choice to the mesh it adopted")
+        #expect(!rig.nodes[yielder].manager.isSessionOpen,
+                "so the control the user touched still reads closed")
+        #expect(rig.nodes[yielder].manager.currentDiscoveryInfo()["meshID"] == nil,
+                "and the TXT publishes no mesh identifiers, which is what closing is for")
+    }
+
     @Test func theOnlyPeerLeavingEndsTheSessionForTheReviewShopAndTranscript() async throws {
         let rig = try MeshFoundingRig.build(2, label: "session-end")
         defer { rig.teardown() }
@@ -649,6 +925,27 @@ struct MeshPairwiseFoundingTests {
         #expect(manager.pendingFriendReview != nil, "the keep-as-friend batch promoted")
         #expect(manager.sessionMessages.messages.isEmpty, "the transcript vanished at session end")
         #expect(manager.clothingShop.window != nil, "and the post-session shop window opened")
+
+        // EXACTLY once. The app runs the same three hooks again on the very next tab exit
+        // (`stopJoin()` → `stopSearching()`), and for a founded pair that second run arrives with
+        // `currentMesh` still set — so "the session ended" must not be answerable twice. The
+        // mechanism is `sessionRoster.removeAll()`: the promotion is once per POPULATION, not once
+        // per predicate edge.
+        let batchID = try #require(manager.pendingFriendReview?.id)
+        let window = manager.clothingShop.window
+        manager.stopJoin()
+        #expect(manager.pendingFriendReview?.id == batchID,
+                "the second run promotes no second batch — the roster it drained is empty")
+        #expect(manager.clothingShop.window == window, "and re-opens no second shop window")
+        #expect(manager.sessionMessages.messages.isEmpty, "the transcript stays cleared")
+        #expect(manager.currentMesh != nil, "and none of it touched the mesh")
+
+        // The routed half is sane too: this session minted nothing, so there is nothing held and
+        // nothing refused — a session-end ceremony must not invent either.
+        #expect(manager.routedDeliveryHold == nil, "no delivery hold is raised by a session ending")
+        #expect(manager.routedShareRefusal == nil, "and no share refusal")
+        #expect(rig.routedIndex(0) == nil,
+                "with the routed store never written, because nothing was ever staged")
     }
 
     @Test func aCommittedPeerAppearsInSessionParticipantsBeforeItIsAdmitted() async throws {
@@ -673,6 +970,125 @@ struct MeshPairwiseFoundingTests {
                 "so removing the only peer ends the session instead of opening a vote nobody can win")
         #expect(!manager.sessionRoster.contains { $0.fingerprint == peer.fingerprint },
                 "and the peer the user asked to remove is never offered by the keep prompt")
+    }
+
+    // MARK: The headline — the app's own content path, measured at the recipient
+
+    /// **The item's headline, and the one claim pass A could only argue.** A photo captured on a
+    /// dwell-founded pair is DELIVERED, in both directions, with nothing seeded anywhere.
+    ///
+    /// Every door is the shipping one: `startJoin`-mode managers with no mesh and no ledger, the
+    /// real dwell commit, the founding, the one auto-granted admission, the digest re-gossip that
+    /// rebases the joiner's bootstrap root — and then `addPhoto` → `shareRoutedPhoto` →
+    /// `originateRoutedItem` → the drain → the recipient's access gate → the recipient's wall.
+    ///
+    /// The assertions are made at the RECIPIENT, which is the only place that separates a delivery
+    /// from a successful mint. A staged own item plus no refusal is also the observation that
+    /// excludes `.skipped(.noDestinations)`: before item 2 this path returned it on the very first
+    /// guard (`membershipVerifier?.roster` was nil for every proximity session ever made), leaving
+    /// the store `.absent` and the user's capture shared with nobody, silently — D-13.18, and the
+    /// whole reason the item exists.
+    ///
+    /// Both directions, because the two sides are not symmetric: one founded and admitted, the other
+    /// yielded its own newborn mesh and was admitted into this one, and only the second has been
+    /// through `MeshLedgerAdoption`'s rebase.
+    @Test func aPairwisePhotoIsDeliveredBothWaysThroughTheAppPath() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "pair-deliver")
+        defer { rig.teardown() }
+        rig.openGate(at: 0)
+        rig.openGate(at: 1)
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        #expect(rig.roster(0).count == 2 && rig.roster(1).count == 2,
+                "the destination set the mint needs is the derived roster, and it must be 2 here")
+
+        rig.capturePhoto(at: 0)
+        let outbound = try #require(rig.stagedOwnItemID(at: 0), """
+            the capture staged nothing — which is exactly what `.skipped(.noDestinations)` looks \
+            like, and what every proximity session did before item 2
+            """)
+        #expect(rig.nodes[0].manager.routedShareRefusal == nil, "and it was not refused either")
+        #expect(rig.nodes[0].manager.meshPhotos.count == 1, "the sender's own echo is unconditional")
+        try await rig.settle(until: { rig.wallEntries(at: 1, itemID: outbound) == 1 })
+        #expect(rig.wallEntries(at: 1, itemID: outbound) == 1,
+                "the peer's wall holds the photo — DELIVERED, not merely minted")
+
+        rig.capturePhoto(at: 1)
+        let inbound = try #require(rig.stagedOwnItemID(at: 1),
+                                   "and the other half of the pair can mint too")
+        #expect(inbound != outbound, "its own item, not the one it received")
+        #expect(rig.nodes[1].manager.routedShareRefusal == nil, "with no refusal")
+        try await rig.settle(until: { rig.wallEntries(at: 0, itemID: inbound) == 1 })
+        #expect(rig.wallEntries(at: 0, itemID: inbound) == 1,
+                "and it reaches the founder's wall, so the pair delivers BOTH ways")
+    }
+
+    /// A third device joins the founded pair **by request** and the founder's photo reaches all
+    /// three — including the device that founded its own mesh first and yielded it.
+    ///
+    /// Two claims in one scenario, because they are one scenario. The admission is the PROMPT path:
+    /// the auto-grant is latched at `mesh.members.count == 1`, so a third device is a stranger
+    /// joining an established mesh and `allowAdmission` is a tap. And the delivery happens after the
+    /// yield, which is the shape that would break if `unwindNewbornMesh()` left anything standing —
+    /// the third device's own ledger, group key and advertisement set all belonged to a mesh it no
+    /// longer holds.
+    ///
+    /// The photo is captured AFTER the third admission so the destination set is all three: a
+    /// `MeshDeliveryTarget` is the roster at creation, which is the rule that makes a late joiner
+    /// not a destination of an earlier item. The origin is linked to both destinations before it
+    /// captures, deliberately: a destination never forwards an item it holds (relay increment 2 is
+    /// not built), so an unlinked third member is a successful MINT whose delivery waits for a link
+    /// — which `MeshRoutedPhotoAddressingTests`' star cell is the claim for, not this one.
+    @Test func aPhotoReachesEveryMemberOfAThreeDeviceFoundedMeshAfterAYield() async throws {
+        let rig = try MeshFoundingRig.build(3, label: "trio-deliver")
+        defer { rig.teardown() }
+        for node in 0..<3 { rig.openGate(at: node) }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle([0, 1], until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        let founded = try #require(rig.nodes[0].manager.currentMesh?.meshID)
+
+        // C commits to node 1, founds its own mesh, then yields it when node 1's descriptor lands.
+        rig.link(1, 2)
+        rig.commit(2, 1)
+        rig.commit(1, 2)
+        #expect(rig.nodes[2].manager.currentMesh?.meshID != founded, "C really did found its own")
+        try await rig.settle(until: { rig.nodes[1].manager.pendingAdmissionRequests.count == 1 })
+        #expect(rig.nodes[1].manager.pendingAdmissionRequests.count == 1,
+                "the third device is PROMPTED — the auto-grant is latched at one member")
+        let queued = try #require(rig.nodes[1].manager.pendingAdmissionRequests.first)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            rig.nodes[1].manager.allowAdmission(queued)
+        }
+        try await rig.settle(until: { rig.roster(2).count >= 3 && rig.roster(0).count >= 3 })
+        #expect(rig.nodes[2].manager.currentMesh?.meshID == founded, "C is on the pair's mesh")
+        #expect(Set(rig.roster(0)).count == 3, "and every side derives a roster of three")
+        #expect(Set(rig.roster(1)).count == 3)
+        #expect(Set(rig.roster(2)).count == 3)
+
+        // The origin links its second destination before capturing — see the note above.
+        rig.link(0, 2)
+        rig.commit(0, 2)
+        rig.commit(2, 0)
+        try await rig.settle(until: { false })
+        #expect(rig.nodes[0].manager.currentMesh?.meshID == founded,
+                "a commit onto a device that already holds the mesh founds nothing new")
+
+        rig.capturePhoto(at: 0)
+        let itemID = try #require(rig.stagedOwnItemID(at: 0),
+                                  "a three-member roster is two destinations, so the mint stages")
+        #expect(rig.nodes[0].manager.routedShareRefusal == nil, """
+            and no destination refused it — including the yielder, whose addressing was unwound with \
+            the mesh it gave up and re-armed at the admission it was granted
+            """)
+        try await rig.settle(until: {
+            rig.wallEntries(at: 1, itemID: itemID) == 1 && rig.wallEntries(at: 2, itemID: itemID) == 1
+        })
+        #expect(rig.wallEntries(at: 1, itemID: itemID) == 1, "the admitter's wall holds it")
+        #expect(rig.wallEntries(at: 2, itemID: itemID) == 1, "and so does the yielder's")
     }
 
     /// A minimal signed-shape clothing catalog, so the shop has something to keep a window for.

@@ -359,19 +359,26 @@ struct MeshRoutedPhotoSenderTests {
 
     /// **R-17.** A capture with no destinations at all reaches the sender's own wall, silently.
     ///
-    /// **Untouched by P6 item 1, and re-documented rather than flipped.** The launcher asked for a
-    /// flip that would be wrong: this is the SOLO case — no mesh, no ledger, no roster — so there is
-    /// nothing for an advertisement to address, and no key advertisement can change it. What the
-    /// cell actually pins is the silence (a wall entry, a session count, no error, no refusal, an
-    /// `.absent` store); it does **not** observe `.skipped(.noDestinations)` itself, so it would stay
-    /// green if the door skipped for another reason. Item 2's promotion change is what makes the
-    /// two-device case stop reaching this path at all.
+    /// **Untouched by items 1 and 2, and re-documented rather than flipped — twice.** The launcher
+    /// asked item 1 for a flip that would have been wrong, and named item 2 as the item that would
+    /// flip it. Neither is right, and the reason is that this cell exercises the **LEDGERLESS** leg:
+    /// a mesh with no membership verifier at all, which exits `originateRoutedItem` on its FIRST
+    /// guard (`membershipVerifier?.roster`) and never reaches the destination count. No key
+    /// advertisement can change that, and item 2 did not either — what item 2 changed is
+    /// *reachability*: before it, every proximity-join session was in this shape (`promoteToMesh`
+    /// minted a descriptor and armed no ledger, and `startNewMesh` had no caller), and afterwards
+    /// this shape is reachable only as a **hand-built manager** like the one below. It is therefore
+    /// kept as the ledgerless control, beside
+    /// ``aSoloMemberWithAnArmedLedgerStillReachesOnlyItsOwnWallSilently()``, which is the same
+    /// silence reached through the OTHER leg (`destinationCount == 0`, a genuine roster of one).
+    /// The two together are what stop either from being green for the wrong reason — the skip has
+    /// two legs and this cell cannot tell them apart, so it says which one it drives.
     ///
     /// This is the premise the ten legacy send-side cells rest on: both retired arms of `addPhoto`
     /// cached before any send and incremented the session counter whichever way the send went, so a
     /// solo member has always had a wall entry and no error. Conditioning the echo on a successful
-    /// mint would break every session that has no membership ledger yet — a solo host, and the whole
-    /// proximity-join pairwise phase.
+    /// mint would break every session whose derived roster is one — a solo host, and the founder's
+    /// window between the founding and its first admission grant.
     @Test func aCaptureWithNoDestinationsStillReachesTheOwnWallSilently() throws {
         let store = makeTestStore()
         defer { withExtendedLifetime(store) {} }
@@ -388,9 +395,56 @@ struct MeshRoutedPhotoSenderTests {
         #expect(manager.photosAddedThisSession == 1, "and so is the session counter")
         #expect(manager.meshError == nil, "sending to nobody is not an error")
         #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
+        #expect(manager.membershipVerifier == nil,
+                "and the leg under test is the LEDGERLESS one, not a roster of one")
         var absent = false
         if case .absent = MeshRoutedStore(scope: store.meshRoutedStorage).load() { absent = true }
         #expect(absent, "nothing was staged, because there was nothing to stage for")
+    }
+
+    /// **The solo control R-17 could not be** (P6 item 2): a member with a real mesh and a real
+    /// one-member ledger still reaches only its own wall, and still says nothing.
+    ///
+    /// This is the `destinationCount == 0` leg — the second of the two legs that answer
+    /// `.skipped(.noDestinations)` — and after item 2 it is the *only* shipping shape that reaches
+    /// the skip at all: a solo host, and the founder's window between the founding and the first
+    /// admission grant. The ledger is armed through the real founder door (`startNewMesh(name:)` →
+    /// `foundMesh(_:now:)` → `prepareMembershipLedger` + `seedFounderAdmission`), so the first guard
+    /// is genuinely passed and the assertion below names which one refused.
+    ///
+    /// Why it has to exist beside R-17: the two legs are one `.skipped(.noDestinations)` case, and a
+    /// cell that asserts only "nothing staged, no refusal" passes identically for "no ledger", "no
+    /// mesh", "no hard deadline" and "a roster of one". Item 2's delivery cells assert the opposite
+    /// of this on the same door, so if the skip moved legs both could be green while the mechanism
+    /// was wrong.
+    @Test func aSoloMemberWithAnArmedLedgerStillReachesOnlyItsOwnWallSilently() throws {
+        let store = makeTestStore()
+        defer { withExtendedLifetime(store) {} }
+        let identity = try MeshPartitionFixtures.identity("solo-armed")
+        let manager = MeshNetworkManager(
+            store: store, transport: FakeMeshTransportSession(), identity: identity
+        )
+        defer { manager.leaveMesh() }
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            manager.startNewMesh(name: "Solo Meadow")
+        }
+        #expect(manager.currentMesh != nil, "a real founded mesh")
+        #expect(manager.membershipVerifier?.roster.memberCount == 1, """
+            with a real ledger holding exactly this device's own admission — which is what makes \
+            `destinationCount == 0` the leg under test rather than the missing verifier
+            """)
+
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            manager.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG())
+        }
+
+        #expect(manager.meshPhotos.count == 1, "the echo is unconditional here too")
+        #expect(manager.photosAddedThisSession == 1, "and so is the session counter")
+        #expect(manager.meshError == nil, "a roster of one is not an error")
+        #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
+        var absent = false
+        if case .absent = MeshRoutedStore(scope: store.meshRoutedStorage).load() { absent = true }
+        #expect(absent, "nothing is staged for a destination set of zero")
     }
 
     /// **R-12a, the negative control.** A destination NO source has stated a key for — no

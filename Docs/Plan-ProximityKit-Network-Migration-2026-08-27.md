@@ -1823,7 +1823,15 @@ at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log
     is the default two-device path, and it is the first thing a two-device hardware validation will
     hit. The inadmissible
     "fix" is keeping the legacy pairwise path alive, which would keep `handlePhotoManifest` and
-    `sendRequestedPhotos` in the tree and make the retirement a fiction. (ii) **A mint refuses whenever
+    `sendRequestedPhotos` in the tree and make the retirement a fiction.
+    **AMENDED and CLOSED 2026-09-11 (P6 item 2, `871e52d` + pass B): the outage was not pairwise —
+    it was the WHOLE proximity-join content path at every roster size**, because `promoteToMesh()`
+    armed none of the five founding steps (no membership ledger, so `originateRoutedItem`'s first
+    guard skipped every capture) and `startNewMesh` had zero shipping callers; the paragraph above
+    understated it as "until a second peer commits". The app now founds a mesh WITH a ledger at the
+    FIRST commit through the same `foundMesh(_:now:)` both founder doors run, and
+    `MeshPairwiseFoundingTests` asserts the photo DELIVERED — on the recipient's wall, both
+    directions for a pair and all three members of a trio — with nothing seeded anywhere. (ii) **A mint refuses whenever
     any destination lacks a handshake-verified X25519 key** (D-13.1/D-13.22): destinations are
     ledger-scoped and durable while the wrap keys are session-scoped, so a **star** topology (A admits
     B, B admits C, B never links to C), a roster above `maxTotalSlots` 5, and **any** resumption —
@@ -2970,7 +2978,10 @@ a lane photo failure is now a *routed* failure, because the legacy pull path is 
 lane-visible refusals to expect, all by name and all deliberate: the **pairwise pre-promotion phase
 has no photo transport at all** (D-13.18 — a two-device auto-dwell stays `currentMesh == nil`, so
 there is no meshID, no ledger and no destination set; `startNewMesh` runs are unaffected but the app
-never calls it, so promote first); **a mint refuses whenever any destination lacks a handshake-verified X25519 key**
+never calls it, so promote first) — **retired 2026-09-11 by P6 item 2, and it was wider than this
+line said: the proximity-join path armed no ledger at ANY roster size, so the refusal was not
+"pre-promotion" but every session the app could start. A Lane C run now founds a mesh with a ledger
+at the first commit, and a flows-only run with no seeded descriptor forms one too**; **a mint refuses whenever any destination lacks a handshake-verified X25519 key**
 (D-13.1/D-13.22 — a **star** topology where two members never link, a roster above `maxTotalSlots` 5,
 and **any** resumption: restart, idle-lapse resume or rejoin restores the ledger but not the session
 roster); and a capped destination raises a visible `routedDeliveryHold`.
@@ -3046,9 +3057,13 @@ Carried from §22.4, with what P5 added:
   sources disagree). **What it converts, exactly:** of D-13.22's three named mint refusals the
   **resumption** becomes a delivery, and the **star** and **over-cap roster** become a successful
   mint whose delivery waits for a link or a departure hand-off — a destination never forwards an
-  item it holds. Still owed alongside it: **the pairwise phase having no mesh identity** (D-13.18:
-  promote at one committed peer, or mint a two-member ledger for the pairwise phase), which is P6
-  item 2.
+  item it holds. ~~Still owed alongside it: **the pairwise phase having no mesh identity**~~ — **BUILT in P6
+  item 2, 2026-09-11** (D-13.18): promoted at ONE committed peer through the same
+  `foundMesh(_:now:)` both founder doors run, which turned out to be the whole proximity-join
+  content path and not a pairwise special case — `promoteToMesh()` armed no ledger at any roster
+  size and `startNewMesh` had no shipping caller. Rides with it: the newborn-yield repair for the
+  double mint, ONE auto-granted admission while the roster is one (the 15 cm dwell as consent), and
+  `hasCommittedPeer` as the session-end predicate `isInSession` can no longer be.
 - **The conflicted-member blast radius** (P6 item 1 pass B review, finding 5). A member that signs
   two different key-agreement keys and hands one to each of two peers makes the mint refuse
   `keyMismatch` **whole** — the resolver answers on the first bad destination, so that origin shares

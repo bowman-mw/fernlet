@@ -10,7 +10,8 @@ import FernletUI
 /// The Friends tab root: the shared photo album when idle, the in-session disposable camera when live.
 ///
 /// Swaps to ``DisposableCameraView`` once `MeshNetworkManager.isInSession` flips and the
-/// ``ConnectionSuccessOverlay`` completes; otherwise it renders the album layout — the
+/// ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the lifecycle half of that
+/// predicate (P6 item 2) — completes; otherwise it renders the album layout — the
 /// post-session shop-window card, the nearby-peer banner (with the QR verify ceremony on manual
 /// commits), and the searchable photo wall. It also owns the session-end review flow:
 /// `presentDisconnectReviewIfNeeded()` presents either the full photo review or the compact
@@ -83,7 +84,10 @@ struct FriendsView: View {
             presentDisconnectReviewIfNeeded()
         }
         .onChange(of: manager.isInSession) { wasInSession, nowInSession in
-            handleSessionChange(wasInSession: wasInSession, nowInSession: nowInSession)
+            handleSessionSurfaceChange(wasInSession: wasInSession, nowInSession: nowInSession)
+        }
+        .onChange(of: manager.hasCommittedPeer) { hadPeer, hasPeer in
+            handleCommittedPeerChange(hadPeer: hadPeer, hasPeer: hasPeer)
         }
         .sheet(isPresented: $disconnectReviewPresented) {
             disconnectReviewSheet
@@ -105,11 +109,37 @@ struct FriendsView: View {
         }
     }
 
-    /// The `isInSession` transition handler: a session becoming live either abandons a standing keep
-    /// prompt (without consuming its batch) or plays the connection choreography; a session ending
-    /// tears the live surface down and presents the review.
-    private func handleSessionChange(wasInSession: Bool, nowInSession: Bool) {
-        if !wasInSession && nowInSession {
+    /// The **layout** half of the session transition: what surface the Social tab draws.
+    ///
+    /// `isInSession`, because that is the predicate `body`'s own swap reads and the predicate
+    /// `ContentView.isDisposableCameraSessionActive` dresses the tab in camera chrome for. A founded
+    /// mesh outlives its links by design (P6 item 2), so a blip deliberately does **not** take the
+    /// camera down: the pair still holds a mesh with a ledger, a capture during the blip is sealed
+    /// into custody and drained when the link heals, and the radios come back through
+    /// `startFriendsDiscovery`'s resume arm. Only a session that is really over — End Session, or a
+    /// launch with no mesh — swaps back to the album.
+    private func handleSessionSurfaceChange(wasInSession: Bool, nowInSession: Bool) {
+        guard wasInSession, !nowInSession else { return }
+        sessionReady = false
+        showConnectionAnimation = false
+    }
+
+    /// The **lifecycle** half: the keep-as-friend ceremony and the connection choreography.
+    ///
+    /// `hasCommittedPeer`, because that is the predicate the manager's three session-end hooks and
+    /// `presentDisconnectReviewIfNeeded()` read (P6 item 2) — and because for a founded pair
+    /// `isInSession` never dips, so hanging either half off it leaves a dead arm: the standing keep
+    /// prompt would never be abandoned across a heal and `finalizeFriendKeeps` would mint friends
+    /// and consume the batch mid-session on dismissal, while a healed link would replay no
+    /// choreography at all. The model half and the presenting half must read the SAME predicate or
+    /// the ceremony is only half re-pointed.
+    ///
+    /// Named residual: with the camera staying up across a blip, the review sheet now presents
+    /// **over** a live camera. That sheet is the one a pair has always been shown when its only peer
+    /// goes away; what item 2 changed is only the surface behind it. Delaying it instead would
+    /// re-break the ceremony this commit exists to revive.
+    private func handleCommittedPeerChange(hadPeer: Bool, hasPeer: Bool) {
+        if !hadPeer && hasPeer {
             if keepFriendsPromptPresented {
                 // A new session became ready while the compact keep prompt was up: dismiss
                 // WITHOUT consuming — the batch persists and re-presents (merged) at the
@@ -126,9 +156,7 @@ struct FriendsView: View {
                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                 withAnimation { showConnectionAnimation = true }
             }
-        } else if wasInSession && !nowInSession {
-            sessionReady = false
-            showConnectionAnimation = false
+        } else if hadPeer && !hasPeer {
             presentDisconnectReviewIfNeeded()
         }
     }
