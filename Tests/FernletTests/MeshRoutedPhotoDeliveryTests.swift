@@ -1276,6 +1276,23 @@ struct MeshRoutedPhotoDeliveryTests {
 
 // MARK: - The addressing family (network migration P6 item 1)
 
+/// What `twoDoorsFiringForOnePeerInOneTurnWriteOneFrame` observed about the interleaving it needs.
+///
+/// A one-frame count is true both when the second door ran *inside* the first door's suspension —
+/// the state the in-flight claim exists for — and when it ran after the first had completed and
+/// latched the peer. Only the first of those is the property, so the second door records its own
+/// return and the suspension records whether that had already happened. `@MainActor`, like every
+/// other value the cell touches, so nothing here crosses an isolation boundary.
+@MainActor
+final class MeshDoubleDoorProbe {
+
+    /// Set by the second door as its last act.
+    var secondDoorReturned = false
+
+    /// What ``secondDoorReturned`` held while the first door was still parked inside its write.
+    var secondDoorReturnedInsideTheSuspension = false
+}
+
 /// What the key advertisement buys the mint, and what it deliberately does not.
 ///
 /// Every cell here drives the real doors: the real send at a real link-open, the real membership
@@ -1769,27 +1786,49 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// the same `owed` and wrote the frame again, spending an encode, a signature and one frame of
     /// the receiver's per-sender budget. The suspension is installed in the fake channel because
     /// this fabric's `send` has no suspension point of its own — see `sendSuspension`.
+    ///
+    /// **The interleaving is observed, not assumed** (third review P3 8). `sentFrames.count == 1`
+    /// alone passes for the wrong reason whenever the second door runs *after* the first completed:
+    /// the peer is then latched by a successful write, `owed` is empty and the count is one anyway.
+    /// Eight `Task.yield()`s is the only lever, so on another scheduler the cell could go on
+    /// passing with the property gone. The probe records, from inside the suspension, whether the
+    /// second door had already returned — which it can only have done by evaluating `owed` against
+    /// a latch the first door claimed and has not yet released.
     @Test func twoDoorsFiringForOnePeerInOneTurnWriteOneFrame() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-double-door")
         defer { rig.teardown() }
         rig.armKeyAdvertisements()
         rig.link(0, 1)
         #expect(rig.nodes[0].channel.sentFrames.isEmpty, "nothing has been written yet")
+        let probe = MeshDoubleDoorProbe()
         rig.nodes[0].channel.sendSuspension = { index in
             guard index == 0 else { return }
             // R2: a fixed number of yields — enough for the queued door to run to completion.
             for _ in 0..<8 { await Task.yield() }
+            probe.secondDoorReturnedInsideTheSuspension = probe.secondDoorReturned
         }
 
         async let first: Void = rig.nodes[0].manager
             .sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
-        async let second: Void = rig.nodes[0].manager
-            .sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+        async let second: Void = Self.sendRecordingReturn(
+            from: rig.nodes[0].manager, to: rig.nodes[1].fingerprint, recordingOn: probe
+        )
         _ = await (first, second)
         rig.nodes[0].channel.sendSuspension = nil
 
+        #expect(probe.secondDoorReturnedInsideTheSuspension,
+                "the second door must have run its owed computation while the first was in flight")
         #expect(rig.nodes[0].channel.sentFrames.count == 1,
                 "the second door saw the claim and wrote nothing")
+    }
+
+    /// The second door of the cell above, with its return recorded so the interleaving is a fact
+    /// the assertion can read rather than a hope about the scheduler.
+    private static func sendRecordingReturn(
+        from manager: MeshNetworkManager, to peer: String, recordingOn probe: MeshDoubleDoorProbe
+    ) async {
+        await manager.sendKeyAdvertisements(to: [peer])
+        probe.secondDoorReturned = true
     }
 
     /// A fold the store refused is **rolled back**, with its conflict marks, and named.
@@ -1824,17 +1863,74 @@ struct MeshKeyAdvertisementDeliveryTests {
         #expect(capture.count(of: "mesh.keyAgreement.notDurable") == 1, "named, never silent")
     }
 
+    /// A fold the store refused costs the sender's VERSION nothing, so nobody is re-told a set they
+    /// already hold.
+    ///
+    /// Third review P3 5. `adoptKeyAdvertisements(_:)` bumps on every difference and a rollback
+    /// differs from the value it undoes, so a refused fold used to move the version **twice** and
+    /// end byte-identical to what every peer had already been told. Every member was then owed the
+    /// set again and re-sent an unchanged frame, each one charged against that receiver's
+    /// `framesPerSenderPerSession` — the one path on which an honest device can spend a peer's whole
+    /// forty-eight on frames carrying nothing new and then have the frame that matters refused. The
+    /// observable is the send: a peer already told the current version is written nothing, and a
+    /// refused fold must not change that.
+    @Test func aFoldTheStoreRefusedLeavesNobodyOwedTheSetTheyHold() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-rollback-version")
+        defer { rig.teardown() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        #expect(rig.advertisementCount(at: 0) == 2, "the pair's two rows must be folded first")
+
+        // Quiesced first, and that takes two sends: the heal's own send goes out BEFORE node 0
+        // folds node 1's row, so node 1 is genuinely owed the post-fold set afterwards. The second
+        // send is the one that must write nothing.
+        await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+        let beforeQuiet = rig.nodes[0].channel.sentFrames.count
+        await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+        #expect(rig.nodes[0].channel.sentFrames.count == beforeQuiet,
+                "the precondition: node 1 is already latched at node 0's current version")
+
+        // A real fold that really changes the set, with every sealed write failing.
+        let third = try #require(rig.nodes[2].manager.keyAdvertisements
+            .advertisement(for: rig.nodes[2].fingerprint))
+        try rig.deliverMembershipFrame(
+            MeshKeyAgreementPayload(
+                meshID: rig.meshID, advertisements: [third],
+                senderFingerprint: rig.nodes[1].fingerprint
+            ),
+            type: .meshKeyAgreement, sender: 1, receiver: 0, binding: .unavailable
+        )
+        #expect(rig.advertisementCount(at: 0) == 2, "the set is back to what is on disk")
+
+        let beforeRetry = rig.nodes[0].channel.sentFrames.count
+        await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+        #expect(rig.nodes[0].channel.sentFrames.count == beforeRetry,
+                "and the version came back with the set, so the unchanged set is not re-sent")
+    }
+
     /// The per-sender receive bound: one sender's frames are capped and the cap is named.
     ///
     /// The frame is unsigned at frame level and can cost sixteen Ed25519 verifications, so this is
     /// the one bound in front of it. Every flooded frame carries a row this device already holds, so
     /// nothing can grow — the charge is spent before the fold either way, which is the point.
+    ///
+    /// **The bound and its derivation are pinned, and the loop is driven by a literal** (third
+    /// review P3 6). Driving the loop from the constant made this cell green on a raised cap, green
+    /// on a lowered one, and red only on a deleted guard — the same defect the repair cell's own
+    /// `#expect(… == 3)` was added to close, applied to the two cells covering the number this phase
+    /// re-derived (32 → 48).
     @Test func oneSendersAdvertisementFramesAreCappedPerSession() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-sender-budget")
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
         defer { capture.uninstall() }
+        #expect(MeshKeyAdvertisementReceiveBounds.framesPerSenderPerSession == 48,
+                "the cap is 48; the literal below is pinned against it")
+        #expect(MeshKeyAdvertisementReceiveBounds.framesPerSenderPerSession
+                == MeshKeyAgreementAdvertisementSet.capacity
+                * MeshKeyAdvertisementReceiveBounds.transitionsPerMember,
+                "and it stays capacity × transitionsPerMember, never a chosen number")
         rig.armKeyAdvertisements()
         try await rig.heal(0, 1)
         let held = try #require(rig.nodes[0].manager.keyAdvertisements
@@ -1846,8 +1942,8 @@ struct MeshKeyAdvertisementDeliveryTests {
             meshID: rig.meshID, advertisements: [held],
             senderFingerprint: rig.nodes[1].fingerprint
         )
-        // R2: the bound plus one, so the refusal after it is observed.
-        for _ in 0...MeshKeyAdvertisementReceiveBounds.framesPerSenderPerSession {
+        // R2: 49 — the bound plus one, as a literal, so the refusal after it is observed.
+        for _ in 0..<49 {
             try rig.deliverMembershipFrame(payload, type: .meshKeyAgreement, sender: 1, receiver: 0)
         }
 
@@ -1863,12 +1959,18 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// eight non-members could lock every real member out of this device's addressing for the whole
     /// session. Keyed by roster member the cap is true by construction: the refusal happens before
     /// the map, before the decode and before any verification.
+    ///
+    /// The loop below is driven by the literal 49 for the reason
+    /// `oneSendersAdvertisementFramesAreCappedPerSession` states: driven from the constant, this
+    /// cell was green whichever way the cap moved (third review P3 6).
     @Test func aNonMemberSenderCannotSpendAnAdvertisementBudget() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-nonmember")
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
         defer { capture.uninstall() }
+        #expect(MeshKeyAdvertisementReceiveBounds.framesPerSenderPerSession == 48,
+                "the cap is 48; the literal below is pinned against it")
         rig.armKeyAdvertisements()
         try await rig.heal(0, 1)
         try await rig.heal(0, 2)
@@ -1889,8 +1991,8 @@ struct MeshKeyAdvertisementDeliveryTests {
             meshID: rig.meshID, advertisements: [row],
             senderFingerprint: rig.nodes[2].fingerprint
         )
-        // R2: the bound plus one — every one of them must be refused before the map.
-        for _ in 0...MeshKeyAdvertisementReceiveBounds.framesPerSenderPerSession {
+        // R2: 49 — the bound plus one, as a literal; every one must be refused before the map.
+        for _ in 0..<49 {
             try rig.deliverMembershipFrame(payload, type: .meshKeyAgreement, sender: 2, receiver: 0)
         }
 
@@ -1907,7 +2009,7 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// signer. A widening arrives in stages, so a row that still fails is re-parked rather than
     /// dropped on the first re-offer. Two of the **three** ends that bound it are under test here —
     /// the share refusal and the session reset; the third, the drop after
-    /// `failedWideningsPerRow` failed widenings, is
+    /// `failedRosterMovesPerRow` failed roster moves, is
     /// `aParkedRowIsDroppedAfterThreeFailedWidenings`'.
     @Test func aParkedRowFromANeverAdmittedSignerIsRefusedAtTheBoundAndAtSessionEnd() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-drop")
@@ -2097,8 +2199,8 @@ struct MeshKeyAdvertisementDeliveryTests {
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
         defer { capture.uninstall() }
-        #expect(MeshKeyAdvertisementParkBounds.failedWideningsPerRow == 3,
-                "three failed widenings; the literals below are pinned against it")
+        #expect(MeshKeyAdvertisementParkBounds.failedRosterMovesPerRow == 3,
+                "three failed roster moves; the literals below are pinned against it")
         rig.armKeyAdvertisements()
         try await rig.heal(0, 1)
         try rig.deliverMembershipFrame(
@@ -2123,13 +2225,13 @@ struct MeshKeyAdvertisementDeliveryTests {
                 "every re-offer was through the one fold door")
     }
 
-    /// A row that has failed a widening yields its slot, and the genuine row then folds.
+    /// A row that has failed a roster move yields its slot, and the genuine row then folds.
     ///
     /// The squat this closes: junk parked under member M's fingerprint meant M's genuine relayed row
     /// was **not** parked when it arrived, the non-park was invisible in the transcript, and the
     /// sender's version latch never re-sent it — so the junk was evicted at the next widening and
     /// the real row was simply gone. Earliest arrival still wins while the held row has failed
-    /// nothing; once it has failed a widening, a newcomer that has failed nothing takes the slot,
+    /// nothing; once it has failed a roster move, a newcomer that has failed nothing takes the slot,
     /// and a verified row always beats an unverified parked one.
     @Test func aRowThatFailedAWideningYieldsItsSlotAndTheGenuineRowThenFolds() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-displace")
@@ -2173,7 +2275,7 @@ struct MeshKeyAdvertisementDeliveryTests {
         )
         #expect(rig.nodes[0].manager.parkedKeyAdvertisementForTesting(
             from: rig.nodes[1].fingerprint, for: rig.nodes[2].fingerprint
-        ) == genuine, "a row that failed a widening yields to one that has not")
+        ) == genuine, "a row that failed a roster move yields to one that has not")
         #expect(capture.count(of: "mesh.keyAgreement.parkCollision") == 2, "named both times")
 
         // The real widening: node 2's admission reaches node 0.

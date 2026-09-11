@@ -618,6 +618,37 @@ struct MeshKeyAgreementFoldTests {
         #expect(!set.isConflicted("fp001"), "and a mark with no row is dropped with it")
     }
 
+    /// Every spelling that reaches the at-rest initializer, matched against **whitespace-collapsed**
+    /// text rather than against a raw line.
+    ///
+    /// The collapse is the third review's P2. This module's house form for a multi-argument
+    /// initializer puts the first label on the NEXT line — the declaring file's own
+    /// `init(from decoder:)` writes `self.init(` and then `advertisements:` below it — so a per-line
+    /// `contains` never saw the declaring file's own construction site, and the allowlist entry that
+    /// had been written for it (`init(from decoder: Decoder) throws {`) matched nothing at all.
+    /// Every needle here is whitespace-free, which is what lets one `contains` over collapsed text
+    /// answer for a site written across two lines as well as for one written on a single line.
+    ///
+    /// The first needle is the BARE type-with-paren, not `…Set(advertisements:` (pass B review
+    /// finding 6) — the same hazard from the other side, where a labelled needle was defeated by a
+    /// line break. The second closes `X.init(`, which does not contain `X(`. The third names no type
+    /// at all, which is what catches an inferred `= .init(advertisements:`, a bare `.init(` and the
+    /// decoder's `self.init(` alike (second fix review finding 9, third review P2).
+    static let constructionNeedles = [
+        "MeshKeyAgreementAdvertisementSet(",
+        "MeshKeyAgreementAdvertisementSet.init(",
+        ".init(advertisements:"
+    ]
+
+    /// `text` with every whole-line comment dropped and every whitespace character removed.
+    ///
+    /// Comments go first for the reason `MeshRoutedSourceScan.codeOnly(_:)` exists: a header that
+    /// *names* the constructor it forbids is the documentation of the rule, not a violation of it.
+    /// Whitespace goes next so a needle can span the line break the house form puts inside a call.
+    static func collapsed(_ text: String) -> String {
+        MeshRoutedSourceScan.codeOnly(text).filter { !$0.isWhitespace }
+    }
+
     /// The set has no silent merge door, and nothing outside its own file may hand it a row.
     ///
     /// `MeshMembershipRecordSet.merging(_:)`/`.inserting(_:)` dedup earliest-wins and silently keep
@@ -632,20 +663,14 @@ struct MeshKeyAgreementFoldTests {
     /// declaring file — the decoder and the two verified doors — may name it. `markingConflicted(`
     /// is walled on the same principle from the other side: only the fold may mark a member
     /// unaddressable, whatever receiver name a caller gives the set.
-    /// Every spelling that reaches the at-rest initializer.
     ///
-    /// The first needle is the BARE type-with-paren, not `…Set(advertisements:` (pass B review
-    /// finding 6): this module's house form for a two-argument initializer puts the first label on
-    /// the next line, as the declaring file's own `restoring(_:verifiedBy:)` does, and a labelled
-    /// needle is therefore defeated by a line break in any other file. The other two close what the
-    /// bare one still missed (second fix review finding 9): `X.init(` does not contain `X(`, and an
-    /// inferred `= .init(advertisements:` does not name the type at all.
-    static let constructionNeedles = [
-        "MeshKeyAgreementAdvertisementSet(",
-        "MeshKeyAgreementAdvertisementSet.init(",
-        ".init(advertisements:"
-    ]
-
+    /// **The needles this cell carries, by name** (third review P3 11 — they had drifted onto the
+    /// constant's own doc comment): the three in ``constructionNeedles``, which are the at-rest
+    /// initializer's spellings, plus `keyAdvertisements.merging(`, `keyAdvertisements.inserting(`
+    /// and `markingConflicted(`, which are the receiver-named doors. Every one of them is tested
+    /// against ``collapsed(_:)`` text, so a line break inside a call defeats none of them, and four
+    /// union-door declarations (`merging`, `folded`, `union`, `combining`) are refused in the
+    /// declaring file itself.
     @Test func theAdvertisementSetNamesNoSilentMergeDoor() throws {
         let declaring = "FernletKit/Sources/ProximityKit/Mesh/MeshKeyAgreementAdvertisement.swift"
         let source = try RepoRoot.source(declaring)
@@ -659,7 +684,7 @@ struct MeshKeyAgreementFoldTests {
         for url in try CryptographicWallScan.sourceFiles() {
             let path = CryptographicWallScan.repoRelativePath(url)
             guard path != declaring else { continue }
-            let text = try String(contentsOf: url, encoding: .utf8)
+            let text = Self.collapsed(try String(contentsOf: url, encoding: .utf8))
             guard Self.constructionNeedles.contains(where: text.contains)
                     || text.contains("keyAdvertisements.merging(")
                     || text.contains("keyAdvertisements.inserting(")
@@ -675,29 +700,44 @@ struct MeshKeyAgreementFoldTests {
         )
     }
 
-    /// The declaring file's exemption is per **function**, not per file.
+    /// The declaring file's exemption is per **declaring type and function**, not per file.
     ///
     /// The at-rest initializer verifies nothing, so even inside the type's own file only the
     /// functions that ARE the set's algebra may name it — otherwise a new fold door added there
     /// reaches the unverified constructor under cover of the file exemption the wall above grants.
-    /// Allowlisted by file + enclosing declaration, so a new site has to be argued for by name.
+    /// Allowlisted by file + **enclosing type** + enclosing declaration, so a new site has to be
+    /// argued for by name.
+    ///
+    /// The type half is the third review's P3 2: the park (`MeshKeyAdvertisementPark`) declares its
+    /// own `static var empty:`, which made a declaration-only entry written for the SET into a
+    /// second, unintended exemption inside a different type — and the two `init(from decoder:)`
+    /// declarations in this file are textually identical, so the pair is the only thing that can
+    /// tell them apart. The six entries below are the six sites that exist.
     @Test func theSetsOwnConstructionSitesAreAllowlistedByFunction() throws {
         let allowed = [
-            "static var empty:", "init(from decoder: Decoder) throws {",
-            "func inserting(_ verified:", "func markingConflicted(",
-            "func clearingConflicts(outside", "static func restoring("
+            "MeshKeyAgreementAdvertisementSet / static var empty:",
+            "MeshKeyAgreementAdvertisementSet / init(from decoder: Decoder) throws {",
+            "MeshKeyAgreementAdvertisementSet / func inserting(_ verified:",
+            "MeshKeyAgreementAdvertisementSet / func markingConflicted(",
+            "MeshKeyAgreementAdvertisementSet / func clearingConflicts(outside",
+            "MeshKeyAdvertisementFold / static func restoring("
         ]
         let source = try RepoRoot.source(
             "FernletKit/Sources/ProximityKit/Mesh/MeshKeyAgreementAdvertisement.swift"
         )
         let lines = source.components(separatedBy: "\n")
         var unallowlisted: [String] = []
+        var matched: Set<String> = []
         // R2: bounded by the file's own line count.
-        for (index, line) in lines.enumerated()
-        where Self.constructionNeedles.contains(where: line.contains) {
-            let declaration = Self.enclosingDeclaration(of: index, in: lines)
-            guard !allowed.contains(where: { declaration.hasPrefix($0) }) else { continue }
-            unallowlisted.append("line \(index + 1) in \(declaration)")
+        for index in lines.indices {
+            let window = Self.constructionWindow(at: index, in: lines)
+            guard Self.constructionNeedles.contains(where: window.contains) else { continue }
+            let site = Self.enclosingSite(of: index, in: lines)
+            guard let entry = allowed.first(where: { site.hasPrefix($0) }) else {
+                unallowlisted.append("line \(index + 1) in \(site)")
+                continue
+            }
+            matched.insert(entry)
         }
         #expect(
             unallowlisted.isEmpty,
@@ -706,32 +746,93 @@ struct MeshKeyAgreementFoldTests {
             Unallowlisted sites: \(unallowlisted.joined(separator: " | "))
             """
         )
+        // An entry that matches nothing is an exemption for a site that no longer exists — which is
+        // exactly what the third review found, and it is indistinguishable from a wall doing its job
+        // unless it is asserted (third review P2).
+        #expect(matched.count == allowed.count,
+                "every allowlist entry must match a real site, or it is exempting nothing")
         #expect(lines.count > 100, "the line scan must not be reading an empty file")
+    }
+
+    /// The line at `index`, collapsed, with its continuation folded in when the module's house form
+    /// split a construction across two lines.
+    ///
+    /// The continuation is appended only when the collapsed line **ends at an open paren**, which is
+    /// exactly the shape that defeated the per-line scan (`self.init(` with `advertisements:`
+    /// below). Extending every line unconditionally would report one site twice — once at its own
+    /// line and once at the signature line above it, whose return type names the same set.
+    private static func constructionWindow(at index: Int, in lines: [String]) -> String {
+        let line = Self.collapsed(lines[index])
+        guard line.hasSuffix("("), lines.indices.contains(index + 1) else { return line }
+        return line + Self.collapsed(lines[index + 1])
+    }
+
+    /// The enclosing type and declaration of the line at `index`, as `"Type / declaration"` — the
+    /// key the allowlist is written in.
+    private static func enclosingSite(of index: Int, in lines: [String]) -> String {
+        let type = Self.enclosingType(of: index, in: lines)
+        return "\(type) / \(Self.enclosingDeclaration(of: index, in: lines))"
     }
 
     /// The nearest declaration at or above `index` — a construction site's owning function.
     ///
-    /// A local `var` is deliberately not a starter: `restoring(_:verifiedBy:)` declares two before
-    /// it builds its set, and treating either as the enclosing declaration would let any site in
-    /// the file pass by standing next to a `var`. A **member** `let`/`var` is a different thing and
-    /// it IS a starter, at the type's own member indent of four spaces only (second fix review
-    /// finding 9): a construction site inside a stored or computed property placed within forty
-    /// lines below an allowlisted function would otherwise inherit that function's name and pass.
-    /// A local is indented eight, which is what keeps both rules true at once.
+    /// **Indentation plus a keyword set**, not a list of modifier spellings (third review P3 3).
+    /// The old rule enumerated six starter and five member prefixes, and `public var`,
+    /// `private(set) var`, `lazy var`, `internal let` and `public static func` matched none of them:
+    /// a construction site inside one walked straight past its own declaration and inherited an
+    /// allowlisted function's name from up to forty lines above. Any line at the type's own member
+    /// indent of four spaces whose first keyword is `let`/`var`/`func`/`init`/`subscript`/`case` is
+    /// now the boundary. A **local** is indented eight, which is what keeps
+    /// `restoring(_:verifiedBy:)`'s two local `var`s from standing in for a declaration; the same
+    /// indent rule is what makes a stored or computed property a boundary rather than a pass.
     private static func enclosingDeclaration(of index: Int, in lines: [String]) -> String {
-        let starters = ["init(", "func ", "static func ", "static var ",
-                        "private func ", "private static func "]
-        let members = ["let ", "var ", "static let ", "private let ", "private var "]
         // R2: a construction site is never forty lines from its own signature.
         for offset in 0..<min(40, index + 1) {
             let line = lines[index - offset]
             let text = line.trimmingCharacters(in: .whitespaces)
-            if starters.contains(where: { text.hasPrefix($0) }) { return text }
             guard line.prefix(while: { $0 == " " }).count == 4,
-                  members.contains(where: { text.hasPrefix($0) }) else { continue }
+                  Self.declaresMember(text) else { continue }
             return text
         }
         return "no enclosing declaration"
+    }
+
+    /// Whether `text` declares a member: any run of modifiers followed by a member keyword.
+    ///
+    /// The prefix scan is what recognises `@ObservationIgnored private(set) var` and
+    /// `public static func` as declarations without naming either spelling. A false positive only
+    /// ever NARROWS the allowlist, which is the safe direction for a wall.
+    private static func declaresMember(_ text: String) -> Bool {
+        let keywords: Set<String> = ["let", "var", "func", "init", "subscript", "case"]
+        // R2: bounded by the modifier words one declaration can carry.
+        for word in text.split(separator: " ").prefix(6) {
+            if keywords.contains(String(word.prefix { $0.isLetter })) { return true }
+        }
+        return false
+    }
+
+    /// The top-level type the line at `index` sits inside, by name.
+    ///
+    /// A declaration at indent zero that ends in a brace, read from the first type keyword it
+    /// carries — so `nonisolated struct MeshKeyAgreementAdvertisementSet: Codable, …` answers
+    /// `MeshKeyAgreementAdvertisementSet` however its modifiers and conformances move.
+    private static func enclosingType(of index: Int, in lines: [String]) -> String {
+        let starters = ["struct ", "enum ", "class ", "actor ", "extension ", "protocol "]
+        // R2: bounded by the file's own line count.
+        for offset in 0..<(index + 1) {
+            let line = lines[index - offset]
+            guard line.first?.isWhitespace == false, line.hasSuffix("{") else { continue }
+            // R2: bounded by the starter list.
+            for starter in starters {
+                guard let range = line.range(of: starter) else { continue }
+                let name = line[range.upperBound...].prefix {
+                    $0.isLetter || $0.isNumber || $0 == "_"
+                }
+                guard !name.isEmpty else { continue }
+                return String(name)
+            }
+        }
+        return "no enclosing type"
     }
 }
 

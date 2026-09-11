@@ -1633,12 +1633,21 @@ struct MeshRoutedDrainWallTests {
     /// that: a new send is invisible to a count of three other symbols, which is exactly how
     /// `sendEpochHeads(` drifted uncounted for two phases — **closed here in the same amendment**,
     /// with its own shape stated (ask + *answer*, never a hand-off or an origination).
+    ///
+    /// **`writeKeyAdvertisementFrame(` is counted too** (third review P3 7). It is not a door — it
+    /// is the private writer the one door calls, and it is where the latch is claimed and released
+    /// — but that is precisely why it needs a count: a future door that called the writer directly
+    /// would skip the roster filter, the bounded self-mint repair and the `owed` computation, with
+    /// every count above still green. Two is one declaration plus the one call inside
+    /// `sendKeyAdvertisements(to:)`; a second call site is a claim about the wall's own subject and
+    /// has to be argued for here.
     @Test func theDrainFiresOnlyFromTheMergeDoor() throws {
         let source = MeshRoutedSourceScan.codeOnly(try managerSource())
         let routed = source.components(separatedBy: "sendRoutedInventory(").count - 1
         let membership = source.components(separatedBy: "sendInventoryDigest(").count - 1
         let heads = source.components(separatedBy: "sendEpochHeads(").count - 1
         let addressing = source.components(separatedBy: "sendKeyAdvertisements(").count - 1
+        let writer = source.components(separatedBy: "writeKeyAdvertisementFrame(").count - 1
         #expect(routed == 4, "one declaration plus three ask sites, found \(routed)")
         #expect(membership == 6,
                 "those three plus the proof and adoption doors, found \(membership)")
@@ -1646,6 +1655,8 @@ struct MeshRoutedDrainWallTests {
                 "one declaration, two ask sites and the digest ANSWER, found \(heads)")
         #expect(addressing == 7,
                 "one declaration, three asks, two non-asks and the grant, found \(addressing)")
+        #expect(writer == 2,
+                "one declaration and the one call inside the send, found \(writer)")
         for door in Self.askDoors {
             let body = try #require(Self.body(startingWith: door, in: source),
                                     "\(door) is gone from MeshNetworkManager.swift")
