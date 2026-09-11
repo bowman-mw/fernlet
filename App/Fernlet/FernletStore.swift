@@ -5022,6 +5022,17 @@ final class FernletStore {
     func deleteAllData(includingHealthKitSamples deleteHealthSamples: Bool) async -> DeleteAllOutcome {
         var outcome = DeleteAllOutcome()
 
+        // 0. The live chat transcript, through the manager's ONE clear funnel so the transcript
+        // generation moves with it — and the routed projection switched OFF for the whole funnel.
+        // Both halves are the P6 item 4 fix-review finding P2-1: leg 7b used to call
+        // `sessionMessages.clear()` directly, which bypassed the generation bump, and the routed
+        // ciphertext is not destroyed until leg 11 — so every suspension point between them was a
+        // window in which a rising access edge re-projected the just-wiped messages into a
+        // transcript that is still live, in the same mesh, at the same generation. `defer`, so no
+        // exit leaves the projection off for the rest of the process.
+        meshNetworkManager.beginPrivacyWipe()
+        defer { meshNetworkManager.endPrivacyWipe() }
+
         // 1. Stop the writers first (see `stopWritersForWipe`).
         stopWritersForWipe()
 
@@ -5308,11 +5319,11 @@ final class FernletStore {
         // their social data visibly surviving a wipe in the running session.
         meshNetworkManager.clothingShop.clearAll()
 
-        // 7b. More session-scoped social surfaces that would otherwise survive the wipe in a running
-        // session (PrivacyWipeCoverage gap, 2026-07-25): temp messages are memory-only but a wipe is a
-        // harder stop than the session end that normally clears them, and the presence radio keeps
-        // advertising/matching until stopped.
-        meshNetworkManager.sessionMessages.clear()
+        // 7b. The presence radio, which keeps advertising and matching until stopped, is the
+        // remaining session-scoped social surface here (PrivacyWipeCoverage gap, 2026-07-25). The
+        // temp-message transcript used to be cleared on this line; it moved to leg 0 in the P6 item
+        // 4 fix review, because `sessionMessages.clear()` is not the manager's clear FUNNEL and
+        // therefore did not bump `transcriptGeneration` — see `beginPrivacyWipe()`.
         presenceManager.stop()
     }
 

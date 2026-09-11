@@ -49,8 +49,8 @@ enum RoutedShareRefusalCopy {
         }
     }
 
-    /// The inline notice the chat panel shows beneath its compose bar, or nil when there is nothing
-    /// to say (P6 item 4).
+    /// The inline notice the chat panel shows at the top of its compose bar — above the text
+    /// field, between it and the transcript — or nil when there is nothing to say (P6 item 4).
     ///
     /// **A second fork rather than a reworded first one.** Every sentence above says "that photo
     /// stayed on your own wall", which is both wrong and unactionable for a message — and the photo

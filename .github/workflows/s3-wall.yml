@@ -218,7 +218,7 @@ jobs:
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 167 \
+          Scripts/run-gated-suites.sh mesh-batteries 171 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

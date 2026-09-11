@@ -14,6 +14,10 @@
 // gets wrong: `String(decoding:as:)` cannot fail — it substitutes U+FFFD, which is neither a control
 // character nor in `SessionMessageStore.sanitize`'s invisible-scalar list — so the tempting spelling
 // admits arbitrary bytes as replacement characters and displays them.
+//
+// The FIFTH arrived with item 4's fix review (P3-1): a decoded `senderName` above the 128-byte
+// bound. That bound used to be enforced at the SENDER only, so the answer to "is it enforced on the
+// wire" was no — while the header allowance's entire arithmetic is a statement about it.
 
 @testable import ProximityKit
 import Foundation
@@ -75,7 +79,7 @@ struct MeshRoutedTextBodyTests {
         #expect(actual == MeshRoutedItemSealGoldenTests.goldenBodyHex)
     }
 
-    // MARK: - The four hostile shapes, all on the one frozen token
+    // MARK: - The five hostile shapes, all on the one frozen token
 
     @Test func aTooShortTextBodyIsMalformed() {
         #expect(throws: MeshRoutedItemSealError.malformed) {
@@ -215,6 +219,55 @@ struct MeshRoutedTextBodyTests {
         let bounded = MeshRoutedTextBody.boundedSenderName(long)
         #expect(bounded.utf8.count <= MeshRoutedTextBody.maxSenderNameUTF8ByteCount)
         #expect(!bounded.isEmpty)
+    }
+
+    /// **The fifth hostile shape: the name bound is enforced on the WIRE too** (P6 item 4 fix
+    /// review, P3-1). Before this, `init(decoding:)` never measured the decoded name, so a body
+    /// carrying a 129-byte — or 8 KB — name was accepted and what bounded it on receive was the
+    /// type cap plus the store's 24-`Character` moderation. The allowance's whole claim
+    /// (`maxFramedTextHeaderByteCount` covers a maximal header 4× over) is arithmetic over THIS
+    /// number, so a receiver that admitted a wider name would be holding a header the formula says
+    /// cannot exist.
+    ///
+    /// One byte over is `malformed`; exactly at the bound is carried. The pair is the non-vacuity —
+    /// a decoder that refused every long name would pass the first half alone.
+    @Test func aTextHeaderNameOverTheByteBoundIsMalformed() throws {
+        let bound = MeshRoutedTextBody.maxSenderNameUTF8ByteCount
+        let atBound = String(repeating: "n", count: bound)
+        let admitted = MeshRoutedTextBody(
+            header: MeshRoutedTextHeader(
+                id: MeshRoutedManifestFixtures.itemID, sentAt: Self.header().sentAt,
+                senderName: atBound
+            ),
+            text: "fine"
+        )
+        let decoded = try MeshRoutedTextBody(decoding: try admitted.encoded())
+        #expect(decoded.header.senderName == atBound, "exactly at the bound is carried")
+
+        let oneOver = MeshRoutedTextBody(
+            header: MeshRoutedTextHeader(
+                id: MeshRoutedManifestFixtures.itemID, sentAt: Self.header().sentAt,
+                senderName: atBound + "n"
+            ),
+            text: "fine"
+        )
+        let hostile = try oneOver.encoded()
+        #expect(throws: MeshRoutedItemSealError.malformed) {
+            _ = try MeshRoutedTextBody(decoding: hostile)
+        }
+
+        // And a name no shipped sender could produce at all, on the same one frozen token.
+        let huge = MeshRoutedTextBody(
+            header: MeshRoutedTextHeader(
+                id: MeshRoutedManifestFixtures.itemID, sentAt: Self.header().sentAt,
+                senderName: String(repeating: "n", count: 8_000)
+            ),
+            text: "fine"
+        )
+        let hostileHuge = try huge.encoded()
+        #expect(throws: MeshRoutedItemSealError.malformed) {
+            _ = try MeshRoutedTextBody(decoding: hostileHuge)
+        }
     }
 
     // MARK: - The epoch wall's own claim, for the new file

@@ -755,10 +755,19 @@ extension MeshRoutedLockedDeviceTests {
     ///   is what makes the home load-bearing, so a second call site or the same call moved to
     ///   another file still fails.
     /// * `MeshRoutedItemSealer.open(` — **1**, beside it: the plaintext seam's other half.
-    /// * `routedCanonicalDispatch(` — **2** in the manager: the declaration plus its single call
-    ///   site in `projectRoutedItemIfPermitted`. This is W2(b), the canonical-mutation half item 10
-    ///   handed forward; a second, ungated mutation is now a build failure rather than a review
-    ///   catch.
+    /// * `routedCanonicalDispatch(` — **4** in the manager: two declarations (photo, text) plus
+    ///   their two call sites in `dispatchRoutedPlaintext`. This is W2(b), the canonical-mutation
+    ///   half item 10 handed forward; a second, ungated mutation is now a build failure rather than
+    ///   a review catch.
+    /// * `dispatchRoutedPlaintext(` — **2** in the manager: the declaration plus its single call
+    ///   site in `routedProjectionVerdict`. It is the row the P6 item 4 fix review added (finding
+    ///   P2-2), and the reason is that item 4 HOISTED the mutation guard one level up: both arms
+    ///   now reach `cachePhoto` and `sessionMessages.receiveIncoming` through this one verb, which
+    ///   sits *above* the pinned needle, so a second caller of it — a live-door shortcut, say —
+    ///   would reach both canonical stores with no mutation guard, leave
+    ///   `routedCanonicalDispatch(` at 4, and satisfy the containment half (a whole-file
+    ///   `contains`, vacuous in the defining file) for free. Pinning the outer verb is what closes
+    ///   that; it names the same predicate in the containment half below.
     /// * `MeshRoutedHeartAck(` — **0**, unchanged. If it moves, scope has drifted into P6.
     /// * `.heartLedgerCommit(` — **1**, the stage precondition's own `guard case` in
     ///   `MeshRoutedDeliveryCommit.stageShortfall`: the **reader** of the evidence, which judges
@@ -771,6 +780,9 @@ extension MeshRoutedLockedDeviceTests {
         // alternative — one verb over a body enum, keeping the pin at 2 — was rejected because the
         // pin would then be blind to a third arm, and item 6 has to move it either way.
         ("routedCanonicalDispatch(", "MeshNetworkManager.swift", 4),
+        // Added at the P6 item 4 fix review: the hoisted mutation guard lives one level ABOVE
+        // `routedCanonicalDispatch`, so the pin has to reach the outer verb too (finding P2-2).
+        ("dispatchRoutedPlaintext(", "MeshNetworkManager.swift", 2),
         ("MeshRoutedHeartAck(", "", 0),
         (".heartLedgerCommit(", "MeshRoutedDeliveryCommit.swift", 1)
     ]
@@ -783,7 +795,7 @@ extension MeshRoutedLockedDeviceTests {
     /// **W2.** No routed plaintext seam exists that does not name its predicate — and today none
     /// exists at all.
     ///
-    /// Two halves. **The pin** (``routedPlaintextSeams``) counts every occurrence of the three
+    /// Two halves. **The pin** (``routedPlaintextSeams``) counts every occurrence of the six
     /// qualified spellings across `FernletKit/Sources/ProximityKit` — the whole module, not just
     /// `Mesh/`, because `MeshRoutedContentKeyWrapper` and its `unwrap` are internal to all of it, so
     /// a decrypt under `HeartSharing/` or `Messaging/` would otherwise be invisible — and requires
@@ -794,7 +806,7 @@ extension MeshRoutedLockedDeviceTests {
     @Test func everyRoutedPlaintextSeamNamesItsPredicate() throws {
         let sources = try Self.codeSources(under: "FernletKit/Sources/ProximityKit")
         #expect(sources.count >= 100, "the ProximityKit source sweep found too few files")
-        // R2: three needles over the module's own bounded file list.
+        // R2: the table's own needles over the module's own bounded file list.
         for seam in Self.routedPlaintextSeams {
             var atHome = 0
             var elsewhere = 0
@@ -842,11 +854,13 @@ extension MeshRoutedLockedDeviceTests {
             #expect(source.code.contains("guard mayDecryptRoutedContent"),
                     "a routed decrypt appeared in a file that does not GUARD on the decrypt predicate")
         }
-        // R2: the same bound.
-        for source in sources {
-            guard source.code.contains("routedCanonicalDispatch(") else { continue }
-            #expect(source.code.contains("mayMutateCanonicalStoreWithRoutedContent"),
-                    "a routed canonical mutation appeared in a file that never names its predicate")
+        // R2: the module's file list times the two canonical-mutation spellings — the inner verb
+        // and the hoisted outer one that reaches both arms (P6 item 4 fix review, finding P2-2).
+        for needle in ["routedCanonicalDispatch(", "dispatchRoutedPlaintext("] {
+            for source in sources where source.code.contains(needle) {
+                #expect(source.code.contains("mayMutateCanonicalStoreWithRoutedContent"),
+                        "a routed canonical mutation appeared in a file that never names its predicate")
+            }
         }
         // R2: the same bound.
         for source in sources where !Self.heartEvidenceHomes.contains(source.name) {

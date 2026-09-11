@@ -11,7 +11,8 @@ import FernletUI
 /// themselves ride the routed store as sealed ciphertext beneath it, held until the item expires —
 /// which is what lets a message reach an admitted member who is not linked at that instant.
 ///
-/// A send that did not stage is said **in place**, under the compose bar, with the draft kept: the
+/// A send that did not stage is said **in place**, at the top of the compose bar — above the text
+/// field, between it and the transcript — with the draft kept: the
 /// compose bar is deliberately not gated on "is there anybody to send to", because that would need
 /// a second published mirror of the mint's own answer and would flicker on every link blip.
 struct SessionChatPanel: View {
@@ -19,8 +20,9 @@ struct SessionChatPanel: View {
     var onDone: () -> Void
 
     @State private var draft = ""
-    /// The inline notice for a send that did not stage (P6 item 4). In place, beneath the compose
-    /// bar, rather than on `routedShareRefusal`'s alert: that alert belongs to
+    /// The inline notice for a send that did not stage (P6 item 4). In place, at the TOP of the
+    /// compose bar (above the text field, below the transcript), rather than on
+    /// `routedShareRefusal`'s alert: that alert belongs to
     /// `DisposableCameraView`, which this panel is presented OVER, so firing it here would present
     /// on a covered presenter and its copy is photo-worded in every arm.
     @State private var sendNotice: LocalizedStringKey?

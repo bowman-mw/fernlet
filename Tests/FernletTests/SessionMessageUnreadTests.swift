@@ -5,7 +5,8 @@
 // message can raise a badge/haptic/notification instead of being silent. Covers: an inbound message
 // increments unread while the panel is closed; no increment while viewing; beginViewing clears the
 // standing count and suppresses; endViewing resumes counting; markAllRead clears; a local echo of an
-// OUTGOING message never counts as unread; and clear() (session end / formation) resets the badge.
+// OUTGOING message never counts as unread; a row a GATE is filtering is held but never unread
+// (P6 item 4 fix review, P3-8); and clear() (session end / formation) resets the badge.
 // Pure store-level tests — no radios, no live session.
 
 @testable import ProximityKit
@@ -108,6 +109,52 @@ struct SessionMessageUnreadTests {
         #expect(!receive(into: s, id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
                                    text: "\u{200B}\n ", sentAt: day, seenAt: day))
         #expect(s.unreadCount == 0)
+    }
+
+    /// The clause a gate-filtered row is never unread by (P6 item 4 fix review, P3-8): deleting
+    /// `messages.contains(where:)` from `receiveIncoming`'s badge line used to redden nothing.
+    ///
+    /// An unread badge is an invitation to go and read something. A row the age gate or a block is
+    /// filtering is not something the user can go and read — it is held, not shown — so counting it
+    /// would put a badge on a panel that opens empty and never clears honestly.
+    @Test func aGateFilteredRowIsHeldButNeverUnread() {
+        let s = SessionMessageStore()
+        // The 13+ chat gate shut: `MeshContentGates.folding` filters every row out of the view.
+        s.refreshGates(chatAllowed: false, isRefused: { _ in false })
+
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Robin",
+                                  text: "held, not shown", sentAt: day, seenAt: day) == .appended,
+                "the row enters the HELD union — a gate is a view filter, not a drop")
+        #expect(s.messages.isEmpty, "and the view shows nothing")
+        #expect(s.unreadCount == 0, """
+            so nothing is unread: a badge is an invitation to read, and there is nothing the user \
+            could open the panel and see
+            """)
+
+        // The same row surfaces — and is still not retroactively unread — when the gate re-opens,
+        // because the badge is counted at ingest and the derivation carries no second delivery.
+        s.refreshGates(chatAllowed: true, isRefused: { _ in false })
+        #expect(s.messages.count == 1, "the row was never destroyed")
+        #expect(s.unreadCount == 0)
+
+        // A BLOCKED sender is the other half of the same filter — and it takes two rows to reach,
+        // because `MeshContentGates.folding` folds `isRefused` over the senders the ledger ALREADY
+        // holds. A sender's very first row is therefore never filtered by the store's own gate;
+        // what refuses it is `routedProjectionAuthor`, which applies the block list before the
+        // content key is unwrapped. The store's gate is deliberately the SECOND of two ends.
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "blocked",
+                                  senderDisplayName: "Nope", text: "before the block",
+                                  sentAt: day, seenAt: day) == .appended)
+        s.markAllRead()
+        s.refreshGates(chatAllowed: true, isRefused: { $0 == "blocked" })
+        #expect(s.messages.map(\.senderFingerprint) == ["fp"],
+                "the blocked sender's rows stop rendering, held rather than destroyed")
+
+        #expect(s.receiveIncoming(id: UUID(), senderFingerprint: "blocked",
+                                  senderDisplayName: "Nope", text: "after the block",
+                                  sentAt: day, seenAt: day) == .appended)
+        #expect(s.messages.map(\.senderFingerprint) == ["fp"], "the new row does not render either")
+        #expect(s.unreadCount == 0, "and it is not unread: there is nothing for the user to go read")
     }
 
     @Test func clearResetsUnread() {

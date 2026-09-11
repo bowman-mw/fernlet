@@ -6,10 +6,12 @@
 //
 // §10.3's four rules, each a claim here:
 //
-//   1. **Photos** union by manifest ID, hash-validated on reassembly, then the existing review flow.
-//   2. **Texts** union by message ID; the visible transcript is re-derived in total order
-//      `(claimedSentAt clamped to ±10 min of first-seen, senderFingerprint, messageID)`.
-//   3. **Hearts** union by gift ID; the final receipt is still only the foreground decrypt +
+//   1. **Photos** union by `(author, manifest ID)`, hash-validated on reassembly, then the existing
+//      review flow.
+//   2. **Texts** union by `(author, message ID)`; the visible transcript is re-derived in total
+//      order `(claimedSentAt clamped to ±10 min of first-seen, senderFingerprint, messageID)`.
+//   3. **Hearts** union by `(author, gift ID)`; the final receipt is still only the foreground
+//      decrypt +
 //      ledger commit, and the ledger's own dedup/cooldown arbitrates a duplicate that crossed
 //      the split.
 //   4. **N-way merges need no special case** — union is commutative, associative and idempotent, so
@@ -197,6 +199,47 @@ struct MeshContentUnionLawTests {
         #expect(set.contains(F.id(cap + 4)))
         #expect(!set.contains(F.id(0)))
         #expect(set.isAtCapacity)
+    }
+
+    /// **The union keys on `(author, id)`, not on the id alone** (P6 item 4 fix review, P1-1).
+    ///
+    /// The id on a routed item is its ORIGIN's own choice and its signed manifest publishes it to
+    /// the whole roster-at-creation in the clear, before the content arrives — so keying the union
+    /// on the id alone let one admitted member spend another member's dedup slot at a third
+    /// device. Asserted for all three kinds at once, because the fix is on the protocol: only the
+    /// message set has a shipping call site today, and item 6's hearts inherit the rule rather than
+    /// re-deriving it.
+    ///
+    /// Both rows must survive AND be ordered, which is why the count and the order are both here:
+    /// `MeshContentOrder` already ranks `senderFingerprint` above `contentID`, so §10.3's order did
+    /// not have to move — only the dedup did.
+    @Test("The union keys on (author, id): two authors may hold one id, and both rows survive")
+    func twoAuthorsMayHoldOneIDAndBothRowsSurvive() {
+        let shared = F.id(7)
+        let messages = MeshContentSet([
+            F.message(7, sender: "bob", claimed: 20, firstSeen: 20),
+            F.message(7, sender: "alice", claimed: 10, firstSeen: 10)
+        ])
+        #expect(messages.count == 2, "one id, two authors, two rows")
+        #expect(messages.contentIDs == [shared], "while the INVENTORY half is still the ids held")
+        #expect(messages.mergeKeys == [
+            MeshContentKey(senderFingerprint: "alice", contentID: shared),
+            MeshContentKey(senderFingerprint: "bob", contentID: shared)
+        ], "and the set's own identity is the pair")
+        #expect(messages.all.map(\.senderFingerprint) == ["alice", "bob"],
+                "ordered by §10.3's first key, the clamped claim — not by insertion")
+        #expect(messages.contains(MeshContentKey(senderFingerprint: "alice", contentID: shared)))
+        #expect(!messages.contains(MeshContentKey(senderFingerprint: "mallory", contentID: shared)))
+
+        // The same fact for the two kinds whose wiring is still ahead of them.
+        let photos = MeshContentSet([
+            F.photo(7, sender: "alice", addedAt: 10), F.photo(7, sender: "bob", addedAt: 20)
+        ])
+        #expect(photos.count == 2, "the photo set keys on the pair too — item 6's inheritance")
+        let hearts = MeshContentSet([
+            F.heart(7, sender: "alice", firstSeen: 10), F.heart(7, sender: "bob", firstSeen: 20)
+        ])
+        #expect(hearts.count == 2, "and so does the heart set")
     }
 
     @Test("The merged caps are the live surfaces' caps, not a second set of numbers")

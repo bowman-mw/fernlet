@@ -1119,7 +1119,18 @@ Ordering and dedup on ingestion:
 
 **Direct answers to the driving questions:**
 - *How do the messages and photos combine?* By ID-keyed union + deterministic re-derivation; nothing is
-  overwritten because nothing conflicting can exist (only missing).
+  overwritten because nothing conflicting can exist (only missing). **Amended at P6 item 4's fix
+  review:** the key is `(author, id)` (`MeshContentKey`), not the id alone. An id-only key is sound
+  only while one id can belong to one author, and on the routed store it cannot — a routed item's id
+  is chosen freely by its origin, the routed index's own key is `(originFingerprint, itemID)`, no
+  verifier refuses a duplicate id from a second origin, and the signed manifest publishing that id
+  reaches the whole roster-at-creation in the clear *before* the content does. Left as it was, an
+  admitted member could read another member's message id off a manifest, mint its own text under it,
+  win the race to a partitioned third device, and have the genuine message land `alreadyHeld` →
+  marked final → gone for the session while its sender saw `.staged`. Narrowing the dedup key is a
+  **local** change: no wire field, no golden, no persisted surface, and the total order below is
+  untouched (it already ranks `senderFingerprint` above the id, so two same-id rows from different
+  authors were always totally ordered — only the dedup conflated them).
 - *What if rotation happened while split?* Both branches rotated independently; both old keys die at
   merge when the merged coordinator mints a strictly-greater epoch. No content is affected because no
   content ever used those keys.
@@ -2943,13 +2954,16 @@ those five.*
   (**16**) *after* subtracting the already-projected (D-13.32). **P6 supplies unwrap → ledger commit →
   `MeshRoutedAckEvidence.heartLedgerCommit` behind the same predicate.** **(5) W2's pins are the test failure that tells P6 it has arrived.** `everyRoutedPlaintextSeamNamesItsPredicate`
   (`MeshRoutedLockedDeviceTests.swift:790`) sweeps all of `FernletKit/Sources/ProximityKit` and pins
-  five spellings with `elsewhere == 0`: `MeshRoutedContentKeyWrapper.unwrap(` = **1**
+  six spellings with `elsewhere == 0`: `MeshRoutedContentKeyWrapper.unwrap(` = **1**
   (`MeshRoutedItemDelivery.swift`), `MeshRoutedItemSealer.open(` = **1** (same file),
-  `routedCanonicalDispatch(` = **2** (`MeshNetworkManager.swift`: declaration + its one call site),
-  `MeshRoutedHeartAck(` = **0** ("if it moves, scope has drifted into P6"), `.heartLedgerCommit(` =
-  **1** (the stage precondition's `guard case`, which reads evidence and judges nothing). **Every one
-  of those five moves when P6 lands hearts or text — move the pin and name the predicate in the same
-  commit** (W3(b) exempts a file that performs a routed decrypt, so the seam may live in a new `Mesh/`
+  `routedCanonicalDispatch(` = **4** since P6 item 4 (`MeshNetworkManager.swift`: two declarations +
+  two call sites), `dispatchRoutedPlaintext(` = **2** since item 4's fix review (same file:
+  declaration + its one call site — the HOISTED mutation guard sits above
+  `routedCanonicalDispatch`, so the outer verb needs its own pin or a second ungated caller of it
+  reaches both canonical stores with the inner pin unmoved), `MeshRoutedHeartAck(` = **0** ("if it
+  moves, scope has drifted into P6"), `.heartLedgerCommit(` = **1** (the stage precondition's
+  `guard case`, which reads evidence and judges nothing). **Every one of those moves when P6 lands
+  hearts — move the pin and name the predicate in the same commit** (W3(b) exempts a file that performs a routed decrypt, so the seam may live in a new `Mesh/`
   file rather than being herded into the manager). Inherited residual: **a heart never foregrounded
   before the mesh ends cannot reach `delivered` and expires at `hardDeadline + 20 min` as
   `custodied(by: self)`** — D-4.5's documented shape, bounded by expiry, handed on unchanged.

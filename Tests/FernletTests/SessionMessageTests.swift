@@ -208,11 +208,53 @@ struct SessionMessageTests {
         #expect(s.messages.first?.text == "once")
     }
 
+    /// **The dedup key is `(senderFingerprint, id)`, so one member cannot spend another's slot**
+    /// (P6 item 4 fix review, finding P1-1).
+    ///
+    /// The attack the id-alone key allowed, in one cell. A routed item's id is its ORIGIN's own
+    /// choice (`MeshRoutedManifest.itemID`), the routed index's key is `(originFingerprint,
+    /// itemID)` and no verifier refuses a duplicate id from a second origin — while the signed
+    /// manifest carrying that id reaches the whole roster-at-creation **in the clear**, before the
+    /// content does. So an admitted member B could read A's message id off a manifest, mint its own
+    /// text under it, and win the race to a partitioned member C. A's genuine message then landed
+    /// `alreadyHeld` at C, the projection marked it FINAL, and it was gone from C's transcript for
+    /// the session — while A saw `.staged` and the delivery ledger recorded `delivered`. A
+    /// censorship primitive between admitted members, with one audit line as its whole trail.
+    ///
+    /// Both rows must land, in §10.3's order, and **A's must never be refused because of B's**:
+    /// the second `#expect` is what reddens if the key goes back to the id alone.
+    @Test func twoOriginsMintingOneMessageIDBothLandAndNeitherRefusesTheOther() {
+        let s = SessionMessageStore()
+        let shared = UUID()
+        // B is first, exactly as the attack requires (it read the id off A's manifest).
+        #expect(s.receiveIncoming(id: shared, senderFingerprint: "mallory",
+                                  senderDisplayName: "Mallory", text: "impostor",
+                                  sentAt: day.addingTimeInterval(1), seenAt: day) == .appended)
+        #expect(s.receiveIncoming(id: shared, senderFingerprint: "alice", senderDisplayName: "Alice",
+                                  text: "the real message", sentAt: day, seenAt: day) == .appended,
+                """
+                A's message must NOT be `alreadyHeld`: the id is A's own, and another member \
+                minting the same one may not consume A's dedup slot
+                """)
+        #expect(s.messages.map(\.text) == ["the real message", "impostor"],
+                "both rows, ordered by the claimed instant — the order never had to move")
+        #expect(s.messages.map(\.senderDisplayName) == ["Alice", "Mallory"],
+                "and the attribution table keys on the pair, so neither name overwrote the other")
+
+        // A re-send of ONE author's copy is still a duplicate. The key narrowed; it did not vanish.
+        #expect(s.receiveIncoming(id: shared, senderFingerprint: "alice", senderDisplayName: "Alice",
+                                  text: "again", sentAt: day, seenAt: day) == .alreadyHeld)
+        #expect(s.messages.count == 2)
+    }
+
     /// The per-sender token bucket retired with the transport it belonged to (P6 item 4): a drain
     /// answer carries up to 16 items, so a burst allowance of 5 would flood-DROP 11 legitimate
     /// messages out of one backlog, and a fixed per-item `firstSeenAt` would never refill it. The
     /// replacement is the routed path's own per-origin, per-session quota
-    /// (`allowIncomingRoutedText`), which `MeshRoutedTextDeliveryTests` covers.
+    /// (`allowIncomingRoutedText`), whose three legs are driven by
+    /// `MeshRoutedTextDeliveryTests.theIncomingTextQuotaRefusesPastItsCapAndIsFreeForAReSend`
+    /// (added at item 4's fix review — until then the door had only a constants pin, and making its
+    /// body `return true` reddened nothing).
     @Test func aBurstFromOneSenderIsNoLongerRateLimited() {
         let s = SessionMessageStore()
         // R2: bounded loop, one more than the retired burst allowance of 5 twice over.

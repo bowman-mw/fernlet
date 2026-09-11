@@ -358,6 +358,42 @@ struct DeleteAllDataTests {
         #expect(queue.records().isEmpty)
     }
 
+    /// **The live chat transcript goes through the MANAGER's clear funnel, not around it**
+    /// (P6 item 4 fix review, finding P2-1).
+    ///
+    /// Leg 7b used to call `sessionMessages.clear()` directly. That emptied the transcript and did
+    /// two things it should not: it did not bump `transcriptGeneration`, which is what the routed
+    /// text projection keys on, and it left the projection running for the rest of the funnel —
+    /// while the sealed routed store holding the ciphertext beneath those messages is not destroyed
+    /// until leg 11, with real suspension points in between. A rising access edge landing in that
+    /// window re-projected the just-wiped messages into a transcript that is still live, in the same
+    /// mesh, at the same generation.
+    ///
+    /// Three assertions, and the second and third are the ones that redden if the direct call comes
+    /// back: an empty transcript is what BOTH shapes produce.
+    @Test func deleteAllDropsTheTranscriptThroughTheGenerationFunnel() async {
+        let store = makeStore("delete-all-transcript")
+        let manager = store.meshNetworkManager
+        #expect(manager.sessionMessages.receiveIncoming(
+            id: UUID(), senderFingerprint: "fp-robin", senderDisplayName: "Robin",
+            text: "said in the session", sentAt: Date(), seenAt: Date()
+        ) == .appended)
+        #expect(!manager.sessionMessages.messages.isEmpty, "precondition: the seeded row did not land")
+        let generationBefore = manager.transcriptGeneration
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(manager.sessionMessages.messages.isEmpty, "the transcript is gone")
+        #expect(manager.transcriptGeneration > generationBefore, """
+            and the generation MOVED with it, so a routed item custodied before the wipe can never \
+            project into a transcript the user was told was emptied
+            """)
+        #expect(!manager.privacyWipeInProgress, """
+            with the projection switched back on: `endPrivacyWipe()` runs from a `defer`, so no \
+            exit from the funnel leaves it off for the rest of the process
+            """)
+    }
+
     /// The survival twin of the test above: the wipe must reach THIS store's inbox and no one else's.
     ///
     /// The share-extension queue is the app-group container's OTHER tenant — `SharedRecipeImports/`

@@ -66,6 +66,30 @@ extension MeshFoundingRig {
         nodes[node].manager.sessionMessages.messages
     }
 
+    /// Whether one node has marked an item FINAL — i.e. `MeshRoutedProjectionVerdict`'s
+    /// `leavesTheRetryList` half fired and `routedProjectedItems` holds the key.
+    ///
+    /// The cells that claim "…AndIsMarkedFinal" have to OBSERVE this: asserting only that the
+    /// transcript stayed empty stays green when the verdict flips to `refusedForNow`, because the
+    /// underlying predicate refuses again at every pass (P6 item 4 fix review, finding P2-5).
+    func isMarkedFinal(at node: Int, itemID: UUID) -> Bool {
+        nodes[node].manager.routedProjectedItems.contains { $0.itemID == itemID }
+    }
+
+    /// Whether one node's projection pass would still OFFER this item, or has dropped it from the
+    /// list for good.
+    ///
+    /// The observable half of "final" for an item whose own transcript has ended:
+    /// `isProjectableAtThisPass` runs BEFORE the allowance is spent, so such an item never reaches
+    /// the verdict and is therefore never in `routedProjectedItems` — which is a stronger
+    /// statement than the mark, not a weaker one. Flipping the liveness arm to `refusedForNow`
+    /// reddens this (the item stays on the list and the pass keeps paying for it).
+    func isStillOfferedToTheProjection(at node: Int, itemID: UUID) -> Bool {
+        guard let index = routedIndex(node),
+              let record = index.items.first(where: { $0.key.itemID == itemID }) else { return false }
+        return nodes[node].manager.isProjectableAtThisPass(record.reference, in: index)
+    }
+
     /// Brings a founded, mutually admitted, chat-enabled pair up with both access gates open — the
     /// precondition every delivery cell shares.
     func settleChattingPair() async throws {
@@ -154,10 +178,14 @@ struct MeshRoutedTextSenderTests {
         #expect(rig.sendText(at: 0, "  spaced   out  ") == .staged)
         let itemID = try #require(rig.stagedOwnItemID(at: 0))
         let row = try #require(rig.transcriptRows(at: 0).first)
-        #expect(row.id == itemID, """
-            the echo's id IS the routed item id — `SessionMessageStore` dedups on it, so a \
-            different id would let this device's own message project a second time
+        #expect(row.messageID == itemID, """
+            the echo's message id IS the routed item id — `SessionMessageStore` dedups on \
+            `(senderFingerprint, id)`, so a different id would let this device's own message \
+            project a second time
             """)
+        #expect(row.id == MeshContentKey(
+            senderFingerprint: rig.identities[0].localFingerprint, contentID: itemID
+        ), "and the ROW's identity is that id paired with this device's own fingerprint")
         #expect(row.text == "spaced out", "and it is the sanitized text, not the raw draft")
         #expect(row.isOutgoing)
     }
@@ -264,13 +292,19 @@ struct MeshRoutedTextDeliveryTests {
             """)
     }
 
-    /// A message whose SESSION has ended is never projected, keeps its custody, and is marked FINAL
-    /// so it leaves the retry list.
+    /// A message whose SESSION has ended is never projected, keeps its custody, and **leaves the
+    /// projection list for good** so it cannot starve the next pass.
     ///
-    /// Two doors in one cell, because they are one fact: the transcript was cleared, and the
-    /// generation moved with it — so even a resumed session in the SAME mesh (which
-    /// `startSearching()` un-ends) must not surface it.
-    @Test func aMessageWhoseSessionHasEndedIsNeverProjectedAndIsMarkedFinal() async throws {
+    /// Renamed and re-asserted at item 4's fix review (finding P2-5): the cell used to claim
+    /// "…AndIsMarkedFinal" while asserting only an empty transcript, which stays green if the
+    /// verdict flips to `refusedForNow`. The mark is also the wrong thing to look for here —
+    /// `isProjectableAtThisPass` drops an ended-transcript item from the list BEFORE the verdict
+    /// runs, so it never reaches `routedProjectedItems` at all, and never spends a pass slot
+    /// either. That exclusion is what is asserted, and it is the stronger claim.
+    ///
+    /// This cell's ending is `leaveSession()`, so the MESH leg answers; the generation leg's own
+    /// shape is `aResumedSessionDoorThreeGaveUpOnProjectsNothingFromTheClearedTranscript` below.
+    @Test func aMessageWhoseSessionHasEndedIsNeverProjectedAndLeavesTheProjectionList() async throws {
         let rig = try MeshFoundingRig.build(2, label: "text-ended")
         defer { rig.teardown() }
         try await rig.settleChattingPair()
@@ -296,6 +330,16 @@ struct MeshRoutedTextDeliveryTests {
             the message belongs to a transcript that vanished: same custody, ended session, so the \
             projection refuses and the ciphertext is kept until expiry
             """)
+        #expect(!rig.isStillOfferedToTheProjection(at: 1, itemID: itemID), """
+            and it has LEFT the projection list — observed, not inferred from an empty transcript: \
+            a `refusedForNow` here would leave the item on a 16-slot re-entry list until expiry, \
+            which is the outage this distinction exists to prevent. The starvation that makes it \
+            load-bearing is driven in `MeshRoutedRetryAllowanceTests` \
+            (`aNewItemProjectsOnItsFirstPassBehindAFullAllowanceOfRetries` and its restart twin), \
+            not duplicated here
+            """)
+        #expect(rig.routedIndex(1)?.items.contains { $0.key.itemID == itemID } == true,
+                "with the ciphertext kept — a final PROJECTION is not a dropped item")
     }
 
     /// A **blip** is not an ending, so a message custodied around one projects when the link heals.
@@ -347,6 +391,10 @@ struct MeshRoutedTextDeliveryTests {
             the block is applied by `routedProjectionAuthor` BEFORE the content key is unwrapped, so \
             a blocked person's message is never materialised and then discarded
             """)
+        #expect(rig.isMarkedFinal(at: 1, itemID: itemID), """
+            and FINAL, observed on the mark: a block is a durable local judgement, so sixteen \
+            blocked-origin items must leave the re-entry list rather than hold it until expiry
+            """)
     }
 
     /// Nothing decrypts while the routed access gate is closed — the text twin of the photo claim,
@@ -370,6 +418,202 @@ struct MeshRoutedTextDeliveryTests {
             and the re-entry pass fills the transcript the moment the gate opens — a deferred \
             projection is RETRYABLE, which is the other half of the same claim
             """)
+    }
+
+    /// **Door 3's generation leg, on the only shape that reaches it** (P6 item 4 fix review,
+    /// finding P2-3).
+    ///
+    /// `MeshTranscriptLiveness` has three legs and the cell above exercises the MESH one:
+    /// `leaveSession()` calls `leaveMesh()`, which nils `currentMesh`, so leg 2 answers first and
+    /// deleting the generation guard reddened nothing. The generation leg's own shape needs a
+    /// session that ends with the **mesh retained** and then becomes live again — which is exactly
+    /// door 3: the five-minute discovery give-up raises `sessionSearchGaveUp` and stands the radios
+    /// down without tearing the mesh, and `startSearching()` (through
+    /// `resumeSearchingForPartitionedMesh()`) clears that flag. Same mesh, live again, cleared
+    /// transcript: only the generation can say no.
+    ///
+    /// Driven with an injected instant and no sleep, the give-up clock's own idiom.
+    @Test func aResumedSessionDoorThreeGaveUpOnProjectsNothingFromTheClearedTranscript() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "text-door3")
+        defer { rig.teardown() }
+        try await rig.settleChattingPair()
+        let recipient = rig.nodes[1].manager
+
+        // Behind a closed gate the item completes into custody unprojected — but it IS offered, so
+        // `noteRoutedItemOffered` stamps it with the generation it arrived in.
+        rig.closeGate(at: 1)
+        #expect(rig.sendText(at: 0, "before the give-up") == .staged)
+        let itemID = try #require(rig.stagedOwnItemID(at: 0))
+        try await rig.settle(until: {
+            rig.routedIndex(1)?.items.contains { $0.key.itemID == itemID } == true
+        })
+        let generationBefore = recipient.transcriptGeneration
+
+        // Door 3: the peer goes away, the clock arms, and five minutes later the session is over.
+        let slot = try #require(recipient.slots.first, "the commit must have seated a slot")
+        let blipAt = Date()
+        recipient.evictSlotForTesting(peerID: slot.id)
+        #expect(recipient.isSessionGiveUpClockArmed, "a blip over a founded mesh arms door 3")
+        recipient.evaluateSessionGiveUp(now: blipAt.addingTimeInterval(6 * 60))
+
+        #expect(!recipient.isSessionLive, "the session ended by door 3")
+        #expect(recipient.currentMesh != nil, """
+            with the MESH RETAINED — which is the whole point: `leaveSession()` would nil it and \
+            the mesh leg would answer instead, leaving this leg unexercised
+            """)
+        #expect(recipient.transcriptGeneration > generationBefore, "and the clear moved the generation")
+
+        // The radios come back over the same mesh, which UN-ENDS the session: legs 1 and 2 both
+        // say live, and leg 3 is the only refusal left.
+        recipient.resumeSearchingForPartitionedMesh()
+        #expect(recipient.isSessionLive, "leg 1 is reversible — that is why leg 3 exists")
+        #expect(recipient.currentMesh?.meshID != nil, "and leg 2 still matches")
+
+        rig.openGate(at: 1)
+        try await rig.settle()
+        #expect(rig.transcript(at: 1).isEmpty, """
+            so the item does not surface: it belongs to a transcript §12 says vanished, and custody \
+            deliberately outlives the session
+            """)
+        #expect(!rig.isStillOfferedToTheProjection(at: 1, itemID: itemID),
+                """
+                and the generation never goes back, so the item has left the projection list rather \
+                than holding a slot on it until expiry
+                """)
+    }
+
+    /// **Nothing projects while the app's delete-all funnel is running** (P6 item 4 fix review,
+    /// finding P2-1).
+    ///
+    /// Delete-all drops the live transcript at the top of the funnel and destroys the routed
+    /// ciphertext near the end of it, with real suspension points in between — so a rising access
+    /// edge landing in the middle re-projected items whose bytes the user had just asked to have
+    /// destroyed, into surfaces the same funnel had already emptied.
+    ///
+    /// **The subject is a PHOTO as well as a message, and the photo is what makes the guard
+    /// load-bearing.** `beginPrivacyWipe()` also bumps the transcript generation, so for a text
+    /// item the generation leg would refuse it anyway and an empty transcript cannot tell the two
+    /// apart. The photo arm has no such leg: without the guard the wall is fed in the middle of a
+    /// wipe that purged the photo corpora at leg 4. The last two assertions are the other half —
+    /// the refusal is RETRYABLE and uncharged (a wipe is the gate's own answer for every item,
+    /// never a fact about one of them), so once the funnel is over the item really does land.
+    @Test func nothingProjectsWhileADeleteAllWipeIsInProgress() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "text-wipe")
+        defer { rig.teardown() }
+        try await rig.settleChattingPair()
+        let recipient = rig.nodes[1].manager
+
+        // Behind a closed gate both items complete into custody unprojected. The photo's id is read
+        // before the message is minted, because `stagedOwnItemID` answers "the first item I minted".
+        rig.closeGate(at: 1)
+        rig.capturePhoto(at: 0)
+        let photoID = try #require(rig.stagedOwnItemID(at: 0), "the capture must have staged")
+        #expect(rig.sendText(at: 0, "wiped mid-funnel") == .staged)
+        try await rig.settle(until: {
+            rig.routedIndex(1)?.items.contains { $0.key.itemID == photoID } == true
+        })
+        let generationBefore = recipient.transcriptGeneration
+
+        recipient.beginPrivacyWipe()
+        #expect(recipient.privacyWipeInProgress)
+        #expect(recipient.transcriptGeneration > generationBefore, """
+            the wipe drops the transcript through the manager's ONE clear funnel, so the generation \
+            moves with it — leg 7b's old `sessionMessages.clear()` did not
+            """)
+
+        rig.openGate(at: 1)
+        try await rig.settle()
+        #expect(rig.wallEntries(at: 1, itemID: photoID) == 0, """
+            a rising edge INSIDE the funnel feeds nothing to the photo wall — the funnel purged the \
+            photo corpora at leg 4, and this is the assertion the guard itself owns
+            """)
+        #expect(rig.transcript(at: 1).isEmpty, "and nothing reaches the transcript either")
+        #expect(!rig.isMarkedFinal(at: 1, itemID: photoID), """
+            and the refusal is RETRYABLE and uncharged: the wipe is the gate's own answer for every \
+            item, so marking one final here would lose it to a wipe that failed halfway
+            """)
+
+        recipient.endPrivacyWipe()
+        #expect(!recipient.privacyWipeInProgress, "and the funnel lowers it on every exit")
+
+        // The proof that it really was retryable: one more rising edge, and the item lands.
+        rig.closeGate(at: 1)
+        rig.openGate(at: 1)
+        try await rig.settle(until: { rig.wallEntries(at: 1, itemID: photoID) == 1 })
+        #expect(rig.wallEntries(at: 1, itemID: photoID) == 1,
+                "nothing was lost — the wipe deferred the projection, it did not retire it")
+    }
+
+    /// **The per-origin message quota's three legs** (P6 item 4 fix review, finding P2-4): it
+    /// refuses past its cap, a re-send of an accepted id is free, and the map is bounded on its
+    /// other axis rather than growing.
+    ///
+    /// Until this cell the door that REPLACED the retired token bucket had only a constants pin
+    /// (`MeshRoutedTypeRegistryTests.theProjectionQuotasAreBoundedOnBothAxes`), so making the body
+    /// `return true` unconditionally reddened nothing — a retired rate limit replaced by an
+    /// untested total. Driven at the door rather than end to end, because 200 delivered messages is
+    /// a load test and the subject is the map.
+    @Test func theIncomingTextQuotaRefusesPastItsCapAndIsFreeForAReSend() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "text-quota")
+        defer { rig.teardown() }
+        let perOrigin = rig.nodes[0].manager
+        let cap = MeshNetworkManager.maxTextMessagesPerSenderPerSession
+        let manifest = Self.quotaManifest(origin: "quota-origin")
+
+        var accepted: [UUID] = []
+        // R2: bounded by the cap itself.
+        for _ in 0..<cap {
+            let id = UUID()
+            #expect(perOrigin.allowIncomingRoutedText(id, from: manifest))
+            accepted.append(id)
+        }
+        #expect(!perOrigin.allowIncomingRoutedText(UUID(), from: manifest),
+                "the cap+1th id from one origin in one mesh is refused")
+        let alreadyAccepted = try #require(accepted.first)
+        #expect(perOrigin.allowIncomingRoutedText(alreadyAccepted, from: manifest), """
+            while a re-send of an id already accepted is FREE — a re-projection after a restart \
+            must not cost a slot it already spent
+            """)
+        #expect(perOrigin.allowIncomingRoutedText(UUID(), from: Self.quotaManifest(origin: "other")),
+                "and another origin in the same mesh has its own budget")
+        #expect(perOrigin.allowIncomingRoutedText(
+            UUID(), from: Self.quotaManifest(origin: "quota-origin", mesh: UUID())
+        ), "as does the same origin in another MESH — the key is the ITEM's mesh (D-13.23)")
+
+        // The other axis, on a manager whose map is still empty: `MeshRoutedStoreFormat.maxItems`
+        // keys, and then a fresh `(mesh, origin)` is refused rather than admitted.
+        let mapBound = rig.nodes[1].manager
+        // R2: bounded by the store's own item cap.
+        for index in 0..<MeshRoutedStoreFormat.maxItems {
+            #expect(mapBound.allowIncomingRoutedText(
+                UUID(), from: Self.quotaManifest(origin: "bulk-\(index)")
+            ))
+        }
+        #expect(!mapBound.allowIncomingRoutedText(UUID(), from: Self.quotaManifest(origin: "one-too-many")),
+                "the map refuses a new key at its bound instead of growing")
+        #expect(mapBound.allowIncomingRoutedText(UUID(), from: Self.quotaManifest(origin: "bulk-0")),
+                "while an origin already in the map keeps its budget")
+    }
+
+    /// A manifest that is real in the fields the quota reads — `(meshID, originFingerprint)` — and
+    /// opaque everywhere else. It never reaches a verifier: `allowIncomingRoutedText` is a map
+    /// lookup, and signing one would test the signer.
+    private static func quotaManifest(
+        origin: String, mesh: UUID = MeshRoutedManifestFixtures.meshID
+    ) -> MeshRoutedManifest {
+        MeshRoutedManifest(
+            meshID: mesh,
+            itemID: UUID(),
+            originFingerprint: origin,
+            typeToken: MeshRoutedManifestFixtures.typeToken,
+            contentHash: MeshRoutedManifestFixtures.contentHash,
+            size: 1,
+            createdAt: MeshRoutedManifestFixtures.createdAt,
+            expiresAt: MeshRoutedManifestFixtures.expiresAt,
+            destinations: [],
+            keyWraps: [],
+            signature: MeshRoutedManifestFixtures.opaqueSignature
+        )
     }
 
     /// One message, ONE row, across a second rising access edge — the idempotence the projection

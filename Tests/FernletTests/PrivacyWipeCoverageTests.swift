@@ -113,7 +113,12 @@ struct PrivacyWipeCoverageTests {
         "purgeDataExports",
         // Social / proximity
         "clothingShop.clearAll",
-        "sessionMessages.clear",
+        // The live chat transcript, dropped in leg 0 through the MANAGER's one clear funnel rather
+        // than by `sessionMessages.clear()` on leg 7b. The funnel is what bumps
+        // `transcriptGeneration` and what switches the routed projection off for the rest of the
+        // wipe; the direct call did neither, so items whose ciphertext leg 11 was about to destroy
+        // could re-project into a still-live transcript (P6 item 4 fix review, finding P2-1).
+        "meshNetworkManager.beginPrivacyWipe",
         "presenceManager.stop",
         "proximityTrustVault.apply",
         "heartLedger.clearAll",
