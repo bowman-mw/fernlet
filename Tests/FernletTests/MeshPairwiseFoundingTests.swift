@@ -436,15 +436,13 @@ struct MeshPairwiseFoundingTests {
         try await rig.settle(until: { rig.roster(2).count >= 2 })
 
         #expect(Set(rig.roster(1)).count == 3, "the admitter files the third admission")
-        // Item 1's residual, MEASURED here for the first time on the app's own path — and it is
-        // wider than item 1 pass B recorded. A row relayed at the GRANT door always arrives while
-        // the joiner's ledger is still the one-record bootstrap its admitter rooted, in which the
-        // admitter itself is not an admitted member, so it is refused `signerNotAdmitted` and
-        // dropped. The joiner's own row does reach the admitter — `attemptLedgerAdoption`
-        // re-states it once the adoption names the whole set — but there is no symmetric
-        // re-statement back, because the admitter's set version has not moved, and
-        // `sendKeyAdvertisements` is bounded once per (peer, version). Pinned as the negative it
-        // is, so the fix flips this cell rather than passing silently.
+        // Item 1's residual, FLIPPED by item 1's fix commit (this cell pinned it as a negative so
+        // the fix would have to flip it). A row relayed at the GRANT door arrives while the
+        // joiner's ledger is still the one-record bootstrap its admitter rooted, in which the
+        // admitter itself is not an admitted member — so the fold refuses it `signerNotAdmitted`
+        // and the joiner now PARKS it until a widening can prove it. `attemptLedgerAdoption` is
+        // that widening: it rebases the joiner off its bootstrap root and re-offers the park, so
+        // both halves of a first grant hold each other's row with NO merge exchange anywhere.
         // Roles, never indices: the rig's identities are freshly provisioned, so WHICH half of the
         // pair founds is decided per run by the election. (Two counts written as `nodes[0]` and
         // `nodes[1]` swapped between runs of this file, which is how this was caught.)
@@ -458,13 +456,13 @@ struct MeshPairwiseFoundingTests {
         ) != nil, "the pair's founder folded its joiner's row, re-stated after the adoption")
         #expect(rig.nodes[pairJoiner].manager.keyAdvertisements.advertisement(
             for: rig.identities[pairFounder].localFingerprint
-        ) == nil, "but the joiner never learned its admitter's, because the grant beat its ledger")
+        ) != nil, "and the joiner holds its admitter's, parked at the grant and proved at adoption")
         #expect(rig.nodes[2].manager.keyAdvertisements.advertisement(
             for: rig.identities[2].localFingerprint
         ) != nil, "a third device arms its own row at its join")
         #expect(rig.nodes[2].manager.keyAdvertisements.advertisement(
             for: rig.identities[0].localFingerprint
-        ) == nil, "and cannot yet address the member it never linked — D-13.22's star, still open")
+        ) != nil, "and can address the member it never linked — D-13.22's star, closed on this path")
     }
 
     // MARK: The auto-grant, and every gate it must not bypass

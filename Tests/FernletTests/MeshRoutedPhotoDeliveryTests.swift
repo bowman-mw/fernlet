@@ -199,11 +199,19 @@ extension MeshRoutedDrainRig {
     func armKeyAdvertisements() {
         // R2: bounded by the rig's own node count.
         for node in nodes {
-            let armed = DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-                node.manager.armOwnKeyAdvertisementForTesting(now: MeshRoutedDrainRig.now)
-            }
-            #expect(armed, "every node's own advertisement is this cell's precondition")
+            armKeyAdvertisement(at: node)
         }
+    }
+
+    /// Mints ONE node's own key advertisement, for the cells whose claim is about a node that has
+    /// a row while another does not.
+    func armKeyAdvertisement(at position: Int) { armKeyAdvertisement(at: nodes[position]) }
+
+    private func armKeyAdvertisement(at node: MeshDepartureNode) {
+        let armed = DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            node.manager.armOwnKeyAdvertisementForTesting(now: MeshRoutedDrainRig.now)
+        }
+        #expect(armed, "this node's own advertisement is the cell's precondition")
     }
 
     /// Links a pair, commits both ends and settles — the real link-open exchange, which is what
@@ -237,8 +245,11 @@ extension MeshRoutedDrainRig {
     /// The rig's own `dispatch(_:type:sender:receiver:…)` reaches `dispatchRoutedPayload` and is
     /// therefore routed-only; an advertisement rides the membership family, whose door applies the
     /// committed-slot and verifier-present gates this has to go through.
+    /// - Parameter binding: The device binding the receive runs under. `.unavailable` makes every
+    ///   sealed write fail, which is how a cell drives the durable-before-it-counts rollback.
     func deliverMembershipFrame(
-        _ payload: some Encodable, type: PayloadType, sender: Int, receiver: Int
+        _ payload: some Encodable, type: PayloadType, sender: Int, receiver: Int,
+        binding: DeviceBindingID.TestOverride? = nil
     ) throws {
         let envelope = try FernletIdentityEnvelope.signed(
             identityService: identities[sender], senderDisplayName: "advert",
@@ -254,7 +265,9 @@ extension MeshRoutedDrainRig {
         let plaintext = try envelope.verify(
             identityService: node.manager.identityForTesting, replayCache: node.replayCache
         )
-        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+        // Resolved in the body, not as a default argument: `MeshP3Acceptance.install` is
+        // `@MainActor`, and a `@MainActor` value cannot be a default-argument expression.
+        DeviceBindingID.$testOverride.withValue(binding ?? .identifier(MeshP3Acceptance.install)) {
             node.manager.proximityCoordinator(
                 coordinator, didReceive: envelope, plaintext: plaintext, from: nil
             )
@@ -1492,5 +1505,324 @@ struct MeshKeyAdvertisementDeliveryTests {
         #expect(capture.count(of: "mesh.keyAgreement.rejected") >= 1,
                 "the drop is named, never silent")
         reborn.leaveMesh()
+    }
+
+    // MARK: The send latch, the repair order and the receive budget (pass B review findings 1-4)
+
+    /// **A frame the wire never wrote leaves its recipient OWED, and the next door re-sends.**
+    ///
+    /// The latch used to be written for every owed peer before the `await`, and nothing re-arms it
+    /// except the local set changing — and no door fires on a fold. So on a stable pair whose set
+    /// never grows again, one frame written to nobody (a disconnect between the door firing and the
+    /// write, or a failed write) meant the peer was never told for the rest of the session and every
+    /// mint refused `destinationNotAddressable`.
+    ///
+    /// The lost recipient is node 2, whose row node 0 learns through a relay *before* it has ever
+    /// been linked to it — so the door fires for a roster member node 0 holds no slot for, the frame
+    /// is written to nobody, and node 0's set is already complete by the time the link forms. That
+    /// last part is what makes the cell load-bearing: nothing re-arms the latch on the later heal,
+    /// because node 2's own row is one node 0 already holds.
+    @Test func anAdvertisementFrameWrittenToNobodyLeavesItsRecipientOwed() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-relatch")
+        defer { rig.teardown() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        let third = try #require(rig.nodes[2].manager.keyAdvertisements
+            .advertisement(for: rig.nodes[2].fingerprint))
+        try rig.deliverMembershipFrame(
+            MeshKeyAgreementPayload(
+                meshID: rig.meshID, advertisements: [third],
+                senderFingerprint: rig.nodes[1].fingerprint
+            ),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(rig.advertisementCount(at: 0) == 3, "node 0's set is complete before any link to C")
+
+        // The door fires for a roster member node 0 holds no slot for.
+        await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[2].fingerprint])
+        #expect(rig.advertisementCount(at: 2) == 1, "unlinked, so nothing can have been written")
+
+        try await rig.heal(0, 2)
+
+        #expect(rig.advertisementCount(at: 2) == 3,
+                "the peer stayed owed, so the first real link-open carried the whole set")
+    }
+
+    /// The bounded self-mint repair is **not** spent when there is nobody to tell.
+    ///
+    /// Five of the six doors are peer-driven, so with the repair above the roster filter three link
+    /// flaps burned all three attempts — a signature and a sealed write each — with `owed` empty.
+    /// Here every recipient is off the roster, so the send has nothing to do and must mint nothing.
+    @Test func aDoorWithNoMemberToTellSpendsNoSelfMintAttempt() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "advert-repair-order")
+        defer { rig.teardown() }
+        #expect(rig.advertisementCount(at: 0) == 0, "nothing is armed: the repair is what would mint")
+
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            // R2: three calls, the repair's own per-session cap.
+            for _ in 0..<3 {
+                await rig.nodes[0].manager.sendKeyAdvertisements(to: ["not-a-member-fingerprint"])
+            }
+        }
+
+        #expect(rig.advertisementCount(at: 0) == 0,
+                "a recipient set the ledger does not name spends no attempt and mints nothing")
+    }
+
+    /// The repair's per-session cap: three attempts, then named and refused.
+    ///
+    /// `.unavailable` makes every sealed write fail, which is the outage the repair exists for — and
+    /// the one that must not become per-link-open work forever on a device whose store is broken.
+    @Test func theSelfMintRepairIsSpentThreeTimesAndThenNamed() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "advert-repair-cap")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        await DeviceBindingID.$testOverride.withValue(.unavailable) {
+            // R2: the cap plus one, so the refusal after it is observed.
+            for _ in 0...MeshKeyAdvertisementSendBounds.selfMintAttemptsPerSession {
+                await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+            }
+        }
+
+        #expect(capture.count(of: "mesh.keyAgreement.selfMintUnavailable")
+                == MeshKeyAdvertisementSendBounds.selfMintAttemptsPerSession,
+                "the repair is named exactly once per attempt and the cap stops the fourth")
+        #expect(rig.advertisementCount(at: 0) == 0,
+                "and a mint the store refused is rolled back out of memory")
+    }
+
+    /// A fold the store refused is **rolled back**, with its conflict marks, and named.
+    ///
+    /// Durable before it counts (plan §3.6): "verified" and "remembered" have to be the same set,
+    /// or a relaunch silently forgets a key the mint has already wrapped content to.
+    @Test func aFoldTheStoreRefusedIsRolledBackAndNamed() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-notdurable")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        #expect(rig.advertisementCount(at: 0) == 2, "the pair's two rows must be folded first")
+
+        // Node 2's own row, relayed by node 1 — a real fold that really changes the set — with
+        // every sealed write failing.
+        let third = try #require(rig.nodes[2].manager.keyAdvertisements
+            .advertisement(for: rig.nodes[2].fingerprint))
+        try rig.deliverMembershipFrame(
+            MeshKeyAgreementPayload(
+                meshID: rig.meshID, advertisements: [third],
+                senderFingerprint: rig.nodes[1].fingerprint
+            ),
+            type: .meshKeyAgreement, sender: 1, receiver: 0, binding: .unavailable
+        )
+
+        #expect(rig.advertisementCount(at: 0) == 2, "the set is rolled back to what is on disk")
+        #expect(rig.nodes[0].manager.keyAdvertisements
+                .advertisement(for: rig.nodes[2].fingerprint) == nil, "and it is that row")
+        #expect(capture.count(of: "mesh.keyAgreement.notDurable") == 1, "named, never silent")
+    }
+
+    /// The per-sender receive bound: one sender's frames are capped and the cap is named.
+    ///
+    /// The frame is unsigned at frame level and can cost sixteen Ed25519 verifications, so this is
+    /// the one bound in front of it. Every flooded frame carries a row this device already holds, so
+    /// nothing can grow — the charge is spent before the fold either way, which is the point.
+    @Test func oneSendersAdvertisementFramesAreCappedPerSession() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "advert-sender-budget")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        let held = try #require(rig.nodes[0].manager.keyAdvertisements
+            .advertisement(for: rig.nodes[1].fingerprint))
+        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent") == 0,
+                "the honest exchange must not have spent the bound")
+
+        let payload = MeshKeyAgreementPayload(
+            meshID: rig.meshID, advertisements: [held],
+            senderFingerprint: rig.nodes[1].fingerprint
+        )
+        // R2: the bound plus one, so the refusal after it is observed.
+        for _ in 0...MeshKeyAdvertisementReceiveBounds.framesPerSenderPerSession {
+            try rig.deliverMembershipFrame(payload, type: .meshKeyAgreement, sender: 1, receiver: 0)
+        }
+
+        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent") >= 1,
+                "past the per-sender bound a frame is refused by name, never quietly accepted")
+        #expect(rig.advertisementCount(at: 0) == 2, "and the set never grew")
+    }
+
+    /// A committed peer the ledger does **not** name can spend none of this device's addressing
+    /// budget.
+    ///
+    /// The budget map is bounded by the roster cap and never evicts, so keyed by *committed* sender
+    /// eight non-members could lock every real member out of this device's addressing for the whole
+    /// session. Keyed by roster member the cap is true by construction: the refusal happens before
+    /// the map, before the decode and before any verification.
+    @Test func aNonMemberSenderCannotSpendAnAdvertisementBudget() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-nonmember")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        try await rig.heal(0, 2)
+        let row = try #require(rig.nodes[2].manager.keyAdvertisements
+            .advertisement(for: rig.nodes[2].fingerprint))
+
+        // Node 2 leaves: its slot at node 0 stays committed, its membership does not.
+        try rig.fileDeparture(of: 2, into: 0)
+        #expect(rig.nodes[0].manager.membershipVerifier?.roster
+                .contains(fingerprint: rig.nodes[2].fingerprint) == false,
+                "the precondition: node 2 is committed but no longer a member")
+        let stillCommitted = rig.nodes[0].manager.slots
+            .contains { $0.fingerprint == rig.nodes[2].fingerprint }
+        #expect(stillCommitted, "and the slot is still committed, which is the whole hazard")
+
+        let spentBefore = capture.count(of: "mesh.keyAgreement.senderBudgetSpent")
+        let payload = MeshKeyAgreementPayload(
+            meshID: rig.meshID, advertisements: [row],
+            senderFingerprint: rig.nodes[2].fingerprint
+        )
+        // R2: the bound plus one — every one of them must be refused before the map.
+        for _ in 0...MeshKeyAdvertisementReceiveBounds.framesPerSenderPerSession {
+            try rig.deliverMembershipFrame(payload, type: .meshKeyAgreement, sender: 2, receiver: 0)
+        }
+
+        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent") == spentBefore,
+                "a non-member's frames are refused before the map, so they charge nothing")
+    }
+
+    // MARK: Parking, the roster fence and the conflict-mark relief
+
+    /// A parked row whose signer the ledger will **never** name is refused at the bound and leaves
+    /// with the session — it never enters the set, and every refusal is named.
+    ///
+    /// Parking exists for one shape only: a row relayed before this device's ledger names its
+    /// signer. A widening arrives in stages, so a row that still fails is re-parked rather than
+    /// dropped on the first re-offer — which makes the two ends that bound it the ones under test
+    /// here: the capacity refusal, and the session reset.
+    @Test func aParkedRowFromANeverAdmittedSignerIsRefusedAtTheBoundAndAtSessionEnd() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-drop")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        try await rig.heal(0, 2)
+        // A full frame of rows for fingerprints no admission names — the park's whole capacity.
+        // R2: bounded by the frame's own clamp.
+        let strangers = (0..<MeshKeyAgreementAdvertisementSet.capacity).map {
+            MeshKeyAgreementFixtures.unverifiedRow($0 + 700, meshID: rig.meshID)
+        }
+        let sender = rig.nodes[1].fingerprint
+        try rig.deliverMembershipFrame(
+            MeshKeyAgreementPayload(
+                meshID: rig.meshID, advertisements: strangers, senderFingerprint: sender
+            ),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(rig.nodes[0].manager.parkedKeyAdvertisementCountForTesting
+                == MeshKeyAgreementAdvertisementSet.capacity,
+                "a row the ledger cannot prove is parked, not folded")
+        #expect(rig.advertisementCount(at: 0) == 3,
+                "and a parked row is NOT in the set: it has verified nothing")
+
+        // One more, from a seventeenth fingerprint: the park is full and says so.
+        try rig.deliverMembershipFrame(
+            MeshKeyAgreementPayload(
+                meshID: rig.meshID,
+                advertisements: [MeshKeyAgreementFixtures.unverifiedRow(999, meshID: rig.meshID)],
+                senderFingerprint: sender
+            ),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(capture.count(of: "mesh.keyAgreement.parkFull") == 1, "the bound is named, not silent")
+        #expect(rig.nodes[0].manager.parkedKeyAdvertisementCountForTesting
+                == MeshKeyAgreementAdvertisementSet.capacity, "and nothing was displaced")
+
+        // A roster move re-offers every parked row through the one fold door; none can verify.
+        try rig.fileDeparture(of: 2, into: 0)
+        #expect(capture.count(of: "mesh.keyAgreement.parkedReoffered") == 1, "the re-offer is named")
+        #expect(rig.advertisementCount(at: 0) == 3, "and still nothing entered the set")
+
+        rig.nodes[0].manager.leaveMesh()
+        #expect(rig.nodes[0].manager.parkedKeyAdvertisementCountForTesting == 0,
+                "the park dies with the session, like the rest of the addressing state")
+    }
+
+    /// Tier B reads a row only for a fingerprint the **current** ledger still names.
+    ///
+    /// The set is grow-only and a roster is not, so a row folded before a departure stays in the
+    /// set. Unobservable through the mint today — destinations ARE the derived roster — which is
+    /// why this reads the resolver's tier B directly: item 6's subset target inherits this fence,
+    /// and an unpinned fence is one a refactor deletes for free.
+    @Test func tierBRefusesARowTheCurrentLedgerNoLongerNames() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-tierb-fence")
+        defer { rig.teardown() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        try await rig.heal(1, 2)
+        rig.commit(0, 1)
+        try await rig.settle()
+        #expect(rig.advertisementCount(at: 0) == 3, "all three rows must be folded first")
+
+        try rig.fileDeparture(of: 2, into: 0)
+
+        #expect(rig.nodes[0].manager.keyAdvertisements
+                .keyAgreementPublicKey(for: rig.nodes[2].fingerprint) != nil,
+                "the set still holds the departed member's row: it only grows")
+        #expect(rig.nodes[0].manager
+                .advertisedKeyAgreementKeyForTesting(for: rig.nodes[2].fingerprint) == nil,
+                "but tier B refuses it, because the current ledger no longer names that member")
+        #expect(rig.nodes[0].manager
+                .advertisedKeyAgreementKeyForTesting(for: rig.nodes[1].fingerprint) != nil,
+                "while a member the ledger still names resolves")
+    }
+
+    /// A conflict mark is released once the derived roster no longer names its member.
+    ///
+    /// The bounded relief for a refusal whose blast radius is the whole mint, mesh-wide and durable
+    /// across restarts: the mesh's own answer to a misbehaving member — a departure or a removal
+    /// vote — has to end the outage rather than leave a mark that outlives the membership. No fence
+    /// is given up: a member the roster does not name is never a mint destination anyway.
+    @Test func aConflictMarkIsReleasedWhenTheRosterNoLongerNamesItsMember() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-mark-relief")
+        defer { rig.teardown() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        try await rig.heal(0, 2)
+        #expect(rig.advertisementCount(at: 0) == 3, "all three rows must be folded first")
+
+        let second = try SignedKeyAgreementAdvertisement.signedForTesting(
+            meshID: rig.meshID, identity: rig.identities[2],
+            keyAgreementPublicKey: MeshKeyAgreementFixtures.key(91),
+            advertisedAt: MeshRoutedDrainRig.now.addingTimeInterval(60)
+        )
+        try rig.deliverMembershipFrame(
+            MeshKeyAgreementPayload(
+                meshID: rig.meshID, advertisements: [second],
+                senderFingerprint: rig.nodes[2].fingerprint
+            ),
+            type: .meshKeyAgreement, sender: 2, receiver: 0
+        )
+        #expect(rig.nodes[0].manager.keyAdvertisements.isConflicted(rig.nodes[2].fingerprint),
+                "two verified keys under one fingerprint mark that member unaddressable")
+
+        try rig.fileDeparture(of: 2, into: 0)
+
+        #expect(!rig.nodes[0].manager.keyAdvertisements.isConflicted(rig.nodes[2].fingerprint),
+                "and the mark is released once the roster no longer names the member")
+        #expect(rig.nodes[0].manager.keyAdvertisements
+                .keyAgreementPublicKey(for: rig.nodes[1].fingerprint) != nil,
+                "while the honest member's row is untouched")
     }
 }

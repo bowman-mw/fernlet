@@ -3049,6 +3049,16 @@ Carried from §22.4, with what P5 added:
   item it holds. Still owed alongside it: **the pairwise phase having no mesh identity** (D-13.18:
   promote at one committed peer, or mint a two-member ledger for the pairwise phase), which is P6
   item 2.
+- **The conflicted-member blast radius** (P6 item 1 pass B review, finding 5). A member that signs
+  two different key-agreement keys and hands one to each of two peers makes the mint refuse
+  `keyMismatch` **whole** — the resolver answers on the first bad destination, so that origin shares
+  with nobody it can see — and the marks ride the sealed session context, so it is durable across
+  restarts, i.e. permanent for the life of the mesh. Fail-closed is the right call and the fix
+  commit did **not** loosen it; what it added is the relief the mesh already implies: a mark is
+  dropped once the derived roster no longer names its member, so a departure or a removal vote ends
+  the outage. Two things are still the owner's: whether item 6's subset target should mint to the
+  addressable destinations instead of refusing whole, and whether the **user** gets a way to clear a
+  mark by hand (no surface exists, and the current escape is ending the mesh).
 - **D-7.30's per-session re-gossip budget.** `reGossipedToFingerprints` is per session and is not
   refunded by `abandonMergeExchange`, so a **second** heal of the same pair inside one session crosses
   no records and neither window can close. Not a regression — today's rule converges no better — but

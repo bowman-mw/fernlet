@@ -646,9 +646,13 @@ struct MeshKeyAgreementFoldTests {
             let path = CryptographicWallScan.repoRelativePath(url)
             guard path != declaring else { continue }
             let text = try String(contentsOf: url, encoding: .utf8)
+            // The needle is the BARE type-with-paren, not `…Set(advertisements:` (pass B review
+            // finding 6): this module's house form for a two-argument initializer puts the first
+            // label on the next line, as the declaring file's own `restoring(_:verifiedBy:)` does,
+            // and a labelled needle is therefore defeated by a line break in any other file.
             guard text.contains("keyAdvertisements.merging(")
                     || text.contains("keyAdvertisements.inserting(")
-                    || text.contains("MeshKeyAgreementAdvertisementSet(advertisements:")
+                    || text.contains("MeshKeyAgreementAdvertisementSet(")
                     || text.contains("markingConflicted(") else { continue }
             namedElsewhere.append(path)
         }
@@ -659,6 +663,57 @@ struct MeshKeyAgreementFoldTests {
             verifies first. These files reach around it: \(namedElsewhere.joined(separator: ", "))
             """
         )
+    }
+
+    /// The declaring file's exemption is per **function**, not per file.
+    ///
+    /// The at-rest initializer verifies nothing, so even inside the type's own file only the
+    /// functions that ARE the set's algebra may name it — otherwise a new fold door added there
+    /// reaches the unverified constructor under cover of the file exemption the wall above grants.
+    /// Allowlisted by file + enclosing declaration, so a new site has to be argued for by name.
+    @Test func theSetsOwnConstructionSitesAreAllowlistedByFunction() throws {
+        let allowed = [
+            "static var empty:", "init(from decoder: Decoder) throws {",
+            "func inserting(_ verified:", "func markingConflicted(",
+            "func clearingConflicts(outside", "static func restoring("
+        ]
+        let source = try RepoRoot.source(
+            "FernletKit/Sources/ProximityKit/Mesh/MeshKeyAgreementAdvertisement.swift"
+        )
+        let lines = source.components(separatedBy: "\n")
+        var unallowlisted: [String] = []
+        // R2: bounded by the file's own line count.
+        for (index, line) in lines.enumerated()
+        where line.contains("MeshKeyAgreementAdvertisementSet(") {
+            let declaration = Self.enclosingDeclaration(of: index, in: lines)
+            guard !allowed.contains(where: { declaration.hasPrefix($0) }) else { continue }
+            unallowlisted.append("line \(index + 1) in \(declaration)")
+        }
+        #expect(
+            unallowlisted.isEmpty,
+            """
+            Only the set's own algebra may name the at-rest initializer, which verifies nothing.
+            Unallowlisted sites: \(unallowlisted.joined(separator: " | "))
+            """
+        )
+        #expect(lines.count > 100, "the line scan must not be reading an empty file")
+    }
+
+    /// The nearest declaration at or above `index` — a construction site's owning function.
+    ///
+    /// A local `var` is deliberately not a starter: `restoring(_:verifiedBy:)` declares two before
+    /// it builds its set, and treating either as the enclosing declaration would let any site in
+    /// the file pass by standing next to a `var`.
+    private static func enclosingDeclaration(of index: Int, in lines: [String]) -> String {
+        let starters = ["init(", "func ", "static func ", "static var ",
+                        "private func ", "private static func "]
+        // R2: a construction site is never forty lines from its own signature.
+        for offset in 0..<min(40, index + 1) {
+            let text = lines[index - offset].trimmingCharacters(in: .whitespaces)
+            guard starters.contains(where: { text.hasPrefix($0) }) else { continue }
+            return text
+        }
+        return "no enclosing declaration"
     }
 }
 
