@@ -1425,6 +1425,117 @@ struct MeshRoutedDrainTests {
         }
     }
 
+    /// **Exactly one** chunk file under one node's routed scope, removed — a single slot's durable
+    /// bytes, where ``removeChunkFiles(of:)`` takes them all.
+    ///
+    /// Which slot is not chosen and cannot be: the file names are opaque by design (no fingerprint,
+    /// item id, index or hash appears in any path component), so the caller learns which slot went
+    /// by diffing ``MeshRoutedIndex/heldChunkIndices(of:)`` across the read that repairs it. That is
+    /// the honest way round — the store's own repair is what decides.
+    ///
+    /// - Parameter node: The node to take a slot from.
+    /// - Returns: whether a file was really removed, so a cell cannot start from a no-op.
+    private static func removeOneChunkFile(of node: MeshDepartureNode) -> Bool {
+        let root = node.store.meshRoutedStorage.directory
+            .appendingPathComponent("MeshRoutedChunks", isDirectory: true)
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: nil
+        )) ?? []
+        guard let victim = contents.sorted(by: { $0.path < $1.path }).first else { return false }
+        return (try? FileManager.default.removeItem(at: victim)) != nil
+    }
+
+    /// **P6 item 8 — the leg P5 item 14 owed by name.** A chunk slot repaired while a DEPARTED
+    /// origin's custodian was forwarding the item on is refillable: the window was told to forget
+    /// that one frame, and it still answers `replayed` for every slot the repair did not touch.
+    ///
+    /// P5 item 12 built `forget(frameID:from:)` for exactly this ("a repaired chunk slot must be
+    /// refillable") and P5 item 14 left the cell unwritten, because rectangle C's pipeline ends at
+    /// the hand-off assertions and holds no forwarding leg at all — the repair there fires from
+    /// `commitLocalCustody`, which is a different call site with a different un-record
+    /// (`aRepairedSlotIsReAdmittable`, above). This drives the other one: `sendRoutedChunks`, on a
+    /// custodian that claimed the item from a member that has already gone.
+    ///
+    /// The shape is a second rig rather than `MeshCustodyChainScenario`, for one reason: that
+    /// scenario's item is 1 200 bytes, i.e. a single chunk, and this cell needs one slot to lose and
+    /// one to keep as its control. Everything else is that scenario's sequence — the origin serves
+    /// the first hop, departs naming every other member, and the hop then forwards.
+    ///
+    /// **Its own non-vacuity is in the cell**: the untouched slot's verdict. An un-record that
+    /// forgot the *sender* rather than the frame (`forget(senderFingerprint:)`, which
+    /// `theRoutedWindowNeverForgetsASender` bans on this path) would pass every other assertion
+    /// here and fail that one.
+    @Test func aRepairedSlotRefilledByADepartedOriginsCustodianIsNotReplayed() async throws {
+        let rig = try MeshRoutedDrainRig.build(4, label: "replay-handoff")
+        defer { rig.teardown() }
+        let item = try MeshRoutedDrainItem.mint(
+            rig, origin: 0, byteCount: MeshChunkFormat.maxChunkPayloadBytes + 1_000
+        )
+        #expect(item.chunks.count == 2, "the cell needs a slot to lose and a slot to keep")
+        item.stage(into: rig, at: 0)
+        let origin = rig.nodes[0].fingerprint
+        let base = MeshRoutedDrainRig.now
+
+        // The origin SERVES the first hop, which is what makes the hand-off below name a custodian
+        // it both named and served (P5 item 8's push).
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        try await rig.settle(until: {
+            rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.isComplete == true
+        })
+        #expect(rig.nodes[1].manager.routedReplayWindowForTesting?.recordedCount(for: origin) == 3,
+                "the precondition: the custodian recorded the manifest and BOTH chunks")
+
+        // …and then departs, naming every other member. The push is the origin's own forwarding
+        // leg, over intact files; the leg under test is the custodian's, below.
+        await rig.develop(0, clock: [base, base.addingTimeInterval(2), base.addingTimeInterval(2)])
+        try await rig.settle([1, 2, 3])
+        rig.cut(0, 1)
+        rig.nodes[1].manager.claimHandedOffCustodyForTesting(now: base)
+        #expect(rig.departure(at: 1) != nil, "the custodian must hold the leaver's signed record")
+
+        #expect(Self.removeOneChunkFile(of: rig.nodes[1]), "the cell must start from a real loss")
+        let heldBefore = Set(rig.routedIndex(rig.nodes[1])?.heldChunkIndices(of: item.key) ?? [])
+        #expect(heldBefore.count == 2, "the index claims both slots until a read notices")
+
+        // The custodian forwards. `sendRoutedChunks` reads the slot whose file went, the store
+        // repairs the index, and the window has to be told in the same breath.
+        rig.link(1, 2)
+        rig.commit(1, 2)
+        try await rig.settle([1, 2, 3])
+        rig.commit(1, 2)
+        try await rig.settle([1, 2, 3])
+
+        let heldAfter = Set(rig.routedIndex(rig.nodes[1])?.heldChunkIndices(of: item.key) ?? [])
+        let dropped = heldBefore.subtracting(heldAfter)
+        #expect(dropped.count == 1, "the forward must have repaired exactly one slot")
+        let slot = Int(try #require(dropped.first))
+        let refill = try #require(item.chunks.dropFirst(slot).first)
+        let untouched = try #require(item.chunks.dropFirst(slot == 0 ? 1 : 0).first)
+        let window = try #require(rig.nodes[1].manager.routedReplayWindowForTesting)
+        #expect(window.recordedCount(for: origin) == 2,
+                "the repaired slot must leave the window ON THE FORWARDING LEG, and nothing else")
+        #expect(
+            window.verdict(frameID: refill.chunkID, from: origin, meshID: rig.meshID,
+                           expiresAt: refill.expiresAt, now: base) == .admitted,
+            "a repaired slot the window still remembers could never be refilled"
+        )
+        #expect(
+            window.verdict(frameID: untouched.chunkID, from: origin, meshID: rig.meshID,
+                           expiresAt: untouched.expiresAt, now: base) == .replayed,
+            "and the un-record is ONE frame, never the sender's whole axis"
+        )
+
+        // The refill, through the real chunk door, from a courier rather than the departed origin.
+        try await deliver(
+            MeshChunkPayload(chunk: refill), type: .meshRoutedChunk, from: rig, sender: 2, receiver: 1
+        )
+
+        #expect(heldChunkCount(rig, 1, item.key) == 2, "the repaired slot really is refilled")
+        #expect(rig.nodes[1].manager.routedReplayWindowForTesting?.recordedCount(for: origin) == 3,
+                "and the refilled frame is recorded again, so a SECOND copy of it is still refused")
+    }
+
     /// **A completing frame whose rung work did not settle is not recorded**, so the honest re-offer
     /// is still the re-drive. Asserted as a PAIR, because the negative alone holds for a device that
     /// simply never completed the item: the courier — admitted through the origin's own hand-off
