@@ -767,6 +767,14 @@ struct ContentView: View {
         // bar this style would otherwise draw beneath the floating one.
     }
 
+    /// Whether the disposable-camera surface is the Social tab's content right now.
+    ///
+    /// It must read the SAME predicate as the swap that actually shows it
+    /// (`ConnectView`'s `isInSession && sessionReady`), so this one stays on `isInSession` and is
+    /// not re-pointed at `hasCommittedPeer` (P6 item 2): the compact tab bar and the dark scene
+    /// background are the camera's chrome, and a founded mesh keeps the camera up across a blip by
+    /// design. Pointing only this half at the lifecycle predicate would draw parchment and a full
+    /// tab bar over a visible camera.
     private var isDisposableCameraSessionActive: Bool {
         selectedTab == .social
             && store.meshNetworkManager.isInSession
@@ -1779,6 +1787,19 @@ struct ContentView: View {
         }
     }
 
+    /// Arms the friend radios, unless a session is already live.
+    ///
+    /// The re-entry guard stays on `isInSession` — **not** `hasCommittedPeer` — and that is a
+    /// decision, not an oversight (P6 item 2). `startJoin()` resets the session state machine and
+    /// the live roster but deliberately does not clear `currentMesh` or the membership ledger, and
+    /// the founding fires only on `currentMesh == nil`. So pointing this guard at
+    /// `hasCommittedPeer` would let a tab bounce run `startJoin()` straight over a founded,
+    /// partitioned mesh: the mesh would lose its ceiling and never re-found, which is a session
+    /// that can no longer expire. The cost is the named residual — **a partitioned pair cannot
+    /// re-arm its radios until End Session** — and End Session is one tap away on the same screen.
+    /// Clearing the mesh in `startJoin()` is the other half of the choice and was rejected here:
+    /// `leaveMesh()` drops the membership verifier and the routed drain state, so a pair that
+    /// auto-left could never deliver its custodied photo when the peer came back.
     private func startFriendsDiscovery() {
         let manager = store.meshNetworkManager
         guard !manager.isInSession, !manager.isSearching else { return }
@@ -1792,16 +1813,21 @@ struct ContentView: View {
                 // discovery start), so returning WITHOUT `stopJoin()` is the intended behavior.
                 return
             }
-            guard !manager.isInSession else { return }
+            // `hasCommittedPeer`, not `isInSession` (P6 item 2): a founded mesh outlives its links,
+            // so on `isInSession` the discovery timeout would stop firing altogether and the radios
+            // would run until the user tapped End Session.
+            guard !manager.hasCommittedPeer else { return }
             manager.stopJoin()
         }
     }
 
+    /// Stands the radios down on tab exit / scene change — unless a peer is actually committed.
+    /// `hasCommittedPeer`, not `isInSession`, for the reason the timeout above gives.
     private func stopFriendsDiscovery() {
         discoveryTimeoutTask?.cancel()
         discoveryTimeoutTask = nil
         let manager = store.meshNetworkManager
-        guard !manager.isInSession else { return }
+        guard !manager.hasCommittedPeer else { return }
         manager.stopJoin()
     }
 }

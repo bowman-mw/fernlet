@@ -1297,6 +1297,12 @@ struct DisposableCameraView: View {
         keptFriendFingerprints = []
     }
 
+    /// Restarts the capture session after a review the user cancelled.
+    ///
+    /// `isInSession` is the right predicate here and stays (P6 item 2): the question is whether this
+    /// view is still the Social tab's content, which is `ConnectView`'s swap condition — not whether
+    /// a peer is committed this instant. A founded pair whose link blipped is still looking at the
+    /// camera.
     private func resumeCameraAfterCancelledReview() {
         guard manager.isInSession else { return }
         camera.startSession()

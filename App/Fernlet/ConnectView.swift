@@ -610,8 +610,13 @@ struct FriendsView: View {
     /// Friend candidates come from the BATCH entries; eligibility is computed here — at
     /// presentation time, against the live trust vault — so peers trusted or blocked mid-session
     /// never reach the prompt.
+    ///
+    /// The gate is `hasCommittedPeer`, not `isInSession` (P6 item 2): a founded mesh outlives its
+    /// links, so on `isInSession` this sheet would never present again for a proximity pair — the
+    /// manager would promote the batch and nothing would ever show it. The model half and the
+    /// presenting half must read the SAME predicate or the ceremony is only half re-pointed.
     private func presentDisconnectReviewIfNeeded() {
-        guard !manager.isInSession else { return }
+        guard !manager.hasCommittedPeer else { return }
         guard !disconnectReviewPresented, !keepFriendsPromptPresented else { return }
         let batch = manager.pendingFriendReview
         let hasPhotos = !manager.sessionPhotos.isEmpty
