@@ -632,6 +632,20 @@ struct MeshKeyAgreementFoldTests {
     /// declaring file — the decoder and the two verified doors — may name it. `markingConflicted(`
     /// is walled on the same principle from the other side: only the fold may mark a member
     /// unaddressable, whatever receiver name a caller gives the set.
+    /// Every spelling that reaches the at-rest initializer.
+    ///
+    /// The first needle is the BARE type-with-paren, not `…Set(advertisements:` (pass B review
+    /// finding 6): this module's house form for a two-argument initializer puts the first label on
+    /// the next line, as the declaring file's own `restoring(_:verifiedBy:)` does, and a labelled
+    /// needle is therefore defeated by a line break in any other file. The other two close what the
+    /// bare one still missed (second fix review finding 9): `X.init(` does not contain `X(`, and an
+    /// inferred `= .init(advertisements:` does not name the type at all.
+    static let constructionNeedles = [
+        "MeshKeyAgreementAdvertisementSet(",
+        "MeshKeyAgreementAdvertisementSet.init(",
+        ".init(advertisements:"
+    ]
+
     @Test func theAdvertisementSetNamesNoSilentMergeDoor() throws {
         let declaring = "FernletKit/Sources/ProximityKit/Mesh/MeshKeyAgreementAdvertisement.swift"
         let source = try RepoRoot.source(declaring)
@@ -646,13 +660,9 @@ struct MeshKeyAgreementFoldTests {
             let path = CryptographicWallScan.repoRelativePath(url)
             guard path != declaring else { continue }
             let text = try String(contentsOf: url, encoding: .utf8)
-            // The needle is the BARE type-with-paren, not `…Set(advertisements:` (pass B review
-            // finding 6): this module's house form for a two-argument initializer puts the first
-            // label on the next line, as the declaring file's own `restoring(_:verifiedBy:)` does,
-            // and a labelled needle is therefore defeated by a line break in any other file.
-            guard text.contains("keyAdvertisements.merging(")
+            guard Self.constructionNeedles.contains(where: text.contains)
+                    || text.contains("keyAdvertisements.merging(")
                     || text.contains("keyAdvertisements.inserting(")
-                    || text.contains("MeshKeyAgreementAdvertisementSet(")
                     || text.contains("markingConflicted(") else { continue }
             namedElsewhere.append(path)
         }
@@ -684,7 +694,7 @@ struct MeshKeyAgreementFoldTests {
         var unallowlisted: [String] = []
         // R2: bounded by the file's own line count.
         for (index, line) in lines.enumerated()
-        where line.contains("MeshKeyAgreementAdvertisementSet(") {
+        where Self.constructionNeedles.contains(where: line.contains) {
             let declaration = Self.enclosingDeclaration(of: index, in: lines)
             guard !allowed.contains(where: { declaration.hasPrefix($0) }) else { continue }
             unallowlisted.append("line \(index + 1) in \(declaration)")
@@ -703,14 +713,22 @@ struct MeshKeyAgreementFoldTests {
     ///
     /// A local `var` is deliberately not a starter: `restoring(_:verifiedBy:)` declares two before
     /// it builds its set, and treating either as the enclosing declaration would let any site in
-    /// the file pass by standing next to a `var`.
+    /// the file pass by standing next to a `var`. A **member** `let`/`var` is a different thing and
+    /// it IS a starter, at the type's own member indent of four spaces only (second fix review
+    /// finding 9): a construction site inside a stored or computed property placed within forty
+    /// lines below an allowlisted function would otherwise inherit that function's name and pass.
+    /// A local is indented eight, which is what keeps both rules true at once.
     private static func enclosingDeclaration(of index: Int, in lines: [String]) -> String {
         let starters = ["init(", "func ", "static func ", "static var ",
                         "private func ", "private static func "]
+        let members = ["let ", "var ", "static let ", "private let ", "private var "]
         // R2: a construction site is never forty lines from its own signature.
         for offset in 0..<min(40, index + 1) {
-            let text = lines[index - offset].trimmingCharacters(in: .whitespaces)
-            guard starters.contains(where: { text.hasPrefix($0) }) else { continue }
+            let line = lines[index - offset]
+            let text = line.trimmingCharacters(in: .whitespaces)
+            if starters.contains(where: { text.hasPrefix($0) }) { return text }
+            guard line.prefix(while: { $0 == " " }).count == 4,
+                  members.contains(where: { text.hasPrefix($0) }) else { continue }
             return text
         }
         return "no enclosing declaration"

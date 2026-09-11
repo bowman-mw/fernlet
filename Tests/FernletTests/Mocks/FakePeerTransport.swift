@@ -286,6 +286,15 @@ final class FakePeerTransport: PeerTransport {
     /// apart from ``droppedFrames``, whose only meaning is "a live fabric refused to carry".
     private(set) var fabricGoneFrames: [(data: Data, peer: PeerHandle, mode: PeerDeliveryMode)] = []
     private(set) var receivedFrames: [InboundPeerFrame] = []
+    /// A suspension a cell can install inside ``send(_:to:mode:)``, given the index of the send.
+    ///
+    /// The one thing this fabric does not reproduce about a real channel: `send` is `async` in the
+    /// protocol and a radio genuinely parks inside it, while this implementation runs to completion
+    /// with no suspension point at all. A cell whose claim is about what a SECOND MainActor door
+    /// does while the first send is in flight has nothing to interleave with otherwise — the child
+    /// task simply finishes first and the interleaving the production code must survive is never
+    /// reached. Nil for every other cell, so nothing else changes shape.
+    var sendSuspension: ((Int) async -> Void)?
     private(set) var lastServiceType: String?
     private(set) var lastDiscoveryInfo: [String: String]?
     private(set) var disconnectCallCount = 0
@@ -322,6 +331,7 @@ final class FakePeerTransport: PeerTransport {
     }
 
     func send(_ data: Data, to peer: PeerHandle, mode: PeerDeliveryMode) async throws {
+        if let sendSuspension { await sendSuspension(sentFrames.count) }
         sentFrames.append((data, peer, mode))
         // A gone fabric carries nothing, and neither does a partitioned one — but they are DIFFERENT
         // facts, recorded apart. A pinned send may now outlive the rig that owned the fabric; that

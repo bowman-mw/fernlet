@@ -239,6 +239,61 @@ extension MeshRoutedDrainRig {
     /// How many advertisement rows one node holds.
     func advertisementCount(at node: Int) -> Int { nodes[node].manager.keyAdvertisements.count }
 
+    /// How many rows one node has PARKED, across every sender's share.
+    func parkedCount(at node: Int) -> Int {
+        nodes[node].manager.parkedKeyAdvertisementCountForTesting
+    }
+
+    /// Re-seats ONE node's verifier on a ledger that admits only `members`.
+    ///
+    /// The same seam every rig starts from (`seedMembershipLedgerForTesting`), used a second time.
+    /// A cell about the park needs a device whose admission set is NARROWER than the mesh's: that
+    /// is the only state in which a genuinely signed row is refused `signerNotAdmitted` rather than
+    /// `signatureInvalid`, and it is the state the grant door actually produces — a joiner on the
+    /// bootstrap ledger its admitter rooted. Calling it a second time with a wider list is the
+    /// widening.
+    ///
+    /// - Parameters:
+    ///   - node: Which node's verifier to re-seat.
+    ///   - members: The rig positions the new ledger admits; position 0 is always the founder.
+    func reseedLedger(at node: Int, admitting members: [Int]) throws {
+        let others = members.filter { $0 != 0 }.map { identities[$0] }
+        let ledger = try MeshPartitionFixtures.ledger(
+            founder: identities[0], others: others, meshID: meshID
+        )
+        nodes[node].manager.seedMembershipLedgerForTesting(
+            meshID: meshID,
+            founderSigningPublicKey: identities[0].localSigningPublicKey,
+            ledger: ledger
+        )
+    }
+
+    /// Drives one node's production re-offer of its parked rows under a pinned binding.
+    ///
+    /// - Parameters:
+    ///   - node: Which node re-offers.
+    ///   - binding: The device binding the re-offer's sealed write runs under; `.unavailable` is
+    ///     how a cell drives the durable-before-it-counts rollback.
+    func reofferParked(at node: Int, binding: DeviceBindingID.TestOverride? = nil) {
+        DeviceBindingID.$testOverride.withValue(binding ?? .identifier(MeshP3Acceptance.install)) {
+            nodes[node].manager.foldParkedKeyAdvertisementsForTesting()
+        }
+    }
+
+    /// One advertisement frame, addressed from one rig node.
+    ///
+    /// - Parameters:
+    ///   - rows: The rows the frame carries.
+    ///   - sender: The rig position the frame is attributed to.
+    /// - Returns: The payload.
+    func advertisementFrame(
+        _ rows: [SignedKeyAgreementAdvertisement], from sender: Int
+    ) -> MeshKeyAgreementPayload {
+        MeshKeyAgreementPayload(
+            meshID: meshID, advertisements: rows, senderFingerprint: nodes[sender].fingerprint
+        )
+    }
+
     /// Delivers one frame through the **membership** dispatch family, on the real receive entry
     /// point and after the real envelope verification.
     ///
@@ -1627,25 +1682,114 @@ struct MeshKeyAdvertisementDeliveryTests {
     ///
     /// `.unavailable` makes every sealed write fail, which is the outage the repair exists for — and
     /// the one that must not become per-link-open work forever on a device whose store is broken.
+    ///
+    /// **The door count and the expected line count are LITERALS** (second fix review finding 10).
+    /// Driving the loop from the constant made this cell unable to fail on a mutation of its own
+    /// bound: raising `selfMintAttemptsPerSession` raised the loop with it, so the count still
+    /// matched and the only red the log ever showed was collateral from a different mutation. Six
+    /// doors against three expected lines reds on a raised cap (five lines), on a lowered one, and
+    /// on a deleted guard (six).
     @Test func theSelfMintRepairIsSpentThreeTimesAndThenNamed() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-repair-cap")
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
         defer { capture.uninstall() }
+        #expect(MeshKeyAdvertisementSendBounds.selfMintAttemptsPerSession == 3,
+                "the cap is three; the literals below are pinned against it")
 
         await DeviceBindingID.$testOverride.withValue(.unavailable) {
-            // R2: the cap plus one, so the refusal after it is observed.
-            for _ in 0...MeshKeyAdvertisementSendBounds.selfMintAttemptsPerSession {
+            // R2: six doors — twice the cap, as a literal.
+            for _ in 0..<6 {
                 await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
             }
         }
 
-        #expect(capture.count(of: "mesh.keyAgreement.selfMintUnavailable")
-                == MeshKeyAdvertisementSendBounds.selfMintAttemptsPerSession,
-                "the repair is named exactly once per attempt and the cap stops the fourth")
+        #expect(capture.count(of: "mesh.keyAgreement.selfMintUnavailable") == 3,
+                "three attempts are named, one per attempt, and the cap stops the other three doors")
         #expect(rig.advertisementCount(at: 0) == 0,
                 "and a mint the store refused is rolled back out of memory")
+    }
+
+    /// The repair still runs once every member has been TOLD — the state it exists for.
+    ///
+    /// The pre-check used to be "a member is OWED the current version", which is stricter than "a
+    /// member exists" in exactly one reachable state, and it is the outage state: the arm-time seal
+    /// was refused, a peer's row was then folded and sent, so every member is latched at the current
+    /// version with the self row still missing. Attempts two and three were forfeited for the
+    /// session, silently, and a store that recovered mid-session never minted the row — leaving the
+    /// device unaddressable to every member it is not linked to, which is the whole outage this
+    /// family closes.
+    @Test func aRecoveredStoreStillMintsTheSelfRowAfterEveryMemberWasTold() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "advert-repair-recovers")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        rig.armKeyAdvertisement(at: 1)
+        rig.link(0, 1)
+        let peerRow = try #require(rig.nodes[1].manager.keyAdvertisements
+            .advertisement(for: rig.nodes[1].fingerprint))
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame([peerRow], from: 1),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(rig.advertisementCount(at: 0) == 1,
+                "the precondition: node 0 holds the peer's row and not its own")
+
+        // A door fires while the store refuses every seal: the repair fails, the frame is still
+        // written, so node 1 ends LATCHED at the current version with the self row still missing.
+        await DeviceBindingID.$testOverride.withValue(.unavailable) {
+            await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+        }
+        #expect(capture.count(of: "mesh.keyAgreement.selfMintUnavailable") == 1,
+                "one attempt was spent and named")
+        #expect(rig.advertisementCount(at: 0) == 1, "and the refused mint was rolled back")
+
+        // The store recovers and the next door fires. Nobody is owed anything.
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+        }
+
+        #expect(rig.nodes[0].manager.keyAdvertisements
+                .advertisement(for: rig.nodes[0].fingerprint) != nil,
+                "a recovered store mints the row its arm could not")
+        try await rig.settle()
+        #expect(rig.advertisementCount(at: 1) == 2,
+                "and the mint moved the version, so the latch re-armed and the peer was re-sent")
+    }
+
+    /// Two doors firing for one peer inside one turn write the frame **once**.
+    ///
+    /// The latch is the in-flight claim as well as the "already told" record. Recording only what
+    /// the wire reached — the fix for one lost frame becoming a session-long outage — moved the
+    /// write under the `await` and left nothing claimed while it was in flight: this manager is
+    /// MainActor-isolated, so a second door (`beginMergeExchange`, `readvertiseMergeProof` and
+    /// `askOneReconnectedPeer` all spawn their own send and their recipient sets overlap) recomputed
+    /// the same `owed` and wrote the frame again, spending an encode, a signature and one frame of
+    /// the receiver's per-sender budget. The suspension is installed in the fake channel because
+    /// this fabric's `send` has no suspension point of its own — see `sendSuspension`.
+    @Test func twoDoorsFiringForOnePeerInOneTurnWriteOneFrame() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "advert-double-door")
+        defer { rig.teardown() }
+        rig.armKeyAdvertisements()
+        rig.link(0, 1)
+        #expect(rig.nodes[0].channel.sentFrames.isEmpty, "nothing has been written yet")
+        rig.nodes[0].channel.sendSuspension = { index in
+            guard index == 0 else { return }
+            // R2: a fixed number of yields — enough for the queued door to run to completion.
+            for _ in 0..<8 { await Task.yield() }
+        }
+
+        async let first: Void = rig.nodes[0].manager
+            .sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+        async let second: Void = rig.nodes[0].manager
+            .sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
+        _ = await (first, second)
+        rig.nodes[0].channel.sendSuspension = nil
+
+        #expect(rig.nodes[0].channel.sentFrames.count == 1,
+                "the second door saw the claim and wrote nothing")
     }
 
     /// A fold the store refused is **rolled back**, with its conflict marks, and named.
@@ -1761,8 +1905,10 @@ struct MeshKeyAdvertisementDeliveryTests {
     ///
     /// Parking exists for one shape only: a row relayed before this device's ledger names its
     /// signer. A widening arrives in stages, so a row that still fails is re-parked rather than
-    /// dropped on the first re-offer — which makes the two ends that bound it the ones under test
-    /// here: the capacity refusal, and the session reset.
+    /// dropped on the first re-offer. Two of the **three** ends that bound it are under test here —
+    /// the share refusal and the session reset; the third, the drop after
+    /// `failedWideningsPerRow` failed widenings, is
+    /// `aParkedRowIsDroppedAfterThreeFailedWidenings`'.
     @Test func aParkedRowFromANeverAdmittedSignerIsRefusedAtTheBoundAndAtSessionEnd() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-drop")
         defer { rig.teardown() }
@@ -1878,5 +2024,204 @@ struct MeshKeyAdvertisementDeliveryTests {
         #expect(rig.nodes[0].manager.keyAdvertisements
                 .keyAgreementPublicKey(for: rig.nodes[1].fingerprint) != nil,
                 "while the honest member's row is untouched")
+    }
+
+    /// One sender cannot fill the park: the share is **per sender**.
+    ///
+    /// The verifier answers `signerNotAdmitted` before it checks the signature, so a parked row is
+    /// attacker-chosen bytes under an attacker-chosen fingerprint — and one frame carries sixteen of
+    /// them, which is exactly the whole capacity a flat container had. A misbehaving member could
+    /// therefore disable the park for the session with a single frame, and every other peer's
+    /// genuine relay was refused with nothing in the transcript to say so.
+    @Test func oneSendersParkShareCannotStarveAnother() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-share")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        try await rig.heal(0, 2)
+        // Node 1 spends its WHOLE share in one frame: rows for fingerprints no admission names.
+        // R2: bounded by the share's own constant.
+        let strangers = (0..<MeshKeyAdvertisementParkBounds.rowsPerSender).map {
+            MeshKeyAgreementFixtures.unverifiedRow($0 + 700, meshID: rig.meshID)
+        }
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame(strangers, from: 1),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(rig.parkedCount(at: 0) == MeshKeyAdvertisementParkBounds.rowsPerSender,
+                "the share is full of rows the ledger cannot prove")
+
+        // One more from node 1: its share is spent, and the refusal is named.
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame(
+                [MeshKeyAgreementFixtures.unverifiedRow(999, meshID: rig.meshID)], from: 1
+            ),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(capture.count(of: "mesh.keyAgreement.parkFull") == 1, "the bound is named, not silent")
+        #expect(rig.parkedCount(at: 0) == MeshKeyAdvertisementParkBounds.rowsPerSender,
+                "and nothing was displaced")
+
+        // Node 2 relays a row for one of the same never-admitted fingerprints. Different sender,
+        // different share.
+        let relayed = try #require(strangers.first)
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame([relayed], from: 2),
+            type: .meshKeyAgreement, sender: 2, receiver: 0
+        )
+
+        #expect(rig.parkedCount(at: 0) == MeshKeyAdvertisementParkBounds.rowsPerSender + 1,
+                "one member's junk cannot spend another member's share")
+        #expect(rig.nodes[0].manager.parkedKeyAdvertisementForTesting(
+            from: rig.nodes[2].fingerprint, for: relayed.memberFingerprint
+        ) == relayed, "and the relay landed in the relaying sender's own share")
+        #expect(rig.advertisementCount(at: 0) == 3, "no parked row entered the set")
+    }
+
+    /// A parked row a widening cannot prove is dropped after **three** failures, by name.
+    ///
+    /// Without a drop, a row for a fingerprint no admission will ever name is immortal: it is
+    /// re-verified at every widening for the life of the mesh and its slot is never freed. Not one
+    /// failure, because a widening arrives in stages — measured, not reasoned: a third device adopts
+    /// the moment the chain to its own admission proves, which can be a two-member ledger, with the
+    /// record naming the third member arriving through the live insert afterwards.
+    ///
+    /// The re-offer count is a LITERAL against the pinned constant, for finding 10's reason: driving
+    /// the loop from the bound would make this cell unable to fail on a mutation of that bound.
+    @Test func aParkedRowIsDroppedAfterThreeFailedWidenings() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "advert-park-drop-after-n")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        #expect(MeshKeyAdvertisementParkBounds.failedWideningsPerRow == 3,
+                "three failed widenings; the literals below are pinned against it")
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame(
+                [MeshKeyAgreementFixtures.unverifiedRow(700, meshID: rig.meshID)], from: 1
+            ),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(rig.parkedCount(at: 0) == 1, "the row is parked, not folded")
+
+        // R2: two re-offers, a literal — one less than the bound.
+        for _ in 0..<2 { rig.reofferParked(at: 0) }
+        #expect(rig.parkedCount(at: 0) == 1,
+                "a widening arrives in stages, so an early failure is not a drop")
+        #expect(capture.count(of: "mesh.keyAgreement.parkDropped") == 0, "nothing dropped yet")
+
+        rig.reofferParked(at: 0)
+
+        #expect(rig.parkedCount(at: 0) == 0, "the third failure drops it")
+        #expect(capture.count(of: "mesh.keyAgreement.parkDropped") == 1, "and names the drop")
+        #expect(capture.count(of: "mesh.keyAgreement.parkedReoffered") == 3,
+                "every re-offer was through the one fold door")
+    }
+
+    /// A row that has failed a widening yields its slot, and the genuine row then folds.
+    ///
+    /// The squat this closes: junk parked under member M's fingerprint meant M's genuine relayed row
+    /// was **not** parked when it arrived, the non-park was invisible in the transcript, and the
+    /// sender's version latch never re-sent it — so the junk was evicted at the next widening and
+    /// the real row was simply gone. Earliest arrival still wins while the held row has failed
+    /// nothing; once it has failed a widening, a newcomer that has failed nothing takes the slot,
+    /// and a verified row always beats an unverified parked one.
+    @Test func aRowThatFailedAWideningYieldsItsSlotAndTheGenuineRowThenFolds() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-displace")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        // Node 0's ledger admits only itself and node 1 — the joiner-bootstrap shape, and the only
+        // state in which node 2's genuinely signed row is refused `signerNotAdmitted`.
+        try rig.reseedLedger(at: 0, admitting: [0, 1])
+        rig.armKeyAdvertisement(at: 2)
+        rig.link(0, 1)
+        let genuine = try #require(rig.nodes[2].manager.keyAdvertisements
+            .advertisement(for: rig.nodes[2].fingerprint))
+        let junk = SignedKeyAgreementAdvertisement(
+            meshID: rig.meshID,
+            memberFingerprint: rig.nodes[2].fingerprint,
+            keyAgreementPublicKey: MeshKeyAgreementFixtures.key(77),
+            advertisedAt: MeshRoutedDrainRig.now,
+            signature: Data(repeating: 0xAB, count: MeshMembershipEventFormat.signatureByteCount)
+        )
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame([junk], from: 1),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame([genuine], from: 1),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(rig.nodes[0].manager.parkedKeyAdvertisementForTesting(
+            from: rig.nodes[1].fingerprint, for: rig.nodes[2].fingerprint
+        ) == junk, "earliest arrival keeps the slot while it has failed nothing")
+        #expect(capture.count(of: "mesh.keyAgreement.parkCollision") == 1,
+                "and the collision the refusal used to hide is named")
+
+        // One widening the junk cannot survive proving, then the genuine row again.
+        rig.reofferParked(at: 0)
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame([genuine], from: 1),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(rig.nodes[0].manager.parkedKeyAdvertisementForTesting(
+            from: rig.nodes[1].fingerprint, for: rig.nodes[2].fingerprint
+        ) == genuine, "a row that failed a widening yields to one that has not")
+        #expect(capture.count(of: "mesh.keyAgreement.parkCollision") == 2, "named both times")
+
+        // The real widening: node 2's admission reaches node 0.
+        try rig.reseedLedger(at: 0, admitting: [0, 1, 2])
+        rig.reofferParked(at: 0)
+
+        #expect(rig.nodes[0].manager.advertisedKeyAgreementKeyForTesting(
+            for: rig.nodes[2].fingerprint
+        ) == rig.identities[2].localKeyAgreementPublicKey,
+                "the genuine row folded, so node 2 is addressable")
+        #expect(rig.parkedCount(at: 0) == 0, "and the park is empty")
+    }
+
+    /// A re-offer the store refused rolls the park back **with** the set.
+    ///
+    /// `commitKeyAdvertisementFold` already rolls the set back — durable before it counts — but the
+    /// park had been emptied before the fold, so a row that had become provable and whose save
+    /// failed was in neither container. Nothing re-sends it: the sender's latch is spent at that
+    /// (peer, version) and no door fires on a fold.
+    @Test func aReOfferTheStoreRefusedRollsBackTheParkWithTheSet() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-rollback")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        try rig.reseedLedger(at: 0, admitting: [0, 1])
+        rig.armKeyAdvertisement(at: 2)
+        rig.link(0, 1)
+        let genuine = try #require(rig.nodes[2].manager.keyAdvertisements
+            .advertisement(for: rig.nodes[2].fingerprint))
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame([genuine], from: 1),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        #expect(rig.parkedCount(at: 0) == 1, "parked: node 0's ledger cannot prove node 2 yet")
+        try rig.reseedLedger(at: 0, admitting: [0, 1, 2])
+
+        rig.reofferParked(at: 0, binding: .unavailable)
+
+        #expect(rig.advertisementCount(at: 0) == 0, "the set is rolled back to what is on disk")
+        #expect(rig.parkedCount(at: 0) == 1,
+                "and the park with it: a row in neither container is a row nothing re-sends")
+        #expect(capture.count(of: "mesh.keyAgreement.notDurable") == 1, "the set's rollback is named")
+        #expect(capture.count(of: "mesh.keyAgreement.parkRolledBack") == 1, "and the park's")
+
+        rig.reofferParked(at: 0)
+
+        #expect(rig.advertisementCount(at: 0) == 1, "and once the store takes it, the row lands")
+        #expect(rig.parkedCount(at: 0) == 0, "leaving the park empty")
     }
 }
