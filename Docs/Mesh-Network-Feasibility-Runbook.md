@@ -1636,8 +1636,56 @@ Two Simulators, A (founder) and B (joiner), `FERNLET_MESH_ALLOW_HEARTS=1` and
 | 3 | The mesh id is **barred** afterwards | **PASS** | `mesh.sessionState.rejoinBarred` on the departer; session 2 therefore uses a different id |
 | 4 | The **keep** writes a trust-vault row through the shipping doors | **PASS on the departer** | `[mesh-flow] friends kept=1 vault=1`, then `[mesh-flow] vault friends=1 heartsReceived=0 ledgerLoaded=true heartState=idle`. The hook calls `keepProximityFriends(from:keptFingerprints:)` + `completeFriendReview(_:)` from the poll **and again after `leave()` returns**, because the departer's poll ends inside `leave` |
 | 5 | Item 6's P1-1 re-assert, on the radio | **PASS, unplanned** | `mesh.sessionState.reassertedAdoptedCommit` in the joiner's audit — the raise a yielding/late-committing joiner needs, which no earlier lane run could show |
-| 6 | The keep on **both** sides | see below | |
-| 7 | Session 2: one routed heart, the ceremony, the receipt | **NOT REACHED** | |
+| 6 | The keep on **both** sides | **PASS (second pass, 2026-09-12)** | `[mesh-flow] friends kept=1 vault=1` on the founder **and** the joiner, each followed by `[mesh-flow] vault friends=1 heartsReceived=0 ledgerLoaded=true heartState=idle` |
+| 7 | Session 2: one routed heart, the ceremony, the receipt | **PASS (second pass, 2026-09-12)** | the whole row set below |
+
+#### Second pass (runs 2026-09-12, P6 item 10b): the mutual keep, then the heart
+
+The first pass reached session 1 and stopped, because the survivor's friend-review batch promotes
+only when *its own* session ends and its next poll — at the ≈ 0.3 Hz a headless Simulator really
+runs — came after the run's teardown. Two sims only (`iPhone 17 Pro` = **A**, founder;
+`iPhone 17 Pro Max` = **B**, joiner), the run length budgeted at `3.5 × leaveAfter + 60` s, and
+**both sides ending locally** — the plan's own fallback — so neither keep depends on the departure
+race.
+
+Session 1 environment (both nodes, plus the two `LEAVE_AFTER`s):
+
+```
+SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic  SIMCTL_CHILD_FERNLET_MESH_MATRIX=1
+SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=77777777-7777-7777-7777-777777777781
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<KA>,<KB>
+SIMCTL_CHILD_FERNLET_MESH_ROLE=founder|joiner
+SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit,capabilities
+SIMCTL_CHILD_FERNLET_MESH_ALLOW_HEARTS=1  SIMCTL_CHILD_FERNLET_MESH_AUTO_KEEP_FRIENDS=1
+SIMCTL_CHILD_FERNLET_MESH_LEAVE_AFTER=70 (A) / 40 (B)          run length 340 s
+```
+
+Session 2 is the same with a **different mesh id** (`…782` — `terminated.v1` bars the first one
+permanently), `FERNLET_MESH_FLOWS_AFTER=25`, **no** `AUTO_KEEP_FRIENDS`, and the `heart` verb on the
+FOUNDER only, so exactly one heart is minted and the JOINER receives it; run length 320 s.
+
+| # | Scenario | Verdict | Evidence |
+| --- | --- | --- | --- |
+| 1 | Both sides end locally and both keep | **PASS** | `leaving via leaveSessionAfterNotifyingPeers ledger=present derived=2` → `[mesh-quic] membershipFrame sent fernlet.mesh.terminated.v1 slots=… recipients=all` → `left ledger=absent derived=0` → **`friends kept=1 vault=1`**, on **both** nodes |
+| 2 | The vault row **survives the relaunch** | **PASS** | session 2's first report on both nodes is `[mesh-flow] vault friends=1 heartsReceived=0 ledgerLoaded=true heartState=idle`, before any heart exists |
+| 3 | The sender's five gates | **PASS** | `[mesh-flow] sending heart to=87684c8a76bb86c7 canSendSessionHeart=true` |
+| 4 | The **mint** | **PASS** | `mesh.routedShare.pushed frames=2` on the sender — one manifest and one chunk to the single destination the `.singleRecipient` row names |
+| 5 | **Consume-on-stage** | **PASS** | `[mesh-flow] … heartState=sent(recipientName: "iPhone 17 Pro Max")` on the sender, at the same poll |
+| 6 | Custody, then completion at the recipient | **PASS** | `mesh.routedDrain.admitted type=fernlet.mesh.routed-manifest.v1 verdict=admitted` then `…routed-chunk.v1 verdict=admitted` |
+| 7 | **The ceremony ran** | **PASS** | **`[mesh-flow] vault friends=1 heartsReceived=1 ledgerLoaded=true`** — `ProximityHeartLedger.recordReceivedHeart` landed and was read back off `receivedHearts` |
+| 8 | The ceremony replaced the fail-closed no-op | **PASS** | **zero** `mesh.routedProjection.noDispatchArm` anywhere in the run |
+| 9 | `mayCommitRoutedHeartLedgerJudgement` was true | **PASS** | **zero** `mesh.routedAccess.heartStageDeferred`. Note what this does and does not say: a `simctl launch`ed app satisfies the gate's two real legs trivially and the `sessionState` leg is inert until P8 — **the foreground gate was not tested** |
+| 10 | The **recipient receipt on the wire** | **PASS** | `mesh.routedDrain.admitted type=fernlet.mesh.recipient-receipt.v1 verdict=admitted` on the sender (plus `…custody-receipt.v1`), and **no** `mesh.routedDrain.deliveryPending` — the delivery is not merely staged |
+| 11 | The retired mesh `.friendHeart` path is silent | **PASS** | zero `fernlet.friend.heart.v1`, zero `mesh.friendHeart*`, zero `mesh.routedShare.recipientIsSelf`, zero `keyMismatch`, zero `destinationNotAddressable` |
+| 12 | **Item 6's P1-1, as a product proof** | **PASS** | the recipient is the JOINER, and `mesh.sessionState.reassertedAdoptedCommit` is in **its** audit stream for this run. That is the device whose `.peerCommitted` was dropped by `noteCommitIntoMesh`'s `currentMesh != nil` guard; before item 6's fix it would have sat at `joining`, the heart stage would have judged nothing, and this heart would have expired custodied while its sender showed "Sent" and spent five minutes of cooldown |
+
+One line worth not misreading: the recipient's stream also carries two
+`mesh.routedProjection.originUnresolvable` lines. They are **not** the heart — `.heartLedger` is
+deliberately absent from `projectableRoutedTypeTokens`, so a heart never reaches the projection arm
+at all; it is judged inside `commitLocalDelivery`. They are leftover text items custodied by an
+earlier run whose origins this run's roster does not name, which is the same fail-closed refusal row
+8 of the text set records.
 
 ### Lane C — a removal by real quorum (P6 item 10b)
 
