@@ -266,20 +266,21 @@ struct MeshRoutedHeartCeremonyTests {
     /// - Parameters:
     ///   - label: The diagnostic prefix.
     ///   - trustBothWays: Whether to seed the vault rows at all — false is the explicit negative.
+    ///   - openRecipientGate: Whether to open the recipient's routed access gate.
+    ///   - recipientLedger: The recipient's ledger, for the cell that needs one whose writes fail.
     /// - Returns: the rig and the recipient's ledger.
     private func founded(
-        _ label: String, trustBothWays: Bool = true, openRecipientGate: Bool = true
+        _ label: String, trustBothWays: Bool = true, openRecipientGate: Bool = true,
+        recipientLedger: ProximityHeartLedger? = nil
     ) async throws -> (rig: MeshFoundingRig, recipientLedger: ProximityHeartLedger) {
         let rig = try MeshFoundingRig.build(2, label: label)
         rig.link(0, 1)
         rig.commit(0, 1)
         rig.commit(1, 0)
         try await rig.settle()
-        rig.ensureForeground(at: 0, facing: 1)
-        rig.ensureForeground(at: 1, facing: 0)
-        let recipientLedger = rig.isolatedHeartLedger(now: day)
+        let ledger = recipientLedger ?? rig.isolatedHeartLedger(now: day)
         rig.nodes[0].manager.heartLedger = rig.isolatedHeartLedger(now: day)
-        rig.nodes[1].manager.heartLedger = recipientLedger
+        rig.nodes[1].manager.heartLedger = ledger
         rig.nodes[0].store.setAllowNearbyHearts(true)
         rig.nodes[1].store.setAllowNearbyHearts(true)
         if trustBothWays {
@@ -287,9 +288,14 @@ struct MeshRoutedHeartCeremonyTests {
             rig.trustPeer(at: 0, asSeenFrom: 1)
         }
         if openRecipientGate { rig.openGate(at: 1) }
+        // **Earned, not manufactured, since the item 6 fix review.** Both halves of a proximity pair
+        // found and one YIELDS; the yielder used to re-enter at `.joining` and stay there, so the rig
+        // injected an extra commit to lift it. It no longer does — `recordVerifiedAdmissionDurably`
+        // re-asserts the commit the yielder had already made — and the election is a per-run coin
+        // flip, so this precondition holds for whichever half of the pair node 1 turns out to be.
         #expect(rig.nodes[1].manager.sessionState == .activeForeground,
                 "the heart stage's third leg is a live FOREGROUND session — without it every cell here defers")
-        return (rig, recipientLedger)
+        return (rig, ledger)
     }
 
     /// **The item's headline, measured at the RECIPIENT.** A heart minted through the real
@@ -314,6 +320,116 @@ struct MeshRoutedHeartCeremonyTests {
                 "and this device's own receipt is STORED, which is what the ack is for")
         #expect(closeness == [rig.nodes[0].fingerprint],
                 "closeness is fed once, with the ORIGIN rather than the courier")
+    }
+
+    /// **The yielding founder judges, with no manufactured commit** — the fix review's P1-1.
+    ///
+    /// Both halves of a proximity pair found and the higher fingerprint YIELDS: it unwinds to
+    /// `.idle`, adopts the winner's descriptor and re-enters at `.joining` through the admission
+    /// grant. Its slot committed *before* the yield, so no second `.peerCommitted` is ever raised —
+    /// and `.peerCommitted` is `.joining`'s only edge out. Before
+    /// `MeshNetworkManager.reassertCommitIntoAdoptedMesh()`, a steady two-device session therefore
+    /// left the yielder unable to judge ANY heart for its whole life: the gift expired custodied
+    /// while its sender saw "Sent" and spent five minutes of cooldown, and tier 1 was green only
+    /// because the rig injected the missing commit.
+    ///
+    /// Written on ROLES, never indices: the election runs over per-run random fingerprints, so
+    /// "node 1 is the yielder" is not a fact a cell may assume.
+    @Test func aHeartToTheYieldingFounderIsJudgedWithNoManufacturedCommit() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "heart-yielder")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        let minted = [rig.nodes[0].manager.currentMesh?.meshID, rig.nodes[1].manager.currentMesh?.meshID]
+        #expect(Set(minted.compactMap { $0 }).count == 2, "both halves really did mint a mesh")
+        let lowerFounds = MeshNetworkManager.foundsPairwiseMesh(
+            local: rig.identities[0].localFingerprint, peer: rig.identities[1].localFingerprint
+        )
+        let winner = lowerFounds ? 0 : 1
+        let yielder = lowerFounds ? 1 : 0
+        try await rig.settle()
+        #expect(rig.nodes[yielder].manager.currentMesh?.meshID == minted[winner],
+                "the precondition: this really is the half that gave up its own mesh")
+
+        let ledger = rig.isolatedHeartLedger(now: day)
+        rig.nodes[yielder].manager.heartLedger = ledger
+        rig.nodes[winner].manager.heartLedger = rig.isolatedHeartLedger(now: day)
+        rig.nodes[winner].store.setAllowNearbyHearts(true)
+        rig.nodes[yielder].store.setAllowNearbyHearts(true)
+        rig.trustPeer(at: winner, asSeenFrom: yielder)
+        rig.trustPeer(at: yielder, asSeenFrom: winner)
+        rig.openGate(at: yielder)
+        #expect(rig.nodes[yielder].manager.sessionState == .activeForeground, """
+            the yielder must be live and foreground with NO further commit — this is the whole \
+            claim, and it is what the rig used to fake
+            """)
+
+        let giftID = try #require(
+            rig.sendHeartReturningItemID(from: winner, to: yielder, name: "Robin")
+        )
+        try await rig.settle()
+
+        #expect(ledger.receivedHearts.map(\.id) == [giftID],
+                "and the heart the winner sent it is judged, not left to expire custodied")
+        let record = try #require(
+            rig.routedIndex(yielder)?.record(for: rig.key(origin: winner, itemID: giftID))
+        )
+        #expect(record.deliveredAt != nil, "with a stamped delivery, so the sender's ack is real")
+    }
+
+    /// **A dirty sidecar must not eat the closeness signal** — the fix review's P2-1.
+    ///
+    /// `recordReceivedHeart` answers true for an applied-but-unpersisted mutation, while
+    /// `commitProof(for:)` answers nil for exactly that state. So the first judgement accepts the
+    /// gift and mints NO ack; the flush makes the proof available and the re-judgement finds the
+    /// gift already stored, which is a REFUSAL — `receivedGiftIDs` is empty on that pass and empty
+    /// forever after. Fed below the ack guard, the closeness signal for a heart that was genuinely
+    /// received *and* acknowledged was therefore lost silently and permanently.
+    @Test func aDirtySidecarFeedsClosenessOnceAndAcksOnTheFlush() async throws {
+        var writesFail = true
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("heart-dirty-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("HeartLedger.json")
+        let ledger = ProximityHeartLedger(
+            fileURL: url, now: { self.day },
+            writeData: { data, target in
+                if writesFail { throw CocoaError(.fileWriteNoPermission) }
+                try FileManager.default.createDirectory(
+                    at: target.deletingLastPathComponent(), withIntermediateDirectories: true
+                )
+                try data.write(to: target, options: .atomic)
+            }
+        )
+        let (rig, _) = try await founded("heart-dirty", recipientLedger: ledger)
+        defer { rig.teardown() }
+        var closeness: [String] = []
+        rig.nodes[1].manager.onHeartReceived = { closeness.append($0) }
+
+        let giftID = try #require(rig.sendHeartReturningItemID(from: 0, to: 1, name: "Robin"))
+        try await rig.settle()
+
+        let key = rig.key(origin: 0, itemID: giftID)
+        #expect(ledger.receivedHearts.map(\.id) == [giftID],
+                "the precondition: the gift was ACCEPTED — in memory, with the write owed")
+        #expect(ledger.commitProof(for: giftID) == nil,
+                "the precondition: and the ledger cannot yet stand behind it, so no ack minted")
+        #expect(rig.routedIndex(1)?.record(for: key)?.deliveredAt == nil,
+                "so nothing is stamped on the first pass")
+        #expect(closeness == [rig.nodes[0].fingerprint],
+                "but closeness is fed on the acceptance, which is the only pass that sees one")
+
+        writesFail = false
+        ledger.retryLoad()
+        rig.pushGateEdge(at: 1)
+
+        #expect(ledger.commitProof(for: giftID) != nil, "the flush landed, so the proof exists")
+        #expect(rig.routedIndex(1)?.record(for: key)?.deliveredAt != nil,
+                "and the re-judgement mints the ack the first pass could not")
+        #expect(closeness == [rig.nodes[0].fingerprint],
+                "while closeness is NOT fed again — the re-judgement is a refusal, not a receipt")
+        #expect(ledger.receivedHearts.filter { $0.id == giftID }.count == 1,
+                "and the ledger still holds exactly one row for the gift")
     }
 
     /// **The closeness hook must fire on FIRST ACCEPTANCE, not on every ack mint.**
@@ -478,8 +594,6 @@ struct MeshRoutedHeartCeremonyTests {
         rig.commit(0, 1)
         rig.commit(1, 0)
         try await rig.settle()
-        rig.ensureForeground(at: 0, facing: 1)
-        rig.ensureForeground(at: 1, facing: 0)
         var clock = day
         let ledger = rig.isolatedHeartLedger(now: { clock })
         rig.nodes[1].manager.heartLedger = ledger
@@ -488,6 +602,8 @@ struct MeshRoutedHeartCeremonyTests {
         rig.nodes[1].store.setAllowNearbyHearts(true)
         rig.trustPeer(at: 0, asSeenFrom: 1)
         rig.openGate(at: 1)
+        #expect(rig.nodes[1].manager.sessionState == .activeForeground,
+                "the recipient must be foreground on its own, whichever half of the pair it is")
         // A heart from the same sender landed seconds ago — the receive window's own precondition.
         #expect(ledger.recordReceivedHeart(
             id: UUID(), senderDisplayName: "Robin", senderFingerprint: rig.nodes[0].fingerprint
@@ -545,6 +661,15 @@ struct MeshRoutedHeartCeremonyTests {
         #expect(ledger.receivedHearts.isEmpty, "a blocked origin's heart is never recorded")
         #expect(rig.nodes[1].manager.routedHeartRefusedKeys.contains(key),
                 "and the leg is MARKED — the defect this cell exists for was a bare return")
+        // Fix review P3-3: a key marked FINAL is UNFINISHABLE, not deferred. Both answers keep it
+        // out of the allowance, but only one keeps `heartsPending` — which the app reads and which
+        // item 9 writes invariants over — meaning "waiting" rather than "refused for good".
+        let report = try #require(rig.pushGateEdgeReturningReport(at: 1),
+                                  "a rising access-gate edge owes a re-entry pass")
+        #expect(report.heartsPending == 0, """
+            a heart refused for good is not pending: counting it would leave the number climbing \
+            for a session that can never move it
+            """)
     }
 
     /// **A judged heart must not log `noDispatchArm` on the SUCCESS path.** `finishLocalRungs` calls
@@ -652,6 +777,48 @@ struct MeshRoutedHeartCeremonyTests {
         #expect(!manager.contains("no heart was sent"))
         #expect(manager.contains("sessionHeartState = .failed(cause, recipientName:"),
                 "the package publishes its frozen token instead")
+    }
+
+    /// **Each cause is pinned to ITS OWN sentence**, which the exhaustive cell above cannot do — the
+    /// fix review's P2-2, where the two routed-store causes carried each other's sentence and every
+    /// "a failure sentence, never the success one" assertion was still green.
+    ///
+    /// `.storeRefused` maps to `.holdingAllItCan` and `.storeUnavailable` to `.storageUnreachable`
+    /// (`MeshNetworkManager.consumeSessionHeart`), so the user was told the storage was unreachable
+    /// when the store was full and that Fernlet was holding all it can when the store was
+    /// unreadable: the audit line and the sentence disagreeing about the same failure.
+    ///
+    /// The expected values are built with the SAME interpolation shape as the copy, because a
+    /// `LocalizedStringKey` compares its key and its arguments — a flat literal would not match an
+    /// interpolated one even for identical rendered text.
+    @Test func everyHeartFailureCauseHasItsOwnSentence() {
+        let name = "Robin"
+        let table: [(MeshNetworkManager.SessionHeartFailure, LocalizedStringKey)] = [
+            (.heartsOff, "Turn on nearby hearts to send \(name) some warmth."),
+            (.ledgerUnavailable,
+             "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."),
+            (.cooldown, "You just sent \(name) some warmth — hearts settle for a few minutes."),
+            (.alreadySending, "Already sending \(name) some warmth — one moment."),
+            (.recipientLeft, "\(name) left the session — no heart was sent."),
+            (.notReachableYet,
+             "Fernlet can't reach \(name) yet, so no heart was sent. Try again in a moment."),
+            (.identityUnconfirmed,
+             "Fernlet couldn't confirm who it was sending to, so no heart was sent."),
+            (.couldNotSend, "Could not send that heart just now."),
+            (.storageUnreachable, "Fernlet couldn't reach its heart storage, so no heart was sent."),
+            (.holdingAllItCan, "Fernlet is holding all it can, so no heart was sent.")
+        ]
+        #expect(Set(table.map(\.0.rawValue))
+                == Set(MeshNetworkManager.SessionHeartFailure.allCases.map(\.rawValue)),
+                "a new cause owes a row here, not just a sentence")
+        // R2: bounded by the table.
+        for (cause, expected) in table {
+            #expect(SessionHeartStatusCopy.message(cause, recipientName: "Robin Jones") == expected,
+                    "each cause must carry its own sentence, not its neighbour's")
+        }
+        #expect(SessionHeartStatusCopy.message(.storageUnreachable, recipientName: "Robin Jones")
+                != SessionHeartStatusCopy.message(.holdingAllItCan, recipientName: "Robin Jones"),
+                "the two routed-store causes are the pair the swap hid")
     }
 }
 
@@ -761,24 +928,18 @@ extension MeshFoundingRig {
         commit(near, far)
     }
 
-    /// Raises one node's session state to `.activeForeground` by driving a further commit, which is
-    /// what a second dwell tick does in production.
+    /// A falling then rising access-gate edge at one node — the re-entry pass's own trigger — and
+    /// the report the rising half produced, which is the channel `heartsPending` is reported through.
     ///
-    /// **It is needed because of a named item 2 residual, and it is worth stating.** Both halves of
-    /// a proximity-join pair found, and the loser YIELDS to the winner's mesh — and the adoption
-    /// re-arms the session, leaving the yielder holding a mesh with `sessionState == .joining` until
-    /// some later `.peerCommitted` arrives. The founder election runs over random per-run
-    /// fingerprints, so WHICH node that is flips from run to run: without this, half of every
-    /// ceremony cell's runs would defer the heart for a reason the cell was not about. The heart
-    /// stage's third leg (`sessionState == .activeForeground`) is the only routed predicate that
-    /// reads the session at all, which is why item 6 is where this surfaced.
-    func ensureForeground(at node: Int, facing peer: Int) {
-        guard nodes[node].manager.sessionState != .activeForeground else { return }
-        commit(node, peer)
-    }
-
-    /// A falling then rising access-gate edge at one node — the re-entry pass's own trigger.
-    func pushGateEdge(at node: Int) {
+    /// **There is deliberately no `ensureForeground` here any more.** It used to inject a further
+    /// commit so both nodes reached `.activeForeground`, because the yielding half of a pairwise
+    /// founding re-entered at `.joining` and stayed there; that was a production defect
+    /// (`MeshNetworkManager.reassertCommitIntoAdoptedMesh()`, fix review P1-1), not a rig gap, and a
+    /// rig that manufactures the state a shipping path cannot reach makes every ceremony cell green
+    /// for the wrong reason. A cell that wants a backgrounded-then-foregrounded transition raises it
+    /// with `applySessionEvent`, which is the honest seam for it.
+    @discardableResult
+    func pushGateEdgeReturningReport(at node: Int) -> MeshRoutedReentryReport? {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             _ = nodes[node].manager.applyRoutedAccessGate(
                 MeshRoutedAccessGate(
@@ -786,8 +947,15 @@ extension MeshFoundingRig {
                 ),
                 now: Date()
             )
-            _ = nodes[node].manager.applyRoutedAccessGate(MeshRoutedDrainRig.openGate, now: Date())
+            return nodes[node].manager.applyRoutedAccessGate(
+                MeshRoutedDrainRig.openGate, now: Date()
+            )
         }
+    }
+
+    /// The same edge, for the cells that only need it to have happened.
+    func pushGateEdge(at node: Int) {
+        pushGateEdgeReturningReport(at: node)
     }
 }
 

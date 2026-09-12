@@ -438,6 +438,15 @@ struct MeshPairwiseFoundingTests {
                 "the yielded mesh's epoch state went with it")
         #expect(rig.nodes[yielder].manager.currentGroupKey == nil,
                 "and so did its group key, which is what let the keyless grant through")
+        // P6 item 6 fix review, P1-1: the unwind reset the machine to `.idle` and the admission
+        // re-entered at `.joining`, whose ONLY edge out is a `.peerCommitted` this pair will never
+        // raise again — the yielder's slot committed BEFORE the yield. It sat there for the rest of
+        // the session, and the one routed predicate that reads the session (the heart stage) was
+        // false throughout. `recordVerifiedAdmissionDurably` now re-asserts that commit.
+        #expect(rig.nodes[yielder].manager.sessionState == .activeForeground,
+                "a yielder that adopted a mesh over a COMMITTED slot is live, not still joining")
+        #expect(rig.nodes[winner].manager.sessionState == .activeForeground,
+                "and the winner never left it")
     }
 
     @Test func aMeshWithARosterOfTwoNeverYields() async throws {

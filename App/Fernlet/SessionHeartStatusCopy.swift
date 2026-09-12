@@ -77,10 +77,16 @@ enum SessionHeartStatusCopy {
             return "Fernlet couldn't confirm who it was sending to, so no heart was sent."
         case .couldNotSend:
             return "Could not send that heart just now."
+        // The two store causes were paired with each other's sentence until the item 6 fix review
+        // (P2-2): `.storeRefused` maps to `.holdingAllItCan` and `.storeUnavailable` to
+        // `.storageUnreachable` (`MeshNetworkManager.consumeSessionHeart`), so the cap refusal read
+        // "couldn't reach its heart storage" and the unreachable store read "holding all it can" —
+        // the audit line and the sentence disagreeing about the same failure. Each case now carries
+        // ITS own sentence, pinned per case by `everyHeartFailureCauseHasItsOwnSentence`.
         case .storageUnreachable:
-            return "Fernlet is holding all it can, so no heart was sent."
-        case .holdingAllItCan:
             return "Fernlet couldn't reach its heart storage, so no heart was sent."
+        case .holdingAllItCan:
+            return "Fernlet is holding all it can, so no heart was sent."
         }
     }
 

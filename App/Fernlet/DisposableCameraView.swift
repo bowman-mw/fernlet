@@ -1690,19 +1690,16 @@ struct DisposableCameraView: View {
         // cooldown copy would be a lie there — nothing was sent. Say what is actually wrong, exactly
         // as the friend row does (FriendListView's `onCooldown` branch).
         let ledgerUnavailable = onCooldown && !store.heartLedger.isLoaded
-        // **Three-way since P6 item 6, and the order matters.** A routed heart to an admitted member
-        // with no live mesh slot is staged and CUSTODIED — delivered only if a link forms before the
-        // mesh ends, and otherwise expired at `hardDeadline + 20 min` while the sender saw "Sent"
-        // and spent five minutes of cooldown. So a live presence link, which delivers now, must
-        // still win over that: prefer a live `.hearts` slot (delivered now, capability known), then
-        // presence while the friend is presence-reachable (delivered now), and only then a routed
-        // custodied heart — the star case, which is the unlock and which presence cannot serve at
-        // all. Taking `canSendSessionHeart` literally as the whole decision would make presence
-        // unreachable in practice while leaving it alone in source.
+        // **Three-way since P6 item 6, and the order matters** — it lives in
+        // `sessionHeartTransport(meshLinked:presenceReachable:meshAddressable:)` below, which is
+        // where its reasoning and its behavioural pin are. This body only reads the three seams.
         let meshLinked = manager.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
         let presenceReachable = store.presenceManager.isReachable(fingerprint: friend.fingerprint)
         let meshAddressable = manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
-        let useMesh = meshLinked || !presenceReachable
+        let transport = Self.sessionHeartTransport(
+            meshLinked: meshLinked, presenceReachable: presenceReachable,
+            meshAddressable: meshAddressable
+        )
         let reachable = meshLinked || presenceReachable || meshAddressable
         let sending = sessionHeartSendInProgress
         let firstName = PresenceManager.firstName(of: friend.displayName)
@@ -1710,12 +1707,10 @@ struct DisposableCameraView: View {
         return Button {
             // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1).
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            if useMesh, meshAddressable {
-                manager.sendSessionHeart(to: friend)
-            } else if presenceReachable {
-                store.presenceManager.sendHeart(to: friend)
-            } else if meshAddressable {
-                manager.sendSessionHeart(to: friend)
+            switch transport {
+            case .mesh: manager.sendSessionHeart(to: friend)
+            case .presence: store.presenceManager.sendHeart(to: friend)
+            case .unavailable: break
             }
         } label: {
             // Compact in-row form of the "Send good vibes" affordance (good-vibes 10c): a
@@ -1738,6 +1733,45 @@ struct DisposableCameraView: View {
                         ? "Send good vibes to \(friend.displayName)"
                         : "\(firstName) isn't reachable for a heart right now."
         )
+    }
+
+    /// Which pipe one heart tap takes.
+    enum SessionHeartTransport: Equatable {
+        /// The routed store: delivered now over a live slot, or staged and custodied for a member
+        /// with no link.
+        case mesh
+        /// The presence path, which delivers now to a friend who is presence-reachable.
+        case presence
+        /// Neither can carry it; the affordance is disabled in this state.
+        case unavailable
+    }
+
+    /// The three-way order behind the heart tap, as a pure function of the three seams the button
+    /// reads (P6 item 6 fix review, P3-6 — it was only ever pinned by scanning this file's text,
+    /// which a reordering that kept the same three lines would have passed).
+    ///
+    /// The order is a PRODUCT rule. A routed heart to an admitted member with no live mesh slot is
+    /// staged and CUSTODIED — delivered only if a link forms before the mesh ends, and otherwise
+    /// expired at `hardDeadline + 20 min` while the sender saw "Sent" and spent five minutes of
+    /// cooldown. So a live presence link, which delivers now, must still win over that: a live
+    /// `.hearts` slot first (delivered now, capability known), then presence while the friend is
+    /// presence-reachable (delivered now), and only then a routed custodied heart — the star case,
+    /// which is the unlock and which presence cannot serve at all. Taking `canSendSessionHeart`
+    /// literally as the whole decision would make presence unreachable in practice while leaving it
+    /// alone in source.
+    ///
+    /// - Parameters:
+    ///   - meshLinked: A live, hearts-capable slot faces the friend.
+    ///   - presenceReachable: The presence path can reach them right now.
+    ///   - meshAddressable: They are on the derived roster with a resolvable key.
+    /// - Returns: the pipe the tap takes.
+    static func sessionHeartTransport(
+        meshLinked: Bool, presenceReachable: Bool, meshAddressable: Bool
+    ) -> SessionHeartTransport {
+        if meshLinked, meshAddressable { return .mesh }
+        if presenceReachable { return .presence }
+        if meshAddressable { return .mesh }
+        return .unavailable
     }
 
     /// A send is in flight — **presence-only since P6 item 6**, and that is correct rather than a

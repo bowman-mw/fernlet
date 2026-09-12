@@ -471,6 +471,50 @@ struct MeshRoutedDeliveryAckTests {
         #expect(Ack.record(rig)?.deliveredAt == nil)
     }
 
+    /// **A delivery this door refuses never resolves its evidence at all** — the fix review's P2-3.
+    ///
+    /// The heart stage's evidence is a ledger JUDGEMENT: an unwrap, a durable write to the user's
+    /// own closeness state and a non-idempotent hook. `evidence:` was a plain argument, so all of
+    /// that ran before `committingDelivery` had looked at the index, the manifest, the expiry, the
+    /// signed destination set, the type token or the delivery target — and before the stage's own
+    /// held-ciphertext clauses. `@autoclosure` makes the ordering structural; this counts the
+    /// resolutions to prove it, across a refusal from each half of the door.
+    @Test func aRefusedDeliveryNeverResolvesItsEvidence() throws {
+        let scope = Fixture.scope()
+        defer { Fixture.tearDown(scope) }
+        let rig = try Ack.heartRig(scope)
+        Ack.admitManifestOnly(rig)
+        var resolutions = 0
+        func spy() -> MeshRoutedAckEvidence {
+            resolutions += 1
+            return .none
+        }
+
+        // Refused inside `stageShortfall`, before its held-ciphertext clause is satisfied.
+        let incomplete = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.committingDelivery(
+                item: rig.key, recipient: rig.custodian.localFingerprint,
+                stages: .increment1, evidence: spy(), now: Fixture.now
+            )
+        }
+        #expect(MeshRoutedCustodyFixtures.deliveryWitness(incomplete) == nil, "\(incomplete)")
+        #expect(resolutions == 0, """
+            an item whose bytes are not all here must not reach the ledger — the judgement is a \
+            durable act, not a probe
+            """)
+
+        // And refused at the door's own guard, before any stage is asked.
+        let stranger = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            rig.store.committingDelivery(
+                item: rig.key, recipient: "fp404", stages: .increment1,
+                evidence: spy(), now: Fixture.now
+            )
+        }
+        #expect(stranger.refusal == .notADestination, "\(stranger)")
+        #expect(resolutions == 0, "a non-destination must not write this device's heart ledger")
+        #expect(Ack.record(rig)?.deliveredAt == nil, "and nothing was stamped either way")
+    }
+
     // MARK: immediate — the reserved control stage
 
     @Test func controlIsFinalImmediatelyWithoutHeldChunks() throws {

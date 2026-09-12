@@ -298,19 +298,83 @@ struct MeshSessionHeartTests {
                 "the pair is linked, so the liveness question is true too")
     }
 
-    /// The app's three-way order, as a table over the two manager seams the view reads. It is a
-    /// PRODUCT rule — a custodied heart is strictly worse than a delivered one — so it is asserted
-    /// against the source that implements it rather than only described.
+    /// The app's three-way order, as an exhaustive table over the three seams the view reads.
+    ///
+    /// It is a PRODUCT rule — a custodied heart is strictly worse than a delivered one — and since
+    /// the item 6 fix review (P3-6) it is a BEHAVIOUR pin rather than three literal substrings of
+    /// `DisposableCameraView.swift`: the old form red on a rename and was blind to a reordering that
+    /// kept the same three lines. All eight combinations, so there is no arm the table does not name.
     @Test func thePresenceOrderPrefersADeliveredHeartOverACustodiedOne() throws {
+        typealias Transport = DisposableCameraView.SessionHeartTransport
+        let table: [(linked: Bool, presence: Bool, addressable: Bool, want: Transport)] = [
+            (true, true, true, .mesh),        // linked and addressable: delivered now, over a slot
+            (true, false, true, .mesh),
+            (true, true, false, .presence),   // a slot we cannot address is not a transport
+            (true, false, false, .unavailable),
+            (false, true, true, .presence),   // THE ordering: presence delivers now, routed custodies
+            (false, true, false, .presence),
+            (false, false, true, .mesh),      // the star case — staged and custodied, the unlock
+            (false, false, false, .unavailable)
+        ]
+        #expect(table.count == 8, "every combination of the three seams is named")
+        // R2: bounded by the table.
+        for row in table {
+            #expect(DisposableCameraView.sessionHeartTransport(
+                meshLinked: row.linked, presenceReachable: row.presence,
+                meshAddressable: row.addressable
+            ) == row.want, "the heart tap's transport order is a product rule, not an accident")
+        }
+        // And the button really consults it, rather than re-deciding in the body.
         let camera = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("App/Fernlet/DisposableCameraView.swift")
         )
-        #expect(camera.contains("let meshLinked = manager.hasLiveHeartSlot(forFingerprint:"),
-                "the first question is a live hearts-capable slot")
-        #expect(camera.contains("let useMesh = meshLinked || !presenceReachable"),
-                "presence wins while it is reachable and no mesh slot is live")
-        #expect(camera.contains("} else if presenceReachable {"),
-                "and the fallback really is taken, not merely computed")
+        #expect(camera.contains("let transport = Self.sessionHeartTransport("),
+                "the order is read from the pinned function, not re-derived in the view body")
+    }
+
+    /// **A heart addressed to this device is a CALLER bug with its own frozen audit token** — the
+    /// fix review's P3-4. The refusal was right and the log named a different fact
+    /// (`destinationSemanticsMismatch`, which is the audience-vs-column question), so the one
+    /// condition `MeshDeliveryRefusal.recipientIsSelf` exists to distinguish was indistinguishable
+    /// in the log. The user-facing refusal is deliberately unchanged.
+    @Test func aHeartAddressedToThisDeviceIsAuditedAsSuch() async throws {
+        let (rig, _) = try await foundedPair("heart-self")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        let me = rig.nodes[0].fingerprint
+
+        rig.sendHeart(from: 0, to: friendRecord(fingerprint: me, name: "Robin"))
+
+        #expect(capture.count(of: "mesh.routedShare.recipientIsSelf") == 1,
+                "the refusal names the fact it actually found")
+        #expect(capture.count(of: "mesh.routedShare.destinationSemanticsMismatch") == 0,
+                "and no longer borrows the audience-vs-column token")
+        #expect(rig.nodes[0].manager.sessionHeartState
+                == .failed(.couldNotSend, recipientName: "Robin"),
+                "while what the user is told is unchanged — there is nothing here they can act on")
+    }
+
+    /// **An ABSENT ledger is refused exactly like an unloaded one** — the fix review's P3-5.
+    ///
+    /// `heartLedger?.isLoaded != false` and `heartLedger?.canSendHeart(to:) ?? true` both passed a
+    /// manager with no ledger wired, so it staged a heart with no cooldown at all while the
+    /// function's own doc claimed every gate the legacy sealed send had is kept. Production always
+    /// wires one, so this is the guard that makes the doc true rather than a live defect.
+    @Test func anAbsentLedgerRefusesTheSendFailClosed() async throws {
+        let (rig, _) = try await foundedPair("heart-no-ledger")
+        defer { rig.teardown() }
+        rig.nodes[0].manager.heartLedger = nil
+        var sends = 0
+        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+
+        rig.sendHeart(from: 0, to: friendRecord(fingerprint: rig.nodes[1].fingerprint, name: "Robin"))
+
+        #expect(sends == 0, "no ledger means no cooldown to check, so nothing is minted")
+        #expect(rig.nodes[0].manager.sessionHeartState
+                == .failed(.ledgerUnavailable, recipientName: "Robin"),
+                "and the cause is the honest one, not a cooldown that was never armed")
     }
 
     // MARK: - Capability advertisement (unchanged by the retirement)
