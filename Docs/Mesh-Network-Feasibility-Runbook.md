@@ -1036,6 +1036,21 @@ xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
 | Variable | Read by | Behaviour when absent |
 | --- | --- | --- |
 | `FERNLET_MESH_FLOWS` | `MeshMatrixDebugOptions` → `MeshFlowDriver` (app target) | No flow is driven and no poll runs: the harness seeds and joins exactly as it did before flows existed. |
+| `FERNLET_MESH_FLOWS_AFTER=<polls>` *(2026-09-12, P6 item 10)* | same | **0 — today's behaviour exactly.** Flows fire on the first poll that has a committed slot, which on a `founder` run is the poll the founder collapses its seeded descriptor to itself: the derived roster is 1, so every routed mint answers `.noDestinations`. Set it past the admission grant (≈ 5–10 polls) to observe a routed delivery instead of the founding window. |
+| `FERNLET_MESH_ALLOW_HEARTS=1` *(2026-09-12, P6 item 10)* | same | Off, and off leaves the device's own `allowNearbyHearts` setting untouched. The setting ships **off** and `localCapabilities()` advertises `.hearts` only when it is on, so this is applied **before `startJoin()`** — a flip afterwards would never reach a peer's capability list. |
+| `FERNLET_MESH_AUTO_KEEP_FRIENDS=1` *(2026-09-12, P6 item 10)* | same | Off: no friend-review batch is ever kept, which is what every Lane C run before this one did. On, it stands in for **one tap** — `ConnectView.finalizeFriendKeeps()`'s — by calling the shipping `FernletStore.keepProximityFriends(from:keptFingerprints:)` and `MeshNetworkManager.completeFriendReview(_:)` on a batch a real session end promoted. It is checked in the poll **and again after `leave()` returns**, because the departer's poll ends inside `leave` and the batch is promoted by that very departure. |
+
+**The launch restore is bypassed on this lane, by construction** *(2026-09-12, P6 item 10; the
+sentence P6 item 7's handoff left owed)*. P6 item 7 mounted `restoreSessionContextOncePerLaunch(now:)`
+at `FernletApp.swift:496`, in the ready view's `.onAppear` one statement after the routed gate push
+— and `shouldRestoreSessionAtLaunch(alreadyMounted:meshHarnessSeeding:)` refuses whenever
+`MeshMatrixDebugOptions.isEnabled`, i.e. whenever `FERNLET_MESH_MATRIX=1`. Every Lane C launch in
+this runbook carries that flag, **the identity-harvest launch included**, so no run can inherit the
+sealed context the previous run left on the same Simulator, and no `simctl erase` or reinstall is
+needed between runs. The cost is the other side of the same coin and belongs in "what this lane
+cannot prove": **Lane C cannot observe the launch restore at all.** A device that has run the app
+WITHOUT the harness does restore, so any future lane wanting a green field must wipe the container
+rather than relying on the pre-item-7 behaviour, where the door had no shipping caller.
 
 **`.chat` is a ROUTED flow since 2026-09-11 (P6 item 4), at a harness change of zero.** The driver
 still calls `sendTempMessage`, but that call now mints a routed item instead of fanning a sealed
@@ -1046,7 +1061,15 @@ inferred — and `.noDestinations` in the founding window is the expected answer
 the first second or two of a pair, not a failure. And a chat failure is now a **routed** failure: the
 same three refusals a lane photo can hit apply to text (a destination with no verified X25519 key, a
 capped destination raising `routedDeliveryHold`), plus the recipient's own 13+ gate at the
-projection. The rows themselves are item 10a's to re-record.
+projection. **The rows are recorded in "Lane C — P6 text on the routed store" below** (2026-09-12),
+together with the two lane facts item 10 measured and every later run depends on: a flow fires
+**once**, on the first poll with a committed slot, which is before the admission grant — hence
+`FERNLET_MESH_FLOWS_AFTER` — and **no routed line reaches `--console-pty` at all**.
+`FernletAuditLog.log` goes to `Logger(subsystem: "com.fernlet", category: "audit")` and to capture
+handlers, never to `print`, and `MeshTransportConsoleLog.echo`'s `[mesh-quic]` mirror is wired at
+exactly two sites in `MeshNetworkManager`. A per-sim
+`xcrun simctl spawn <udid> log stream --predicate 'subsystem == "com.fernlet"'` is therefore the
+evidence for every routed observation; a run without one proves nothing about the routed path.
 
 Its tokens are `commit`, `capabilities`, `chat`, `chatAgeGated`, `photo`, `shop`. Committing is
 unconditional once *any* flow is asked for — every other flow needs a committed slot — so `commit`
@@ -1073,8 +1096,8 @@ The run is symmetric: each device drove every flow and observed the peer's.
 | **Photo transferred (per-transfer streams)** | **Observed**, both directions, **on the new streams** | A: `[mesh-flow] sending photo jpegBytes=437040` → `[mesh-quic] transfer opened bytes=483282 stream=1` → `transfer sent bytes=483282 stream=1`, and B: `[mesh-quic] transfer received bytes=483282 stream=1` → `[mesh-flow] photos received=1`. The reverse crossed on B's `stream=4`. Two different stream ids because the two directions exercise the two acceptors: an odd id is server-initiated (served by the dialing side's acceptor), an even one client-initiated (routed past the control stream by the listening side's) |
 | **Shop / clothing catalogue sync** | **Observed**, both sides | `[mesh-flow] shop peerCatalogs=1` on A and on B — the manager offers a catalogue once per slot at commit, so nothing is sent by hand |
 | **Age gate — the 13+ mesh-chat gate** | **Observed**, both halves, both sides | Gate open: `messages` present in the capability list above and `chat received=1 sent=1`. Gate closed (`FERNLET_MESH_FLOWS=…,chatAgeGated`): `[mesh-flow] ageGate chatAllowed=false`, `[mesh-flow] capabilities peer=[activities,moderation,photos,shop,wire2]` — **`messages` is gone from the wire** — and `[mesh-flow] sending chat isChatAllowed=false` followed by `chat received=0 sent=0` for the rest of the run. Both enforcement points fire over QUIC exactly as they do over MC: the capability is withheld and the send is refused |
-| **In-session hearts** | **Unreachable in this slice: mutual trust-vault records.** Not a transport limit | `sendSessionHeart(to:)` takes a `ProximityTrustedPeerRecord` and the receiver requires `ProximityTrustVault.isTrustedProximityPeer`; a fresh pair of Simulators has neither. Reaching it needs a *second* session — commit, end the session, complete the `pendingFriendReview` on both devices to write the vault rows, then reconnect — plus `allowNearbyHearts` on, which has no manager-level seam. The driver drives one session |
-| **Moderation signal** | **Unreachable in this slice: same trust-vault precondition** | `sendModerationReports` gates on `isTrustedProximityPeer(signingPublicKey:)` for the recipient and on a non-empty `ownModerationReportsProvider`; the receiver re-checks vault trust before verifying a single row. Two devices that have never kept each other as friends exchange nothing, correctly. The `moderation` **capability** is advertised and was observed in every capability list above |
+| **In-session hearts** | **Reachable since 2026-09-12 (P6 item 10)** — see "Lane C — two sessions: the hearts ceremony". `FERNLET_MESH_ALLOW_HEARTS=1` flips the opt-in before `startJoin()` so `hearts` reaches the capability list, and `FERNLET_MESH_AUTO_KEEP_FRIENDS=1` writes the trust-vault row through the shipping keep doors at a real session end. Both are observed; the second session's heart is not yet | `sendSessionHeart(to:)` takes a `ProximityTrustedPeerRecord` and the receiver requires `ProximityTrustVault.isTrustedProximityPeer`; a fresh pair of Simulators has neither. Reaching it needs a *second* session — commit, end the session, complete the `pendingFriendReview` on both devices to write the vault rows, then reconnect — plus `allowNearbyHearts` on, which has no manager-level seam. The driver drives one session |
+| **Moderation signal** | **Unreachable in this slice: same trust-vault precondition — and do not conflate it with the moderation VOTE** (P6 item 10): `proposeSignedRemoval(of:now:)` gates on a mesh, a ledger roster and target ≠ self, and needs no vault at all; only the *report* needs one | `sendModerationReports` gates on `isTrustedProximityPeer(signingPublicKey:)` for the recipient and on a non-empty `ownModerationReportsProvider`; the receiver re-checks vault trust before verifying a single row. Two devices that have never kept each other as friends exchange nothing, correctly. The `moderation` **capability** is advertised and was observed in every capability list above |
 | **First-meeting stranger admission / the QR ceremony's stranger half** | **Unreachable at P2: membership (plan §8)** | An empty roster makes every peer a stranger and the QUIC introduction refuses the tunnel before any app frame — row 1 of the rejection matrix. Admitting a peer who is *not yet* a member is the membership question P3 owns; there is nothing at P2 to admit them into |
 
 #### The defect this lane found: two writes per frame desynchronize the control stream
@@ -1251,6 +1274,22 @@ founder/joiner shape is therefore a **prerequisite** for loop item 9, not a deta
 > `armFounderLedgerForHarness()` at all. Nothing about a seeded run changes — the harness arms its
 > ledger *before* `startJoin`, so `currentMesh != nil` and the founding is never entered (A28) — and
 > nothing here has been observed on a radio yet: P6 tier-2 item 10 is the run that would.
+>
+> **Corrected 2026-09-12 (P6 item 10).** The middle sentence is wrong **on the QUIC radio**, which is
+> the radio every Lane C run in this runbook uses. A run with no seeded descriptor has
+> `currentMesh == nil`, so `MeshNetworkManager.roster` (`:14288`) falls back to
+> `legacyIntroductionRoster()` (`:14298`) → `currentMesh?.members ?? []` → **empty**, and
+> `MeshIntroductionRoster.verdict(for:)` (`MeshChannelIntroduction.swift:303`) answers `.stranger`
+> for an empty member list. `NetworkMeshSession`'s channel introduction refuses a stranger at
+> `MeshChannelIntroduction.swift:486–488` (`.unknownIdentity`) **before any app frame**, so no tunnel
+> comes up, no slot commits, and nothing is founded. `maySeatVerifiedPeer` returning `true` for
+> `currentMesh == nil` (`:1171`) is a later gate that is never reached. The claim holds only on the
+> **MC** radio, where `attachIntroductionAuthority(_:)` is a documented no-op
+> (`MeshTransportSelection.swift:173`) and there is no transport-level admission decision at all — so
+> an unseeded app-path founding is reachable there and nowhere else on this lane. That is why P6 item
+> 10's TEXT-4 shape is specified over MC, and why the app-path founding over QUIC stays **unobserved**
+> and is handed to the owner list rather than claimed.
+
 
 #### Fixed (0b) — the root cause was the owner's link gate, not the transport
 
@@ -1439,6 +1478,9 @@ The seams below are the smallest thing that opens it, and each one stands in for
 | `MeshNetworkManager.armFounderLedgerForHarness()` | DEBUG extension, `MeshNetworkManager.swift` | `startNewMesh`'s **id mint** and its `startSearching()` restart (which would re-mint the Bonjour name and drop the tunnel) | `prepareMembershipLedger` + `seedFounderAdmission` + `persistSessionContext` — the shipping founding, on the id the seeded descriptor already names. It also collapses the seeded two-member descriptor to what `startNewMesh` would have produced: the founder alone |
 | `MeshNetworkManager.requestAdmissionForHarness()` | same | the *trigger* only — a joiner whose seeded descriptor already lists it never gets the `handleMeshDescriptor` trigger | `sendAdmissionRequest(for:)`, the shipping emitter, and the whole grant path after it |
 | `FERNLET_MESH_LEAVE_AFTER=<seconds>` | `MeshFlowDriver` | a user tapping Leave | `leaveSessionAfterNotifyingPeers()` verbatim |
+| `FERNLET_MESH_FLOWS_AFTER=<polls>` *(P6 item 10)* | `MeshMatrixDebugOptions` / `MeshFlowDriver` | **nothing at all** — it only delays when the existing flows fire, so a run can observe a routed delivery instead of the founding window | every flow, unchanged |
+| `FERNLET_MESH_ALLOW_HEARTS=1` *(P6 item 10)* | same | the user turning the nearby-hearts opt-in on, before the session | `FernletStore.setAllowNearbyHearts(_:)`, and `localCapabilities()`'s own decision to advertise `hearts` |
+| `FERNLET_MESH_AUTO_KEEP_FRIENDS=1` + `MeshFlowVerb.heart` *(P6 item 10)* | same | **one tap each** — `ConnectView.finalizeFriendKeeps()`'s keep, and the camera sheet's heart button | `keepProximityFriends(from:keptFingerprints:)`, `completeFriendReview(_:)`, `canSendSessionHeart(toFingerprint:)` and `sendSessionHeart(to:)` — every gate, the mint, the ceremony and the receipt |
 | `FERNLET_MESH_REMOVE_AFTER=<seconds>` + `seedRemovalRecordForHarness` | same | **plan §10.4's quorum arithmetic, and nothing else** | the record is really signed under `meshMemberRemovalV1`; `MeshDerivedRoster` really derives `barred` from it; the introduction really refuses on it |
 | `[mesh-quic] membershipFrame sent …` / `membershipRecord … accepted\|<refusal>` | `MeshNetworkManager` (`MeshTransportConsoleLog`, DEBUG-only echo) | nothing — pure instrumentation | — |
 
@@ -1529,6 +1571,82 @@ for a survivor to learn a departure it missed.
 | A rotation crossing **two** tunnels | One tunnel exists here. **Proven on three nodes** since 0b: one `epochRef` agreed by all three, minted by the non-founder lowest fingerprint |
 | `MeshLedgerAdoption.adopt`'s **rebase** onto a founder that is not the admitter | On a pair the admitter *is* the founder, so the joiner's bootstrap root is already right and the rebase is a no-op. Needs a third node admitted by the second — the harness's founder admits everyone, so a driver change is owed |
 | First-meeting **stranger** admission | Unreachable on this transport by construction (above). Not a P3 item; recorded here because the harness seams exist only to route around it |
+
+### Lane C — P6 text on the routed store (runs 2026-09-12, P6 item 10a)
+
+Three Simulators, QUIC, one seeded mesh, founder + two joiners. `iPhone 17 Pro` = **A**
+(`fb795f343c2954da`, founder) · `iPhone 17 Pro Max` = **B** (`87684c8a76bb86c7`) · `iPhone 17e` = **C**
+(`45975569e20dfb12`). Logs are per-run under a fresh directory, and **every routed observation below
+comes from a per-sim `xcrun simctl spawn <udid> log stream --predicate 'subsystem == "com.fernlet"'`** —
+no routed manifest, chunk, receipt or projection line reaches `--console-pty` at all.
+
+| # | Scenario | Verdict | Evidence |
+| --- | --- | --- | --- |
+| 1 | A message sent in the **founding window** | **Refused, by name — and it is the only thing today's driver can produce** | `[mesh-flow] chat outcome=noDestinations` on every node, at the same poll as `[mesh-flow] founder armed=true ledger=present derived=1`, with `membership ledger=present derived=2 barred=0 status=active` later in the same transcript. The founder collapses the seeded descriptor to itself at its first committed slot, which is the first tick a flow can fire |
+| 2 | Text **originated** as a routed item, after the grant | **PASS** | `FERNLET_MESH_FLOWS_AFTER=25`; `[mesh-flow] chat outcome=staged` + `mesh.routedShare.pushed` |
+| 3 | Text **custodied and completed** at the receiver | **PASS** | `mesh.routedDrain.admitted type=fernlet.mesh.routed-manifest.v1 verdict=admitted` ×4 then `…routed-chunk.v1 verdict=admitted` ×6 |
+| 4 | Text **projected** into the live transcript | **PASS** | `[mesh-flow] chat received=1 sent=1` at both converged members, with no `mesh.routedProjection.*` line for their own pair |
+| 5 | The **recipient receipt** returned | **PASS** | `mesh.routedDrain.admitted type=fernlet.mesh.recipient-receipt.v1 verdict=admitted` ×4, plus `…custody-receipt.v1` ×4 |
+| 6 | The legacy `.tempMessage` transport is **gone** | **PASS — the retirement, observed** | `grep -c 'fernlet.message.temp.v1'` over every audit and flow transcript of the run == **0**; no `mesh.tempMessage.refused` |
+| 7 | No mint refusal on a converged mesh | **PASS** | no `mesh.routedShare.destinationNotAddressable`, no `mesh.routedShare.keyMismatch` |
+| 8 | An **unresolvable origin** is refused at the projection | **PASS, unplanned** | a node that minted from the seeded descriptor but never joined had its frames admitted and then refused with `mesh.routedProjection.originUnresolvable` ×4 at both members — the author is not on the roster they derived. Fail-closed, and the reason "zero `mesh.routedProjection.*`" holds only for a fully converged roster |
+| 9 | The 13+ gate, all three legs | **NOT RUN** | Out of the timebox: the three-node shape it needs converged in 2 of 4 attempts — see the founder-collapse race below |
+
+**Three facts this lane measured that every later Lane C run depends on.**
+
+1. **A flow fires ONCE, at the first poll with a committed slot, which is before the grant.** Hence
+   `FERNLET_MESH_FLOWS_AFTER=<polls>`; absent, it is 0, which is exactly the old behaviour.
+2. **The 1 Hz poll runs at roughly 0.3 Hz on a headless Simulator.** `FLOWS_AFTER=25` took ≈ 90 s and
+   `LEAVE_AFTER=40` ≈ 140 s of wall clock. Budget ≈ 3.5 × the tick number or the run is terminated
+   before its own schedule fires — two runs were voided by this before it was measured.
+3. **Every node must seed the SAME descriptor `createdAt`.** The session hard deadline is
+   `descriptor.createdAt + MeshSessionCeiling.ceilingSeconds`, every routed manifest and chunk carries
+   `MeshRoutedManifest.expiry(afterHardDeadline:)`, and the receiver refuses anything that is not its
+   own deadline plus grace. With a per-device `Date()` the deadlines differed by the launch stagger and
+   **two thirds of every routed frame was refused `mesh.routedDrain.rejected reason=expiryMismatch`**
+   (8 manifests, 12 chunks) — each node agreeing with exactly one peer. `MeshMatrixDebugOptions
+   .seededCreatedAt` floors the instant to a shared 600 s grid and the banner echoes it; after the fix
+   the same run has **zero** `expiryMismatch`. It is an artefact of seeding, not a product defect: on
+   the app path the founder mints one descriptor and gossips it.
+
+**Two things that did not cross, by name.**
+
+* **`simctl launch --console-pty` intermittently attaches no stdout** — the launch returns its pid
+  line and nothing else, while the app runs. A node with no `[mesh-matrix] run label=` banner proves
+  nothing about that node; the launcher now checks for the banner after the stagger and relaunches
+  once.
+* **The founder-collapse race on the third node.** In 2 of 4 three-node attempts the third node
+  logged `[mesh-quic] tunnelEnded introductionFailed unverified live=false … The outbound QUIC tunnel
+  failed its signed channel introduction` three times, then `The QUIC tunnel gave up after 3 attempts`
+  and `dial refused refusedRetryBudgetSpent`, and never joined. Hypothesis: the founder had already
+  collapsed the seeded descriptor to itself, so its derived roster of one verdicts the late third node
+  `.stranger`. **What would settle it:** a `FERNLET_MESH_ARM_AFTER=<polls>` hook holding
+  `armFounderLedgerForHarness` until every tunnel is up, then a re-run. A tier-1 cell cannot: it is a
+  race between a real dial and a real roster change.
+
+### Lane C — two sessions: the hearts ceremony (runs 2026-09-12, P6 item 10b)
+
+Two Simulators, A (founder) and B (joiner), `FERNLET_MESH_ALLOW_HEARTS=1` and
+`FERNLET_MESH_AUTO_KEEP_FRIENDS=1` on both.
+
+| # | Scenario | Verdict | Evidence |
+| --- | --- | --- | --- |
+| 1 | The hearts opt-in reaches the **handshake** | **PASS** | `[mesh-flow] hearts on=true` before `startJoin()`, then `[mesh-flow] capabilities peer=[activities,hearts,moderation,photos,shop,wire2]` — and `messages` correctly ABSENT, because this run asks for no chat flow and `chatAllowedProvider` is fail-closed |
+| 2 | A two-member session ends with **`terminated.v1`**, not a departure | **PASS** | `[mesh-flow] leaving via leaveSessionAfterNotifyingPeers ledger=present derived=2` → `[mesh-quic] membershipFrame sent fernlet.mesh.terminated.v1 slots=1 recipients=all` → `[mesh-flow] left ledger=absent derived=0` |
+| 3 | The mesh id is **barred** afterwards | **PASS** | `mesh.sessionState.rejoinBarred` on the departer; session 2 therefore uses a different id |
+| 4 | The **keep** writes a trust-vault row through the shipping doors | **PASS on the departer** | `[mesh-flow] friends kept=1 vault=1`, then `[mesh-flow] vault friends=1 heartsReceived=0 ledgerLoaded=true heartState=idle`. The hook calls `keepProximityFriends(from:keptFingerprints:)` + `completeFriendReview(_:)` from the poll **and again after `leave()` returns**, because the departer's poll ends inside `leave` |
+| 5 | Item 6's P1-1 re-assert, on the radio | **PASS, unplanned** | `mesh.sessionState.reassertedAdoptedCommit` in the joiner's audit — the raise a yielding/late-committing joiner needs, which no earlier lane run could show |
+| 6 | The keep on **both** sides | see below | |
+| 7 | Session 2: one routed heart, the ceremony, the receipt | **NOT REACHED** | |
+
+### Lane C — a removal by real quorum (P6 item 10b)
+
+**NOT RUN.** The three DEBUG seams plan §4.2 specifies (`proposeSignedRemovalForHarness`,
+`voteOnFirstOpenSignedRemovalForHarness`, `harnessRemovalSummary`) were not built inside the timebox,
+and the run needs the three-node shape whose founder-collapse race is recorded above. Plan §4.2 is the
+ready-made spec; note in passing that the moderation **vote** never needed the trust vault
+(`proposeSignedRemoval` gates on a mesh, a ledger roster and target ≠ self) while the moderation
+**report** still does — the two are routinely conflated.
 
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
 

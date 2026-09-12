@@ -52,6 +52,14 @@ enum MeshFlowVerb: String, CaseIterable, Sendable {
     /// Exchange clothing-shop catalogs. Nothing is sent by hand: the manager offers a catalog once
     /// per slot at commit, so this verb supplies a catalog to offer and then observes.
     case shop
+
+    /// Send one in-session heart to the first trusted session peer (P6 item 10).
+    ///
+    /// Needs three things a fresh Simulator does not have: the nearby-hearts opt-in on
+    /// (``MeshMatrixDebugOptions/allowsHearts``, applied before `startJoin()`), a trust-vault row
+    /// for the peer (a previous session's keep — ``MeshMatrixDebugOptions/autoKeepsFriends``), and
+    /// a committed slot. Missing any of them, the verb says which and sends nothing.
+    case heart
 }
 
 // MARK: - MeshMatrixRole
@@ -123,6 +131,11 @@ struct MeshFlowRunState {
     /// The poll at which the joiner last asked for admission, so the ask repeats on a schedule
     /// rather than every second while it waits for the founder to arm.
     var askedAdmissionAt = -1
+
+    /// The heart summary — vault size, received hearts, ledger load state, send state — at the last
+    /// report (P6 item 10). One string for the same reason ``membership`` is one: four counters that
+    /// move together are one transcript line.
+    var hearts = ""
 }
 
 // MARK: - MeshFlowDriver
@@ -179,7 +192,15 @@ enum MeshFlowDriver {
     ///
     /// Ordering is the whole contract: `localCapabilities()` is read when a peer's coordinator is
     /// built, so a provider set after `startJoin()` would never reach a peer's capability list.
-    static func prepare(manager: MeshNetworkManager) {
+    static func prepare(manager: MeshNetworkManager, store: FernletStore) {
+        // P6 item 10: the hearts opt-in ships OFF and `.hearts` is advertised only when it is on,
+        // so this must land before `startJoin()` too — and it is applied whether or not a flow was
+        // asked for, because a session-1 run that only keeps friends still wants the capability on
+        // the wire. It writes the user's own setting through the shipping door.
+        if MeshMatrixDebugOptions.allowsHearts {
+            store.setAllowNearbyHearts(true)
+            echo("hearts on=true")
+        }
         let flows = MeshMatrixDebugOptions.flows
         guard !flows.isEmpty else { return }
         echo("flows requested=[\(flows.map(\.rawValue).joined(separator: ","))]")
@@ -206,16 +227,16 @@ enum MeshFlowDriver {
 
     /// Starts the run's poll. A no-op when no flow and no membership role was asked for, which is
     /// the behaviour this file had before it existed.
-    static func start(manager: MeshNetworkManager) {
+    static func start(manager: MeshNetworkManager, store: FernletStore) {
         guard !MeshMatrixDebugOptions.flows.isEmpty || MeshMatrixDebugOptions.role != .none else { return }
-        Task { @MainActor [weak manager] in
-            guard let manager else { return }
-            await run(manager: manager)
+        Task { @MainActor [weak manager, weak store] in
+            guard let manager, let store else { return }
+            await run(manager: manager, store: store)
         }
     }
 
     /// The bounded poll: commit what is waiting, fire what is due, report what changed.
-    private static func run(manager: MeshNetworkManager) async {
+    private static func run(manager: MeshNetworkManager, store: FernletStore) async {
         var state = MeshFlowRunState()
         for tick in 0..<maxTicks {
             do {
@@ -224,15 +245,36 @@ enum MeshFlowDriver {
                 return
             }
             commitPendingSlots(manager: manager, state: &state)
-            report(manager: manager, state: &state)
+            report(manager: manager, store: store, state: &state)
             driveRole(manager: manager, state: &state, tick: tick)
-            fireDueFlows(manager: manager, state: &state)
+            fireDueFlows(manager: manager, store: store, state: &state, tick: tick)
+            autoKeepFriendsIfDue(manager: manager, store: store)
             guard MeshMatrixDebugOptions.leaveAfterSeconds != tick else {
                 await leave(manager: manager)
+                // The departer's poll ends inside `leave`, and `pendingFriendReview` is promoted by
+                // the session end that departure causes — so a poll-only check would never see the
+                // batch it exists for (P6 item 10).
+                autoKeepFriendsIfDue(manager: manager, store: store)
+                report(manager: manager, store: store, state: &state)
                 return
             }
         }
         echo("run ended: poll budget spent")
+    }
+
+    /// Keeps every candidate of a promoted friend-review batch, then consumes the batch.
+    ///
+    /// Stands in for `ConnectView.finalizeFriendKeeps()`'s one tap: both doors below are the
+    /// shipping ones, and the batch is only ever promoted by a real session end. The trust-vault
+    /// row it writes is what makes a peer heart-eligible in a LATER session — which is why the
+    /// hearts script needs two of them (P6 item 10).
+    private static func autoKeepFriendsIfDue(manager: MeshNetworkManager, store: FernletStore) {
+        guard MeshMatrixDebugOptions.autoKeepsFriends,
+              let batch = manager.pendingFriendReview else { return }
+        let kept = Set(batch.entries.map(\.fingerprint))
+        store.keepProximityFriends(from: batch.entries, keptFingerprints: kept)
+        manager.completeFriendReview(batch.id)
+        echo("friends kept=\(kept.count) vault=\(store.trustedProximityPeers.count)")
     }
 
     // MARK: - Membership roles (P3 item 9)
@@ -334,19 +376,32 @@ enum MeshFlowDriver {
         }
     }
 
-    /// Fires each requested flow once, as soon as a committed slot exists to carry it.
-    private static func fireDueFlows(manager: MeshNetworkManager, state: inout MeshFlowRunState) {
+    /// Fires each requested flow once, as soon as a committed slot exists to carry it and the
+    /// run's `FERNLET_MESH_FLOWS_AFTER` poll has arrived.
+    ///
+    /// The poll gate is P6 item 10's, and it is the difference between observing the founding
+    /// window and observing a routed delivery. The first tick with a committed slot is the tick a
+    /// `founder` run collapses its seeded descriptor to itself, so the derived roster is 1 and every
+    /// routed mint answers `.noDestinations`; the admission grant lands several polls later. With
+    /// the variable absent the gate is poll 0 — today's behaviour exactly, and the founding-window
+    /// refusal is then the observation rather than an accident.
+    private static func fireDueFlows(
+        manager: MeshNetworkManager, store: FernletStore, state: inout MeshFlowRunState, tick: Int
+    ) {
+        guard tick >= MeshMatrixDebugOptions.flowsAfterPolls else { return }
         guard committedSlotCount(manager) > 0 else { return }
         for verb in MeshMatrixDebugOptions.flows where !state.fired.contains(verb) {
             state.fired.insert(verb)
-            fire(verb, manager: manager)
+            fire(verb, manager: manager, store: store)
         }
     }
 
     /// One flow. `commit`, `capabilities` and `shop` drive nothing — they are observed by
     /// ``report(manager:state:)`` — so they only say that their moment arrived.
-    private static func fire(_ verb: MeshFlowVerb, manager: MeshNetworkManager) {
+    private static func fire(_ verb: MeshFlowVerb, manager: MeshNetworkManager, store: FernletStore) {
         switch verb {
+        case .heart:
+            fireHeart(manager: manager, store: store)
         case .commit, .capabilities, .shop:
             echo("armed \(verb.rawValue)")
         case .chat, .chatAgeGated:
@@ -365,10 +420,37 @@ enum MeshFlowDriver {
         }
     }
 
+    /// One in-session heart, through the same three lines the camera's heart button uses.
+    ///
+    /// The trust-vault lookup is the whole point: `sendSessionHeart(to:)` takes a
+    /// `ProximityTrustedPeerRecord`, and the receiver's ceremony asks
+    /// `isHeartEligibleFriend(_:in:)`, which requires that row on the OTHER device too — so a run
+    /// that has not kept the peer in a previous session says so and sends nothing, rather than
+    /// producing a refusal that looks like a defect. It stands in for one tap and no consent
+    /// decision (P6 item 10).
+    private static func fireHeart(manager: MeshNetworkManager, store: FernletStore) {
+        guard let peer = manager.sessionParticipants.first(where: { !$0.isLocal }) else {
+            echo("heart NOT sent: no remote participant in this session")
+            return
+        }
+        guard let friend = store.trustedProximityPeers.first(where: {
+            IdentityService.fingerprintsMatch($0.fingerprint, peer.fingerprint)
+                && $0.blockedAt == nil && $0.revokedAt == nil
+        }) else {
+            echo("heart NOT sent: no trust-vault row for \(peer.fingerprint)")
+            return
+        }
+        echo("sending heart to=\(friend.fingerprint) "
+            + "canSendSessionHeart=\(manager.canSendSessionHeart(toFingerprint: friend.fingerprint))")
+        manager.sendSessionHeart(to: friend)
+    }
+
     // MARK: - Observation
 
     /// Echoes every counter that moved since the last poll, and nothing that did not.
-    private static func report(manager: MeshNetworkManager, state: inout MeshFlowRunState) {
+    private static func report(
+        manager: MeshNetworkManager, store: FernletStore, state: inout MeshFlowRunState
+    ) {
         let slots = slotSummary(manager)
         if slots != state.slots {
             echo("slots \(slots)")
@@ -380,6 +462,27 @@ enum MeshFlowDriver {
             state.capabilities = capabilities
         }
         reportPayloads(manager: manager, state: &state)
+        reportHearts(manager: manager, store: store, state: &state)
+    }
+
+    /// The hearts run's four counters, as one line, only for a run that asked about hearts.
+    ///
+    /// Gated rather than unconditional because `store.heartLedger` is lazy and reading it loads a
+    /// sidecar off disk; a matrix run that never mentions hearts should not pay for that every
+    /// second (P6 item 10).
+    private static func reportHearts(
+        manager: MeshNetworkManager, store: FernletStore, state: inout MeshFlowRunState
+    ) {
+        guard MeshMatrixDebugOptions.allowsHearts
+                || MeshMatrixDebugOptions.autoKeepsFriends
+                || MeshMatrixDebugOptions.flows.contains(.heart) else { return }
+        let summary = "vault friends=\(store.trustedProximityPeers.count) "
+            + "heartsReceived=\(store.heartLedger.receivedHearts.count) "
+            + "ledgerLoaded=\(store.heartLedger.isLoaded) "
+            + "heartState=\(manager.sessionHeartState)"
+        guard summary != state.hearts else { return }
+        echo(summary)
+        state.hearts = summary
     }
 
     /// The three receive-side counters a flow run is read off.

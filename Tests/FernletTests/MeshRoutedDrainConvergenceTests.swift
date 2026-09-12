@@ -1142,17 +1142,21 @@ extension MeshConvergenceRun {
     ///   - judged: The **audience** — the destination fingerprints the roster-wide claims may be
     ///     written against, or nil for "every living member but the origin", which is what a
     ///     `.fullRosterAtCreation` item means. See ``routedJudgedAudience(_:key:)``.
+    ///   - token: The row's type token, when the caller knows it. Nil makes the widening read the
+    ///     token off a surviving manifest and REFUSE when there is none, rather than guessing
+    ///     `.photo` (P6 item 9's second fix review, P2-B).
     func routedInvariants(
         _ origin: MeshConvergenceMember,
         _ key: MeshRoutedItemKey,
         audited capture: MeshRoutedBackpressureAuditCapture,
         overlay: MeshRoutedScheduleOverlay,
         before: MeshRoutedRungSnapshot,
-        judged: Set<String>? = nil
+        judged: Set<String>? = nil,
+        token: String? = nil
     ) {
         let audited = capture.values(of: "mesh.routedStore.itemDropped", key: "reason")
             .contains("delivered")
-        let audience = judged ?? routedRosterWideAudience(origin, key)
+        let audience = judged ?? routedRosterWideAudience(origin, key, token: token)
         routedProgressByName(origin, key, overlay: overlay, audited: audited)
         routedNothingLost(origin, key, audited: audited, judged: audience)
         routedBytesRecoverable(origin, key, audited: audited)
@@ -1162,7 +1166,8 @@ extension MeshConvergenceRun {
         routedRungMonotone(
             origin, key, before: before, audited: audited,
             blocked: routedEveryDestinationIsPlanted(
-                origin, overlay: overlay, judged: audience, token: routedTypeToken(origin, key)
+                origin, overlay: overlay, judged: audience,
+                token: token ?? routedTypeToken(origin, key)
             )
         )
         routedCapacityHoldVisible(overlay: overlay)
@@ -1181,15 +1186,33 @@ extension MeshConvergenceRun {
     /// item passes at every non-recipient for exactly the reason R3 narrowed it away from. The
     /// registry's own column decides which this is, so a fourth type needs no edit here.
     ///
+    /// **The guard was blind in the branch it guards until P6 item 9's SECOND fix review (P2-A of
+    /// that round is elsewhere; this is its P2-B).** It resolved the token through
+    /// ``routedTypeToken(_:_:)``, whose `.photo` fallback fires under the SAME condition that makes
+    /// the audience nil — no living member holds a record — and `.photo` is
+    /// `.fullRosterAtCreation`, so `semantics != .singleRecipient` passed in every state the guard
+    /// existed for. (The round's `neg-07` reddened it twelve times, but with an INJECTED nil while
+    /// the records still existed, which is not the failure mode.) It now takes `token` from the
+    /// caller where the caller knows it, falls back to a token read off a REAL surviving manifest,
+    /// and **refuses** when there is neither — an audience nobody can name is not a claim.
+    ///
     /// - Parameters:
     ///   - origin: The member that minted the item.
     ///   - key: The item.
-    /// - Returns: every living member but the origin.
+    ///   - token: The row's type token when the caller knows it, which every rectangle-G cell does.
+    /// - Returns: every living member but the origin, or the empty set when the row cannot be named.
     private func routedRosterWideAudience(
-        _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey
+        _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey, token: String?
     ) -> Set<String> {
-        let token = routedTypeToken(origin, key)
-        let semantics = MeshRoutedTypeRegistry.increment1.entry(for: token)?.destinations
+        guard let resolved = token ?? routedResolvedTypeToken(origin, key) else {
+            Issue.record("""
+                no living member holds a record for this item and the caller named no type token, so \
+                its destination semantics are unknowable — a roster-wide audience here would be the \
+                false green R3 narrowed away, and the photo fallback used to supply it
+                """)
+            return []
+        }
+        let semantics = MeshRoutedTypeRegistry.increment1.entry(for: resolved)?.destinations
         #expect(semantics != .singleRecipient, """
             a one-destination item's roster-wide claims were widened to the whole living roster, \
             which is the false green R3 narrowed them away from
@@ -1239,21 +1262,48 @@ extension MeshConvergenceRun {
     /// samples, and the map carries no per-item fact that could be lost with it.
     ///
     /// Equality is admitted, exactly as the door admits it: a peer's own digest re-arriving
-    /// byte-identical re-records the same stamp, and the claim is monotonicity, not progress — and
-    /// "exactly as the door admits it" is now literal rather than a promise (P6 item 7 fix review,
-    /// P2-1). The claim CALLS `MeshRoutedInventoryStampRule`, the same pure decision
-    /// `routedInventoryStampIsStale(_:from:)` applies, so a tolerance or a flipped arm added to the
-    /// rule reddens here instead of leaving the battery asserting a second, hand-spelled `>=` that
-    /// the shipping door no longer means.
+    /// byte-identical re-records the same stamp, and the claim is monotonicity, not progress.
+    ///
+    /// **Both spellings, deliberately** (P6 item 10 SET A, the item 7 fix review's P2-B). The rule
+    /// call is the anti-drift half: `MeshRoutedInventoryStampRule` is the same pure decision
+    /// `routedInventoryStampIsStale(_:from:)` applies, so an arm that starts refusing equality
+    /// reddens here instead of leaving the battery asserting a hand-spelled `>=` the shipping door
+    /// no longer means. The hand-spelled `later >= stamp` is the INDEPENDENT half, and it went
+    /// missing for one commit: with only the rule call, a door that later tolerates a small
+    /// backwards step (`inbound >= recorded − ε ⇒ .admit`) makes this claim tolerate a real
+    /// backwards move of up to ε — the claim would be defined by the door it tests.
+    ///
+    /// **What this cell does NOT cover, measured rather than assumed — four negatives across two
+    /// rounds.** Item 7's fix run inverted the rule's strictly-greater arm
+    /// (`inbound > recorded ⇒ .refuseStale`) and the whole convergence suite stayed GREEN; flipping
+    /// the equality arm reddened 646 evaluated pairs. P6 item 10 flipped the equality arm again and
+    /// reddened 634 — **every one of them on the rule call below and none on the `>=` above**.
+    ///
+    /// So every consecutive pair this battery compares is `==`, on all 40 cells, and the reason is
+    /// sharper than "the clock does not move": **the rectangle records a given `(member, peer)`
+    /// stamp once and does not re-record it between the two rung samples.** Measured: a door mutated
+    /// to write `payload.sentAt − 3600` on every RE-record, with the rule made unconditionally
+    /// `.admit` so only the hand-spelled claim could catch it, left the suite green (P6 item 10,
+    /// `neg-04`). A backwards move cannot be manufactured here at all.
+    ///
+    /// That is why both spellings stay. The rule call is the wall this rectangle can exercise; the
+    /// hand-spelled `later >= stamp` is the wall against a FUTURE schedule that does re-record — and
+    /// against a door that later tolerates a small backwards step, which would make the rule call
+    /// tolerate it too. `aNewerInventoryStampMovesTheRecordForward` covers the strictly-newer
+    /// direction. Making either direction appear in the rectangle means driving two digests for one
+    /// pair with the fixture clock advanced between the samples, which moves `pinnedOverlayDigest` —
+    /// a schedule decision, not a claim-strength edit.
     private func routedInventoryStampMonotone(before: MeshRoutedRungSnapshot) {
         let after = routedInventoryStamps()
         // R2: bounded by the roster cap, squared.
         for (member, stamps) in before.inventoryStamps {
             for (peer, stamp) in stamps {
                 guard let later = after[member]?[peer] else { continue }
+                #expect(later >= stamp,
+                        "a peer's recorded inventory stamp moved backwards down the drain")
                 let verdict = MeshRoutedInventoryStampRule.verdict(inbound: later, recorded: stamp)
                 #expect(verdict == .admit,
-                        "a peer's recorded inventory stamp moved backwards down the drain")
+                        "the shipping stamp rule refuses a pair this battery watched the drain make")
             }
         }
     }
@@ -1499,9 +1549,24 @@ extension MeshConvergenceRun {
     private func routedTypeToken(
         _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey
     ) -> String {
+        routedResolvedTypeToken(origin, key) ?? MeshRoutedTypeToken.photo
+    }
+
+    /// The same lookup **without** the photo fallback — nil when no living member holds a manifest
+    /// for `key` at all (P6 item 9's second fix review, P2-B).
+    ///
+    /// The fallback is right for `routedProgressByName`'s purposes and wrong for a claim about the
+    /// row's DESTINATION SEMANTICS: a record can only carry a manifest where it can carry a
+    /// `deliveryTarget`, so the state in which `routedJudgedAudience(_:key:)` answers nil is exactly
+    /// the state in which the fallback invents `.photo` — and `.photo` is `.fullRosterAtCreation`,
+    /// so a registry guard reading it waves through the one shape it exists to catch. Separating the
+    /// two lets the audience helper refuse instead of guess.
+    private func routedResolvedTypeToken(
+        _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey
+    ) -> String? {
         if let token = routedIndex(of: origin)?.record(for: key)?.manifest?.typeToken { return token }
         let held = livingMembers.compactMap { routedIndex(of: $0)?.record(for: key)?.manifest }
-        return held.first?.typeToken ?? MeshRoutedTypeToken.photo
+        return held.first?.typeToken
     }
 
     /// Whether `member` projected this item into **its own type's** canonical store.

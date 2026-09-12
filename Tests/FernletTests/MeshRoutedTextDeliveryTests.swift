@@ -560,8 +560,18 @@ struct MeshRoutedTextDeliveryTests {
     /// `maxPrivacyWipeDepth` saturate the depth but are counted in the overflow, ends drain the
     /// overflow first, and the gate therefore falls on the LAST paired end rather than one end
     /// early. A saturating depth alone was fail-open in its own small way — the ninth begin did not
-    /// increment and the ninth end still decremented — and it also stopped `mesh.privacyWipe.began`
-    /// pairing with `mesh.privacyWipe.ended` for a reader counting them in a transcript.
+    /// increment and the ninth end still decremented, so the routed projection ran again while an
+    /// outer funnel still had the ciphertext purge ahead of it. (It was ALSO said to keep
+    /// `mesh.privacyWipe.began` pairing with `mesh.privacyWipe.ended` for a transcript reader.
+    /// That was never true and this counter cannot make it true: `ended` is written only at depth
+    /// zero, so N nested funnels always wrote N begins and one end — P6 item 10 SET A, P3-a.)
+    ///
+    /// The LAST leg is the overflow's own cap, which was remembered rather than pinned (P6 item 10
+    /// SET A, P3-d): past `2 × maxPrivacyWipeDepth` overlapping funnels the counter saturates, the
+    /// begin is audited `saturated` and dropped, and the gate really does fall one end early again
+    /// — the documented honest failure, now asserted. It needs seventeen concurrent `@MainActor`
+    /// delete-all funnels, which the two shipping entry points cannot produce; the leg exists so
+    /// the cap's behaviour is a fact about the code rather than a sentence about it.
     @Test func overlappingWipeFunnelsKeepTheProjectionShutUntilTheLastOneEnds() throws {
         let rig = try MeshFoundingRig.build(2, label: "wipe-depth")
         defer { rig.teardown() }
@@ -596,12 +606,37 @@ struct MeshRoutedTextDeliveryTests {
         // R2: the three overflow ends, which must drain the overflow and NOT the depth.
         for _ in 0..<3 { manager.endPrivacyWipe() }
         #expect(manager.privacyWipeDepth == cap, "an end past the cap lowered the gate's own counter")
-        #expect(manager.privacyWipeOverflow == 0)
+        #expect(manager.privacyWipeOverflow == 0, "the three overflow ends did not drain the overflow")
         // R2: the same ceiling, one end short of the last.
         for _ in 0..<(cap - 1) { manager.endPrivacyWipe() }
         #expect(manager.privacyWipeInProgress, "the gate fell before the LAST paired end")
         manager.endPrivacyWipe()
         #expect(!manager.privacyWipeInProgress, "the counter came back down to zero")
+
+        // The overflow's OWN cap and its `saturated` arm (P6 item 10 SET A, P3-d). `2 × cap + 1`
+        // begins: the depth saturates at the cap, the overflow saturates at the cap, and the last
+        // begin is audited `saturated` rather than counted — so it has no end to pair with and the
+        // gate falls one end early again. That is the documented honest failure; it is asserted
+        // here so it is a fact about the code rather than a sentence about it.
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        // R2: a hard constant ceiling.
+        for _ in 0..<(2 * cap + 1) { manager.beginPrivacyWipe() }
+        #expect(manager.privacyWipeDepth == cap, "the depth grew past its own cap under saturation")
+        #expect(manager.privacyWipeOverflow == cap, "the overflow counter grew past its own cap")
+        #expect(capture.values(of: "mesh.privacyWipe.depthExceeded", key: "saturated").contains("true"),
+                "the begin the counters could not hold was dropped without saying so")
+        // R2: the same ceiling — one end short of the begins, which is the whole point.
+        for _ in 0..<(2 * cap) { manager.endPrivacyWipe() }
+        #expect(!manager.privacyWipeInProgress, """
+            past 2 × maxPrivacyWipeDepth overlapping funnels the gate falls one end early again — \
+            the named cost of a bounded counter, unreachable from the two @MainActor entry points \
+            and pinned here rather than remembered
+            """)
+        manager.endPrivacyWipe()
+        #expect(manager.privacyWipeDepth == 0 && manager.privacyWipeOverflow == 0,
+                "the unpaired end drove a counter somewhere other than zero")
     }
 
     /// **The per-origin message quota's three legs** (P6 item 4 fix review, finding P2-4): it

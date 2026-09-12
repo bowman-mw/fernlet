@@ -1071,7 +1071,10 @@ extension MeshRoutedLockedDeviceTests {
     /// re-entry's job 1 finds nothing pending and the next real rise is what retries a deferral.
     /// Swap the two statements and this reddens; the line it replaced (`FernletApp` never names the
     /// internal `restoreSessionContextAtLaunch(`) could not fail at all, because that door is
-    /// `internal` to ProximityKit and `App/Fernlet` is a different module.
+    /// `internal` to ProximityKit and `App/Fernlet` is a different module. The order claim is
+    /// brace-matched rather than text-adjacent since P6 item 10's SET A — see
+    /// ``theMountSitsInsideTheGatePushingOnAppear(_:)`` for the five closures that made the first
+    /// spelling green over the wrong one.
     @Test func theLaunchRestoreDecisionIsTwoFactsAndHasOneCallSite() throws {
         #expect(FernletApp.shouldRestoreSessionAtLaunch(
             alreadyMounted: false, meshHarnessSeeding: false))
@@ -1091,12 +1094,42 @@ extension MeshRoutedLockedDeviceTests {
         let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
         let mounts = code.components(separatedBy: "restoreSessionContextOncePerLaunch(").count - 1
         #expect(mounts == 1, "the launch mount has exactly one call site")
+        try Self.theMountSitsInsideTheGatePushingOnAppear(code)
+    }
+
+    /// The containment half of the order wall (P6 item 10 SET A, the item 7 fix review's P3-c).
+    ///
+    /// The first spelling took the text between the nearest `.onAppear {` opener and the mount and
+    /// asked whether a gate push lay in it — textual precedence, not containment. `FernletApp.swift`
+    /// has six `.onAppear` closures and five of them push the gate, so moving the mount OUT of the
+    /// ready view's closure — into a sibling `.task { }` further down the file — kept it green.
+    /// This one brace-matches the closure that really encloses the mount and asserts both facts
+    /// inside that slice: the mount is in it, and the push comes first.
+    private static func theMountSitsInsideTheGatePushingOnAppear(_ code: String) throws {
         let callSite = "restoreMeshSessionContextIfNeeded(store)"
-        #expect(code.contains(callSite), "the launch mount is no longer called from the ready view")
-        let beforeMount = code.components(separatedBy: callSite).first ?? code
-        let closure = try #require(beforeMount.components(separatedBy: ".onAppear {").last)
-        #expect(closure.contains("pushRoutedAccessGate("),
-                "the launch restore must sit in the ready view's `.onAppear`, after the gate push")
+        let mount = try #require(code.range(of: callSite),
+                                 "the launch mount is no longer called from the ready view")
+        let opener = ".onAppear {"
+        let head = try #require(
+            code.range(of: opener, options: .backwards, range: code.startIndex..<mount.lowerBound),
+            "the launch mount has no `.onAppear` above it at all"
+        )
+        let block = try #require(
+            MeshRoutedSourceScan.bracedBody(after: opener, in: String(code[head.lowerBound...])),
+            "the enclosing `.onAppear` closure does not close"
+        )
+        #expect(block.contains(callSite), """
+            the launch mount is no longer INSIDE the ready view's `.onAppear` — a sibling `.task` \
+            further down the file satisfies "some earlier closure pushes the gate" and runs at a \
+            different moment
+            """)
+        let push = try #require(block.range(of: "pushRoutedAccessGate("), """
+            the closure holding the launch mount does not push the routed access gate, so the \
+            launch no longer consumes its own rising protected-data edge before restoring
+            """)
+        let inBlock = try #require(block.range(of: callSite))
+        #expect(push.lowerBound < inBlock.lowerBound,
+                "the launch mount runs BEFORE the routed gate push; swap them back")
     }
 
     /// **W7b.** An `.active → .inactive → .active` bounce moves no leg, so it runs no re-entry pass:

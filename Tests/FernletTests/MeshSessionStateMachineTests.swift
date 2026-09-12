@@ -28,6 +28,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+import FernletFoundation
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -1185,6 +1186,100 @@ struct MeshSessionLifecycleManagerTests {
         #expect(raised)
         #expect(fresh.sessionState == .activeForeground)
         fresh.leaveMesh()
+
+        try theUnwindLeavesAPreExistingBeaconAndRotationAlone(admitting: member, seating: fingerprint)
+    }
+
+    /// **The unwind's SELECTIVITY, which no cell could red until now** (P6 item 9's second fix
+    /// review, P3-3).
+    ///
+    /// The one cell above drives the door with `(beaconWasRunning, rotationWasScheduled,
+    /// nextRotationAt) == (false, false, nil)`, so a probe deleting either rollback — or either
+    /// condition — stayed green: the rotation half was never executed at all, and "only what this
+    /// raise started" was a sentence rather than a claim. Here both are ALREADY up before the raise,
+    /// and both must survive a refusal, because they belong to an earlier life of this session and
+    /// tearing them down would be a rollback of work this call never did.
+    ///
+    /// It is also what makes the two rollbacks' INDEPENDENCE visible: they were a `guard` chain
+    /// until this round, so a running beacon skipped the rotation rollback entirely — correct only
+    /// by a coupling to `noteCommitIntoMesh`'s own early return, with no compile-time link.
+    private func theUnwindLeavesAPreExistingBeaconAndRotationAlone(
+        admitting member: IdentityService, seating fingerprint: String
+    ) throws {
+        let manager = MeshNetworkManager(store: store)
+        try seatJoiningManager(manager, admitting: member, seating: [fingerprint], raising: false)
+        manager.startBeaconLoopForTesting()
+        let rotationAt = Date().addingTimeInterval(900)
+        manager.scheduleRotationForTesting(nextRotationAt: rotationAt)
+        #expect(manager.isBeaconLoopRunningForTesting && manager.isRotationTimerScheduledForTesting,
+                "the precondition: both belong to an earlier life of this session")
+
+        let refused = DeviceBindingID.$testOverride.withValue(.unavailable) {
+            manager.reassertCommitIntoAdoptedMesh()
+        }
+        #expect(!refused)
+        #expect(manager.isBeaconLoopRunningForTesting,
+                "the unwind stood down a beacon this raise never started")
+        #expect(manager.isRotationTimerScheduledForTesting,
+                "the unwind cancelled a rotation timer this raise never scheduled")
+        #expect(manager.lastKnownNextRotationAtForTesting == rotationAt,
+                "and it overwrote a rotation instant it did not set")
+        manager.leaveMesh()
+    }
+
+    /// **The ordinary joiner path: a refused re-assert unwinds to `.idle`, not to `.joining`**
+    /// (P6 item 9's second fix review, P2-A).
+    ///
+    /// `recordVerifiedAdmissionDurably()`'s first arm is the one the door's own doc names — a joiner
+    /// whose dwell committed before the descriptor arrived, and the yielding half of a pairwise
+    /// founding. There `joinDurably()` moves `idle → joining` on a save that **succeeds**, and the
+    /// re-assert's own save is the one that is refused. Unwinding to `.joining` therefore put the
+    /// machine at a state this grant created rather than at the state it found: the device sat
+    /// durably joining a mesh whose admission record `handleAdmissionGrant` had just rolled back
+    /// underneath it, at the one state whose only edge out is `.peerCommitted` — the outage shape
+    /// item 6's own P1-1 fixed. The grant's pre-state is captured at the top of the door and put
+    /// back instead.
+    ///
+    /// **Making the first save succeed and the second fail** is what the earlier cell's doc says a
+    /// single `DeviceBindingID` override cannot do — both saves read the same binding inside one
+    /// call. A `ScriptedBinding` plus the door's own audit line does it with no new seam: the flip
+    /// rides `mesh.sessionState.reassertedAdoptedCommit`, which the re-assert writes AFTER
+    /// `joinDurably()` has returned and BEFORE `noteCommitIntoMesh(peer:)` raises.
+    ///
+    /// The ledger and addressing rollback is the CALLER's half and stays there
+    /// (`handleAdmissionGrant(_:from:senderSigningPublicKey:)`); this asserts the door's own.
+    @Test func aRefusedReAssertOnTheJoinerPathUnwindsToTheStateTheGrantFound() throws {
+        let member = IdentityService(keychainService: "com.fernlet.identity.test.\(UUID().uuidString)")
+        let fingerprint = IdentityService.fingerprint(of: member.localSigningPublicKey)
+        let manager = MeshNetworkManager(store: store)
+        try seatJoiningManager(
+            manager, admitting: member, seating: [fingerprint],
+            raising: false, recordingAdmission: false
+        )
+        #expect(manager.sessionState == .idle,
+                "the state the grant finds on the ordinary joiner path")
+        #expect(!manager.isBeaconLoopRunningForTesting && !manager.isRotationTimerScheduledForTesting,
+                "and nothing this grant will start is up yet")
+
+        let scripted = DeviceBindingID.ScriptedBinding(.identifier(Self.install))
+        let flip = FernletAuditLog.addCaptureHandler { event, _ in
+            guard event == "mesh.sessionState.reassertedAdoptedCommit" else { return }
+            scripted.set(.unavailable)
+        }
+        defer { FernletAuditLog.removeCaptureHandler(flip) }
+
+        let durable = DeviceBindingID.$testOverride.withValue(.scripted(scripted)) {
+            manager.recordVerifiedAdmissionDurably()
+        }
+        #expect(!durable, "the grant is not durable when the raise it produced never sealed")
+        #expect(manager.sessionState == .idle, """
+            the device was left durably JOINING a mesh it holds no admission record for, at the one             state whose only edge out is a further commit
+            """)
+        #expect(!manager.isBeaconLoopRunningForTesting,
+                "the beacon the raise started is stood down with it")
+        #expect(!manager.isRotationTimerScheduledForTesting,
+                "and so is the rotation it scheduled")
+        manager.leaveMesh()
     }
 
     /// Puts `manager` at `.joining` inside a mesh that has admitted itself and `admitting`, with
@@ -1197,9 +1292,13 @@ struct MeshSessionLifecycleManagerTests {
     ///   - raising: Whether the slots are in place for the grant's own re-assert. False seats them
     ///     AFTERWARDS, which leaves the manager at `.joining` with a committed member slot — the one
     ///     state the re-assert's own door can be driven from twice.
+    ///   - recordingAdmission: Whether to run `recordVerifiedAdmissionDurably()` at all. False
+    ///     leaves the manager at **`.idle`** with a committed member slot, which is the state the
+    ///     ORDINARY joiner path is in when a grant arrives — the arm whose unwind P6 item 9's
+    ///     second fix review (P2-A) found restoring `.joining`.
     private func seatJoiningManager(
         _ manager: MeshNetworkManager, admitting: IdentityService,
-        seating: [String], raising: Bool = true
+        seating: [String], raising: Bool = true, recordingAdmission: Bool = true
     ) throws {
         let mesh = makeMesh(manager)
         manager.currentMesh = mesh
@@ -1219,8 +1318,10 @@ struct MeshSessionLifecycleManagerTests {
             ledger: ledger
         )
         if raising { seatSlots(seating, on: manager) }
-        DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
-            _ = manager.recordVerifiedAdmissionDurably()
+        if recordingAdmission {
+            DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+                _ = manager.recordVerifiedAdmissionDurably()
+            }
         }
         if !raising { seatSlots(seating, on: manager) }
     }

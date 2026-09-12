@@ -479,7 +479,7 @@ struct FernletApp: App {
                     // P2 rejection-matrix lane (runbook Lane C). Absent FERNLET_MESH_MATRIX=1 this
                     // does nothing — the mesh manager is not even built — and in release it is a
                     // compiled-out no-op.
-                    .task { MeshRejectionMatrixHarness.install(manager: store.meshNetworkManager) }
+                    .task { MeshRejectionMatrixHarness.install(manager: store.meshNetworkManager, store: store) }
                     // P5 item 10's launch push. `.onChange(of: scenePhase)` carries no `initial:`,
                     // and on a cold launch the loader reaches `.ready` AFTER the
                     // `.inactive → .active` edge — without this the gate would sit fail-closed for

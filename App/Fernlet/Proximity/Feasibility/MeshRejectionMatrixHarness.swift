@@ -70,11 +70,52 @@ enum MeshMatrixDebugOptions {
     /// no removal is ever filed.
     static let removeAfterKey = "FERNLET_MESH_REMOVE_AFTER"
 
+    /// `FERNLET_MESH_FLOWS_AFTER=<polls>` — hold every flow until this poll, so a run can fire
+    /// text, photos and hearts AFTER the founding window instead of inside it (P6 item 10).
+    ///
+    /// Without it a flow fires on the first tick that has a committed slot, which on a `founder`
+    /// run is the tick the founder collapses the seeded descriptor to itself — the derived roster
+    /// is 1, every routed mint has zero destinations, and `.noDestinations` is the only outcome the
+    /// lane can produce. Absent means 0, which is that behaviour exactly.
+    static let flowsAfterKey = "FERNLET_MESH_FLOWS_AFTER"
+
+    /// `FERNLET_MESH_ALLOW_HEARTS=1` — turn the in-person hearts opt-in ON for this launch, BEFORE
+    /// `startJoin()`, so `.hearts` reaches the handshake's capability list (P6 item 10).
+    ///
+    /// The setting ships **off** and `localCapabilities()` advertises `.hearts` only when it is on,
+    /// and a peer's capability list is snapshotted when its coordinator is built — so this is an
+    /// ordering constraint, not a convenience. Absent leaves the user's own setting untouched.
+    static let allowHeartsKey = "FERNLET_MESH_ALLOW_HEARTS"
+
+    /// `FERNLET_MESH_AUTO_KEEP_FRIENDS=1` — stand in for the user tapping "keep" on every candidate
+    /// of a promoted `pendingFriendReview` batch, then consume the batch (P6 item 10).
+    ///
+    /// Stands in for ONE tap and nothing else: `keepProximityFriends(from:keptFingerprints:)` and
+    /// `completeFriendReview(_:)` are the shipping doors `ConnectView.finalizeFriendKeeps()` calls,
+    /// unchanged. It exists because the trust-vault row those doors write is the only thing that
+    /// makes a peer heart-eligible, and a fresh pair of Simulators has none. Absent means no batch
+    /// is ever kept, which is today's behaviour.
+    static let autoKeepFriendsKey = "FERNLET_MESH_AUTO_KEEP_FRIENDS"
+
     /// Ed25519 public-key length. Anything else in the member list is not a key and is dropped.
     static let signingKeyByteCount = 32
 
     /// Cap on seeded members — the mesh roster cap, so a malformed variable cannot grow the list.
     static let maxSeededMembers = 8
+
+    /// Granularity, in seconds, of the seeded descriptor's creation instant (P6 item 10).
+    ///
+    /// **This is load-bearing and the lane found out the hard way.** Every node seeds its OWN
+    /// descriptor, and `MeshNetworkManager` derives the session's hard deadline from
+    /// `descriptor.createdAt + MeshSessionCeiling.ceilingSeconds`. Every routed manifest and chunk
+    /// carries `MeshRoutedManifest.expiry(afterHardDeadline:)`, and the receiving verifier refuses
+    /// anything whose expiry is not ITS OWN deadline plus grace (`MeshChunkVerifier`'s
+    /// `expiryMismatch`). With a per-device `Date()` the three nodes' deadlines differed by the
+    /// launch stagger, and **two thirds of every routed frame in run C-P6-TEXT-2 was refused**.
+    /// Flooring to a shared grid makes the seeded descriptors agree without a new environment
+    /// variable and without touching shipping code — on the app path the founder mints one
+    /// descriptor and gossips it, so the disagreement is an artefact of seeding, not a defect.
+    static let seededCreationGridSeconds: TimeInterval = 600
 
     /// Whether this launch installs the harness.
     static let isEnabled = ProcessInfo.processInfo.environment[enabledKey] == "1"
@@ -101,6 +142,22 @@ enum MeshMatrixDebugOptions {
     /// Poll at which the founder files a removal record, or nil for never.
     static let removeAfterSeconds = parseSeconds(ProcessInfo.processInfo.environment[removeAfterKey])
 
+    /// The seeded descriptor's creation instant, floored to ``seededCreationGridSeconds`` so every
+    /// node of one run derives the SAME session hard deadline (P6 item 10).
+    static var seededCreatedAt: Date {
+        let grid = seededCreationGridSeconds
+        return Date(timeIntervalSince1970: (Date().timeIntervalSince1970 / grid).rounded(.down) * grid)
+    }
+
+    /// The first poll at which a flow may fire. Zero — today's behaviour — when absent.
+    static let flowsAfterPolls = parseSeconds(ProcessInfo.processInfo.environment[flowsAfterKey]) ?? 0
+
+    /// Whether this launch turns the nearby-hearts opt-in on before the radios start.
+    static let allowsHearts = ProcessInfo.processInfo.environment[allowHeartsKey] == "1"
+
+    /// Whether this launch keeps every candidate of a promoted friend-review batch.
+    static let autoKeepsFriends = ProcessInfo.processInfo.environment[autoKeepFriendsKey] == "1"
+
     /// Frozen diagnostic English naming what the launch environment asked for, for the transcript.
     static var summary: String {
         let environment = ProcessInfo.processInfo.environment
@@ -108,6 +165,9 @@ enum MeshMatrixDebugOptions {
             + "chaos=\(environment["FERNLET_MESH_CHAOS"] ?? "off") "
             + "chaosBarred=\(environment["FERNLET_MESH_CHAOS_BARRED"] == nil ? "none" : "set") "
             + "flows=\(flows.isEmpty ? "none" : flows.map(\.rawValue).joined(separator: "+")) "
+            + "flowsAfter=\(flowsAfterPolls) "
+            + "hearts=\(allowsHearts ? "on" : "off") "
+            + "autoKeepFriends=\(autoKeepsFriends ? "on" : "off") "
             + "role=\(role.rawValue) "
             + "leaveAfter=\(leaveAfterSeconds.map(String.init) ?? "never") "
             + "removeAfter=\(removeAfterSeconds.map(String.init) ?? "never")"
@@ -160,7 +220,10 @@ enum MeshMatrixDebugOptions {
 ///
 /// ## What it does, and what it deliberately does not
 ///
-/// It seeds ``MeshNetworkManager/currentMesh`` and calls `startJoin()`. That is all. It does not
+/// It seeds ``MeshNetworkManager/currentMesh`` and calls `startJoin()`. Since P6 item 10 it also
+/// carries the `FernletStore` the flow driver needs for the hearts script — the nearby-hearts
+/// opt-in, the trust vault and the heart ledger all live there, and every one of them is reached
+/// through a shipping door. That is all. It does not
 /// touch the introduction, the roster derivation, the dial policy or the tie-break — the whole
 /// point is that the code under observation is the shipping code. The misbehaviours that produce
 /// the signature and replay rows live on the other side of the module wall, in ProximityKit's own
@@ -189,7 +252,7 @@ enum MeshRejectionMatrixHarness {
     ///
     /// Idempotent through `isSearching`: the SwiftUI `.task` that calls this can re-fire, and a
     /// second `startJoin()` would re-mint the radio's Bonjour name mid-run.
-    static func install(manager: @autoclosure () -> MeshNetworkManager) {
+    static func install(manager: @autoclosure () -> MeshNetworkManager, store: FernletStore) {
         guard MeshMatrixDebugOptions.isEnabled else { return }
         let manager = manager()
         guard !manager.isSearching else { return }
@@ -199,10 +262,11 @@ enum MeshRejectionMatrixHarness {
         seedDescriptor(manager: manager)
         // Before `startJoin()`, never after: a peer's capability list is snapshotted when its
         // coordinator is built, so a provider the flow driver sets later would never reach the wire.
-        MeshFlowDriver.prepare(manager: manager)
+        // The hearts opt-in (P6 item 10) is in that same window for the same reason.
+        MeshFlowDriver.prepare(manager: manager, store: store)
         manager.startJoin()
         echo("radios started; searching=\(manager.isSearching)")
-        MeshFlowDriver.start(manager: manager)
+        MeshFlowDriver.start(manager: manager, store: store)
     }
 
     /// Applies the seeded descriptor, or says out loud that none was asked for.
@@ -212,7 +276,10 @@ enum MeshRejectionMatrixHarness {
             echo("no descriptor seeded: roster stays empty, every peer verdicts stranger")
             return
         }
-        let now = Date()
+        // Floored, never `Date()`: see `seededCreationGridSeconds` — the hard deadline every routed
+        // frame's expiry is checked against comes from here, so two nodes that disagree by a second
+        // refuse each other's manifests and chunks outright.
+        let now = MeshMatrixDebugOptions.seededCreatedAt
         manager.currentMesh = MeshDescriptor(
             meshID: meshID,
             name: "matrix",
@@ -224,7 +291,7 @@ enum MeshRejectionMatrixHarness {
             modeSetBy: manager.localFingerprint,
             createdAt: now
         )
-        echo("descriptor seeded: mesh=\(meshID) members=\(keys.count)")
+        echo("descriptor seeded: mesh=\(meshID) members=\(keys.count) createdAt=\(now.timeIntervalSince1970)")
     }
 
     /// One seeded member row. The key-agreement half is real only for this device — the roster the
@@ -252,7 +319,8 @@ enum MeshRejectionMatrixHarness {
     }
     #else
     /// Release no-op — the autoclosure is never evaluated, so nothing is read, nothing is seeded,
-    /// no radio is started, and the lazy mesh manager is not even built.
-    static func install(manager: @autoclosure () -> MeshNetworkManager) {}
+    /// no radio is started, and the lazy mesh manager is not even built. The store arrives by
+    /// reference and is not touched either.
+    static func install(manager: @autoclosure () -> MeshNetworkManager, store: FernletStore) {}
     #endif
 }

@@ -190,11 +190,24 @@ struct MeshRoutedRefusalBudgetTests {
     /// door), the dispatch decode goes through it too, the gate sits at the dispatch, and the
     /// budget is reset with the drain state — nowhere else. The two digest doors are outside the
     /// budget by design (D-5.12 / D-6.10: a digest costs one verify, is bound to its slot, and its
-    /// answer is bounded by the per-peer frame budget), and their **four** spellings are pinned so a
-    /// fifth cannot appear unnoticed: three spell `mesh.routedDrain.rejected` and the fourth is P6
-    /// item 7's stamp guard, which refuses a record under its own token (P6 item 7 fix review,
-    /// P2-3 — the wall counted one token rather than the doors' exits, so the fourth exit had landed
-    /// unseen).
+    /// answer is bounded by the per-peer frame budget), and what pins them is a **count over their
+    /// brace-matched bodies**, not a list of spellings (P6 item 10 SET A, the item 7 fix review's
+    /// P2-A).
+    ///
+    /// The spelling list was wrong the day it was written. It said "four spellings, so a fifth
+    /// cannot appear unnoticed"; the digest family's refusal exits were already **five** — the
+    /// drain answer's binding guard (`mesh.merge.routedQuiescentUnbound`,
+    /// `receiveRoutedDrainAnswer`) is a pre-store refusal in one of the two doors the sentence is
+    /// about and was pinned nowhere in `Tests/`. Enumerating spellings is the failure mode: a sixth
+    /// exit under a fresh token is invisible to a list and visible to a count. So the doors are
+    /// brace-matched and every `FernletAuditLog.log(` inside them is counted — **six**: two
+    /// refusals + one guard + two refusals, plus the one SUCCESS line
+    /// (`mesh.merge.routedQuiescent`), which is deliberately inside the count. A new line of any
+    /// kind, refusal or not, reds here and has to be argued for.
+    ///
+    /// The token counts are kept beside it because they say something the body count cannot: that
+    /// the *shared* rejected token has not spread to a content door, and that item 7's stamp guard
+    /// still refuses under its own name.
     @Test func everyPreStoreRefusalGoesThroughTheOneChargingDoor() throws {
         let code = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
@@ -204,7 +217,8 @@ struct MeshRoutedRefusalBudgetTests {
         #expect(total == 5, "the probe, the charging door and the three digest-door lines; found \(total)")
         let stale = "\"mesh.routedInventory.staleSentAt\""
         #expect(code.components(separatedBy: stale).count - 1 == 1,
-                "the digest doors' fourth refusal spelling moved, or a fifth exit picked a new token")
+                "P6 item 7's stamp guard no longer refuses under its own token")
+        try digestDoorAuditLinesAreCounted(in: code)
 
         let doorsStart = try #require(code.range(of: "private func ingestRoutedManifest("))
         let doorsEnd = try #require(code.range(of: "private nonisolated enum RoutedDrainVerdict"))
@@ -226,5 +240,34 @@ struct MeshRoutedRefusalBudgetTests {
         let resets = code.components(separatedBy: "routedRefusalBudget.reset()").count - 1
         #expect(resets == 1, "the budget is reset with the drain state only — never on a disconnect or a flap")
         #expect(code.contains("routedRefusalBudget = MeshRoutedRefusalBudget()"))
+    }
+
+    /// The digest family's three brace-matched bodies and the one number that covers all of them.
+    ///
+    /// `routedInventoryStampIsStale(_:from:)` is counted with the two doors because it is the
+    /// inventory door's own refusal exit, lifted into a named function so one verdict could decide
+    /// both the record and the quiescence re-stamp (P6 item 7). Leaving it out would let a fourth
+    /// exit hide in the lift.
+    private func digestDoorAuditLinesAreCounted(in code: String) throws {
+        let doors = [
+            "func receiveRoutedInventory(",
+            "private func routedInventoryStampIsStale(",
+            "private func receiveRoutedDrainAnswer("
+        ]
+        var lines = 0
+        // R2: a fixed three-element list.
+        for door in doors {
+            let body = try #require(
+                MeshRoutedSourceScan.bracedBody(after: door, in: code),
+                "a digest door was renamed, or its brace-matched body does not close"
+            )
+            lines += body.components(separatedBy: "FernletAuditLog.log(").count - 1
+        }
+        #expect(lines == 6, """
+            the digest doors write an audit line this wall does not know about. Six are expected: \
+            the inventory verifier's rejection, the sender mismatch, item 7's stale stamp, the \
+            answer verifier's rejection, the answer's unbound binding guard, and the one success \
+            line. A seventh is a refusal exit nobody pinned — the shape P6 item 10 SET A closed
+            """)
     }
 }

@@ -328,10 +328,22 @@ struct MeshP6TextRoutingAcceptanceTests {
     ///   `MeshP6AcceptanceTests.swift:339`) — so "nothing is projected below the 13+ line" is walled
     ///   here at the seam that decides it, and the held-ciphertext line beside it is what keeps the
     ///   claim from being a claim about a delivery that never happened.
+    ///
+    /// **Leg 3's own tripwire is one line, not a cell** (P6 item 9's second fix review, P3-6).
+    /// `mesh.routedProjection.transcriptAgeGated` is written in exactly ONE place in the tree —
+    /// leg 3's refusal arm, `MeshNetworkManager.swift:7919` — so capturing it around this run says
+    /// leg 3 fired, which the view gate cannot fake. **Its one weakness, named rather than left for
+    /// a reader to find:** the audit log is process-global and suites run in parallel, so a
+    /// concurrent suite driving its own gated projection could satisfy the count. It is therefore a
+    /// deletion tripwire for leg 3 rather than an exact per-manager witness; an exact one would need
+    /// a new `onRoutedProjectionRefusalForTesting` seam on the manager, which is a residual by name.
     @Test(arguments: MeshP6Acceptance.gatedCorners)
     func aGatedMemberHoldsTheCiphertextAndProjectsNothing(
         cell: MeshRoutedConvergenceCell
     ) async throws {
+        let gateAudit = MeshRoutedBackpressureAuditCapture()
+        gateAudit.install()
+        defer { gateAudit.uninstall() }
         let outcome = try await MeshP6Acceptance.feature(cell, label: "p6text-gate")
         defer { MeshP6Acceptance.teardown(outcome.run) }
         let run = outcome.run
@@ -357,6 +369,11 @@ struct MeshP6TextRoutingAcceptanceTests {
             #expect(member.node.manager.sessionMessages.messages.map(\.text).contains(wanted),
                     "an ungated survivor's transcript is missing the message")
         }
+        #expect(gateAudit.count(of: "mesh.routedProjection.transcriptAgeGated") > 0, """
+            leg 3 — the `.sessionTranscript` arm's own `guard isChatAllowed`, applied BEFORE the \
+            unwrap — never refused anything while this cell ran, so the empty transcript above is \
+            the VIEW gate's doing and the plaintext was decrypted below the 13+ line
+            """)
     }
 
     /// **One honest transcript** — identical rows, in one order, at every ungated reader, with the
@@ -592,6 +609,16 @@ struct MeshP6HeartCeremonyAcceptanceTests {
     /// Custody is the one shape that could legitimately put these chunks elsewhere, and increment 1
     /// does not: `originRetainsUntilDeparture` moves custody only at a DEPARTURE, to the custodians
     /// the leaver's signed record names, and a living non-destination is neither.
+    ///
+    /// **What the complement loop can and cannot red** (P6 item 9's second fix review, P3-4/P3-5),
+    /// written here so a reader does not take three claims for three walls. The RECORD leg is the
+    /// live one: item 9's `neg-01` produced ten of its fourteen issues there. The ledger-row and
+    /// judgement legs cannot red in this rig at all — `armHeartCeremony` arms a ledger at the origin
+    /// and the recipient only, so a non-destination has no ledger to write a row in and nothing to
+    /// judge with; they are belt-and-braces against a future rig that arms every member, not
+    /// independent claims today. And the loop is **vacuous on `twoOne`**, whose living roster is two:
+    /// origin plus recipient leaves no member to iterate. The `livingMembers.count >= 3` assertion
+    /// below is what stops that vacuity spreading to the shapes that do have a complement.
     @Test(arguments: MeshP6Acceptance.oneCellPerShape)
     func aHeartNamesOneDestinationOnEveryShape(cell: MeshRoutedConvergenceCell) async throws {
         let outcome = try await MeshP6Acceptance.feature(cell, label: "p6heart-one")
@@ -605,9 +632,11 @@ struct MeshP6HeartCeremonyAcceptanceTests {
         #expect(outcome.run.livingMembers.count >= 2,
                 "a one-destination claim on a roster of one says nothing")
 
+        var complement = 0
         // R2: bounded by the roster cap.
         for member in outcome.run.livingMembers where member.index != outcome.heartOrigin.index
             && member.index != outcome.heartRecipient.index {
+            complement += 1
             #expect(outcome.run.routedIndex(of: member)?.record(for: key) == nil, """
                 a one-destination heart reached a member its own signed target does not name — the \
                 ciphertext is the thing the flip exists to keep off every other device
@@ -616,6 +645,12 @@ struct MeshP6HeartCeremonyAcceptanceTests {
                     "a member the target does not name wrote a heart-ledger row for this gift")
             #expect(!outcome.judgementLog.judged(key.itemID, at: member.fingerprint),
                     "a member the target does not name judged this gift")
+        }
+        if outcome.run.livingMembers.count >= 3 {
+            #expect(complement > 0, """
+                a shape with three living members ran the complement loop zero times, so "and \
+                nobody else" asserted nothing on the shapes that have a complement at all
+                """)
         }
     }
 
@@ -763,6 +798,10 @@ struct MeshP6DeterminismAcceptanceTests {
     /// P6's own clause file — the one the digest-pin wall reads, and the one this suite lives in.
     private static let ownFile = "\(suiteDirectory)/MeshP6AcceptanceTests.swift"
 
+    /// The batteries the tree is known to hold — P3, P4, P5, P6 — plus the convergence file item 9
+    /// widened. A ratchet: a new phase's battery raises it, and nothing ever lowers it.
+    private static let minimumScannedFiles = 5
+
     /// The files the batch-counter wall scans: every `MeshP*AcceptanceTests.swift` there is, plus
     /// the convergence file item 9 widened.
     ///
@@ -845,7 +884,7 @@ struct MeshP6DeterminismAcceptanceTests {
     @Test func neitherFileItemNineOwnsSpellsTheBatchCounter() throws {
         let needle = Self.batchCounterSpelling
         let files = try Self.scannedFiles()
-        #expect(files.count >= 5, """
+        #expect(files.count >= Self.minimumScannedFiles, """
             the enumeration matched fewer files than the acceptance batteries that exist, so the \
             wall is scanning a list it derived from nothing
             """)
@@ -871,7 +910,14 @@ struct MeshP6DeterminismAcceptanceTests {
                     """)
             }
         }
-        #expect(scanned == files.count, "every derived file was really opened")
+        // `scanned == files.count` was a tautology — the loop above has no `continue`, no `break`
+        // and no early return, and its one escape (a throwing `codeLines`) fails the cell before any
+        // expectation is reached (P6 item 9's second fix review, P3-7). The claim worth making is
+        // that the DERIVATION really found the batteries, against a number written down here rather
+        // than against the list's own length.
+        #expect(scanned >= Self.minimumScannedFiles, """
+            the derived enumeration opened fewer acceptance-battery files than the tree is known to             hold, so this wall is scanning a list it derived from nothing
+            """)
     }
 
     /// **The two digests keep their one home**, and this suite re-pins neither.

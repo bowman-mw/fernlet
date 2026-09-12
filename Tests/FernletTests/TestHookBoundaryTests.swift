@@ -47,8 +47,9 @@ struct TestHookBoundaryTests {
     /// Floor for the shipping scan (367 files at the time of writing); a root that stops resolving trips it.
     static let minimumShippingFilesScanned = 300
 
-    /// Real (non-comment) hook reads today: 61 across all four families. A wall that finds fewer has
-    /// stopped looking — comment stripping or the token matcher has broken.
+    /// Real (non-comment) hook reads today: **68** across all four families (P6 item 10 added three
+    /// mesh ones). A wall that finds fewer has stopped looking — comment stripping or the token
+    /// matcher has broken.
     static let minimumHookLines = 40
 
     /// The tokens that name a debug/test launch hook.
@@ -60,7 +61,9 @@ struct TestHookBoundaryTests {
     /// `FERNLET_UI_TEST_`, the first token in this list, rather than to the mesh family.
     static let hookTokens = ["FERNLET_UI_TEST_", "FERNLET_SKIP_", "FERNLET_MESH", "FERNLET_PROBE"]
 
-    /// Per-family floors, each about two-thirds of today's real count (39 / 8 / 11 / 3).
+    /// Per-family floors, each comfortably below today's real count (39 / 8 / 18 / 3, measured
+    /// 2026-09-12). The floors themselves do not move for an ADDED hook — only for a removed
+    /// family.
     ///
     /// The global floor above cannot catch a matcher that loses one family: drop every mesh and
     /// probe read and 47 remain, comfortably past it. These are what make each family's membership

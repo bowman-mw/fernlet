@@ -623,14 +623,20 @@ struct MeshRoutedDrainTests {
     ///
     /// The frame charge is the fourth assertion and it is **not** a claim that nothing was answered
     /// (P6 item 7 fix review, P2-2: the refusal stops the record, never the answer). It is unmoved
-    /// here for a reason measured twice: by the time the stale digest lands, this peer's leg of the
-    /// offered item is already `delivered`, so the re-plan has nothing left to offer and the answer
-    /// puts no bulk on the wire. The cell that proves the answer really still fires is
+    /// here for a reason that is now **asserted rather than remembered** (P6 item 10 SET A, P3-e):
+    /// by the time the stale digest lands the origin has nothing outstanding for this peer at all —
+    /// measured, the whole record has been RECLAIMED after full delivery — and
+    /// `offerableKeys(to:in:at:)` builds its set from `outstandingItems(at:in:)`, so the re-plan has
+    /// nothing to offer and the answer puts no bulk on the wire. See
+    /// ``theOriginHasNothingLeftToOffer(_:key:to:)``: without it, any rig change that left the item
+    /// outstanding would red the frame claim for a reason that is not a regression at all. The cell
+    /// that proves the answer really still fires is
     /// ``aStaleDigestIsRefusedAsARecordAndStillAnswered``, which mints an item in between.
     @Test func anOlderInventoryDigestIsRefusedAndLeavesEveryRecordedFactAlone() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "stamp-older")
         defer { rig.teardown() }
-        try MeshRoutedDrainItem.mint(rig, origin: 0).stage(into: rig, at: 0)
+        let offered = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        offered.stage(into: rig, at: 0)
         try MeshRoutedDrainItem.mint(rig, origin: 1).stage(into: rig, at: 1)
         rig.link(0, 1)
         let peer = rig.nodes[1].fingerprint
@@ -653,6 +659,7 @@ struct MeshRoutedDrainTests {
                 "the accepted digest must have been answered, or the stamp claim below is vacuous")
         let spent = rig.nodes[0].manager.routedDrainFramesSpentForTesting[peer] ?? 0
         #expect(spent > 0, "the accepted digest planned nothing, so the plan claim would be vacuous")
+        try Self.theOriginHasNothingLeftToOffer(rig, key: offered.key, to: peer)
 
         try await receiveInventory(rig, older, at: 0, from: 1, now: fresh)
 
@@ -1894,6 +1901,36 @@ struct MeshRoutedDrainTests {
         now: Date? = nil
     ) async throws {
         try await rig.deliver(payload, type: type, sender: sender, receiver: receiver, now: now)
+    }
+
+    /// The precondition that makes "the frame charge did not move" a claim about the PLAN rather
+    /// than about a rung the rig happened to leave at a particular place (P6 item 10 SET A, P3-e).
+    ///
+    /// `offerableKeys(to:in:at:)` builds its set from `outstandingItems(at:in:)`, so the frame
+    /// charge is unmoved exactly when the ORIGIN has nothing outstanding for this peer. Asserted at
+    /// that bucket rather than at a disposition, because **which** of the two shapes produces it is
+    /// a rig detail and both are legitimate: measured here, the answer is the sharper one — the
+    /// origin's record is GONE. Every destination was delivered, so P5 item 9's reclaim took the
+    /// whole item away; the doc's "the leg is already delivered" was true and one step short. Either
+    /// way the plan has nothing to offer, which is the fact the assertion below depends on, and any
+    /// rig change that leaves the item outstanding for this peer reds HERE, naming the precondition,
+    /// instead of reddening the frame charge for a reason that is not a regression.
+    private static func theOriginHasNothingLeftToOffer(
+        _ rig: MeshRoutedDrainRig, key: MeshRoutedItemKey, to peer: String
+    ) throws {
+        let index = try #require(rig.routedIndex(rig.nodes[0]),
+                                 "the origin's sealed index would not load")
+        let roster = try #require(rig.nodes[0].manager.membershipVerifier?.roster,
+                                  "the origin holds no derived roster, so no leg has a disposition")
+        let outstanding = index.outstandingItems(at: MeshRoutedDrainRig.now, in: roster)[peer] ?? []
+        #expect(!outstanding.contains { $0.key == key }, """
+            the origin still has this item outstanding for this peer, so the answer really would \
+            re-offer it and the frame-charge assertion below would move for a reason that is not a \
+            regression
+            """)
+        let record = index.record(for: key)
+        #expect(record == nil || record?.deliveryTarget?.dispositions(in: roster)[peer] == .delivered,
+                "the item is neither reclaimed nor delivered to this peer, yet nothing is outstanding")
     }
 }
 
