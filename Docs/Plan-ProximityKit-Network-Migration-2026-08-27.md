@@ -1745,7 +1745,7 @@ at every item that ran it (items 1–14 and 1a, per each item's own gauntlet log
    `receiptID` excludes `custodiedAt`, so a receipt re-minted after a repaired slot carries an id
    peers already recorded and their windows answer `replayed` — they keep the **earlier** receipt.
    **Cost:** staleness, never a lost delivery; a cross-device un-record would be a wire change.
-   (ii) D-12.12 (amended) — **CLOSED in P6 item 7 (<SHA placeholder>)**: `receiveRoutedInventory`
+   (ii) D-12.12 (amended) — **CLOSED in P6 item 7 (`896d96a`)**: `receiveRoutedInventory`
    now refuses the **record** a digest whose signed `sentAt` is strictly before the recorded one
    would write (`MeshRoutedInventoryStampRule`, one audit line `mesh.routedInventory.staleSentAt`, no
    refusal-budget charge — the digest family stays outside that door per D-5.12/D-6.10), and the
@@ -2035,7 +2035,31 @@ owed beside them — **three phases ungated**, flagged at three consecutive phas
 
 ---
 
-## 12. Phase P6 — feature routing
+## 12. Phase P6 — feature routing — **BUILT** (2026-09-12)
+
+**Landed on `claude/youthful-zhukovsky-d27308`, oldest first** (`d263b1d..` the P6 close-out commit —
+its SHA is in the ledger's item 11 row — the launcher commit exclusive through the phase's last
+commit; **24 shipping commits before this one** — 23 item commits plus the close-out catalog sync
+`6b77ec2` — each followed in history by its own ledger commit; **68 commits before this one** from
+the P5 boundary `3a32be0`). `Docs/Mesh-Migration-Loop-Ledger-P6.md` is the decision record; rows 1–11
+carry every SHA, review finding and residual cited in §12.1–§12.4. **P6 is merged to `main` and NOT
+pushed** — `origin/main` is still `3a32be0`, so the first push is also the first time CI builds any
+P6 code.
+
+| SHA | Item | What it is |
+|---|---|---|
+| `1aece9d` + `0295ac4` | 1 | the signed key-advertisement family `fernlet.mesh.key-agreement.v1` — record, verifier, conflict-refusing grow-only set, `MeshSessionContext` schema 3, six send doors, the mint's third verified source |
+| `871e52d` + `921441a` | 2 | proximity-join founding — a mesh **with a ledger** at the first committed peer, the newborn-yield repair, one auto-granted admission |
+| `f306f4f` | 3 | the receiver-side per-type size cap at the manifest door, landed with the photo row's narrowed cap |
+| `5659a0a` | 4 | temporary text on the routed store, with the legacy `.tempMessage` transport retired in the same commit |
+| `5d3a00b` | 5 | one retry planner pacing both re-entry lists — never-tried first, a capped retry share drawn round-robin, memory-only FINAL marks |
+| `ed66042` | 6 | hearts on the routed store — a single-recipient row, one ceremony door, the legacy `.friendHeart` mesh path retired |
+| `896d96a` | 7 | the `sentAt` monotonicity guard, the launch session restore wired behind the gate, and item 9's stage-0 seams |
+| `d8822ed` | 8 | the departed-origin custodian-forwarding cell on a second four-node rig |
+| `ee4c7de` | 9 | the P6 acceptance battery (eight clause suites) and the CI gate lines |
+| `64c47f2` + `ea03411` | 10 | tier 2 — text **and** a routed heart observed end to end on real QUIC between Simulators, plus items 7's and 9's second fix sets |
+| `0665d0c` | 1c | the recurring P4-quorum load flake, fixed at the value layer with an injected clock |
+| `b0bf4d1`, `beef3ed`, `bd72de2`, `193cfd7`, `66c64d8`, `fb24c79`, `e573a18`, `a2df52d`, `0e182bb` | review fixes | one or more per item — item 1 took three, and items 5 and 8's rode inside `ed66042` — each after its own adversarial review: the review pass is part of the item, not an afterthought |
 
 **Testing lane (re-tiered 2026-09-01, §7.8).** Photos already crossed on per-transfer QUIC streams,
 in both directions, between two Simulators on one Mac (P2 item 10) — so this phase's observation lane
@@ -2094,11 +2118,358 @@ still a sim-lane job; no hardware is implied by it.
     photo and text receipts (R-19 on job 4's list), and FINAL refusals are marked memory-only in
     `routedHeartRefusedKeys`. `PayloadType.friendHeart` is **not parkable** — presence still uses it.
 
-### 12.4 Acceptance evidence — BUILT 2026-09-12 (P6 item 9)
+### 12.1 What landed
 
-§12's clauses, one serialized suite each, in `Tests/FernletTests/MeshP6AcceptanceTests.swift` —
-**eight suites**, in §11.4's format and for §11.4's reason: each is a self-contained scenario on the
-shipping seams, so CI can gate one line per clause. The launcher named seven; the eighth is P5's
+**Result:** every §12 row now rides the one routed path P5 built. Text and hearts originate through
+the *same three lines photos use* — `routedTypes.token(forCanonicalStore:)` → encode a body framed
+per `MeshRoutedItemBodyFormat` → `originateRoutedItem(body:typeToken:itemID:audience:now:)`
+(`MeshNetworkManager.swift:6255`), pushed by `pushOriginatedItem` — and both legacy sealed-envelope
+transports are **deleted**, not disabled, into zero-list walls
+(`MeshRoutedDrainTests.theRetiredTextTransportIsGone` `:2400`,
+`…theRetiredMeshHeartTransportIsGone` `:2443`, beside item 13's `theRetiredPhotoTransportIsGone`
+`:2366`). One column moved on the wire vocabulary: the heart row's `destinations` is
+`.singleRecipient` (`MeshRoutedTypeRegistry.swift:360`), which is the first routed type whose
+audience is decided by the **caller** rather than by the roster.
+
+**The precondition P6 discovered it had to build first.** §12 assumed a session with a mesh. The
+item 2 design check found that the app never had one: `promoteToMesh()` armed no membership ledger at
+**any** roster size and `startNewMesh` — which does — had **zero shipping callers**, so every
+proximity-join session the app could start held no meshID, no ledger and no destination set, and the
+routed content path was dead for 2–5 devices alike. Every P3–P5 Lane C run and every tier-1 rig had
+seeded the ledger through a harness door, which is why five phases never saw it. §11.3 item 13(i)'s
+"until a second peer commits" understated it; item 2 is the fix and §23.2/§23.4's lines are amended
+in its commit.
+
+| # | Work | SHA |
+|---|---|---|
+| 1 | **The key advertisement, as its own family.** `SignedKeyAgreementAdvertisement` (each member signs **its own durable X25519 key** — `IdentityService`'s keychain-resident, never-rotated `keyAgreementPrivateKey` — under its **admitted** Ed25519 key, meshID bound in), `MeshMembershipRecordVerifier.verify(_:)` → `MeshVerifiedKeyAgreementAdvertisement` whose `fileprivate` init is a compile fence (verify BEFORE any conflict mark), and `MeshKeyAgreementAdvertisementSet` — its own grow-only, conflict-refusing type with **no** `merging(`, grep-walled, 16 rows refused by name. `MeshSessionContext` goes **2 → 3** (v2 = corrupt, P3's precedent) carrying the set, and `routingInventoryDigest` — dead since P5 item 5 — is deleted in the same bump. Pass B wires it: `sendKeyAdvertisements(to:)` (`MeshNetworkManager.swift:4074`) at **six** doors (the three ask doors + `readvertiseMergeProof` + `attemptLedgerAdoption` + `grantAdmission`), committed members only, once per (peer, local-set version); a member-keyed receive budget outside the refusal budget; `MeshKeyAdvertisementFold.restoring(_:verifiedBy:)` re-proves persisted rows at restore as a **fence, not a discipline**; and the mint's resolver `routedDestinationKeys` becomes a three-case value with `MeshRoutedShareRefusal.keyMismatch` as the fail-closed answer when a handshake-verified key and an advertised one disagree. `repairOwnKeyAdvertisementIfMissing()` (`:4148`) self-mints, bounded at 3 attempts per session and gated on a member being **owed** a row. The drain wall was amended to count the new send and **shown red once**. Of D-13.22's three named mint refusals, **resumption becomes a delivery**; **star** and **over-cap roster** become a successful mint whose delivery waits for a link or a departure hand-off | `1aece9d`, `0295ac4`, fixes `beef3ed` + `bd72de2` + `193cfd7` |
+| 2 | **Founding a mesh with a ledger, at the first commit.** `foundMesh(_:now:)` (`MeshNetworkManager.swift:1893`, extracted from `startNewMesh` so both founder doors run one body) + `noteCommitIntoMesh` (which arms the ceiling) + `autoGrantsFoundingAdmission` (`:12056`, ONE grant while `members.count == 1`, through the existing `grantAdmission`). The election is a **pure order** over verified fingerprints, not a gate — both devices may found, and the newborn-yield rule decides; the yielder's `unwindNewbornMesh` takes the group key down with the advertisement state. `isInSession` → `hasCommittedPeer` at three hooks and seven app sites, `sessionParticipants` ∪ slots, and the test seam `commitSlotForTesting` drives the **real** path (every earlier rig faked the commit, which is why P3–P5 never drove descriptor/request/grant at tier 1). Pass B added `resumeSearchingForPartitionedMesh()` and a three-way `startFriendsDiscovery`, and **measured delivery at the recipient through the real path with nothing seeded** — a pair both ways, three devices after a yield, an only-peer departure firing its hooks once. The review's P1 forced the phase's largest behaviour decision: **session end means the MESH ending** — End Session, a signed termination, a completed departure, or the five-minute discovery timeout with no peer — never a lost link, because a link **blip** was running the session-end ceremony and presenting a review sheet whose both actions signed a termination on a session the commit kept alive. `isSessionLive` (`:1241`) is that predicate | `871e52d`, `921441a`, fixes `66c64d8` |
+| 3 | **The per-type cap, at the door.** `sizeExceedsTypeCap` at the manifest door — after the verifier, before the store, through `refuseRoutedFrameBeforeStore` (`:5176`) so it is charged to the authenticated sender — with a **non-dropping** arm in `MeshRoutedParkedDrop.reason` (D-9.3's origin-bound drop rule is untouched). The photo row's narrowed cap is defined **once** as arithmetic, never a literal: `PrivateMediaStore.maxIncomingPhotoBytes` (made public — ProximityKit had the dependency since P2) + the framed-header allowance (8 + 64 KiB) + the seal's 33 B = **10,551,337 B**. The registry doc keeps the ciphertext-vs-plaintext distinction, and the review added the `<=` boundary admission the first cut left untested | `f306f4f`, fixes `b0bf4d1` |
+| 4 | **Temporary text, and the first real canonical mutation behind W2.** `MeshRoutedTextBody` (`MeshRoutedItemBody.swift:288`) — frozen framing, four hostile shapes including invalid UTF-8, cap = 16 × `SessionMessageStore.maxTextLength` + a 1 KiB text-header allowance + the seal's overhead — originated through the three lines and projected through a new `.sessionTranscript` arm that re-applies `isChatAllowed` and the block list and then calls `SessionMessageStore.receiveIncoming`, which already dedups, sanitizes, flood-caps and audits. `SessionMessageStore` becomes a **derivation** over a held `MeshContentSet<MeshMergedMessage>` — §12's own word, "re-derive" — so §10.3's ordering, the age gate and the local block are a view filter over an unmutated union. The legacy per-slot `.tempMessage` fan-out and handler are deleted and `PayloadType.tempMessage` parked. The fix review's P1 was a **composite key**: `MeshContentKey{senderFingerprint, contentID}` (`MeshContentMerge.swift:72`) is now the dedup key on `MeshMergeableContent`, because the routed index key is `(origin, itemID)` for every family and no verifier refuses a duplicate id from a second origin. **No wire change** — the manifest and the body are byte-for-byte unchanged, no golden moved, nothing persisted moved; the key is local | `5659a0a`, fixes `fb24c79` |
+| 5 | **One retry planner, both re-entry lists.** `MeshRoutedRetryPlan` (`MeshRoutedRetryPlan.swift:71`, pure, keys only) paces the projection list *and* the local-ack list: never-tried work first, the retry share capped at `MeshRoutedDrainBounds.increment1.maxItems / retryShareDivisor` = 8 of 16 (`MeshRoutedRetryPlan.swift:81`, `:116`) and drawn **round-robin** so its own tail cannot starve, unused slots spilling either way; `MeshRoutedRetryRotation` (`:170`) is memory-only and bounded at `MeshRoutedStoreFormat.maxItems` = 1024 per list; the first pass after a restart charges pre-armed refs to the retry share. **The durability decision is memory-only** — the routed index stays schema 2 — because every FINAL mark re-derives from origin-signed bytes plus durable local state, which is the honesty test a memory-only mark had to pass. `ackableNow` (`:6923`) is the one line item 6 replaces, and it answers a three-case verdict rather than a `Bool` so `heartsPending` does not read 0 the moment a heart answers false | `5d3a00b`, fixes in `ed66042` |
+| 6 | **Hearts, and the ceremony with one door.** The registry's heart row flips **in place** to `.singleRecipient` (`MeshRoutedTypeRegistry.swift:360`) and its cap narrows to a formula with a **zero** payload term — `MeshRoutedHeartBody` (`MeshRoutedItemBody.swift:529`) is header-only (`{id, sentAtDayKey, senderName}`), so the cap is this family's framed-header allowance plus the seal's overhead, **553 B**. `MeshDeliveryTarget.addressing(…)` (`MeshDeliveryTarget.swift:389`) is the subset capture door: the recipient is a **caller argument validated against the roster**, never body-derived. The sender keeps its five gates and gains one bug fix (an UNLOADED ledger refuses with its own cause instead of borrowing the cooldown's sentence, which was a lie), and `SessionHeartState.failed(message: String)` — six sentences composed inside ProximityKit and invisible to both localization scanners — forks into a frozen `SessionHeartFailure` (`MeshNetworkManager.swift:196`) plus the app's `SessionHeartStatusCopy`. **The ceremony has one call site**, inside `commitLocalDelivery` after its own guards, resolving its evidence through an `@autoclosure` so a refused delivery never runs it; closeness feeds on `outcome.receivedGiftIDs`; a blocked author is FINAL and marked; and **`.heartLedger` does not join `projectableRoutedTypeTokens`** — a heart's canonical write is its ack evidence and job 5's list never shrinks, so a token there would strand every heart in a 16-slot allowance for ever. `ackableNow` gained the heart leg so sixteen unjudgeable hearts cannot starve this device's own photo and text receipts. `PayloadType.friendHeart` is **not** parked — presence still uses it — so only the three mesh functions go to the zero-list | `ed66042`, fixes `e573a18` |
+| 7 | **The `sentAt` guard, on the door — and a launch that restores its session.** The monotonicity guard sits on `receiveRoutedInventory(_:from:now:)` (`:5355`), not inside `recordPeerRoutedInventory`, because one verdict decides two things there: whether the record is written and whether the answer may re-stamp `quiescentLocalAsOf`. The fix review made it sharper still: it refuses the **record** and **always answers** from the view already recorded — suppressing the answer stalled every delivery custodied for a peer whose clock stepped backwards, for the length of the step, up to the 6 h ceiling, invisibly at both ends. `MeshRoutedInventoryStampRule` (`MeshRoutedDrainPlan.swift:86`) is the pure decision, `==` admitted, the refusal (`mesh.routedInventory.staleSentAt`) **not** charged to the refusal budget because the digest family is outside that door. The battery's thirteenth claim (I-13) **calls the same rule** rather than hand-spelling `>=`. Part 2 of the bundle wired the launch restore: `restoreSessionContextOncePerLaunch(now:)` (`:9723`) called once from `FernletApp.swift:317`, behind the gate push, with a Lane C bypass keyed on `FERNLET_MESH_MATRIX=1` | `896d96a`, fixes `a2df52d`, claim-strength set inside `64c47f2` |
+| 8 | **The forwarding leg P5 item 14 could not reach.** A second four-node no-partition rig: the origin departs, a custodian forwards to a destination whose chunk slot was **repaired**, and the replay window must not answer `replayed` for the refilled slot — the repaired slot `.admitted` against an untouched `.replayed` control, with a real refill re-recording. Shown red once with `forget` disabled | `d8822ed`, `quiesce()` fix in `ed66042` |
+| 9 | **The battery, the overlay's new fields, and the CI lines.** Seven fields appended to `MeshRoutedScheduleOverlay` **after field 8** (`textOrigin`, `textRound`, `ageGatedMember`, `heartOrigin`, `heartRecipient`, `heartRound`, `heartRecipientForegrounded`), costing **eight** draws, every one after `let unknown` and each appended to `description` — so `pinnedOverlayDigest` moved and `pinnedScheduleDigest` did not, which is the proof the append stayed inside the overlay. Eight serialized `MeshP6*AcceptanceTests` clause suites, rectangle G (`MeshRoutedConvergenceMatrix.featureTree`, 12 cells) on a new `MeshRoutedFeaturePipeline.featureRouting`, and `routedInvariants` taught a `judged:` audience so a roster-wide claim about a `.singleRecipient` heart stops passing at every non-recipient for the wrong reason. The CI floor was **measured**, never inherited: 300 over 50 suites (was 240 over 41), `CIGateSelectorBoundaryTests`' battery pin 28 → 36, `MeshRoutedDrainWallTests` added to the named-walls pin | `ee4c7de`, fixes `0e182bb`, second set inside `64c47f2` |
+| 10 | **Text as a routed delivery, on a radio.** The headline of the phase's tier-2 pass: on three Simulators over real QUIC, `[mesh-flow] chat outcome=staged`, `mesh.routedShare.pushed`, and manifest / chunk / recipient-receipt / custody-receipt all `verdict=admitted`, with the transcript filled — and `grep -c fernlet.message.temp.v1` = **0** in all six audit streams, which is item 4's retirement **observed** rather than asserted. The founding window is a real refusal on the radio too (`chat outcome=noDestinations` at the poll where the founder collapses its descriptor to itself), and `mesh.routedProjection.originUnresolvable` fired four times at a node the derived roster did not know — the projection's origin check, fail-closed, on a radio. **The second pass then crossed the hearts ceremony end to end on two Simulators** — the row §12 was written for and P2 could not reach. Session 1 closed the **mutual** keep (`[mesh-flow] friends kept=1 vault=1` on **both** nodes, `hearts` in both capability lists, `terminated.v1` on the two-member end, `rejoinBarred`), fixed by arithmetic rather than code: budget the run at `3.5 × leaveAfter + 60` s **and** give the survivor its own later `LEAVE_AFTER` so neither keep waits on the other's departure frame. Session 2, on a different mesh id because the bar is permanent, minted exactly one heart at the founder and delivered it to the joiner: `sending heart … canSendSessionHeart=true` (the five kept gates) → `mesh.routedShare.pushed frames=2` (one manifest, one chunk, **one** destination) → `heartState=sent(recipientName:)` (**consume-on-stage**, §5d, on a radio) → manifest and chunk `verdict=admitted` at the recipient → **`vault friends=1 heartsReceived=1 ledgerLoaded=true`** (the ceremony: `recordReceivedHeart` landed and was read back off `receivedHearts`) → `recipient-receipt.v1 verdict=admitted` at the sender. Nine absence proofs are zero across both audit streams and both flow transcripts (`noDispatchArm`, `heartStageDeferred`, `fernlet.friend.heart.v1`, `mesh.friendHeart*`, `fernlet.message.temp.v1`, `recipientIsSelf`, `keyMismatch`, `destinationNotAddressable`, `deliveryPending`). **And item 6's P1-1 fix became a PRODUCT proof:** the recipient is the joiner, and `mesh.sessionState.reassertedAdoptedCommit` is in **its** stream — the device that needed the re-raise is the device that judged the heart. **Not over-claimed:** `mayCommitRoutedHeartLedgerJudgement`'s two plaintext legs are satisfied trivially by a `simctl launch`ed app, and **nothing in shipping raises `.backgrounded` / `.foregrounded`**, so a headless Simulator with its links up never leaves `.activeForeground` and the lane satisfies the third leg by accident rather than by proof — **the foreground gate was not tested**. The leg itself is **not inert** (`MeshNetworkManager.swift:8948–8958`): `.linksLost` closes it on every blip. What is unreachable on a Simulator is `.continuingInBackground`, which is P8's | `64c47f2`, pass 2 `ea03411` |
+| 1c | **A recurring load flake, fixed at the value layer.** `MeshP4QuorumAcceptanceTests.aTwoTwoSplitOfAFourRosterRemovesNobodyAtTheManagerSeam` and `MeshQuorumManagerSeamTests.anIncompleteProposalWritesNothingAtTheManagerSeam` read a quorum verdict at `Date()` — the only two wall-clock verdict reads in the mesh suites — against a 300 s `proposalLifetime` stamped at `firstSeenAt`; under a 470-suite load a cell's own elapsed time crossed five minutes. The verdict is now read at the node's own `firstSeenAt`, terminal settles end on a predicate, every assertion kept plus a `#require` that the proposal is open. Red once (7 issues including three sibling sites), green three times under a 166-suite load | `0665d0c` |
+
+**Wire.** **One** additive frame family, with its full trio in one commit:
+`fernlet.mesh.key-agreement.v1` — frozen token, `PayloadType` case, crypto purpose +
+domain-separation row, canonical bytes, an independently derived golden, and a framing-transcript
+case in `CryptographicPurposeBoundaryTests.canonicalSerializerTranscriptsMatchTheirDeclaredFraming`.
+**No existing golden moved in this phase**, and items 3–10 added no wire vocabulary at all — text and
+hearts are *bodies inside P5's routed item seal*, which is exactly why they cost no frame. Two
+`PayloadType` cases were **parked** rather than deleted (`.tempMessage` by item 4;
+`.friendHeart` is **not** parked, because presence still sends and receives it and it is in
+`sealingRequiredTypes`). **One** persisted surface moved and it is paperwork-complete by carrying no
+new row: `MeshSessionContext` goes schema **2 → 3** (the key-advertisement set in,
+`routingInventoryDigest` out) under the wipe row it already had — items 3–10 each state "nothing
+persisted, no wipe row" as a decision, and `Docs/PrivacyWipeCoverage.md` gained **no new row in the
+whole phase**. The routed index stayed at schema **2** (item 5's explicit decision).
+
+**The gauntlet, item by item.** Full `FernletTests`, one invocation, at the landings that moved the
+count: 4615 at the P5 boundary (`3f323e9`) → 4642 (item 3) → 4692 (item 1 pass B) → 4721 (item 2
+pass B) → 4735 / 4736 (item 2 fixes + 1c) → 4771 (item 4) → 4781 (items 5 + 8) → 4820 (item 6) →
+4826 (item 6 fixes) → 4837 (item 7) → 4863 (item 9) → 4865 (item 7 fixes) → **4866 in 486 suites**
+(item 10, `logs/item10/full-03.log`) — with `power-of-10-scan.py` at 0 violations and
+`doc-coverage-scan.py` at 0 undocumented type declarations throughout, and `spm-wall-check.sh`
+PASSED at every item that ran it.
+
+### 12.2 Deviations from the sketch, and why
+
+- **§12 was silent about whether the app had a mesh at all, and that silence was the phase's biggest
+  cost.** The row list assumed the routed path had a session to run in. It did not (§12.1, item 2).
+  Two items — the key advertisement and the founding — were built **before** either feature row, and
+  both are things §11.3 item 13 and §23.4 had called "strictly bigger than a P6 item" and owner-gated.
+  The launcher took them under the P5 post-close review's recommendation, which the P5 ledger records
+  as taken, and they are reported here as policy acts (below) rather than as work.
+- **`sendTempMessage` RETURNS an outcome** where the photo path only raises an alert. The photo path's
+  `routedShareRefusal` alert lives on the view the chat panel covers, and its copy is photo-worded, so
+  text got `MeshTextSendOutcome` and its own `RoutedShareRefusalCopy.chatMessage(_:)` fork. Two more
+  text-only departures ride with it: `.noDestinations` is **visible** for text where it is silent for
+  photos, and the live-arrival token bucket retired with its transport in favour of a
+  per-`(mesh, origin)` session total.
+- **A text item whose transcript has been cleared is not projected at re-entry and is marked final,
+  while its custody is kept until expiry.** §12 stated the transcript's clearing rule but not the
+  re-entry rule; this is a new decision, and the honest form of its assertion is the **exclusion**
+  (`isProjectableAtThisPass` drops it before the verdict runs, so no pass slot is spent), not a mark.
+- **The heart row flipped in place and the registry's freezing rule was amended to allow it.**
+  `MeshRoutedTypeEntry`'s doc froze `destinations` once a token is *registered*; the same file's
+  `.singleRecipient` doc promised P6 would "land one and flip the column". The two conflicted. The
+  flip resolves it in the column's favour and the entry doc is amended in the same commit to say a
+  **never-minted** row may be re-declared once — the freezing rule's failure mode is silent
+  divergence between two builds, and heart v1 has been minted, admitted and custodied by nobody, so
+  there is no second build to diverge from. The allowance is now **spent**.
+- **`unsupportedDestinationSemantics` narrows rather than retires.** The manifest sees only a target,
+  and a full-roster target on a pair is byte-identical to a subset one, so the guard is a SHAPE check
+  and the real fence is the `audience:` argument at the one origination door. The asymmetry is
+  recorded rather than hidden: the manifest cannot see a `.fullRosterAtCreation` row handed exactly
+  one recipient at all.
+- **`.heartLedger` does NOT join `projectableRoutedTypeTokens`** — this refuses the launcher on a
+  point it stated as a requirement. A heart's canonical write is its ack evidence, and job 5's
+  projection list never shrinks for a heart, so the token there would strand every heart in a 16-slot
+  allowance for ever. The heart belongs to job 4, and `ackableNow` gained the leg instead.
+  `PayloadType.friendHeart` is **not parkable** for the same class of reason: presence still uses it.
+- **Item 6 does not close item 5, and the order stayed 4 → 5 → 6.** `ackableNow` was the right place
+  for the heart leg, but a bare `Bool` there gave item 6 no channel for the heart COUNT, so item 6
+  widened item 5's verdict rather than replacing it.
+- **Item 7's guard sits on the DOOR, not inside `recordPeerRoutedInventory`** where §23.3 placed it,
+  and after its fix review it **refuses the record but always answers**. Both are behaviour choices
+  with named costs: the door placement is where one verdict can decide both the record and the
+  re-stamp; answering from the recorded view costs a stale delta and some redundant, budget-bounded
+  offers, and buys back a delivery path that would otherwise stall invisibly for the length of a
+  backwards clock step.
+- **Item 7 Part 2 — the launch restore is wired, and it is materially real but half-hollow. Say
+  exactly what it buys.** It **buys**: `startJoin()` keeps the restored `membershipVerifier`,
+  `keyAdvertisements` and `epochHeads`, so a re-link into the **same** mesh (descriptor adoption,
+  `prepareMembershipLedger`'s same-meshID early return) drains what a relaunched member previously
+  could not; and the rejoin bar is re-derived at launch, which had been claimed since P3 and never
+  done. It does **not** buy: anything on the fresh-founding path (a new `UUID()` discards the restored
+  ledger), and **any user-visible resumption at all** — a restore leaves `currentMesh == nil`,
+  `isInSession` false, the Friends three-way resolving `.fresh`, and **no app surface reads**
+  `lastSessionRestoreOutcome`, `offersForegroundResume`, `restoredSessionContext` or `rejoinBar`
+  (the shipping doc says so itself at `FernletApp.swift:306–308`). **P7 still owes the resume
+  wiring**; §24.1 hands it over by name.
+- **Item 9's overlay digest moved, and both values are recorded so a move and a re-pin stay
+  distinguishable.** `pinnedOverlayDigest`
+  `f1cc626d4421a8845839ac41be3c4fa418e98dd2047ad92865306e40d1693ff9` →
+  `594b6f77d18703e3b3f3d180473869360999061b6d207206ba314b0896d55765`;
+  `pinnedScheduleDigest` `ca898bcc9ec7eb099c20bf0b1557e8d450d2d6747d103d899883aef06d466930`
+  **unmoved**. The old literal was shown red once before the re-pin, because a moved digest with no
+  before-value is indistinguishable from a silent re-pin. A **labels correction** rides with it: item
+  7's ledger note had the two labels swapped; the source is authoritative
+  (`MeshP5AcceptanceTests.swift:1160`/`:1174`).
+- **§2d's arming-skipped negative was dropped as stale.** Item 1's
+  `repairOwnKeyAdvertisementIfMissing()` self-mints on the heal's first ask, so the negative the
+  design named could not red. The cell now asserts that mechanism, and the load-bearing negative for
+  that battery half is the fail-closed chat gate, which does red.
+- **One design-check recommendation was inverted by measurement.** "Pick a slot on the derived
+  roster" for the yielder's re-assert would have re-opened the outage it was fixing —
+  `armJoinerLedger` bootstraps from this device's own admission alone, so the roster does not yet
+  know the admitter. The grant's **sender** is threaded down and the roster is the fallback.
+
+**The §5 calls the owner should read as POLICY ACTS.** Each was taken as a default, each is reversible
+at a stated price, and none was the owner's decision at the time it was taken.
+
+1. **(§5a) The key advertisement is an additive family with its own door, not a fifth
+   `MeshMembershipRecordKind`.** A fifth kind widens the membership digest and its golden and moves
+   `maxReGossipFrames` = `maxProofs` = 49, a number P4's 80 cells and P5's 40 cells were measured
+   under. Price of reversing: a new record kind, a golden move and a re-measurement of both rectangles.
+2. **(§5b) Promotion to a mesh at ONE committed peer.** A two-device session now carries everything a
+   mesh carries — group-key rotation and epochs, the ledger and re-gossip, the Live Activity title,
+   the shop window, `pendingFriendReview`, the ceiling/idle-lapse machine, the rejoin bar. The audit
+   that lists each of those and says a pair should now have it is in ledger row 2.
+3. **(item 2) The 15 cm dwell is treated as consent for ONE auto-granted admission** while the roster
+   is exactly one member. The prompt is kept for closed meshes, for the third and later member, and
+   for every non-join path. This converts a physical gesture into an admission decision, which is a
+   product call, not an engineering one.
+4. **(item 2) The founder election is a pure order over durable fingerprints an adversary can
+   grind.** About 16 keypairs beat any given peer over a 64-bit fingerprint, and founder = admitter =
+   the root of the joiner's ledger — so who founds is selectable by anyone who cares to. What founder
+   status buys *inside a session the user already consented to* is the question for the owner.
+5. **(item 2) Any member may CLOSE the mesh, and the merge resolves closure by last-writer-wins on
+   `modeSetAt`.** The yielder re-applies its own closed mode after losing the election. The fix
+   commit made the local half sticky and the stamp monotonic (`userClosedThisSession`,
+   `MeshNetworkManager.swift:1005`) because forward clock skew on the winner otherwise re-opened a
+   mesh a user had closed. *(The pass-B spelling `reassertClosedModeAfterYield` that ledger row 2
+   cites was REMOVED at `66c64d8`; it is not a HEAD symbol.)*
+6. **(item 2 review P1) Session end means the MESH ending, never a lost link.** A blip presents no
+   review sheet, clears no transcript, promotes no batch and opens no shop window. This changed what
+   "the session ended" means to seven app sites and three hooks.
+7. **(§5c) The heart row's `destinations` flipped IN PLACE, amending the registry's freezing rule.**
+   See above. Price of reversing: one registry row and one test pin for a `…heart.v2` token — not a
+   redesign.
+8. **(§5d) Consume-on-stage.** `.staged` is "Sent": the cooldown is armed, closeness is fed and the
+   UI says sent the moment the sealed item is on disk with a signed manifest. The two costs are named
+   rather than hidden — a gift consumed for an item that later expires undelivered, and a second tap
+   inside the window minting a second gift the recipient's ledger dedups. A third is in finding 20:
+   a recipient's FINAL refusal does not refund the sender's cooldown.
+9. **Items 1 and 2 were taken despite §23.4's owner gate.** Recorded in the ledger's decisions table
+   on 2026-09-10 under the P5 post-close review's recommendation. The launcher was fact-checked
+   against HEAD before the first commit (62 claims, 10 corrected).
+10. **`MeshSessionContext.routingInventoryDigest` was retired** in item 1's schema bump, under the
+    launcher's stated default; §23.4's line — which had said its disposal was the owner's — is
+    amended in that commit, and a zero-list cell in `MeshKeyAgreementSchemaTests` stops the field
+    coming back by copy-paste.
+
+**One further owner-gated question was taken as a default and should be read the same way:** the
+launch session restore was mounted behind the gate (item 7, `896d96a`) rather than left to P7. The
+"Blocked on owner" line that asked "does item 6/7 wire it or does P7?" is answered *item 7 wired the
+door*; the **resume UI is still P7's**, and §24.1 says so.
+
+### 12.3 Findings for the owner — real, and deliberately NOT fixed here
+
+*Every "Blocked on owner" line the P6 ledger carried is resolved into this list: taken as a default
+(and then recorded in §12.2 as a policy act), fixed, or written here with its cost. Finding 20 does
+the same for every residual the items' handoffs named and this phase did not take.*
+
+1. **The launch restore is called, and nothing in the app reads its outcome.** (Item 7 Part 2,
+   `896d96a`; the review's own honesty verdict.) `restoreSessionContextOncePerLaunch(now:)` runs once
+   per launch from `FernletApp.swift:317`, but a restore leaves `currentMesh == nil`, `isInSession`
+   false and the Friends three-way resolving `.fresh`, and there are **zero** app readers of
+   `lastSessionRestoreOutcome`, `offersForegroundResume`, `restoredSessionContext` or `rejoinBar` —
+   the shipping doc says so at `FernletApp.swift:306–308`. **Cost:** every resumption path P3 built
+   (restart / idle-lapse / rejoin) is reachable by the *drain* and invisible to the *user*; a
+   relaunched member silently re-drains into the same mesh if it re-links, and is offered nothing if
+   it does not. **This is P7's resume wiring and §24.1 hands it over by name** — it is on this list
+   only so that "resumption → delivery" is not read as a product claim.
+2. **Joining silently depends on the launch restore having run — finding L-1, the lane's product
+   finding.** (Item 10, `logs/item10/text1/`.) A device holding a sealed session context written by
+   an **unsupported schema version** can never join a mesh: `persistSessionContext` refuses, so the
+   join-ack gate drops every admission grant, for ever
+   (`mesh.keyRotation.blocked` → `mesh.sessionState.effectAbandoned effect=persistContext` →
+   `mesh.admissionGrant.droppedNotDurable`, then `mesh.membershipEvent.droppedNoLedger` for every
+   frame after it). The only thing that clears it is the launch restore's **quarantine** — which item
+   7 wired, and which the Lane C harness bypasses by construction. **Cost:** bounded on a shipping
+   device, where the first launch after an upgrade quarantines the stale blob — but item 1 bumped that
+   schema this phase, so the sequence is live, and **any future launch path that skips the restore is
+   a device that silently cannot join**. Worth stating as an invariant somewhere the next schema bump
+   will read it.
+3. **A yielding founder ends with a mesh and no session ceiling until P7's poller.** (Item 2 pass A
+   review.) `enforceSessionCeiling` has no shipping caller. **Cost:** latent — the ceiling is the 6 h
+   bound on a session; a yielder's is simply never enforced until P7 wires the poller. Named here
+   because it is the one lifecycle gap item 2's founding change created rather than inherited.
+4. **An over-cap manifest refusal is charged to the RELAYING custodian, and the capacity exemption
+   does not cover it.** (Item 3 review finding 3.) `routedRefusalIsHeldForCapacity` keys "named but
+   never charged" on `routedRefusedKeys`, which holds capacity refusals only, so under the
+   cross-build cap disagreement the non-dropping arm anticipates, an honest custodian re-offering
+   burns one of its 1056 per-peer refusals per exchange. **Cost:** a slow budget leak on a courier
+   that is behaving correctly. Either record the item key the way a capacity refusal does, or record
+   that charging the forwarder is the chosen policy — both are one-line answers, and the choice is
+   the owner's.
+5. **`ConnectionInspectorTests.beginSessionCreatesLiveLog()` (`:33`) takes ~206 s under full-suite
+   load against a `.timeLimit(.minutes(2))`.** A 1c-shaped wall-clock flake in a **non-mesh** suite.
+   **Cost:** it voided **four** full runs this phase (item 4's `full-01`, item 7-fix's `full-01`
+   and `full-03`, item 10's `full-01`), each about 30 minutes, and a log carrying
+   `Restarting after unexpected exit, crash, or test timeout` has no usable total at all. Raise the
+   limit or make the cell load-independent; it is the owner's suite.
+6. **The conflicted-member blast radius is fail-closed, durable, and has no user escape.** (Item 1
+   pass B review, finding 5; carried from §23.4.) A member that signs two different key-agreement
+   keys and hands one to each of two peers makes the mint refuse `keyMismatch` **whole**, and the
+   marks ride the sealed session context, so it survives restarts. The fix commit did not loosen it;
+   what it added is the relief the mesh already implies — a mark is dropped once the derived roster no
+   longer names its member. **Still the owner's:** whether item 6's subset target should mint to the
+   addressable destinations instead of refusing whole, and whether the **user** gets any way to clear
+   a mark by hand (today the only escape is ending the mesh).
+7. **A brand-new joiner still cannot address a third member that never links it.** (Item 1's named
+   residual, narrowed by item 2's audit.) **Cost:** the item is minted and custodied, and delivery
+   waits for a link or a departure hand-off — never a lost delivery, but "addressable" is not the same
+   as "reachable", and the advertisement family closed the first half only.
+8. **Item 6's two named residuals stand, deliberately.** (a) An **adoption with no grant** sits at
+   `.idle` and self-heals only via descriptor re-broadcast — item 6's re-assert fix is bound to the
+   grant door; item 9 keyed its invariant on "admitted", not "holds a mesh", rather than paper over
+   it. (b) A **process death between a `.dirty` sidecar accept and the flush double-feeds closeness**
+   — day-capped downstream, so the cost is bounded and cosmetic. Both are in the battery's
+   not-claimed list.
+9. **A heart awaiting its ledger judgement when the mesh ends cannot reach `delivered`** and expires
+   at `hardDeadline + 20 min` as `custodied(by: self)` (D-4.5, inherited from P5 and unchanged).
+   **Cost:** the sender saw "Sent" — consume-on-stage — and the recipient never sees the heart. This
+   is the one shape where §5d's stage-as-sent is visibly weaker than delivery, and it is named in
+   `MeshP6HonestyAcceptanceTests`.
+10. **I-13 is a two-sample claim and is blind to a pair that VANISHES.** (Item 7 fix review P3-4.) A
+    vanished pair is legal under `clearRoutedDrainState()`; a disappear-then-reappear-older shape
+    belongs to item 9's rectangle or to P7. **Cost:** the monotonicity claim is slightly weaker than
+    its sentence reads. Not taken.
+11. **The peer-holdings-SHRINK shape is documented in three places and not closed.** (Item 7 fix
+    review P3-g.) An item a peer has just lost and still needs waits until that peer's stamp passes
+    the recorded one. **Cost:** bounded by the size of the backwards step and by the 6 h ceiling; no
+    lost delivery, a delayed one.
+12. **Four tier-2 rows are still un-run, each with a paste-ready owner sentence.** (Item 10, handoff
+    `:369–:400` and its SECOND PASS section.) Text and the heart ceremony both crossed; what did not:
+    (i) **the eligibility negative** — a heart to a member with **no** trust-vault row, which must be
+    a FINAL, audited refusal with custody kept; it needs a third simulator that sat out session 1 and
+    was outside the second pass's instructed scope. *"A heart to a member with no trust-vault row is
+    still unobserved on a radio; tier 1 covers the refusal, and the lane run needs a third simulator
+    that sat out session 1."* (ii) **the removal vote** — needs three DEBUG seams for the signed
+    quorum family that were not built inside the timebox (plan §4.2 is the ready-made spec) **and**
+    the three-node shape whose arming race is finding 13. (iii) **TEXT-3**, the `.chatAgeGated`
+    three-leg negative, same three-node blocker. (iv) **TEXT-4**, the unseeded app-path founding over
+    MC — the QUIC lane cannot reach it at all (an empty introduction roster verdicts every peer
+    `.stranger` before any app frame; corrected in the runbook's dated **Corrected 2026-09-12 (P6
+    item 10)** note, `Docs/Mesh-Network-Feasibility-Runbook.md:1278–1290`, with its four source
+    citations — and the Lane C bypass sentence item 7's handoff left owed is now in the runbook too,
+    at `:1043–1052`). **Cost:** the 13+ gate's transport half and a real quorum vote are still
+    tier-1-only claims, and the heart's *refusal* path is proven only in a rig. **What is NOT on this
+    list any more:** the two-session ceremony itself — it crossed (§12.1 item 10).
+13. **L-3, the founder-collapse arming race, blocks every three-node lane run.** (Item 10.) Two of
+    four three-node attempts lost the third node to
+    `tunnelEnded introductionFailed` ×3 → `refusedRetryBudgetSpent`: the founder collapses the seeded
+    descriptor to itself at its first committed slot, and a third node whose tunnel is not already up
+    is a `.stranger` to a derived roster of one. **Cost:** TEXT-3 and the removal vote cannot be run
+    reliably until a `FERNLET_MESH_ARM_AFTER=<polls>` hook exists. A tier-1 cell cannot settle it — it
+    is a race between a real dial and a real roster change.
+14. **`MeshRoutedDrainTests` (43 `@Test` at HEAD — 41 when item 9 measured it; `0e182bb` added two)
+    stays ungated, and item 8's own handed-over cell lives in it.** (Item 9's explicit hand-over to
+    item 11; ledger row 8 calls it "the owner's call".) The wider ungated P6-relevant total is
+    **~286 `@Test`** across fourteen suites, itemised in item 9's handoff — gating all of them would
+    roughly double the `mesh-batteries` step. **Recommendation:** gate `MeshRoutedDrainTests` first,
+    because it is the only one holding a cell that was handed over rather than promoted by a clause,
+    and price the rest against the step's measured time.
+15. **Four audit tokens from item 7 and two from item 6 are in no frozen-vocabulary pin**, and item
+    9's `MeshP6HonestyAcceptanceTests` pins the vocabulary at 14. **Cost:** a token can be renamed
+    without failing a test. Cheap to close at the next touch of either file.
+16. **1c's sibling hazard is untouched.** The receive dispatch stamps `Date()` with no seam and
+    `issuanceSkewAllowance` (600 s) is a **second** wall-clock leg on the same seam; the failure shape
+    would be `pending(counted: 1)` rather than `.expired`. **Cost:** a future load flake of the same
+    family, with a different signature. Needs an injectable `now` at the dispatch.
+17. **Small, honest weaknesses in the battery itself, stated rather than hidden.** Leg 3 of the 13+
+    gate has no wall of its own (its honest wall is the `mesh.routedProjection.transcriptAgeGated`
+    audit line at a gated member, a cell nobody has written); leg 4
+    (`projectableRoutedTypeTokens`) is unobservable in this rig, and a wall for it belongs where the
+    pass allowance is spent; `routedRosterWideAudience`'s guard is a **registry** check that falls
+    back to `.photo` when no record survives anywhere (unreachable today from every caller);
+    the complement loop is vacuous on `twoOne`; rectangle G's twelve cells do not reach
+    `textRound < heartRound` (measured — the ordering claim is made over all 40 overlays where it is
+    reached); and `MeshP6ProjectionRetryAcceptanceTests` is the thinnest clause at 2 cells.
+18. **Carried from §23.4, untouched by P6 and still the owner's:** option (b) for
+    `handleEncryptedMetadata` (delete the receive-only door and park the `PayloadType`);
+    **D-7.30**'s per-session re-gossip budget as once-per-window (blast radius: all 80 membership
+    cells, all 40 routed cells and **both** pinned digests); the legacy unsigned two-party removal's
+    retirement; transcript `sid`; **§18.2**'s partition UX copy; the two census/duress questions for
+    `com.fernlet.mesh-session` and `com.fernlet.mesh-routed`; the hardware lanes (Lane A's report,
+    Lane B's double-dial row, item 11's AWDL half, Lane D with the cable OUT); **H-1a.3 / H-1a.4**
+    (four app-side `unowned` hosts, the un-cancelled fan-out); **6b**, the drain's main-actor store
+    I/O; **D-12.15**'s re-minted custody receipt; and item 9's deliberately unreclaimed all-departed
+    item. **§17.3's privacy paragraph is now plural and the sentence is drafted in §24.4.** The
+    **final wording** of the routed hold, refusal and heart copy is still the owner's; P6 added **19**
+    display sentences to that set, and they are already in the committed catalog (`6b77ec2` — 17
+    added, 2 already present from the presence path), so what is outstanding is the English, not the
+    plumbing.
+19. **Unowed cleanup, not taken:** deleting the derived `MeshRoutedAckStageTable.increment1` alias and
+    re-pointing item 4's pins at the registry. The launcher said "take it at close-out only if it
+    costs nothing"; it does not cost nothing (it moves pins in a file item 9 gated), so it is left.
+20. **Residuals the handoffs named and this phase did not take, grouped because each is small and
+    none is a bug in what landed.** (i) **The routed path still consults only
+    `ProximityHost.isBlockedFingerprint`, never `ModerationBanStore.isPeerBanned`**
+    (`MeshNetworkManager.swift:7701`, `:8152`, `SessionMessageStore.swift:60`) — item 4's gap,
+    inherited by item 6 unchanged; a banned-but-unblocked peer's text and hearts are ingested.
+    **Cost:** the ban store is a local view the mesh cannot see; closing it is one host method.
+    (ii) **A recipient's FINAL refusal does not refund the sender's five-minute cooldown**
+    (item 6, accepted) — the third named cost of §5d's consume-on-stage. (iii) **`canSendSessionHeart`
+    lost its `.hearts` capability pre-flight for an UNLINKED member**, and `localCapabilities()`
+    still advertises `.hearts` that no sender consults for one — advertised-but-unread at both ends;
+    the real fix is a capability bit on item 1's advertisement family, which is a wire decision.
+    (iv) **`PresenceManager.heartSendState.failed(message: String)` is the same `String`-composed
+    localization hole item 6 forked out of the mesh path** (`PresenceManager.swift:652`/`:975`),
+    invisible to both scanners. (v) **The heart body's `sentAtDayKey` is carried and validated and
+    read by nothing** (`MeshRoutedItemBody.swift:490`/`:640`) — dropping it is a `…heart.v2`
+    decision. (vi) **Item 6's P2-3 save-failure leg cannot be closed by ordering**: if
+    `stampedDeliveryInstant`'s save fails the ledger row and cooldown are already written; only a
+    compensating unwind or a two-phase ledger would close it, and it heals on a later pass.
+    (vii) **Item 4's fix-review P3-4 was not taken** — four `contentIDs.count == count` cells would
+    not redden on a revert of the composite key; `mergeKeys.count` is the honest spelling.
+    (viii) Three measured non-results kept so nobody re-runs the probe: two overlapping wipe funnels
+    past the cap saturate (unreachable with two `@MainActor` entry points), leg 3's tripwire is a
+    process-global audit count rather than a per-manager witness, the derived battery file scan has
+    a floor ratchet and no ceiling, and `routedAckEvidence`'s `deliveredAt == nil` guard is a second
+    belt with no independent observable.
+
+### 12.4 Acceptance evidence
+
+§12's clauses, one serialized suite each, in `Tests/FernletTests/MeshP6AcceptanceTests.swift`
+(`ee4c7de`, P6 item 9) — **eight suites, 21 tests**, in §11.4's format and for §11.4's
+reason: each is a self-contained scenario on the shipping seams, so CI can gate one line per clause. The launcher named seven; the eighth is P5's
 Honesty shape, which is what gives rectangle G's wholeness and the not-claimed list a home.
 
 | Clause | Suite | Scenario |
@@ -2146,6 +2517,127 @@ not inherited: items 6 and 7 declared no `MeshP6*AcceptanceTests` of their own),
 this is recorded so it is not re-litigated: `Scripts/run-gated-suites.sh` rejects any selector
 containing a `/`, and `everyGatedSelectorNamesADeclaredSuite` requires each selector to name a
 declared top-level type — so the whole suite is the smallest gateable unit.
+
+- **The battery: 21 tests in 8 suites**, per-suite from the gated run's own result bundle
+  (`logs/item9/gated-tests.json`): KeyAdvertisement 2, PairwiseIdentity 2, PerTypeCap 2, TextRouting
+  3, ProjectionRetry 2, HeartCeremony 3, Honesty 2, Determinism 5.
+- **The gated step, measured and not inherited: `Scripts/run-gated-suites.sh mesh-batteries 300 …`
+  over 50 named suites** (`.github/workflows/s3-wall.yml:246–296`) —
+  `==> mesh-batteries: 300 test(s) ran, 0 failed, 0 skipped, result=Passed`
+  (`logs/item9/gated-mesh-01.log`). The floor was 240 over 41 before item 9. The static half is
+  `CIGateSelectorBoundaryTests`: every named suite must be declared, every declared
+  `MeshP<n>*AcceptanceTests` must be named, no step may bypass the script, and the battery count is
+  pinned at `>= 36` (`CIGateSelectorBoundaryTests.swift:157`) — **measured** at the commit that moved
+  it, never inherited. **Measured fact worth keeping:** `totalTestCount` counts `@Test` *functions*,
+  not parameterized cases, so `MeshRoutedDrainConvergenceTests` contributes 19 while running a 40-cell
+  and a 12-cell rectangle.
+- **The verified `-only-testing` lines**, each run at the bundle its figure belongs to:
+  `-only-testing:FernletTests` alone for the full suite; the eight `MeshP6*AcceptanceTests` names for
+  the battery; and the 50 names above for the gated step. A `-only-testing` line must name the
+  **`@Suite` struct**, never the file: `MeshRoutedManifestTests` is a file holding
+  `MeshRoutedManifestGoldenTests` and `MeshRoutedManifestSigningTests`, `MeshIntroductionAuthorityTests`
+  is a file holding three suites, `MeshRoutedDrainTests.swift` holds **two**
+  (`MeshRoutedDrainTests` and `MeshRoutedDrainWallTests`), and `MeshRoutedStoreIsolationTests`,
+  `PowerOfTenBoundaryTests` and `LocalizationBoundaryTests` carry no `@Suite` attribute at all, so a
+  list regenerated from `@Suite` greps must add them by hand. And for the same reason the CI paragraph
+  above gives, `-only-testing:Target/Suite/cellName` runs **zero** tests under a green banner for
+  Swift Testing suites — even spelled correctly, even with `()`.
+- **Full `FernletTests`: 4866 tests in 486 suites green, EXIT=0, in ONE invocation** at `64c47f2`
+  (1909.4 s, `logs/item10/full-03.log`) — zero `recorded an issue`, **no**
+  `Restarting after unexpected exit, crash, or test timeout` line, 486 `◇ Suite` starts. The P5
+  boundary was 4615 in 461. The per-item ladder is in §12.1.
+- **At item 10's bundle alone, three full runs were VOIDED by load** — six across the phase (§12.3
+  finding 5) — **and each is named with its evidence**, because a voided run is not a red one:
+  `ConnectionInspectorTests.beginSessionCreatesLiveLog()` exceeding its 120 s limit; the documented
+  ~350 s first-invocation runner hang; and one run where
+  `MeshP4ConvergencePropertyAcceptanceTests.oneScheduleHealedTwoValidWaysConvergesOnIdenticalState()`
+  took **1749 of 1938 seconds** and failed — re-run alone it passes in **1.304 s**
+  (`logs/item10/setA/p4-recheck.log`). A fixed-seed digest comparison that takes 1749 s was starved,
+  not regressed.
+- **Both determinism digests are recorded by value in the digest block above** — overlay
+  `594b6f77…5765` with its P5 before-value, schedule `ca898bcc…6930` UNMOVED — and both are asserted
+  inside every subsequent run (`MeshP5DeterminismAcceptanceTests` / `MeshP6DeterminismAcceptanceTests`).
+  **No golden and no digest was re-pinned after item 9.**
+- **Repository gates at the final bundle:** `python3 Scripts/power-of-10-scan.py` → **503 files, 0
+  violations**, 21 allowlisted, assertion density 3851/4933 = **0.781** against a 0.68 floor;
+  `python3 Scripts/doc-coverage-scan.py` → **0 undocumented type declarations**;
+  `Scripts/spm-wall-check.sh` → `WALL CHECK PASSED`; `xcodebuild build-for-testing` →
+  `** TEST BUILD SUCCEEDED **`, `EXIT=0`.
+- **Non-vacuity.** Every new or amended wall and cell in the phase was **shown red once** and
+  restored byte-identically: item 1's drain-wall amendment and three bound cells; item 2's hooks cell;
+  item 3's boundary; item 4's fifteen; item 6's five; item 7's three negative batches over four
+  builds; item 9's fifteen mutations in three batches; item 10's four batches. Two of item 9's "did
+  not red" results were **real findings and were fixed** (an age-gate clause vacuous on corners that
+  drew no gated member; a cap probe that was a no-op), and four results across items 7, 9 and 10 are
+  recorded **non-results** rather than passes — the most informative being that I-13's rectangle
+  contains **only equal** stamp pairs (646 of them), so the hand-spelled `later >= stamp` could not
+  see a change to the door it tested, while the rule call reddens 634 times when the rule's equality
+  arm is flipped.
+
+**Tier 2 — what actually crossed a radio, and what did not.** Three Simulators, real QUIC, Lane C
+harness, logs under `scratchpad/logs/item10/` (not committed); the runbook carries the dated rows.
+
+| Run | Verdict | The observation |
+|---|---|---|
+| C-P6-TEXT-1 (founding window, no hook) | **PASS** | `[mesh-flow] chat outcome=noDestinations` on every node at the poll the founder collapses its seeded descriptor to itself, with `founder armed=true ledger=present derived=1` at the same poll and `derived=2` later in the same transcript — the founding window is a real refusal on the radio, not a maybe |
+| C-P6-TEXT-2 (after the grant) | **PASS — the phase's tier-2 headline** | `chat outcome=staged`, `mesh.routedShare.pushed`, and manifest ×4 / chunk ×6 / recipient-receipt ×4 / custody-receipt ×4 all `verdict=admitted`, transcript filled; **`grep -c fernlet.message.temp.v1` == 0 in all six audit streams** — item 4's retirement OBSERVED; bonus `mesh.routedProjection.originUnresolvable` ×4 at a node the derived roster does not know (fail-closed, and the reason the "zero `mesh.routedProjection.*`" expectation holds only for a fully converged roster) |
+| C-P6-HEART session 1, pass 1 | **PARTIAL** | `hearts` in the handshake capability list (and `messages` correctly absent — no chat flow, so the gate is fail-closed); `terminated.v1` on a two-member end, not `member-departure.v1`; `mesh.sessionState.rejoinBarred`; `[mesh-flow] friends kept=1 vault=1` on the **departer** only. Blocker named and measured: the survivor's `pendingFriendReview` promotes only when its own session ends, and at ≈ 0.3 Hz its next poll came after teardown |
+| C-P6-HEART session 1, pass 2 (`ea03411`) | **PASS** | the **mutual** keep — `[mesh-flow] friends kept=1 vault=1` on **both** nodes, `hearts` in both capability lists, `terminated.v1` and `rejoinBarred` on both. **Nothing in the code changed:** the run was budgeted at `3.5 × leaveAfter + 60` s **and** the survivor was given its own later `FERNLET_MESH_LEAVE_AFTER`, so both sides end locally and neither keep waits on the other's departure frame |
+| C-P6-HEART session 2 (`ea03411`) | **PASS — one routed heart, end to end** | a different mesh id (the bar is permanent), `FLOWS_AFTER=25`, the `heart` verb on the founder only so exactly one heart is minted and the joiner receives it: `sending heart to=… canSendSessionHeart=true` → `mesh.routedShare.pushed frames=2` (one manifest + one chunk, **one** destination) → `heartState=sent(recipientName:)` (**consume-on-stage** on a radio) → `routed-manifest.v1` then `routed-chunk.v1` `verdict=admitted` at the recipient → **`vault friends=1 heartsReceived=1 ledgerLoaded=true`** (the ceremony) → `recipient-receipt.v1 verdict=admitted` at the sender. Nine absence proofs zero across both streams (`noDispatchArm`, `heartStageDeferred`, `fernlet.friend.heart.v1`, `mesh.friendHeart*`, `fernlet.message.temp.v1`, `recipientIsSelf`, `keyMismatch`, `destinationNotAddressable`, `deliveryPending`). **`mesh.sessionState.reassertedAdoptedCommit` is in the RECIPIENT's stream** — item 6's P1-1 fix as a product proof, on the device that needed it |
+| eligibility negative / removal vote / TEXT-3 / TEXT-4 | **NOT RUN** | §12.3 finding 12, each with a paste-ready owner sentence in item 10's handoff |
+
+**Two things the tier-2 pass deliberately does NOT claim.** (i) **The foreground gate was not
+tested.** `mayCommitRoutedHeartLedgerJudgement`'s two plaintext legs are satisfied trivially by a
+`simctl launch`ed app, and **nothing in shipping raises `.backgrounded` / `.foregrounded`**, so a
+headless Simulator with its links up never leaves `.activeForeground` and the lane satisfies the
+third leg by accident rather than by proof. The leg itself is **not inert**
+(`MeshNetworkManager.swift:8948–8958`): `.linksLost` closes it on every blip. What is unreachable on
+a Simulator is `.continuingInBackground`, which is P8's. (ii) **The two
+`mesh.routedProjection.originUnresolvable` lines in the recipient's session-2 stream are not the
+heart.** `.heartLedger` is deliberately absent from `projectableRoutedTypeTokens`, so a heart never
+reaches the projection arm at all — it is judged inside `commitLocalDelivery`. Those lines are text
+items custodied by an earlier run whose origin this roster does not name.
+
+**The second pass changed no Swift file**, so it ran the light gauntlet as instructed rather than the
+full suite: po10 `503 files, 0 violations, density 0.781`, doccov `0`, build
+`** TEST BUILD SUCCEEDED **`, and the wall suites + all eight `MeshP6*AcceptanceTests` +
+`TestHookBoundaryTests` + `MeshRoutedStoreIsolationTests` →
+`✔ Test run with 218 tests in 18 suites passed after 33.758 seconds.`, `EXIT=0`, zero
+`recorded an issue`. **The 4866 / 486 baseline from `64c47f2` therefore stands unchanged**, because
+no compiled file moved.
+
+**Lane findings, by name.** **L-1** is a product finding and is §12.3 finding 2. **L-2** was a harness
+defect and is **fixed**: each node seeded its own descriptor with `createdAt: Date()`, so the three
+session hard deadlines differed by the launch stagger and two thirds of every routed frame refused
+`expiryMismatch` — the seeded instant is now floored to a shared 600 s grid and echoed in the
+`descriptor seeded:` line, taking the refusals 20 → **0**. **L-3** is §12.3 finding 13. Three lane
+facts were measured and cost nothing to know: `simctl launch --console-pty` **intermittently attaches
+no stdout** (a node with no `[mesh-matrix] run label=` banner proves nothing about that node); the
+driver's 1 Hz poll runs at **≈ 0.3 Hz** on a headless Simulator, so wall clock must be budgeted at
+≈ 3.5 × the tick number; and `log config --mode private_data:on` is **refused on this OS** and costs
+nothing, because the context values are not redacted anyway.
+
+**What the lane could NOT observe, by name** — none of it is a P6 gap, and all of it is on the owner's
+or P8's side:
+- **CPT / continued processing and the backgrounded leg.** `BGTaskScheduler` errors on a Simulator, so
+  `.continuingInBackground` never exists and the deliberate disagreement between the pushed
+  `appIsForeground` leg and the heart predicate's `sessionState` leg cannot be produced. **P8 /
+  hardware.**
+- **`sessionState == .activeForeground` as a load-bearing leg.** Nothing in shipping raises
+  `.backgrounded` / `.foregrounded`; a headless Simulator satisfies the leg trivially, and this lane
+  **does not claim the ceremony's foreground gate was tested**.
+- **Data protection.** `simctl` has no lock verb, `isProtectedDataAvailable` is always true and
+  `protectedDataWillBecomeUnavailableNotification` never posts. The `appIsForeground` half **is**
+  reachable (background the app with a second `simctl launch`) and was not attempted inside the
+  timebox. **Owner / Lane B.**
+- **The UWB 15 cm dwell and the real proximity consent.** The driver commits both gates through
+  `commitManualProximity`, standing in for the app's debug Force control — never for a consent
+  decision. **Hardware.**
+- **The launch restore itself**, because every Lane C launch carries the `FERNLET_MESH_MATRIX=1`
+  bypass by decision. Any future lane that wants the restore must run without the harness.
+- **First-meeting stranger admission over QUIC.** Members-only by construction; a standing lane
+  property, now with the source citations in the runbook's dated **Corrected 2026-09-12 (P6 item 10)**
+  note (`Docs/Mesh-Network-Feasibility-Runbook.md:1278–1290`).
 
 ---
 
@@ -3153,7 +3645,7 @@ keep `STAGGER=1`, and re-harvest identities after any test run.
 | **The receiver-side per-type size cap** — *DONE 2026-09-11 (`f306f4f`, P6 item 3): default taken as written, and the row bounds the origin-signed manifest at the door only* | **Land it in ONE commit with P6's first narrowed cap**: the check, its new `MeshRoutedManifestRejection` case, and that case's **non-dropping** arm in `MeshRoutedParkedDrop.reason`. The photo row's narrowed cap is `PrivateMediaStore.maxIncomingPhotoBytes` — **widen its access rather than restating 10 MB**, and keep the ciphertext-vs-plaintext bound distinction in the registry doc. | D-11.4. Increment 1 cannot produce the condition (every per-type cap equals the wire cap), so adding the case earlier would force `MeshRoutedParkedDrop`'s exhaustive switch to re-decide D-9.3's origin-bound drop rule for an unreachable condition. |
 | **Durable attribution after the mesh ends** | **Keep it fail-closed, for text and hearts too:** a projection whose `manifest.originFingerprint` the admission ledger cannot resolve is refused, custody kept, one audit line — never a nil/empty or body-supplied signing key (D-13.21). | The real answer is a signed key/identity advertisement family (`fernlet.mesh.key-agreement.v1`, full trio), which is a **new wire family** and owner-gated (§23.4). Text and hearts want the same answer photos wanted; deciding it once, on the wire, beats three fail-open guesses. |
 | **The projection's retryable-vs-final distinction** — **DONE 2026-09-11 (P6 items 4 + 5).** Item 4 landed the classification: `MeshRoutedProjectionVerdict` (handed on / refused for good / refused for now), the mark written by one caller, memory-only on `routedProjectedItems` and honest because every permanent refusal re-derives from origin-signed bytes plus durable local state. **Item 5 landed the allowance discipline, on BOTH retry lists**: `MeshRoutedRetryPlan` (a pure value over keys — never-attempted work first, the retry share capped at `maxItems / retryShareDivisor` = 8, unused slots spilling either way, the share taken in round-robin so its own tail cannot starve) plus `MeshRoutedRetryRotation` (memory-only per list, bounded by `MeshRoutedStoreFormat.maxItems` and audited at the bound, armed by the session's FIRST pass so a restart's re-derived backlog competes for the retry share and not for the reserved half). **The durability decision is: memory-only, routed index stays schema 2** — every FINAL mark re-derives from origin-signed bytes plus durable local state, which is the honesty test the memory-only mark had to pass, and a durable "locally refused" field would be a fourth stored state on a record whose only durable facts are the origin's signature and the rungs. A refusal made by the GATE is charged to no item. The filter-before-plan seam is the manager's (`isProjectableAtThisPass` on job 5, `ackableNow` on job 4). **Item 6's run closed three defects in it** (item 5's own review): the session cut compared a FLOORED `firstSeenAt` against an unfloored `armedAt`, green only because the fixture clock's base is an integral second and due to red on 2026-12-16; neither rotation was pruned to the pass's own enumeration, so keys that left their list by another door filled the 1024 bound until the pacing silently reverted to D-13.32's head-of-list prefix; and `ackableNow` returned a bare `Bool`, which would have made `heartsPending` read 0 the moment a heart answered false. `ackableNow` now answers a three-case verdict, and the claim that the projection list's retryable population is unreachable in production is **withdrawn** — `transcriptLiveness == .notLiveRightNow` and a deferred store both reach the arm. | **Build it when P6 adds its second projectable type**, not before. A refused projection is deliberately still not marked projected, so a refusing set larger than the 16-item allowance can starve new items (D-13.32). | With one dispatch arm the starvation needs 16 simultaneously-refusing photos; with three arms it is ordinary. The distinction needs a durable place item 13 did not have, and P6 is opening that surface anyway. |
-| **The `sentAt` monotonicity guard on `recordPeerRoutedInventory`** — *DONE 2026-09-12 (P6 item 7, `<SHA placeholder>`), default taken. The guard sits on `receiveRoutedInventory(_:from:now:)` rather than inside the record, because one verdict decides two things there: whether the record is written, and whether the answer may re-stamp `quiescentLocalAsOf` from this digest's instant. **It refuses the RECORD and not the ANSWER** (the item's fix review, P2-2): the peer is still answered from the view already recorded, because `answerRoutedInventory` is `sendRoutedDrainBatch`'s only caller and the digest fires from the three merge doors with no timer — suppressing the answer stalled every delivery custodied for a peer whose clock stepped backwards, for the length of the step, up to the 6 h ceiling and invisibly at both ends. Answering from the recorded view costs a stale delta plus redundant offers, budget-bounded and refused at the peer as duplicates, and still offers anything minted since. `MeshRoutedInventoryStampRule` is the pure decision, admitting `==` (an idempotent replay of one digest must not audit — though it runs the whole answer, so its cost is bounded rather than free); the refusal writes `mesh.routedInventory.staleSentAt` and is **not** charged to `MeshRoutedRefusalBudget` — the digest family is outside that door (D-5.12 / D-6.10) and its count did not move. The cap path is untouched: a digest arriving when the per-peer map is already at the roster cap is still answered, exactly as before. The battery's thirteenth claim (I-13) **calls** the same rule (the fix review's P2-1: it hand-spelled `>=` until then), sampled into `MeshRoutedRungSnapshot` so no 40-cell signature grew a parameter, with its non-vacuity asserted once beside the sample.* | **Take it, with the property battery asserting it** (`inventorySentAt` never moves backwards). Today a peer's own replayed older digest regresses this device's view of that peer's holdings and re-stamps `quiescentLocalAsOf` from the stale instant. | D-12.12 (amended): item 12 named it in three places and did **not** close it, because the fix changes items 5/6's door behaviour and the stamp `routedConvergenceSummary(for:)` reads. That is a behaviour change, and P6 is the first phase with a reason to open that door. Cost today is a stale delta — wasted, budget-bounded offers — never a lost or double-counted delivery. |
+| **The `sentAt` monotonicity guard on `recordPeerRoutedInventory`** — *DONE 2026-09-12 (P6 item 7, `896d96a`, fix review `a2df52d`), default taken. The guard sits on `receiveRoutedInventory(_:from:now:)` rather than inside the record, because one verdict decides two things there: whether the record is written, and whether the answer may re-stamp `quiescentLocalAsOf` from this digest's instant. **It refuses the RECORD and not the ANSWER** (the item's fix review, P2-2): the peer is still answered from the view already recorded, because `answerRoutedInventory` is `sendRoutedDrainBatch`'s only caller and the digest fires from the three merge doors with no timer — suppressing the answer stalled every delivery custodied for a peer whose clock stepped backwards, for the length of the step, up to the 6 h ceiling and invisibly at both ends. Answering from the recorded view costs a stale delta plus redundant offers, budget-bounded and refused at the peer as duplicates, and still offers anything minted since. `MeshRoutedInventoryStampRule` is the pure decision, admitting `==` (an idempotent replay of one digest must not audit — though it runs the whole answer, so its cost is bounded rather than free); the refusal writes `mesh.routedInventory.staleSentAt` and is **not** charged to `MeshRoutedRefusalBudget` — the digest family is outside that door (D-5.12 / D-6.10) and its count did not move. The cap path is untouched: a digest arriving when the per-peer map is already at the roster cap is still answered, exactly as before. The battery's thirteenth claim (I-13) **calls** the same rule (the fix review's P2-1: it hand-spelled `>=` until then), sampled into `MeshRoutedRungSnapshot` so no 40-cell signature grew a parameter, with its non-vacuity asserted once beside the sample.* | **Take it, with the property battery asserting it** (`inventorySentAt` never moves backwards). Today a peer's own replayed older digest regresses this device's view of that peer's holdings and re-stamps `quiescentLocalAsOf` from the stale instant. | D-12.12 (amended): item 12 named it in three places and did **not** close it, because the fix changes items 5/6's door behaviour and the stamp `routedConvergenceSummary(for:)` reads. That is a behaviour change, and P6 is the first phase with a reason to open that door. Cost today is a stale delta — wasted, budget-bounded offers — never a lost or double-counted delivery. |
 | **Body framing for text and hearts** | **Copy `MeshRoutedItemBodyFormat`'s frozen pair or state why not:** `[.sortedKeys, .withoutEscapingSlashes]` on the encoder and `.secondsSince1970` on **both** ends, length-prefixed header ‖ raw payload — never one `Codable` blob. | D-13.20/13.20a. `JSONEncoder` base64s a `Data` property, inflating the payload by a third and silently re-scaling `manifest.size`, the chunk count, item 9's caps, the frame budget and the number tier 2 exists to measure. All three hostile framing shapes must land on the one frozen `malformed` token (D-13.27). |
 
 ### 23.4 Still owed by the owner, and not blocking P6
@@ -3304,3 +3796,275 @@ Carried from §22.4, with what P5 added:
   limit resets at a fixed local hour, so the longest workflow of the day goes right after a reset, and a
   mid-run failure waits for the reset rather than retrying — cached stages replay, only
   verify/fix/gauntlet re-run.)
+
+---
+
+## 24. P7 handoff — written at the P6 boundary, 2026-09-12
+
+P0–P6 are **BUILT** (§5, §6, §7, §8, §10, §11, §12). This is what a fresh session needs to start P7
+and nothing more; **§13 is the specification** and P6's routed feature path is the surface the run
+policy now has to keep alive. P7 is the smallest phase left before the physical gates: it is
+**mostly wiring**, and every seam it needs already exists and is already tested — what it does not
+have is a single owner for them.
+
+### 24.1 What P7 inherits
+
+*Every file line number in this section is current at `8a3c2f3` (P6 item 10's pass-2 ledger commit,
+the P6 boundary). Re-check before editing — P7's own commits move them.*
+
+- **The `apply(_:)`-shaped door already exists, and P7 becomes its single writer.**
+  `MeshNetworkManager.applyRoutedAccessGate(_:now:)` (`MeshNetworkManager.swift:1430`, `public`) takes
+  a `MeshRoutedAccessGate` value — `protectedDataAvailable`, `appIsForeground`, `duressActive` — and
+  runs a bounded, idempotent, audited **five-job re-entry** on a rising ciphertext leg or the duress
+  falling edge. The app assembles that value in **one** private helper,
+  `FernletApp.pushRoutedAccessGate(_:protectedData:foreground:)` (`App/Fernlet/FernletApp.swift:282`),
+  called from **six** sites (`:337`, `:383`, `:416`, `:435`, `:447`, `:491`). **The six collapse into
+  one policy call without the seam moving** — that is the whole shape of the P7 change on this axis.
+  Two rules ride with it and are load-bearing: `foreground` is **always**
+  `FernletApp.routedGateForeground(for:)`'s answer (`:220` — `phase != .background`), never a raw
+  phase compare, because `ScenePhase` is not frozen and an `@unknown default` under
+  warnings-as-errors would have to pick a side for a phase that does not exist yet; and
+  **`.inactive` is deliberately NOT a gate leg** (P5's post-close review correction — an inactive
+  scene is still foreground for data protection and for the heart ceremony; treating it as background
+  would close the gate on every control-centre pull).
+- **The gate says what may be DECRYPTED, never which radios run.** `MeshRoutedAccessGate` is pure
+  vocabulary; the rule is D-10.3 — **iOS data protection gates plaintext** (decrypt + canonical-store
+  mutation) and store readability, **Fernlet's app lock gates nothing in the mesh**, with the one
+  clause that a duress session closes the gate, observed on its own `.onChange` because it moves at
+  neither a scene nor a protected-data transition. "May seal custody" is answered by the store's five
+  states, never by the gate (D-10.2). P7's run policy decides **radios**; it must not grow a second
+  opinion about plaintext.
+- **The heart predicate reads the session state, and that leg is NOT inert.**
+  `mayCommitRoutedHeartLedgerJudgement` (`MeshNetworkManager.swift:8962`) =
+  `mayDecryptRoutedContent ∧ mayMutateCanonicalStoreWithRoutedContent ∧ sessionState ==
+  .activeForeground`, and it is the **only** shipping reader of `.activeForeground`
+  (`:8964`; every other occurrence in the module is a doc line or a state-machine transition).
+  P6 item 6 corrected the sentence that used to call the leg inert: `applySessionEvent(.linksLost)`
+  fires at `handlePeerDisconnected` whenever the last committed link drops with a mesh still live and
+  moves the state to `.partitioned`, so **a link blip closes this predicate and a custodied heart
+  defers — retryably, which is correct** — recovering at `.linksRestored` or `.peerCommitted`.
+  `resumeSearchingForPartitionedMesh()` changes no session state; it re-arms the radios.
+- **Where the two legs will DISAGREE, deliberately, once P8 is real** (§23.5, unchanged and now
+  written into the shipping doc at `:8956–8958`). Nothing in shipping raises `.backgrounded` /
+  `.foregrounded`, so `.continuingInBackground` does not occur today. When P8 makes it real, the
+  **pushed** `appIsForeground` leg and the heart predicate's `sessionState` leg must disagree: a
+  CPT-continued mesh **custodies ciphertext and decrypts nothing**. P7 must not "fix" that
+  disagreement by making one leg read the other.
+- **The poller's three consumers exist, are tested, and have no shipping caller.**
+  `enforceSessionCeiling(now:monotonicElapsed:)` (`:9559`), `evaluateIdleLapse(now:)` (`:9576`) and
+  `evaluatePartition(reachable:now:)` (`:9637`, with the convenience `evaluatePartition(now:)` at
+  `:9616` as its only in-module caller). Grepped at HEAD: **every other caller is a test**. Detection
+  is on demand by design — nothing spins — so P7 owns the poller, and the shipping doc says so in
+  **five** places (`:1940`, `:9623`, `:13332`, `MeshRoutedCustody.swift:976`,
+  `Documentation.docc/ProximityKit.md:1343`). **Item 2 added the first consequence:** a yielding
+  founder ends with a mesh and no ceiling until that poller exists (§12.3 finding 3).
+- **What item 2's promotion change did to the two-device session's lifecycle — read this before
+  writing the policy matrix.** A pair now founds a real mesh at the **first** committed peer
+  (`foundMesh(_:now:)`, `:1893`), so a two-device session carries everything a mesh carries: group-key
+  rotation and epochs, the membership ledger and re-gossip, the Live Activity title, the shop window,
+  `pendingFriendReview`, the ceiling/idle-lapse machine and the rejoin bar. And **session end now
+  means the MESH ending**, never a lost link — `isSessionLive` (`:1241`) is the predicate:
+  `currentMesh == nil ? hasCommittedPeer : (!sessionState.hasEnded && !sessionSearchGaveUp)`, with
+  four end doors (End Session, a terminal state — termination or completed departure —, the five-minute
+  discovery timeout with no peer, and slot loss **only while ledgerless**). A **blip** must present no
+  review sheet, clear no transcript, promote no batch and open no shop window, because the review
+  sheet's two actions both sign a termination plus a permanent rejoin bar on a mesh the commit keeps
+  alive. **Three predicates, three jobs, and P7 must keep them apart:** `isSessionLive` (is the mesh
+  alive — projections and ceremonies key on this), `hasCommittedPeer` (is there a peer right now — the
+  radio guards and the resume arm), `isInSession` (is a session surface up — the layout swap).
+  A yielding founder additionally re-raises `.peerCommitted` for its already-committed slots after
+  adopting the winner's mesh (`reassertCommitIntoAdoptedMesh(admittedBy:)`, `:9391`), and a refused
+  re-assert **unwinds its own raise** (`unwindRefusedReassert`, `:9459`) back to the state the grant
+  found — so the state machine is consistent across a failed durable save, which is the shape P7's
+  policy will be pushing against on every scene change.
+- **The launch restore is wired and its user-facing half is hollow — this is P7's first real UI
+  job.** `restoreSessionContextOncePerLaunch(now:)` (`:9723`) is called once per launch from
+  `FernletApp.swift:317`, inside `restoreMeshSessionContextIfNeeded`, **after** the gate push in the
+  same `.onAppear` closure and latched by `didMountMeshSessionRestore`. It **arms no radio**, and
+  **no app surface reads `lastSessionRestoreOutcome`, `offersForegroundResume`,
+  `restoredSessionContext` or `rejoinBar`** — the shipping doc states it at `FernletApp.swift:306–308`
+  and a grep at HEAD confirms the only App mention of all four is that doc comment. What the restore
+  already buys is real (`startJoin()` keeps the restored `membershipVerifier`, `keyAdvertisements`
+  and `epochHeads`, so a re-link into the **same** mesh drains what a relaunched member previously
+  could not; the rejoin bar is re-derived at launch, claimed since P3 and never done before). **P7
+  owes: the resume surface** — an offer to resume, what a `corrupt`/`deferred` outcome says to the
+  user, and what a rejoin bar looks like when the user tries anyway. And see §24.4's L-1: **joining
+  silently depends on this restore having run.**
+- **The registry, the walls and the retirement list P7 must not trip.** The routed type registry is
+  the only per-type source (`noShippingCodeBranchesOnARoutedTypeToken`); a `.singleRecipient` row's
+  destination comes from the `audience:` argument at the one origination door and never from a body;
+  every pre-store refusal exits through `refuseRoutedFrameBeforeStore` **except** the digest family;
+  no epoch on the routed path; W2 pins move with the file that moves them; `MeshSessionContext` is
+  schema **3** (`MeshSessionContextSchema.current`, `MeshSessionContext.swift:60`) and the routed
+  index is **2**; and the three retirement walls (`theRetiredPhotoTransportIsGone`,
+  `theRetiredTextTransportIsGone`, `theRetiredMeshHeartTransportIsGone`) fail the build if a deleted
+  transport comes back.
+- **The `HeartDrop` CloudKit record type is still not in the Production schema.** It is documented in
+  `Docs/CloudKit-Schema-Deploy.md:95` and was never promoted — `Docs/ImplementationPlan.md:51` carries
+  it as an App-Store-readiness owner action. Unrelated to the mesh heart (P6's routed heart is a mesh
+  seam, not the CloudKit dead-drop), but it is the last thing standing between the away-heart path and
+  a TestFlight build, so it travels with the handoff.
+
+### 24.2 The sim↔sim lane, as it actually is
+
+**P6 ran real lane work for the first time since P2, and it closed the row §12 was written for.**
+§23.2's table stands otherwise. Over real QUIC through the Lane C harness, on one Mac:
+
+- **Text is a routed delivery on a radio** (three Simulators) — `chat outcome=staged`,
+  `mesh.routedShare.pushed`, manifest / chunk / recipient-receipt / custody-receipt all
+  `verdict=admitted`, the transcript filled, and `grep -c fernlet.message.temp.v1` = **0** in all six
+  audit streams, which is item 4's retirement **observed** rather than asserted. The founding window
+  is a real refusal (`chat outcome=noDestinations` at the poll the founder collapses its descriptor),
+  and `mesh.routedProjection.originUnresolvable` fires at a node the derived roster does not know —
+  the projection's origin check, fail-closed.
+- **The two-session hearts ceremony crossed** (two Simulators, `ea03411`) — the job §12 called "this
+  phase's first real job" and P2 could not reach. Session 1 closed the **mutual** keep on both nodes;
+  session 2 minted one heart at the founder and delivered it to the joiner through
+  `canSendSessionHeart=true` → `pushed frames=2` → `heartState=sent(recipientName:)` → manifest and
+  chunk admitted → `vault heartsReceived=1` → `recipient-receipt.v1 verdict=admitted`, with nine
+  absence proofs at zero. **`mesh.sessionState.reassertedAdoptedCommit` is in the recipient's
+  stream**, which makes item 6's P1-1 fix a product proof rather than a rig claim.
+- **The fix for session 1 was arithmetic, not code:** budget the run at `3.5 × leaveAfter + 60` s and
+  give the survivor its own later `FERNLET_MESH_LEAVE_AFTER`, so both sides end locally and neither
+  keep waits on the other's departure frame. Worth keeping — it is the general shape for any lane
+  claim about a *second* device's post-session poll.
+
+**What the lane still has not reached, and P7 inherits unchanged:** the **eligibility negative** (a
+heart to a member with no trust-vault row — a FINAL, audited refusal with custody kept; it needs a
+third simulator that sat out session 1), the **removal vote**, the **`.chatAgeGated` three-leg
+negative** and the **app-path founding over MC** — all NOT RUN, each with a paste-ready owner sentence
+in §12.3 finding 12, and the middle two blocked behind L-3's arming race. **And the lane cannot claim
+the heart ceremony's foreground gate**: `mayCommitRoutedHeartLedgerJudgement`'s two plaintext legs are
+satisfied trivially by a `simctl launch`ed app, and **nothing in shipping raises `.backgrounded` /
+`.foregrounded`**, so a headless Simulator with its links up never leaves `.activeForeground` and the
+lane satisfies the third leg by accident rather than by proof. The leg itself is **not inert**
+(`MeshNetworkManager.swift:8948–8958`): `.linksLost` closes it on every blip. What is unreachable on a
+Simulator is `.continuingInBackground`, which is P8's.
+
+**Three harness hooks P6 added, all DEBUG-only and inside the existing walled `FERNLET_MESH` family**
+— `FERNLET_MESH_FLOWS_AFTER=<polls>` (a flow otherwise fires **once**, on the first committed tick,
+**before** the grant, so `.noDestinations` is the only outcome a `FLOWS=chat` run could produce),
+`FERNLET_MESH_ALLOW_HEARTS` (the opt-in must be flipped **before** `startJoin()` or `hearts` never
+reaches the handshake capability list) and `FERNLET_MESH_AUTO_KEEP_FRIENDS` (which calls the shipping
+`keepProximityFriends` + `completeFriendReview`, in the poll **and** after `leave()`, because the
+departer's poll ends inside `leave`).
+
+**Four lane facts measured in P6 that any P7 lane work must budget for:**
+1. **A headless Simulator's 1 Hz driver poll runs at ≈ 0.3 Hz.** Budget wall clock at **≈ 3.5 ×** the
+   tick number, or a run terminates before its own schedule fires. Two runs were voided before this
+   was measured.
+2. **`simctl launch --console-pty` intermittently attaches no stdout.** A node with no
+   `[mesh-matrix] run label=` banner proves **nothing** about that node; verify the banner after the
+   stagger and relaunch once.
+3. **`log config --mode private_data:on` is refused on this OS** — and it costs nothing, because the
+   context values are not redacted anyway (`outcome=corrupt`, `detail=unsupportedSchemaVersion(2)`,
+   `type=fernlet.mesh.key-agreement.v1` all read in full).
+4. **Every Lane C launch carries `FERNLET_MESH_MATRIX=1`, which bypasses the launch restore**, so the
+   lane can never observe the restore itself — and, per L-1, a run that inherits a stale sealed
+   context can never join. One NON-harness launch per simulator before a lane run lets the shipping
+   restore quarantine whatever is there (`scratchpad/cleanse.sh` was P6's).
+
+**Still owed on the lane and unchanged from §23.2:** the four ≥ 3-node asks (a 2/2 or 3/1 split, a
+departure learned by re-gossip, a real quorum, `MeshLedgerAdoption`'s rebase); P5's tier-2 list (QUIC
+chunk pacing at 256 KiB, control-stream starvation, **whether relay increment 2 is needed at all**,
+6b's main-actor drain I/O, item 9's `maxChunksPerAnswer` 64 / `maxChunksInFlightPerPeer` 3
+re-measurement, the sealed index file's uncounted ~5 MB worst case). Keep `STAGGER=1` and re-harvest
+identities after any `xcodebuild test` run.
+
+### 24.3 Decisions with defaults — take them deliberately, at the start
+
+| Decision | Default if the owner is silent | Why |
+|---|---|---|
+| **Where the run policy lives** | **A new app-target `ProximityRunPolicy`** — §13's option A, already the recommendation — the single translator from (scenePhase, tab, lock/duress, protected data, age gates, delete-all, CPT state) → per-radio `RunState` (`run` / `foregroundOnly` / `stop`), pushed through one `apply(_:)` seam per manager. | Options B and C are rejected in §13 with reasons that have only got stronger: ProximityKit still imports no UIKit and cannot import `FernletLock`, and P6 added a second app-only fact (the duress session) to the three the gate already carries. |
+| **Whether the run policy also writes the routed access gate** | **Yes, and it is the only writer.** The six `FernletApp` call sites collapse into one policy call; `applyRoutedAccessGate(_:now:)` does not move. | One decision point. The gate's own contract (what may be decrypted) stays ProximityKit's; the policy decides only *when the app says the scene changed*. |
+| **Whether the policy decides plaintext** | **No.** Radios only. The gate keeps D-10.3's rule, and `mayCommitRoutedHeartLedgerJudgement` keeps its `sessionState` leg. | Two owners for "may we decrypt" is exactly the bug class §13 rejects option C for. The P8 disagreement (§24.1) requires the two legs to stay independent. |
+| **Who owns the poller, and at what interval** | **The policy owns it**, on a single timer it can stop, driving `enforceSessionCeiling` / `evaluateIdleLapse` / `evaluatePartition` in that order. Interval: the coarsest that still honours the 30-minute idle stop — start at 30 s and measure. | All three are on-demand by design so that nothing spins when no session is live; a policy that already knows whether a session is live is the only thing that can start and stop one timer honestly. |
+| **What the launch restore's outcome presents** | **An explicit resume affordance on the Friends surface, and nothing modal.** `offersForegroundResume` true ⇒ offer; `corrupt` ⇒ say the previous session could not be reopened and that nothing was lost that was not already sealed; `deferred` ⇒ silent, it retries at the next protected-data rise; a `rejoinBar` hit ⇒ name the mesh as ended, never "failed". | The door is wired and its outcome is currently invisible (§12.3 finding 1). A modal on launch would fire on every cold start; the three-way `FriendsDiscoveryEntry` already exists as the surface. |
+| **Whether `hasCommittedPeer` or `isSessionLive` gates a radio** | **`hasCommittedPeer` for radio guards and the resume arm; `isSessionLive` for projections and ceremonies.** Do not collapse them. | Item 2's pass-B P1: reading the wrong one made a link blip sign a termination on a live mesh. The third, `isInSession`, is the layout swap's and nothing else's. |
+| **Whether P7 touches the two-device session's new mesh behaviours** | **No.** Item 2's audit (ledger row 2) already decided each one; P7 gates radios, not features. | Re-deciding them inside a run policy would put the audit's conclusions in two places. |
+
+### 24.4 Still owed by the owner, and not blocking P7
+
+Carried from §23.4, with what P6 added or closed:
+
+- **Hardware, unchanged:** the Lane A report, Lane B's double-dial row (§7.7 finding 6), the **AWDL
+  half** of item 11, and **Lane D — the production transport over Wi-Fi with the cable OUT**; check
+  afterwards that no ready line names a USB-side interface (`anpi0`/`en8`).
+- **The push.** P6 is **merged to `main`** (`main` was fast-forwarded onto the branch at the
+  close-out) and is **not pushed**: `origin/main` is still `3a32be0`. Both hosted workflows (S3 Wall,
+  Power of 10) were last green on `3a32be0` on 2026-09-06, so **the first push is the first time CI
+  builds any P6 code**, against a `mesh-batteries` floor of **300 over 50 suites** that has never run
+  on a hosted runner — and the 1c load-flake family is still unmeasured there.
+- ~~**A signed key-advertisement wire family**~~ and ~~**the pairwise phase having no mesh
+  identity**~~ — **BUILT in P6 items 1 and 2** (§12.1). ~~**`MeshSessionContext.routingInventoryDigest`**~~
+  — **retired** in item 1's schema bump (§12.2 policy act 10). The **conflicted-member blast radius**
+  from item 1's review is still open and is §12.3 finding 6.
+- **Option (b) for `handleEncryptedMetadata`**, **D-7.30**'s per-session re-gossip budget, the
+  **legacy unsigned two-party removal**'s retirement, **transcript `sid`** (§18 decision 7), **§18.2**'s
+  partition UX copy, and the **two census/duress questions** for `com.fernlet.mesh-session` /
+  `com.fernlet.mesh-routed` — all unchanged, all wire/interop or product decisions.
+- **The final wording of the routed hold and refusal copy, now materially larger.** P6 forked two new
+  app copy tables — `RoutedShareRefusalCopy.chatMessage(_:)` / `.chatNotice(_:)` (item 4) and
+  `SessionHeartStatusCopy` (item 6) — and added the `keyMismatch` refusal's photo sentence (item 1).
+  **Those nineteen display sentences are now IN the committed catalog** — synced from `HEAD`'s blob
+  at the close-out (`6b77ec2`, index-only, the other session's held working copy untouched): 17 added
+  and 2 already present from the presence path. Only the **wording** is still the owner's; the
+  mechanism is done (frozen tokens in ProximityKit, `LocalizedStringKey` forks in the app, both
+  exhaustive over `CaseIterable`), and every key now has a stub awaiting its final English.
+- **§17.3's `PrivacyInfo` / privacy-copy paragraph**, by the first TestFlight build — **P6 makes it
+  plural, and here is the sentence, drafted:** *"While you are in a session, nearby Fernlet devices
+  may briefly hold your photos, messages and hearts for you — always encrypted, never readable by
+  them, and deleted when the session ends or the content expires."* Also still owed: **downgrade
+  `browsed peers=` from `.notice`/`.public`** before QUIC ships.
+- **The `HeartDrop` CloudKit record type** is still not promoted to the Production schema
+  (`Docs/CloudKit-Schema-Deploy.md:95`, `Docs/ImplementationPlan.md:51`).
+- **`ConnectionInspectorTests.beginSessionCreatesLiveLog()`** — the owner's suite, §12.3 finding 5;
+  it cost P6 four voided full runs.
+- **The ungated drain cells.** `MeshRoutedDrainTests` (**43 `@Test`** at HEAD — 41 when item 9
+  measured it, `0e182bb` added two — holding item 8's handed-over cell) plus ~243 more P6-relevant
+  cells across fourteen suites are not on a CI line (§12.3 finding 14).
+- **H-1a.3 / H-1a.4**, **6b**, **D-12.15**, item 9's unreclaimed all-departed item, and **1c's sibling
+  wall-clock leg** (§12.3 finding 16) — all unchanged; and with them **§12.3 finding 20's grouped
+  residuals** (the `ModerationBanStore` gap on the routed path, the un-refunded sender cooldown after
+  a FINAL refusal, the `.hearts` capability pre-flight lost for an unlinked member,
+  `PresenceManager`'s `String`-composed failure sentence, the heart body's unread `sentAtDayKey`, item
+  4's untaken fix-review P3-4, and four measured non-results).
+- **Closed; do not re-audit:** `MeshTunnelConvergence` and the id-vs-endpoint family; the
+  crypto-purpose / `PayloadType` / record-kind spellings (walled); plan §10.7–§10.10, §11.1–§11.4 and
+  now **§12.1–§12.4**; `Docs/Proximity-Security-Followups-2026-08-18.md` **§1** (its §2,
+  sealed-introduction 3DH, is still open). `Docs/Security-Review-External-Surfaces-2026-08-18.md`
+  remains a **dated historical record**, not live surface.
+
+### 24.5 What P6 learned that re-tiers P7–P8 further
+
+- **P7 is smaller than it looks and one of its jobs is bigger.** The wiring half is genuinely
+  mechanical — six call sites into one, a timer for three existing consumers. The half that is not
+  mechanical is the **resume surface**: P6 wired the launch restore's door and proved it is
+  materially real, and then found that nothing presents its outcome. That is product work, not
+  plumbing, and it should be scoped as such.
+- **A predicate's blast radius is measurable, and measuring it is cheap.** Item 6's P1 was found by
+  asking "how many shipping readers does `.activeForeground` have?" — the answer was **one**, which
+  turned a frightening state-machine change into a bounded one. P7 should do the same before it
+  changes what any radio guard reads: grep the readers first, and write the count into the commit.
+- **"Inert until P8" is a claim that rots.** The `sessionState` leg was documented inert for a whole
+  phase and was not — `.linksLost` reaches it on every blip. P8's `.continuingInBackground` is the
+  next claim of that shape, and §24.1 names where the two legs must disagree rather than agree.
+- **The property battery grew a feature row without a new rig, exactly as §23.5 predicted**, and the
+  two disciplines held: **append after field 8, every draw unconditional, every field resolved**, and
+  **never a new `MeshScheduleEvent` case**. The overlay digest moved once, by decision, with both
+  values recorded. A third phase of rows can be added the same way.
+- **A roster-wide invariant is not key-generic.** `routedDeliveryState` answers `.reclaimed` for "this
+  device holds no record", so a roster-wide claim about a `.singleRecipient` item passes at every
+  non-recipient **for the wrong reason**. `routedInvariants` now takes a `judged:` audience (nil = the
+  whole living roster, so every pre-P6 cell is byte-identical). Any future per-recipient family
+  inherits that trap.
+- **The lane's cheapest findings were about the harness, and its most expensive was about the
+  product.** L-2 (every node seeding its own `createdAt`) cost two thirds of every routed frame and
+  was a one-line fix; L-1 (a device with an unsupported sealed schema can never join, and only the
+  launch restore's quarantine clears it) is a real product invariant that five phases of lane runs
+  never surfaced because the harness always bypassed the restore. **Any bypass that skips a shipping
+  door is a place where a product claim can hide.**
+- **The P8 boundary is unchanged.** Background, battery and thermal remain irreducibly physical
+  (§15); a Simulator cannot produce `.continuingInBackground` at all, and the lane explicitly does
+  **not** claim the heart ceremony's foreground gate was tested. The first hardware sample stands:
+  iOS ended a user-started continued-processing task ≈ 46 s in.
