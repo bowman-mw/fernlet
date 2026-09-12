@@ -1,47 +1,46 @@
 // MeshSessionHeartTests.swift
 // FernletTests
 //
-// TF b19 item 5 tier 2 — in-session hearts delivered over the LIVE mesh session (the reliable
-// already-connected channel) instead of the fragile on-demand presence connect. Covers the mesh
-// `.friendHeart` receive handler's MANDATORY receiver-side gates (a past review found an opt-out bypass
-// in a share manager — these must not repeat it): the committed-slot registry gate, the
-// `allowNearbyHearts` receive opt-out, the trusted-friend requirement, and the block list; that a
-// received heart lands through the SAME shared ledger the presence path uses; and the send path's
-// capability gating + 5-minute cooldown + opt-out. The full presence-radio heart coverage lives in
-// PresenceHeartsTests / HeartShareTests — this file is the mesh-slot transport that item 5 added.
+// Network migration P6 item 6 (plan §12): the in-session heart SENDER, on the routed store.
 //
-// The shared `store` (retained past the manager's `unowned` reference) persists its trust vault and
-// slots across this serialized suite, so every fixture uses a UNIQUE random signing key / fingerprint
-// to keep per-test trust and slot state isolated.
+// This file used to cover the legacy `.friendHeart` mesh transport — a sealed envelope written to a
+// live committed slot — and its whole receive half went with that transport (the handler, the
+// per-slot send and the slot-keyed test seam are pinned at zero by
+// `MeshRoutedDrainTests.theRetiredMeshHeartTransportIsGone`). What replaced the receive half is the
+// ACK CEREMONY, which is not a handler at all and is covered in `MeshRoutedHeartTests.swift`
+// against a real two-node founding rig. What is left here is the sender: five gates, the three
+// origination lines, consume-on-stage, and the in-flight claim.
+//
+// Two fixture facts this file rests on:
+//
+// - **The send needs a real mesh.** `originateRoutedItem`'s first guard is `currentMesh` plus a
+//   membership ledger, so a cell with slots and no founding answers `.skipped(.noDestinations)` and
+//   proves nothing. Every send cell drives `MeshFoundingRig`, where the founding is the REAL commit
+//   path and the key advertisements are minted by the production doors — the trap item 1's ledger
+//   row names ("the convergence rig must arm the advertisements or the addressing half is green
+//   over nothing"), applied here.
+// - **Consume-on-stage moved the cooldown's arming.** `.staged` arms it, so a second tap in the
+//   same turn is refused by the COOLDOWN rather than by the in-flight claim, and a refused first
+//   tap leaves the cooldown clear. Both directions are asserted, because the old assertion in this
+//   file ("the refusal burns no cooldown") inverts under the new rule for a STAGED send.
 
 @testable import ProximityKit
 import Foundation
 import Testing
-import MultipeerConnectivity
-import FernletFoundation
+@testable import FernletCrypto
 import FernletDomainModel
-import FernletPersistence
-import CloudKitSync
+import FernletFoundation
 @testable import Fernlet
 
 @Suite(.serialized) @MainActor
 struct MeshSessionHeartTests {
-    // Keeps the FernletStore alive past the manager's `unowned let store` (mirrors SessionMessageTests).
-    let store = makeTestStore()
 
     private let day = Date(timeIntervalSince1970: 1_780_000_000)
 
-    private var heartsCap: [String] {
-        [ProximityCapability.photos.rawValue, ProximityCapability.hearts.rawValue]
-    }
-
-    // MARK: - Fixtures
-
     private func randomKey() -> Data { Data((0..<32).map { _ in UInt8.random(in: .min ... .max) }) }
-    private func uniqueFingerprint() -> String { "fp-\(UUID().uuidString)" }
 
-    /// A fresh, temp-file-backed ledger injected into the manager so assertions are isolated from the
-    /// shared on-disk HeartLedger.json (and from the presence path's ledger).
+    /// A fresh, temp-file-backed ledger so assertions are isolated from the shared on-disk
+    /// `HeartLedger.json` and from the presence path's ledger.
     private func isolatedLedger() -> ProximityHeartLedger {
         ProximityHeartLedger(
             fileURL: FileManager.default.temporaryDirectory
@@ -49,349 +48,6 @@ struct MeshSessionHeartTests {
                 .appendingPathComponent("HeartLedger.json"),
             now: { self.day })
     }
-
-    private func makePeerIdentity(
-        name: String,
-        signingPublicKey: Data,
-        capabilities: [String]? = nil
-    ) -> ProximityCoordinator.PeerIdentity {
-        ProximityCoordinator.PeerIdentity(
-            id: UUID(),
-            displayName: name,
-            signingPublicKey: signingPublicKey,
-            keyAgreementPublicKey: Data([9, 9, 9]),
-            fingerprint: IdentityService.fingerprint(of: signingPublicKey),
-            rangingMode: .none,
-            firstSeenAt: day,
-            capabilities: capabilities
-        )
-    }
-
-    private func makePeerHandle(name: String) -> PeerHandle {
-        PeerHandle(
-            id: UUID(),
-            displayHint: name,
-            discoveryInfo: nil,
-            advertisedFingerprint: nil
-        )
-    }
-
-    private func throwawayCoordinator() -> ProximityCoordinator {
-        let identity = IdentityService(keychainService: "test.mesh.hearts.\(UUID().uuidString)")
-        return ProximityCoordinator(
-            identity: identity,
-            transport: MockMultipeerTransport(),
-            ranging: MockRangingProvider(),
-            inspector: nil,
-            replayCache: ReplayCache(),
-            foregroundAnchor: nil,
-            displayName: "Local",
-            timeoutSeconds: 0
-        )
-    }
-
-    private func heartEnvelope(
-        id: UUID = UUID(),
-        dayKey: String = "2026-07-25",
-        senderName: String = "Robin"
-    ) throws -> (envelope: FernletIdentityEnvelope, plaintext: Data) {
-        let payload = HeartPayload(id: id, sentAtDayKey: dayKey)
-        let plaintext = try JSONEncoder().encode(payload)
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
-            envelopeID: UUID(),
-            senderSigningPublicKey: Data(),
-            senderKeyAgreementPublicKey: Data(),
-            senderDisplayName: senderName,
-            recipientFingerprint: nil,
-            payloadType: .friendHeart,
-            payloadEncryption: .none,
-            payloadSummary: PayloadSummary(title: "Good vibes"),
-            payload: plaintext,
-            createdAt: day,
-            expiresAt: nil,
-            signature: Data()
-        )
-        return (envelope, plaintext)
-    }
-
-    /// Registers a COMMITTED slot for a peer and drives a heart through the full production dispatch
-    /// path (registry commit gate → receiver gates → shared ledger). `trust` controls whether the peer
-    /// is a vault friend (the trusted-friend requirement). Each call uses a UNIQUE signing key.
-    @discardableResult
-    private func deliverHeart(
-        via manager: MeshNetworkManager,
-        id: UUID = UUID(),
-        dayKey: String = "2026-07-25",
-        senderName: String = "Robin",
-        trust: Bool = true,
-        commit: Bool = true
-    ) throws -> ProximityCoordinator.PeerIdentity {
-        let coordinator = throwawayCoordinator()
-        let identity = makePeerIdentity(name: senderName, signingPublicKey: randomKey(), capabilities: heartsCap)
-        if trust { store.proximityTrustVault.trust(identity, mode: .friend) }
-        manager.addSlotForTesting(
-            coordinator: coordinator,
-            peer: makePeerHandle(name: senderName),
-            fingerprint: commit ? identity.fingerprint : nil,
-            peerCapabilities: heartsCap
-        )
-        let (envelope, plaintext) = try heartEnvelope(id: id, dayKey: dayKey, senderName: senderName)
-        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: identity)
-        return identity
-    }
-
-    // MARK: - Receive gates
-
-    @Test func committedFriendHeartIsRecordedThroughTheSharedLedger() throws {
-        let manager = store.meshNetworkManager
-        let ledger = isolatedLedger()
-        manager.heartLedger = ledger
-        store.setAllowNearbyHearts(true)
-
-        let robin = try deliverHeart(via: manager)
-        #expect(ledger.receivedHearts.count == 1)
-        let record = try #require(ledger.receivedHearts.first)
-        #expect(record.senderFingerprint == robin.fingerprint)   // transport-verified, not a wire claim
-        #expect(record.senderDisplayName == "Robin")
-    }
-
-    @Test func heartFromUncommittedSlotIsDroppedByTheRegistryGate() throws {
-        let manager = store.meshNetworkManager
-        let ledger = isolatedLedger()
-        manager.heartLedger = ledger
-        store.setAllowNearbyHearts(true)
-
-        // commit: false models a pre-dwell candidate — feature payloads are for committed members only.
-        try deliverHeart(via: manager, commit: false)
-        #expect(ledger.receivedHearts.isEmpty)
-    }
-
-    @Test func heartDroppedWhenNearbyHeartsOff() throws {
-        let manager = store.meshNetworkManager
-        let ledger = isolatedLedger()
-        manager.heartLedger = ledger
-        // Receiver-side opt-out (the gate a share-manager bypass regression must never re-open).
-        store.setAllowNearbyHearts(false)
-
-        try deliverHeart(via: manager)
-        #expect(ledger.receivedHearts.isEmpty, "A heart to a hearts-off device is silently dropped")
-    }
-
-    @Test func heartFromNonFriendIsDropped() throws {
-        let manager = store.meshNetworkManager
-        let ledger = isolatedLedger()
-        manager.heartLedger = ledger
-        store.setAllowNearbyHearts(true)
-
-        // trust: false → the sender is NOT a vault friend, so the trusted-friend requirement drops it.
-        try deliverHeart(via: manager, trust: false)
-        #expect(ledger.receivedHearts.isEmpty)
-    }
-
-    @Test func heartFromBlockedFingerprintIsDropped() throws {
-        let manager = store.meshNetworkManager
-        let ledger = isolatedLedger()
-        manager.heartLedger = ledger
-        store.setAllowNearbyHearts(true)
-
-        let signingKey = randomKey()
-        let identity = makePeerIdentity(name: "Blocked", signingPublicKey: signingKey, capabilities: heartsCap)
-        // Trust then block so the vault holds the fingerprint (mirrors .friendPhoto / .tempMessage).
-        store.proximityTrustVault.trust(identity, mode: .friend)
-        store.proximityTrustVault.block(signingPublicKey: signingKey)
-
-        let coordinator = throwawayCoordinator()
-        manager.addSlotForTesting(
-            coordinator: coordinator,
-            peer: makePeerHandle(name: "Blocked"),
-            fingerprint: identity.fingerprint,
-            peerCapabilities: heartsCap
-        )
-        let (envelope, plaintext) = try heartEnvelope(senderName: "Blocked")
-        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: identity)
-
-        #expect(ledger.receivedHearts.isEmpty)
-    }
-
-    @Test func malformedDayKeyHeartIsDropped() throws {
-        let manager = store.meshNetworkManager
-        let ledger = isolatedLedger()
-        manager.heartLedger = ledger
-        store.setAllowNearbyHearts(true)
-
-        // A hostile peer can't land an oversized/garbage day key past the wire shape-check.
-        try deliverHeart(via: manager, dayKey: "not-a-day-key-at-all")
-        #expect(ledger.receivedHearts.isEmpty)
-    }
-
-    // MARK: - Send path
-
-    @Test func sendSessionHeartRidesTheMeshToAHeartsCapablePeer() {
-        let manager = store.meshNetworkManager
-        manager.heartLedger = isolatedLedger()
-        store.setAllowNearbyHearts(true)
-
-        var sentSlotIDs: [UUID] = []
-        manager.onSessionHeartSendForTesting = { sentSlotIDs.append($0) }
-
-        let fp = uniqueFingerprint()
-        let peer = makePeerHandle(name: "Capable")
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: peer, fingerprint: fp,
-            verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
-        )
-        #expect(manager.canSendSessionHeart(toFingerprint: fp))
-
-        manager.sendSessionHeart(to: friendRecord(fingerprint: fp, name: "Capable"))
-        #expect(sentSlotIDs == [peer.id], "The heart dispatches over the committed hearts-capable slot")
-        #expect(manager.sessionHeartState == .sending(recipientName: "Capable"))
-    }
-
-    @Test func sendSessionHeartSkipsAPeerWithoutTheHeartsCapability() {
-        let manager = store.meshNetworkManager
-        manager.heartLedger = isolatedLedger()
-        store.setAllowNearbyHearts(true)
-
-        var sends = 0
-        manager.onSessionHeartSendForTesting = { _ in sends += 1 }
-        // A photos-only committed peer (older build) cannot receive a mesh heart.
-        let fp = uniqueFingerprint()
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "PhotosOnly"),
-            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([2]),
-            peerCapabilities: [ProximityCapability.photos.rawValue]
-        )
-        #expect(!manager.canSendSessionHeart(toFingerprint: fp))
-
-        manager.sendSessionHeart(to: friendRecord(fingerprint: fp, name: "PhotosOnly"))
-        #expect(sends == 0, "No mesh heart is dispatched to a peer that can't handle it")
-        #expect(manager.sessionHeartState.isFailed)
-    }
-
-    @Test func sendSessionHeartRespectsTheOptOut() {
-        let manager = store.meshNetworkManager
-        manager.heartLedger = isolatedLedger()
-        store.setAllowNearbyHearts(false)
-
-        var sends = 0
-        manager.onSessionHeartSendForTesting = { _ in sends += 1 }
-        let fp = uniqueFingerprint()
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
-            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
-        )
-
-        manager.sendSessionHeart(to: friendRecord(fingerprint: fp, name: "Capable"))
-        #expect(sends == 0, "Hearts-off blocks the send")
-    }
-
-    @Test func sendSessionHeartRespectsTheCooldown() {
-        let manager = store.meshNetworkManager
-        let ledger = isolatedLedger()
-        manager.heartLedger = ledger
-        store.setAllowNearbyHearts(true)
-
-        let fp = uniqueFingerprint()
-        // Prime the shared ledger so the friend is inside the 5-minute per-friend window.
-        ledger.recordHeartSent(to: fp)
-
-        var sends = 0
-        manager.onSessionHeartSendForTesting = { _ in sends += 1 }
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
-            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
-        )
-
-        manager.sendSessionHeart(to: friendRecord(fingerprint: fp, name: "Capable"))
-        #expect(sends == 0, "A heart inside the 5-minute cooldown is not re-sent")
-        #expect(manager.sessionHeartState.isFailed)
-    }
-
-    /// Regression (review 2026-07-27): the cooldown CANNOT deduplicate concurrent taps, because
-    /// consume-on-send arms the ledger only after the wire write returns. Two taps in the same
-    /// runloop turn therefore both saw a clear cooldown and both dispatched — the recipient's own
-    /// 5-minute receive window then silently discarded the second, while the sender was told
-    /// "Sent … good vibes" twice for one delivered heart. An in-flight claim taken BEFORE the
-    /// await is what actually closes the window; `recordHeartSent` deliberately stays after it, so
-    /// a failed send never burns the five minutes.
-    @Test func aSecondTapDuringAnInFlightSendIsRefusedNotDuplicated() {
-        let manager = store.meshNetworkManager
-        let ledger = isolatedLedger()
-        manager.heartLedger = ledger
-        store.setAllowNearbyHearts(true)
-
-        var sends = 0
-        manager.onSessionHeartSendForTesting = { _ in sends += 1 }
-
-        let fp = uniqueFingerprint()
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
-            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
-        )
-        let friend = friendRecord(fingerprint: fp, name: "Capable")
-
-        // Both calls land before the first send's Task can resume, so the ledger is still unarmed
-        // for the second — exactly the window the old re-check could not see.
-        manager.sendSessionHeart(to: friend)
-        manager.sendSessionHeart(to: friend)
-
-        #expect(sends == 1, "Only one heart is dispatched for two taps in the same turn")
-        #expect(manager.sessionHeartState.isFailed, "The refused second tap says so instead of claiming a send")
-        #expect(ledger.canSendHeart(to: fp), "The refusal burns no cooldown — the send hasn't completed yet")
-    }
-
-    /// The claim must not outlive the session that took it: the delivery task's own `defer` never
-    /// runs if its slot died mid-flight, and a stale claim would refuse the FIRST heart of the next
-    /// session.
-    @Test func sessionEndClearsAStrandedInFlightHeartClaim() {
-        let manager = store.meshNetworkManager
-        manager.heartLedger = isolatedLedger()
-        store.setAllowNearbyHearts(true)
-
-        var sends = 0
-        manager.onSessionHeartSendForTesting = { _ in sends += 1 }
-
-        let fp = uniqueFingerprint()
-        let firstPeer = makePeerHandle(name: "Capable")
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: firstPeer,
-            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
-        )
-        let friend = friendRecord(fingerprint: fp, name: "Capable")
-        manager.sendSessionHeart(to: friend)
-        #expect(sends == 1)
-
-        // The session ends (removeSlot funnel) with the claim still held, then a new session
-        // re-seats the same friend.
-        manager.evictSlotForTesting(peerID: firstPeer.id)
-        manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
-            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
-        )
-        manager.sendSessionHeart(to: friend)
-        #expect(sends == 2, "A fresh session's first heart is not refused by a stranded claim")
-    }
-
-    // MARK: - Capability advertisement
-
-    @Test func localCapabilitiesAdvertiseHearts() {
-        let manager = store.meshNetworkManager
-
-        // Opted in → we can receive a mesh heart, so advertise `.hearts` (heart-reachable).
-        store.setAllowNearbyHearts(true)
-        #expect(manager.localCapabilities().contains(ProximityCapability.hearts.rawValue))
-
-        // Opted out (the default) → the receiver silently drops every heart (`receiveSessionHeart`), so
-        // we must NOT appear heart-reachable; otherwise a sender "succeeds" and burns the 5-minute
-        // cooldown on a dropped heart. Only the hearts capability is gated on the opt-out — the always-on
-        // capabilities (e.g. photos) are still advertised.
-        store.setAllowNearbyHearts(false)
-        #expect(!manager.localCapabilities().contains(ProximityCapability.hearts.rawValue))
-        #expect(manager.localCapabilities().contains(ProximityCapability.photos.rawValue))
-    }
-
-    // MARK: - Helpers
 
     private func friendRecord(fingerprint: String, name: String) -> ProximityTrustedPeerRecord {
         ProximityTrustedPeerRecord(
@@ -404,11 +60,274 @@ struct MeshSessionHeartTests {
             lastSeenAt: day
         )
     }
-}
 
-private extension MeshNetworkManager.SessionHeartState {
-    var isFailed: Bool {
-        if case .failed = self { return true }
-        return false
+    /// A founded pair with hearts on at both ends and a ledger at the sender — the state every send
+    /// cell needs before `sendSessionHeart` can do anything but skip.
+    private func foundedPair(_ label: String) async throws -> (rig: MeshFoundingRig, ledger: ProximityHeartLedger) {
+        let rig = try MeshFoundingRig.build(2, label: label)
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle()
+        let ledger = isolatedLedger()
+        rig.nodes[0].manager.heartLedger = ledger
+        rig.nodes[1].manager.heartLedger = isolatedLedger()
+        rig.nodes[0].store.setAllowNearbyHearts(true)
+        rig.nodes[1].store.setAllowNearbyHearts(true)
+        return (rig, ledger)
+    }
+
+    // MARK: - The three origination lines
+
+    /// **The item's headline.** A heart to an admitted member is minted with EXACTLY ONE
+    /// destination, staged durably, and consumed on the stage — with no live-slot requirement
+    /// anywhere in the path.
+    @Test func aHeartMintsOneDestinationAndIsConsumedOnStage() async throws {
+        let (rig, ledger) = try await foundedPair("heart-send")
+        defer { rig.teardown() }
+        let recipient = rig.nodes[1].fingerprint
+        try #require(rig.roster(0).contains(recipient), "the pair must have founded with a ledger")
+        var outcomes: [MeshRoutedOriginationOutcome] = []
+        var closeness: [String] = []
+        rig.nodes[0].manager.onHeartSendForTesting = { outcomes.append($0) }
+        rig.nodes[0].manager.onHeartSent = { closeness.append($0) }
+
+        rig.sendHeart(from: 0, to: friendRecord(fingerprint: recipient, name: "Robin"))
+
+        let outcome = try #require(outcomes.first, "the mint seam must fire exactly once")
+        #expect(outcomes.count == 1)
+        guard case .staged(let key, _) = outcome else {
+            Issue.record("the heart must stage: \(outcome)")
+            return
+        }
+        let record = try #require(rig.routedIndex(0)?.record(for: key))
+        let manifest = try #require(record.manifest)
+        #expect(manifest.destinations == [recipient],
+                "a single-recipient mint names its recipient and nobody else")
+        #expect(manifest.itemID == key.itemID)
+        #expect(manifest.typeToken == MeshRoutedTypeToken.heart)
+        #expect(closeness == [recipient], "the stage feeds closeness, once")
+        #expect(!ledger.canSendHeart(to: recipient), "and arms the cooldown — consume-on-stage")
+        #expect(rig.nodes[0].manager.sessionHeartState == .sent(recipientName: "Robin"))
+    }
+
+    /// The body's id IS the gift id, and the gift id IS the routed item id. One `UUID`, three roles,
+    /// frozen for this token — and the sealed body carries it too, so a receiver can enforce it.
+    @Test func theBodyIsHeaderOnlyAndItsIDIsTheGiftID() async throws {
+        let (rig, _) = try await foundedPair("heart-body-id")
+        defer { rig.teardown() }
+        var outcomes: [MeshRoutedOriginationOutcome] = []
+        rig.nodes[0].manager.onHeartSendForTesting = { outcomes.append($0) }
+
+        rig.sendHeart(from: 0, to: friendRecord(fingerprint: rig.nodes[1].fingerprint, name: "Robin"))
+
+        guard case .staged(let key, let chunkCount) = try #require(outcomes.first) else {
+            Issue.record("the heart must stage")
+            return
+        }
+        #expect(chunkCount == 1, "a header-only body is one chunk")
+        let record = try #require(rig.routedIndex(0)?.record(for: key))
+        let manifest = try #require(record.manifest)
+        #expect(manifest.size <= UInt64(MeshRoutedHeartBody.maxSealedBlobByteCount),
+                "a minted heart must fit the cap its own row declares")
+    }
+
+    // MARK: - The five gates
+
+    @Test func theOptOutRefusesTheSendWithItsOwnCause() async throws {
+        let (rig, ledger) = try await foundedPair("heart-optout")
+        defer { rig.teardown() }
+        rig.nodes[0].store.setAllowNearbyHearts(false)
+        var sends = 0
+        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        let recipient = rig.nodes[1].fingerprint
+
+        rig.sendHeart(from: 0, to: friendRecord(fingerprint: recipient, name: "Robin"))
+
+        #expect(sends == 0, "hearts-off refuses before the mint")
+        #expect(rig.nodes[0].manager.sessionHeartState
+                == .failed(.heartsOff, recipientName: "Robin"))
+        #expect(ledger.canSendHeart(to: recipient), "a refusal burns no cooldown")
+    }
+
+    /// The §2.1 bug fix: `canSendHeart` is fail-closed and answers false for an UNLOADED ledger too,
+    /// where the cooldown sentence is a lie — nothing was sent. The app already distinguished the
+    /// two for its accessibility label; the send did not.
+    @Test func anUnloadedLedgerRefusesWithItsOwnCause() async throws {
+        let (rig, _) = try await foundedPair("heart-unloaded")
+        defer { rig.teardown() }
+        // A file that EXISTS and cannot be read — the `.unloaded` sidecar state. A merely absent
+        // file loads as an empty ledger, which is a different fact and would make this cell vacuous
+        // (`HeartDropTests.unreadableLedgerFailsClosedAndRecovers` is the same construction).
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("heart-unreadable-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("HeartLedger.json")
+        let seeder = ProximityHeartLedger(fileURL: url, now: { self.day })
+        seeder.recordHeartSent(to: "someone-else")
+        let unreadable = ProximityHeartLedger(
+            fileURL: url, now: { self.day },
+            readData: { _ in throw CocoaError(.fileReadNoPermission) }
+        )
+        try #require(!unreadable.isLoaded, "the precondition: this ledger cannot be read")
+        rig.nodes[0].manager.heartLedger = unreadable
+        var sends = 0
+        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+
+        rig.sendHeart(from: 0, to: friendRecord(fingerprint: rig.nodes[1].fingerprint, name: "Robin"))
+
+        #expect(sends == 0)
+        #expect(rig.nodes[0].manager.sessionHeartState
+                == .failed(.ledgerUnavailable, recipientName: "Robin"),
+                "an unloaded ledger is not a cooldown — nothing was sent")
+    }
+
+    @Test func theCooldownRefusesTheSend() async throws {
+        let (rig, ledger) = try await foundedPair("heart-cooldown")
+        defer { rig.teardown() }
+        let recipient = rig.nodes[1].fingerprint
+        ledger.recordHeartSent(to: recipient)
+        var sends = 0
+        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+
+        rig.sendHeart(from: 0, to: friendRecord(fingerprint: recipient, name: "Robin"))
+
+        #expect(sends == 0, "a heart inside the 5-minute cooldown is not re-minted")
+        #expect(rig.nodes[0].manager.sessionHeartState
+                == .failed(.cooldown, recipientName: "Robin"))
+    }
+
+    @Test func aBlockedOrRevokedRecordIsRefusedSilently() async throws {
+        let (rig, _) = try await foundedPair("heart-revoked")
+        defer { rig.teardown() }
+        var sends = 0
+        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        var revoked = friendRecord(fingerprint: rig.nodes[1].fingerprint, name: "Robin")
+        revoked.revokedAt = day
+
+        rig.sendHeart(from: 0, to: revoked)
+
+        #expect(sends == 0)
+        #expect(rig.nodes[0].manager.sessionHeartState == .idle,
+                "silent: the affordance is not drawn for such a record, so reaching here is a caller bug")
+    }
+
+    /// **Re-aimed from `aSecondTapDuringAnInFlightSendIsRefusedNotDuplicated`.** The claim changed
+    /// mechanism: the mint is synchronous, so the second tap sees a RELEASED claim and an ARMED
+    /// cooldown. Asserting the cause token is what stops this staying green while testing something
+    /// else.
+    @Test func aSecondTapIsRefusedByTheCooldownTheStageArmed() async throws {
+        let (rig, ledger) = try await foundedPair("heart-second-tap")
+        defer { rig.teardown() }
+        let recipient = rig.nodes[1].fingerprint
+        var sends = 0
+        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        let friend = friendRecord(fingerprint: recipient, name: "Robin")
+
+        rig.sendHeart(from: 0, to: friend)
+        #expect(sends == 1, "the precondition: the first tap really staged")
+        #expect(!ledger.canSendHeart(to: recipient), "and really armed the cooldown")
+        rig.sendHeart(from: 0, to: friend)
+
+        #expect(sends == 1, "only one heart is minted for two taps")
+        #expect(rig.nodes[0].manager.sessionHeartState
+                == .failed(.cooldown, recipientName: "Robin"),
+                "and the second is refused by the cooldown the STAGE armed, not by the in-flight claim")
+    }
+
+    /// The in-flight claim must not outlive the session that took it, or it would refuse the FIRST
+    /// heart of the next one. Unchanged in substance; the claim is now a fence over an empty window.
+    @Test func sessionEndClearsAStrandedInFlightHeartClaim() async throws {
+        let (rig, _) = try await foundedPair("heart-stranded")
+        defer { rig.teardown() }
+        let manager = rig.nodes[0].manager
+        manager.claimSessionHeartForTesting(rig.nodes[1].fingerprint)
+        #expect(manager.holdsSessionHeartClaimForTesting(rig.nodes[1].fingerprint),
+                "the precondition: the claim is held")
+
+        manager.leaveMesh()
+
+        #expect(!manager.holdsSessionHeartClaimForTesting(rig.nodes[1].fingerprint),
+                "a fresh session's first heart must not be refused by a stranded claim")
+    }
+
+    /// A member the derived roster no longer holds is a `.noDestinations` SKIP at the mint, and the
+    /// heart says so rather than staying silent — the one place this row differs from a photo's.
+    @Test func aHeartToADepartedMemberSaysTheyLeft() async throws {
+        let (rig, ledger) = try await foundedPair("heart-departed")
+        defer { rig.teardown() }
+        var sends = 0
+        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        let stranger = "fp-\(UUID().uuidString)"
+        try #require(!rig.roster(0).contains(stranger))
+
+        rig.sendHeart(from: 0, to: friendRecord(fingerprint: stranger, name: "Robin"))
+
+        #expect(sends == 1, "the mint was attempted — the seam fires on every outcome")
+        #expect(rig.nodes[0].manager.sessionHeartState
+                == .failed(.recipientLeft, recipientName: "Robin"))
+        #expect(ledger.canSendHeart(to: stranger), "and a skip burns no cooldown")
+    }
+
+    /// Every origination outcome maps to a cause, exhaustively — the switch is the wall, this is the
+    /// statement that the vocabulary has no gap the compiler cannot see.
+    @Test func everyHeartFailureCauseIsAFrozenToken() {
+        #expect(MeshNetworkManager.SessionHeartFailure.allCases.map(\.rawValue) == [
+            "heartsOff", "ledgerUnavailable", "cooldown", "alreadySending", "recipientLeft",
+            "notReachableYet", "identityUnconfirmed", "couldNotSend", "storageUnreachable",
+            "holdingAllItCan"
+        ], "audit vocabulary; a rename breaks every reader of mesh.routedHeart.sendFailed")
+    }
+
+    // MARK: - Reachability, and the presence ordering
+
+    /// `canSendSessionHeart` answers "is this a member this device can address", not "are they
+    /// linked" — and `hasLiveHeartSlot` is the separate question the app's ordering asks first.
+    @Test func addressabilityAndLivenessAreTwoQuestions() async throws {
+        let (rig, _) = try await foundedPair("heart-reach")
+        defer { rig.teardown() }
+        let manager = rig.nodes[0].manager
+        let recipient = rig.nodes[1].fingerprint
+
+        #expect(manager.canSendSessionHeart(toFingerprint: recipient),
+                "an admitted member with a resolvable key is addressable")
+        #expect(!manager.canSendSessionHeart(toFingerprint: rig.nodes[0].fingerprint),
+                "this device is never addressable for its own heart")
+        #expect(!manager.canSendSessionHeart(toFingerprint: "fp-\(UUID().uuidString)"),
+                "and a stranger is not in the roster")
+        #expect(manager.hasLiveHeartSlot(forFingerprint: recipient),
+                "the pair is linked, so the liveness question is true too")
+    }
+
+    /// The app's three-way order, as a table over the two manager seams the view reads. It is a
+    /// PRODUCT rule — a custodied heart is strictly worse than a delivered one — so it is asserted
+    /// against the source that implements it rather than only described.
+    @Test func thePresenceOrderPrefersADeliveredHeartOverACustodiedOne() throws {
+        let camera = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/DisposableCameraView.swift")
+        )
+        #expect(camera.contains("let meshLinked = manager.hasLiveHeartSlot(forFingerprint:"),
+                "the first question is a live hearts-capable slot")
+        #expect(camera.contains("let useMesh = meshLinked || !presenceReachable"),
+                "presence wins while it is reachable and no mesh slot is live")
+        #expect(camera.contains("} else if presenceReachable {"),
+                "and the fallback really is taken, not merely computed")
+    }
+
+    // MARK: - Capability advertisement (unchanged by the retirement)
+
+    /// `localCapabilities()` still gates `.hearts` on the opt-out. It is now an
+    /// **advertised-but-unread** capability on the send side — the routed sender consults the roster
+    /// and the key resolver, not a slot's capabilities — and it is kept because the app's ordering
+    /// reads it through `hasLiveHeartSlot` and because a peer's build advertises it too.
+    @Test func localCapabilitiesAdvertiseHearts() {
+        let store = makeTestStore()
+        let manager = store.meshNetworkManager
+
+        store.setAllowNearbyHearts(true)
+        #expect(manager.localCapabilities().contains(ProximityCapability.hearts.rawValue))
+
+        store.setAllowNearbyHearts(false)
+        #expect(!manager.localCapabilities().contains(ProximityCapability.hearts.rawValue))
+        #expect(manager.localCapabilities().contains(ProximityCapability.photos.rawValue))
     }
 }

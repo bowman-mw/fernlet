@@ -19,12 +19,21 @@
 //   observe either retry list at all (a chunk that arrives on a link has its receipt filed and its
 //   plaintext projected at the live door, before any re-entry pass exists to pace).
 //
-// Where a population is PLANTED rather than minted, the cell says why in its own doc: after item 4,
-// the routes to a projection refusal that is real, repeatable and NOT re-derivable away are all
-// either unreachable from a registered mint (an over-resident blob — the photo row's cap IS the
-// resident bound, D-13.19) or self-healing (a missing chunk file is repaired out of completeness on
-// the first read). The population item 5 paces arrives with item 6's hearts; the discipline has to
-// exist before it does.
+// Where a population is PLANTED rather than minted, the cell says why in its own doc: the routes
+// that are convenient to construct are either unreachable from a registered mint (an over-resident
+// blob — the photo row's cap IS the resident bound, D-13.19) or self-healing (a missing chunk file
+// is repaired out of completeness on the first read).
+//
+// **The projection list's retryable population IS reachable in production, and three documents said
+// otherwise** (item 5 review, P2-3; the commit message, the ledger row and this header's earlier
+// wording all claimed it was structural). Two real routes pass `isProjectableAtThisPass` and reach
+// the arm: `routedCanonicalDispatch(_: MeshRoutedTextBody, …)` answers `.refusedForNow` whenever
+// `transcriptLiveness` is `.notLiveRightNow` — a session ended by the five-minute give-up door that
+// `startSearching()` can un-end, in the right mesh and the right generation — and
+// `routedProjectionBlob` answers nil for a store read that is `.unavailable` or `.refused`, which
+// repeats at every pass and does not self-heal. The filter only excludes `.endedForGood`. So item 5's
+// projection half is load-bearing in production, not merely structural; what the plants buy is a
+// population that is easy to place at the HEAD of an index ordered by origin fingerprint.
 
 @testable import ProximityKit
 import Foundation
@@ -351,7 +360,11 @@ struct MeshRoutedRetryAllowanceTests {
     /// and text receipts are never filed.
     private static func stagedHeart(_ rig: MeshRoutedDrainRig, itemID: UUID) throws -> MeshRoutedDrainItem {
         let signer = rig.identities[0]
-        let payload = MeshRoutedCustodyFixtures.blob(byteCount: 1_200)
+        let payload = MeshRoutedCustodyFixtures.blob(
+            byteCount: MeshRoutedCustodyFixtures.blobByteCount(
+                for: MeshRoutedTypeToken.heart, requested: 1_200
+            )
+        )
         let target = MeshDeliveryTarget(
             contentID: itemID, roster: rig.roster, selfFingerprint: signer.localFingerprint
         )
@@ -393,6 +406,16 @@ struct MeshRoutedRetryAllowanceTests {
         try MeshRoutedStoreFixtures.plant(
             index, into: rig.routedStore(rig.nodes[node]), install: MeshP3Acceptance.install
         )
+    }
+
+    /// Drops planted items out of one node's store, so the next pass's enumeration no longer names
+    /// them — what a narrowed enumeration looks like from the rotation's side.
+    private static func dropBacklog(
+        _ rig: MeshRoutedDrainRig, at node: Int, keys: [MeshRoutedItemKey]
+    ) {
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            _ = rig.routedStore(rig.nodes[node]).dropping(items: keys, reason: "test.narrowed")
+        }
     }
 
     /// Job 5's list at `node`, read from the test's side so a precondition is a fact and not an
@@ -487,9 +510,11 @@ struct MeshRoutedRetryAllowanceTests {
     /// hearts do not hold the ack allowance: this device's own receipt for a new item is filed on
     /// the first pass after it arrives.
     ///
-    /// The hearts stay counted rather than filtered — `heartsPending` keeps meaning "heart-stage
-    /// items this pass could not judge" until item 6 supplies `ackableNow`'s heart leg, and then the
-    /// filter closes the other half of this hazard.
+    /// **Since P6 item 6 supplied `ackableNow`'s heart leg the hearts spend NO slot at all**, which
+    /// is a strictly stronger statement than the retry share bounding them: this rig wires no heart
+    /// ledger, so `routedHeartJudgementReadiness()` is false, and the filter takes all sixteen off
+    /// the list before the allowance is planned. `heartsPending` keeps its meaning — "heart-stage
+    /// items this pass could not judge" — because the filter counts what it refused a slot to.
     @Test func aNewReceiptIsFiledOnItsFirstPassBehindAFullAllowanceOfHearts() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "retry-acks")
         defer { rig.teardown() }
@@ -520,9 +545,90 @@ struct MeshRoutedRetryAllowanceTests {
             the reserved half of the ack allowance is what reaches a new receipt; sixteen hearts \
             from one ground fingerprint must not be able to hold the whole pass
             """)
-        #expect(second.heartsPending == allowance - 1,
-                "and the hearts spend the retry share, one slot short of it")
+        #expect(second.heartsPending == allowance,
+                "and all sixteen are still counted while spending no slot — the filter, not the share")
         let filed = try #require(rig.routedIndex(rig.nodes[1])?.record(for: key))
         #expect(filed.recipientReceipts.isEmpty == false, "the receipt is stored, not merely counted")
     }
+
+    /// **A1 — the restart cut compares two clocks, and only a floored pair agrees.**
+    ///
+    /// `MeshRoutedItemRecord.firstSeenAt` is written through the record's one initializer as
+    /// `MeshRoutedManifest.floored(...)` by both admission doors, so it is a whole second. Before
+    /// this fix the pass's own instant was not floored, so an item first seen at `floor(t)` with the
+    /// pass armed at `t + 0.5` read as **carried-over**, competed for the retry share, and queued
+    /// behind sixteen re-derivations.
+    ///
+    /// It was green only because `MeshRoutedDrainRig.now` is an integral second — and
+    /// `MeshRoutedFixtureClock.createdAt` stops being integral at its own documented 2026-12-16
+    /// crossover, at which point three cells in this suite would have gone red for a reason no
+    /// commit caused. So the pass's instant is fractional here, deliberately: half a second past the
+    /// rig's own.
+    ///
+    /// It is written against JOB 5's list rather than job 4's, and the reason is item 6: job 4's
+    /// blocking population used to be sixteen unjudgeable hearts, and `ackableNow`'s heart leg now
+    /// filters those out before the allowance is planned, so they can no longer crowd anything.
+    /// Job 5's stubborn backlog is the population that still competes.
+    @Test func aFractionalPassInstantStillTreatsAFlooredArrivalAsNew() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "retry-floored")
+        defer { rig.teardown() }
+        rig.seedAgreementKeys()
+        let backlog = try Self.plantStubbornBacklog(
+            rig, at: 1, firstSeenAt: MeshRoutedDrainRig.createdAt.addingTimeInterval(60)
+        )
+        let arriving = try MeshRoutedPhotoFixtures.item(rig, origin: 0, itemID: try Self.highID())
+        rig.link(0, 1)
+        try rig.handOver(arriving, sender: 0, receiver: 1)
+        try await rig.settle()
+        let key = MeshRoutedItemKey(arriving.manifest)
+        let staged = try #require(rig.routedIndex(rig.nodes[1])?.record(for: key))
+        #expect(staged.firstSeenAt == MeshRoutedManifest.floored(staged.firstSeenAt),
+                "the precondition: every admission door floors the stamp")
+        let awaiting = try awaitingProjection(rig, at: 1)
+        #expect(awaiting.count == backlog.count + 1, "the precondition: seventeen on job 5's list")
+        #expect(awaiting.map(\.key).last == key, "and the newcomer sorts LAST")
+
+        // The session's FIRST pass, armed half a second past the newcomer's own stamped second.
+        rig.pushGate(Self.openGate, at: 1, now: MeshRoutedDrainRig.now.addingTimeInterval(0.5))
+
+        #expect(rig.wallEntries(at: 1, itemID: arriving.manifest.itemID).count == 1, """
+            an item stamped in the same second as the first pass is NEW: with the cut unfloored it \
+            reads as carried-over, competes for the retry share, and is not reached behind sixteen \
+            re-derivations
+            """)
+    }
+
+    /// **A2 — the rotation is pruned to what the pass enumerated.**
+    ///
+    /// A key leaves its list without passing this pass's own `noteFinal` in two ways, and both fill
+    /// the 1024 bound: the LIVE delivery door files a receipt job 4's loop never attempted, and a
+    /// list's enumeration narrows under a remembered key (a heart, which
+    /// `projectableRoutedTypeTokens` never names, or a text item after the age gate flips off). At
+    /// the bound the rotation refuses to remember and the pacing reverts to a head-of-list prefix —
+    /// D-13.32's original defect, silently restored. Asserted on the rotation's own tried set, which
+    /// is the thing the bound counts.
+    @Test func theRotationDropsKeysThePassNoLongerEnumerates() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "retry-prune")
+        defer { rig.teardown() }
+        rig.seedAgreementKeys()
+        let backlog = try Self.plantStubbornBacklog(
+            rig, at: 1, firstSeenAt: MeshRoutedDrainRig.createdAt.addingTimeInterval(60)
+        )
+        _ = try #require(rig.pushGate(Self.openGate, at: 1), "the unlock edge owes a pass")
+        let remembered = rig.nodes[1].manager.routedRetryRotationForTesting(.localProjection)
+        #expect(remembered.count == backlog.count,
+                "the precondition: the whole refusing backlog is remembered as attempted")
+
+        // The items leave the list — here by leaving the mesh's index behind entirely, which is what
+        // a narrowed enumeration looks like from the rotation's side.
+        Self.dropBacklog(rig, at: 1, keys: backlog)
+        rig.pushGate(Self.closedGate, at: 1)
+        _ = try #require(rig.pushGate(Self.openGate, at: 1), "the second edge owes a pass")
+
+        #expect(rig.nodes[1].manager.routedRetryRotationForTesting(.localProjection).isEmpty, """
+            a key the pass no longer enumerates must leave the tried set, or the bound fills with \
+            keys that cost no slot and the pacing turns itself off at 1024
+            """)
+    }
+
 }

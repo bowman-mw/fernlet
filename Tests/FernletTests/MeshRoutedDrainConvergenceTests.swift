@@ -73,11 +73,41 @@ extension MeshConvergenceRun {
             throw MeshMergeTestFailure.rosterTooSmall
         }
         let payload = MeshRoutedCustodyFixtures.blob(
-            byteCount: MeshChunkFormat.maxChunkPayloadBytes * (chunks - 1) + 1_000
+            byteCount: MeshRoutedCustodyFixtures.blobByteCount(
+                for: typeToken,
+                requested: MeshChunkFormat.maxChunkPayloadBytes * (chunks - 1) + 1_000
+            )
         )
-        let target = MeshDeliveryTarget(
-            contentID: UUID(), roster: roster, selfFingerprint: identity.localFingerprint
-        )
+        // The target's SHAPE follows the type's registered column (P6 item 6): the heart row is
+        // `.singleRecipient`, and a full-roster target for it is refused by the mint's own shape
+        // guard on any roster of three or more. Read from the registry rather than branched on the
+        // token, so a fourth type needs no edit here.
+        let contentID = UUID()
+        let target: MeshDeliveryTarget
+        if MeshRoutedTypeRegistry.increment1.entry(for: typeToken)?.destinations == .singleRecipient {
+            // The recipient must be a SURVIVOR, not merely a roster row: on a partition shape the
+            // lowest-sorting roster member may be one the schedule removed, and a single-recipient
+            // item addressed to it has exactly one destination that is `departed` — so the item
+            // closes with nobody outstanding and nobody holding custody, and a stage claim about it
+            // asserts nothing. A full-roster item hid this by always having a living destination
+            // too (item 9's design check, R3, met here first).
+            let living = Set(livingMembers.map(\.fingerprint))
+            let recipient = try #require(
+                roster.memberFingerprints.first {
+                    $0 != identity.localFingerprint && living.contains($0)
+                },
+                "a single-recipient mint needs one other LIVING member"
+            )
+            guard case .updated(let subset) = MeshDeliveryTarget.addressing(
+                contentID: contentID, recipient: recipient, roster: roster,
+                selfFingerprint: identity.localFingerprint
+            ) else { throw MeshMergeTestFailure.rosterTooSmall }
+            target = subset
+        } else {
+            target = MeshDeliveryTarget(
+                contentID: contentID, roster: roster, selfFingerprint: identity.localFingerprint
+            )
+        }
         let manifest = try MeshRoutedManifest.signed(
             meshID: meshID,
             target: target,

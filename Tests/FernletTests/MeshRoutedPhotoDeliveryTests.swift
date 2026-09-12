@@ -346,10 +346,17 @@ extension MeshRoutedDrainRig {
     }
 
     /// Pushes one node's access gate under the pinned install binding, which is the re-entry's edge.
+    ///
+    /// - Parameter now: The pass's instant. Nil takes the rig's own `now`, which is an INTEGRAL
+    ///   second — the only reason the carried-over cut's two clocks agreed before item 5's review
+    ///   floored the cut (P1-1), so the cell that proves the flooring passes a fractional instant
+    ///   explicitly. `Date?` rather than a default expression because the anchor is `@MainActor`.
     @discardableResult
-    func pushGate(_ gate: MeshRoutedAccessGate, at node: Int) -> MeshRoutedReentryReport? {
+    func pushGate(
+        _ gate: MeshRoutedAccessGate, at node: Int, now: Date? = nil
+    ) -> MeshRoutedReentryReport? {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            nodes[node].manager.applyRoutedAccessGate(gate, now: MeshRoutedDrainRig.now)
+            nodes[node].manager.applyRoutedAccessGate(gate, now: now ?? MeshRoutedDrainRig.now)
         }
     }
 

@@ -355,7 +355,11 @@ struct MeshDeliveryTargetTests {
         #expect(
             MeshDeliveryRefusal.allCases.map(\.rawValue) == [
                 "notADestination", "alreadyDelivered", "wouldRegress",
-                "differentContent", "destinationSetMismatch"
+                "differentContent", "destinationSetMismatch",
+                // P6 item 6's two capture refusals. `recipientNotInRoster` is the one ORDINARY
+                // outcome in this vocabulary — a race, not a caller bug — and it reaches the user
+                // as copy ("they left the session").
+                "recipientIsSelf", "recipientNotInRoster"
             ]
         )
         #expect(MeshDeliveryState.pending.token == .pending)

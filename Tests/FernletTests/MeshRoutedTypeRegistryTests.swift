@@ -219,20 +219,28 @@ struct MeshRoutedTypeRegistryTests {
             MeshRoutedTypeToken.tempMessage: .durableRecipientStorage,
             MeshRoutedTypeToken.heart: .foregroundDecryptAndLedgerCommit
         ]
-        // P6 item 3 narrowed the photo row to the seal formula and P6 item 4 narrowed the TEXT row
-        // to its own body's (the sanitized maximum's byte bound + this family's framed header
-        // allowance + the seal's overhead). The heart row is still the shared wire bound and
-        // narrows when item 6 lands its body. Each is read from the type that owns it — a literal
-        // here would be the second copy the formula exists to prevent.
+        // P6 item 3 narrowed the photo row to the seal formula, item 4 the TEXT row to its own
+        // body's, and item 6 the HEART row to its own — a header-only body, so the formula's payload
+        // term is zero. Every row is now narrowed; none sits at the shared wire bound. Each is read
+        // from the type that owns it — a literal here would be the second copy the formula exists to
+        // prevent.
         let caps: [String: UInt64] = [
             MeshRoutedTypeToken.photo: UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
             MeshRoutedTypeToken.tempMessage: UInt64(MeshRoutedTextBody.maxSealedBlobByteCount),
-            MeshRoutedTypeToken.heart: MeshRoutedManifestFormat.maxContentByteCount
+            MeshRoutedTypeToken.heart: UInt64(MeshRoutedHeartBody.maxSealedBlobByteCount)
+        ]
+        // `destinations` is no longer one value for every row: P6 item 6 flipped the heart row to
+        // `.singleRecipient` in place — the one re-declaration the freezing rule allows a
+        // never-minted row, and it is spent.
+        let semantics: [String: MeshRoutedDestinationSemantics] = [
+            MeshRoutedTypeToken.photo: .fullRosterAtCreation,
+            MeshRoutedTypeToken.tempMessage: .fullRosterAtCreation,
+            MeshRoutedTypeToken.heart: .singleRecipient
         ]
         for token in registry.tokens {
             let entry = try #require(registry.entry(for: token), "\(token)")
             #expect(entry.maxItemByteCount == caps[token], "\(token)")
-            #expect(entry.destinations == .fullRosterAtCreation, "\(token)")
+            #expect(entry.destinations == semantics[token], "\(token)")
             #expect(entry.relayRetention == .originRetainsUntilDeparture, "\(token)")
             #expect(entry.expiry == .meshHardDeadlinePlusGrace, "\(token)")
             #expect(entry.canonicalStore == stores[token], "\(token)")
@@ -484,15 +492,18 @@ struct MeshRoutedTypeRegistryTests {
 struct MeshRoutedTypeRegistryConsumerTests {
 
     /// A two-member rig and the mint every cell here drives.
+    /// - Parameter target: The destination set to mint against; nil captures the full roster, which
+    ///   is what every pre-item-6 caller wanted. P6 item 6's two shape cells pass a subset.
     private func mint(
         _ rig: MeshDeliveryRig,
         typeToken: String,
         size: UInt64,
-        types: MeshRoutedTypeRegistry
+        types: MeshRoutedTypeRegistry,
+        target explicitTarget: MeshDeliveryTarget? = nil
     ) throws -> MeshRoutedManifest {
         let originFingerprint = rig.fingerprints[0]
         let origin = try #require(rig.identities[originFingerprint])
-        let target = MeshDeliveryTarget(
+        let target = explicitTarget ?? MeshDeliveryTarget(
             contentID: UUID(), roster: rig.roster, selfFingerprint: originFingerprint
         )
         return try MeshRoutedManifest.signed(
@@ -545,8 +556,12 @@ struct MeshRoutedTypeRegistryConsumerTests {
         #expect(manifest.typeToken == MeshRoutedTypeRegistryFixtures.probeToken)
     }
 
+    /// **Re-aimed at P6 item 6, and the re-aim is the point.** The guard became a SHAPE check — a
+    /// `.singleRecipient` row must arrive with exactly one destination — and on `memberCount: 2` a
+    /// full-roster target already has exactly one, so at its old size this cell would have passed by
+    /// MINTING while claiming to assert a refusal. Three members is what makes it discriminate.
     @Test func theMintRefusesANarrowedDestinationSemantics() throws {
-        let rig = try MeshDeliveryFixtures.rig(memberCount: 2)
+        let rig = try MeshDeliveryFixtures.rig(memberCount: 3)
         let narrow = MeshRoutedTypeRegistryFixtures.onlyProbe(
             MeshRoutedTypeRegistryFixtures.probeEntry(destinations: .singleRecipient)
         )
@@ -557,6 +572,55 @@ struct MeshRoutedTypeRegistryConsumerTests {
                 rig, typeToken: MeshRoutedTypeRegistryFixtures.probeToken, size: 2_048, types: narrow
             )
         }
+    }
+
+    /// The other side of the flip: a `.singleRecipient` row MINTS when the target's shape matches.
+    @Test func aSingleRecipientRowMintsWithAOneDestinationTarget() throws {
+        let rig = try MeshDeliveryFixtures.rig(memberCount: 3)
+        let narrow = MeshRoutedTypeRegistryFixtures.onlyProbe(
+            MeshRoutedTypeRegistryFixtures.probeEntry(destinations: .singleRecipient)
+        )
+        let recipient = rig.fingerprints[2]
+        guard case .updated(let target) = MeshDeliveryTarget.addressing(
+            contentID: UUID(), recipient: recipient, roster: rig.roster,
+            selfFingerprint: rig.fingerprints[0]
+        ) else {
+            Issue.record("the capture door must answer for a roster member")
+            return
+        }
+        let minted = try mint(
+            rig, typeToken: MeshRoutedTypeRegistryFixtures.probeToken, size: 2_048,
+            types: narrow, target: target
+        )
+        #expect(minted.destinations == [recipient],
+                "one destination, and it is the one the caller named")
+        #expect(minted.keyWraps.count == 1, "and one wrap, so wraps stay identical to destinations")
+    }
+
+    /// **The fence is ONE-DIRECTIONAL, and this is the direction the manifest cannot see.** A
+    /// `.fullRosterAtCreation` row handed a single-recipient target falls straight through the
+    /// `case .fullRosterAtCreation: break` arm — nothing about a one-destination target is wrong for
+    /// a two-member mesh — so the ONLY fence for it is the audience argument at
+    /// `MeshNetworkManager.originateRoutedItem`'s one door. Asserted as a mint that SUCCEEDS, so the
+    /// asymmetry is recorded rather than assumed.
+    @Test func aFullRosterRowWithASubsetTargetIsNotRefusedByTheManifest() throws {
+        let rig = try MeshDeliveryFixtures.rig(memberCount: 3)
+        let full = MeshRoutedTypeRegistryFixtures.onlyProbe(
+            MeshRoutedTypeRegistryFixtures.probeEntry(destinations: .fullRosterAtCreation)
+        )
+        guard case .updated(let subset) = MeshDeliveryTarget.addressing(
+            contentID: UUID(), recipient: rig.fingerprints[2], roster: rig.roster,
+            selfFingerprint: rig.fingerprints[0]
+        ) else {
+            Issue.record("the capture door must answer for a roster member")
+            return
+        }
+        let minted = try mint(
+            rig, typeToken: MeshRoutedTypeRegistryFixtures.probeToken, size: 2_048,
+            types: full, target: subset
+        )
+        #expect(minted.destinations.count == 1,
+                "the manifest mints it — the shape guard has no arm for this direction")
     }
 
     /// D-11.8's derivation, pinned rather than asserted in prose: `destinations` has **no**

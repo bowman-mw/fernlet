@@ -210,6 +210,29 @@ enum MeshRoutedCustodyFixtures {
 
     /// A deterministic pseudo-random blob. Non-repeating over 64 KiB, so a mis-sliced boundary
     /// changes the reassembled bytes.
+    /// A payload size that fits the registered CAP of `typeToken`, clamping the requested one.
+    ///
+    /// Needed from P6 item 6 onward: every routed row is now narrowed to a formula over its own
+    /// body, and the heart row's body is HEADER-ONLY — 553 B of ciphertext, i.e. 520 B of plaintext
+    /// — so an opaque 1–2 KB fixture blob under the heart token is refused
+    /// `sizeExceedsTypeCap` at the mint, which is the cap working. A fixture must mint something a
+    /// shipping sender could mint.
+    ///
+    /// It only ever SHRINKS. A cell that means to exceed a cap builds its manifest directly with an
+    /// explicit `size:` (`MeshRoutedTypeRegistryTests`' own mints), so a clamp here cannot turn one
+    /// of those green.
+    ///
+    /// - Parameters:
+    ///   - typeToken: The row to fit.
+    ///   - requested: The size the caller wanted.
+    /// - Returns: the plaintext byte count to use.
+    static func blobByteCount(for typeToken: String, requested: Int = blobByteCount) -> Int {
+        guard let cap = MeshRoutedTypeRegistry.increment1.entry(for: typeToken)?.maxItemByteCount
+        else { return requested }
+        let plaintextRoom = Int(cap) - MeshRoutedItemSealFormat.overheadByteCount
+        return max(1, min(requested, plaintextRoom))
+    }
+
     static func blob(byteCount: Int = blobByteCount) -> Data {
         Data((0..<byteCount).map { UInt8(truncatingIfNeeded: ($0 &* 31 &+ 7) ^ ($0 >> 8)) })
     }
@@ -229,10 +252,30 @@ enum MeshRoutedCustodyFixtures {
         let names = members.fingerprints
         let origin = try #require(members.identities[names[0]])
         let custodian = try #require(members.identities[names[1]])
-        let payload = blob(byteCount: byteCount)
-        let target = MeshDeliveryTarget(
-            contentID: UUID(), roster: members.roster, selfFingerprint: origin.localFingerprint
-        )
+        let payload = blob(byteCount: blobByteCount(for: typeToken, requested: byteCount))
+        // The target's SHAPE follows the type's registered column (P6 item 6): a `.singleRecipient`
+        // row — the heart's, since item 6 flipped it — is refused by the mint's own shape guard when
+        // handed a full-roster target on a roster of three or more, which this rig's default is. The
+        // recipient is the CUSTODIAN, because that is the fingerprint every ack cell here commits
+        // for. Read from the registry rather than branched on the token, so a fourth type needs no
+        // edit here.
+        let contentID = UUID()
+        let target: MeshDeliveryTarget
+        if MeshRoutedTypeRegistry.increment1.entry(for: typeToken)?.destinations == .singleRecipient {
+            guard case .updated(let subset) = MeshDeliveryTarget.addressing(
+                contentID: contentID, recipient: custodian.localFingerprint,
+                roster: members.roster, selfFingerprint: origin.localFingerprint
+            ) else {
+                #expect(Bool(false), "the custodian must be addressable in the rig's own roster")
+                throw MeshRoutedItemSealError.malformed
+            }
+            target = subset
+        } else {
+            target = MeshDeliveryTarget(
+                contentID: contentID, roster: members.roster,
+                selfFingerprint: origin.localFingerprint
+            )
+        }
         let manifest = try MeshRoutedManifest.signed(
             meshID: members.meshID,
             target: target,

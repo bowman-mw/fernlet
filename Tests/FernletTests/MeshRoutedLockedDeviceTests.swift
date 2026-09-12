@@ -382,6 +382,12 @@ struct MeshRoutedLockedDeviceTests {
         #expect(report.restoredSession == false, "a duress fall owes no session restore")
         #expect(report.committedCustodyCount == 0, "a duress fall owes no custody commit")
         #expect(report.sweptPeerCount == 0, "a duress fall owes no sweep")
+        // Still 1 after P6 item 6, and the REASON changed: the gate is open, so the stage's
+        // predicate holds, but this rig's manager has no `heartLedger` at all, so
+        // `routedHeartJudgementReadiness()` is false and the heart is filtered before the allowance
+        // is planned. The count is what the filter refused a slot to — which is exactly what
+        // `heartsPending` has always meant.
+        #expect(manager.heartLedger == nil, "the rig wires no heart ledger, which is what withholds the judgement")
         #expect(report.heartsPending == 1, "the pending heart must be counted")
         #expect(capture.count(of: "mesh.routedAccess.heartStageEvaluable") == 1,
                 "the heart stage was not re-evaluated when duress cleared")
@@ -418,8 +424,15 @@ struct MeshRoutedLockedDeviceTests {
         #expect(capture.count(of: "mesh.routedAccess.heartStageEvaluable") == 1,
                 "the heart stage was not evaluated behind an open gate")
         let record = try #require(rig.routedIndex(rig.nodes[1])?.record(for: heart.key))
-        #expect(record.deliveredAt == nil, "item 10 must commit no heart — that is P6's")
-        #expect(record.recipientReceipts.isEmpty, "and mint no receipt for one")
+        // **Re-aimed at P6 item 6.** The ceremony is real now, so "no heart is committed" is no
+        // longer a phase claim — it is a claim about THIS device, and the reason is the ledger: this
+        // rig wires none, so `routedHeartJudgementReadiness()` is false, the heart is filtered
+        // before a slot is spent, and nothing is judged. The whole-gate predicate above is
+        // necessary for a judgement and not sufficient, which is the honest statement of the
+        // stage's three legs. The ceremony's own coverage is `MeshRoutedHeartCeremonyTests`.
+        #expect(manager.heartLedger == nil, "no ledger is wired, so the judgement cannot be made")
+        #expect(record.deliveredAt == nil, "so no delivery is stamped")
+        #expect(record.recipientReceipts.isEmpty, "and no receipt is minted")
     }
 
     // MARK: - T15/T8: the sweep budget
@@ -768,23 +781,37 @@ extension MeshRoutedLockedDeviceTests {
     ///   `routedCanonicalDispatch(` at 4, and satisfy the containment half (a whole-file
     ///   `contains`, vacuous in the defining file) for free. Pinning the outer verb is what closes
     ///   that; it names the same predicate in the containment half below.
-    /// * `MeshRoutedHeartAck(` — **0**, unchanged. If it moves, scope has drifted into P6.
-    /// * `.heartLedgerCommit(` — **1**, the stage precondition's own `guard case` in
-    ///   `MeshRoutedDeliveryCommit.stageShortfall`: the **reader** of the evidence, which judges
-    ///   nothing. A construction or an `evidence: .heartLedgerCommit(ack)` call site would be a
-    ///   second occurrence, and that is the event this pin exists to catch.
-    private static let routedPlaintextSeams: [(needle: String, home: String, pinned: Int)] = [
-        ("MeshRoutedContentKeyWrapper.unwrap(", "MeshRoutedItemDelivery.swift", 1),
-        ("MeshRoutedItemSealer.open(", "MeshRoutedItemDelivery.swift", 1),
+    /// * `MeshRoutedHeartAck(` — **1** in the manager since P6 item 6: the ONE construction, in
+    ///   `heartLedgerJudgement`. It matches neither the type's declaration (`nonisolated struct
+    ///   MeshRoutedHeartAck: Equatable`, no paren) nor either of its two `init?(` forms, so the pin
+    ///   counts constructions and nothing else — and the scan covers
+    ///   `FernletKit/Sources/ProximityKit` only, so an ack a TEST builds is invisible to it. That is
+    ///   why the ceremony's cells assert a stored `MeshRecipientReceipt` from the real
+    ///   `commitLocalDelivery` rather than an ack value they built (`MeshRoutedHeartTests`' header).
+    /// * `.heartLedgerCommit(` — **2** since P6 item 6, and in **two** files: the stage
+    ///   precondition's own `guard case` in `MeshRoutedDeliveryCommit.stageShortfall` (the *reader*
+    ///   of the evidence, which judges nothing) and `commitLocalDelivery`'s `evidence:` argument in
+    ///   the manager. That second home is why ``routedPlaintextSeams`` had to grow a `homes` SET:
+    ///   with one home per needle, `elsewhere == 0` fails for this row no matter what number is
+    ///   pinned. **The widening is forced, not chosen**, and both escapes are blocked — a factory on
+    ///   the enum or on `MeshRoutedHeartAck` would put the spelling in `MeshRoutedAck.swift`, which
+    ///   is in ``heartEvidenceHomes`` and therefore EXEMPT from the containment half, so the
+    ///   judgement would sit in a file the wall does not require to name
+    ///   `mayCommitRoutedHeartLedgerJudgement`; and building the evidence inside
+    ///   `MeshRoutedDeliveryCommit.swift` is impossible, because it is a `nonisolated extension
+    ///   MeshRoutedStore` and `ProximityHeartLedger` is a `@MainActor final class`.
+    private static let routedPlaintextSeams: [(needle: String, homes: Set<String>, pinned: Int)] = [
+        ("MeshRoutedContentKeyWrapper.unwrap(", ["MeshRoutedItemDelivery.swift"], 1),
+        ("MeshRoutedItemSealer.open(", ["MeshRoutedItemDelivery.swift"], 1),
         // 2 → 4 at P6 item 4: a second OVERLOAD for `MeshRoutedTextBody` plus its call site. The
         // alternative — one verb over a body enum, keeping the pin at 2 — was rejected because the
         // pin would then be blind to a third arm, and item 6 has to move it either way.
-        ("routedCanonicalDispatch(", "MeshNetworkManager.swift", 4),
+        ("routedCanonicalDispatch(", ["MeshNetworkManager.swift"], 4),
         // Added at the P6 item 4 fix review: the hoisted mutation guard lives one level ABOVE
         // `routedCanonicalDispatch`, so the pin has to reach the outer verb too (finding P2-2).
-        ("dispatchRoutedPlaintext(", "MeshNetworkManager.swift", 2),
-        ("MeshRoutedHeartAck(", "", 0),
-        (".heartLedgerCommit(", "MeshRoutedDeliveryCommit.swift", 1)
+        ("dispatchRoutedPlaintext(", ["MeshNetworkManager.swift"], 2),
+        ("MeshRoutedHeartAck(", ["MeshNetworkManager.swift"], 1),
+        (".heartLedgerCommit(", ["MeshRoutedDeliveryCommit.swift", "MeshNetworkManager.swift"], 2)
     ]
 
     /// The two files that name the heart evidence without judging anything: the enum's own
@@ -812,11 +839,19 @@ extension MeshRoutedLockedDeviceTests {
             var elsewhere = 0
             for source in sources {
                 let found = Self.occurrences(of: seam.needle, in: source.code)
-                if source.name == seam.home { atHome += found } else { elsewhere += found }
+                if seam.homes.contains(source.name) { atHome += found } else { elsewhere += found }
             }
-            #expect(elsewhere == 0, "a routed plaintext seam appeared outside its pinned home")
+            #expect(elsewhere == 0, "a routed plaintext seam appeared outside its pinned homes")
             #expect(atHome == seam.pinned, "a routed plaintext seam's pinned count moved")
         }
+        // **The guard on the shape change itself** (P6 item 6). For a single-element `homes` set the
+        // summed form is semantically identical to the one-home form it replaced, so the widening
+        // costs nothing — but only while it stays confined to the one row that forced it. Without
+        // this, a later edit could relax `unwrap(`, `open(`, `routedCanonicalDispatch(` or
+        // `MeshRoutedHeartAck(` to two homes with no deliberate decision anywhere.
+        let widened = Self.routedPlaintextSeams.filter { $0.homes.count > 1 }
+        #expect(widened.map(\.needle) == [".heartLedgerCommit("],
+                "exactly ONE seam may stand in two files, and it is the heart evidence's")
         Self.expectPlaintextSeamsNameTheirPredicate(sources)
     }
 

@@ -211,6 +211,17 @@ jobs:
         # and PROJECTED end to end through the real founding path — the first text-over-routed
         # exercise in the project, and ungated it would never run, since
         # CIGateSelectorBoundaryTests only REQUIRES MeshP<n>*AcceptanceTests);
+        # P6 item 5's two allowance suites and item 8's drain-wall home (the retry planner, the two
+        # lists on a rig, and the retirement/parking walls — item 5's whole proof is those cells, and
+        # it is an AVAILABILITY wall against an attacker-choosable list position, so the item 4
+        # argument applies with more force, not less);
+        # and P6 item 6's four heart suites (the header-only body and its four hostile shapes, the
+        # `.singleRecipient` flip with the shape fence in both directions, the ack ceremony end to
+        # end on a real two-node founding, and the sender's five gates + consume-on-stage).
+        # `MeshRoutedDrainTests`' own 37 cells stay ungated — that is item 11's call, as its ledger
+        # row says.
+        # The floor is MEASURED, never inferred: 240 is what this exact step list executed through
+        # `Scripts/run-gated-suites.sh` at floor 1 (41 suites), read off its own "N test(s) ran".
         # RAISE it when a battery grows.
         # CIGateSelectorBoundaryTests is the static half of this guard — every suite named on any
         # run-gated-suites.sh line must be a declared suite, and every MeshP<n>*AcceptanceTests /
@@ -218,13 +229,20 @@ jobs:
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 171 \
+          Scripts/run-gated-suites.sh mesh-batteries 240 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
             MeshRoutedTextBodyTests \
             MeshRoutedTextSenderTests \
             MeshRoutedTextDeliveryTests \
+            MeshRoutedRetryPlanTests \
+            MeshRoutedRetryAllowanceTests \
+            MeshRoutedDrainWallTests \
+            MeshRoutedHeartBodyTests \
+            MeshRoutedHeartTargetTests \
+            MeshRoutedHeartCeremonyTests \
+            MeshSessionHeartTests \
             MeshP3SessionAcceptanceTests \
             MeshP3RotationAcceptanceTests \
             MeshP3RestoreMatrixAcceptanceTests \

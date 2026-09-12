@@ -290,7 +290,9 @@ struct MeshRoutedDrainItem {
         byteCount: Int = 2_000
     ) throws -> MeshRoutedDrainItem {
         let signer = rig.identities[origin]
-        let payload = MeshRoutedCustodyFixtures.blob(byteCount: byteCount)
+        let payload = MeshRoutedCustodyFixtures.blob(
+            byteCount: MeshRoutedCustodyFixtures.blobByteCount(for: typeToken, requested: byteCount)
+        )
         let target = MeshDeliveryTarget(
             contentID: UUID(), roster: rig.roster, selfFingerprint: signer.localFingerprint
         )
@@ -1534,6 +1536,12 @@ struct MeshRoutedDrainTests {
         #expect(heldChunkCount(rig, 1, item.key) == 2, "the repaired slot really is refilled")
         #expect(rig.nodes[1].manager.routedReplayWindowForTesting?.recordedCount(for: origin) == 3,
                 "and the refilled frame is recorded again, so a SECOND copy of it is still refused")
+        // This cell MOVED A ROSTER (`develop(0, …)` files a departure into nodes 1–3), which arms
+        // the debounced rotation — so the rig's own documented discipline applies: `quiesce()` at
+        // the end of any cell that moved a roster, with the `defer { teardown() }` kept as the
+        // failure path. Without it this cell's leftover frames land in the next cell's channel
+        // recordings (item 8 review, P3-6).
+        await rig.quiesce()
     }
 
     /// **A completing frame whose rung work did not settle is not recorded**, so the honest re-offer
@@ -2109,6 +2117,48 @@ struct MeshRoutedDrainWallTests {
             #expect(!source.contains(symbol), "\(symbol) came back to MeshNetworkManager.swift")
         }
         #expect(scanned == retired.count, "the retired-text-transport scan lost a symbol")
+    }
+
+    /// **W2 — the retired MESH heart transport is gone**, symbol by symbol (P6 item 6).
+    ///
+    /// The same zero-list shape the photo and text walls use, and owed for the same reason: keeping
+    /// both paths alive is what makes a retirement a fiction. **Three functions, one seam, one
+    /// payload spelling.** The registered `.friendHeart` handler and the receiver-side gate chain it
+    /// applied (`registerSessionHeartHandler`, `receiveSessionHeart`), the sealed per-slot send that
+    /// was this module's only `.friendHeart` call site (`deliverSessionHeart`), the slot-id test seam
+    /// that could not be re-aimed in place because the routed path has no slot
+    /// (`onSessionHeartSendForTesting`), and the payload spelling itself over comment-stripped
+    /// source — `localCapabilities()`'s mention of it is inside a comment and `codeOnly` strips it,
+    /// so the mesh manager names the legacy payload type NOWHERE after the retirement.
+    ///
+    /// **`PayloadType.friendHeart` is NOT parked, and that is the one place this row differs from
+    /// the text row's.** Parking is what the `.tempMessage` and `.friendPhoto` retirements did
+    /// because nothing else used those cases. `.friendHeart` is still LIVE: `PresenceManager` sends
+    /// and receives it, it is in `sealingRequiredTypes`, and `HeartPayload` is still used by the
+    /// presence path and by `HeartDropService`. There is nothing to park —
+    /// `sealedPayloadTypeCoverageIsComplete` and the sealed-framing pins are untouched — and the
+    /// presence heart path is deliberately left alone (P9's).
+    @Test func theRetiredMeshHeartTransportIsGone() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let retired = [
+            "registerSessionHeartHandler", "receiveSessionHeart", "deliverSessionHeart",
+            "onSessionHeartSendForTesting", ".friendHeart"
+        ]
+        var scanned = 0
+        // R2: five names over one file.
+        for symbol in retired {
+            scanned += 1
+            #expect(!source.contains(symbol), "\(symbol) came back to MeshNetworkManager.swift")
+        }
+        #expect(scanned == retired.count, "the retired-mesh-heart scan lost a symbol")
+        // And the payload type is live elsewhere, so a "park it too" edit would be wrong.
+        #expect(PayloadType(rawValue: "fernlet.friend.heart.v1") == .friendHeart,
+                "the case stays with its frozen rawValue — the presence path still uses it")
+        let presence = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift")
+        )
+        #expect(presence.contains(".friendHeart"),
+                "and it is LIVE there, which is why `.friendHeart` is not parkable")
     }
 
     /// The other half of the retirement: `PayloadType.tempMessage` is **parked, not deleted**.

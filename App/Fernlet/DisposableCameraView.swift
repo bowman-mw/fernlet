@@ -1547,16 +1547,30 @@ struct DisposableCameraView: View {
     }
 
     /// TF b19 item 5 tier 1: surface heart send state inline (no longer silent).
+    ///
+    /// **Two sources, two types, one row** (P6 item 6). The mesh path publishes a frozen token the
+    /// app forks into a `LocalizedStringKey` (`SessionHeartStatusCopy`); the presence fallback still
+    /// publishes a composed `String` (P9's hole, deliberately not widened into here — typing the
+    /// whole row `LocalizedStringKey` would force `LocalizedStringKey(runtimeString)` on that arm
+    /// and move the defect rather than close it). The mesh line wins when present: only one send
+    /// runs at a time, and the mesh mint is synchronous.
     @ViewBuilder
     private var heartStatusRow: some View {
-        if let status = sessionHeartStatusText {
-            Text(status)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.moss)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .fernletWrappingText()
-                .accessibilityIdentifier("sessionInfo.heartStatus")
+        if let status = sessionHeartStatusKey {
+            heartStatusText(Text(status))
+        } else if let status = presenceHeartStatusText {
+            heartStatusText(Text(status))
         }
+    }
+
+    /// The one set of modifiers both status sources share.
+    private func heartStatusText(_ text: Text) -> some View {
+        text
+            .font(.fernlet(.bodySmall))
+            .foregroundStyle(Color.moss)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .fernletWrappingText()
+            .accessibilityIdentifier("sessionInfo.heartStatus")
     }
 
     /// TF b19 item 5 tier 1: actionable prompt for the older-build fallback that still needs the
@@ -1676,21 +1690,32 @@ struct DisposableCameraView: View {
         // cooldown copy would be a lie there — nothing was sent. Say what is actually wrong, exactly
         // as the friend row does (FriendListView's `onCooldown` branch).
         let ledgerUnavailable = onCooldown && !store.heartLedger.isLoaded
-        // Prefer the mesh: a live session member with the `hearts` capability is always reachable over
-        // the already-connected channel — no dependence on the separate presence radio. Only the older-
-        // build fallback consults presence reachability.
-        let meshCapable = manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
-        let reachable = meshCapable || store.presenceManager.isReachable(fingerprint: friend.fingerprint)
+        // **Three-way since P6 item 6, and the order matters.** A routed heart to an admitted member
+        // with no live mesh slot is staged and CUSTODIED — delivered only if a link forms before the
+        // mesh ends, and otherwise expired at `hardDeadline + 20 min` while the sender saw "Sent"
+        // and spent five minutes of cooldown. So a live presence link, which delivers now, must
+        // still win over that: prefer a live `.hearts` slot (delivered now, capability known), then
+        // presence while the friend is presence-reachable (delivered now), and only then a routed
+        // custodied heart — the star case, which is the unlock and which presence cannot serve at
+        // all. Taking `canSendSessionHeart` literally as the whole decision would make presence
+        // unreachable in practice while leaving it alone in source.
+        let meshLinked = manager.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
+        let presenceReachable = store.presenceManager.isReachable(fingerprint: friend.fingerprint)
+        let meshAddressable = manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
+        let useMesh = meshLinked || !presenceReachable
+        let reachable = meshLinked || presenceReachable || meshAddressable
         let sending = sessionHeartSendInProgress
         let firstName = PresenceManager.firstName(of: friend.displayName)
         let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
         return Button {
             // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1).
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            if meshCapable {
+            if useMesh, meshAddressable {
                 manager.sendSessionHeart(to: friend)
-            } else {
+            } else if presenceReachable {
                 store.presenceManager.sendHeart(to: friend)
+            } else if meshAddressable {
+                manager.sendSessionHeart(to: friend)
             }
         } label: {
             // Compact in-row form of the "Send good vibes" affordance (good-vibes 10c): a
@@ -1715,32 +1740,33 @@ struct DisposableCameraView: View {
         )
     }
 
-    /// A send is in flight on EITHER transport (the mesh path — TF b19 item 5 — or the presence
-    /// fallback for older peers).
+    /// A send is in flight — **presence-only since P6 item 6**, and that is correct rather than a
+    /// loss. The routed mint is fully synchronous: there is no window between the tap and the
+    /// durable stage for a mesh `.sending` state to describe, so the case was deleted with the
+    /// legacy transport. The presence pipeline's multi-second connect still has one.
     private var sessionHeartSendInProgress: Bool {
-        if case .sending = manager.sessionHeartState { return true }
         switch store.presenceManager.heartSendState {
         case .connecting, .verifying: return true
         default: return false
         }
     }
 
-    /// Shared, single-line status for the in-session heart send (TF b19 item 5 tier 1 — surface the
-    /// send state instead of failing silently). Reflects the mesh path first, then the presence
-    /// fallback. Only one send runs at a time, so one line suffices for the whole participant list.
-    private var sessionHeartStatusText: String? {
-        switch manager.sessionHeartState {
-        case .sending(let name): return "Sending \(name) some warmth…"
+    /// The MESH path's status line, localized by construction (P6 item 6).
+    private var sessionHeartStatusKey: LocalizedStringKey? {
+        SessionHeartStatusCopy.line(manager.sessionHeartState)
+    }
+
+    /// The PRESENCE fallback's status line, still a composed `String` — `PresenceManager`'s own
+    /// `heartSendState.failed(message:)` is the same localization hole in P9's scope, and forking
+    /// only half of it here would create a `LocalizedStringKey(runtimeString)` conversion rather
+    /// than close anything.
+    private var presenceHeartStatusText: String? {
+        switch store.presenceManager.heartSendState {
+        case .idle: return nil
+        case .connecting(let name): return "Connecting to \(name)…"
+        case .verifying(let name): return "Saying hello to \(name)…"
         case .sent(let name): return "Sent \(name) some good vibes."
         case .failed(let message): return message
-        case .idle:
-            switch store.presenceManager.heartSendState {
-            case .idle: return nil
-            case .connecting(let name): return "Connecting to \(name)…"
-            case .verifying(let name): return "Saying hello to \(name)…"
-            case .sent(let name): return "Sent \(name) some good vibes."
-            case .failed(let message): return message
-            }
         }
     }
 
@@ -1753,6 +1779,7 @@ struct DisposableCameraView: View {
         return manager.sessionParticipants.contains { participant in
             guard !participant.isLocal, let friend = trustedFriend(for: participant) else { return false }
             return !manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
+                && !manager.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
         }
     }
 
