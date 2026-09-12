@@ -63,6 +63,12 @@ struct FernletApp: App {
     /// (pre-first-unlock prewarm / background relaunch): the scene-activation hook retries until
     /// a launch can read the blob and resolve for real.
     @State private var didResolveBackupExclusionDefault = false
+    /// One-shot latch for P6 item 7's mesh session-context launch mount, in
+    /// `didScheduleStartupCloudSync`'s idiom: the mount hangs off the ready view's `.onAppear`,
+    /// which re-fires on every reappearance, and restoring the sealed context is a once-per-process
+    /// act. The manager refuses a second attempt on its own (`sessionRestoreAttempts`), so this is
+    /// the courtesy half — it keeps the audit trail down to one line per launch.
+    @State private var didMountMeshSessionRestore = false
     /// Presents the one-time existing-install backup-exclusion prompt (see
     /// `BackupExclusionLaunchGate`); only ever set when the gate classifies this launch as an
     /// existing install with no recorded choice.
@@ -215,6 +221,51 @@ struct FernletApp: App {
         phase != .background
     }
 
+    /// Whether THIS launch should mount the sealed mesh session context (network migration P6
+    /// item 7) — the pure half, in ``routedGateForeground(for:)``'s idiom so the decision is a value
+    /// a test states rather than a condition only the scene can reach.
+    ///
+    /// Two facts and nothing else. `alreadyMounted` is the per-launch latch: the mount hangs off the
+    /// ready view's `.onAppear`, which re-fires whenever that view reappears, and the restore is a
+    /// once-per-process act. `meshHarnessSeeding` is the Lane C bypass — see
+    /// ``meshHarnessIsSeedingMembership``.
+    ///
+    /// **Protected-data availability is deliberately NOT a term.** A launch before first unlock must
+    /// still attempt the restore: the attempt is what produces the `retryAfterUnlock` outcome, and
+    /// `retrySessionRestoreIfPending(now:)` — the routed re-entry's job 1, which fires on the
+    /// protected-data rise — answers nil until one attempt has been made. Skipping the call on a
+    /// locked device would therefore mean never restoring at all on exactly the launches the retry
+    /// exists for.
+    ///
+    /// - Parameters:
+    ///   - alreadyMounted: Whether this process has already mounted the restore.
+    ///   - meshHarnessSeeding: Whether a DEBUG mesh harness is seeding membership this launch.
+    /// - Returns: `true` when the mount should run.
+    nonisolated static func shouldRestoreSessionAtLaunch(
+        alreadyMounted: Bool, meshHarnessSeeding: Bool
+    ) -> Bool {
+        !alreadyMounted && !meshHarnessSeeding
+    }
+
+    /// Whether a DEBUG mesh harness is seeding this launch's membership state, in which case the
+    /// launch restore is bypassed (network migration P6 item 7; runbook Lane C).
+    ///
+    /// `MeshRejectionMatrixHarness` seeds `currentMesh` from `FERNLET_MESH_MATRIX_*` and arms the
+    /// founder/joiner ledger from `FERNLET_MESH_ROLE`, and Lane C re-uses one Simulator across runs
+    /// — so a launch-time restore would hand run N the sealed context run N−1 left behind, and the
+    /// harness's seeded roster would then be fighting a restored ledger for the same mesh. Every one
+    /// of those variables is inert unless `FERNLET_MESH_MATRIX=1`, which is what
+    /// ``MeshMatrixDebugOptions/isEnabled`` reads, so that single flag is the whole condition.
+    ///
+    /// It is a hard-coded `false` in release, where the harness cannot be installed at all.
+    ///
+    /// Main-actor isolated, unlike ``shouldRestoreSessionAtLaunch(alreadyMounted:meshHarnessSeeding:)``
+    /// beside it: `MeshMatrixDebugOptions` is, so this reads the environment on the actor and the
+    /// pure decision takes the answer as a plain `Bool`.
+    static var meshHarnessIsSeedingMembership: Bool {
+        MeshMatrixDebugOptions.isEnabled
+    }
+
     /// Pushes the three lock facts into the mesh manager (network migration P5 item 10).
     ///
     /// The app is the only place all three live: the OS device lock (data protection), the scene,
@@ -239,6 +290,31 @@ struct FernletApp: App {
             ),
             now: Date()
         )
+    }
+
+    /// Mounts the sealed mesh session context, once per launch (network migration P6 item 7).
+    ///
+    /// Called from the ready view's `.onAppear`, **after** `pushRoutedAccessGate(_:protectedData:
+    /// foreground:)` in the same closure, and that order is the whole wiring decision: the store is
+    /// loaded (so the manager's identity is provisioned), and the gate already carries this launch's
+    /// three lock facts, so a `deferred` restore has a gate to be retried against at the next
+    /// protected-data rise (`retrySessionRestoreIfPending(now:)`, the routed re-entry's job 1).
+    ///
+    /// **It arms no radio.** The restore makes the ledger, the roster, the restored key
+    /// advertisements and the routed store addressable; whether this device then goes looking for
+    /// peers stays the Friends tab's three-way (`FriendsDiscoveryEntry`) and, later, P7's run
+    /// policy. Nothing here is presented to the user either — no app surface reads
+    /// `lastSessionRestoreOutcome`, `offersForegroundResume`, `restoredSessionContext` or
+    /// `rejoinBar`.
+    ///
+    /// - Parameter store: The loaded store, whose mesh manager holds the sealed context.
+    private func restoreMeshSessionContextIfNeeded(_ store: FernletStore) {
+        guard Self.shouldRestoreSessionAtLaunch(
+            alreadyMounted: didMountMeshSessionRestore,
+            meshHarnessSeeding: Self.meshHarnessIsSeedingMembership
+        ) else { return }
+        didMountMeshSessionRestore = true
+        store.meshNetworkManager.restoreSessionContextOncePerLaunch(now: Date())
     }
 
     /// Everything one scene transition owes: the snapshot flush and relock on background, the
@@ -408,12 +484,16 @@ struct FernletApp: App {
                     // and on a cold launch the loader reaches `.ready` AFTER the
                     // `.inactive → .active` edge — without this the gate would sit fail-closed for
                     // the whole foreground session and the re-entry would never run.
+                    // P6 item 7's launch mount for the sealed session context, in the same closure
+                    // and deliberately AFTER the gate push — see
+                    // `restoreMeshSessionContextIfNeeded(_:)`.
                     .onAppear {
                         pushRoutedAccessGate(
                             store,
                             protectedData: protectedDataAvailableNow,
                             foreground: Self.routedGateForeground(for: scenePhase)
                         )
+                        restoreMeshSessionContextIfNeeded(store)
                     }
             case .failed(let error):
                 LaunchFailureView(error: error) {

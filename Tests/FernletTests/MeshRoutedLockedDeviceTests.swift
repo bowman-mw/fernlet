@@ -1054,6 +1054,41 @@ extension MeshRoutedLockedDeviceTests {
         #expect(routed == 6, "every push site routes its foreground fact through the one mapping")
     }
 
+    /// **P6 item 7: the launch mount's decision, and its single call site.**
+    ///
+    /// Two facts and no more — the per-launch latch and the Lane C bypass. **Protected-data
+    /// availability is deliberately absent**: a launch before first unlock must still attempt the
+    /// restore, because the attempt is what produces the `retryAfterUnlock` outcome that
+    /// `retrySessionRestoreIfPending(now:)` — job 1 of the re-entry pass, on the protected-data
+    /// rising leg — has to find pending. Skipping the call on a locked device would mean never
+    /// restoring at all on exactly the launches the retry exists for, which is the fail-open this
+    /// truth table pins shut.
+    ///
+    /// The source half is the other wall: the app reaches the restore through the once-per-launch
+    /// door and never past it, from exactly one site.
+    @Test func theLaunchRestoreDecisionIsTwoFactsAndHasOneCallSite() throws {
+        #expect(FernletApp.shouldRestoreSessionAtLaunch(
+            alreadyMounted: false, meshHarnessSeeding: false))
+        #expect(!FernletApp.shouldRestoreSessionAtLaunch(
+            alreadyMounted: true, meshHarnessSeeding: false),
+                "the mount hangs off `.onAppear`, which re-fires; restoring is a once-per-process act")
+        #expect(!FernletApp.shouldRestoreSessionAtLaunch(
+            alreadyMounted: false, meshHarnessSeeding: true), """
+            Lane C re-uses one Simulator, so a launch-time restore would hand run N the sealed \
+            context run N−1 left behind, fighting the harness's own seeded roster
+            """)
+        #expect(!FernletApp.shouldRestoreSessionAtLaunch(
+            alreadyMounted: true, meshHarnessSeeding: true))
+        #expect(!FernletApp.meshHarnessIsSeedingMembership,
+                "no test run sets FERNLET_MESH_MATRIX, so the bypass must be inert here")
+
+        let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
+        let mounts = code.components(separatedBy: "restoreSessionContextOncePerLaunch(").count - 1
+        #expect(mounts == 1, "the launch mount has exactly one call site")
+        #expect(!code.contains("restoreSessionContextAtLaunch("),
+                "the app must not reach past the once-per-launch door to the internal restore")
+    }
+
     /// **W7b.** An `.active → .inactive → .active` bounce moves no leg, so it runs no re-entry pass:
     /// the mapping is what keeps a Control Center pull or a Face ID prompt from costing three
     /// sealed-index loads on the main actor.

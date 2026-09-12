@@ -544,6 +544,50 @@ struct MeshRoutedTextDeliveryTests {
                 "nothing was lost — the wipe deferred the projection, it did not retire it")
     }
 
+    /// **Two overlapping wipe funnels: the gate falls with the LAST of them** (P6 item 4 fix review
+    /// P3-2, taken in item 7).
+    ///
+    /// Two entry points reach `FernletStore.deleteAllData(includingHealthKitSamples:)` with no
+    /// in-flight guard between them — `DeleteEverythingFlow.runWipe` *sets* `isDeleting` rather than
+    /// checking it, and the duress purge hook fires the same funnel with no UI gate at all — and
+    /// both are `@MainActor`, so they interleave at the funnel's five `await`s. With a `Bool`, the
+    /// inner funnel's `defer` lowered the flag while the outer one still had the routed-store purge
+    /// ahead of it, re-opening exactly the window the flag closes, on the path where the user's
+    /// intent is strongest. The depth counter is the fix, and the middle assertion is the defect in
+    /// its own words.
+    @Test func overlappingWipeFunnelsKeepTheProjectionShutUntilTheLastOneEnds() throws {
+        let rig = try MeshFoundingRig.build(2, label: "wipe-depth")
+        defer { rig.teardown() }
+        let manager = rig.nodes[0].manager
+        #expect(manager.privacyWipeDepth == 0)
+
+        manager.beginPrivacyWipe()
+        manager.beginPrivacyWipe()
+        #expect(manager.privacyWipeDepth == 2)
+        manager.endPrivacyWipe()
+        #expect(manager.privacyWipeInProgress, """
+            the inner funnel's `defer` lowered the gate while the outer one still had the \
+            routed-store purge ahead of it — the window a Bool re-opened
+            """)
+        manager.endPrivacyWipe()
+        #expect(!manager.privacyWipeInProgress)
+
+        // Never negative: an unpaired end at zero is a no-op, so the next begin still raises it.
+        manager.endPrivacyWipe()
+        #expect(manager.privacyWipeDepth == 0)
+        manager.beginPrivacyWipe()
+        #expect(manager.privacyWipeInProgress)
+        manager.endPrivacyWipe()
+
+        // And bounded: begins past the cap saturate rather than growing without limit (R2).
+        // R2: a hard constant ceiling.
+        for _ in 0..<(MeshNetworkManager.maxPrivacyWipeDepth + 3) { manager.beginPrivacyWipe() }
+        #expect(manager.privacyWipeDepth == MeshNetworkManager.maxPrivacyWipeDepth)
+        // R2: the same ceiling.
+        for _ in 0..<MeshNetworkManager.maxPrivacyWipeDepth { manager.endPrivacyWipe() }
+        #expect(!manager.privacyWipeInProgress, "the counter came back down to zero")
+    }
+
     /// **The per-origin message quota's three legs** (P6 item 4 fix review, finding P2-4): it
     /// refuses past its cap, a re-send of an accepted id is free, and the map is bounded on its
     /// other axis rather than growing.

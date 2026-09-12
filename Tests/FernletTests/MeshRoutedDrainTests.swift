@@ -593,6 +593,174 @@ struct MeshRoutedDrainTests {
                 "two batches planned in one pump did not charge twice")
     }
 
+    /// One verified routed-inventory digest from `node`, signed on the fixture clock.
+    private func inventoryDigest(
+        _ rig: MeshRoutedDrainRig, from node: Int, index: MeshRoutedIndex, sentAt: Date
+    ) throws -> MeshRoutedInventoryPayload {
+        try MeshRoutedInventoryPayload.signed(
+            meshID: rig.meshID, index: index, sentAt: sentAt, identity: rig.identities[node]
+        )
+    }
+
+    /// Delivers one advertisement into `receiver`'s own door on the injected clock, then pumps the
+    /// fabric so whatever it planned actually goes on the wire inside this cell.
+    private func receiveInventory(
+        _ rig: MeshRoutedDrainRig, _ payload: MeshRoutedInventoryPayload,
+        at receiver: Int, from sender: Int, now: Date
+    ) async throws {
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            rig.nodes[receiver].manager.receiveRoutedInventory(
+                payload, from: rig.nodes[sender].fingerprint, now: now
+            )
+        }
+        try await MeshDepartureRig.settle(rig.nodes, on: rig.fabric)
+    }
+
+    /// **P6 item 7: a peer's own OLDER digest is refused by name, and changes nothing.**
+    ///
+    /// The four facts a regression would move are asserted one by one: the recorded holdings, the
+    /// recorded stamp, the `quiescentLocalAsOf` the answer re-stamps, and the per-peer frame charge
+    /// — the only one of the four that would show a **re-plan** rather than a re-record.
+    ///
+    /// Measured with the guard reverted, the first three redden and the charge does not: by the time
+    /// the stale digest lands, this peer's leg of the offered item is already `delivered`, so the
+    /// re-plan the stale inventory invites has nothing left to offer. The charge assertion is kept
+    /// anyway — "a refused digest plans nothing at all" is the claim, and an item still outstanding
+    /// when the replay arrives is the ordinary case on a real radio.
+    @Test func anOlderInventoryDigestIsRefusedAndLeavesEveryRecordedFactAlone() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "stamp-older")
+        defer { rig.teardown() }
+        try MeshRoutedDrainItem.mint(rig, origin: 0).stage(into: rig, at: 0)
+        try MeshRoutedDrainItem.mint(rig, origin: 1).stage(into: rig, at: 1)
+        rig.link(0, 1)
+        let peer = rig.nodes[1].fingerprint
+        let fresh = MeshRoutedDrainRig.now
+        let newer = try inventoryDigest(
+            rig, from: 1, index: try #require(rig.routedIndex(rig.nodes[1])), sentAt: fresh
+        )
+        let older = try inventoryDigest(
+            rig, from: 1, index: MeshRoutedIndex(), sentAt: fresh.addingTimeInterval(-60)
+        )
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await receiveInventory(rig, newer, at: 0, from: 1, now: fresh)
+        let recorded = try #require(rig.nodes[0].manager.peerRoutedInventories[peer])
+        #expect(recorded.inventory?.entries.isEmpty == false,
+                "the control digest must carry holdings, or 'the holdings are unchanged' is vacuous")
+        #expect(recorded.quiescentLocalAsOf == newer.sentAt,
+                "the accepted digest must have been answered, or the stamp claim below is vacuous")
+        let spent = rig.nodes[0].manager.routedDrainFramesSpentForTesting[peer] ?? 0
+        #expect(spent > 0, "the accepted digest planned nothing, so the plan claim would be vacuous")
+
+        try await receiveInventory(rig, older, at: 0, from: 1, now: fresh)
+
+        let after = try #require(rig.nodes[0].manager.peerRoutedInventories[peer])
+        #expect(after.inventorySentAt == newer.sentAt, "the stale digest moved the recorded stamp")
+        #expect(after.inventory == recorded.inventory, "the stale digest replaced the recorded holdings")
+        #expect(after.quiescentLocalAsOf == newer.sentAt,
+                "the stale digest re-stamped the quiescence instant it must not reach")
+        #expect(rig.nodes[0].manager.routedDrainFramesSpentForTesting[peer] == spent,
+                "the stale digest was answered with a re-plan, and charged for it")
+        #expect(capture.values(of: "mesh.routedInventory.staleSentAt", key: "peer").count == 1,
+                "the refusal was not named exactly once")
+    }
+
+    /// **An EQUAL stamp is an idempotent replay: recorded, answered, and never audited.**
+    ///
+    /// "Accepted" is read as a change the refusal could not have produced — the second digest
+    /// advertises an empty inventory under the SAME stamp, so the recorded holdings going empty is
+    /// the write itself, not an absence.
+    @Test func anEqualInventoryStampIsAcceptedSilently() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "stamp-equal")
+        defer { rig.teardown() }
+        try MeshRoutedDrainItem.mint(rig, origin: 0).stage(into: rig, at: 0)
+        try MeshRoutedDrainItem.mint(rig, origin: 1).stage(into: rig, at: 1)
+        rig.link(0, 1)
+        let peer = rig.nodes[1].fingerprint
+        let now = MeshRoutedDrainRig.now
+        let full = try inventoryDigest(
+            rig, from: 1, index: try #require(rig.routedIndex(rig.nodes[1])), sentAt: now
+        )
+        let empty = try inventoryDigest(rig, from: 1, index: MeshRoutedIndex(), sentAt: now)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await receiveInventory(rig, full, at: 0, from: 1, now: now)
+        #expect(rig.nodes[0].manager.peerRoutedInventories[peer]?.inventory?.entries.isEmpty == false,
+                "the first digest must really have recorded holdings")
+        try await receiveInventory(rig, empty, at: 0, from: 1, now: now)
+
+        let after = try #require(rig.nodes[0].manager.peerRoutedInventories[peer])
+        #expect(after.inventory?.entries.isEmpty == true,
+                "an equal stamp must be RECORDED — a refusal would have kept the earlier holdings")
+        #expect(after.inventorySentAt == now)
+        #expect(capture.values(of: "mesh.routedInventory.staleSentAt", key: "peer").isEmpty,
+                "an idempotent replay of one digest must not audit a refusal")
+    }
+
+    /// **The control: a NEWER stamp moves the record forward, and audits nothing.**
+    @Test func aNewerInventoryStampMovesTheRecordForward() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "stamp-newer")
+        defer { rig.teardown() }
+        try MeshRoutedDrainItem.mint(rig, origin: 0).stage(into: rig, at: 0)
+        try MeshRoutedDrainItem.mint(rig, origin: 1).stage(into: rig, at: 1)
+        rig.link(0, 1)
+        let peer = rig.nodes[1].fingerprint
+        let now = MeshRoutedDrainRig.now
+        let early = try inventoryDigest(rig, from: 1, index: MeshRoutedIndex(), sentAt: now)
+        let late = try inventoryDigest(
+            rig, from: 1, index: try #require(rig.routedIndex(rig.nodes[1])),
+            sentAt: now.addingTimeInterval(60)
+        )
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await receiveInventory(rig, early, at: 0, from: 1, now: now)
+        #expect(rig.nodes[0].manager.peerRoutedInventories[peer]?.inventorySentAt == now)
+        try await receiveInventory(rig, late, at: 0, from: 1, now: now)
+
+        let after = try #require(rig.nodes[0].manager.peerRoutedInventories[peer])
+        #expect(after.inventorySentAt == late.sentAt, "a newer digest must move the stamp forward")
+        #expect(after.inventory?.entries.isEmpty == false, "and must replace the recorded holdings")
+        #expect(after.quiescentLocalAsOf == late.sentAt, "and must have been answered")
+        #expect(capture.values(of: "mesh.routedInventory.staleSentAt", key: "peer").isEmpty)
+    }
+
+    /// **The guard is per PEER, not a global high-water mark.**
+    ///
+    /// Peer B's first digest is stamped EARLIER than the one already recorded for peer A. A guard
+    /// that compared against anything but B's own record would refuse B's opening advertisement and
+    /// leave B permanently unanswered — the drain's silent stall, arrived at from the other side.
+    @Test func theInventoryStampGuardIsPerPeer() async throws {
+        let rig = try MeshRoutedDrainRig.build(3, label: "stamp-per-peer")
+        defer { rig.teardown() }
+        try MeshRoutedDrainItem.mint(rig, origin: 0).stage(into: rig, at: 0)
+        rig.link(0, 1)
+        rig.link(0, 2)
+        let now = MeshRoutedDrainRig.now
+        let late = try inventoryDigest(
+            rig, from: 1, index: MeshRoutedIndex(), sentAt: now.addingTimeInterval(60)
+        )
+        let early = try inventoryDigest(rig, from: 2, index: MeshRoutedIndex(), sentAt: now)
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await receiveInventory(rig, late, at: 0, from: 1, now: now)
+        try await receiveInventory(rig, early, at: 0, from: 2, now: now)
+
+        let inventories = rig.nodes[0].manager.peerRoutedInventories
+        #expect(inventories[rig.nodes[1].fingerprint]?.inventorySentAt == late.sentAt)
+        #expect(inventories[rig.nodes[2].fingerprint]?.inventorySentAt == early.sentAt,
+                "peer B's opening stamp was judged against peer A's record")
+        #expect(capture.values(of: "mesh.routedInventory.staleSentAt", key: "peer").isEmpty,
+                "a second peer's earlier stamp is not a regression of anything")
+    }
+
     /// **D-6.5's other half.** The inventory and the answer bit are never charged: a peer whose
     /// session budget is spent still learns what this device holds and still gets its quiescence
     /// answered — only the bulk stops, and the remainder waits for the next session.

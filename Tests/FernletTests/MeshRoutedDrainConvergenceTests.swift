@@ -45,6 +45,15 @@ enum MeshRoutedCellFailure: Error {
     /// than a force-unwrap because that construction is a *generator* invariant, and a generator
     /// change that broke it must fail as a named error rather than trap the whole test process.
     case originNotLiving
+
+    /// The TEXT row's own send door refused, or minted something other than exactly one item
+    /// (P6 item 9, stage 0).
+    ///
+    /// Carries the outcome rather than a `Bool`, because the whole point of minting through
+    /// `sendTempMessage(_:)` is that a run whose addressing never converged answers
+    /// `.refused(.destinationNotAddressable)` **by name** — item 1's residual turned into a failure
+    /// instead of a silence. A cell that could not mint must say which refusal it got.
+    case textNotStaged(MeshTextSendOutcome)
 }
 
 // MARK: - The routed seam on the convergence run
@@ -567,6 +576,158 @@ extension MeshConvergenceRun {
     }
 }
 
+// MARK: - The key-advertisement seams (P6 item 9, STAGE 0)
+
+/// The addressing half of item 9's feature pipeline, landed ahead of the overlay it will serve.
+///
+/// **Inside this file on purpose.** A new convergence suite would not match
+/// `CIGateSelectorBoundaryTests.isMeshBattery`'s `MeshP<n>*AcceptanceTests` shape and would be
+/// ungated the day it was written; these are seams on the rig every routed cell already uses, so
+/// they ride `MeshRoutedDrainConvergenceTests`' own CI line.
+///
+/// Nothing here touches `MeshRoutedScheduleOverlay`, adds a `MeshScheduleEvent` case, or draws from
+/// any generator, so **neither `MeshP5DeterminismAcceptanceTests` digest can move**.
+@MainActor
+extension MeshConvergenceRun {
+
+    /// Mints every living member's OWN key advertisement through the **production** door.
+    ///
+    /// `MeshConvergenceRun` arms its ledgers with `seedMembershipLedgerForTesting`, which bypasses
+    /// BOTH doors the shipping self-mint hangs off (`seedFounderAdmission` / `armJoinerLedger`) and
+    /// therefore mints nothing at all — P6 item 1's named residual, and still true of the seeding
+    /// itself.
+    ///
+    /// **It is not, however, what makes the set non-empty**, and the item 9 design's expectation
+    /// that it was has been measured and corrected: `sendKeyAdvertisements(to:)` runs
+    /// `repairOwnKeyAdvertisementIfMissing()` above its batch read, so the heal's own
+    /// `.peerCommitted` traffic self-mints every missing row. See
+    /// ``MeshRoutedDrainConvergenceTests/withoutTheArmingDoorItemOnesSelfMintRepairStillAddressesTheMesh()``.
+    /// This seam earns its place as a **determinism** one: it mints on the injected clock before the
+    /// heal, it asserts the arm rather than discovering a half-armed mesh later, and it leaves the
+    /// repair's three-attempt session budget unspent for the state the repair actually exists for.
+    ///
+    /// `#expect(armed)` per member, so an arm-time seal refusal fails loudly rather than leaving a
+    /// half-armed mesh that converges to a subset.
+    ///
+    /// - Parameter now: The injected instant the advertisement is signed at.
+    func armKeyAdvertisements(now: Date) {
+        // R2: bounded by the roster cap.
+        for member in livingMembers {
+            let armed = DeviceBindingID.$testOverride.withValue(
+                .identifier(MeshP3Acceptance.install)
+            ) {
+                member.node.manager.armOwnKeyAdvertisementForTesting(now: now)
+            }
+            #expect(armed, "a living member could not mint or seal its own key advertisement")
+        }
+    }
+
+    /// Opens the 13+ chat gate at every living member, except one that is deliberately left shut.
+    ///
+    /// `chatAllowedProvider` is **nil** on a freshly built manager and `isChatAllowed` reads
+    /// `provider?() == true`, i.e. fail-closed — so without this call `sendTempMessage(_:)` answers
+    /// `.ageGated` at every member and the whole text half is green over nothing.
+    ///
+    /// - Parameter gated: The member index to leave gated, or nil to open every member.
+    func allowChatEverywhere(except gated: Int?) {
+        // R2: bounded by the roster cap.
+        for member in livingMembers {
+            let allowed = member.index != gated
+            member.node.manager.chatAllowedProvider = { allowed }
+        }
+    }
+
+    /// Whether every living member holds a verified advertisement for every OTHER living member.
+    ///
+    /// **Equality, never `⊇`.** A superset would be satisfied by rows for members that have since
+    /// left, and a subset claim is what "green over nothing" looks like the moment the set is empty.
+    /// One survivor converges nothing, so a roster of fewer than two is `false` rather than
+    /// vacuously true.
+    func routedAdvertisementsConverged() -> Bool {
+        let living = Set(livingMembers.map(\.fingerprint))
+        guard living.count >= 2 else { return false }
+        // R2: bounded by the roster cap, squared.
+        return livingMembers.allSatisfy { member in
+            let set = member.node.manager.keyAdvertisements
+            guard set.memberFingerprints == living else { return false }
+            return living.allSatisfy { set.keyAgreementPublicKey(for: $0) != nil }
+        }
+    }
+
+    /// Bounded commit-and-settle rounds until the advertised-key set has converged.
+    ///
+    /// The same loop shape as ``runRoutedDrainRounds(origin:key:binding:)`` and for the same reason:
+    /// item 1 hung `sendKeyAdvertisements(to:)` off the three ask doors plus `readvertiseMergeProof`,
+    /// `attemptLedgerAdoption` and `grantAdmission`, all reached from
+    /// `applySessionEvent(.peerCommitted)` — and the send is once per (peer, local-set version), with
+    /// the version bumping on every fold, so a bounded number of full-mesh commit rounds converges
+    /// it. `linkBranches` deliberately raises no `.peerCommitted`, which is why nothing converges
+    /// before the heal.
+    ///
+    /// A bound that turns out too small leaves the caller's own `#expect` to fail loudly, rather
+    /// than this quietly returning a half-converged set.
+    func runKeyAdvertisementRounds() async throws {
+        let binding = DeviceBindingID.TestOverride.identifier(MeshP3Acceptance.install)
+        // R2: a hard constant ceiling.
+        for _ in 0..<Self.routedDrainRounds {
+            if routedAdvertisementsConverged() { return }
+            let living = livingMembers
+            DeviceBindingID.$testOverride.withValue(binding) {
+                // R2: bounded by the roster cap, squared.
+                for (position, near) in living.enumerated() {
+                    for far in living.dropFirst(position + 1) {
+                        near.node.manager.applySessionEvent(
+                            .peerCommitted, committedPeer: far.fingerprint
+                        )
+                        far.node.manager.applySessionEvent(
+                            .peerCommitted, committedPeer: near.fingerprint
+                        )
+                    }
+                }
+            }
+            try await MeshDepartureRig.settle(livingNodes, on: fabric, binding: binding)
+        }
+    }
+
+    /// The frozen text one feature round mints. Distinct per round, so an ordering claim over two
+    /// rounds is assertable.
+    static func featureText(_ round: Int) -> String { "feature-\(round)" }
+
+    /// What the TEXT row's **own public door** answers for one member — the outcome, unjudged.
+    ///
+    /// Separate from ``routedTextEvent(at:round:)`` because the negative needs the refusal itself:
+    /// a run whose addressing never converged answers `.refused(.destinationNotAddressable)` here,
+    /// and that named answer is what makes the arming door load-bearing instead of decorative.
+    func sendTextOutcome(at member: MeshConvergenceMember, round: Int) -> MeshTextSendOutcome {
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            member.node.manager.sendTempMessage(Self.featureText(round))
+        }
+    }
+
+    /// **One call into the TEXT row's own seam** (P6 item 4): the member sends a session message
+    /// through the real public API, and the cell refuses to continue on anything but a staged mint.
+    ///
+    /// The id is read back by diffing the origin's own index rather than returned by a new seam:
+    /// `sendTempMessage(_:)` mints its own `UUID`, and a seam that handed it out would be a second
+    /// per-type source — exactly what D-13.31 walls.
+    ///
+    /// - Parameters:
+    ///   - member: The origin.
+    ///   - round: Which feature round's text to mint.
+    /// - Returns: the minted item's key.
+    /// - Throws: ``MeshRoutedCellFailure/textNotStaged(_:)`` on any answer but one staged item.
+    func routedTextEvent(at member: MeshConvergenceMember, round: Int) throws -> MeshRoutedItemKey {
+        let before = Set(routedIndex(of: member)?.items.map(\.key) ?? [])
+        let outcome = sendTextOutcome(at: member, round: round)
+        guard outcome == .staged else { throw MeshRoutedCellFailure.textNotStaged(outcome) }
+        let minted = Set(routedIndex(of: member)?.items.map(\.key) ?? []).subtracting(before)
+        guard minted.count == 1, let key = minted.first else {
+            throw MeshRoutedCellFailure.textNotStaged(outcome)
+        }
+        return key
+    }
+}
+
 // MARK: - The rung ladder and the byte reader
 
 @MainActor
@@ -594,7 +755,37 @@ extension MeshConvergenceRun {
             }
             rungs[member.fingerprint] = mine
         }
-        return MeshRoutedRungSnapshot(rungs: rungs, receiptCounts: receipts)
+        return MeshRoutedRungSnapshot(
+            rungs: rungs, receiptCounts: receipts, inventoryStamps: routedInventoryStamps()
+        )
+    }
+
+    /// Every living member's last recorded `inventorySentAt`, per peer — **I-13's unit** (P6 item 7).
+    ///
+    /// Folded into ``MeshRoutedRungSnapshot`` rather than handed to `routedInvariants` as a second
+    /// `before:` parameter: that signature is called by 40+ cells, and a claim is not worth a
+    /// parameter at every one of them when the value it needs is already sampled at exactly the
+    /// right two moments.
+    ///
+    /// Read-only, through `peerRoutedInventories` (`@ObservationIgnored private(set)` at internal
+    /// access). A peer with no stamp yet is **absent** rather than present-and-nil, so a member that
+    /// exchanged no digest contributes nothing and the claim has nothing to compare — which is why
+    /// the non-vacuity guard lives with the sample (see
+    /// ``MeshRoutedDrainConvergenceTests/theRungSnapshotReallySamplesAnInventoryStamp()``) and not
+    /// inside the shared claim, where it would redden every cell that legitimately exchanges none.
+    func routedInventoryStamps() -> [String: [String: Date]] {
+        var stamps: [String: [String: Date]] = [:]
+        // R2: bounded by the roster cap.
+        for member in livingMembers {
+            var mine: [String: Date] = [:]
+            // R2: bounded by the roster cap.
+            for (peer, state) in member.node.manager.peerRoutedInventories {
+                guard let sentAt = state.inventorySentAt else { continue }
+                mine[peer] = sentAt
+            }
+            if !mine.isEmpty { stamps[member.fingerprint] = mine }
+        }
+        return stamps
     }
 
     /// The routed ladder projected onto **member indices** rather than fingerprints — the value two
@@ -657,8 +848,13 @@ extension MeshConvergenceRun {
 @MainActor
 extension MeshConvergenceRun {
 
-    /// The routed half of §16.2's invariants, over the same survivors — **twelve named claims behind
-    /// one entry point**, so a departure-free cell cannot assert five of them vacuously.
+    /// The routed half of §16.2's invariants, over the same survivors — **thirteen named claims
+    /// behind one entry point**, so a departure-free cell cannot assert five of them vacuously.
+    ///
+    /// The thirteenth is P6 item 7's: `inventorySentAt` never moves backwards, at any member, for
+    /// any peer. It reads the same rule the door applies (`MeshRoutedInventoryStampRule`), and its
+    /// non-vacuity is asserted once beside the sample rather than here — see
+    /// ``routedInventoryStamps()``.
     ///
     /// There is deliberately no relaxed variant (item 7 deleted P4's `checkExceptTheHealsRotationCause`
     /// and item 14 does not reintroduce the shape): a cell that cannot pass is deferred by name with a
@@ -694,6 +890,28 @@ extension MeshConvergenceRun {
         routedCapacityHoldVisible(overlay: overlay)
         routedReplayWindowStaysInsideItsBounds(overlay: overlay)
         routedMergeClosureNamed()
+        routedInventoryStampMonotone(before: before)
+    }
+
+    /// **I-13 — a peer's recorded `inventorySentAt` never moves backwards** (P6 item 7).
+    ///
+    /// One pair at a time, over the pairs present in BOTH samples. A pair that vanished is not a
+    /// regression and needs no excuse: `clearRoutedDrainState()` empties the whole per-peer map at
+    /// a session end, which is a legal thing for a departing member to have done between the two
+    /// samples, and the map carries no per-item fact that could be lost with it.
+    ///
+    /// Equality is admitted, exactly as the door admits it: a peer's own digest re-arriving
+    /// byte-identical re-records the same stamp, and the claim is monotonicity, not progress.
+    private func routedInventoryStampMonotone(before: MeshRoutedRungSnapshot) {
+        let after = routedInventoryStamps()
+        // R2: bounded by the roster cap, squared.
+        for (member, stamps) in before.inventoryStamps {
+            for (peer, stamp) in stamps {
+                guard let later = after[member]?[peer] else { continue }
+                #expect(later >= stamp,
+                        "a peer's recorded inventory stamp moved backwards down the drain")
+            }
+        }
     }
 
     /// **I-1 — progress by name, per destination.** Every destination ends `delivered`, or departed
@@ -1147,6 +1365,14 @@ nonisolated struct MeshRoutedRungSnapshot: Equatable, Sendable {
 
     /// member fingerprint → custody receipts + recipient receipts held for the item.
     let receiptCounts: [String: Int]
+
+    /// member fingerprint → peer fingerprint → that peer's last recorded `inventorySentAt` — the
+    /// unit **I-13** compares across the final drain (P6 item 7's monotonicity guard).
+    ///
+    /// Item-independent, unlike the two above: a device records one stamp per peer, not one per
+    /// item. It rides this value anyway because this is what `routedInvariants` already takes as
+    /// `before:`, sampled at exactly the two moments the claim needs.
+    let inventoryStamps: [String: [String: Date]]
 }
 
 // MARK: - MeshRoutedConvergenceCell
@@ -1639,6 +1865,142 @@ struct MeshRoutedDrainConvergenceTests {
             #expect(member.node.manager.meshPhotos.filter { $0.id == key.itemID }.count == 1,
                     "every destination's wall holds exactly one entry for the delivered item")
         }
+    }
+
+    /// **I-13's non-vacuity, asserted once — beside the sample, not inside the claim** (P6 item 7).
+    ///
+    /// `routedInventoryStampMonotone(before:)` compares the pairs present in both samples and is
+    /// silent when there are none, which is correct: rectangle B's replay cell and the development
+    /// pipeline legitimately exchange no inventory digest, and an `isEmpty == false` inside the
+    /// shared claim would redden them. So the "it really is comparing something" half lives here,
+    /// on one cell that does drive a full heal and two drain passes.
+    @Test func theRungSnapshotReallySamplesAnInventoryStamp() async throws {
+        let cell = MeshRoutedConvergenceCell(shape: .twoTwo, seed: MeshConvergenceSeeds.root)
+        let outcome = try await MeshRoutedPipeline.fullHeal(cell, label: "routed-stamp")
+        defer { MeshRoutedPipeline.teardown(outcome.run) }
+
+        let sampled = outcome.before.inventoryStamps.values.reduce(0) { $0 + $1.count }
+        #expect(sampled > 0, """
+            no member had recorded any peer's inventory stamp when the ladder was sampled, so I-13 \
+            compares nothing on every cell in the rectangle
+            """)
+    }
+
+    /// **P6 item 9, STAGE 0: tier B addressing really converges in THIS rig.**
+    ///
+    /// The convergence run seeds its ledgers straight into the verifier, which is a different
+    /// arming from the photo rigs that proved the resolver — so "does the advertised-key set
+    /// converge here?" was the design's riskiest unanswered question, and it is answerable with no
+    /// overlay change at all. The text mint at the end is the point: `sendTempMessage(_:)` runs the
+    /// real `routedDestinationKeys` resolver, so a set that had not converged would refuse here
+    /// rather than pass silently.
+    @Test func everyLivingMemberEndsHoldingEveryOtherMembersAdvertisedKey() async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
+        )
+        let run = try MeshConvergenceRun.build(
+            schedule, label: "routed-adv", anchor: MeshRoutedFixtureClock.createdAt
+        )
+        defer { MeshRoutedPipeline.teardown(run) }
+        try await run.runSplitEvents()
+        run.allowChatEverywhere(except: nil)
+        run.armKeyAdvertisements(now: MeshRoutedPipeline.mintInstant)
+
+        try await run.runHeal()
+        try await run.runKeyAdvertisementRounds()
+
+        #expect(run.livingMembers.count >= 2, "one survivor converges nothing")
+        #expect(run.routedAdvertisementsConverged(), """
+            the advertised-key set never converged, so every feature mint item 9 will hang off it \
+            would be unaddressable
+            """)
+        let origin = try #require(run.livingMembers.first, "the cell needs a surviving origin")
+        let key = try run.routedTextEvent(at: origin, round: 0)
+        #expect(run.routedOutstanding(at: origin, key: key).isEmpty == false,
+                "a converged set must resolve real destinations for the text row")
+    }
+
+    /// **The arming-skipped case, measured — and it does NOT fail.** (item 9 design §2d, corrected.)
+    ///
+    /// The design expected a run that never calls ``MeshConvergenceRun/armKeyAdvertisements(now:)``
+    /// to hold an EMPTY advertisement set, with the text mint answering
+    /// `.refused(.destinationNotAddressable)`. **Measured at this HEAD, it converges anyway**, and
+    /// the reason is item 1's own fix rather than an accident of the rig:
+    /// `sendKeyAdvertisements(to:)` calls `repairOwnKeyAdvertisementIfMissing()` **above** its batch
+    /// read, gated only on "there is somebody to tell" (item 1's second fix review, finding 1), and
+    /// the heal raises `.peerCommitted` at every pair — so each member self-mints its own missing
+    /// row on the first ask, bounded at
+    /// `MeshKeyAdvertisementSendBounds.selfMintAttemptsPerSession`. The design was read before that
+    /// gate was reshaped; this cell records the truth instead of asserting the stale expectation.
+    ///
+    /// The first assertion is the half that IS still true, and it is the half item 1's residual was
+    /// really about: the rig's `seedMembershipLedgerForTesting` bypasses both production mint doors,
+    /// so nothing is advertised until a **shipping** door runs. `armKeyAdvertisements(now:)`
+    /// therefore stays as a determinism seam — it mints on the injected clock, before the heal, with
+    /// `#expect(armed)` per member so an arm-time seal refusal is loud, and it does not spend the
+    /// repair's three-attempt session budget. It is not what makes the set non-empty.
+    ///
+    /// The negative that really is load-bearing for this stage is the chat gate — see
+    /// ``theChatGateIsFailClosedSoTheTextHalfIsNeverGreenOverNothing()``.
+    @Test func withoutTheArmingDoorItemOnesSelfMintRepairStillAddressesTheMesh() async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
+        )
+        let run = try MeshConvergenceRun.build(
+            schedule, label: "routed-adv-repair", anchor: MeshRoutedFixtureClock.createdAt
+        )
+        defer { MeshRoutedPipeline.teardown(run) }
+        try await run.runSplitEvents()
+        run.allowChatEverywhere(except: nil)
+
+        let seededEmpty = run.livingMembers.allSatisfy { $0.node.manager.keyAdvertisements.isEmpty }
+        #expect(seededEmpty, """
+            the rig's ledger seeding must mint nothing, or neither this cell nor the arming door \
+            above it is measuring a production mint at all
+            """)
+
+        try await run.runHeal()                                   // deliberately no arming
+        try await run.runKeyAdvertisementRounds()
+
+        #expect(run.routedAdvertisementsConverged(), """
+            item 1's bounded self-mint repair no longer fills the set on the first ask — if that is \
+            deliberate, the arming door becomes load-bearing and §2d's negative comes back
+            """)
+        let origin = try #require(run.livingMembers.first, "the cell needs a surviving origin")
+        #expect(run.sendTextOutcome(at: origin, round: 0) == .staged,
+                "a converged set addresses the text row whether or not the arming door ran")
+    }
+
+    /// **The chat gate is fail-closed, which is what keeps the text half from being green over
+    /// nothing** (item 9 design B1).
+    ///
+    /// `chatAllowedProvider` is **nil** on a freshly built manager and `isChatAllowed` reads
+    /// `provider?() == true`, so a run that never calls
+    /// ``MeshConvergenceRun/allowChatEverywhere(except:)`` gets `.ageGated` from every member — an
+    /// answer that never touches the resolver, never mints an item, and would leave item 9's whole
+    /// text rectangle asserting over nothing. The control is the same member one line later, with
+    /// only the gate changed.
+    @Test func theChatGateIsFailClosedSoTheTextHalfIsNeverGreenOverNothing() async throws {
+        let schedule = MeshScheduleGenerator.schedule(
+            seed: MeshConvergenceSeeds.root, shape: .twoTwo, preferQuorum: false
+        )
+        let run = try MeshConvergenceRun.build(
+            schedule, label: "routed-adv-gate", anchor: MeshRoutedFixtureClock.createdAt
+        )
+        defer { MeshRoutedPipeline.teardown(run) }
+        try await run.runSplitEvents()
+        run.armKeyAdvertisements(now: MeshRoutedPipeline.mintInstant)
+        try await run.runHeal()
+        try await run.runKeyAdvertisementRounds()
+
+        #expect(run.routedAdvertisementsConverged(), "the addressing half must not be the reason")
+        let origin = try #require(run.livingMembers.first, "the cell needs a surviving origin")
+        #expect(run.sendTextOutcome(at: origin, round: 0) == .ageGated,
+                "a nil chat provider must fail CLOSED, or the gate is decoration")
+
+        run.allowChatEverywhere(except: nil)
+        #expect(run.sendTextOutcome(at: origin, round: 1) == .staged,
+                "and opening the gate is the only thing that changed")
     }
 
     /// **P5 item 9 in the battery.** One survivor is at its byte cap when the drain reaches it, and a

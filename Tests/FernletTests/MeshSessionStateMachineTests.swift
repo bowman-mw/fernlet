@@ -896,6 +896,51 @@ struct MeshSessionLifecycleManagerTests {
         #expect(manager.rejoinBar == nil)
     }
 
+    /// **P6 item 7: the app's launch mount restores exactly once per process, and starts nothing.**
+    ///
+    /// `restoreSessionContextAtLaunch(now:)` had no launch caller at all until this item — its only
+    /// shipping driver was the routed re-entry's job 1, which returns nil until one attempt has been
+    /// made. The public door holds the latch at the MANAGER (`sessionRestoreAttempts`, monotone and
+    /// reset nowhere), so a re-fired `.onAppear` cannot re-run the restore even if the app's own
+    /// `@State` latch were lost.
+    ///
+    /// That a restored context then really drains custodied work is proved elsewhere and is
+    /// deliberately not duplicated here: `MeshRoutedPhotoDeliveryTests` (the reborn manager's
+    /// restore, then delivery) and `MeshRoutedLockedDeviceTests` (restore behind a closed gate,
+    /// then the unlock edge) both drive it end to end.
+    @Test func theLaunchMountRestoresExactlyOncePerProcessAndStartsNothing() throws {
+        let sessionStore = MeshSessionStore(scope: store.meshSessionStorage)
+        let created = Date()
+        try MeshSessionStoreFixtures.save(
+            MeshSessionContext(
+                meshID: UUID(), protocolVersion: 3, createdAt: created,
+                hardDeadline: created.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
+            ),
+            into: sessionStore, install: Self.install
+        )
+
+        let manager = MeshNetworkManager(store: store)
+        let mounted = DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+            manager.restoreSessionContextOncePerLaunch(now: created.addingTimeInterval(60))
+        }
+
+        #expect(mounted, "the launch mount did not take the launch's one attempt")
+        #expect(manager.sessionRestoreAttempts == 1)
+        #expect(manager.sessionState == .localIdleStop, "a live context restores idle-lapsed")
+        #expect(manager.currentMesh == nil, "the launch mount reconnects nothing")
+        #expect(!manager.isSearching, "and arms no radio — that is P7's run policy, not this")
+
+        // R2: a hard constant ceiling.
+        for _ in 0..<5 {
+            let again = DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+                manager.restoreSessionContextOncePerLaunch(now: created.addingTimeInterval(60))
+            }
+            #expect(!again, "a re-fired launch mount performed a second restore")
+        }
+        #expect(manager.sessionRestoreAttempts == 1,
+                "the per-process latch is the manager's, not the caller's")
+    }
+
     /// A context whose ceiling passed while the process was gone expires AND writes the mark.
     @Test func aPastDeadlineContextRestoresExpiredAndWritesTheMark() throws {
         let sessionStore = MeshSessionStore(scope: store.meshSessionStorage)
