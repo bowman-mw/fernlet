@@ -1064,8 +1064,14 @@ extension MeshRoutedLockedDeviceTests {
     /// restoring at all on exactly the launches the retry exists for, which is the fail-open this
     /// truth table pins shut.
     ///
-    /// The source half is the other wall: the app reaches the restore through the once-per-launch
-    /// door and never past it, from exactly one site.
+    /// The source half is the other wall, and it pins the ORDER rather than an impossibility (P6
+    /// item 7 fix review, P3-6). The mount has exactly one call site, and that site sits inside the
+    /// ready view's `.onAppear` **after** the routed gate push — which is what makes a launch on an
+    /// unlocked device consume its own rising protected-data edge before the restore runs, so the
+    /// re-entry's job 1 finds nothing pending and the next real rise is what retries a deferral.
+    /// Swap the two statements and this reddens; the line it replaced (`FernletApp` never names the
+    /// internal `restoreSessionContextAtLaunch(`) could not fail at all, because that door is
+    /// `internal` to ProximityKit and `App/Fernlet` is a different module.
     @Test func theLaunchRestoreDecisionIsTwoFactsAndHasOneCallSite() throws {
         #expect(FernletApp.shouldRestoreSessionAtLaunch(
             alreadyMounted: false, meshHarnessSeeding: false))
@@ -1085,8 +1091,12 @@ extension MeshRoutedLockedDeviceTests {
         let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
         let mounts = code.components(separatedBy: "restoreSessionContextOncePerLaunch(").count - 1
         #expect(mounts == 1, "the launch mount has exactly one call site")
-        #expect(!code.contains("restoreSessionContextAtLaunch("),
-                "the app must not reach past the once-per-launch door to the internal restore")
+        let callSite = "restoreMeshSessionContextIfNeeded(store)"
+        #expect(code.contains(callSite), "the launch mount is no longer called from the ready view")
+        let beforeMount = code.components(separatedBy: callSite).first ?? code
+        let closure = try #require(beforeMount.components(separatedBy: ".onAppear {").last)
+        #expect(closure.contains("pushRoutedAccessGate("),
+                "the launch restore must sit in the ready view's `.onAppear`, after the gate push")
     }
 
     /// **W7b.** An `.active → .inactive → .active` bounce moves no leg, so it runs no re-entry pass:

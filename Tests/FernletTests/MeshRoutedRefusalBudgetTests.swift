@@ -190,8 +190,11 @@ struct MeshRoutedRefusalBudgetTests {
     /// door), the dispatch decode goes through it too, the gate sits at the dispatch, and the
     /// budget is reset with the drain state — nowhere else. The two digest doors are outside the
     /// budget by design (D-5.12 / D-6.10: a digest costs one verify, is bound to its slot, and its
-    /// answer is bounded by the per-peer frame budget), and their three spellings are pinned so a
-    /// fourth cannot appear unnoticed.
+    /// answer is bounded by the per-peer frame budget), and their **four** spellings are pinned so a
+    /// fifth cannot appear unnoticed: three spell `mesh.routedDrain.rejected` and the fourth is P6
+    /// item 7's stamp guard, which refuses a record under its own token (P6 item 7 fix review,
+    /// P2-3 — the wall counted one token rather than the doors' exits, so the fourth exit had landed
+    /// unseen).
     @Test func everyPreStoreRefusalGoesThroughTheOneChargingDoor() throws {
         let code = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
@@ -199,6 +202,9 @@ struct MeshRoutedRefusalBudgetTests {
         let token = "\"mesh.routedDrain.rejected\""
         let total = code.components(separatedBy: token).count - 1
         #expect(total == 5, "the probe, the charging door and the three digest-door lines; found \(total)")
+        let stale = "\"mesh.routedInventory.staleSentAt\""
+        #expect(code.components(separatedBy: stale).count - 1 == 1,
+                "the digest doors' fourth refusal spelling moved, or a fifth exit picked a new token")
 
         let doorsStart = try #require(code.range(of: "private func ingestRoutedManifest("))
         let doorsEnd = try #require(code.range(of: "private nonisolated enum RoutedDrainVerdict"))

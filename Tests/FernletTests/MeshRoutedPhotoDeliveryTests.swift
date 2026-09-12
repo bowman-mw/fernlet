@@ -554,7 +554,16 @@ struct MeshRoutedPhotoSenderTests {
     /// A seeded-set version of this cell would pass with the send door, the receive door, the
     /// verifier, the frame and the schema all deleted — it would prove only that the resolver reads
     /// a dictionary.
-    @Test func aMintAfterARestartDeliversFromTheRestoredAdvertisements() async throws {
+    ///
+    /// **One seam IS set by hand, and the name says so** (P6 item 7 fix review, P3-2): `currentMesh`.
+    /// The restore deliberately leaves it nil — restoring is not reconnecting — and the only
+    /// shipping writer from nil on a re-link is the descriptor-adoption arm of
+    /// `receiveMeshDescriptor(_:from:)` (the `currentMesh == nil` branch, which
+    /// `prepareMembershipLedger`'s same-meshID early return then leaves the restored ledger alone
+    /// for). No cell in the tree drives that frame today, so the assignment below stands in for it:
+    /// what this cell proves is that the restored ADDRESSING survives a restart and really carries a
+    /// delivery, not that the shipping resume path reaches it. P7's resume wiring owns that half.
+    @Test func aMintAfterARestartDeliversFromTheRestoredAdvertisementsOnceReAdopted() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "photo-resumed")
         defer { rig.teardown() }
         rig.armKeyAdvertisements()
@@ -576,6 +585,7 @@ struct MeshRoutedPhotoSenderTests {
         #expect(reborn.sessionRoster.isEmpty, "and the memory-only session roster did NOT")
         #expect(reborn.keyAdvertisements.count == 2,
                 "the addressing came back with the ledger, re-proved against it")
+        // Hand-set, standing in for `receiveMeshDescriptor`'s adoption arm — see the doc above.
         reborn.currentMesh = MeshP3Acceptance.mesh(
             for: reborn, meshID: rig.meshID, createdAt: MeshRoutedDrainRig.createdAt
         )

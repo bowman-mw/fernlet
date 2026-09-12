@@ -555,6 +555,13 @@ struct MeshRoutedTextDeliveryTests {
     /// ahead of it, re-opening exactly the window the flag closes, on the path where the user's
     /// intent is strongest. The depth counter is the fix, and the middle assertion is the defect in
     /// its own words.
+    ///
+    /// The tail is the cap, and it pins SYMMETRY (P6 item 7 fix review, P3-7): begins past
+    /// `maxPrivacyWipeDepth` saturate the depth but are counted in the overflow, ends drain the
+    /// overflow first, and the gate therefore falls on the LAST paired end rather than one end
+    /// early. A saturating depth alone was fail-open in its own small way — the ninth begin did not
+    /// increment and the ninth end still decremented — and it also stopped `mesh.privacyWipe.began`
+    /// pairing with `mesh.privacyWipe.ended` for a reader counting them in a transcript.
     @Test func overlappingWipeFunnelsKeepTheProjectionShutUntilTheLastOneEnds() throws {
         let rig = try MeshFoundingRig.build(2, label: "wipe-depth")
         defer { rig.teardown() }
@@ -579,12 +586,21 @@ struct MeshRoutedTextDeliveryTests {
         #expect(manager.privacyWipeInProgress)
         manager.endPrivacyWipe()
 
-        // And bounded: begins past the cap saturate rather than growing without limit (R2).
+        // And bounded: begins past the cap saturate the DEPTH rather than growing without limit
+        // (R2) — but they are counted, so their ends still pair.
+        let cap = MeshNetworkManager.maxPrivacyWipeDepth
         // R2: a hard constant ceiling.
-        for _ in 0..<(MeshNetworkManager.maxPrivacyWipeDepth + 3) { manager.beginPrivacyWipe() }
-        #expect(manager.privacyWipeDepth == MeshNetworkManager.maxPrivacyWipeDepth)
-        // R2: the same ceiling.
-        for _ in 0..<MeshNetworkManager.maxPrivacyWipeDepth { manager.endPrivacyWipe() }
+        for _ in 0..<(cap + 3) { manager.beginPrivacyWipe() }
+        #expect(manager.privacyWipeDepth == cap, "the depth grew past its own cap")
+        #expect(manager.privacyWipeOverflow == 3, "the begins past the cap were dropped, not counted")
+        // R2: the three overflow ends, which must drain the overflow and NOT the depth.
+        for _ in 0..<3 { manager.endPrivacyWipe() }
+        #expect(manager.privacyWipeDepth == cap, "an end past the cap lowered the gate's own counter")
+        #expect(manager.privacyWipeOverflow == 0)
+        // R2: the same ceiling, one end short of the last.
+        for _ in 0..<(cap - 1) { manager.endPrivacyWipe() }
+        #expect(manager.privacyWipeInProgress, "the gate fell before the LAST paired end")
+        manager.endPrivacyWipe()
         #expect(!manager.privacyWipeInProgress, "the counter came back down to zero")
     }
 

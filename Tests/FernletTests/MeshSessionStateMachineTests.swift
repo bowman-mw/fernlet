@@ -904,10 +904,14 @@ struct MeshSessionLifecycleManagerTests {
     /// reset nowhere), so a re-fired `.onAppear` cannot re-run the restore even if the app's own
     /// `@State` latch were lost.
     ///
-    /// That a restored context then really drains custodied work is proved elsewhere and is
-    /// deliberately not duplicated here: `MeshRoutedPhotoDeliveryTests` (the reborn manager's
-    /// restore, then delivery) and `MeshRoutedLockedDeviceTests` (restore behind a closed gate,
-    /// then the unlock edge) both drive it end to end.
+    /// That a restored context then really addresses custodied work is proved in ONE place and
+    /// deliberately not duplicated here:
+    /// `MeshRoutedPhotoDeliveryTests.aMintAfterARestartDeliversFromTheRestoredAdvertisementsOnceReAdopted`
+    /// — the reborn manager's restore, then a real delivery resolved only from the restored
+    /// advertisements (with the mesh re-adoption hand-set; that cell's own doc says why). The
+    /// second citation this doc used to carry was wrong (P6 item 7 fix review, P3-1):
+    /// `MeshRoutedLockedDeviceTests` has no restore-then-drain cell at all, and the line it pointed
+    /// at proves the OPPOSITE — that a gate edge during a live session does not retry a restore.
     @Test func theLaunchMountRestoresExactlyOncePerProcessAndStartsNothing() throws {
         let sessionStore = MeshSessionStore(scope: store.meshSessionStorage)
         let created = Date()

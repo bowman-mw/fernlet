@@ -1197,14 +1197,20 @@ extension MeshConvergenceRun {
     /// samples, and the map carries no per-item fact that could be lost with it.
     ///
     /// Equality is admitted, exactly as the door admits it: a peer's own digest re-arriving
-    /// byte-identical re-records the same stamp, and the claim is monotonicity, not progress.
+    /// byte-identical re-records the same stamp, and the claim is monotonicity, not progress — and
+    /// "exactly as the door admits it" is now literal rather than a promise (P6 item 7 fix review,
+    /// P2-1). The claim CALLS `MeshRoutedInventoryStampRule`, the same pure decision
+    /// `routedInventoryStampIsStale(_:from:)` applies, so a tolerance or a flipped arm added to the
+    /// rule reddens here instead of leaving the battery asserting a second, hand-spelled `>=` that
+    /// the shipping door no longer means.
     private func routedInventoryStampMonotone(before: MeshRoutedRungSnapshot) {
         let after = routedInventoryStamps()
         // R2: bounded by the roster cap, squared.
         for (member, stamps) in before.inventoryStamps {
             for (peer, stamp) in stamps {
                 guard let later = after[member]?[peer] else { continue }
-                #expect(later >= stamp,
+                let verdict = MeshRoutedInventoryStampRule.verdict(inbound: later, recorded: stamp)
+                #expect(verdict == .admit,
                         "a peer's recorded inventory stamp moved backwards down the drain")
             }
         }

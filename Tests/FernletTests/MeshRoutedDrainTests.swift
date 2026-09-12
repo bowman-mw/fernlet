@@ -616,17 +616,17 @@ struct MeshRoutedDrainTests {
         try await MeshDepartureRig.settle(rig.nodes, on: rig.fabric)
     }
 
-    /// **P6 item 7: a peer's own OLDER digest is refused by name, and changes nothing.**
+    /// **P6 item 7: a peer's own OLDER digest is refused as a RECORD, and moves no recorded fact.**
     ///
-    /// The four facts a regression would move are asserted one by one: the recorded holdings, the
-    /// recorded stamp, the `quiescentLocalAsOf` the answer re-stamps, and the per-peer frame charge
-    /// — the only one of the four that would show a **re-plan** rather than a re-record.
+    /// The three facts a regression would move are asserted one by one: the recorded holdings, the
+    /// recorded stamp, and the `quiescentLocalAsOf` an admitted digest re-stamps.
     ///
-    /// Measured with the guard reverted, the first three redden and the charge does not: by the time
-    /// the stale digest lands, this peer's leg of the offered item is already `delivered`, so the
-    /// re-plan the stale inventory invites has nothing left to offer. The charge assertion is kept
-    /// anyway — "a refused digest plans nothing at all" is the claim, and an item still outstanding
-    /// when the replay arrives is the ordinary case on a real radio.
+    /// The frame charge is the fourth assertion and it is **not** a claim that nothing was answered
+    /// (P6 item 7 fix review, P2-2: the refusal stops the record, never the answer). It is unmoved
+    /// here for a reason measured twice: by the time the stale digest lands, this peer's leg of the
+    /// offered item is already `delivered`, so the re-plan has nothing left to offer and the answer
+    /// puts no bulk on the wire. The cell that proves the answer really still fires is
+    /// ``aStaleDigestIsRefusedAsARecordAndStillAnswered``, which mints an item in between.
     @Test func anOlderInventoryDigestIsRefusedAndLeavesEveryRecordedFactAlone() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "stamp-older")
         defer { rig.teardown() }
@@ -662,9 +662,94 @@ struct MeshRoutedDrainTests {
         #expect(after.quiescentLocalAsOf == newer.sentAt,
                 "the stale digest re-stamped the quiescence instant it must not reach")
         #expect(rig.nodes[0].manager.routedDrainFramesSpentForTesting[peer] == spent,
-                "the stale digest was answered with a re-plan, and charged for it")
-        #expect(capture.values(of: "mesh.routedInventory.staleSentAt", key: "peer").count == 1,
+                "the answer re-offered a leg this peer had already been delivered")
+        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 1,
                 "the refusal was not named exactly once")
+    }
+
+    /// **P6 item 7 fix review, P2-2: a refused RECORD is still an ANSWER.**
+    ///
+    /// The guard's whole job is the record. Suppressing the answer with it made a peer whose clock
+    /// steps backwards unanswerable for the rest of the session: `answerRoutedInventory` is the only
+    /// caller that reaches `sendRoutedDrainBatch`, and a digest arrives only from the three merge
+    /// doors — no timer — so nothing this device custodied for that peer could move until the step
+    /// elapsed, the 6 h ceiling fell or the process died.
+    ///
+    /// Here an item is minted BETWEEN the two digests, which is what the first cell's already
+    /// delivered leg could not show: the record must not move, and the frames must.
+    @Test func aStaleDigestIsRefusedAsARecordAndStillAnswered() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "stamp-still-answered")
+        defer { rig.teardown() }
+        try MeshRoutedDrainItem.mint(rig, origin: 0).stage(into: rig, at: 0)
+        rig.link(0, 1)
+        let peer = rig.nodes[1].fingerprint
+        let fresh = MeshRoutedDrainRig.now
+        let newer = try inventoryDigest(rig, from: 1, index: MeshRoutedIndex(), sentAt: fresh)
+        let older = try inventoryDigest(
+            rig, from: 1, index: MeshRoutedIndex(), sentAt: fresh.addingTimeInterval(-3_600)
+        )
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await receiveInventory(rig, newer, at: 0, from: 1, now: fresh)
+        let spent = rig.nodes[0].manager.routedDrainFramesSpentForTesting[peer] ?? 0
+        #expect(spent > 0, "the control digest planned nothing, so the charge below proves nothing")
+        // Minted only now: the stale digest's answer has something outstanding to offer.
+        try MeshRoutedDrainItem.mint(rig, origin: 0).stage(into: rig, at: 0)
+
+        try await receiveInventory(rig, older, at: 0, from: 1, now: fresh)
+
+        let after = try #require(rig.nodes[0].manager.peerRoutedInventories[peer])
+        #expect(after.inventorySentAt == newer.sentAt, "the stale digest moved the recorded stamp")
+        #expect(after.quiescentLocalAsOf == newer.sentAt,
+                "the stale digest re-stamped the quiescence instant it must not reach")
+        #expect((rig.nodes[0].manager.routedDrainFramesSpentForTesting[peer] ?? 0) > spent, """
+            the stale digest was not answered at all: every delivery this device custodies for a \
+            peer whose clock stepped backwards stalls for the length of the step
+            """)
+        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 1,
+                "the refused record was not named exactly once")
+    }
+
+    /// **P6 item 7 fix review, P2-2, end to end: an hour-long backwards step delivers anyway.**
+    ///
+    /// The stamp is taken from the reconnect's OWN recorded digest rather than from a literal, so
+    /// the step is one hour behind whatever this peer honestly last said — and the item is minted
+    /// after that, so the only frame that can carry it is the one the stale digest's answer plans.
+    @Test func aPeerWhoseClockSteppedBackStillReceivesANewlyMintedItem() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "stamp-stepped-back")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        let peer = rig.nodes[1].fingerprint
+        rig.commit(0, 1)
+        try await rig.settle()
+        let recorded = try #require(
+            rig.nodes[0].manager.peerRoutedInventories[peer]?.inventorySentAt,
+            "the reconnect recorded no digest for this peer, so there is nothing to step back from"
+        )
+
+        let item = try MeshRoutedDrainItem.mint(rig, origin: 0)
+        item.stage(into: rig, at: 0)
+        #expect(heldChunkCount(rig, 1, item.key) == 0, "the peer must start without the item")
+        let steppedBack = try inventoryDigest(
+            rig, from: 1, index: MeshRoutedIndex(), sentAt: recorded.addingTimeInterval(-3_600)
+        )
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        try await receiveInventory(rig, steppedBack, at: 0, from: 1, now: MeshRoutedDrainRig.now)
+        try await rig.settle(until: { self.heldChunkCount(rig, 1, item.key) == item.chunks.count })
+
+        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 1,
+                "the stepped-back digest was not refused as a record, so the cell proves nothing")
+        #expect(rig.nodes[0].manager.peerRoutedInventories[peer]?.inventorySentAt == recorded,
+                "and the refusal must still have kept the recorded stamp where it was")
+        #expect(heldChunkCount(rig, 1, item.key) == item.chunks.count, """
+            a peer whose clock stepped back an hour never received an item minted after its last \
+            honest digest: the refusal stalled the delivery instead of only the record
+            """)
     }
 
     /// **An EQUAL stamp is an idempotent replay: recorded, answered, and never audited.**
@@ -697,7 +782,7 @@ struct MeshRoutedDrainTests {
         #expect(after.inventory?.entries.isEmpty == true,
                 "an equal stamp must be RECORDED — a refusal would have kept the earlier holdings")
         #expect(after.inventorySentAt == now)
-        #expect(capture.values(of: "mesh.routedInventory.staleSentAt", key: "peer").isEmpty,
+        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 0,
                 "an idempotent replay of one digest must not audit a refusal")
     }
 
@@ -727,7 +812,8 @@ struct MeshRoutedDrainTests {
         #expect(after.inventorySentAt == late.sentAt, "a newer digest must move the stamp forward")
         #expect(after.inventory?.entries.isEmpty == false, "and must replace the recorded holdings")
         #expect(after.quiescentLocalAsOf == late.sentAt, "and must have been answered")
-        #expect(capture.values(of: "mesh.routedInventory.staleSentAt", key: "peer").isEmpty)
+        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 0,
+                "a digest that moved the record forward must not audit a refusal")
     }
 
     /// **The guard is per PEER, not a global high-water mark.**
@@ -757,7 +843,7 @@ struct MeshRoutedDrainTests {
         #expect(inventories[rig.nodes[1].fingerprint]?.inventorySentAt == late.sentAt)
         #expect(inventories[rig.nodes[2].fingerprint]?.inventorySentAt == early.sentAt,
                 "peer B's opening stamp was judged against peer A's record")
-        #expect(capture.values(of: "mesh.routedInventory.staleSentAt", key: "peer").isEmpty,
+        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 0,
                 "a second peer's earlier stamp is not a regression of anything")
     }
 
@@ -1863,6 +1949,17 @@ private final class MeshRoutedDrainAuditCapture {
     func values(of event: String, key: String) -> [String] {
         lock.lock(); defer { lock.unlock() }
         return storedLines.filter { $0.event == event }.compactMap { $0.context[key] }
+    }
+
+    /// How many lines were logged under `event`, whatever context each carried.
+    ///
+    /// The reader a "nothing was audited" assertion has to use (P6 item 7 fix review, P3-10).
+    /// ``values(of:key:)`` is a `compactMap` over ONE context key, so a line logged without that key
+    /// is invisible to it: an emptiness claim written on top of it keeps passing — silently, and for
+    /// the wrong reason — the moment the shipping line drops a placeholder it never used.
+    func count(of event: String) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return storedLines.filter { $0.event == event }.count
     }
 }
 
