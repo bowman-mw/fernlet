@@ -1132,27 +1132,59 @@ struct MeshSessionLifecycleManagerTests {
     /// make the first succeed and the second fail. The composed shape is a latent hazard, exactly as
     /// P3-a's stranger was — which is why the fix is a returned answer rather than a guard added
     /// somewhere downstream.
+    ///
+    /// **And the answer is only half the door: the raise is UNWOUND** (item 9 review, P2-1).
+    /// `applySessionEvent` assigns the state before it performs the effects, so the refused call had
+    /// already moved this manager to `.activeForeground` and started the beacon loop. Two things
+    /// follow, and both are asserted below: the device really goes back to `.joining`, and — because
+    /// it does — a second call is a real second call rather than the
+    /// `guard sessionState == .joining else { return true }` early exit answering for it. The
+    /// accepted leg used to be exactly that early exit, satisfied by the refused call's own state
+    /// move, so the success path of this door's return value was executed by no cell in the tree.
     @Test func aReAssertWhoseOwnSaveIsRefusedAnswersFalse() throws {
         let member = IdentityService(keychainService: "com.fernlet.identity.test.\(UUID().uuidString)")
+        let fingerprint = IdentityService.fingerprint(of: member.localSigningPublicKey)
         let manager = MeshNetworkManager(store: store)
-        try seatJoiningManager(
-            manager, admitting: member,
-            seating: [IdentityService.fingerprint(of: member.localSigningPublicKey)],
-            raising: false
-        )
+        try seatJoiningManager(manager, admitting: member, seating: [fingerprint], raising: false)
         #expect(manager.sessionState == .joining, "the precondition the re-assert is defined on")
+        #expect(!manager.isBeaconLoopRunningForTesting, "and nothing this raise will start is up yet")
+        #expect(!manager.isSessionGiveUpClockArmed, """
+            door 3 never arms while a slot is committed, so the raise's own cancel has nothing to \
+            stand down and the unwind has nothing to put back
+            """)
 
         let refused = DeviceBindingID.$testOverride.withValue(.unavailable) {
             manager.reassertCommitIntoAdoptedMesh()
         }
         #expect(!refused, "a raise whose context never reached the disk is not a durable grant")
+        #expect(manager.sessionState == .joining, """
+            and the state move the effect list never earned is unwound, rather than left standing \
+            with the pre-join verifier restored underneath it
+            """)
+        #expect(!manager.isBeaconLoopRunningForTesting,
+                "the beacon the raise started is stood down with it")
+        #expect(!manager.isSessionGiveUpClockArmed, "and door 3 is where it was")
 
+        // The sequence this cell is named for, and it is a sequence only because of the unwind: the
+        // precondition is back, so the second call raises rather than answering from the early exit.
         let accepted = DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
             manager.reassertCommitIntoAdoptedMesh()
         }
         #expect(accepted, "and the same raise behind a working seal is")
         #expect(manager.sessionState == .activeForeground)
+        #expect(manager.isBeaconLoopRunningForTesting, "which really did start the beacon this time")
         manager.leaveMesh()
+
+        // A SECOND manager, never refused, for the success path on its own: if the unwind ever
+        // regresses, the leg above turns back into the early exit and this one still executes it.
+        let fresh = MeshNetworkManager(store: store)
+        try seatJoiningManager(fresh, admitting: member, seating: [fingerprint], raising: false)
+        let raised = DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+            fresh.reassertCommitIntoAdoptedMesh()
+        }
+        #expect(raised)
+        #expect(fresh.sessionState == .activeForeground)
+        fresh.leaveMesh()
     }
 
     /// Puts `manager` at `.joining` inside a mesh that has admitted itself and `admitting`, with

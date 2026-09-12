@@ -183,7 +183,8 @@ import Testing
         // zero-lists item 4 and item 6 put there run nowhere else — so removing it from the line
         // must be a failure rather than a silence, exactly as the two above are.
         // `MeshRoutedLockedDeviceTests` is gated beside it but is deliberately NOT on this pin: it
-        // is 25 behaviour cells over five store states, not a zero-list, and
+        // is 26 behaviour cells over five store states (measured at item 9's own gated run, and the
+        // number the workflow's floor decomposition uses), not a zero-list, and
         // `MeshP5LockedDeviceAcceptanceTests` is already its acceptance clause.
         #expect(gated.contains("MeshRoutedDrainWallTests"),
                 "the routed path's retirement and parking zero-lists are gated")

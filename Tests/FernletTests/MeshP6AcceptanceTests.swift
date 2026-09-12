@@ -306,6 +306,28 @@ struct MeshP6TextRoutingAcceptanceTests {
     /// check's R9: an empty transcript is a VIEW fact (`rederiveTranscript` filters through
     /// `visibleTranscript(gates:)`, and a closed gate hides rows without destroying them), so the
     /// gated member's held ciphertext is asserted beside it.
+    ///
+    /// **Which leg of the 13+ gate this cell actually walls — measured, in three runs** (item 9
+    /// review, P2-2). The projection side has three independent legs, and only the last of them is
+    /// what an empty transcript is evidence of:
+    ///
+    /// * **leg 4**, `projectableRoutedTypeTokens`, the re-entry pass's enumeration filter. Deleting
+    ///   it alone reds nothing and *could* not (`logs/item9fix/neg-04.log`, suite green): leg 3
+    ///   still refuses `.refusedForGood`. Nor is the `routedProjectedItems` mark its observable —
+    ///   the delivery-time projection marks this item at the gated member either way (measured: a
+    ///   mark claim was written, run, and reddened with leg 4 INTACT, then withdrawn). It is a
+    ///   pass-slot economy, and this battery does not claim it.
+    /// * **leg 3**, the `.sessionTranscript` arm's own `guard isChatAllowed`, applied BEFORE the
+    ///   unwrap. Deleting it alone also leaves this cell green (`neg-05.log`): the row is received
+    ///   and HELD, and the view gate below still hides it. Leg 3 is a *decrypt* claim — it is what
+    ///   stops the plaintext existing — and the honest wall for it is an audit-line claim nobody has
+    ///   written yet.
+    /// * **the view gate**, `SessionMessageStore.refreshGates(chatAllowed:isRefused:)` folding
+    ///   `MeshContentGates`, which is what `messages` is derived through. Deleting leg 3 AND forcing
+    ///   that fold open reds this cell on **both** gated cells (`neg-06.log`,
+    ///   `MeshP6AcceptanceTests.swift:339`) — so "nothing is projected below the 13+ line" is walled
+    ///   here at the seam that decides it, and the held-ciphertext line beside it is what keeps the
+    ///   claim from being a claim about a delivery that never happened.
     @Test(arguments: MeshP6Acceptance.gatedCorners)
     func aGatedMemberHoldsTheCiphertextAndProjectsNothing(
         cell: MeshRoutedConvergenceCell
@@ -380,13 +402,28 @@ struct MeshP6TextRoutingAcceptanceTests {
     ///
     /// Rectangle G cannot carry it because a feature cell never ends a session — the pipeline's
     /// teardown is the end, and by then there is nothing left to assert against.
+    ///
+    /// **The clear is a real transition** (item 9 review, P3-6): one message is delivered and
+    /// PROJECTED with the gate open before anything closes, so `leaveSession()` empties a non-empty
+    /// transcript. Closing the gate first left node 1's wall empty before the session ever ended,
+    /// and "the transcript is cleared at session end" then rested on the generation bump alone.
     @Test func aSessionEndClearsTheTranscriptAndNothingProjectsIntoTheVacancy() async throws {
         let rig = try MeshFoundingRig.build(2, label: "p6text-ended")
         defer { rig.teardown() }
         try await rig.settleChattingPair()
+        #expect(rig.sendText(at: 0, "before the end") == .staged)
+        try await rig.settle(until: { rig.transcript(at: 1).isEmpty == false })
+        #expect(rig.transcript(at: 1) == ["before the end"],
+                "the recipient really projected it, which is what the clear below has to undo")
+
         rig.closeGate(at: 1)
+        // The second item, identified by DIFFERENCE rather than by `items.first`: by now the index
+        // holds the delivered first one too.
+        let staged = Set(rig.routedIndex(0)?.items.map(\.key.itemID) ?? [])
         #expect(rig.sendText(at: 0, "in the old session") == .staged)
-        let itemID = try #require(rig.stagedOwnItemID(at: 0))
+        let minted = Set(rig.routedIndex(0)?.items.map(\.key.itemID) ?? []).subtracting(staged)
+        #expect(minted.count == 1, "one send, one new item")
+        let itemID = try #require(minted.first)
         try await rig.settle(until: {
             rig.routedIndex(1)?.items.contains { $0.key.itemID == itemID } == true
         })
@@ -395,7 +432,8 @@ struct MeshP6TextRoutingAcceptanceTests {
         let generation = recipient.transcriptGeneration
         recipient.leaveSession()
         #expect(recipient.transcriptGeneration > generation, "the clear bumped the generation")
-        #expect(rig.transcript(at: 1).isEmpty, "and the transcript really is empty")
+        #expect(rig.transcript(at: 1).isEmpty,
+                "and a transcript that really had something in it really is empty")
 
         rig.openGate(at: 1)
         try await rig.settle()
@@ -541,6 +579,19 @@ struct MeshP6HeartCeremonyAcceptanceTests {
 
     /// **The heart's destination set is exactly one member on every shape** — the flip's own
     /// convergence statement, and the thing a full-roster target made unassertable.
+    ///
+    /// **Both halves: the plan AND the outcome** (item 9 review, P2-4). The first claim is about
+    /// what the mint SIGNED, and a mis-targeted heart reds on it. A heart that keeps the right
+    /// target and is *additionally* admitted at a third member reds nowhere else in the battery:
+    /// `routedJudgedAudience` derives every roster-wide claim's audience from that same signed
+    /// target, so the narrowing walks past the leaked member by construction; `armHeartCeremony`
+    /// arms a ledger at origin and recipient only, so a leaked copy refuses before it could judge
+    /// and `acks.count == 1` stays green. The complement loop is the outcome half — "and nobody
+    /// else" — asserted at the devices themselves.
+    ///
+    /// Custody is the one shape that could legitimately put these chunks elsewhere, and increment 1
+    /// does not: `originRetainsUntilDeparture` moves custody only at a DEPARTURE, to the custodians
+    /// the leaver's signed record names, and a living non-destination is neither.
     @Test(arguments: MeshP6Acceptance.oneCellPerShape)
     func aHeartNamesOneDestinationOnEveryShape(cell: MeshRoutedConvergenceCell) async throws {
         let outcome = try await MeshP6Acceptance.feature(cell, label: "p6heart-one")
@@ -553,6 +604,19 @@ struct MeshP6HeartCeremonyAcceptanceTests {
             """)
         #expect(outcome.run.livingMembers.count >= 2,
                 "a one-destination claim on a roster of one says nothing")
+
+        // R2: bounded by the roster cap.
+        for member in outcome.run.livingMembers where member.index != outcome.heartOrigin.index
+            && member.index != outcome.heartRecipient.index {
+            #expect(outcome.run.routedIndex(of: member)?.record(for: key) == nil, """
+                a one-destination heart reached a member its own signed target does not name — the \
+                ciphertext is the thing the flip exists to keep off every other device
+                """)
+            #expect(outcome.run.heartLedgerRows(at: member, giftID: key.itemID).isEmpty,
+                    "a member the target does not name wrote a heart-ledger row for this gift")
+            #expect(!outcome.judgementLog.judged(key.itemID, at: member.fingerprint),
+                    "a member the target does not name judged this gift")
+        }
     }
 
     /// **The deferred quarter, two-sided and then resolved** (the design check's R4 and R5).
@@ -623,6 +687,19 @@ struct MeshP6HonestyAcceptanceTests {
             the age-gate clause runs only cells whose overlay really shut a gate, and it needs two \
             of them — a clause selected down to nothing is green over nothing
             """)
+        // The same non-vacuity, for the OTHER selected-by-arithmetic arm (item 9 review, P3-1).
+        // Measured at ee4c7de: exactly one of the five cells is asleep, so a re-seed that wakes it
+        // would silently retire `aGiftIsJudgedExactlyOnceOnEveryShape`'s `else` branch — the only
+        // place the heart's deferred half is asserted across the partition tree — and every
+        // remaining assertion would still pass.
+        let shapes = MeshP6Acceptance.oneCellPerShape
+        let anyAsleep = shapes.contains { !$0.overlay.heartRecipientForegrounded }
+        let anyAwake = shapes.contains { $0.overlay.heartRecipientForegrounded }
+        #expect(anyAsleep, """
+            no cell on the one-per-shape line draws a sleeping recipient, so the deferred arm of \
+            the exactly-once claim runs nowhere
+            """)
+        #expect(anyAwake, "and none draws a waking one, so the judged arm runs nowhere")
         #expect(MeshScheduleBounds.maxFeatureRounds == 2, """
             two feature rounds, and it is an assertion rather than a knob: text-then-heart, \
             heart-then-text and both-in-one-round are all reachable inside two
@@ -680,11 +757,30 @@ struct MeshP6HonestyAcceptanceTests {
 @Suite(.serialized)
 struct MeshP6DeterminismAcceptanceTests {
 
-    /// The two files item 9 owns, which the batch-counter wall scans.
-    private static let ownedFiles = [
-        "Tests/FernletTests/MeshP6AcceptanceTests.swift",
-        "Tests/FernletTests/MeshRoutedDrainConvergenceTests.swift"
-    ]
+    /// The directory every acceptance battery lives in.
+    private static let suiteDirectory = "Tests/FernletTests"
+
+    /// P6's own clause file — the one the digest-pin wall reads, and the one this suite lives in.
+    private static let ownFile = "\(suiteDirectory)/MeshP6AcceptanceTests.swift"
+
+    /// The files the batch-counter wall scans: every `MeshP*AcceptanceTests.swift` there is, plus
+    /// the convergence file item 9 widened.
+    ///
+    /// **Derived, never listed** (item 9 review, P3-5). A hand-maintained two-element list stops
+    /// looking the day a `MeshP7…AcceptanceTests.swift` writes its exactly-once claim against the
+    /// batch counter — and that is precisely the file this rule would then be about. The sibling
+    /// wall in P5 guards its list with `scanned == files.count`, which catches a file that
+    /// disappeared; only enumeration catches one that appeared. The scan's own floor is asserted at
+    /// the call site, so a glob that matches nothing is a red rather than a green over zero files.
+    ///
+    /// - Returns: repo-root-relative paths, in a stable order.
+    private static func scannedFiles() throws -> [String] {
+        let listed = try FileManager.default
+            .contentsOfDirectory(atPath: RepoRoot.url(suiteDirectory).path)
+            .filter { $0.hasPrefix("MeshP") && $0.hasSuffix("AcceptanceTests.swift") }
+            .sorted()
+        return (listed + ["MeshRoutedDrainConvergenceTests.swift"]).map { "\(suiteDirectory)/\($0)" }
+    }
 
     /// The batch counter's spelling, **assembled rather than written**, so this wall's own file does
     /// not trip it. `MeshRoutedHeartAck` forbids comparing the batch field by name; this is that
@@ -748,24 +844,39 @@ struct MeshP6DeterminismAcceptanceTests {
     /// the count here is a plain ZERO rather than an exactly-named exception.
     @Test func neitherFileItemNineOwnsSpellsTheBatchCounter() throws {
         let needle = Self.batchCounterSpelling
-        // R2: bounded by the two-element file list.
-        for path in Self.ownedFiles {
+        let files = try Self.scannedFiles()
+        #expect(files.count >= 5, """
+            the enumeration matched fewer files than the acceptance batteries that exist, so the \
+            wall is scanning a list it derived from nothing
+            """)
+        #expect(files.contains(Self.ownFile), "and it must include the file this clause lives in")
+        var scanned = 0
+        // R2: bounded by the derived list, itself bounded by the directory.
+        for path in files {
             let lines = try MeshP5Acceptance.codeLines(of: path)
-            #expect(lines.count > 100, "\(path): an empty scan is a wall that stopped looking")
+            scanned += 1
+            // `Issue.record` rather than an interpolated `#expect` comment (item 9 review, P3-2):
+            // the house rule is literal comments, and which FILE tripped is worth keeping.
+            if lines.count <= 100 {
+                Issue.record("\(path): an empty scan is a wall that stopped looking")
+            }
             let offenders = lines.filter {
                 $0.replacingOccurrences(of: Self.perGiftSpelling, with: "").contains(needle)
             }
-            #expect(offenders.isEmpty, """
-                \(path) spells the BATCH judgement counter: the exactly-once claim must be written \
-                against the per-gift field, never against a counter a one-element batch makes \
-                coincide with it — \(offenders)
-                """)
+            if !offenders.isEmpty {
+                Issue.record("""
+                    \(path) spells the BATCH judgement counter: the exactly-once claim must be \
+                    written against the per-gift field, never against a counter a one-element batch \
+                    makes coincide with it — \(offenders)
+                    """)
+            }
         }
+        #expect(scanned == files.count, "every derived file was really opened")
     }
 
     /// **The two digests keep their one home**, and this suite re-pins neither.
     @Test func theDigestsAreNotRePinnedHere() throws {
-        let lines = try MeshP5Acceptance.codeLines(of: Self.ownedFiles[0])
+        let lines = try MeshP5Acceptance.codeLines(of: Self.ownFile)
         // Assembled, for `batchCounterSpelling`'s reason: a wall that spells its own needle fails
         // itself the day it is written.
         let overlayPin = "pinned" + "OverlayDigest"

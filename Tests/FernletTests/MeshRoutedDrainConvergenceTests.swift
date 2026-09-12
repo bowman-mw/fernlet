@@ -785,6 +785,21 @@ final class MeshRoutedHeartJudgementLog {
     func acks(for giftID: UUID) -> [MeshRoutedHeartAck] {
         judgements.filter { $0.ack.giftID == giftID }.map(\.ack)
     }
+
+    /// Whether ONE member judged one gift — the complement of the `.singleRecipient` flip, read at
+    /// a member the heart's signed target does not name (P6 item 9 review, P2-4).
+    ///
+    /// A method rather than a filter at the call site because the list's own name is the batch
+    /// counter's spelling, which `neitherFileItemNineOwnsSpellsTheBatchCounter` forbids in the two
+    /// files item 9 owns — the read belongs beside the storage, where it is not a field access.
+    ///
+    /// - Parameters:
+    ///   - giftID: The gift.
+    ///   - member: The fingerprint of the device to ask about.
+    /// - Returns: whether that member minted a judgement for it.
+    func judged(_ giftID: UUID, at member: String) -> Bool {
+        judgements.contains { $0.member == member && $0.ack.giftID == giftID }
+    }
 }
 
 // MARK: - The feature seams (P6 item 9)
@@ -1137,9 +1152,7 @@ extension MeshConvergenceRun {
     ) {
         let audited = capture.values(of: "mesh.routedStore.itemDropped", key: "reason")
             .contains("delivered")
-        let audience = judged ?? Set(
-            livingMembers.filter { $0.index != origin.index }.map(\.fingerprint)
-        )
+        let audience = judged ?? routedRosterWideAudience(origin, key)
         routedProgressByName(origin, key, overlay: overlay, audited: audited)
         routedNothingLost(origin, key, audited: audited, judged: audience)
         routedBytesRecoverable(origin, key, audited: audited)
@@ -1158,6 +1171,32 @@ extension MeshConvergenceRun {
         routedInventoryStampMonotone(before: before)
     }
 
+    /// The pre-P6 reading — "every living member but the origin" — for a caller that named no
+    /// audience, with the one shape it must never stand in for asserted rather than assumed.
+    ///
+    /// **Item 9 review, P3-10.** ``routedJudgedAudience(_:key:)`` answers nil when no record
+    /// survives anywhere, and widening on nil is the safe direction for a `.fullRosterAtCreation`
+    /// item and the **unsafe** one for a `.singleRecipient` item: `routedDeliveryState` answers
+    /// `.reclaimed` for "this device holds no record", so a roster-wide claim about a one-destination
+    /// item passes at every non-recipient for exactly the reason R3 narrowed it away from. The
+    /// registry's own column decides which this is, so a fourth type needs no edit here.
+    ///
+    /// - Parameters:
+    ///   - origin: The member that minted the item.
+    ///   - key: The item.
+    /// - Returns: every living member but the origin.
+    private func routedRosterWideAudience(
+        _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey
+    ) -> Set<String> {
+        let token = routedTypeToken(origin, key)
+        let semantics = MeshRoutedTypeRegistry.increment1.entry(for: token)?.destinations
+        #expect(semantics != .singleRecipient, """
+            a one-destination item's roster-wide claims were widened to the whole living roster, \
+            which is the false green R3 narrowed them away from
+            """)
+        return Set(livingMembers.filter { $0.index != origin.index }.map(\.fingerprint))
+    }
+
     /// The audience a **one-destination** item's roster-wide claims must be narrowed to (P6 item 9,
     /// the design check's R3).
     ///
@@ -1173,7 +1212,10 @@ extension MeshConvergenceRun {
     /// `.departed` arm, not by a claim about what it still holds. Answers nil — meaning "judge
     /// everybody", the pre-P6 reading — when the origin no longer holds a record, because item 9's
     /// reclaim legitimately takes it away and a narrowed audience derived from nothing would be
-    /// narrower than the truth.
+    /// narrower than the truth. Where that nil reaches ``routedInvariants(_:_:audited:overlay:before:judged:)``
+    /// the widening is checked against the registry rather than trusted
+    /// (``routedRosterWideAudience(_:_:)``), and callers judging a one-destination row `#require`
+    /// the set instead of falling back to it (item 9 review, P2-3/P3-10).
     ///
     /// - Parameters:
     ///   - origin: The member that minted the item.
@@ -2506,10 +2548,18 @@ struct MeshRoutedDrainConvergenceTests {
             before: outcome.beforeText
         )
         let heartKey = try #require(outcome.heartKey, "every cell in this rectangle plans a heart")
-        let audience = run.routedJudgedAudience(outcome.heartOrigin, key: heartKey)
-            ?? [outcome.heartRecipient.fingerprint]
+        // `try #require`, never `?? [recipient]` (item 9 review, P2-3): the fallback substituted
+        // exactly the value the next line compares against, so a nil — "no living member holds a
+        // record for this heart", which a too-eager reclaim or a store door refusing the manifest
+        // everywhere both produce — made the claim a tautology AND handed the narrowed run below an
+        // assumed destination set. The `#require` is two-sided: nil reds, a wrong set reds.
+        let audience = try #require(
+            run.routedJudgedAudience(outcome.heartOrigin, key: heartKey),
+            "the heart's own signed destination set must be derivable from a record that survived"
+        )
         #expect(audience == [outcome.heartRecipient.fingerprint], """
-            the heart's own signed destination set must be exactly the member the overlay drew, or             the narrowed audience below is narrower than the mint
+            the heart's own signed destination set must be exactly the member the overlay drew, or \
+            the narrowed audience below is narrower than the mint
             """)
         run.routedInvariants(
             outcome.heartOrigin, heartKey, audited: capture,
@@ -2521,7 +2571,8 @@ struct MeshRoutedDrainConvergenceTests {
             before: outcome.beforeHeart, judged: audience
         )
         #expect(Set(outcome.executedTokens) == overlay.featureTokens, """
-            this cell executed a feature token its overlay never planned, or planned one it never             executed
+            this cell executed a feature token its overlay never planned, or planned one it never \
+            executed
             """)
         #expect(outcome.judgementLog.dropped == 0,
                 "the judgement witness hit its own cap, so the count below is not the whole count")
