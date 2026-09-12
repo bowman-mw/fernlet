@@ -1700,7 +1700,11 @@ struct DisposableCameraView: View {
             meshLinked: meshLinked, presenceReachable: presenceReachable,
             meshAddressable: meshAddressable
         )
-        let reachable = meshLinked || presenceReachable || meshAddressable
+        // **Reachability is the transport's own answer, never a re-derived disjunction** (P6 item 6
+        // fix review, P3-e). `(meshLinked, !presenceReachable, !meshAddressable)` — row 4 of the
+        // table below — resolves to `.unavailable` while the disjunction reads true, which enabled
+        // the button over a tap whose switch has nothing to run: a silent tap, with a haptic.
+        let reachable = transport != .unavailable
         let sending = sessionHeartSendInProgress
         let firstName = PresenceManager.firstName(of: friend.displayName)
         let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)

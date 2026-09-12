@@ -479,6 +479,11 @@ struct MeshRoutedDeliveryAckTests {
     /// signed destination set, the type token or the delivery target — and before the stage's own
     /// held-ciphertext clauses. `@autoclosure` makes the ordering structural; this counts the
     /// resolutions to prove it, across a refusal from each half of the door.
+    ///
+    /// **And once on the success path** (P6 item 9's SET A, the fix review's P3-f). Two zero counts
+    /// alone are satisfied by an `evidence:` parameter nobody ever resolves — by the autoclosure
+    /// being dropped entirely, which is the one regression this cell exists to catch. The third leg
+    /// is the complement: a delivery the door ACCEPTS resolves it exactly once, never twice.
     @Test func aRefusedDeliveryNeverResolvesItsEvidence() throws {
         let scope = Fixture.scope()
         defer { Fixture.tearDown(scope) }
@@ -497,7 +502,8 @@ struct MeshRoutedDeliveryAckTests {
                 stages: .increment1, evidence: spy(), now: Fixture.now
             )
         }
-        #expect(MeshRoutedCustodyFixtures.deliveryWitness(incomplete) == nil, "\(incomplete)")
+        #expect(MeshRoutedCustodyFixtures.deliveryWitness(incomplete) == nil,
+                "a manifest-only item has no delivery witness to give")
         #expect(resolutions == 0, """
             an item whose bytes are not all here must not reach the ledger — the judgement is a \
             durable act, not a probe
@@ -510,9 +516,32 @@ struct MeshRoutedDeliveryAckTests {
                 evidence: spy(), now: Fixture.now
             )
         }
-        #expect(stranger.refusal == .notADestination, "\(stranger)")
+        #expect(stranger.refusal == .notADestination,
+                "a recipient the signed destination set does not name is refused by name")
         #expect(resolutions == 0, "a non-destination must not write this device's heart ledger")
         #expect(Ack.record(rig)?.deliveredAt == nil, "and nothing was stamped either way")
+
+        // The complement: an ACCEPTED delivery resolves the evidence exactly once.
+        let openScope = Fixture.scope()
+        defer { Fixture.tearDown(openScope) }
+        let open = try Ack.heartRig(openScope)
+        MeshRoutedCustodyFixtures.stageAll(open)
+        _ = MeshRoutedCustodyFixtures.commit(open)
+        let judged = try Ack.evidence(for: open, in: Ack.ledger())
+        var accepted = 0
+        func openSpy() -> MeshRoutedAckEvidence {
+            accepted += 1
+            return judged
+        }
+        let outcome = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) {
+            open.store.committingDelivery(
+                item: open.key, recipient: open.custodian.localFingerprint,
+                stages: .increment1, evidence: openSpy(), now: Fixture.now
+            )
+        }
+        #expect(MeshRoutedCustodyFixtures.deliveryWitness(outcome) != nil,
+                "the success leg must really have delivered, or it counts nothing")
+        #expect(accepted == 1, "the accepted delivery resolved its evidence exactly once")
     }
 
     // MARK: immediate — the reserved control stage

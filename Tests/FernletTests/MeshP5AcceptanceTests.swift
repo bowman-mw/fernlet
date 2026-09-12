@@ -1070,8 +1070,11 @@ struct MeshP5HonestyAcceptanceTests {
     /// held to its expiry rather than dropped. Neither of those two is asserted here, and neither
     /// is asserted away either.
     @Test func theBatteryNamesWhatItDoesNotClaim() throws {
-        #expect(MeshRoutedEventToken.vocabulary.count == 9,
-                "the routed vocabulary is nine tokens; a tenth needs its own planned draw")
+        #expect(MeshRoutedEventToken.vocabulary.count == 14, """
+            the routed vocabulary is fourteen tokens — P5's nine plus P6 item 9's five (the key \
+            advertisement, the text origination, the age-gated receiver, the heart origination and \
+            the deferred heart); a fifteenth needs its own planned draw
+            """)
         #expect(MeshRoutedEventToken.allCases.contains(.development),
                 "custody transfer on departure is increment 1's load-bearing relay case")
         #expect(MeshRoutedTypeRegistry.increment1.tokens.count == 3,
@@ -1126,9 +1129,14 @@ struct MeshP5DeterminismAcceptanceTests {
     /// spelling `Date()` by **reading a symbol that does**, and a wall satisfied by indirection is
     /// not a wall. It is a fourteen-line file, so it carries its own floor rather than inheriting
     /// the thousand-line file's.
+    /// P6 item 9's own battery file joined the list with the rectangle it runs: its cells build
+    /// `MeshConvergenceRun`s from the same fixed seeds, so a `Date()` or a `.randomElement()` there
+    /// would make them unreplayable exactly as it would in the convergence file. It carries its own
+    /// floor rather than inheriting the thousand-line file's.
     private static let scannedFiles = [
         (path: "Tests/FernletTests/MeshRoutedDrainConvergenceTests.swift", minimumCodeLines: 100),
-        (path: "Tests/FernletTests/MeshRoutedFixtureClock.swift", minimumCodeLines: 10)
+        (path: "Tests/FernletTests/MeshRoutedFixtureClock.swift", minimumCodeLines: 10),
+        (path: "Tests/FernletTests/MeshP6AcceptanceTests.swift", minimumCodeLines: 100)
     ]
 
     /// The ONE code line in the walled set allowed to spell a banned token, and the file it may
@@ -1153,8 +1161,18 @@ struct MeshP5DeterminismAcceptanceTests {
         "ca898bcc9ec7eb099c20bf0b1557e8d450d2d6747d103d899883aef06d466930"
 
     /// The SHA-256 of the canonical transcript of all **40** generated routed overlays.
+    ///
+    /// **Moved once, at P6 item 9, and the move is a recorded DECISION rather than a re-pin.**
+    /// Before `594b6f77…`: `f1cc626d4421a8845839ac41be3c4fa418e98dd2047ad92865306e40d1693ff9`.
+    /// What moved it: seven fields appended to `MeshRoutedScheduleOverlay` after field 8 —
+    /// `textOrigin`, `textRound`, `ageGatedMember`, `heartOrigin`, `heartRecipient`, `heartRound`,
+    /// `heartRecipientForegrounded` — costing **eight** draws (1 + 1 + 2 + 1 + 1 + 1 + 1), all of
+    /// them after `let unknown` in `routedOverlay(for:using:)`, and each appended to `description`.
+    /// `pinnedScheduleDigest` did NOT move, which is the proof the append stayed inside the overlay:
+    /// three independent SplitMix64 generators, `schedule(…)` never reads `routedSalt`, and
+    /// `scheduleDigest()` never builds an overlay.
     private static let pinnedOverlayDigest =
-        "f1cc626d4421a8845839ac41be3c4fa418e98dd2047ad92865306e40d1693ff9"
+        "594b6f77d18703e3b3f3d180473869360999061b6d207206ba314b0896d55765"
 
     /// **The salt is a pinned constant and the overlay replays from it.**
     @Test func theRoutedOverlayIsReplayableAndSaltedAwayFromTheSchedule() {

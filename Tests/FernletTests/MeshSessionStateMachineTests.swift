@@ -1050,4 +1050,156 @@ struct MeshSessionLifecycleManagerTests {
                 "the bytes are set aside, not destroyed")
         #expect(!FileManager.default.fileExists(atPath: sessionStore.fileURL.path))
     }
+
+    // MARK: The adopted-mesh commit re-assert (P6 item 9 SET A — item 6's fix review, P3-a/P3-b)
+
+    /// **The re-assert names the grant's own sender, never an arbitrary committed slot** — the fix
+    /// review's P3-a.
+    ///
+    /// `reassertCommitIntoAdoptedMesh()` took `slots.compactMap(\.fingerprint).first`. A device
+    /// joining somebody else's mesh may hold slots facing peers that mesh never admitted — a
+    /// three-phone shape where this device dwelled with a stranger first — and that stranger's
+    /// fingerprint was then handed to `noteCommitIntoMesh(peer:)` as the commit that made the
+    /// session live. It was inert only because `openBlipMergeIfReconnected` refuses
+    /// `previous == .joining` AND re-checks the roster itself, i.e. because of guards on the far
+    /// side of the raise; the state change happened either way.
+    ///
+    /// **The derived roster is the fallback, not the rule, and that is measured.** At the instant
+    /// the grant is acknowledged, `armJoinerLedger` has bootstrapped the verifier from this device's
+    /// OWN admission alone, so the roster names the joiner and not the admitter — filtering on it
+    /// leaves the yielding half of a pairwise founding at `.joining` for its whole session, which is
+    /// the outage P1-1 fixed (measured: it reddened the pairwise heart cells).
+    @Test func theAdoptedCommitReAssertNamesTheGrantsSenderOrARosterMember() throws {
+        let member = IdentityService(keychainService: "com.fernlet.identity.test.\(UUID().uuidString)")
+        let memberFingerprint = IdentityService.fingerprint(of: member.localSigningPublicKey)
+        // A fingerprint no record in this mesh names. Spelled rather than derived from a second
+        // `IdentityService`: two services built in one test process answer the SAME signing key
+        // here, so a "stranger" made that way is the member under another name and the cell would
+        // be green for the one reason it exists to exclude (measured, `logs/item9/p6-03.log`).
+        let stranger = "fp-stranger-0000000000000000"
+        #expect(stranger != memberFingerprint, "the two peers must really be two")
+
+        let strangerOnly = MeshNetworkManager(store: store)
+        try seatJoiningManager(strangerOnly, admitting: member, seating: [stranger])
+        // The premises, read at the device rather than assumed.
+        #expect(strangerOnly.membershipVerifier?.roster.memberCount == 2,
+                "the seeded mesh admits this device and one member, and nobody else")
+        #expect(strangerOnly.membershipVerifier?.roster.contains(fingerprint: stranger) == false,
+                "the stranger is deliberately not a member of the mesh being adopted")
+        #expect(strangerOnly.slots.compactMap(\.fingerprint) == [stranger],
+                "and the one committed slot faces exactly that stranger")
+        #expect(strangerOnly.sessionState == .joining, """
+            with no grant to name, a committed slot the mesh never admitted is not the commit that \
+            made this session live
+            """)
+        strangerOnly.leaveMesh()
+
+        let both = MeshNetworkManager(store: store)
+        try seatJoiningManager(both, admitting: member, seating: [stranger, memberFingerprint])
+        #expect(both.sessionState == .activeForeground,
+                "and the member's own commit, sitting behind the stranger's, is the one that counts")
+        both.leaveMesh()
+
+        // The shipping shape: the grant's sender is named, and it is the one that is raised even
+        // though the bootstrapped roster does not know it yet.
+        let granted = MeshNetworkManager(store: store)
+        try seatJoiningManager(granted, admitting: member, seating: [stranger], raising: false)
+        #expect(granted.sessionState == .joining, "the precondition the re-assert is defined on")
+        let raised = DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+            granted.reassertCommitIntoAdoptedMesh(admittedBy: stranger)
+        }
+        #expect(raised)
+        #expect(granted.sessionState == .activeForeground, """
+            a named admitter is a stronger statement than roster membership: it is the peer whose \
+            grant this save is acknowledging
+            """)
+        granted.leaveMesh()
+    }
+
+    /// **A re-assert whose own save is refused answers false** — the fix review's P3-b.
+    ///
+    /// The raise goes through `applySessionEvent(.peerCommitted)`, whose effect list contains
+    /// `.persistContext`; a refused seal abandons it and leaves `lastSessionEffectFailure` set. The
+    /// door used to answer `true` regardless, so `recordVerifiedAdmissionDurably()` told its caller
+    /// a grant was durable when the state change it had just produced was not.
+    ///
+    /// Driven at the door directly and deliberately: inside one `recordVerifiedAdmissionDurably()`
+    /// call both saves read the SAME install binding, so no single `DeviceBindingID` override can
+    /// make the first succeed and the second fail. The composed shape is a latent hazard, exactly as
+    /// P3-a's stranger was — which is why the fix is a returned answer rather than a guard added
+    /// somewhere downstream.
+    @Test func aReAssertWhoseOwnSaveIsRefusedAnswersFalse() throws {
+        let member = IdentityService(keychainService: "com.fernlet.identity.test.\(UUID().uuidString)")
+        let manager = MeshNetworkManager(store: store)
+        try seatJoiningManager(
+            manager, admitting: member,
+            seating: [IdentityService.fingerprint(of: member.localSigningPublicKey)],
+            raising: false
+        )
+        #expect(manager.sessionState == .joining, "the precondition the re-assert is defined on")
+
+        let refused = DeviceBindingID.$testOverride.withValue(.unavailable) {
+            manager.reassertCommitIntoAdoptedMesh()
+        }
+        #expect(!refused, "a raise whose context never reached the disk is not a durable grant")
+
+        let accepted = DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+            manager.reassertCommitIntoAdoptedMesh()
+        }
+        #expect(accepted, "and the same raise behind a working seal is")
+        #expect(manager.sessionState == .activeForeground)
+        manager.leaveMesh()
+    }
+
+    /// Puts `manager` at `.joining` inside a mesh that has admitted itself and `admitting`, with
+    /// one slot per entry of `seating` — the shape both P3 cells are written against.
+    ///
+    /// - Parameters:
+    ///   - manager: The manager to seat.
+    ///   - admitting: The peer the mesh admits besides this device.
+    ///   - seating: The peer FINGERPRINTS to seat slots for, in slot order.
+    ///   - raising: Whether the slots are in place for the grant's own re-assert. False seats them
+    ///     AFTERWARDS, which leaves the manager at `.joining` with a committed member slot — the one
+    ///     state the re-assert's own door can be driven from twice.
+    private func seatJoiningManager(
+        _ manager: MeshNetworkManager, admitting: IdentityService,
+        seating: [String], raising: Bool = true
+    ) throws {
+        let mesh = makeMesh(manager)
+        manager.currentMesh = mesh
+        let identity = manager.identityForTesting
+        var ledger = try selfAdmittingLedger(manager, meshID: mesh.meshID)
+        ledger.admissions = ledger.admissions.inserting(
+            SignedAdmissionRecord(token: try MeshAdmissionToken.signed(
+                meshID: mesh.meshID,
+                joinerFingerprint: IdentityService.fingerprint(of: admitting.localSigningPublicKey),
+                joinerSigningPublicKey: admitting.localSigningPublicKey,
+                admitterIdentity: identity
+            ))
+        )
+        manager.seedMembershipLedgerForTesting(
+            meshID: mesh.meshID,
+            founderSigningPublicKey: identity.localSigningPublicKey,
+            ledger: ledger
+        )
+        if raising { seatSlots(seating, on: manager) }
+        DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+            _ = manager.recordVerifiedAdmissionDurably()
+        }
+        if !raising { seatSlots(seating, on: manager) }
+    }
+
+    /// Seats one committed slot per fingerprint, in order, with a throwaway coordinator behind each.
+    private func seatSlots(_ peers: [String], on manager: MeshNetworkManager) {
+        // R2: bounded by the caller's own fixed list.
+        for fingerprint in peers {
+            manager.addSlotForTesting(
+                coordinator: Self.throwawayCoordinator(),
+                peer: PeerHandle(
+                    id: UUID(), displayHint: "peer", discoveryInfo: nil, advertisedFingerprint: nil
+                ),
+                fingerprint: fingerprint
+            )
+        }
+    }
 }

@@ -150,7 +150,11 @@ import Testing
     @Test func everyMeshAcceptanceBatteryIsGated() throws {
         let gated = Set(Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath)).flatMap(\.suites))
         let batteries = try Self.declaredTopLevelTypes().filter(Self.isMeshBattery)
-        #expect(batteries.count >= 28, "the mesh batteries shrank: \(batteries.count) declared")
+        // MEASURED at the commit that moved it, never inherited: 28 at P6 item 7 (2 convergence
+        // generators + the routed convergence battery + 4×P3 + 9×P4 + 12×P5), plus P6 item 9's
+        // eight clause suites. Items 6 and 7 declared no `MeshP6*AcceptanceTests` of their own, so
+        // the arithmetic below is the whole of it.
+        #expect(batteries.count >= 36, "the mesh batteries shrank: \(batteries.count) declared")
         let ungated = batteries.subtracting(gated).sorted()
         #expect(ungated.isEmpty, """
             Mesh acceptance batteries declared in Tests/FernletTests but not named in \
@@ -175,6 +179,14 @@ import Testing
         #expect(selfGates.count >= 2, "this suite must gate itself on two independent steps, so editing one cannot silence it")
         #expect(gated.contains("IdentityProvisioningReadTests") && gated.contains("MeshRoutedRefusalBudgetTests"),
                 "the two walls the P5 correction pass added are gated")
+        // `MeshRoutedDrainWallTests` is a WALL with no compiler half — the retirement and parking
+        // zero-lists item 4 and item 6 put there run nowhere else — so removing it from the line
+        // must be a failure rather than a silence, exactly as the two above are.
+        // `MeshRoutedLockedDeviceTests` is gated beside it but is deliberately NOT on this pin: it
+        // is 25 behaviour cells over five store states, not a zero-list, and
+        // `MeshP5LockedDeviceAcceptanceTests` is already its acceptance clause.
+        #expect(gated.contains("MeshRoutedDrainWallTests"),
+                "the routed path's retirement and parking zero-lists are gated")
         let script = try RepoRoot.source(Self.floorScript)
         #expect(script.contains("totalTestCount") && script.contains("-resultBundlePath"),
                 "the floor script no longer reads the result bundle's own count")

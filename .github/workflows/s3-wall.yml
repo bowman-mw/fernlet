@@ -194,55 +194,56 @@ jobs:
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests
 
-      - name: Mesh acceptance batteries (P3 / P4 / P5) + the CI selector wall
+      - name: Mesh acceptance batteries (P3 / P4 / P5 / P6) + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
         # §11.4, §23.4) ran only by hand until 2026-09-06. Tier 1 throughout: FakePeerNetwork, an
         # injected clock, no radio, no wall-clock sleeps — ~2 minutes on a hosted runner.
         #
-        # The decomposition below was RE-MEASURED per suite at P6 item 7 (item 4's fix review, P3-1:
-        # the arithmetic here had drifted while the floor above it moved). Terms, from the same run:
-        #   105  the P3/P4/P5 acceptance batteries + the two convergence generators
+        # The decomposition below was RE-MEASURED per suite at P6 item 9, from that item's own
+        # gated run (`Scripts/run-gated-suites.sh mesh-batteries 1 <this exact list>` at floor 1,
+        # read off the result bundle). Terms:
+        #   108  the P3/P4/P5 acceptance batteries + the two convergence generators
         #        (MeshConvergenceScheduleTests, MeshConvergencePropertyTests) + the routed
-        #        convergence battery. 101 at 24f6051; P6 items 6 and 7 added cells to
-        #        MeshRoutedDrainConvergenceTests (now 16).
+        #        convergence battery. 105 at P6 item 7; item 9 added rectangle G's property cell
+        #        and two rectangle pins to MeshRoutedDrainConvergenceTests (now 19).
         #  +  4  CIGateSelectorBoundaryTests' own — the static half of this guard.
         #  +  8  MeshRoutedRefusalBudgetTests — the per-sender pre-store refusal bound the P5
         #        post-close review added.
         #  + 27  MeshPairwiseFoundingTests (P6 item 2: the proximity-join founding — the app's ONLY
         #        session entry, and the only suite that drives the real commit/founding/admission/
-        #        delivery path with nothing seeded; 18 at 921441a, plus the 7 the session-end fix
-        #        added — the four doors of `isSessionLive`, the two blip cells and the
-        #        discovery-entry table — plus the 2 its fix review added: door 3's clock, armed in
-        #        the MANAGER at the slot-loss edge, ending a blipped session with no tab bounce and
-        #        cancelled by a re-link).
+        #        delivery path with nothing seeded).
         #  + 32  P6 item 4's three text suites (16 + 3 + 13): the routed text body's framing, its
         #        FIVE hostile shapes and its cap formula; the sender's outcome table; and text
-        #        delivered and PROJECTED end to end through the real founding path — the first
-        #        text-over-routed exercise in the project, and ungated it would never run, since
-        #        CIGateSelectorBoundaryTests only REQUIRES MeshP<n>*AcceptanceTests.
+        #        delivered and PROJECTED end to end through the real founding path.
         #  + 30  P6 item 5's two allowance suites and item 8's drain-wall home (6 + 5 + 19): the
-        #        retry planner, the two lists on a rig, and the retirement/parking walls — item 5's
-        #        whole proof is those cells, and it is an AVAILABILITY wall against an
-        #        attacker-choosable list position, so the item 4 argument applies with more force.
+        #        retry planner, the two lists on a rig, and the retirement/parking walls — an
+        #        AVAILABILITY wall against an attacker-choosable list position.
         #  + 44  P6 item 6's four heart suites (7 + 6 + 16 + 15): the header-only body and its four
         #        hostile shapes, the `.singleRecipient` flip with the shape fence in both
         #        directions, the ack ceremony end to end on a real two-node founding, and the
         #        sender's five gates + consume-on-stage.
-        #  = 250 tests in 41 suites.
-        # `MeshRoutedDrainTests`' own cells stay ungated — that is item 11's call, as its ledger
-        # row says.
-        # The floor is MEASURED, never inferred: 250 is what this exact step list executed through
-        # `Scripts/run-gated-suites.sh` at floor 1 (41 suites) at P6 item 7, read off its own
-        # "N test(s) ran". The floor is deliberately left at 240 here — P6 is still adding suites to
-        # this list, and re-pinning it to the measured count is item 11's close-out job. RAISE it
-        # then; never lower it in passing.
+        #  + 26  MeshRoutedLockedDeviceTests, gated by P6 item 9 and priced on its OWN argument
+        #        rather than riding the drain wall's: it is 26 behaviour cells over five store
+        #        states and two independent knobs, not a zero-list wall, and it is where item 7's
+        #        launch-restore decision table and item 6's W2 rows live.
+        #  + 21  P6 item 9's eight acceptance suites (2 + 2 + 2 + 3 + 2 + 3 + 2 + 5): key
+        #        advertisement, pairwise identity, per-type caps, text routing, projection retry,
+        #        the heart ceremony, honesty and determinism.
+        #  = 300 tests in 50 suites.
+        # `MeshRoutedDrainTests`' own 37 cells stay ungated — that is item 11's call, as its ledger
+        # row says; so do item 1's three key-agreement suites (30) and the 51 photo-delivery cells
+        # the key-advertisement clause promotes by citation.
+        # The floor is MEASURED, never inferred: 300 is what this exact step list executed at P6
+        # item 9. Note the count is over `@Test` FUNCTIONS, not parameterized cases — measured, not
+        # assumed: MeshRoutedDrainConvergenceTests contributes 19 while running a 40-cell and a
+        # 12-cell rectangle. RAISE this as suites grow; never lower it in passing.
         # CIGateSelectorBoundaryTests is the static half of this guard — every suite named on any
         # run-gated-suites.sh line must be a declared suite, and every MeshP<n>*AcceptanceTests /
         # convergence battery declared in the tree must be named here — and it also runs on the first
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 240 \
+          Scripts/run-gated-suites.sh mesh-batteries 300 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -283,4 +284,13 @@ jobs:
             MeshP5ReplayAcceptanceTests \
             MeshP5OtherBranchDeliveryAcceptanceTests \
             MeshP5HonestyAcceptanceTests \
-            MeshP5DeterminismAcceptanceTests
+            MeshP5DeterminismAcceptanceTests \
+            MeshRoutedLockedDeviceTests \
+            MeshP6KeyAdvertisementAcceptanceTests \
+            MeshP6PairwiseIdentityAcceptanceTests \
+            MeshP6PerTypeCapAcceptanceTests \
+            MeshP6TextRoutingAcceptanceTests \
+            MeshP6ProjectionRetryAcceptanceTests \
+            MeshP6HeartCeremonyAcceptanceTests \
+            MeshP6HonestyAcceptanceTests \
+            MeshP6DeterminismAcceptanceTests

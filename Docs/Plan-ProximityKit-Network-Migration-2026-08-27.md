@@ -2070,6 +2070,59 @@ still a sim-lane job; no hardware is implied by it.
     photo and text receipts (R-19 on job 4's list), and FINAL refusals are marked memory-only in
     `routedHeartRefusedKeys`. `PayloadType.friendHeart` is **not parkable** — presence still uses it.
 
+### 12.4 Acceptance evidence — BUILT 2026-09-12 (P6 item 9)
+
+§12's clauses, one serialized suite each, in `Tests/FernletTests/MeshP6AcceptanceTests.swift` —
+**eight suites**, in §11.4's format and for §11.4's reason: each is a self-contained scenario on the
+shipping seams, so CI can gate one line per clause. The launcher named seven; the eighth is P5's
+Honesty shape, which is what gives rectangle G's wholeness and the not-claimed list a home.
+
+| Clause | Suite | Scenario |
+|---|---|---|
+| (a) key advertisement — item 1 | `MeshP6KeyAdvertisementAcceptanceTests` | the advertised-key set converges on **every partition shape** and a real `sendTempMessage(_:)` then resolves real destinations against it; plus the fail-closed 13+ gate as a positive assertion — without `allowChatEverywhere(except:)` every text mint answers `.ageGated` before a resolver runs, and the whole text half would be green over nothing |
+| (b) pairwise identity — item 2 | `MeshP6PairwiseIdentityAcceptanceTests` | one compact founded pair delivers **both** of P6's rows **both ways**, asserted at the recipients; and a pair's heart still names exactly one destination, where a full-roster target would have been indistinguishable from it |
+| (c) per-type caps — item 3 | `MeshP6PerTypeCapAcceptanceTests` | all three registered caps are **arithmetic over their own body family**, never a literal, with the heart row's zero payload term spelled out and the heart < text ordering pinned; plus the frozen columns beside the two P6 edited in place |
+| (d) text routing — item 4 | `MeshP6TextRoutingAcceptanceTests` | rectangle G's text half: the gated member holds the ciphertext and projects nothing (two-sided — an empty transcript is a VIEW fact), the **complement** loop over every ungated survivor, one honest transcript compared as `(id, text, sender)` triples **and** as instants (the derivable form of "every claim was inside its window"), and item 4's fourth handed-over invariant — a session end clears the transcript and nothing projects into the vacancy |
+| (e) projection retry — item 5 | `MeshP6ProjectionRetryAcceptanceTests` | the retry share starves neither half of a pass, over three list shapes; and a converged feature run leaves both re-entry lists accounted for — the mark present at every ungated reader and absent at the gated one |
+| (f) heart ceremony — item 6 | `MeshP6HeartCeremonyAcceptanceTests` | a gift is judged **exactly once on every shape**, witnessed per gift over `onHeartJudgedForTesting` and corroborated by the ledger's own dedup; a heart names one destination on every shape; and the deferred quarter two-sided — held ciphertext, no ledger row, then one `.foregrounded` edge producing **exactly one** ack |
+| (j) honesty | `MeshP6HonestyAcceptanceTests` | rectangle G whole at **12 of 12**, every shape, `deferred` empty as a positive claim, the vocabulary at 14 and the feature window at 2; and what the battery does not claim, named — the asleep quarter proves the gate's arithmetic rather than a reachable product state (nothing in shipping raises `.backgrounded`), the seeded trust-vault rows stand in for a second session, the age gate is product policy re-applied at two points, D-4.5, item 3's charged-forwarder residual, item 8's ungated drain cells, and item 6's two named residuals |
+| (j) determinism | `MeshP6DeterminismAcceptanceTests` | every new overlay field reaches the replayable label (the named risk: a field appended to the struct but not to `description` leaves the digest byte-identical and the pin passes unchanged); the 40 overlays are still 40 distinct plans; the **batch judgement counter is spelled nowhere** in the two files item 9 owns, with the per-gift field stripped before the scan so the wall is about which FIELD is read; neither digest is re-pinned here; and `MeshPartitionShape.matrix`'s ORDER is pinned, because `routedShapeSalt` reads `firstIndex(of:)` and `scheduleDigest()` iterates in matrix order, so a re-order moves BOTH digests |
+
+**Rectangle G — the feature tree** (`MeshRoutedConvergenceMatrix.featureTree`, 12 cells: the whole
+seed family on `2/2` plus the root seed on the other four shapes, rectangle B's shape for rectangle
+B's reason) runs `MeshRoutedFeaturePipeline.featureRouting` — split, open every gate, arm every
+member's own key advertisement, shut one drawn member's chat gate, heal, **converge the
+advertised-key set**, then a bounded two-round feature window the overlay's own draws interleave.
+Its property cell is `MeshRoutedDrainConvergenceTests.bothFeatureRowsConvergeUnderASeededSchedule`,
+and the two rows are judged with **different audiences**: a text is `.fullRosterAtCreation` and a
+heart is `.singleRecipient`, while `routedDeliveryState` answers `.reclaimed` for "this device holds
+no record" — so a roster-wide claim about a heart passes at every non-recipient for exactly the wrong
+reason. `routedInvariants` therefore took a `judged:` audience (nil = the whole living roster, so
+every pre-P6 cell is byte-identical), I-2 and I-8's `blocked` leg read it, and I-4's projection arm
+became per canonical store instead of photo-only.
+
+```
+overlay digest (40 routed overlays)
+  before  f1cc626d4421a8845839ac41be3c4fa418e98dd2047ad92865306e40d1693ff9
+  after   594b6f77d18703e3b3f3d180473869360999061b6d207206ba314b0896d55765
+moved by: seven fields appended after field 8 (textOrigin, textRound, ageGatedMember, heartOrigin,
+heartRecipient, heartRound, heartRecipientForegrounded), EIGHT draws (1+1+2+1+1+1+1), every one of
+them after `let unknown` in `routedOverlay(for:using:)`; each appended to `description`.
+schedule digest (80 membership schedules)
+  ca898bcc9ec7eb099c20bf0b1557e8d450d2d6747d103d899883aef06d466930   UNMOVED
+why only that one moved: three independent SplitMix64 generators; `schedule(…)` never reads
+`routedSalt` and `scheduleDigest()` never builds an overlay. A digest failure is a DECISION, not a
+re-pin — both literals are recorded above so a "moved" digest and a re-pin are distinguishable.
+```
+
+**CI.** The eight suites plus `MeshRoutedLockedDeviceTests` joined the `mesh-batteries` step in
+`.github/workflows/s3-wall.yml`; `CIGateSelectorBoundaryTests`' battery pin moved 28 → 36 (measured,
+not inherited: items 6 and 7 declared no `MeshP6*AcceptanceTests` of their own), and
+`MeshRoutedDrainWallTests` joined its named-walls pin. A **cell-level** selector is not an option and
+this is recorded so it is not re-litigated: `Scripts/run-gated-suites.sh` rejects any selector
+containing a `/`, and `everyGatedSelectorNamesADeclaredSuite` requires each selector to name a
+declared top-level type — so the whole suite is the smallest gateable unit.
+
 ---
 
 ## 13. Phase P7 — app-layer lifecycle gating seam
@@ -3014,10 +3067,15 @@ those five.*
   (`MeshConvergenceSchedule.swift:748`), riding P4's root seed `0x00F32B1C00090002` across the same
   five shapes as a **40-cell** rectangle; P4's 80 membership schedules are byte-identical beside it
   (D-14.1: no routed event became a `MeshScheduleEvent` case, because one more element re-phases every
-  shape and seed and voids §10.10's evidence *and its provenance*). **P6 grows the overlay by
-  appending fields after field 8**, every draw unconditional, every field storing a **resolved** value
-  — that re-phases nothing and moves only the overlay digest, deliberately. Two SHA-256 digests are
+  shape and seed and voids §10.10's evidence *and its provenance*). **P6 grew the overlay by
+  appending fields after field 8** (item 9, 2026-09-12): seven fields and **eight** draws, every draw
+  unconditional, every field storing a **resolved** value — which re-phased nothing and moved only the
+  overlay digest, deliberately (`f1cc626d…3ff9` → `594b6f77…5765`; the schedule digest
+  `ca898bcc…6930` is unmoved, §12.4 carries the block). Two SHA-256 digests are
   pinned in `MeshP5DeterminismAcceptanceTests` and **a digest failure is a decision, not a re-pin**.
+  One tripwire is now a cell rather than a comment: `MeshPartitionShape.matrix`'s ORDER moves BOTH
+  digests, because `routedShapeSalt` reads `firstIndex(of:)` and `scheduleDigest()` iterates in
+  matrix order, while `everyDeclaredShapeIsInTheMatrix` compares only SETS.
   **And the suites-list lesson, twice-paid:** a `-only-testing:` line naming a non-existent suite, or
   a *file* rather than a `@Suite` struct, matches zero tests and still prints
   `TEST EXECUTE SUCCEEDED`. P5 hit it twice, and the corrected 143-name list it worked from lived only

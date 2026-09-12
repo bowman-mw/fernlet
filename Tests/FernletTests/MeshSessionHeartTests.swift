@@ -304,32 +304,51 @@ struct MeshSessionHeartTests {
     /// the item 6 fix review (P3-6) it is a BEHAVIOUR pin rather than three literal substrings of
     /// `DisposableCameraView.swift`: the old form red on a rename and was blind to a reordering that
     /// kept the same three lines. All eight combinations, so there is no arm the table does not name.
+    ///
+    /// **The `enabled` column is P6 item 9's SET A (the fix review's P3-e).** The button's own
+    /// `reachable` was `meshLinked || presenceReachable || meshAddressable`, which disagrees with
+    /// the transport on exactly row 4: a live hearts slot facing a peer this device cannot address
+    /// is not a transport, but it made the disjunction true — so the affordance was enabled over a
+    /// switch with nothing to run, and the tap fired a haptic and did nothing. Enablement is now the
+    /// transport's own answer, and this column is what says the two cannot drift apart again.
     @Test func thePresenceOrderPrefersADeliveredHeartOverACustodiedOne() throws {
         typealias Transport = DisposableCameraView.SessionHeartTransport
-        let table: [(linked: Bool, presence: Bool, addressable: Bool, want: Transport)] = [
-            (true, true, true, .mesh),        // linked and addressable: delivered now, over a slot
-            (true, false, true, .mesh),
-            (true, true, false, .presence),   // a slot we cannot address is not a transport
-            (true, false, false, .unavailable),
-            (false, true, true, .presence),   // THE ordering: presence delivers now, routed custodies
-            (false, true, false, .presence),
-            (false, false, true, .mesh),      // the star case — staged and custodied, the unlock
-            (false, false, false, .unavailable)
+        let table: [(linked: Bool, presence: Bool, addressable: Bool, want: Transport, enabled: Bool)] = [
+            (true, true, true, .mesh, true),      // linked and addressable: delivered now, over a slot
+            (true, false, true, .mesh, true),
+            (true, true, false, .presence, true), // a slot we cannot address is not a transport
+            (true, false, false, .unavailable, false), // …and with no presence it is no transport at all
+            (false, true, true, .presence, true), // THE ordering: presence delivers now, routed custodies
+            (false, true, false, .presence, true),
+            (false, false, true, .mesh, true),    // the star case — staged and custodied, the unlock
+            (false, false, false, .unavailable, false)
         ]
         #expect(table.count == 8, "every combination of the three seams is named")
+        let disagreements = table.filter {
+            ($0.linked || $0.presence || $0.addressable) != $0.enabled
+        }
+        #expect(disagreements.count == 1,
+                "row 4 is the one shape where the old disjunction and the transport disagree")
         // R2: bounded by the table.
         for row in table {
-            #expect(DisposableCameraView.sessionHeartTransport(
+            let transport = DisposableCameraView.sessionHeartTransport(
                 meshLinked: row.linked, presenceReachable: row.presence,
                 meshAddressable: row.addressable
-            ) == row.want, "the heart tap's transport order is a product rule, not an accident")
+            )
+            #expect(transport == row.want,
+                    "the heart tap's transport order is a product rule, not an accident")
+            #expect((transport != .unavailable) == row.enabled,
+                    "the affordance is enabled exactly where a transport can carry the tap")
         }
-        // And the button really consults it, rather than re-deciding in the body.
+        // And the button really consults it, rather than re-deciding in the body — both halves: the
+        // transport itself, and the enablement derived from it rather than from the three seams.
         let camera = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("App/Fernlet/DisposableCameraView.swift")
         )
         #expect(camera.contains("let transport = Self.sessionHeartTransport("),
                 "the order is read from the pinned function, not re-derived in the view body")
+        #expect(camera.contains("let reachable = transport != .unavailable"),
+                "and enablement is the transport's answer, not a disjunction that disagrees on row 4")
     }
 
     /// **A heart addressed to this device is a CALLER bug with its own frozen audit token** — the

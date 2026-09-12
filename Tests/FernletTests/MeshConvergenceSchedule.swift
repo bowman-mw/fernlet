@@ -101,6 +101,16 @@ nonisolated enum MeshScheduleBounds {
     /// own written note, in the idiom P4 used raising `maxSettleSweeps` from 4 to 6.
     static let maxCommitRounds = 2
 
+    /// How many bounded FEATURE rounds a cell runs after the heal — the window P6's text and heart
+    /// originations are interleaved in (P6 item 9).
+    ///
+    /// **Two, and it is an assertion, not a knob** (`theFeatureRectangleStaysInsideItsBounds`). Two
+    /// is what makes the interleaving a real draw: text-then-heart, heart-then-text and
+    /// both-in-one-round are all reachable, and a third round would only re-run a drain the first
+    /// two already converged. Raising it needs its own written note, in the idiom P4 used raising
+    /// ``maxSettleSweeps`` from 4 to 6.
+    static let maxFeatureRounds = 2
+
     /// The most content items one branch creates — one photo, one text, one heart. Far below the
     /// smallest ``MeshContentSet`` capacity, which is what makes "no content loss" an unconditional
     /// claim rather than one that has to reason about the caps (the caps have their own suite in
@@ -794,6 +804,25 @@ nonisolated enum MeshScheduleGenerator {
         let replayGate = random.index(below: 2) == 0
         let develops = random.index(below: 2) == 0 && routedCanDevelop(schedule, origin: origin)
         let unknown = routedSubject(others, gateBelow: 4, using: &random)
+        // ── P6 item 9: fields 9…15, appended AFTER field 8 and before nothing that draws. Every
+        //    draw unconditional; every stored value resolved against THIS cell's survivors, so
+        //    `featureTokens` stays a pure function of the value. Appending here is what leaves
+        //    fields 1–8 byte-identical for every seed and every shape — `index(below:)` draws
+        //    before its bound check, and everything below this block is pure.
+        let textSlot = random.index(below: survivors.count)                             // field 9
+        let textOrigin = survivors.indices.contains(textSlot) ? survivors[textSlot] : 0
+        let textRound = random.index(below: MeshScheduleBounds.maxFeatureRounds)         // field 10
+        let gated = routedSubject(                                                      // field 11
+            survivors.filter { $0 != textOrigin }, gateBelow: 3, using: &random
+        )
+        let heartSlot = random.index(below: survivors.count)                            // field 12
+        let heartOrigin = survivors.indices.contains(heartSlot) ? survivors[heartSlot] : 0
+        let heartPool = survivors.filter { $0 != heartOrigin }
+        let recipientSlot = random.index(below: heartPool.count)                        // field 13
+        let heartRecipient = heartPool.indices.contains(recipientSlot)
+            ? heartPool[recipientSlot] : heartOrigin
+        let heartRound = random.index(below: MeshScheduleBounds.maxFeatureRounds)        // field 14
+        let heartAwake = random.index(below: 4) > 0                                     // field 15
         // A replay needs a receiver that ALREADY admitted the manifest. Where this cell plants a
         // refusal at every one of its own live destinations, no receiver ever admits anything, and
         // a re-presented frame would be a FIRST admission dressed up as a replay — it would move
@@ -807,7 +836,10 @@ nonisolated enum MeshScheduleGenerator {
             seed: schedule.seed, origin: origin, chunks: chunks, sealed: sealed,
             capacityMember: capacity, lockMember: lock, replays: replays, develops: develops,
             unknownTypeMember: unknown,
-            farBranchMint: routedIsFarBranch(schedule, origin: origin)
+            farBranchMint: routedIsFarBranch(schedule, origin: origin),
+            textOrigin: textOrigin, textRound: textRound, ageGatedMember: gated,
+            heartOrigin: heartOrigin, heartRecipient: heartRecipient, heartRound: heartRound,
+            heartRecipientForegrounded: heartAwake
         )
     }
 
@@ -888,6 +920,23 @@ nonisolated enum MeshRoutedEventToken: String, CaseIterable, Equatable, Sendable
     /// The mint happened in a branch other than the lowest-indexed survivor's.
     case farBranchMint
 
+    /// Every living member's OWN key advertisement minted through the production door, and the
+    /// bounded rounds that converge the set (P6 items 1 and 9).
+    case keyAdvertisement
+
+    /// A session TEXT minted at a survivor through the real `sendTempMessage(_:)` (P6 item 4).
+    case textOrigination
+
+    /// One survivor's 13+ chat gate is shut across the feature window (P6 item 4).
+    case ageGatedReceiver
+
+    /// A REAL sealed heart minted at a survivor for ONE recipient (P6 item 6).
+    case heartOrigination
+
+    /// The heart's recipient is not `.activeForeground` when it arrives, so the ledger judgement is
+    /// deferred rather than refused (P6 item 6, D-10.12's third leg).
+    case heartDeferred
+
     /// Every token an overlay can plan — the coverage target the rectangle asserts it reached.
     static let vocabulary: [String] = allCases.map(\.rawValue)
 }
@@ -934,6 +983,47 @@ nonisolated struct MeshRoutedScheduleOverlay: Hashable, Sendable, CustomStringCo
     /// Whether the mint lands outside the lowest-indexed survivor's branch.
     let farBranchMint: Bool
 
+    /// The survivor that originates a session TEXT (field 9, P6 item 9).
+    let textOrigin: Int
+
+    /// Which feature round the text is minted in, `0..<MeshScheduleBounds.maxFeatureRounds`
+    /// (field 10).
+    let textRound: Int
+
+    /// A survivor OTHER than ``textOrigin`` whose 13+ chat gate is shut, or nil (field 11).
+    ///
+    /// Drawn off the origin deliberately: a gated ORIGIN answers `.ageGated` at `sendTempMessage`
+    /// and mints nothing, which would make the whole text half green over nothing.
+    let ageGatedMember: Int?
+
+    /// The survivor that sends a HEART (field 12).
+    let heartOrigin: Int
+
+    /// The single recipient the heart addresses. Equals ``heartOrigin`` only where no other survivor
+    /// exists — which plans no heart at all, and is unreachable in this rectangle (field 13).
+    let heartRecipient: Int
+
+    /// Which feature round the heart is minted in (field 14).
+    let heartRound: Int
+
+    /// Whether the recipient is `.activeForeground` when the heart arrives — D-10.12's third leg,
+    /// drawn rather than assumed. ¾ awake (field 15).
+    let heartRecipientForegrounded: Bool
+
+    /// Whether this cell plans a heart at all.
+    ///
+    /// False only for a survivor set of one, which this rectangle cannot produce
+    /// (`preferQuorum` is fixed false for routed cells, so `planDeparture` never drops below two).
+    var plansHeart: Bool { heartRecipient != heartOrigin }
+
+    /// The recipient whose ledger judgement this cell deliberately withheld, or nil.
+    ///
+    /// **Derived, not a sixteenth field and not in ``description``** — the `awake|asleep` clause
+    /// already carries field 15, and a stored copy would be a second source for one fact.
+    var heartDeferredRecipient: Int? {
+        plansHeart && !heartRecipientForegrounded ? heartRecipient : nil
+    }
+
     /// A replayable label: the seed and the resolved plan, in frozen English.
     var description: String {
         var text = "routed \(String(seed, radix: 16)) o\(origin) x\(chunks)"
@@ -944,6 +1034,10 @@ nonisolated struct MeshRoutedScheduleOverlay: Hashable, Sendable, CustomStringCo
         if develops { text += " develops" }
         if let unknownTypeMember { text += " unknown\(unknownTypeMember)" }
         if farBranchMint { text += " far" }
+        text += " t\(textOrigin)@\(textRound)"
+        if let ageGatedMember { text += " gate\(ageGatedMember)" }
+        if plansHeart { text += " h\(heartOrigin)>\(heartRecipient)@\(heartRound)" }
+        text += heartRecipientForegrounded ? " awake" : " asleep"
         return text
     }
 
@@ -968,9 +1062,34 @@ nonisolated struct MeshRoutedScheduleOverlay: Hashable, Sendable, CustomStringCo
         return tokens
     }
 
-    /// Every token this overlay plans, across both pipelines — the coverage wall's generated side.
+    /// The tokens the **feature** pipeline executes — rectangle G: the arming, the text, the heart.
+    ///
+    /// Deliberately a third bucket beside ``fullHealTokens`` and ``developmentTokens``: the feature
+    /// rows are minted AFTER the heal, on a run whose addressing has really converged, which
+    /// pipeline 1 cannot do without making its own lock window vacuous (D-14.9's ordering).
+    var featureTokens: Set<String> {
+        var tokens: Set<String> = [
+            MeshRoutedEventToken.keyAdvertisement.rawValue,
+            MeshRoutedEventToken.textOrigination.rawValue
+        ]
+        if ageGatedMember != nil { tokens.insert(MeshRoutedEventToken.ageGatedReceiver.rawValue) }
+        if plansHeart { tokens.insert(MeshRoutedEventToken.heartOrigination.rawValue) }
+        if heartDeferredRecipient != nil {
+            tokens.insert(MeshRoutedEventToken.heartDeferred.rawValue)
+        }
+        return tokens
+    }
+
+    /// Every token this overlay plans, across **all three** pipelines — the per-cell union.
+    ///
+    /// The coverage wall takes the union **per rectangle** rather than reading this
+    /// (`theRoutedRectangleEmitsEveryRoutedToken`), because only rectangle G runs pipeline 3 and
+    /// only rectangle C runs pipeline 2 — the same restriction `develops` already gives
+    /// ``developmentTokens``. This value stays the honest "everything this overlay plans anywhere",
+    /// which is what a per-cell diagnostic wants.
     var plannedTokens: Set<String> {
-        develops ? fullHealTokens.union(developmentTokens) : fullHealTokens
+        let base = develops ? fullHealTokens.union(developmentTokens) : fullHealTokens
+        return base.union(featureTokens)
     }
 
     /// Which mint this overlay plans.

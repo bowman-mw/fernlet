@@ -54,6 +54,20 @@ enum MeshRoutedCellFailure: Error {
     /// `.refused(.destinationNotAddressable)` **by name** — item 1's residual turned into a failure
     /// instead of a silence. A cell that could not mint must say which refusal it got.
     case textNotStaged(MeshTextSendOutcome)
+
+    /// The HEART row's own send door staged nothing, or more than one item (P6 item 9).
+    ///
+    /// Carries no outcome, unlike its text sibling: `sendSessionHeart(to:)` answers `Void` and
+    /// reports through `sessionHeartState`, so the honest thing a cell can say is "no heart reached
+    /// the store" — the state itself is item 6's exhaustive space and is asserted there.
+    case heartNotStaged
+
+    /// The overlay named a heart recipient that is not a living member of the built run.
+    ///
+    /// Unreachable by construction — field 13 draws over `survivors ∖ {heartOrigin}` — and a thrown
+    /// error rather than a force-unwrap for ``originNotLiving``'s reason: a generator change that
+    /// broke it must fail as a named error rather than trap the whole test process.
+    case heartRecipientMissing
 }
 
 // MARK: - The routed seam on the convergence run
@@ -728,6 +742,248 @@ extension MeshConvergenceRun {
     }
 }
 
+// MARK: - MeshRoutedHeartJudgementLog
+
+/// Every routed heart judgement one run's members minted, in order — the per-gift witness item 9's
+/// exactly-once invariant is written against (P6 item 9).
+///
+/// **A run-scoped collector over item 6's own `onHeartJudgedForTesting` seam, not a new field on the
+/// manager.** The design proposed a `routedHeartJudgementsForTesting` list on `MeshNetworkManager`;
+/// item 6 had already shipped the seam that makes one unnecessary, and a stored list would have been
+/// a second persisted-ish surface to bound, clear and wipe for no gain. Nothing here is shipping
+/// code, so the memory-lifecycle and wipe walls have nothing to look for.
+///
+/// The ledger cannot be this witness and neither can the audit capture: `recordReceivedHeart` dedups
+/// by gift id, so a ledger asked twice looks exactly like a ledger asked once, and the capture is
+/// process-global with no node or item scope (D-14.10 / D-6a.10).
+@MainActor
+final class MeshRoutedHeartJudgementLog {
+
+    /// The most judgements one run may record before this stops growing.
+    ///
+    /// A real bound at the append site rather than a claim in a doc comment: a cell's heart is one
+    /// gift over at most eight members, so anything approaching this is a defect the count itself
+    /// should make visible rather than an allocation to absorb.
+    static let maxJudgements = 64
+
+    /// Every ack minted at any member, with the fingerprint of the device that minted it.
+    private(set) var judgements: [(member: String, ack: MeshRoutedHeartAck)] = []
+
+    /// How many judgements were dropped at the cap — asserted zero rather than assumed.
+    private(set) var dropped = 0
+
+    /// Records one judgement, or counts a drop.
+    func record(_ ack: MeshRoutedHeartAck, at member: String) {
+        guard judgements.count < Self.maxJudgements else {
+            dropped += 1
+            return
+        }
+        judgements.append((member: member, ack: ack))
+    }
+
+    /// Every judgement minted **anywhere** for one gift.
+    func acks(for giftID: UUID) -> [MeshRoutedHeartAck] {
+        judgements.filter { $0.ack.giftID == giftID }.map(\.ack)
+    }
+}
+
+// MARK: - The feature seams (P6 item 9)
+
+/// The heart half of item 9's feature pipeline, the drain round its two rows share, and the reads
+/// rectangle G's invariants are written against.
+///
+/// **Through the real `sendSessionHeart(to:)`, never a fixture mint.** The design named a
+/// `MeshRoutedHeartFixtures` item built on `MeshDeliveryTarget.addressing(…)` because at design time
+/// neither existed (its own check said so, O7); item 6 shipped the whole sender instead, and its
+/// five gates are six lines of rig state — the same six `MeshFoundingRig`'s heart seams set. Going
+/// through the shipping door is strictly stronger: it runs `originateRoutedItem` →
+/// `routedDestinationKeys`, the resolver the arming converges, so a heart on a mesh whose
+/// advertisements never converged refuses BY NAME here exactly as a text does, and the exactly-once
+/// claim is then about the real ceremony rather than about a fixture's chunks.
+@MainActor
+extension MeshConvergenceRun {
+
+    /// Arms both ends of one heart: the opt-in, an isolated ledger each, and the mutual trust-vault
+    /// rows a mesh heart's eligibility gate reads.
+    ///
+    /// **The vault rows are SEEDED, and that is the thing to be honest about** — the same honesty
+    /// item 6's ceremony suite carries in its own header. A vault row appears when
+    /// `pendingFriendReview` completes, which fires at session END, so inside the session that
+    /// produced a heart it cannot exist. This stands in for a second session and proves nothing
+    /// about the first; item 10's two-session Lane C script is the only honest proof of the feature.
+    ///
+    /// The ledgers are per node and temp-file backed (the shared-disk-root flake family), and their
+    /// clock is the run's own injected anchor, never the wall clock.
+    ///
+    /// - Parameters:
+    ///   - origin: The member that will send.
+    ///   - recipient: Its single destination.
+    func armHeartCeremony(at origin: MeshConvergenceMember, to recipient: MeshConvergenceMember) {
+        // R2: a fixed two-element list.
+        for member in [origin, recipient] {
+            member.node.store.setAllowNearbyHearts(true)
+            member.node.manager.heartLedger = isolatedHeartLedger()
+        }
+        origin.node.store.proximityTrustVault.trust(heartPeerIdentity(of: recipient), mode: .friend)
+        recipient.node.store.proximityTrustVault.trust(heartPeerIdentity(of: origin), mode: .friend)
+    }
+
+    /// A temp-file-backed heart ledger on the run's injected clock.
+    func isolatedHeartLedger() -> ProximityHeartLedger {
+        let anchor = self.anchor
+        return ProximityHeartLedger(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("routed-feature-\(UUID().uuidString)", isDirectory: true)
+                .appendingPathComponent("HeartLedger.json"),
+            now: { anchor }
+        )
+    }
+
+    /// The handshake-shaped identity the trust vault keys its rows on, built from the two fields
+    /// the run's own pump hands the manager.
+    private func heartPeerIdentity(of member: MeshConvergenceMember) -> ProximityCoordinator.PeerIdentity {
+        let identity = member.node.manager.identityForTesting
+        return ProximityCoordinator.PeerIdentity(
+            id: member.node.handle.id,
+            displayName: member.node.label,
+            signingPublicKey: identity.localSigningPublicKey,
+            keyAgreementPublicKey: identity.localKeyAgreementPublicKey,
+            fingerprint: identity.localFingerprint,
+            rangingMode: .rssi,
+            firstSeenAt: anchor,
+            capabilities: ProximityCapability.allCases.map(\.rawValue)
+        )
+    }
+
+    /// Installs `log` as every member's heart-judgement witness.
+    ///
+    /// `members`, not `livingMembers`: a device that judged and then departed still judged, and a
+    /// witness over survivors alone could not see the judgement it made.
+    func installHeartJudgementWitness(_ log: MeshRoutedHeartJudgementLog) {
+        // R2: bounded by the roster cap.
+        for member in members {
+            let fingerprint = member.fingerprint
+            member.node.manager.onHeartJudgedForTesting = { [weak log] ack in
+                log?.record(ack, at: fingerprint)
+            }
+        }
+    }
+
+    /// **One call into the HEART row's own seam** (P6 item 6): the member sends a session heart to
+    /// one recipient through the real public API, and the cell refuses to continue on anything but
+    /// a staged mint.
+    ///
+    /// The id is read back out of the origin's own routed index rather than returned by a new seam,
+    /// for `routedTextEvent(at:round:)`'s reason: the door mints its own `UUID` and a seam that
+    /// handed it out would be a second per-type source, which is what D-13.31 walls.
+    ///
+    /// - Parameters:
+    ///   - member: The origin.
+    ///   - recipient: The single destination.
+    /// - Returns: the minted item's key, whose `itemID` **is** the gift id for this type.
+    /// - Throws: ``MeshRoutedCellFailure/heartNotStaged`` when no heart reached the store.
+    func routedHeartEvent(
+        at member: MeshConvergenceMember, to recipient: MeshConvergenceMember
+    ) throws -> MeshRoutedItemKey {
+        let before = Set(routedHeartKeys(at: member))
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            member.node.manager.sendSessionHeart(to: heartFriendRecord(of: recipient))
+        }
+        let minted = Set(routedHeartKeys(at: member)).subtracting(before)
+        guard minted.count == 1, let key = minted.first else {
+            throw MeshRoutedCellFailure.heartNotStaged
+        }
+        return key
+    }
+
+    /// Every heart this member originated itself, by key.
+    private func routedHeartKeys(at member: MeshConvergenceMember) -> [MeshRoutedItemKey] {
+        let mine = member.fingerprint
+        return routedIndex(of: member)?.items.filter {
+            $0.key.originFingerprint == mine
+                && $0.manifest?.typeToken == MeshRoutedTypeToken.heart
+        }.map(\.key) ?? []
+    }
+
+    /// The trusted-peer record the heart affordance would hand the sender for `member`.
+    private func heartFriendRecord(of member: MeshConvergenceMember) -> ProximityTrustedPeerRecord {
+        let identity = member.node.manager.identityForTesting
+        return ProximityTrustedPeerRecord(
+            displayName: member.node.label,
+            fingerprint: identity.localFingerprint,
+            signingPublicKey: identity.localSigningPublicKey,
+            keyAgreementPublicKey: identity.localKeyAgreementPublicKey,
+            mode: .friend,
+            firstAcceptedAt: anchor,
+            lastSeenAt: anchor
+        )
+    }
+
+    /// Puts one member's session state where field 15 drew it.
+    ///
+    /// **`applySessionEvent(.backgrounded)`, never the routed access gate** (the design check's R4).
+    /// `MeshRoutedAccessGate.permits(.decryptContent)` reads `appIsForeground`, so pushing a closed
+    /// gate would shut that member's TEXT projection too and redden the complement loop §2c depends
+    /// on. The only leg that isolates the heart is `sessionState`, whose case is
+    /// `.continuingInBackground`; `.peerCommitted` is then a self-edge, so the drain still pumps.
+    ///
+    /// Honesty, recorded in `MeshP6HonestyAcceptanceTests` as well as here: **nothing in shipping
+    /// raises `.backgrounded` or `.foregrounded`** — the predicate's own source calls the leg inert
+    /// until P8 — so the asleep quarter proves the gate's arithmetic, not a reachable product state.
+    ///
+    /// - Parameters:
+    ///   - member: The recipient.
+    ///   - foregrounded: Whether it stays `.activeForeground`.
+    func setHeartRecipientForegrounded(_ member: MeshConvergenceMember, _ foregrounded: Bool) {
+        guard !foregrounded else { return }
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            member.node.manager.applySessionEvent(.backgrounded)
+        }
+    }
+
+    /// Raises the recipient back to the foreground — the re-entry half of the asleep quarter.
+    func foregroundHeartRecipient(_ member: MeshConvergenceMember) {
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            member.node.manager.applySessionEvent(.foregrounded)
+        }
+    }
+
+    /// The heart-ledger rows one member holds for a gift — the ledger's own dedup, read at the
+    /// device that holds it.
+    func heartLedgerRows(at member: MeshConvergenceMember, giftID: UUID) -> [ReceivedHeartRecord] {
+        member.node.manager.heartLedger?.receivedHearts.filter { $0.id == giftID } ?? []
+    }
+
+    /// One bounded full-mesh round for the feature window: every pair commits, then the fabric
+    /// settles, exactly as ``runKeyAdvertisementRounds()`` does.
+    ///
+    /// Separate from ``runRoutedDrainRounds(origin:key:binding:)`` because the window carries TWO
+    /// keys with two different origins, so there is no single "is the origin settled?" exit.
+    func runFeatureDrainRound() async throws {
+        let binding = DeviceBindingID.TestOverride.identifier(MeshP3Acceptance.install)
+        let living = livingMembers
+        DeviceBindingID.$testOverride.withValue(binding) {
+            // R2: bounded by the roster cap, squared.
+            for (position, near) in living.enumerated() {
+                for far in living.dropFirst(position + 1) {
+                    near.node.manager.applySessionEvent(.peerCommitted, committedPeer: far.fingerprint)
+                    far.node.manager.applySessionEvent(.peerCommitted, committedPeer: near.fingerprint)
+                }
+            }
+        }
+        try await MeshDepartureRig.settle(livingNodes, on: fabric, binding: binding)
+    }
+
+    /// Asserts the advertised-key set really converged before anything is minted against it.
+    func expectAdvertisementsConverged() {
+        #expect(livingMembers.count >= 2, "one survivor converges nothing")
+        #expect(routedAdvertisementsConverged(), """
+            the advertised-key set never converged, so every feature mint below it would be \
+            unaddressable and every claim about them green over nothing
+            """)
+    }
+}
+
 // MARK: - The rung ladder and the byte reader
 
 @MainActor
@@ -868,29 +1124,69 @@ extension MeshConvergenceRun {
     ///     un-corroborated `.reclaimed` would satisfy "nothing lost" for any deletion at all.
     ///   - overlay: What this cell PLANTED — the only thing allowed to excuse an outstanding leg.
     ///   - before: The rung ladder sampled after the heal, which I-8 compares the final one against.
+    ///   - judged: The **audience** — the destination fingerprints the roster-wide claims may be
+    ///     written against, or nil for "every living member but the origin", which is what a
+    ///     `.fullRosterAtCreation` item means. See ``routedJudgedAudience(_:key:)``.
     func routedInvariants(
         _ origin: MeshConvergenceMember,
         _ key: MeshRoutedItemKey,
         audited capture: MeshRoutedBackpressureAuditCapture,
         overlay: MeshRoutedScheduleOverlay,
-        before: MeshRoutedRungSnapshot
+        before: MeshRoutedRungSnapshot,
+        judged: Set<String>? = nil
     ) {
         let audited = capture.values(of: "mesh.routedStore.itemDropped", key: "reason")
             .contains("delivered")
+        let audience = judged ?? Set(
+            livingMembers.filter { $0.index != origin.index }.map(\.fingerprint)
+        )
         routedProgressByName(origin, key, overlay: overlay, audited: audited)
-        routedNothingLost(origin, key, audited: audited)
+        routedNothingLost(origin, key, audited: audited, judged: audience)
         routedBytesRecoverable(origin, key, audited: audited)
         routedNoDoubleCountedReceipt(origin, key)
         routedLoadStatesAreDistinct(origin, key, overlay: overlay, audited: audited)
         routedHandoffBound(origin: origin, key: key, developing: false)
         routedRungMonotone(
             origin, key, before: before, audited: audited,
-            blocked: routedEveryDestinationIsPlanted(origin, overlay: overlay)
+            blocked: routedEveryDestinationIsPlanted(
+                origin, overlay: overlay, judged: audience, token: routedTypeToken(origin, key)
+            )
         )
         routedCapacityHoldVisible(overlay: overlay)
         routedReplayWindowStaysInsideItsBounds(overlay: overlay)
         routedMergeClosureNamed()
         routedInventoryStampMonotone(before: before)
+    }
+
+    /// The audience a **one-destination** item's roster-wide claims must be narrowed to (P6 item 9,
+    /// the design check's R3).
+    ///
+    /// Item 6 flipped the heart row to `.singleRecipient`, and three of the claims above are
+    /// `.fullRosterAtCreation`-shaped. The trap `routedDeliveryState` sets is that it answers
+    /// **`.reclaimed` for "the index loads and holds no record for this key"** — which is precisely
+    /// a device that was never a destination. So I-2's third disjunct is satisfied at every
+    /// non-recipient for exactly the wrong reason, and I-8's `blocked` leg, computed over
+    /// `livingMembers`, asks whether every LIVING member was planted rather than every destination.
+    ///
+    /// Read off the record's own signed delivery target rather than from a parameter the caller
+    /// composes, intersected with the living: a destination that departed is judged by I-1's
+    /// `.departed` arm, not by a claim about what it still holds. Answers nil — meaning "judge
+    /// everybody", the pre-P6 reading — when the origin no longer holds a record, because item 9's
+    /// reclaim legitimately takes it away and a narrowed audience derived from nothing would be
+    /// narrower than the truth.
+    ///
+    /// - Parameters:
+    ///   - origin: The member that minted the item.
+    ///   - key: The item.
+    /// - Returns: the living destinations, or nil.
+    func routedJudgedAudience(
+        _ origin: MeshConvergenceMember, key: MeshRoutedItemKey
+    ) -> Set<String>? {
+        let witness = routedIndex(of: origin)?.record(for: key)?.deliveryTarget
+            ?? livingMembers.compactMap { routedIndex(of: $0)?.record(for: key)?.deliveryTarget }.first
+        guard let target = witness else { return nil }
+        let living = Set(livingMembers.map(\.fingerprint))
+        return Set(target.destinations).intersection(living)
     }
 
     /// **I-13 — a peer's recorded `inventorySentAt` never moves backwards** (P6 item 7).
@@ -961,6 +1257,11 @@ extension MeshConvergenceRun {
     }
 
     /// The fingerprints this cell's overlay planted a refusal at — the only excusable destinations.
+    ///
+    /// An **upper bound**, never a claim: `excused.isSubset(of: planted)` is the only reader, so a
+    /// fingerprint that is never actually excused is inert. That is why P6 item 9's deferred heart
+    /// recipient joins the set unconditionally rather than behind the token test that guards the
+    /// excuse itself.
     private func routedPlantedFingerprints(_ overlay: MeshRoutedScheduleOverlay) -> Set<String> {
         var planted: Set<String> = []
         if let index = overlay.capacityMember, let member = participant(global: index) {
@@ -969,27 +1270,61 @@ extension MeshConvergenceRun {
         if let index = overlay.unknownTypeMember, let member = participant(global: index) {
             planted.insert(member.fingerprint)
         }
+        if let index = overlay.heartDeferredRecipient, let member = participant(global: index) {
+            planted.insert(member.fingerprint)
+        }
         return planted
     }
 
-    /// Whether this cell planted a refusal at **every** one of its own live destinations.
+    /// Whether this cell planted, at **every** one of its own live destinations, something that
+    /// stops a rung moving at all.
     ///
-    /// The one shape in which no rung can legally move and no receiver can legally admit anything —
-    /// a roster-3 cell whose single surviving destination is the byte-hog, say. I-8's non-vacuity
-    /// and the replay's own resolution both have to know it, or a correctly-refusing cell reds for
-    /// the refusal it was built to drive.
+    /// The one shape in which no rung can legally move — a roster-3 cell whose single surviving
+    /// destination is the byte-hog, say. I-8's non-vacuity and the replay's own resolution both have
+    /// to know it, or a correctly-refusing cell reds for the refusal it was built to drive.
+    ///
+    /// Over the item's own AUDIENCE since P6 item 9 (R3): a one-destination heart whose single
+    /// recipient is the byte-hog is blocked, and a full-roster photo with one hog among seven is not
+    /// — a question `livingMembers` alone cannot tell apart.
+    ///
+    /// **The deferred-heart arm is P6 item 9's, and it is TYPE-SCOPED for rectangle A's sake.** A
+    /// backgrounded recipient admits the ciphertext and holds it, but `ackableNow` skips an
+    /// unjudgeable heart *before* the allowance is planned — so it files no receipt of any kind, and
+    /// the origin's rung for it stays at `.pending` by design (measured: two of rectangle G's twelve
+    /// cells, `logs/item9/conv-02.log`). That is the same consequence the two refusals above have,
+    /// by a different mechanism, and it is stated rather than folded into their wording. Without the
+    /// `token ==` leg a rectangle-A photo cell whose overlay happened to draw a sleeping recipient
+    /// would read as blocked and lose I-8's non-vacuity for nothing.
+    ///
+    /// - Parameters:
+    ///   - origin: The member that minted the item.
+    ///   - overlay: What this cell planted.
+    ///   - judged: The item's own audience.
+    ///   - token: The item's signed type token.
     private func routedEveryDestinationIsPlanted(
-        _ origin: MeshConvergenceMember, overlay: MeshRoutedScheduleOverlay
+        _ origin: MeshConvergenceMember, overlay: MeshRoutedScheduleOverlay,
+        judged: Set<String>, token: String
     ) -> Bool {
-        let destinations = livingMembers.filter { $0.index != origin.index }
+        let destinations = livingMembers.filter {
+            $0.index != origin.index && judged.contains($0.fingerprint)
+        }
         guard !destinations.isEmpty else { return true }
         return destinations.allSatisfy {
             $0.index == overlay.capacityMember || $0.index == overlay.unknownTypeMember
+                || (token == MeshRoutedTypeToken.heart
+                    && $0.index == overlay.heartDeferredRecipient)
         }
     }
 
     /// Whether an outstanding leg is one this cell planted, corroborated at that destination's own
-    /// manager: item 9's `storeFull` hold, or item 11's registry answering nil for the token.
+    /// manager: item 9's `storeFull` hold, item 11's registry answering nil for the token, or P6
+    /// item 9's deliberately-asleep heart recipient.
+    ///
+    /// **The heart arm is TYPE-SCOPED, which is what makes it safe for rectangle A.** The photo and
+    /// blob items rectangle A judges carry `MeshRoutedTypeToken.photo` (`routedCustodyEvent`'s own
+    /// default, and `record.manifest?.typeToken ?? .photo` at the reader), so `token ==` can never
+    /// fire there; and it is corroborated at the recipient's own manager by the predicate that
+    /// actually deferred it, never by the overlay alone.
     private func routedOutstandingIsExcused(
         _ destination: String, overlay: MeshRoutedScheduleOverlay, token: String
     ) -> Bool {
@@ -998,6 +1333,9 @@ extension MeshConvergenceRun {
            member.node.manager.routedDeliveryHold?.cause == .storeFull { return true }
         if overlay.unknownTypeMember == member.index,
            member.node.manager.routedTypeRegistryForTesting?.entry(for: token) == nil { return true }
+        if overlay.heartDeferredRecipient == member.index,
+           token == MeshRoutedTypeToken.heart,
+           !member.node.manager.mayCommitRoutedHeartLedgerJudgement { return true }
         return false
     }
 
@@ -1015,8 +1353,16 @@ extension MeshConvergenceRun {
     /// `reason=delivered` drop. Members whose store reads `.deferred` or `.refused` are excluded **by
     /// state**, never by a nil index: neither is "empty" (plan §3.7, §19.5's fifth wrinkle). And §6.5's
     /// missing half — every custodian the origin's own record names must carry that record itself.
+    ///
+    /// **Over the item's own AUDIENCE, not the whole roster** (P6 item 9, R3): for a
+    /// `.singleRecipient` heart a non-recipient survivor holds nothing and is owed nothing, and its
+    /// only escape is the third disjunct — which `routedDeliveryState` grants for free to any device
+    /// with no record at all. Judging it there would be the D-14.10 shape this file forbids
+    /// everywhere else. `judged` is the whole living roster minus the origin for a full-roster item,
+    /// so every pre-P6 cell is byte-identical.
     private func routedNothingLost(
-        _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey, audited: Bool
+        _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey, audited: Bool,
+        judged: Set<String>
     ) {
         let owed = Set(routedOutstanding(at: origin, key: key))
         let claimed = routedClaimedCustodians(origin, key)
@@ -1034,8 +1380,13 @@ extension MeshConvergenceRun {
             // device that did exactly the right thing. It is accepted ONLY together with the audited
             // drop that is the only thing allowed to have produced it.
             let reclaimed = audited && routedDeliveryState(at: member, key: key) == .reclaimed
-            #expect(holdsSomething || owed.contains(member.fingerprint) || reclaimed,
-                    "a destination neither holds the item nor is still owed it")
+            if judged.contains(member.fingerprint) {
+                #expect(holdsSomething || owed.contains(member.fingerprint) || reclaimed,
+                        "a destination neither holds the item nor is still owed it")
+            }
+            // **Not narrowed by the audience**: a rung can name a pure courier that is nobody's
+            // destination, and "a custodian rung was written for a device holding nothing" is a
+            // claim about the rung rather than about the audience.
             if claimed.contains(member.fingerprint) {
                 #expect(record != nil,
                         "a custodian rung was written for a device whose own index holds nothing")
@@ -1064,6 +1415,11 @@ extension MeshConvergenceRun {
     /// populations are empty — every destination excused by a planted refusal — the origin's own copy
     /// stands in, which is honest rather than trivial: the origin's chunk files must still open, seal
     /// key and per-slot descriptor comparison included.
+    ///
+    /// The projection arm is **per canonical store since P6 item 9** (R3): it read `meshPhotos`
+    /// alone, so a heart legitimately projected into the heart ledger — or a text into the session
+    /// transcript — whose ciphertext was then reclaimed fell through to the audited-drop arm and
+    /// was judged by a deletion rather than by the projection that justified it.
     private func routedBytesRecoverable(
         _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey, audited: Bool
     ) {
@@ -1073,11 +1429,12 @@ extension MeshConvergenceRun {
                     "nobody holds the item and no device dropped it, so the bytes simply vanished")
             return
         }
+        let token = routedTypeToken(origin, key)
         var assembled = 0
         // R2: bounded by the roster cap.
         for member in population {
             if routedAssembledBlob(at: member, key: key) != nil { assembled += 1; continue }
-            if member.node.manager.meshPhotos.contains(where: { $0.id == key.itemID }) { continue }
+            if routedProjectedIntoItsStore(at: member, key: key, token: token) { continue }
             switch routedLoadState(of: member) {
             case .deferred, .refused: continue
             case .loaded, .absent, .corrupt: break
@@ -1087,6 +1444,37 @@ extension MeshConvergenceRun {
         }
         #expect(assembled > 0,
                 "no member in this cell could reassemble the item from its own sealed chunk files")
+    }
+
+    /// The signed type token of `key`, read off whichever living member still holds a manifest for
+    /// it, defaulting to the photo token exactly as `routedProgressByName` does.
+    private func routedTypeToken(
+        _ origin: MeshConvergenceMember, _ key: MeshRoutedItemKey
+    ) -> String {
+        if let token = routedIndex(of: origin)?.record(for: key)?.manifest?.typeToken { return token }
+        let held = livingMembers.compactMap { routedIndex(of: $0)?.record(for: key)?.manifest }
+        return held.first?.typeToken ?? MeshRoutedTypeToken.photo
+    }
+
+    /// Whether `member` projected this item into **its own type's** canonical store.
+    ///
+    /// One arm per registered routed type, because "the plaintext is safely somewhere else" is a
+    /// different fact for each: a photo is in `meshPhotos`, a heart is a judged gift in the heart
+    /// ledger, a text is a row in the session transcript. The control token is reserved and
+    /// unregistered, so it has no projection and falls through to the audited-drop arm.
+    private func routedProjectedIntoItsStore(
+        at member: MeshConvergenceMember, key: MeshRoutedItemKey, token: String
+    ) -> Bool {
+        switch token {
+        case MeshRoutedTypeToken.heart:
+            return member.node.manager.heartLedger?.receivedHearts
+                .contains { $0.id == key.itemID } == true
+        case MeshRoutedTypeToken.tempMessage:
+            return member.node.manager.sessionMessages.messages
+                .contains { $0.messageID == key.itemID }
+        default:
+            return member.node.manager.meshPhotos.contains { $0.id == key.itemID }
+        }
     }
 
     /// I-4's two populations — the delivered destinations and the receipted custodians — read off
@@ -1455,6 +1843,23 @@ nonisolated enum MeshRoutedConvergenceMatrix {
     static let corners: [MeshRoutedConvergenceCell] = MeshConvergenceSeeds.family.prefix(2).map {
         MeshRoutedConvergenceCell(shape: .twoTwo, seed: $0)
     }
+
+    /// **Rectangle G** — the FEATURE tree (P6 item 9): the whole seed family on `2/2`, plus the root
+    /// seed on the other four shapes, so both of P6's rows are driven across the partition tree
+    /// without paying for 40 runs of the costliest pipeline in the file.
+    ///
+    /// Rectangle B's shape and rectangle B's reason (`lockWindow`'s own note): a cell here mints a
+    /// text through the real sender, a heart through the real sender, converges an advertised-key
+    /// set first and then drains two keys with two different origins. Twelve cells, derived by
+    /// arithmetic over the same rectangle rather than drawn beside it.
+    static let featureTree: [MeshRoutedConvergenceCell] = {
+        var cells = all.filter { $0.shape == .twoTwo }
+        // R2: bounded by the shape list.
+        for shape in MeshPartitionShape.matrix where shape != .twoTwo {
+            cells.append(MeshRoutedConvergenceCell(shape: shape, seed: MeshConvergenceSeeds.root))
+        }
+        return cells
+    }()
 }
 
 // MARK: - MeshRoutedCellRun
@@ -1686,6 +2091,202 @@ enum MeshRoutedPipeline {
     }
 }
 
+// MARK: - MeshRoutedFeatureCellRun
+
+/// One executed FEATURE cell (P6 item 9): the run, the two rows it minted, and what it really did.
+///
+/// Two keys rather than one, because rectangle G's whole point is that P6's two rows converge
+/// **together** on one partition tree — a text to the full roster and a heart to exactly one
+/// member, interleaved by the overlay's own draws.
+@MainActor
+struct MeshRoutedFeatureCellRun {
+
+    /// The live run, for the caller to assert on and tear down.
+    let run: MeshConvergenceRun
+
+    /// The cell's resolved plan.
+    let overlay: MeshRoutedScheduleOverlay
+
+    /// The member that minted the text.
+    let textOrigin: MeshConvergenceMember
+
+    /// The text item, minted through the real `sendTempMessage(_:)`.
+    let textKey: MeshRoutedItemKey
+
+    /// The member that minted the heart.
+    let heartOrigin: MeshConvergenceMember
+
+    /// The heart's single recipient.
+    let heartRecipient: MeshConvergenceMember
+
+    /// The heart item, or nil where the overlay planned none (unreachable in this rectangle).
+    let heartKey: MeshRoutedItemKey?
+
+    /// The routed tokens this pipeline really executed, in order.
+    let executedTokens: [String]
+
+    /// The text's rung ladder, sampled after its first drain pass.
+    let beforeText: MeshRoutedRungSnapshot
+
+    /// The heart's rung ladder, sampled after its first drain pass.
+    let beforeHeart: MeshRoutedRungSnapshot
+
+    /// Every heart judgement any member minted during the run.
+    let judgementLog: MeshRoutedHeartJudgementLog
+}
+
+// MARK: - MeshRoutedFeaturePipeline
+
+/// **Pipeline 3 — the FEATURE pipeline** (P6 item 9): the two rows P6 added, on a run whose
+/// addressing has really converged.
+///
+/// **Why not pipeline 1.** The feature mints must come AFTER the heal, because nothing converges the
+/// advertisement set before it (`linkBranches` raises no `.peerCommitted` on purpose) and the
+/// resolver then refuses every mint by name. Pipeline 1's own mint must come BEFORE the heal for the
+/// opposite reason — its lock window is vacuous otherwise (D-14.9). The two orders are incompatible,
+/// which is what makes this a third pipeline rather than four more lines in an existing one.
+@MainActor
+enum MeshRoutedFeaturePipeline {
+
+    /// Runs one feature cell end to end and hands the caller the run to assert on.
+    ///
+    /// - Parameters:
+    ///   - cell: The rectangle-G cell.
+    ///   - label: The diagnostic prefix.
+    /// - Returns: the executed cell.
+    static func featureRouting(
+        _ cell: MeshRoutedConvergenceCell, label: String
+    ) async throws -> MeshRoutedFeatureCellRun {
+        let overlay = cell.overlay
+        let run = try MeshConvergenceRun.build(
+            cell.schedule, label: label, anchor: MeshRoutedFixtureClock.createdAt
+        )
+        let cast = try await converged(run, overlay: overlay)
+        let log = MeshRoutedHeartJudgementLog()
+        run.installHeartJudgementWitness(log)
+        run.armHeartCeremony(at: cast.heartOrigin, to: cast.recipient)
+        run.setHeartRecipientForegrounded(cast.recipient, overlay.heartRecipientForegrounded)
+        let window = try await runFeatureWindow(run, overlay: overlay, cast: cast)
+        return MeshRoutedFeatureCellRun(
+            run: run, overlay: overlay,
+            textOrigin: cast.textOrigin, textKey: window.textKey,
+            heartOrigin: cast.heartOrigin, heartRecipient: cast.recipient,
+            heartKey: window.heartKey, executedTokens: window.tokens,
+            beforeText: window.beforeText, beforeHeart: window.beforeHeart, judgementLog: log
+        )
+    }
+
+    /// The three members one cell's overlay names.
+    struct FeatureCast {
+        /// The text's origin.
+        let textOrigin: MeshConvergenceMember
+        /// The heart's origin.
+        let heartOrigin: MeshConvergenceMember
+        /// The heart's single recipient.
+        let recipient: MeshConvergenceMember
+    }
+
+    /// Splits, opens every gate, arms and converges the advertised-key set, and resolves the cast.
+    ///
+    /// The arming is its own step and the convergence is asserted before anything is minted: a run
+    /// whose set never converged would refuse every mint below by name, which is a loud failure —
+    /// but the loud failure belongs here, where it names the addressing rather than the row.
+    private static func converged(
+        _ run: MeshConvergenceRun, overlay: MeshRoutedScheduleOverlay
+    ) async throws -> FeatureCast {
+        let now = MeshRoutedPipeline.mintInstant
+        try await run.runSplitEvents()
+        run.openEveryRoutedGate(now: now)
+        run.armKeyAdvertisements(now: now)
+        run.allowChatEverywhere(except: overlay.ageGatedMember)
+        try await run.runHeal()
+        try await run.runKeyAdvertisementRounds()
+        run.expectAdvertisementsConverged()
+        guard let textOrigin = run.participant(global: overlay.textOrigin),
+              let heartOrigin = run.participant(global: overlay.heartOrigin)
+        else { throw MeshRoutedCellFailure.originNotLiving }
+        guard let recipient = run.participant(global: overlay.heartRecipient),
+              overlay.plansHeart
+        else { throw MeshRoutedCellFailure.heartRecipientMissing }
+        return FeatureCast(textOrigin: textOrigin, heartOrigin: heartOrigin, recipient: recipient)
+    }
+
+    /// Samples one row's rung ladder the moment it has something off `.pending`, bounded.
+    ///
+    /// **Neither end of the obvious window works, and both were measured** (`logs/item9/`). I-8
+    /// compares two ladders and its non-vacuity needs the FIRST to be off the bottom, so a sample
+    /// taken straight off the feature window is all `.pending` for a row minted in the window's last
+    /// round — two of rectangle G's twelve cells. Sampling after the full drain instead is worse:
+    /// item 9's reclaim drops a fully delivered item at the origin, so on exactly the cells that
+    /// converged best there is no ladder left to sample at all. So the sample is taken the moment
+    /// the ladder moves, with a hard ceiling, and a row whose ladder never moves falls through to
+    /// the caller's own claim rather than being waited for forever.
+    private static func sampleWhenMoving(
+        _ run: MeshConvergenceRun, key: MeshRoutedItemKey
+    ) async throws -> MeshRoutedRungSnapshot {
+        // R2: a hard constant ceiling.
+        for _ in 0..<MeshConvergenceRun.routedDrainRounds {
+            let snapshot = run.routedRungSnapshot(key: key)
+            let moving = snapshot.rungs.values.contains { $0.values.contains { $0 > 0 } }
+            if moving { return snapshot }
+            try await run.runFeatureDrainRound()
+        }
+        return run.routedRungSnapshot(key: key)
+    }
+
+    /// What one feature window produced.
+    private struct FeatureWindow {
+        let textKey: MeshRoutedItemKey
+        let heartKey: MeshRoutedItemKey?
+        let tokens: [String]
+        let beforeText: MeshRoutedRungSnapshot
+        let beforeHeart: MeshRoutedRungSnapshot
+    }
+
+    /// The bounded feature window, then a bounded drain to convergence for each row.
+    ///
+    /// A conditional **execution** keyed on a resolved field, exactly as `capacityMember` and
+    /// `develops` already are — never a conditional draw. The ladders are sampled after the window
+    /// rather than straight off a mint: a sample taken off the mint is all `.pending`, the bottom of
+    /// the ladder, and I-8 would then compare bottoms on every cell in the rectangle.
+    private static func runFeatureWindow(
+        _ run: MeshConvergenceRun, overlay: MeshRoutedScheduleOverlay, cast: FeatureCast
+    ) async throws -> FeatureWindow {
+        var tokens = [
+            MeshRoutedEventToken.keyAdvertisement.rawValue,
+            MeshRoutedEventToken.textOrigination.rawValue
+        ]
+        if overlay.ageGatedMember != nil {
+            tokens.append(MeshRoutedEventToken.ageGatedReceiver.rawValue)
+        }
+        var textKey: MeshRoutedItemKey?
+        var heartKey: MeshRoutedItemKey?
+        // R2: a hard constant ceiling.
+        for round in 0..<MeshScheduleBounds.maxFeatureRounds {
+            if round == overlay.textRound {
+                textKey = try run.routedTextEvent(at: cast.textOrigin, round: round)
+            }
+            if round == overlay.heartRound {
+                heartKey = try run.routedHeartEvent(at: cast.heartOrigin, to: cast.recipient)
+                tokens.append(MeshRoutedEventToken.heartOrigination.rawValue)
+                if overlay.heartDeferredRecipient != nil {
+                    tokens.append(MeshRoutedEventToken.heartDeferred.rawValue)
+                }
+            }
+            try await run.runFeatureDrainRound()
+        }
+        guard let textKey, let heartKey else { throw MeshRoutedCellFailure.heartNotStaged }
+        let beforeText = try await sampleWhenMoving(run, key: textKey)
+        let beforeHeart = try await sampleWhenMoving(run, key: heartKey)
+        try await run.runRoutedDrainRounds(origin: cast.textOrigin, key: textKey)
+        try await run.runRoutedDrainRounds(origin: cast.heartOrigin, key: heartKey)
+        return FeatureWindow(
+            textKey: textKey, heartKey: heartKey, tokens: tokens,
+            beforeText: beforeText, beforeHeart: beforeHeart
+        )
+    }
+}
+
 // MARK: - The property
 
 /// **The routed progress property.** One seeded, bounded schedule per cell: split, events, mint,
@@ -1864,6 +2465,73 @@ struct MeshRoutedDrainConvergenceTests {
         for member in destinations {
             #expect(member.node.manager.meshPhotos.filter { $0.id == key.itemID }.count == 1,
                     "every destination's wall holds exactly one entry for the delivered item")
+        }
+    }
+
+    /// **Rectangle G — both of P6's rows converge together, across the partition tree** (item 9).
+    ///
+    /// One seeded cell: split, open every gate, arm every member's own key advertisement, shut one
+    /// drawn member's chat gate, heal, converge the advertised-key set, then a bounded two-round
+    /// feature window in which the overlay's draws decide who sends a text, who sends a heart to
+    /// whom, in which round, and whether the recipient is awake when it lands.
+    ///
+    /// The two rows are judged with **different audiences**, which is the whole reason item 9 has a
+    /// rectangle of its own: a text is `.fullRosterAtCreation` and a heart is `.singleRecipient`, and
+    /// `routedDeliveryState` answers `.reclaimed` for "this device holds no record" — so a
+    /// roster-wide claim about the heart would pass at every non-recipient for exactly the wrong
+    /// reason (the design check's R3, and item 6's handoff §8 names the same trap).
+    @Test(arguments: MeshRoutedConvergenceMatrix.featureTree)
+    func bothFeatureRowsConvergeUnderASeededSchedule(
+        cell: MeshRoutedConvergenceCell
+    ) async throws {
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        let outcome = try await MeshRoutedFeaturePipeline.featureRouting(cell, label: "routed-feature")
+        defer { MeshRoutedPipeline.teardown(outcome.run) }
+        let overlay = cell.overlay
+        let run = outcome.run
+
+        run.routedInvariants(
+            outcome.textOrigin, outcome.textKey, audited: capture,
+            overlay: MeshRoutedOverlayFixtures.textOnly(
+                cell.seed, origin: outcome.textOrigin.index, gated: overlay.ageGatedMember
+            ),
+            before: outcome.beforeText
+        )
+        let heartKey = try #require(outcome.heartKey, "every cell in this rectangle plans a heart")
+        let audience = run.routedJudgedAudience(outcome.heartOrigin, key: heartKey)
+            ?? [outcome.heartRecipient.fingerprint]
+        #expect(audience == [outcome.heartRecipient.fingerprint], """
+            the heart's own signed destination set must be exactly the member the overlay drew, or             the narrowed audience below is narrower than the mint
+            """)
+        run.routedInvariants(
+            outcome.heartOrigin, heartKey, audited: capture,
+            overlay: MeshRoutedOverlayFixtures.heartOnly(
+                cell.seed, origin: outcome.heartOrigin.index,
+                recipient: outcome.heartRecipient.index,
+                deferredRecipient: overlay.heartDeferredRecipient
+            ),
+            before: outcome.beforeHeart, judged: audience
+        )
+        #expect(Set(outcome.executedTokens) == overlay.featureTokens, """
+            this cell executed a feature token its overlay never planned, or planned one it never             executed
+            """)
+        #expect(outcome.judgementLog.dropped == 0,
+                "the judgement witness hit its own cap, so the count below is not the whole count")
+        // I-8's non-vacuity, named per ROW rather than left to the shared claim: the two ladders are
+        // sampled independently and "the ladder was not actually compared" cannot say which of them
+        // was still sitting at the bottom.
+        let textOff = outcome.beforeText.rungs.values.flatMap(\.values).filter { $0 > 0 }.count
+        let heartOff = outcome.beforeHeart.rungs.values.flatMap(\.values).filter { $0 > 0 }.count
+        let heartMayBeStill = overlay.heartDeferredRecipient != nil
+        if textOff == 0 || (heartOff == 0 && !heartMayBeStill) {
+            Issue.record("""
+                a feature ladder was sampled entirely at .pending — text \(textOff) off-pending over \
+                \(outcome.beforeText.rungs.count) members, heart \(heartOff) over \
+                \(outcome.beforeHeart.rungs.count) members, deferred recipient \
+                \(overlay.heartDeferredRecipient != nil)
+                """)
         }
     }
 
@@ -2129,6 +2797,13 @@ struct MeshRoutedDrainConvergenceTests {
         let developing = MeshRoutedConvergenceMatrix.developing.count
         #expect(developing >= 8 && developing <= 40,
                 "the development rectangle must be neither empty nor the whole rectangle")
+        #expect(MeshRoutedConvergenceMatrix.featureTree.count == 12,
+                "rectangle G is rectangle B's shape, for rectangle B's reason")
+        #expect(
+            Set(MeshRoutedConvergenceMatrix.featureTree.map(\.shape))
+                == Set(MeshPartitionShape.matrix),
+            "and it reaches every shape, so neither P6 row is proved on one topology"
+        )
     }
 
     /// **The `.departed` disposition is reachable at all** — the one variety of I-1's arm that had
@@ -2172,11 +2847,103 @@ struct MeshRoutedDrainConvergenceTests {
     @Test func theRoutedRectangleEmitsEveryRoutedToken() {
         var planned: Set<String> = []
         // R2: bounded by the rectangle's own 40 cells.
-        for cell in MeshRoutedConvergenceMatrix.all { planned.formUnion(cell.overlay.plannedTokens) }
+        for cell in MeshRoutedConvergenceMatrix.all { planned.formUnion(cell.overlay.fullHealTokens) }
+        // R2: bounded by rectangle C, itself a subset of the 40.
+        for cell in MeshRoutedConvergenceMatrix.developing {
+            planned.formUnion(cell.overlay.developmentTokens)
+        }
+        // R2: bounded by rectangle G's own 12 cells.
+        for cell in MeshRoutedConvergenceMatrix.featureTree {
+            planned.formUnion(cell.overlay.featureTokens)
+        }
         #expect(planned == Set(MeshRoutedEventToken.vocabulary),
                 "the rectangle plans a token it never runs, or runs one it never planned")
         #expect(MeshRoutedEventToken.vocabulary.count == MeshRoutedEventToken.allCases.count,
                 "the vocabulary is the whole enum")
+        // Per-cell, the union really is a union: each pipeline's bucket is inside `plannedTokens`,
+        // which is what makes the three loops above a RESTRICTION of that value rather than a
+        // different accounting of it.
+        // R2: bounded by the rectangle's own 40 cells.
+        for cell in MeshRoutedConvergenceMatrix.all {
+            let overlay = cell.overlay
+            let whole = overlay.plannedTokens
+            let covered = overlay.fullHealTokens.isSubset(of: whole)
+                && overlay.featureTokens.isSubset(of: whole)
+                && (!overlay.develops || overlay.developmentTokens.isSubset(of: whole))
+            #expect(covered, "a pipeline's token bucket escaped the per-cell union")
+        }
+    }
+
+    /// **Rectangle G plans what it claims** — pure arithmetic over the twelve built overlays, with
+    /// every threshold MEASURED from a probe run first and then pinned (D-14.2's lesson: seed-only
+    /// salting once collapsed the 40-cell rectangle to 8 distinct plans with no multi-chunk cell at
+    /// all, and it was found by a probe rather than by reasoning).
+    @Test func theFeatureRectanglePlansWhatItClaims() {
+        let tree = MeshRoutedConvergenceMatrix.featureTree
+        #expect(tree.count == 12, "8 seeds on 2/2 plus the root seed on the other four shapes")
+        #expect(Set(tree.map(\.shape)) == Set(MeshPartitionShape.matrix),
+                "every shape §16.2 names carries a feature cell")
+        #expect(tree.allSatisfy { MeshRoutedConvergenceMatrix.all.contains($0) },
+                "the feature cells are selected from the rectangle, never drawn beside it")
+        let overlays = tree.map(\.overlay)
+        let resolved = tree.allSatisfy { cell in
+            let survivors = Set(cell.schedule.survivors)
+            return survivors.contains(cell.overlay.textOrigin)
+                && survivors.contains(cell.overlay.heartOrigin)
+                && survivors.contains(cell.overlay.heartRecipient)
+        }
+        #expect(resolved, "a feature field resolved to a member this cell does not leave alive")
+        let planned = overlays.allSatisfy(\.plansHeart)
+        #expect(planned, "survivors are never fewer than two here, so every cell plans a heart")
+        #expect(overlays.contains { $0.ageGatedMember != nil },
+                "no cell shuts a chat gate, so the age-gate half would never run")
+        #expect(overlays.contains { !$0.heartRecipientForegrounded },
+                "no cell defers a heart, so D-10.12's third leg would never run")
+        #expect(Set(overlays.map(\.textRound)) == Set(0..<MeshScheduleBounds.maxFeatureRounds),
+                "both feature rounds must carry a text, or the window is one round wide")
+        #expect(Set(overlays.map(\.heartRound)) == Set(0..<MeshScheduleBounds.maxFeatureRounds),
+                "and both must carry a heart")
+        #expect(overlays.contains { $0.textRound == $0.heartRound },
+                "both-in-one-round is unreached, so the window never interleaves at all")
+        #expect(overlays.contains { $0.textRound != $0.heartRound },
+                "and a round apart with it")
+        // **Measured, then pinned.** Rectangle G's twelve reach `heart == text` and
+        // `heart < text` and NOT `text < heart` (`logs/item9/subset-01.log` — the first pin was a
+        // guess and it was wrong). Both draws are fields 10 and 14 over the whole 40-cell rectangle,
+        // so the ordering that G's twelve miss is asserted where it is reachable rather than wished
+        // for here: twelve independent ¼-chance cells miss it about 3% of the time.
+        let whole = MeshRoutedConvergenceMatrix.all.map(\.overlay)
+        #expect(whole.contains { $0.textRound < $0.heartRound },
+                "text-then-heart is unreached across all 40, so the interleaving is not a draw")
+        #expect(whole.contains { $0.heartRound < $0.textRound }, "and heart-then-text with it")
+    }
+
+    /// **The whole 40-cell rectangle's feature fields are total functions** — the claim rectangle G
+    /// itself cannot make, because it runs only twelve of them.
+    ///
+    /// Every overlay in the file is built for every cell (the coverage wall reads all 40), so a
+    /// field that resolved to a non-survivor on cell 37 would be a latent trap for whatever later
+    /// rectangle reaches it. Survivors are ≥ 2 on all 40 — `preferQuorum` is fixed false for routed
+    /// cells, so `removal.completes` is always false and `planDeparture` refuses below three — which
+    /// is what makes `plansHeart` universally true and `heartRecipient != heartOrigin` total.
+    @Test func everyOverlaysFeatureFieldsResolveOnEveryCell() {
+        // R2: bounded by the rectangle's own 40 cells.
+        for cell in MeshRoutedConvergenceMatrix.all {
+            let overlay = cell.overlay
+            let survivors = Set(cell.schedule.survivors)
+            #expect(survivors.count >= 2, "a routed cell with one survivor converges nothing")
+            let inside = survivors.contains(overlay.textOrigin)
+                && survivors.contains(overlay.heartOrigin)
+                && survivors.contains(overlay.heartRecipient)
+            #expect(inside, "a feature field resolved outside this cell's own survivors")
+            #expect(overlay.heartRecipient != overlay.heartOrigin,
+                    "a heart addressed to its own origin plans nothing")
+            #expect(overlay.ageGatedMember != overlay.textOrigin,
+                    "a gated ORIGIN mints nothing, which would make the text half green over nothing")
+            let bounded = overlay.textRound < MeshScheduleBounds.maxFeatureRounds
+                && overlay.heartRound < MeshScheduleBounds.maxFeatureRounds
+            #expect(bounded, "a feature round outside the window it is an index into")
+        }
     }
 }
 
@@ -2192,19 +2959,62 @@ nonisolated enum MeshRoutedOverlayFixtures {
 
     /// The lock-window cell's plan: the window runs at the ORIGIN, so no non-origin subject exists.
     static func lockOnly(_ seed: UInt64, origin: Int) -> MeshRoutedScheduleOverlay {
-        MeshRoutedScheduleOverlay(
-            seed: seed, origin: origin, chunks: 1, sealed: false, capacityMember: nil,
-            lockMember: origin, replays: false, develops: false, unknownTypeMember: nil,
-            farBranchMint: false
-        )
+        base(seed, origin: origin, lockMember: origin)
     }
 
     /// The replay cell's plan.
     static func replayOnly(_ seed: UInt64, origin: Int) -> MeshRoutedScheduleOverlay {
+        base(seed, origin: origin, replays: true)
+    }
+
+    /// The TEXT half of one feature cell, as the invariants must judge it: a full-roster item with
+    /// one drawn gated receiver and no heart (P6 item 9).
+    ///
+    /// The gate is carried because §2c's own claim is that the gated member holds the ciphertext and
+    /// projects nothing — it is not an excuse for an outstanding leg, and no invariant reads it as
+    /// one; `routedPlantedFingerprints` deliberately still names only the capacity and unknown-type
+    /// subjects.
+    static func textOnly(_ seed: UInt64, origin: Int, gated: Int?) -> MeshRoutedScheduleOverlay {
+        base(seed, origin: origin, textOrigin: origin, ageGatedMember: gated)
+    }
+
+    /// The HEART half of one feature cell: a one-destination item whose recipient may have been
+    /// deliberately left asleep (P6 item 9).
+    ///
+    /// - Parameters:
+    ///   - seed: The cell's seed, so a failure names its own replay.
+    ///   - origin: The heart's origin.
+    ///   - recipient: Its single destination.
+    ///   - deferredRecipient: The recipient when this cell withheld its foreground, else nil — the
+    ///     ONE thing allowed to excuse an outstanding heart leg.
+    static func heartOnly(
+        _ seed: UInt64, origin: Int, recipient: Int, deferredRecipient: Int?
+    ) -> MeshRoutedScheduleOverlay {
+        base(
+            seed, origin: origin, textOrigin: origin, heartOrigin: origin,
+            heartRecipient: recipient, heartRecipientForegrounded: deferredRecipient == nil
+        )
+    }
+
+    /// The inert plan every fixture above varies one or two fields of.
+    ///
+    /// The feature fields default to "plans nothing": `textOrigin == origin`, no gate, and
+    /// `heartRecipient == heartOrigin`, i.e. `plansHeart == false` — so rectangles A, B and C, whose
+    /// pipelines never run a feature round, behave EXACTLY as they did before P6 item 9 appended
+    /// the fields.
+    private static func base(
+        _ seed: UInt64, origin: Int, lockMember: Int? = nil, replays: Bool = false,
+        textOrigin: Int? = nil, ageGatedMember: Int? = nil,
+        heartOrigin: Int? = nil, heartRecipient: Int? = nil,
+        heartRecipientForegrounded: Bool = true
+    ) -> MeshRoutedScheduleOverlay {
         MeshRoutedScheduleOverlay(
             seed: seed, origin: origin, chunks: 1, sealed: false, capacityMember: nil,
-            lockMember: nil, replays: true, develops: false, unknownTypeMember: nil,
-            farBranchMint: false
+            lockMember: lockMember, replays: replays, develops: false, unknownTypeMember: nil,
+            farBranchMint: false,
+            textOrigin: textOrigin ?? origin, textRound: 0, ageGatedMember: ageGatedMember,
+            heartOrigin: heartOrigin ?? origin, heartRecipient: heartRecipient ?? origin,
+            heartRound: 0, heartRecipientForegrounded: heartRecipientForegrounded
         )
     }
 }
