@@ -296,11 +296,12 @@ struct FernletApp: App {
     /// Seeds every run-policy leg this launch can answer for, installs the mesh door, and makes the
     /// launch push (network migration P7 item 2; P5 item 10's launch site).
     ///
-    /// The ORDER inside is load-bearing. Every leg is seeded BEFORE
-    /// ``ProximityRunPolicyHost/connect(_:)``, so the seeding writes nothing and a launch is ONE
-    /// gate push rather than one per leg; `pushNow()` is then the single explicit act. On a
-    /// re-fired `.onAppear` the door is already latched and each seed re-reads the current truth, so
-    /// every push carries the gate the manager already holds and is silently ignored there.
+    /// The ORDER inside is load-bearing, and what it buys depends on which mount this is. On the
+    /// FIRST mount every leg is seeded BEFORE ``ProximityRunPolicyHost/connect(_:)``, so the seeding
+    /// writes nothing and the launch is ONE gate push — `pushNow()`, the single explicit act. On a
+    /// re-fired `.onAppear` the door is already latched, so each seed DOES push; those pushes are
+    /// harmless rather than absent, because every seed re-reads the current truth and
+    /// `MeshNetworkManager.applyRoutedAccessGate(_:now:)` silently ignores a gate it already holds.
     ///
     /// Four of the legs are read off the store because that is where they live —
     /// `AgeAssuranceStore.record`, the mesh manager's `hasCommittedPeer`, and the two nearby

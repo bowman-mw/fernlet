@@ -29,10 +29,12 @@
 //     user is present and the process is live.
 //
 // And one boundary, D-10.3: the policy decides RADIOS, never plaintext. The `MeshRoutedAccessGate`
-// the decision carries is assembled from exactly the three facts
-// `FernletApp.pushRoutedAccessGate(_:protectedData:foreground:)` assembles it from today and is
-// carried through untouched — nothing in this file reads `isOpen` or `permits(_:)`, and Fernlet's
-// app lock gates nothing in the mesh beyond the duress clause the gate already owns.
+// the decision carries is assembled from exactly the three facts the app used to assemble at each of
+// its six push sites — iOS data protection, `FernletApp.routedGateForeground(for:)`'s answer for the
+// scene phase, and the duress clause of the app lock — and the value is carried through untouched.
+// Since P7 item 2 those six sites are gone and this is the only place in the app target that
+// constructs a gate at all; nothing in this file reads `isOpen` or `permits(_:)`, and Fernlet's app
+// lock gates nothing in the mesh beyond the duress clause the gate already owns.
 
 import FernletDomainModel
 import FernletLock
@@ -339,9 +341,9 @@ nonisolated struct ProximityRunDecision: Equatable, Sendable {
     /// against.
     let isForeground: Bool
 
-    /// The gate value, assembled from the same three facts
-    /// `FernletApp.pushRoutedAccessGate(_:protectedData:foreground:)` assembles it from, for the
-    /// single writer P7 item 2 makes of this policy.
+    /// The gate value, assembled from the same three facts the app used to assemble at each of its
+    /// six push sites — iOS data protection, ``FernletApp/routedGateForeground(for:)``'s answer and
+    /// the duress clause of the app lock — for the single writer P7 item 2 makes of this policy.
     let accessGate: MeshRoutedAccessGate
 
     /// The directive for one radio.
