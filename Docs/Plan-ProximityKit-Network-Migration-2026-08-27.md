@@ -2641,7 +2641,35 @@ or P8's side:
 
 ---
 
-## 13. Phase P7 — app-layer lifecycle gating seam
+## 13. Phase P7 — app-layer lifecycle gating seam — **BUILT** (2026-09-17)
+
+**Nothing in this phase was compiled or executed by the session that landed it.** The landing
+container held no Swift toolchain — `xcodebuild`, the full suite, `spm-wall-check.sh` and the UI
+harness could not run there — so every SHA below is **scan-green, build-unverified**, and every wall
+the phase wrote still owes its "shown red once" log. §13.3 carries the exact gauntlet a Mac session
+must run before any claim here is a green one.
+
+**Landed on `claude/hopeful-edison-rl5hb3`, oldest first** (`82fc4d7..a528760` — the P6 push commit
+exclusive through the phase's last shipping commit; **17 shipping commits** — 16 item commits plus
+the close-out catalog sync `2389d01` — each followed in history by one or more ledger commits, **51
+commits from the P6 push, measured at `6ccd619`** (17 shipping + 34 ledger); this close-out's own
+commit and its ledger commit add two more. `Docs/Mesh-Migration-Loop-Ledger-P7.md` is the decision
+record; rows 1–9 carry every SHA, review finding and residual cited in §13.1–§13.4. **P6 is pushed** — `82fc4d7` is both `main`
+and `origin/main` — which the P7 launcher's "not pushed" line got wrong, and which is how the S3
+Wall red in §13.3 finding 1 was found at all. **P7 is pushed to its own branch but NOT merged to
+`main`:** `origin/claude/hopeful-edison-rl5hb3` tracks HEAD exactly, and `main` is still the P6
+commit.
+
+| SHA | Item | What it is |
+|---|---|---|
+| `27fb026` + `2f3a8a1` | 1 | `ProximityRunPolicy` as a pure value — ten inputs, four radios, a teardown flag and the `MeshRoutedAccessGate` — with the matrix over the full input product as its test |
+| `f0325e3` + `d35f9d8` | 2 | `ProximityRunPolicyHost`: the policy becomes the **single writer** of `applyRoutedAccessGate(_:now:)`, six app sites → one |
+| `ca3f361` + `5faabaf`; `023f7f9` + `ac8824c` | 3 | the radios get `applyRunState` seams (pass A) and the host becomes their only caller; `ContentView`'s four radio owners and `FernletStore`'s three stop sites retire (pass B) |
+| `ee0a8be` + `eeb5718` | 4 | the poller — one host-owned self-re-arming one-shot at 30 s, three consumers in index order, armed and cancelled with session liveness |
+| `841abc8`; `d91d3dc` + `19ad37a` + `4990e59` | 5 | the resume surface over `MeshSessionRestoreOutcome` — the decision value (pass 1), then the Friends-surface affordance and the public projection (pass 2) |
+| `2389d01` | close-out | `Localizable.xcstrings` synced from `HEAD`'s blob for item 5's 15 owed keys — 14 added, 1 already present |
+| `b3f6de0` + `a528760` | 7 | the P7 acceptance battery (six clause suites) and the CI gate lines |
+| — | 6, 8 | **not done** — both need a Mac; §13.3 findings 2 and 3 |
 
 Today `ContentView` owns start/stop by scene/tab; ProximityKit deliberately observes nothing. Background
 continuation breaks that ownership. Options reviewed:
@@ -2657,6 +2685,376 @@ discovery/admission `foregroundOnly` (invariant 5), presence + recipe `stop` on 
 behavior); CPT refused → mesh `foregroundOnly` with the UI explaining background continuation is
 unavailable; delete-all / below-age / duress → `stop` + teardown. Table-driven tests over the full
 input product.
+
+**Option A was adopted whole.**
+Every load-bearing row above is a literal cell in the battery: the CPT rows at
+`Tests/FernletTests/MeshP7AcceptanceTests.swift:337`
+(`theContinuationTaskRowsAreLiteralAndOnlyGrantedEverRunsTheMesh`), the three dominating inputs at
+`:372` (`theThreeDominatingInputsStopEveryRadioAndTearTheSessionDown`) — both read at `a528760`.
+
+### 13.1 What landed
+
+**Result:** the app target has one owner for four proximity radios, one writer for the routed access
+gate, one timer for three consumers that had none, and — for the first time since P6 wired the door —
+a user-visible answer to the launch restore. The policy is a **pure value**; every seam it drives is
+an `apply(_:)`-shaped door that already existed or was added in the same shape. `ProximityKit` gained
+no UIKit dependency and no lifecycle observer.
+
+**The precondition P7 discovered it had to move.** §13 sketched `ProximityRunState` as an app-target
+type. It could not be: the seams that consume it are package-target managers that cannot name an app
+type, so item 3 pass A moved **only that enum** down into ProximityKit and left the policy, the
+radios enum, the two lock/age enums, the CPT state and both structs in the app. That is a policy act,
+not a detail — §13.2 act 1.
+
+| # | Work | SHA |
+|---|---|---|
+| 1 | **The policy as a pure value, and the matrix as the artefact.** `ProximityRunPolicy.decide(_:)` over `ProximityRunInputs` — **ten** fields, not §13's seven: the seven §13 names (`isForeground`, `selectedTab`, `lockState` with duress folded in, `isProtectedDataAvailable`, `chatAgeGate`, `isDeletingAllData`, `continuationTask`) **plus** `hasCommittedPeer` and the two nearby consents — to `ProximityRunDecision` (four `ProximityRunState` directives, `tearsDownSession`, the foreground leg, and the `MeshRoutedAccessGate` carried through untouched). **There is exactly one initializer and it takes a `ScenePhase`**, so no caller can hand the policy a foreground fact that did not come from `FernletApp.routedGateForeground(for:)` — a structural fence, not a convention. The matrix enumerates the WHOLE input product — 23 040 constructor calls over **15 360 distinct** inputs (the struct stores the Bool, so three phases collapse to two thirds) — and the oracle spells the SHIPPING predicates where §13 is silent, so the mismatch set is the asserted deviation rather than a tautology: **832 rows**, every one an inactive scene, every one a radio `ContentView` would have dropped. `FernletTab` was made `nonisolated` so the input struct can store it under the app target's `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`. No wiring in this commit | `27fb026`, fixes `2f3a8a1` |
+| 2 | **One writer for the gate.** `ProximityRunPolicyHost` — `@MainActor`, a value holder and nothing else: one property per input leg, one setter each (each re-decides; **no** deduplication, because every seam owns its own edge), `connect(accessGate:meshRadios:presence:recipeShare:tearDownSession:poll:)` installing the doors as a SET and replacing them on a second call, and `pushNow()` writing gate → radios → teardown. It lives as `FernletApp`'s `@State`, not as a `FernletStore` member. `FernletApp.pushRoutedAccessGate(_:protectedData:foreground:)` and its six call sites are **deleted**; `applyRoutedAccessGate(` now appears **once** in the app target, inside the mount. `MeshNetworkManager.applyRoutedAccessGate(_:now:)` did not move. The wall counts **occurrences** across a comment-stripped `App/` sweep and pins the total at 1 beside the file-list claim — a file-name wall is green with two call sites in one file | `f0325e3`, fixes `d35f9d8` |
+| 3 | **The radios get their seams, and the view stops owning them.** Pass A: `ProximityRunState` moved into ProximityKit; `MeshNetworkManager.applyRunState(links:discovery:)` — ONE seam for both mesh radios because `startJoin()`/`stopJoin()` already is one — arming through `FriendsDiscoveryEntry`'s three-way rather than a fourth copy of it, bailing on `hasCommittedPeer` exactly as `ContentView.stopFriendsDiscovery()` did, holding the P8-only `run`/`stop` pair, and logging an audit family `mesh.runState.applied` / `.held` / `.unresolved`; plus `applyRunState(_:)` on presence and recipe share. Pass B: the host drives all three from six production doors at the launch mount; `ContentView`'s `startFriendsDiscovery()`, `stopFriendsDiscovery()`, `updatePresenceListener()`, `updateRecipeShareListener()` and `armDiscoveryTimeout()` are deleted along with the `discoveryTimeoutTask` handle; `FernletStore`'s three stop sites retire behind a new `deletingAllDataHook` raised at **leg 0** of the wipe funnel and lowered from a `defer` registered first; the five-minute fresh-search give-up clock gets a home on the manager's own clock (`armFreshSearchGiveUpClock(now:)`); and the zero wall lands, receiver-**agnostic**, with two by-name exemptions each fixtured against the exact calls it was written for | `ca3f361` + `5faabaf`; `023f7f9` + `ac8824c` |
+| 4 | **The poller, and the three consumers that have had no shipping caller since P3.** One host-owned self-re-arming one-shot at `defaultPollInterval` = **30 s**, injectable so a cell can await a real arm in milliseconds. `setSessionLive(_:)` is its switch — the only leg that is not a policy input and the only setter that deduplicates, because the edge is the meaning. One tick is `enforceSessionCeiling(now:monotonicElapsed: nil)` → `evaluateIdleLapse(now:)` → `evaluatePartition(now:)`, each once, in that index order. Nothing spins while no session is live: with the leg false there is no task, a tick that wakes to find it false re-arms nothing, the handle is cancelled before every replacement, and an `isolated deinit` cancels it. **§12.3 finding 3 is closed:** `adoptSessionCeiling(of:now:)` arms the ceiling in `handleMeshDescriptor`'s yield arm from the ADOPTED mesh's `createdAt`, so a yielding founder is expired by one tick without hand-arming. Three consumer types were made `public` for the app to name their verdicts. The teardown door ends the session (`stopJoin()` **+** `leaveSession()`) rather than lowering the leg by hand | `ee0a8be`, fixes `eeb5718` |
+| 5 | **The resume surface — the half P6 wired a door for and left invisible.** Pass 1 is the pure decision: `ProximityResumeDecision.decide(_:)` from three enumerable facts to a `ProximityResumePresentation` (`nothing` / `offerResume` / `couldNotReopen` / `ended(reason)`), five ordered clauses where the order IS the decision, `deferred` and `refused` silent as a positive claim, an ended mesh named **ended, never "failed"**; a 522-row product against a RAW-outcome oracle; and `ProximityResumeCopy`, the third file of the `SessionHeartStatusCopy` shape, `LocalizedStringKey` from the first line. Pass 2 is the surface and the export: `MeshSessionResumeProjection` (the module's one public export of the restore), `MeshSessionTerminationReason` made `public`, `acceptForegroundResume(now:)` / `declineForegroundResume()` doors that **arm no radio**, `ProximityResumeCard` at the TOP of `ConnectView`'s album layout, per-launch `@State` dismissal, and a `FERNLET_MESH_RESUME_PRESENTATION` DEBUG hook with seven UI cells (six at pass 2; `19ad37a` added the seventh). The mesh seam's `.fresh` row **HOLDS while an offer stands** (`resumeOffered`) — without it `startJoin()` reset the state machine and wiped the offer before a card could draw. The fix pass reserved "ended" for a rejoin-bar **HIT this run** | `841abc8`; `d91d3dc` + `19ad37a` + `4990e59` |
+| 7 | **The battery and the CI lines, in one commit.** Six serialized `MeshP7*AcceptanceTests` clause suites — PolicyMatrix 5, GateWriter 4, RadioSeam 7, Poller 6, Resume 6, Honesty 7 = **35 static `@Test`**. The `mesh-batteries` floor moves **300/50 → 335/56** and `CIGateSelectorBoundaryTests`' battery pin **36 → 42**, both regenerated from declaration counts. The mesh step's own name gains P7. Neither P5 determinism digest is touched by construction — nothing in the phase names the overlay, the schedule or `MeshScheduleEvent`. The fix pass scoped the continuation-task honesty needles to the TYPE (nine needles over three cases), made the mount's radio count a literal 7 rather than an import of the cited suite's pin, and swept every workflow file rather than `s3-wall.yml` alone — 35 cells unchanged | `b3f6de0` + `a528760` |
+| — | **The catalog sync.** Item 5's 15 owed keys, synced from `HEAD`'s blob at sorted positions with empty entries and no existing line touched: **14 added, 1 already present** (`Not now`); catalog **1936 → 1950** | `2389d01` |
+
+**The doc surfaces moved with the code, in the same commits:** `Docs/FileIndex.md` (+21/−9),
+`Docs/ProximityFunctionIndex.md` (+41/−7), the ProximityKit landing page (+40/−1),
+`Docs/Mesh-Network-Feasibility-Runbook.md` (+13/−0), and `Docs/PrivacyWipeCoverage.md` (+2/−2 — the
+delete-all row **re-tokened**, not a new row). **No new persisted surface and no new `UserDefaults`
+key**, the same default P6 held for a whole phase.
+
+**Repository scans at HEAD:** `python3 Scripts/power-of-10-scan.py` → **509 files, 0 violations**,
+21 allowlisted, assertion density **3887/4971 = 0.782** against a 0.68 floor;
+`python3 Scripts/doc-coverage-scan.py` → **0 undocumented type declarations**. Those two are the
+**only** gates this phase actually ran.
+
+### 13.2 Deviations from the sketch, and the policy acts inside them
+
+§13 is fourteen lines and an options table; it is silent about almost everything the phase had to
+decide. Where it was silent, the launcher's §3 default was taken, and the defaults were taken whole:
+all seven rows of the ledger's decisions table are the §3 defaults, with one refinement recorded
+against the resume row.
+
+- **§13 said "seven inputs"; the policy takes ten.** The three extra are `hasCommittedPeer` (the
+  predicate §24.3 names for radio guards, without which "user-started mesh" has no spelling) and the
+  two nearby consents, which were already gates on the presence and recipe listeners in `ContentView`
+  and would otherwise have had to reach around the policy.
+- **§13 said the policy produces `RunState` "per radio" and said nothing about the gate's carriage.**
+  The decision carries the assembled `MeshRoutedAccessGate` through **untouched**: the host
+  constructs no gate and reads neither `isOpen` nor `permits(_:)`, so D-10.3's one-owner rule
+  survives a policy that writes the gate.
+- **§13 sketched `MeshContinuationCoordinator` "feeding" the CPT state in. Nothing feeds it.** The
+  host binds `continuationTask` as `private let … = .inert`; there is no setter, no coordinator and
+  no `setContinuationTask(_:)` anywhere at HEAD. P7 shipping can produce only one of the four states.
+  That is deliberate (§13.3 finding 9 names what it costs P8) and it is what makes the honesty
+  suite's nine-needle continuation-task sweep — three cases × three spellings, every one zero —
+  meaningful.
+- **The give-up clock is not where §13 or the launcher put it.** Retiring `ContentView`'s
+  `armDiscoveryTimeout()` would have silently deleted the fourth session-end door, because item 4's
+  poller runs only while `isSessionLive` and a peerless fresh search never is. Pass B homed it on the
+  manager's own five-minute clock, armed from `armFriendRadios()`'s `.fresh` row — with a named
+  behaviour delta: **tab re-entry now restarts it**, where `ContentView`'s task did not.
+- **The poller's teardown door does not lower the poller's own leg.** Pass A's teardown set liveness
+  false while `isSessionLive` stayed true — `stopJoin()` nils no `currentMesh` and moves no
+  `sessionState` — so `.onChange` had nothing to carry and the poller was dead for that mesh's life.
+  The predicate drives the leg; the door now **ends the session** through the manager's own end path.
+- **"Ended" is a rejoin-bar HIT this run, not the durable bar.** Pass 2's first design matched the
+  bar against the mesh in hand; the fix review found `.ended` firing on **every cold start**, because
+  the bar is cleared nowhere and a terminated sealed context is never reaped. Launch is now silent
+  for `terminated`/`expired`.
+
+**The calls the owner should read as POLICY ACTS.** Each was taken as a default or as the only
+shape that worked, each is reversible at a stated price, and none was the owner's decision at the
+time it was taken.
+
+1. **`ProximityRunState` was moved INTO ProximityKit.** §13 and the launcher both placed the whole
+   policy in the app target. The enum could not stay there: the three `applyRunState` seams are
+   package-target managers that cannot name an app type. Only the enum moved; the policy, the radios
+   enum, the two lock/age enums, the CPT state and both structs stayed in the app, and the file's
+   `ScenePhase` count is unchanged at one. **Price of reversing:** a generic or protocol at each of
+   three seams, or three app-side adapters.
+2. **Ten inputs, not §13's seven.** `hasCommittedPeer` and the two nearby consents became policy
+   inputs rather than conditions reaching around the policy. **Price:** a narrower policy plus three
+   surviving out-of-band owners — which is precisely the fiction the single-writer wall exists to
+   prevent.
+3. **The `.inactive` widening reaches EVERY radio, and it is a behaviour change on all four.**
+   P5's post-close correction says an inactive scene is a foreground scene; shipping asked for the
+   **active** phase at every gate (`ContentView.shouldRunPresence`, `shouldListenForRecipeShares`,
+   and `handleScenePhaseChange`, which stood a peerless Friends search down on any non-active phase).
+   So under the policy an inactive scene now keeps `foregroundOnly` radios **up** where `ContentView`
+   dropped them — during a control-centre pull, an incoming call banner, a notification shade. The
+   extent is pinned exactly rather than papered over: **832 rows** of the 23 040. **Price of
+   reversing:** one predicate and a re-measurement of that literal.
+4. **The host is `FernletApp`'s `@State`, not a `FernletStore` member.** That is where the legs are —
+   `scenePhase`, the two `UIApplication` notifications, the duress `.onChange` and
+   `FernletLockService` are all this type's, not the store's. The store was only ever the
+   DESTINATION of the six pushes. **Price:** `FernletStore` reaches the policy only through
+   `deletingAllDataHook`, a closure that does capture the host strongly.
+5. **The teardown door ENDS the session locally.** It is `stopJoin()` **plus** `leaveSession()`, so a
+   delete-all, a below-age record or a duress session ends the mesh for this device rather than
+   merely standing its radios down. That is a user-visible product decision — it signs no
+   termination, but it does leave the mesh. **Price of reversing:** the poller's leg has no honest
+   way to fall (act 5 is what fixed the dead poller of §13.2's fourth bullet).
+6. **A yielding founder adopts the WINNER's ceiling, measured from the adopted mesh's `createdAt`.**
+   §12.3 finding 3 asked only for a ceiling; where it is anchored was P7's call, and anchoring it at
+   the adopted `createdAt` means a yielder inherits the elapsed time of a mesh it did not found —
+   which can expire it at the first tick. **Price of the alternative:** a yielder gets a fresh six
+   hours and two members of one mesh disagree about when it ends.
+7. **"Ended" is reserved for a rejoin-bar HIT this run.** A launch-derived bar says nothing; only a
+   refusal at a door this run names a mesh ended. This is why a user who was removed from a mesh
+   yesterday sees **nothing** at tomorrow's cold start. **Price of reversing:** the nag of §13.3
+   finding 6 comes back on every launch until the context is reaped.
+8. **`MeshSessionTerminationReason` was made `public`.** The projection could not carry the bar's
+   reason otherwise, and making `MeshSessionRestoreOutcome` public would have dragged
+   `MeshSessionContext` public with it. One small public enum instead of three types and a context.
+   **Price:** eight frozen raw values are now module API.
+9. **The mesh seam's `.fresh` row HOLDS while an offer stands.** Without it, the first visit to the
+   Friends tab after a relaunch called `startJoin()`, which resets the state machine and clears
+   `offersForegroundResume`, `restoredSessionContext` and the ceiling — wiping the offer before a
+   card could be drawn. The hold is bounded by the user's **answer**: accept adopts, decline clears,
+   and the app re-pushes either way. **Price:** a user who never answers has no fresh search on the
+   Friends tab for that launch.
+10. **The fresh-search give-up clock restarts on tab re-entry.** Homing it on the manager's own
+    five-minute clock from `armFriendRadios()` means leaving and returning to Friends re-arms it,
+    where `ContentView`'s `discoveryTimeoutTask` did not. A user who taps away and back never
+    times out. **Price of reversing:** a fourth session-end door with no owner.
+11. **The recipe share sheet's dismissal asks the HOST, not the manager.** Pass B's verify found the
+    sheet was a second radio owner behind `manager.start()` — invisible to a receiver-qualified
+    needle, and with a restart guard reading `lockService.state`, which is `.unlocked` during duress.
+    The sheet now takes the host as an init parameter through
+    FoodView → RecipeBookSheet → RecipeCreationOptionsView → RecipeImportSheet, and dismissal is
+    `manager.stop()` + `pushNow()`. **Price:** four view initialisers carry a parameter they do not
+    otherwise use.
+12. **`FernletTab` was made `nonisolated`.** The app target is
+    `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so a `nonisolated` input struct storing an
+    un-annotated app enum is a compile error. The stored enum was marked, not the container.
+    **Price:** none measured; it is the invariant every other `nonisolated` app type already holds.
+
+### 13.3 Findings for the owner — real, and deliberately NOT fixed here
+
+*Every "Blocked on owner" line the P7 ledger carried ends here, resolved, taken as a default and
+recorded in §13.2, or written below with its cost.*
+
+1. **The S3 Wall is RED on `82fc4d7` — P6's own push — and P7 never made it green.** Run 71 failed at the mesh-batteries step
+   (steps 1–11 green; Power of 10 run 31 green) with
+   `Test run with 300 tests in 50 suites failed … with 1 issue` — the floor met exactly — in
+   **`MeshRoutedHeartCeremonyTests.everyHeartFailureCauseHasItsOwnSentence()`**. Diagnosed read-only:
+   the cell never reads the catalog, it compares `SessionHeartStatusCopy.message(_:recipientName:)`
+   against a hand-built `LocalizedStringKey` per cause; at HEAD all ten sentences match code-point
+   for code-point and all eleven heart keys are in the committed catalog. The failing expectation's
+   text is **unretrievable** through the Actions API, which returns only the tail of a long run.
+   Working hypothesis: `LocalizedStringKey ==` over **interpolated** arguments behaves differently on
+   the `macos-26` runner's simulator runtime. **Cost:** item 7's CI lines cannot be called green on a
+   hosted runner until this is settled, and P7's own floor raise lands on top of a red step. The
+   robust fix is to compare a stable projection instead of two interpolated keys — **the owner's
+   cell, not P7's.** **Owner: re-run the job once; if it reproduces, download the raw log.**
+2. **Item 6 was never measured: `MeshRoutedDrainTests` stays ungated and P6's ~286 ungated cells are
+   still unpriced.** The item IS a measured step time with and without, and the landing container had
+   no toolchain. `MeshRoutedDrainTests` is **43 `@Test`** at HEAD and holds P6 item 8's handed-over
+   cell. **Cost:** §12.3 finding 14 is carried forward unchanged into P8, and the `mesh-batteries`
+   step's real cost of gating them is still a guess. **Secondary finding:** the workflow's own
+   comment at `.github/workflows/s3-wall.yml:243` says "`MeshRoutedDrainTests`' own **37** cells" —
+   stale by six.
+3. **Item 8 — the whole tier-2 lane — was never run.** (a) the backgrounding half of the gate, (b)
+   the heart eligibility negative, (c) P6's remaining rows behind `FERNLET_MESH_ARM_AFTER`. All need
+   a Mac and a simulator fleet. **Cost:** the pushed `appIsForeground` leg has still never been
+   observed to FALL on any radio, in any phase — which is the one thing P7 could have proved about
+   its own central object and did not. P8 inherits it unchanged.
+4. **The whole phase is BUILD-UNVERIFIED, and this is the gauntlet a Mac session must run before any
+   claim in §13.1 or §13.4 is green.** Nothing below has been run.
+   ```bash
+   python3 Scripts/power-of-10-scan.py            # expect 509 files, 0 violations, density ≥ 0.68
+   python3 Scripts/doc-coverage-scan.py           # expect 0 undocumented type declarations
+   xcodebuild build-for-testing -project App/Fernlet.xcodeproj -scheme Fernlet \
+     -destination 'platform=iOS Simulator,name=iPhone 17'
+   xcodebuild test-without-building  -project App/Fernlet.xcodeproj -scheme Fernlet \
+     -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests
+   Scripts/spm-wall-check.sh
+   Scripts/spm-wall-selftest.sh
+   Scripts/sync-string-catalogs.sh --check
+   ```
+   plus, and these are not optional: **every new or amended wall shown red once** (disable the guard,
+   **REBUILD**, run the suite, keep the log, restore the exact text, re-grep the needles, **REBUILD**
+   again) — the single-writer occurrence wall, the zero wall and both by-name exemption fixtures, the
+   nine-needle continuation-task sweep, the poller's index-order assertion, the gate-purity scan and the resume
+   file's no-radio scan; the **UI suite** `ProximityResumeCardUITests` (7 cells, serially, iPhone 17,
+   portrait, its own invocation, environment pinned) which has never been run and is in no workflow;
+   and a confirmation that the gated step actually reports **`Test run with 335 tests`** rather than
+   meeting a floor that was counted statically. **Cost:** the phase's 10 492 inserted lines have been
+   read but not compiled; the most likely failures are the ones no reader catches — an `init`
+   parameter threaded four views deep, an `isolated deinit`, a `private` helper's access level.
+5. **The ordinary proximity joiner still arms no ceiling.** Item 4 closed §12.3 finding 3 for the
+   *yielding founder* via the adopt path; the `currentMesh == nil` arm of `handleMeshDescriptor` —
+   an ordinary joiner adopting a descriptor it did not found — arms none. **Cost:** narrower than
+   finding 3 but the same shape: the 6 h bound on that device's session is never enforced. It is
+   named in source and in the index, and it has its own honesty cell.
+6. **A `terminated`/`expired` sealed context is never reaped.** `MeshSessionStore` has no delete but
+   `wipeForDeleteAll`, so the "That session has ended." notice would recur on every cold start until
+   a new session overwrites the file — which is exactly why §13.2 act 7 reserved "ended" for a hit
+   this run. Reaping would lose the durable rejoin bar the context re-derives. **Cost:** the user is
+   told nothing at launch about a mesh they were removed from; and a persisted acknowledgement would
+   owe a `PrivacyWipeCoverage.md` row, or the bar needs a store separate from the context. **The fix
+   is the owner's — it is a schema decision, not a wiring one.**
+7. **A sealed context carries no mesh NAME and no MODE.** An accepted resume therefore adopts a
+   descriptor with a generated name and `nameSetAt`/`modeSetAt` at `.distantPast`; the first
+   gossiped descriptor wins them back under last-write-wins. **Cost:** a resumed mesh briefly shows
+   the wrong name to its own user, and a mesh the user had CLOSED re-opens as open until a member
+   gossips. A schema question.
+8. **`FernletUITests` is in no workflow at all.** Item 5 pass 2's six UI cells (seven at HEAD) are
+   the app's first visible-surface tests since P2 and nothing runs them — not locally this phase, not
+   on any hosted runner. **Cost:** the resume card's placement, its accessibility identifiers and its
+   DEBUG hook are asserted only by a suite that has never executed. Adding the target to the S3 Wall
+   is a workflow decision with a real minute cost, so it is the owner's.
+9. **All three non-inert CPT states are pinned now, but the wall is SPELLING-based, not
+   type-checked.** The fix pass (`a528760`) closed the hole the first version had: the cell no
+   longer zero-lists a bare `.granted` — which could never have reached `.refused` or `.expired`,
+   both ordinary spellings elsewhere in the app (`RoutedShareRefusalCopy`,
+   `DuressRecoveryCoordinator`, `ProximityResumeDecision`) — and instead sweeps **nine needles
+   scoped to the type**: `continuationTask: .<case>`, `ProximityContinuationTaskState.<case>` and
+   `setContinuationTask(.<case>` over `granted`, `refused` and `expired`, every one measured at zero
+   over the comment-stripped app target outside the declaring file. **What is still owed:** those
+   nine needles are string matches over three *anticipated* spellings. A non-inert state reaching
+   the policy through a local variable, a computed property or any fourth spelling evades all of
+   them. **Cost:** the wall narrows the hole from two cases in three to one class of evasion, and
+   what ultimately protects the claim is still the `private let … = .inert` binding — a fact P8
+   deletes on its first commit, at which point this cell must be replaced by one that reads the
+   host's actual value rather than the app target's text.
+10. **The 30-second poll interval is unmeasured.** §3's default said "start at 30 s and measure
+    against the 30-minute idle stop"; nothing was measured. The interval's own honesty cell names
+    that. **Cost:** unknown battery cost while a session is live, and the number P8's CPT progress
+    unit will inherit if nobody re-opens it.
+11. **A tick that ends a session leaves the host's liveness leg high for one frame.** The teardown
+    ends the session through the manager, and the leg follows the observed predicate on the next
+    `.onChange` — so between a ceiling verdict and the leg falling there is one main-actor turn in
+    which the poller is still armed. Bounded and self-correcting; named because it is the shape act 5
+    deliberately chose over lowering the leg by hand. **Cost:** at most one extra tick against a dead
+    mesh, whose three consumers are all no-ops on it.
+12. **Lane C's harness now feeds the tab leg, and a Lane C run must stay on Friends.** The
+    rejection-matrix harness installs after the launch push and calls `startJoin()` directly; any
+    later leg change off the Friends tab stands it down, because the policy is now the only radio
+    owner. Pass B's fix has the harness feed the tab leg. **Cost:** any future lane script that
+    navigates away mid-run silently loses its radios — a new failure mode that did not exist before
+    P7.
+13. **A Lane C run holds the recipe listener down for its whole length, because the harness pins the
+    tab leg to `.social`.** The product rule itself did **not** change: `recipeShareDirective(_:)`
+    reproduces the retired `ContentView.shouldListenForRecipeShares` exactly — `.home`, `.food` and
+    `.move` are `foregroundOnly`, `.social` and `.personal` are `stop` — and the old view property
+    guarded `selectedTab == .home || .food || .move` in the same words, so a user on the Friends tab
+    never heard a share before P7 either. What is new is the **lane**: the rejection-matrix harness
+    now feeds the tab leg and sets `.social` once the radios are up, so for the whole of any Lane C
+    run the recipe listener is stopped by the policy. **Cost:** no lane can observe a recipe share
+    while the harness is installed, and a future lane that wants one must move the tab leg
+    deliberately (which, per finding 12, stands the mesh radios down instead) or run without the
+    harness. The active share sheet's own `start()` remains the shipping escape and is the second
+    by-name exemption.
+14. **Carried unchanged from §24.4, none of it P7 work:** option (b) for `handleEncryptedMetadata`;
+    D-7.30's per-session re-gossip budget as once-per-window; **§18.2**'s partition UX copy; the
+    legacy unsigned two-party removal's retirement; transcript `sid`; the hardware lanes (Lane A's
+    report, Lane B's double-dial row, item 11's AWDL half, Lane D with the cable OUT); the two
+    census/duress questions; the **final wording** of the routed hold / refusal / heart copy (19
+    sentences in the catalog since `6b77ec2`, plus P7's 15 — the mechanism is done, the English is
+    not); §17.3's privacy paragraph, drafted in §24.4; `browsed peers=` still `.notice`/`.public`;
+    and the **`HeartDrop` CloudKit record type still not promoted to the Production schema**.
+15. **P6 §12.3's open findings stand, none of them P7 work:** the charged forwarder (4),
+    `ConnectionInspectorTests` (5), the conflicted-member blast radius (6), the un-linked third
+    member (7), item 6's two residuals (8), D-4.5's expiring heart (9), I-13's vanished pair (10),
+    the peer-holdings-shrink shape (11), tier 2's un-run rows (12), L-3's arming race (13), the
+    unpinned audit tokens (15), 1c's sibling wall-clock leg (16), the battery's own named weaknesses
+    (17), the `MeshRoutedAckStageTable.increment1` alias cleanup (19), and finding 20's grouped
+    residuals.
+
+### 13.4 Acceptance evidence
+
+**First, the honest sentence: nothing in P7 was compiled or executed by the landing session.** There
+is no build log, no test run, no wall shown red, no simulator and no `Test run with N tests` line
+anywhere in this phase. What follows is the evidence a Mac session must **produce**, written as the
+exact lines to run, plus the two things that were actually executed.
+
+§13's clauses, one serialized suite each, in `Tests/FernletTests/MeshP7AcceptanceTests.swift`
+(`b3f6de0` + `a528760`, P7 item 7) — **six suites, 35 static `@Test`**, in §11.4's and §12.4's format. The
+launcher named five clauses; the sixth is P5's and P6's Honesty shape.
+
+| Clause | Suite | Static cells | Scenario |
+|---|---|---|---|
+| (a) the policy matrix — item 1 | `MeshP7PolicyMatrixAcceptanceTests` | 5 | the ten-input product enumerated whole with no row left undecided — a **SUBSTITUTION** the cell states where it stands: item 7's row asked for `deferred` to be shown EMPTY as a positive claim, and there is no `deferred` in the decision vocabulary (`ProximityRunState` is `.run` / `.foregroundOnly` / `.stop`), so the per-radio OBSERVED-VOCABULARY pin is asserted in its place; the CPT rows literal and only `.granted` ever earning mesh `run`; the three dominating inputs stopping every radio and tearing the session down; an inactive scene a foreground scene at every radio; the gate carried through untouched and never interpreted |
+| (b) the single writer — item 2 | `MeshP7GateWriterAcceptanceTests` | 4 | one gate writer and one `decide` call in the whole app target; the six edges each writing the gate they own and no other; the launch mount installing the doors **before** the restore runs; nothing written before the doors are installed |
+| (c) the radio seams — item 3 | `MeshP7RadioSeamAcceptanceTests` | 7 | a `run` arming the friend radios once and a second push silent; a `stop` with no committed peer standing them down; a `stop` over a committed peer tearing nothing down; the P8-only pair moving nothing and naming itself; an unanswered resume offer holding the fresh search; presence and recipe standing down once and idempotently; the zero wall counting every radio call inside the mount |
+| (d) the poller — item 4 | `MeshP7PollerAcceptanceTests` | 6 | nil until a session is live and cancelled when the leg falls; the armed poller ticking and never stacking a second timer; one tick ending a mesh whose ceiling elapsed; one tick partitioning a live mesh that can reach nobody; the idle lapse spent by the **second** of two ticks; and §12.3 finding 3's headline — a yielding founder's adopted ceiling expired by one tick |
+| (e) the resume decision — item 5 | `MeshP7ResumeAcceptanceTests` | 6 | every restore outcome and payload variant decided against the table; the four named rows literal; the projection flattening every outcome into the app's vocabulary; accepting adopting the context and **arming no radio**; declining clearing the offer and adopting nothing; a barred try ended while a terminated launch stays silent |
+| (f) honesty | `MeshP7HonestyAcceptanceTests` | 7 | what the battery does **not** claim, one cell per absence: no scene phase was driven; no continuation task exists and `.inert` is the only value shipping; no device lock was driven; `.continuingInBackground` is unreachable because nothing raises the edge; the ordinary proximity joiner still arms no ceiling; the resume card's UI suite is named in no workflow step; the 30-second poll interval is unmeasured |
+
+**The `-only-testing` lines a Mac session must run.** Regenerated from the `@Suite` declarations at
+HEAD, never inherited. A line must name the **`@Suite` struct**, never the file: P7 adds one more
+file of that shape — `ProximityRunStateSeamTests.swift` holds **two** suites,
+`ProximityRunStateVocabularyTests` and `ProximityRunStateSeamTests`. And
+`-only-testing:Target/Suite/cellName` runs **zero** tests under a green banner.
+
+```
+# the P7 battery
+-only-testing:FernletTests/MeshP7PolicyMatrixAcceptanceTests
+-only-testing:FernletTests/MeshP7GateWriterAcceptanceTests
+-only-testing:FernletTests/MeshP7RadioSeamAcceptanceTests
+-only-testing:FernletTests/MeshP7PollerAcceptanceTests
+-only-testing:FernletTests/MeshP7ResumeAcceptanceTests
+-only-testing:FernletTests/MeshP7HonestyAcceptanceTests
+# the phase's other new suites — every one of them new in P7
+-only-testing:FernletTests/ProximityRunPolicyTests
+-only-testing:FernletTests/ProximityRunPolicyHostTests
+-only-testing:FernletTests/ProximityResumeDecisionTests
+-only-testing:FernletTests/ProximityRunStateVocabularyTests
+-only-testing:FernletTests/ProximityRunStateSeamTests
+# the amended suites the phase's diff touched
+-only-testing:FernletTests/CIGateSelectorBoundaryTests
+-only-testing:FernletTests/MeshPairwiseFoundingTests
+-only-testing:FernletTests/MeshRoutedLockedDeviceTests
+-only-testing:FernletTests/PrivacyWipeCoverageTests
+# the app-target walls P7's diff puts in scope
+-only-testing:FernletTests/PersistedSurfaceWipeBoundaryTests
+-only-testing:FernletTests/DeleteAllDataTests
+-only-testing:FernletTests/NoTrackingBoundaryTests
+-only-testing:FernletTests/MemoryLifecycleBoundaryTests
+-only-testing:FernletTests/TransportNeutralityBoundaryTests
+-only-testing:FernletTests/PowerOfTenBoundaryTests          # carries no @Suite — add by hand
+-only-testing:FernletTests/LocalizationBoundaryTests        # carries no @Suite — add by hand
+# the full suite, and the tier-1b suite that has never run
+-only-testing:FernletTests
+-only-testing:FernletUITests/ProximityResumeCardUITests
+```
+
+**CI.** The six suites joined the `mesh-batteries` step in `.github/workflows/s3-wall.yml`, whose
+name now reads "(P3 / P4 / P5 / P6 / P7)"; the floor moved **300 over 50 suites → 335 over 56**, and
+`CIGateSelectorBoundaryTests`' battery pin moved **36 → 42**. **Both numbers are STATIC counts taken
+with no toolchain** — the floor is the sum of declared `@Test` functions, not a measured run — so a
+Mac session must confirm `Test run with 335 tests` before either is trustworthy, and a shortfall is a
+mis-count, not a regression. Neither P5 determinism digest may move
+(`594b6f77…5765` overlay, `ca898bcc…6930` schedule): nothing in P7 names
+`MeshRoutedScheduleOverlay`, `MeshConvergenceSchedule` or `MeshScheduleEvent`, so a move is a red.
+
+**What WAS run, and it is two lines.** At HEAD, in a container with no Swift toolchain:
+
+```
+python3 Scripts/power-of-10-scan.py
+  → files scanned: 509; violations: 0; allowlisted hits: 21;
+    assertion density: 3887/4971 = 0.782 (floor 0.68, ok)
+python3 Scripts/doc-coverage-scan.py
+  → TOTAL undocumented type declarations: 0
+```
+
+**The catalog.** Fifteen keys were owed by item 5 and all fifteen are now in the committed catalog:
+synced from `HEAD`'s blob at `2389d01` (sorted position, empty entries, no existing line touched),
+**14 added and 1 already present** (`Not now`), taking the catalog **1936 → 1950**. Only the English
+is outstanding. `Scripts/sync-string-catalogs.sh --check` was **not run** — it is on §13.3 finding
+4's list.
+
+**Non-vacuity: NOT DONE.** Not one wall or cell in this phase was shown red. Every wall item 1
+through item 7 wrote — the occurrence-counting single-writer wall, the receiver-agnostic zero wall
+and its two fixtured exemptions, the nine-needle continuation-task sweep, the gate-purity scan, the resume file's
+no-radio scan, the poller's index-order assertion, the matrix's 832-row deviation pin — is asserted
+by reading and by nothing else. **This is the single largest gap between what P7 wrote and what P7
+proved**, and it is §13.3 finding 4's second paragraph.
+
+**Tier 2: NOT RUN.** Item 8 was never attempted; §13.3 finding 3 names the three rows. The lane's
+state is §24.2's, unchanged, plus one new fact P7 created: Lane C's harness now feeds the tab leg,
+and a Lane C run that navigates off Friends stands its own radios down.
 
 ---
 
@@ -4068,3 +4466,299 @@ Carried from §23.4, with what P6 added or closed:
   (§15); a Simulator cannot produce `.continuingInBackground` at all, and the lane explicitly does
   **not** claim the heart ceremony's foreground gate was tested. The first hardware sample stands:
   iOS ended a user-started continued-processing task ≈ 46 s in.
+
+---
+
+## 25. P8 handoff — written at the P7 boundary, 2026-09-17
+
+P0–P7 are **BUILT** (§5, §6, §7, §8, §10, §11, §12, §13). This is what a fresh session needs to start
+P8 and nothing more; **§14 is the specification** and **§15's hardware gates are P8's entry
+criteria**, which is what makes P8 the first phase since P2 that cannot be finished on this Mac.
+P7 built the single owner P8 feeds: a pure policy, one gate writer, three radio seams and a poller.
+P8's job is the thing that feeds them, and the two legs that must then disagree.
+
+**Read §13.3 first.** P7 is **BUILD-UNVERIFIED** — nothing it landed was compiled or executed — so
+P8's item 0 is a Mac session running P7's gauntlet before P8 writes a line.
+
+### 25.1 What P8 inherits
+
+*Every file line number in this section is current at `a528760` (the phase's last shipping commit).
+Re-check before editing — P8's own commits move them.*
+
+- **The CPT state is already a policy input, and the policy already decides every row for it.**
+  `ProximityContinuationTaskState` has four cases — `inert`, `granted`, `refused`, `expired` — and
+  `ProximityRunPolicy.meshLinksDirective(_:)` reads it:
+  `run` requires **both** `hasCommittedPeer` **and** `continuationTask == .granted`; anything else
+  with a committed peer or the Friends tab is `foregroundOnly`; neither is `stop`. `.refused` and
+  `.expired` answer identically by design, so P8 need not add a third row — it needs to *raise* the
+  states. Discovery/admission, presence and recipe do not read the CPT state at all, which is §13's
+  invariant 5 already satisfied.
+- **Nothing feeds it, and there is no setter.** The host binds
+  `private let continuationTask: ProximityContinuationTaskState = .inert`. **`MeshContinuationCoordinator`
+  does not exist at HEAD and neither does `setContinuationTask(_:)`** — the §13 options table's
+  "`MeshContinuationCoordinator` *feeds* its state in" is still entirely unbuilt. **P8's first wiring
+  job is one setter on `ProximityRunPolicyHost` and one caller.** The setter must follow the house
+  rule of every other leg — record, re-decide, push, **no deduplication** — except that P8 should
+  decide deliberately whether it also deduplicates like `setSessionLive(_:)` does, since a CPT state
+  that re-asserts itself on every progress update would otherwise push the radios on every tick.
+- **The exact place the two legs must DISAGREE.** The **pushed** `appIsForeground` leg is the app's
+  scene fact, assembled by the policy and written through the one gate call
+  (`App/Fernlet/FernletApp.swift:415` → `MeshNetworkManager.applyRoutedAccessGate(_:now:)`,
+  `MeshNetworkManager.swift:1451`). The heart predicate's leg is
+  `mayCommitRoutedHeartLedgerJudgement` (`MeshNetworkManager.swift:9333`) =
+  `mayDecryptRoutedContent ∧ mayMutateCanonicalStoreWithRoutedContent ∧ sessionState ==
+  .activeForeground` (`:9335`). **A CPT-continued mesh custodies ciphertext and decrypts nothing** —
+  the shipping doc says so in the sentence §24.1 pointed at, now at
+  `MeshNetworkManager.swift:9327–9330` (the `:8956–8958` of the P6 boundary). **P8 must not close
+  that gap by making one leg read the other.**
+- **`sessionState == .activeForeground` still has exactly ONE shipping reader**, and P7 added none:
+  `MeshNetworkManager.swift:9335`. Every other occurrence in the module is a state-machine
+  transition or a comment. Measure it again before changing it and write the count into the commit —
+  P6 item 6's P1 was bounded that way and P7 kept the discipline.
+- **`.backgrounded` and `.foregrounded` are still raised by nobody, and P7 deliberately added no
+  raise.** They exist as `MeshSessionEvent` cases and as transition arms only.
+  `.continuingInBackground` is a declared `MeshSessionState` case reachable from no shipping path,
+  which is why P7's honesty suite has a cell saying so. **P8 is the phase that raises them**, and
+  the raise is what makes `.continuingInBackground` real — and therefore what makes the
+  disagreement above observable for the first time.
+- **The poller, and what it costs while a CPT runs.** One **host-owned, self-re-arming one-shot**,
+  not a repeating timer: `ProximityRunPolicyHost` arms it on the rise of `setSessionLive(_:)` and
+  cancels it on the fall; `defaultPollInterval` is **30 s**, injectable through
+  `init(pollInterval:)`; an `isolated deinit` cancels the handle. One tick is `pollNow(at:)` handing
+  the injected `poll` door one instant, and production's door runs three consumers on the mesh
+  manager **in index order**: `enforceSessionCeiling(now:monotonicElapsed: nil)`
+  (`MeshNetworkManager.swift:10005`) → `evaluateIdleLapse(now:)` (`:10029`) →
+  `evaluatePartition(now:)` (`:10076`). **What it costs P8:** while a CPT runs, the session is live,
+  so the poller keeps ticking **once every 30 seconds in the background** for the life of the task —
+  three main-actor calls and, on the ceiling consumer, one `ContinuousClock` read. That interval was
+  never measured (§13.3 finding 10). **P8 decides whether the CPT progress unit rides this tick** —
+  it is the only periodic wake the mesh has, and reusing it means progress and expiry cannot drift
+  apart; the cost of reusing it is that the poll interval becomes a progress-resolution decision as
+  well as a battery one.
+- **The `held noStandAloneDiscoveryStop` combination is P8's, and the primitive it needs does not
+  exist.** `MeshNetworkManager.applyRunState(links:discovery:)` (`:2235`) resolves the four
+  directive pairs; the pair **links `run` + discovery `stop`** — exactly the shape a CPT-continued
+  mesh wants, keep the committed links alive and stop looking for anyone new — moves **nothing** and
+  records `ProximityRunStateSeam.noStandAloneDiscoveryStop`. It is honest rather than silent because
+  the manager has **no primitive for it**: `stopJoin()` runs `stopSearching()`, which empties the
+  committed slots and clears the group key state, so "stop searching" and "drop the mesh" are the
+  same call today. **P8 must build "stop searching, keep committed links" in ProximityKit**, and
+  until it does, a CPT-continued mesh that reaches `run`/`stop` is a logged no-op.
+- **The teardown door, which P8 must not fight.** The sixth production door is
+  `stopJoin()` **+** `leaveSession()` — it **ends the session locally**, because a host leg the host
+  lowers itself can never rise again if the observed predicate never fell (P7 item 4's P1). A CPT
+  coordinator that wants to keep a mesh alive across a delete-all, a below-age record or a duress
+  session is fighting the policy, and that is precisely the two-owner bug class §13 rejected option C
+  for. **`tearsDownSession` wins; the CPT state is an input, never an override.**
+- **The resume surface, and what P8's `.foregrounded` edge must raise.** P7 built the whole path
+  P8's foreground return will land on. `restoreSessionContextOncePerLaunch(now:)` (`:10186`) still
+  runs once per launch from `FernletApp`, **after** the gate push and the mount, latched.
+  `MeshSessionResumeProjection` (`MeshSessionRestore.swift:183`) is ProximityKit's ONE public export
+  of the restore, read by `sessionResumeProjection` (`:10356`); `acceptForegroundResume(now:)`
+  (`:10412`) answers `MeshForegroundResumeOutcome` (`MeshSessionRestore.swift:292`) and
+  **arms no radio** — the app hands the radios back with `ProximityRunPolicyHost.pushNow()`;
+  `declineForegroundResume()` (`:10449`) is silent when no offer stands. The offer itself is raised
+  by **one** state-machine effect, `.offerForegroundResume`, from the two transitions into
+  `.localIdleStop` (`MeshSessionStateMachine.swift:331` and `:446`), applied at
+  `MeshNetworkManager.swift:9614–9615`. **So P8's `.foregrounded` edge already has its consumer:**
+  a mesh that stopped locally on the idle lapse while the app was away raises an offer, and the
+  Friends surface draws a card for it the moment the user returns. What P8 must decide is whether a
+  CPT that **expires** should also route through `.localIdleStop` (and therefore offer a resume) or
+  end the session outright.
+- **The progress strategy is already fixed, and the clock it needs already exists.** §14 sets the
+  unit: **elapsed session time toward the ceiling**, monotonic by construction. The manager already
+  measures exactly that: `sessionMonotonicOrigin` is a `ContinuousClock.Instant?`
+  (`MeshNetworkManager.swift:9344`), stamped when a session starts or is restored (`:9923`), and
+  `enforceSessionCeiling(now:monotonicElapsed:)` derives elapsed runtime from it when the caller
+  passes `nil` — which is what P7's poller door does, deliberately, so the number P8's progress bar
+  reuses is the manager's own. A `ContinuousClock` keeps counting across a wall-clock change and
+  across device sleep, which is the property that stops a clock set backwards from lengthening a
+  session — and the property the system's monotonic-progress termination rule demands. **P8 should
+  read the same origin and not mint a second one.**
+- **The yielding founder's ceiling is armed now, and the ordinary joiner's is not.**
+  `adoptSessionCeiling(of:now:)` (`:9952`) arms from the ADOPTED mesh's `createdAt` in
+  `handleMeshDescriptor`'s yield arm. The `currentMesh == nil` arm — an ordinary proximity joiner —
+  still arms none (§13.3 finding 5). **P8 inherits a device that can run a CPT against a mesh with
+  no ceiling**, which is a progress bar with no denominator. Close it before the progress work, not
+  after.
+- **The Live Activity, and the reaper that must stay.** §14 suppresses the custom foreground anchor
+  for continued meshes (no duplicate UI) and keeps its once-per-launch orphan reaper. P7 touched
+  neither. The anchor is reached through `ProximityForegroundAnchoring`; **grep it before assuming a
+  concrete type name** — there is no bare type called `ProximityForegroundAnchor` at HEAD, only a
+  FILE of that name.
+- **The walls P8 must not trip, all standing and none of them P7's to move.** The routed type
+  registry is the only per-type source; two admission doors and only two; every pre-store refusal
+  exits through `refuseRoutedFrameBeforeStore` except the digest family; no epoch on the routed path;
+  `MeshSessionContext` is schema **3** and the routed index is **2**, and neither moved in P7; the
+  three retirement zero-lists; both P5 determinism digests (`594b6f77…5765` overlay,
+  `ca898bcc…6930` schedule) **unmoved** — a move is a red, never a re-pin; MC containment;
+  `MemoryLifecycleBoundaryTests`' ML4/ML5 (P7 added an `isolated deinit`, not a sixth unmarked
+  detached `Task`); and Power of 10 at **0 violations over 509 files**.
+- **The wipe wall, unbroken for two phases.** P6 added no `Docs/PrivacyWipeCoverage.md` row in its
+  whole phase and neither did P7 — the policy is derived state and the restore's outcome already
+  lives in the manager. **P8's CPT registration is the first thing in three phases with a real claim
+  to a persisted surface** (a task id, a resume token). If it takes one, it owes a
+  `PrivacyWipeCoverage.md` row **and** delete-all writer wiring in the same commit.
+- **The `HeartDrop` CloudKit record type is still not in the Production schema.** Unchanged since
+  §24.1; it is the last thing standing between the away-heart path and a TestFlight build, so it
+  travels with the handoff.
+
+### 25.2 The lane as it is
+
+**§24.2's table stands unchanged: P7 ran no lane work at all.** Item 8 was never attempted (§13.3
+finding 3), so every row §24.2 recorded — text as a routed delivery on three Simulators, the
+two-session hearts ceremony on two, the four un-run rows, the four measured lane facts, the three
+DEBUG harness hooks — is inherited byte-for-byte. Re-read §24.2 rather than this section for those.
+
+Three things P7 **added** to the lane's shape, and all three change how a lane run must be written:
+
+- **Lane C's harness now feeds the tab leg, and a Lane C run must stay on Friends.** The
+  rejection-matrix harness installs after the launch push and calls `startJoin()` directly; since the
+  policy is now the only radio owner, **any leg change that moves off the Friends tab stands the
+  harness's radios down mid-run**. Pass B's fix has the harness feed the tab leg so a run that never
+  navigates is safe; a run that navigates is not. This failure mode did not exist before P7.
+- **The resume card has a DEBUG hook, and it is not Lane C's.**
+  `FERNLET_MESH_RESUME_PRESENTATION=<token>` (`nothing` / `offerResume` / `couldNotReopen` /
+  `ended:<reason>`) forces the Friends tab's launch-restore card into one fixed shape for a tier-1b
+  UI run. It is inert without `FERNLET_MESH_MATRIX`, seeds no mesh, writes no file and starts no
+  radio; an unrecognised token means "no override", so a typo leaves the shipping decision in place;
+  release answers a hard-coded nil. It lives in the harness file because Power of 10 rule 8 forbids
+  nesting one `#if DEBUG` inside another.
+- **Every Lane C launch still carries `FERNLET_MESH_MATRIX=1`, which bypasses the launch restore** —
+  and now that the restore has a *visible* surface, a lane that wants to observe the resume card
+  must run **without** the harness, with the DEBUG token instead. L-1 stands: a simulator holding a
+  stale sealed context from an unsupported schema can never join until a non-harness launch
+  quarantines it.
+
+**Still owed on the lane, unchanged:** the four ≥ 3-node asks; P5's tier-2 list (QUIC chunk pacing at
+256 KiB, control-stream starvation, whether relay increment 2 is needed at all, 6b's main-actor drain
+I/O, item 9's `maxChunksPerAnswer` / `maxChunksInFlightPerPeer` re-measurement, the sealed index
+file's uncounted ~5 MB worst case). Keep `STAGGER=1`, budget wall clock at ≈ 3.5 × the tick number,
+and re-harvest identities after any `xcodebuild test` run.
+
+### 25.3 Decisions with defaults — take them deliberately, at the start
+
+| Decision | Default if the owner is silent | Why |
+|---|---|---|
+| **Whether P8 starts before P7's gauntlet is green** | **No.** A Mac session runs §13.3 finding 4's gauntlet FIRST, as P8's item 0, and fixes whatever it finds before any P8 code lands. | P7 inserted 10 492 lines that have never been compiled. Building P8 on top of an unbuilt P7 makes every subsequent failure ambiguous between the two phases. |
+| **Where the coordinator lives** | **A new app-target `MeshContinuationCoordinator`** — §14's own word, and §13's options table already assigned it the FEEDER role. It owns `BGTaskScheduler`, which ProximityKit must not import, exactly as it must not import UIKit. | The composition-root pattern P7 just established. The coordinator calls one setter on `ProximityRunPolicyHost` and decides nothing about radios. |
+| **How the CPT state reaches the policy** | **One setter, `setContinuationTask(_:)`, on `ProximityRunPolicyHost`**, following the house rule (record, re-decide, push) but **deduplicating** like `setSessionLive(_:)` does — because a progress update every 30 s must not re-push four radios. | Every other leg's seam owns its own edge; the CPT's does not, because the coordinator is the seam. |
+| **Whether the CPT state can override a teardown** | **No.** `tearsDownSession` wins. Delete-all, below-age and duress end the session whatever the task is doing. | Two owners for one radio is the bug class §13 rejects option C for, and P7's teardown door already ENDS the session. |
+| **Whether the CPT progress unit rides the poller's tick** | **Yes** — one wake, 30 s, elapsed session time from `sessionMonotonicOrigin` toward the ceiling. | It is the only periodic wake the mesh has, and reusing it keeps progress and expiry from drifting. The cost: the poll interval becomes a progress-resolution decision too, and it is still unmeasured (§13.3 finding 10). |
+| **What "stop searching, keep committed links" looks like** | **A new ProximityKit primitive**, not a widened `stopJoin()`. `stopJoin()` → `stopSearching()` empties the committed slots and clears the group key state; that is a teardown and must stay one. | The `held noStandAloneDiscoveryStop` record exists precisely so this gap is logged rather than silently wrong. |
+| **Whether an EXPIRED CPT offers a resume** | **Yes** — route it through the same `.localIdleStop` transition that already raises `.offerForegroundResume`, so the user returning to the app is offered the mesh back rather than finding it gone. | The whole surface already exists and arms no radio; the alternative is a mesh that vanishes silently while the phone was in a pocket. |
+| **Whether P8 adds a persisted surface** | **Assume yes and pay for it.** If registration needs a durable task id or resume token, it owes a `Docs/PrivacyWipeCoverage.md` row and delete-all writer wiring **in the same commit**. | P6 and P7 each added none; P8 is the first phase with a real claim to one, and the wall is unforgiving. |
+| **Whether P8 may "fix" the two-leg disagreement** | **No, and it is not a bug.** A CPT-continued mesh custodies ciphertext and decrypts nothing. | It is written into the shipping doc and into §24.1 and §25.1. Making one leg read the other is the failure §23.5 named two phases ago. |
+
+### 25.4 Still owed by the owner
+
+**First and blocking: the P7 gauntlet.** Nothing in P7 was compiled or executed. Before P8 begins, a
+Mac session must run `build-for-testing`, the full `FernletTests` suite in ONE invocation,
+`Scripts/spm-wall-check.sh`, `Scripts/spm-wall-selftest.sh`,
+`Scripts/sync-string-catalogs.sh --check`, **every new wall shown red once and restored
+byte-identically**, the `FernletUITests/ProximityResumeCardUITests` suite (7 cells, serially,
+environment pinned) which is in no workflow and has never run, and a confirmation that the gated
+mesh step reports **`Test run with 335 tests`** rather than meeting a statically-counted floor. The
+full list is §13.3 finding 4.
+
+**Second and nearly blocking: the S3 Wall is RED on `origin/main`.** Run 71 failed at the mesh
+step on `82fc4d7` in `MeshRoutedHeartCeremonyTests.everyHeartFailureCauseHasItsOwnSentence()` — the
+owner's cell, diagnosed read-only in §13.3 finding 1, with the failing expectation's text
+unretrievable through the Actions API. **Re-run the job once; if it reproduces, download the raw
+log.** P7's floor raise lands on top of that red.
+
+Then, carried from §24.4 with what P7 added or closed:
+
+- **Hardware, and now it is the critical path.** §15's gates are P8's **entry criteria**, not its
+  exit: the radio matrix (QUIC surviving background+lock, cached-endpoint re-dial while backgrounded,
+  fresh Bonjour browse while backgrounded, each × infra-Wi-Fi and AWDL, plus Low Power Mode and
+  memory-pressure kills), the partition walks, the 3 h and 6 h progress soaks, and the bounded
+  Wi-Fi Aware evaluation. Plus the two P2 residuals that join them: item 11's AWDL half and Lane B's
+  "at most one connection per peer pair". And **Lane A's report** and **Lane D with the cable OUT**,
+  both still owed from P2.
+- **Items 6 and 8 of P7, both unstarted and both a Mac's work.** Item 6: gate
+  `MeshRoutedDrainTests` (**43 `@Test`** at HEAD) and price P6's ~286 ungated cells by measuring the
+  step with and without. Item 8: the backgrounding half of the gate — which is now *P8's own
+  question*, not a leftover — the heart eligibility negative, and P6's rows behind
+  `FERNLET_MESH_ARM_AFTER`.
+- **`ConnectionInspectorTests.beginSessionCreatesLiveLog()`** — the owner's suite, §12.3 finding 5;
+  it voided four P6 full runs.
+- **Option (b) for `handleEncryptedMetadata`**, **D-7.30**'s once-per-window re-gossip budget, the
+  **legacy unsigned two-party removal**'s retirement, **transcript `sid`**, **§18.2**'s partition UX
+  copy, and the **two census/duress questions** — all unchanged, all wire or product decisions.
+- **The final wording of the display copy, now larger again.** P7 forked `ProximityResumeCopy` and
+  added **15** sentences, synced into the committed catalog at `2389d01` (14 added, 1 already
+  present; catalog **1936 → 1950**) on top of P6's 19. The mechanism is done — frozen tokens in
+  ProximityKit, `LocalizedStringKey` in the app, exhaustive over `CaseIterable` — and every key has a
+  stub awaiting its final English.
+- **§17.3's privacy paragraph**, drafted in §24.4, still owed by the first TestFlight build; and
+  **downgrade `browsed peers=` from `.notice`/`.public`** before QUIC ships.
+- **The `HeartDrop` CloudKit record type**, still not promoted to Production
+  (`Docs/CloudKit-Schema-Deploy.md:95`, `Docs/ImplementationPlan.md:51`).
+- **P7's own nine open findings** (§13.3 findings 5–13): the ordinary joiner's unarmed ceiling, the
+  unreaped terminated context, the nameless sealed context, `FernletUITests` in no workflow, the
+  unpinnable `.refused`/`.expired` spellings, the unmeasured 30 s interval, the one-frame leg lag,
+  Lane C's tab-leg dependency, and the recipe listener under a held `.social` tab.
+- **H-1a.3 / H-1a.4**, **6b**, **D-12.15**, item 9's unreclaimed all-departed item, **1c's sibling
+  wall-clock leg**, and **§12.3 finding 20's grouped residuals** — all unchanged.
+- **Closed; do not re-audit:** `MeshTunnelConvergence` and the id-vs-endpoint family; the
+  crypto-purpose / `PayloadType` / record-kind spellings; plan §10.7–§10.10, §11.1–§11.4,
+  §12.1–§12.4 and now **§13.1–§13.4**;
+  `Docs/Proximity-Security-Followups-2026-08-18.md` **§1**.
+
+### 25.5 What P7 learned that re-tiers P8 further
+
+- **The tier-1 re-tier HELD through P7, and it stops here.** Items 1–5 and 7 are all tier 1 — a pure
+  table, a value holder, three seams, one timer and a pure decision — and every one of them landed
+  without a simulator. The two items that needed a Mac (6 and 8) are the two that did not land.
+  **P8 inverts that ratio completely:** §15's gates are background, lock, radio physics, battery,
+  thermal and OS policy, a Simulator answers none of them, and `BGTaskScheduler` errors there
+  outright. **P8 is a tier-3 phase with a tier-1 skirt**, and it should be scoped that way from the
+  first iteration: build the coordinator and the setter at tier 1 against an injected task state,
+  then stop and wait for the phone drawer.
+- **§15's gates are P8's ENTRY criteria, not its exit.** The degraded ladder in §14 (full background
+  mesh → background on infra-Wi-Fi only → foreground-only with opportunistic sync on reunite) is
+  **pre-decided against the §15.3 soak results**, so the soak is what selects the scope. Running it
+  late means building the wrong rung.
+- **The first hardware sample still stands and it is not encouraging.** 2026-09-02, DEBUG probe, one
+  sample: iOS ended a user-started continued-processing task **≈ 46 s** after it started, shortly
+  after the app was backgrounded, with the fail-immediately strategy and **no progress reported**.
+  It does not answer the "survives background+lock" row — the probe tears its own tunnel down when
+  the task ends — so that gate needs a variant that keeps the tunnel and keeps logging past expiry.
+  **The progress work is not a polish item; it is the thing that may make the 46 s number move.**
+- **A phase can land 10 492 lines without compiling one of them, and the ledger will still read
+  green.** P7's items are all marked `done`; every one of them also says **build-unverified**, and
+  the distinction is carried by six words in a row. P8's ledger should make "verified on a Mac" its
+  own column rather than a note, so a glance cannot mistake the two.
+- **A leg the host lowers itself can never rise again if the observed predicate never fell.** P7 item
+  4's P1: the teardown set liveness false while `isSessionLive` stayed true, so `.onChange` had
+  nothing to carry and the poller was dead for that mesh's life. **The predicate drives the leg; a
+  door that wants the leg to fall ends the thing the predicate reads.** P8's CPT leg is the next one
+  of this shape — a coordinator that sets `.expired` on itself without the task actually ending is
+  the same bug.
+- **A self-re-arming one-shot must re-check cancellation AND liveness after the sleep.** A
+  continuation already queued on the main actor outlives `cancel()`; a tick can land mid-wipe and
+  re-arm over a fresh `connect`. Every periodic thing P8 writes inherits this.
+- **A matrix oracle that reads the policy's computed inputs is a tautology, and so is a host cell
+  that recomputes the decision.** Item 1's pass A had 0 mismatches by construction; item 2's pass A
+  had a host cell that could never fail. The oracle takes the RAW inputs and spells the SHIPPING
+  predicates; the host expectation is a **literal** per step. P8's coordinator will want a state
+  table of its own and will hit this on the first try.
+- **A wall that collects file NAMES is green with two call sites in one file, and a
+  receiver-qualified needle is blind to the same object under another name.** Both cost P7 a review
+  round. Count occurrences across the sweep, sweep receiver-agnostically, and exempt **by file name
+  with a pinned count** — and fixture every exemption against the exact calls it was written for, or
+  an exemption that stops matching becomes a hole nobody can see.
+- **"Inert until P8" rots, and P7 proved it a second time.** `sessionState == .activeForeground` has
+  exactly one shipping reader and `.linksLost` reaches it on every blip. P7's own inert claim —
+  `continuationTask = .inert` — is honest only because it is a `let` with no setter; the moment P8
+  adds one, the claim is a runtime fact rather than a compile-time one, and the honesty suite's
+  nine-needle sweep — which today pins `granted`, `refused` and `expired` at zero across three
+  spellings each, one of them `setContinuationTask(.<case>` — starts reporting P8's own coordinator
+  and must be replaced by a cell that reads the host's value rather than the app target's text
+  (§13.3 finding 9). **Measure a predicate's
+  blast radius before changing it and write the count into the commit.**
+- **Any harness bypass that skips a shipping door is a place where a product claim can hide** —
+  P6's L-1 hid there for five phases, and P7 added a *second* such door (the resume card) behind the
+  same `FERNLET_MESH_MATRIX=1` bypass. P8's CPT path will be the third. Give it a non-harness lane
+  from the start.

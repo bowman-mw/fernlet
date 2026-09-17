@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P7
 
 **Phase:** P7 (the app-layer run policy, the poller, the resume surface) · **Prompt:** [Next-Round-Prompt-Mesh-P7-2026-09-12.md](Next-Round-Prompt-Mesh-P7-2026-09-12.md)
-**Started:** 2026-09-17 · **Iteration:** 1 · **Tree at seed:** `82fc4d7` = `main` = `origin/main` (P6 **is pushed** — the launcher's "not pushed" line is stale; see Blocked on owner) · **Branch:** `claude/hopeful-edison-rl5hb3`
+**Started:** 2026-09-17 · **Iteration:** 7 (final) · **Closed:** 2026-09-17 · **Tree at seed:** `82fc4d7` = `main` = `origin/main` (P6 **is pushed** — the launcher's "not pushed" line is stale; see Blocked on owner) · **Branch:** `claude/hopeful-edison-rl5hb3`
 
 **Environment of the session that seeded this ledger:** a Linux container with **no Swift toolchain** — `xcodebuild`, the full suite, `spm-wall-check.sh` and the UI harness cannot run here; only `power-of-10-scan.py` and `doc-coverage-scan.py` do (both green at seed: 503 files / 0 violations / density 0.781; 0 undocumented). **Every SHA this session lands is "scan-green, build-unverified"** until a Mac session runs §6's gauntlet on it, and every wall it writes still owes its "shown red once" log. Item 6 (a measured step time) and item 8 (tier 2) cannot be done from this environment at all.
 
@@ -17,13 +17,77 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | 6 | Gate `MeshRoutedDrainTests` (43) and price P6's ~286 ungated cells | 1 | — | blocked (needs a Mac) | | P6 §12.3 finding 14; the item IS the measured step time with and without — unmeasurable here; owed to a Mac session, carried into §13.3 |
 | 7 | The P7 acceptance battery + CI gate lines, one commit | 1 | 1–6 | done | pass A `b3f6de0` + fixes `a528760` (verify "mergeable as is": 0 P1, 3 P2 — the CPT honesty cell's bare `.granted` needle, one count inheriting the cited suite's pin instead of a literal 7, the FileIndex row — all fixed, 35 cells unchanged; **build-unverified**; note: the row's "`deferred` empty as a positive claim" is SUBSTITUTED by a per-radio observed-vocabulary pin because the decision vocabulary has no deferred state) | six `MeshP7*AcceptanceTests` (PolicyMatrix 5, GateWriter 4, RadioSeam 7, Poller 6, Resume 6, Honesty 7 = **35 static `@Test`**); mesh step floor **300/50 → 335/56**, selector pin **36 → 42** (regenerated declaration count); both P5 digests untouched by construction; item 6 not gated; FileIndex row owed by the fix pass; **the floor increment is a STATIC count taken with no toolchain — a Mac must confirm `Test run with 335 tests`**; **build-unverified** |
 | 8 | Tier 2: the backgrounding half; the heart eligibility negative; P6's remaining rows behind `FERNLET_MESH_ARM_AFTER` | 2 | 3, 4 | todo | | timebox 2 iterations; needs a Mac |
-| 9 | Close-out: §13 BUILT, §25 P8 handoff, P8 launcher, memory | 1 | 1–8 | in-flight | | draft → verify → apply from files — DRAFT written to `scratchpad/closeout/` (five files: §13 BUILT + §13.1–§13.4 with 12 policy acts and 15 findings; §25; the P8 launcher with the gauntlet debt as item 0; memory note; ledger final blocks), two-lens adversarial verify in flight writing `corrections.md` (items 6 and 8 owed, carried into §13.3); §13.1 must say plan §24.1's six-site lines (`:3820`) are historical after item 2; §13.2 policy acts so far: the `.inactive` widening on every radio (item 1), `FernletTab` made `nonisolated` (item 1), the host as FernletApp `@State` not a store member (item 2) |
+| 9 | Close-out: §13 BUILT, §25 P8 handoff, P8 launcher, memory | 1 | 1–8 | done | draft `⟦SHA⟧`, verify + apply `⟦SHA⟧` | §13 marked **BUILT (2026-09-17)** with §13.1–§13.4; §25 written in §24's format; `Docs/Next-Round-Prompt-Mesh-P8-2026-09-17.md` written from §25 and fact-checked against HEAD; memory note written. Ran as draft → adversarial verify → apply from `scratchpad/closeout/` (§0 rule 6). **§13.1's note held:** plan §24.1's six-site lines (`:3820–3822`) are historical after item 2 — one writer at `App/Fernlet/FernletApp.swift:415`. **§13.2 carries 12 policy acts**; **§13.3 carries 15 findings with costs**, the first four being the S3 Wall red on `82fc4d7`, item 6 unmeasured, item 8 unrun, and the **whole-phase BUILD-UNVERIFIED gauntlet debt**. Item 7's fix pass (`a528760`) landed before this close-out, so §13's landing table, §13.1 and §13.4 carry **17** shipping commits and the battery's line numbers as of `a528760`. **§13.4 says in its first sentence that nothing in P7 was compiled or executed**, and gives the `-only-testing:` lines a Mac must run — regenerated from `@Suite` declarations, and `ProximityRunStateSeamTests.swift` holds **two** suites. Items 6 and 8 carried into §13.3 as owed; **build-unverified, like every row above it** |
 
-## Blocked on owner
-- **The P6 push happened** (`82fc4d7` on `origin/main`, 2026-09-15) and **hosted CI is RED on it**: S3 Wall run 71 failed at step 12, *Mesh acceptance batteries (P3 / P4 / P5 / P6) + the CI selector wall* (steps 1–11 green; Power of 10 run 31 green). Cause: `Test run with 300 tests in 50 suites failed … with 1 issue` — **`MeshRoutedHeartCeremonyTests.everyHeartFailureCauseHasItsOwnSentence()`** (the floor of 300/50 was met exactly; everything else green). **Diagnosed read-only on iteration 1:** the cell (`Tests/FernletTests/MeshRoutedHeartTests.swift:794–822`) never reads the catalog — it compares `SessionHeartStatusCopy.message(_:recipientName:)` against a hand-built `LocalizedStringKey` per cause and checks the 10 `SessionHeartFailure` cases against its table; at HEAD all 10 sentences match code-point for code-point (the only difference is the interpolation variable's *name*, `firstName` vs `name`, both "Robin"), and all 11 heart keys are in the committed catalog. The failing expectation's text is **unretrievable** through the Actions API (the log tool caps at the last ~55 s of a 444 s run). Working hypothesis: `LocalizedStringKey ==` over **interpolated** arguments behaves differently on the `macos-26` runner's simulator runtime than on the owner's — the P5 copy tests compare un-interpolated keys and are green there. **Owner: re-run the job once; if it reproduces, download the raw log for the expected/actual line.** The robust fix is to compare a stable projection instead of two interpolated keys — the owner's cell, not P7's; but item 7 cannot be called green on a hosted runner until this is resolved.
-- **Two product findings from item 5 pass 2, for §13.3 (not papered over):** (a) a `terminated`/`expired` sealed context is never reaped (`MeshSessionStore` has no delete but `wipeForDeleteAll`), so its "That session has ended." notice recurs on every cold start until a new session overwrites the file — reaping would lose the durable rejoin bar the context re-derives, so the fix is the owner's (a persisted acknowledgement owes a wipe row; or a bar store separate from the context); (b) `MeshSessionContext` carries no mesh NAME or MODE, so an accepted resume adopts a descriptor with a generated name and `nameSetAt`/`modeSetAt` at `.distantPast` — the first gossiped descriptor wins them back; a schema question.
-- Carried unchanged from plan §24.4: option (b) for `handleEncryptedMetadata`; D-7.30 once-per-window; §18.2 copy; the legacy unsigned removal; transcript `sid`; the hardware lanes (A report, B double-dial, AWDL, D with the cable out); the two census/duress questions; the final wording of the routed hold / refusal / heart copy (19 sentences in the catalog since `6b77ec2`); §17.3's privacy paragraph (drafted in §24.4); `browsed peers=` downgraded from `.notice`/`.public`; the `HeartDrop` CloudKit record type still not promoted to the Production schema.
-- P6 §12.3's open findings, none of them P7 work: the charged forwarder (4), `ConnectionInspectorTests` (5), the conflicted-member blast radius (6), the un-linked third member (7), item 6's two residuals (8), D-4.5's expiring heart (9), I-13's vanished pair (10), the peer-holdings-shrink shape (11), tier 2's un-run rows (12), L-3's arming race (13), the unpinned audit tokens (15), 1c's sibling wall-clock leg (16), the battery's own named weaknesses (17), the un-taken `MeshRoutedAckStageTable.increment1` alias cleanup (19), and the grouped residuals of finding 20.
+## Blocked on owner — final state
+*Every line below ends RESOLVED, TAKEN (as a default, and then recorded in plan §13.2 as a policy
+act), or OWED (written into plan §13.3 with its cost). P6's close-out made that the rule.*
+
+- **RESOLVED (as a fact) / OWED (as a fix) — the P6 push happened and hosted CI is RED on it.**
+  `82fc4d7` is `origin/main` (2026-09-15); the launcher's "not pushed" line was stale. S3 Wall run 71
+  (`conclusion: failure`) failed at **step 12, "Mesh acceptance batteries (P3 / P4 / P5 / P6) + the
+  CI selector wall"** — steps 1–11 green; Power of 10 run 31 on the same SHA `conclusion: success` —
+  with `Test run with 300 tests in 50 suites failed … with 1 issue` in
+  **`MeshRoutedHeartCeremonyTests.everyHeartFailureCauseHasItsOwnSentence()`**
+  (`Tests/FernletTests/MeshRoutedHeartTests.swift:794` at HEAD). Diagnosed read-only on iteration 1:
+  the cell never reads the catalog; at HEAD all 10 sentences match code-point for code-point and all
+  11 heart keys are committed; the failing expectation's text is unretrievable through the Actions
+  API. **OWED to the owner — it is the owner's cell, not P7's.** Re-run the job once; if it
+  reproduces, download the raw log. → **plan §13.3 finding 1.**
+- **OWED — item 6 was never measured.** `MeshRoutedDrainTests` (**43 `@Test`** at HEAD) stays
+  ungated and P6's ~286 ungated cells stay unpriced; the item IS a measured step time and this
+  container had no toolchain. The workflow's own comment (`.github/workflows/s3-wall.yml:243`) still
+  says 37 and is stale by six. → **plan §13.3 finding 2.**
+- **OWED — item 8, the whole tier-2 lane, was never run.** The backgrounding half of the gate, the
+  heart eligibility negative, and P6's rows behind `FERNLET_MESH_ARM_AFTER`. The pushed
+  `appIsForeground` leg has still never been observed to FALL on any radio, in any phase. →
+  **plan §13.3 finding 3.**
+- **OWED — the whole phase is BUILD-UNVERIFIED.** Nothing P7 landed was compiled or executed: no
+  build, no test run, no wall shown red, no simulator, no `Test run with N tests` line. The exact
+  gauntlet a Mac session must run — build, the full suite in ONE invocation, `spm-wall-check.sh`,
+  `spm-wall-selftest.sh`, `sync-string-catalogs.sh --check`, **every new wall shown red once**, the
+  never-run `FernletUITests/ProximityResumeCardUITests` (7 cells), and a confirmation of
+  `Test run with 335 tests` — is **plan §13.3 finding 4**, and it is P8's item 0.
+- **OWED — the two product findings from item 5 pass 2.** (a) A `terminated`/`expired` sealed context
+  is **never reaped** (`MeshSessionStore` has no delete but `wipeForDeleteAll`), so a launch-derived
+  notice would nag on every cold start until a new session overwrote the file — which is why "ended"
+  was narrowed to a rejoin-bar HIT this run. Reaping would lose the durable rejoin bar the context
+  re-derives, so the fix is the owner's: a persisted acknowledgement owes a wipe row, or the bar
+  needs a store separate from the context. → **plan §13.3 finding 6.** (b) `MeshSessionContext`
+  carries no mesh NAME and no MODE, so an accepted resume adopts a descriptor with a generated name
+  and `nameSetAt`/`modeSetAt` at `.distantPast`; the first gossiped descriptor wins them back. A
+  schema question. → **plan §13.3 finding 7.**
+- **TAKEN — all seven §3 decisions, as their defaults**, with one refinement: "a rejoinBar hit ⇒
+  ended" means a HIT this run, never the launch-derived bar. The decisions table below records each
+  one. The reversible calls inside them are written up as **plan §13.2's twelve policy acts** — the
+  `ProximityRunState` move into ProximityKit, ten inputs not seven, the `.inactive` widening on every
+  radio, the host as `FernletApp` `@State`, the teardown door ending the session, the yielding
+  founder's adopted ceiling, "ended" as a hit this run, `MeshSessionTerminationReason` made public,
+  the mesh seam's fresh-row hold, the give-up clock restarting on tab re-entry, the recipe sheet's
+  dismissal asking the host, and `FernletTab` made `nonisolated`.
+- **OWED — seven more findings P7 opened and did not close**, each with its cost in plan §13.3: the
+  ordinary proximity joiner's unarmed ceiling (5), `FernletUITests` in no workflow (8), the
+  spelling-based rather than type-checked CPT sweep, which P8's first setter will trip (9), the
+  unmeasured 30 s poll interval
+  (10), the one-frame liveness-leg lag after a tick ends a session (11), Lane C's harness now feeding
+  the tab leg (12), and the recipe listener under a held `.social` tab (13).
+- **OWED, carried unchanged from plan §24.4** → **plan §13.3 finding 14:** option (b) for
+  `handleEncryptedMetadata`; D-7.30 once-per-window; §18.2 copy; the legacy unsigned removal;
+  transcript `sid`; the hardware lanes (A report, B double-dial, AWDL, D with the cable out); the two
+  census/duress questions; the final wording of the routed hold / refusal / heart copy (19 sentences
+  since `6b77ec2`, plus P7's 15 since `2389d01`); §17.3's privacy paragraph; `browsed peers=`
+  downgraded from `.notice`/`.public`; the `HeartDrop` CloudKit record type still not promoted to the
+  Production schema.
+- **OWED, unchanged — P6 §12.3's open findings, none of them P7 work** → **plan §13.3 finding 15:**
+  the charged forwarder (4), `ConnectionInspectorTests` (5), the conflicted-member blast radius (6),
+  the un-linked third member (7), item 6's two residuals (8), D-4.5's expiring heart (9), I-13's
+  vanished pair (10), the peer-holdings-shrink shape (11), tier 2's un-run rows (12), L-3's arming
+  race (13), the unpinned audit tokens (15), 1c's sibling wall-clock leg (16), the battery's own
+  named weaknesses (17), the un-taken `MeshRoutedAckStageTable.increment1` alias cleanup (19), and
+  the grouped residuals of finding 20.
+- **RESOLVED — the catalog keys owed.** All 15 of item 5's keys are in the committed catalog, synced
+  from `HEAD`'s blob at `2389d01`: 14 added + 1 already present (`Not now`), **1936 → 1950**. Only
+  the English wording is the owner's.
 
 ## Catalog keys owed (synced at close-out from `HEAD`'s blob, never the held working copy — `f4a69f1`'s method)
 Item 5 pass 1 (`841abc8`), all measured ABSENT from the committed catalog; one em dash (U+2014) in key 5, straight apostrophes, no interpolation:
@@ -78,4 +142,52 @@ Item 5 pass 2 (`d91d3dc`), 2 more: `Not now` · `Dismiss session notice` — **1
 - Other sessions may hold `App/Fernlet/Localizable.xcstrings` + `xcschememanagement.plist` on the owner's Mac — never stage them; commit with explicit pathspecs. (This container's clone was clean at seed.)
 
 ## Next item
-9 (close-out) — in flight (iteration 7): drafts written, two-lens verify running, then apply from `corrections.md`. Items 6 and 8 need a Mac — carried into §13.3 as owed.
+
+**P7 is CLOSED.** §13 is **BUILT (2026-09-17)** with §13.1–§13.4; §25 is the P8 handoff;
+`Docs/Next-Round-Prompt-Mesh-P8-2026-09-17.md` is the launcher; the memory note is written. Items 6
+and 8 did not land and are carried into §13.3 as owed. **Do not resume this loop** — this ledger is
+now a finished record.
+
+**Next: P8, from a FRESH session, from the P8 launcher** — background continuation (§14), whose entry
+criteria are §15's hardware gates. It is a tier-3 phase with a tier-1 skirt: build the coordinator,
+the `setContinuationTask(_:)` feed, the `.backgrounded`/`.foregrounded` raises and the "stop
+searching, keep committed links" primitive at tier 1 against an injected task façade, then stop and
+wait for the phone drawer. `BGTaskScheduler` errors on a Simulator.
+
+**But FIRST, and before any P8 code: a Mac session runs the gauntlet debt.** The whole of P7 is
+build-unverified — 10 492 inserted lines, none of them compiled. Run plan §13.3 finding 4's list
+(build-for-testing; the full `FernletTests` suite in ONE invocation; `spm-wall-check.sh`;
+`spm-wall-selftest.sh`; `sync-string-catalogs.sh --check`; **every new wall shown red once** and
+restored byte-identically; the never-run `FernletUITests/ProximityResumeCardUITests`, 7 cells,
+serially, environment pinned; and a confirmation that the gated mesh step reports
+`Test run with 335 tests` rather than meeting a statically-counted floor), **and** re-run the hosted
+S3 Wall job once against the red on `82fc4d7`. It is P8's item 0, and nothing else may start until
+it is green.
+
+## Memory note
+
+*Condensed at close-out from `scratchpad/closeout/memory-note.md`. The full record is plan §13 (**BUILT**, with §13.1–§13.4's 12 policy acts and 15 findings) and plan §25 (the P8 handoff).*
+
+**Phase:** P7 · **Closed:** 2026-09-17 · **Tree:** `claude/hopeful-edison-rl5hb3`, `82fc4d7..a528760` (the last shipping commit), 51 commits at `6ccd619` (17 shipping + 34 ledger; this close-out's own commit and its ledger commit add two more), 42 files, +10 492 / −458.
+
+**The one sentence.** P7 gave the app **one owner** for four proximity radios, **one writer** for the routed access gate, **one timer** for three consumers that had had none since P3, and a **visible** answer to the launch restore P6 wired and left invisible — **and compiled none of it.**
+
+**What landed.** (1) `27fb026`+`2f3a8a1` — `ProximityRunPolicy`, a pure function over **ten** inputs (§13 said seven), four radios; matrix **23 040 rows / 15 360 distinct**, deviation pinned at **832**. (2) `f0325e3`+`d35f9d8` — `ProximityRunPolicyHost` as `FernletApp`'s `@State`; six gate pushes → **one**, `pushRoutedAccessGate` deleted. (3) `ca3f361`+`5faabaf`; `023f7f9`+`ac8824c` — `ProximityRunState` **moved into ProximityKit**, three `applyRunState` seams, `ContentView`'s four radio owners and `FernletStore`'s three stop sites retired behind `deletingAllDataHook`. (4) `ee0a8be`+`eeb5718` — the poller: one self-re-arming one-shot at **30 s**, ceiling → idle lapse → partition; **§12.3 finding 3 closed** (a yielding founder's ceiling armed from the adopted mesh's `createdAt`). (5) `841abc8`; `d91d3dc`+`19ad37a`+`4990e59` — the resume surface: a pure decision, a public `MeshSessionResumeProjection`, accept/decline doors that **arm no radio**, `ProximityResumeCard` atop `ConnectView`. (7) `b3f6de0`+`a528760` — six `MeshP7*AcceptanceTests`, **35 static `@Test`** (5/4/7/6/6/7); floor **300/50 → 335/56**; pin **36 → 42**. (—) `2389d01` — catalog synced from `HEAD`'s blob, 14 added + 1 present, **1936 → 1950**. Items **6 and 8 did not land**; both need a Mac.
+
+**What surprised us.** The P6 push had already happened and the launcher's "not pushed" line was stale — which is how the **S3 Wall red on `82fc4d7`** was found. `ProximityRunState` could not live in the app target (its consumers are package-target managers). `.inactive` widened *every* radio, not just the gate — 832 rows. A host leg the host lowers itself never rises again if the observed predicate never fell (the teardown door now **ends the session**). `startSessionCeiling` had two callers and none on the adopt path. A receiver-qualified needle is blind to the same object under another name — the recipe share sheet was a real second radio owner behind `manager.start()`, with a restart guard reading `lockService.state`, which is `.unlocked` during duress. `rejoinBar` is never cleared while `offersForegroundResume` is, and a terminated sealed context is never reaped, so the first design fired `.ended` on **every cold start**; "ended" now means a bar **HIT this run**. `@ObservationIgnored` on a fact a view derives from means the view never repaints for it, and `a ?? b` registers no dependency on `b` while `a` is non-nil. `isInSession && !sessionReady` was unreachable until a door set `currentMesh` without a committed peer — grep both predicates before adding such a door. Delete-all now re-arms the radios the instant its leg falls, safe only because `wipeIdentityForDeleteAll()` runs before the hook's `defer`.
+
+**What the next session must NOT re-derive.**
+1. **P7 was never compiled.** Run the gauntlet first — build, the full suite in ONE invocation, `spm-wall-check.sh`, `spm-wall-selftest.sh`, `sync-string-catalogs.sh --check`, every new wall shown red once, the **never-run** `FernletUITests/ProximityResumeCardUITests` (7 cells), and a confirmation that the gated step reports `Test run with 335 tests`. Plan §13.3 finding 4 is the list; it is P8's item 0.
+2. **The S3 Wall is red on `origin/main`** in the owner's `everyHeartFailureCauseHasItsOwnSentence()`. Re-run once; if it reproduces, download the RAW log — the Actions API returns only a long run's tail. Do not bisect it and do not attribute it to P7.
+3. **`MeshContinuationCoordinator` and `setContinuationTask(_:)` do not exist.** The grep returns three occurrences and not one is a declaration or a call — a comment at `App/Fernlet/ProximityRunPolicyHost.swift:26` and, from item 7's fix pass, a doc comment and a needle STRING in `MeshP7AcceptanceTests.swift`; comment-stripped, the app target holds zero. The host binds `continuationTask` as a `private let … = .inert`. The policy already decides every CPT row; what is missing is the feed.
+4. **Nothing raises `.backgrounded` / `.foregrounded`.** Ten occurrences over three files: seven transition arms in `MeshSessionStateMachine.swift`, none a raise, plus three doc comments saying so. P8 raises them, and that is what makes the two-leg disagreement observable.
+5. **The two legs must DISAGREE.** Pushed `appIsForeground` (via `FernletApp.swift:415` → `applyRoutedAccessGate` at `MeshNetworkManager.swift:1451`) vs the heart predicate's `sessionState` leg (`:9333`, the `.activeForeground` read at `:9335`). The doc says so at `:9327–9330`. **Do not make one leg read the other.** `.activeForeground` still has exactly ONE shipping reader.
+6. **"Stop searching, keep committed links" has no primitive.** The `run`/`stop` pair resolves to **nothing** and records `noStandAloneDiscoveryStop`, because `stopJoin()` → `stopSearching()` empties committed slots and clears group key state. Build the primitive; do not widen `stopJoin()`.
+7. **Progress already has its clock.** `sessionMonotonicOrigin` is a `ContinuousClock.Instant?` (`MeshNetworkManager.swift:9344`), stamped at `:9923`; the poller passes `monotonicElapsed: nil` so `enforceSessionCeiling` derives elapsed runtime from it. Read the same origin; do not mint a second one.
+8. **The ordinary proximity joiner still arms no ceiling** — only the yielding founder's adopt path does. A CPT against that mesh is a progress bar with no denominator.
+9. **`FernletUITests` is in no workflow.** Seven cells, never run.
+10. **A Lane C run must stay on the Friends tab.** The policy is the only radio owner now, so any leg change off Friends stands the harness's radios down — new in P7. Every Lane C launch still bypasses the launch restore; use `FERNLET_MESH_RESUME_PRESENTATION` and a non-harness launch to see the card.
+11. **Ledger hygiene:** "done" and "build-unverified" sat six words apart in every P7 row and the phase read green. **P8's ledger needs a `Verified` column.**
+12. **Catalog method, unchanged:** sync from `HEAD`'s blob, never the held working copy; check the count against the owed list before committing (P6's was 19 of which 2 existed; P7's 15 of which 1 did). 1950 keys at the boundary.
+
+**The numbers to carry.** Repository gates at HEAD: `power-of-10-scan.py` → **509 files, 0 violations**, density **3887/4971 = 0.782** (floor 0.68); `doc-coverage-scan.py` → **0** — the only two gates P7 ran. Full-suite baseline: **unknown, and it stays unknown until a Mac runs it** (P6's was 4866 / 486 at `64c47f2`, 1909.4 s, one invocation; P7 added eleven suites and ran none, and the four it AMENDED have uncounted deltas). Measure, do not compute — the static parts are 35 (battery) + 87 (`ProximityRunPolicyTests` 13, `ProximityRunPolicyHostTests` 34, `ProximityResumeDecisionTests` 22, `ProximityRunStateSeamTests` 18). `mesh-batteries`: **335 over 56 suites**, a **static** count; `CIGateSelectorBoundaryTests` pin **42**; `MeshRoutedDrainTests` (43 `@Test`) still ungated and the workflow's own comment says 37, stale by six. Determinism digests **unmoved** and must stay so: overlay `594b6f77…5765`, schedule `ca898bcc…6930`.
