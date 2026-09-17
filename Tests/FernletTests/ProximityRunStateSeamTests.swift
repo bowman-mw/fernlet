@@ -13,9 +13,17 @@
 // cancels every slot coordinator and runs `clearGroupKeyState()`; running that over a committed
 // slot is ending a live mesh, not standing one down.
 //
-// **What it does not claim.** Nothing here is wired: pass A gives the managers the seams and pass B
-// makes `ProximityRunPolicyHost` drive them, so no shipping caller exists yet and this suite is the
-// only driver in the build. And no cell drives `run` from a STOPPED presence or recipe manager:
+// **And, since pass B, the give-up clock.** `ContentView.armDiscoveryTimeout()` — the five-minute
+// "found nobody" one-shot that hung off the app's own `startFriendsDiscovery()` — is retired, and
+// its successor is `armFriendRadios()`'s `.fresh` row arming the manager's existing door-3 clock.
+// Two cells drive it end to end with an injected instant: a fresh peerless search gives up after
+// `discoveryGiveUpInterval`, and a committed peer cancels it.
+//
+// **What it does not claim.** The app's own wiring: pass B makes `ProximityRunPolicyHost` the
+// shipping driver of these three doors, and the host's side — the resolved directives, the teardown
+// latch and the zero wall over `App/` — is `ProximityRunPolicyHostTests`' subject, not this file's.
+// Every cell here still drives a manager directly. And no cell drives `run` from a STOPPED presence
+// or recipe manager:
 // `PresenceManager.start()` brings up a real `MCNearbyServiceAdvertiser` and
 // `ProximityRecipeShareManager.start()` a real browser, which a unit test must never do. Both
 // managers' `run` arm is therefore covered from the RUNNING side — the idempotent no-op, which is
@@ -41,8 +49,11 @@
 // and synchronous**: a synchronous main-actor body cannot suspend, so `install()` → drive → assert
 // → `uninstall()` can never interleave with another cell's capture handler. One `async` cell added
 // to either suite would silently break every count in both. The second fact the counts rest on is
-// that `mesh.runState.*` has no other emitter in the build: these three seams are its only source
-// and nothing ships a caller yet.
+// that `mesh.runState.*` has no other emitter in the build: these three seams are its only source,
+// and the one shipping caller pass B added (`ProximityRunPolicyHost`, reached from `FernletApp`'s
+// scene) exists only inside a running app — no unit-test process mounts a scene, so nothing else in
+// this process can add to the tally. The same holds for the two `mesh.session.*` tokens the
+// give-up-clock cells count.
 
 import Foundation
 import Testing
@@ -280,10 +291,88 @@ struct ProximityRunStateSeamTests {
                 "and emits nothing: `applied` is a CHANGE line, not a receipt for every call")
     }
 
+    /// **The five-minute give-up clock has a home again** (P7 item 3, pass B — the obligation pass A
+    /// recorded and the ledger carried).
+    ///
+    /// `ContentView.startFriendsDiscovery()` armed `armDiscoveryTimeout()` beside its radio call,
+    /// and pass B retires both. The successor is `armFriendRadios()`'s `.fresh` row, which arms the
+    /// manager's own door-3 clock — the same `MeshNetworkManager.discoveryGiveUpInterval`, the same
+    /// on-fire effect (`endSessionAfterDiscoveryTimeout()`, which the app's one-shot also called),
+    /// and no display copy anywhere: the ending is a frozen state the app renders, never a sentence
+    /// ProximityKit owns.
+    ///
+    /// Driven with an INJECTED instant and no sleep, the way `MeshPairwiseFoundingTests` drives the
+    /// slot-loss arm: the deadline is the decision and `evaluateSessionGiveUp(now:)` is the only
+    /// thing that reads it, so a wake that never comes and a wake that comes late are the same cell.
+    /// The interval is read off the shipping constant rather than spelled, so the clock and the cell
+    /// cannot drift to different five minutes.
+    @Test func aFreshPeerlessSearchGivesUpAfterTheGiveUpInterval() {
+        let audit = RunStateAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        // The host is held for the manager's whole life (rule ML5): `store` is `unowned`, so an
+        // inline `makeTestStore()` would die at the end of the expression that built the manager.
+        let host = makeTestStore()
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession())
+        defer { manager.stopJoin() }
+        let armedAt = Date()
+        let interval = MeshNetworkManager.discoveryGiveUpInterval
+
+        manager.applyRunState(links: .run, discovery: .run)
+        #expect(manager.isSearching, "the `.fresh` row armed the radios")
+        #expect(!manager.hasCommittedPeer, "with nobody committed, which is what makes it `.fresh`")
+        #expect(manager.isSessionGiveUpClockArmed, """
+            and the give-up clock came with them — retiring the app's armDiscoveryTimeout() without \
+            this arm would have left a fresh search with no door 3 at all
+            """)
+
+        manager.evaluateSessionGiveUp(now: armedAt.addingTimeInterval(interval - 60))
+        #expect(manager.isSearching, "a minute short of the interval is not the interval")
+        #expect(audit.count(of: "mesh.session.endedByDiscoveryTimeout") == 0, "nothing has given up")
+
+        manager.evaluateSessionGiveUp(now: armedAt.addingTimeInterval(interval + 60))
+        #expect(!manager.isSearching, "past the deadline the search stands down")
+        #expect(audit.count(of: "mesh.session.endedByDiscoveryTimeout") == 1,
+                "through endSessionAfterDiscoveryTimeout(), which is what the app's one-shot called")
+        #expect(!manager.isSessionGiveUpClockArmed, "and the clock stands down with it")
+    }
+
+    /// The other half of the same clock: a committed peer cancels it rather than deferring it.
+    ///
+    /// A search with a peer in it is not giving up on anything, so the wake that arrives after the
+    /// original deadline must find nothing to end. Two guards make that true and both are shipping:
+    /// `evaluateSessionGiveUp(now:)` cancels outright on `hasCommittedPeer`, and
+    /// `endSessionAfterDiscoveryTimeout()` refuses the same predicate at the far end.
+    @Test func aCommittedPeerCancelsTheFreshSearchesGiveUpClock() {
+        let audit = RunStateAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        // The host is held for the manager's whole life (rule ML5): `store` is `unowned`, so an
+        // inline `makeTestStore()` would die at the end of the expression that built the manager.
+        let host = makeTestStore()
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession())
+        defer { manager.stopJoin() }
+        let armedAt = Date()
+
+        manager.applyRunState(links: .run, discovery: .run)
+        #expect(manager.isSessionGiveUpClockArmed, "the fresh search is counting down")
+
+        MeshP3Acceptance.attachSlot(to: manager, fingerprint: "00000000000000dd")
+        #expect(manager.hasCommittedPeer, "a peer commits inside the window")
+
+        manager.evaluateSessionGiveUp(
+            now: armedAt.addingTimeInterval(MeshNetworkManager.discoveryGiveUpInterval + 60)
+        )
+        #expect(!manager.isSessionGiveUpClockArmed, "so the clock is cancelled, not fired")
+        #expect(manager.isSearching, "the radios stay up over a committed peer")
+        #expect(audit.count(of: "mesh.session.endedByDiscoveryTimeout") == 0, "and nothing gave up")
+    }
+
     /// `stop` with no committed peer stands the radios down — and a second `stop` is silent.
     ///
-    /// This is the whole of today's `ContentView.stopFriendsDiscovery()` when its `hasCommittedPeer`
-    /// guard passes, and it is the only row of the table in which `stopJoin()` runs at all.
+    /// This is the whole of the retired `ContentView.stopFriendsDiscovery()` when its
+    /// `hasCommittedPeer` guard passed, and it is the only row of the table in which `stopJoin()`
+    /// runs at all.
     @Test func aStopWithNoCommittedPeerStandsTheRadiosDown() {
         let audit = RunStateAuditCapture()
         audit.install()
@@ -534,8 +623,9 @@ struct ProximityRunStateSeamTests {
     ///
     /// Driven from the RUNNING side through `activateForTesting()`, which flips the run flag without
     /// bringing up Bonjour — `start()` would advertise for real. This is also the direction shipping
-    /// takes at `FernletStore.setAllowNearbyPresence(false)` and in the wipe funnel, both of which
-    /// pass B re-aims at the policy.
+    /// takes when the nearby-presence consent goes off and when a wipe runs, both of which pass B
+    /// re-aimed at the policy: `FernletStore.setAllowNearbyPresence(false)` now only writes the
+    /// setting, and the wipe funnel raises `deletingAllDataHook` instead of stopping one radio.
     @Test func thePresenceSeamStandsTheRadioDownOnceAndIsIdempotent() {
         let audit = RunStateAuditCapture()
         audit.install()

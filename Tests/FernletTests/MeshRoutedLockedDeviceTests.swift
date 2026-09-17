@@ -1010,19 +1010,23 @@ extension MeshRoutedLockedDeviceTests {
         #expect(scanned == files.count, "the keychain-class scan lost a file")
     }
 
-    /// **W6.** The app still observes every site the three facts actually move at — six EDGES —
-    /// even though P7 item 2 collapsed the six gate pushes into one writer.
+    /// **W6.** The app still observes every site the three facts actually move at — SEVEN edges
+    /// since P7 item 3 — even though P7 item 2 collapsed the six gate pushes into one writer.
     ///
-    /// Six edges, each now a leg update on `ProximityRunPolicyHost`: the launch mount
+    /// Each is a leg update on `ProximityRunPolicyHost`: the launch mount
     /// (`.onChange(of: scenePhase)` carries no `initial:`, and the loader becomes ready after the
     /// first activation), the two scene legs, the two protected-data notifications — which pass the
     /// fact **literally**, because `isProtectedDataAvailable` still answers `true` inside the
-    /// will-become-unavailable handler — and duress, which moves at neither transition and is the
-    /// one clause of Fernlet's own app lock that reaches the mesh (D-10.3).
+    /// will-become-unavailable handler — duress, which moves at neither transition and is the one
+    /// clause of Fernlet's own app lock that reaches the GATE (D-10.3), and, added by item 3, the
+    /// `.locked` / `.unlocked` edge beside it, which moves the two listener RADIOS the policy now
+    /// owns.
     ///
-    /// The counts are three, three and two rather than two, two and one because the launch mount
-    /// seeds all three legs before it connects the door: that seeding is what makes the launch push
-    /// carry this launch's facts instead of the host's fail-closed defaults.
+    /// The counts are three, three and three rather than two, two and two because the launch mount
+    /// seeds all three legs before it connects the doors: that seeding is what makes the launch push
+    /// carry this launch's facts instead of the host's fail-closed defaults. **Measured at the
+    /// commit that moves them, never inherited** — the lock count went 2 → 3 when the lock-state
+    /// edge landed, and the scene and protected-data counts did not move at all.
     @Test func theAppFeedsThePolicyFromEverySiteTheFactsMoveAt() throws {
         let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
         let scene = Self.occurrences(of: "runPolicyHost.setScenePhase(", in: code)
@@ -1030,15 +1034,17 @@ extension MeshRoutedLockedDeviceTests {
         let lock = Self.occurrences(of: "runPolicyHost.setAppLockState(", in: code)
         #expect(scene == 3, "the two scene legs plus the launch seed feed the phase")
         #expect(protectedData == 3, "the two notification legs plus the launch seed feed the fact")
-        #expect(lock == 2, "the duress edge plus the launch seed feed the app lock")
+        #expect(lock == 3, "the duress edge, the lock-state edge and the launch seed feed the app lock")
         #expect(code.contains("runPolicyHost.setProtectedDataAvailable(false)"),
                 "the will-become-unavailable handler must pass the fact literally")
         #expect(code.contains("runPolicyHost.setProtectedDataAvailable(true)"),
                 "the did-become-available handler must pass the fact literally")
         #expect(code.contains("onChange(of: lockService.isDuressSessionActive)"),
                 "duress moves at neither a scene nor a protected-data transition")
+        #expect(code.contains("onChange(of: lockService.state)"),
+                "the locked / unlocked edge is what moves the presence and recipe radios")
         #expect(Self.occurrences(of: "runPolicyHost.connect", in: code) == 1,
-                "the production door is installed in exactly one place")
+                "the production doors are installed in exactly one place")
         #expect(Self.occurrences(of: "runPolicyHost.pushNow()", in: code) == 1,
                 "the launch push is the one explicit push the app makes")
     }

@@ -87,14 +87,15 @@ nonisolated enum ProximityRadio: String, CaseIterable, Hashable, Sendable {
 /// ``ProximityAppLockState/resolve(_:isDuressSessionActive:)`` is the one documented mapping.
 ///
 /// **Duress is a case rather than a second axis**, and it is checked first, because a duress unlock
-/// arrives as an ordinary `.unlocked` transition (`ContentView.swift:300`) — the two facts co-occur,
+/// arrives as an ordinary `.unlocked` transition (`ContentView.handleLockStateChange(_:)`) — the two facts co-occur,
 /// and §13 has duress stopping every radio and tearing the session down regardless of the lock
 /// state underneath it. It is also the only clause of Fernlet's own app lock that reaches the mesh
 /// at all (D-10.3).
 nonisolated enum ProximityAppLockState: String, CaseIterable, Hashable, Sendable {
 
     /// No credential has ever been configured. Treated exactly as `unlocked` by every radio rule,
-    /// matching `ContentView.shouldRunPresence` (`ContentView.swift:1783`).
+    /// matching the retired `ContentView.shouldRunPresence`, whose `switch` over `FernletLockState`
+    /// answered `true` for this case and for `unlocked` alike.
     case notConfigured
 
     /// Unlocked for some surface.
@@ -205,8 +206,9 @@ nonisolated struct ProximityRunInputs: Equatable, Hashable, Sendable {
     /// An inactive scene is foreground.
     let isForeground: Bool
 
-    /// `ContentView.selectedTab`. The Friends tab arms the search
-    /// (`ContentView.swift:329`); presence and recipe each have their own tab set.
+    /// `ContentView.selectedTab`. The Friends tab arms the search — that used to be
+    /// `handleTabChange`'s own `startFriendsDiscovery()` call, and since P7 item 3 it is this leg;
+    /// presence and recipe each have their own tab set.
     let selectedTab: FernletTab
 
     /// The app lock, with duress folded in.
@@ -229,20 +231,21 @@ nonisolated struct ProximityRunInputs: Equatable, Hashable, Sendable {
     /// guards, never `isSessionLive` (projections and ceremonies) and never `isInSession` (the
     /// layout swap).
     ///
-    /// Required, not decorative: `ContentView.stopFriendsDiscovery()` guards on it
-    /// (`ContentView.swift:1862`), so a tab exit or a scene change stands the radios down only when
-    /// no peer is committed. A policy blind to it would tear a live mesh down on a tab switch.
+    /// Required, not decorative: the retired `ContentView.stopFriendsDiscovery()` guarded on it, so
+    /// a tab exit or a scene change stood the radios down only when no peer was committed — a guard
+    /// `MeshNetworkManager.applyRunState(links:discovery:)` now owns. A policy blind to it would
+    /// tear a live mesh down on a tab switch.
     let hasCommittedPeer: Bool
 
-    /// `FernletStore.settings.allowNearbyPresence`. Gates the presence radio today
-    /// (`ContentView.swift:1779`), and `FernletStore.setAllowNearbyPresence(_:)` stops the radio
-    /// outright when it is turned off (`FernletStore.swift:1868`) — one of the three store-side stop
-    /// sites P7 item 3 re-aims at the policy, which is only possible if the policy can see it.
+    /// `FernletStore.settings.allowNearbyPresence`. Gated the presence radio through
+    /// `ContentView.shouldRunPresence`, and `FernletStore.setAllowNearbyPresence(_:)` stopped the
+    /// radio outright when it was turned off — one of the three store-side stop sites P7 item 3
+    /// re-aimed at the policy, which is only possible because the policy can see this.
     let allowsNearbyPresence: Bool
 
-    /// `FernletStore.settings.allowNearbyRecipeShares`. Gates the recipe listener today
-    /// (`ContentView.swift:1720`); `FernletStore.setAllowNearbyRecipeShares(_:)` is the second
-    /// store-side stop site (`FernletStore.swift:1701`).
+    /// `FernletStore.settings.allowNearbyRecipeShares`. Gated the recipe listener through
+    /// `ContentView.shouldListenForRecipeShares`; `FernletStore.setAllowNearbyRecipeShares(_:)` was
+    /// the second store-side stop site, and both are the policy's since P7 item 3.
     let allowsNearbyRecipeShares: Bool
 
     /// Builds the inputs, deriving the foreground fact in the one place it may be derived.
@@ -361,15 +364,16 @@ nonisolated struct ProximityRunDecision: Equatable, Sendable {
 /// The rules, in the order they are applied:
 ///
 /// 1. **Delete-all, below-age and duress dominate.** Every radio stops and the session tears down
-///    (§13). These are the conditions `FernletStore` reaches around the view for today —
-///    `FernletStore.swift:1701`, `:1868` and `:5327` — and P7 item 3 re-aims those at this answer.
+///    (§13). These are the conditions `FernletStore` used to reach around the view for, at three
+///    stop sites P7 item 3 re-aimed at this answer — the two consent setters, and the wipe funnel,
+///    which raises `FernletStore.deletingAllDataHook` instead of stopping one radio itself.
 /// 2. **Mesh links.** `stop` with no committed peer and off the Friends tab (nothing is user-started
-///    to keep up — `ContentView.swift:331`, the tab-exit `stopJoin()`); `run` only for a committed
+///    to keep up — the tab-exit `stopJoin()` the view used to make); `run` only for a committed
 ///    peer under a granted continuation task; `foregroundOnly` otherwise, which is where a refused
 ///    or expired task lands and where every P7 row lands.
 /// 3. **Discovery/admission** is never `run` (invariant 5): `foregroundOnly` on the Friends tab or
-///    while a peer is committed (`ContentView.swift:329` and the `hasCommittedPeer` guard at
-///    `:1862`), `stop` otherwise.
+///    while a peer is committed (the tab-entry arm, and the `hasCommittedPeer` guard the stand-down
+///    carried), `stop` otherwise.
 /// 4. **Presence** and **recipe** are never `run` either — §13 has both stopping on background —
 ///    and each keeps its own shipping condition: its consent, an unlocked-or-unconfigured app lock,
 ///    and its own tab set.
@@ -423,8 +427,8 @@ nonisolated enum ProximityRunPolicy {
         return .run
     }
 
-    /// Whether this is the tab that arms the friend search (`ContentView.handleTabChange`,
-    /// `App/Fernlet/ContentView.swift:329`).
+    /// Whether this is the tab that arms the friend search — `ContentView.handleTabChange(from:to:)`,
+    /// which since P7 item 3 feeds this leg rather than calling a radio.
     ///
     /// An exhaustive `switch` rather than an equality test, matching the two listener rules below: a
     /// sixth tab is a build error here until someone decides which side of the search it sits on.
@@ -451,15 +455,15 @@ nonisolated enum ProximityRunPolicy {
     }
 
     /// The presence radio's directive: consent, an app lock that is not locked, and one of the four
-    /// tabs that are not Private (`ContentView.shouldRunPresence`, `ContentView.swift:1778`).
+    /// tabs that are not Private — the retired `ContentView.shouldRunPresence`'s three guards,
+    /// exactly.
     ///
     /// **The one deliberate widening, and it covers all four radios.** Shipping code asks for the
     /// ACTIVE phase at every one of its gates, so a Control Centre pull or a call banner stands the
-    /// whole set down today: `ContentView.shouldRunPresence` (`ContentView.swift:1780`) and
-    /// `shouldListenForRecipeShares` (`:1721`) each guard `scenePhase == .active`, and
-    /// `handleScenePhaseChange` (`:348`) runs `stopFriendsDiscovery()` on ANY non-active phase —
-    /// which stands the mesh links and the admission door down too whenever no peer is committed
-    /// (`:1858`, where the stop bails on a committed peer). The policy has one foreground fact and
+    /// whole set down: `ContentView.shouldRunPresence` and `shouldListenForRecipeShares` each
+    /// guarded `scenePhase == .active`, and `handleScenePhaseChange` ran `stopFriendsDiscovery()` on
+    /// ANY non-active phase — which stood the mesh links and the admission door down too whenever
+    /// no peer was committed (the stop bailed on a committed peer). The policy has one foreground fact and
     /// an inactive scene is foreground, so `foregroundOnly` keeps presence, the recipe listener, a
     /// peerless Friends search and its admission door up across that bounce. The alternative is a
     /// second scene fact, which means a raw phase comparison in this file for a state that is
@@ -478,8 +482,8 @@ nonisolated enum ProximityRunPolicy {
     }
 
     /// The recipe listener's directive: consent, an app lock that is not locked, and one of the
-    /// three non-social, non-Private tabs (`ContentView.shouldListenForRecipeShares`,
-    /// `ContentView.swift:1719`).
+    /// three non-social, non-Private tabs — the retired `ContentView.shouldListenForRecipeShares`'s
+    /// three guards, exactly.
     ///
     /// Exhaustive over `FernletTab` rather than a set membership test, so a sixth tab is a build
     /// error here until someone decides which side of the listener it sits on. Carries the same

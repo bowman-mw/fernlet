@@ -113,13 +113,24 @@ struct PrivacyWipeCoverageTests {
         "purgeDataExports",
         // Social / proximity
         "clothingShop.clearAll",
-        // The live chat transcript, dropped in leg 0 through the MANAGER's one clear funnel rather
+        // The live chat transcript, dropped in leg 0b through the MANAGER's one clear funnel rather
         // than by `sessionMessages.clear()` on leg 7b. The funnel is what bumps
         // `transcriptGeneration` and what switches the routed projection off for the rest of the
         // wipe; the direct call did neither, so items whose ciphertext leg 11 was about to destroy
         // could re-project into a still-live transcript (P6 item 4 fix review, finding P2-1).
         "meshNetworkManager.beginPrivacyWipe",
-        "presenceManager.stop",
+        // The four PROXIMITY RADIOS — the presence advertiser, the recipe listener, the mesh links
+        // and the admission door. Until network migration P7 item 3 this row was a bare
+        // `presenceManager.stop()` on leg 7b: one radio of four, a third of the way through the
+        // funnel, while the mesh kept advertising for the whole wipe. The funnel raises this hook at
+        // its TOP instead, which makes the wipe one of plan §13's three dominating policy inputs —
+        // every radio goes to `stop` and the session tears down through `ProximityRunPolicyHost`'s
+        // one set of doors. Lowered from a `defer`, so no exit leaves the policy pinned.
+        "deletingAllDataHook",
+        // …and the host call the hook is wired to, pinned through the ContentView half of the scan
+        // (see `wipePathSource`): the hook alone would stay green if `attachDeleteAllHooks` stopped
+        // wiring it, which is exactly the shape that leaves a wipe advertising.
+        "setDeletingAllData",
         "proximityTrustVault.apply",
         "heartLedger.clearAll",
         "moderationLedger.clearAll",
@@ -263,10 +274,12 @@ struct PrivacyWipeCoverageTests {
         "func resetAll() -> [String]"
     ]
 
-    /// The `ContentView` half of the wipe path: five real clears live inside the hook closures
-    /// wired here (the sealed row deletes, the locked-note buffer purge, the two store rebuilds,
-    /// the HealthKit sweep and both direct-CloudKit sweeps), and a scan bounded to `FernletStore`
-    /// cannot see any of them — a hook could stop being wired with every token still green.
+    /// The `ContentView` half of the wipe path: several real clears live only inside the hook
+    /// closures wired here (the sealed row deletes, the locked-note buffer purge, the two store
+    /// rebuilds, the HealthKit sweep, both direct-CloudKit sweeps and — since P7 item 3 — the
+    /// run-policy leg that stands all four proximity radios down for the wipe), and a scan bounded
+    /// to `FernletStore` cannot see any of them — a hook could stop being wired with every token
+    /// still green.
     /// Scanning them makes hook-side spellings usable as manifest tokens.
     private static let hookWiringFunctionSignatures = [
         "func attachDeleteAllHooks()",

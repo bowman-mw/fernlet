@@ -1344,9 +1344,13 @@ as `enforceSessionCeiling(now:monotonicElapsed:)` and `evaluateIdleLapse(now:)`,
 own — P7 wires the one poller that drives all three. The radios themselves are already seamed for
 that phase: P7 item 3 gave each manager one `apply(_:)` door taking the RESOLVED directive
 (``MeshNetworkManager/applyRunState(links:discovery:)``, ``PresenceManager/applyRunState(_:)`` and
-``ProximityRecipeShareManager/applyRunState(_:)``), and a mesh `stop` there is **stand down, never
-session end** — it refuses outright while a peer is committed, because `stopJoin()` empties the slots
-and clears the group-key state. While a device is partitioned its rotation
+``ProximityRecipeShareManager/applyRunState(_:)``), and its pass B made the app's
+`ProximityRunPolicyHost` the only caller of all three — no view starts or stops a radio any more. A
+mesh `stop` there is **stand down, never session end** — it refuses outright while a peer is
+committed, because `stopJoin()` empties the slots and clears the group-key state; ending a session is
+the policy's separate teardown door. The five-minute give-up clock the Friends tab used to arm came
+with them: `armFriendRadios()` arms it on the ``FriendsDiscoveryEntry`` rows
+``FriendsDiscoveryEntry/armsDiscoveryTimeout`` names, and `stopSearching()` cancels it. While a device is partitioned its rotation
 roster is scoped to the branch (intersected with the current full roster, so a departure since the
 last evaluation still excludes), which makes the **branch coordinator the lowest fingerprint
 present** and is exactly why two branches rotating independently at the same counter mint distinct

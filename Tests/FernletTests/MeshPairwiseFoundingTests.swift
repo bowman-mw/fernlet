@@ -730,9 +730,10 @@ struct MeshPairwiseFoundingTests {
     /// The outage the seam closes is three moves long and every move ships: a link drop deletes the
     /// committed slot outright (no re-invite retry — that path is guarded on the slot never having
     /// committed), a tab exit or a scene change then runs `stopJoin()` → `stopSearching()` (radios
-    /// off, `isProximityJoin` false, slots emptied), and on return `startFriendsDiscovery`'s
-    /// `!isInSession` guard passes over it because the founded mesh outlived the link. There was no
-    /// other shipping re-arm: `startSearching()` is private. The user was left looking at a live
+    /// off, `isProximityJoin` false, slots emptied), and on return the app's re-arm (then
+    /// `ContentView.startFriendsDiscovery()`, now `MeshNetworkManager.armFriendRadios()`) found its
+    /// `!isInSession` guard passing over it, because the founded mesh outlived the link. There was
+    /// no other shipping re-arm: `startSearching()` is private. The user was left looking at a live
     /// camera over a session with no radios, with End Session the only escape.
     ///
     /// What the cell pins is why the answer is not "point that guard at `hasCommittedPeer`":
@@ -1221,8 +1222,10 @@ struct MeshPairwiseFoundingTests {
 
     /// Door 3's CLOCK, armed where the peer is actually lost (fix review finding P2-1).
     ///
-    /// Before this, `armDiscoveryTimeout()` was the only arm and it fires once per visit from
-    /// `startFriendsDiscovery()` (tab entry / scene-active, bailing on `isSearching`). So a pair
+    /// Before this, `ContentView.armDiscoveryTimeout()` was the only arm and it fired once per
+    /// visit from `startFriendsDiscovery()` (tab entry / scene-active, bailing on `isSearching`).
+    /// Both are retired — P7 item 3's pass B moved the tab's arm into
+    /// `MeshNetworkManager.armFriendRadios()` — but the gap this cell closes is the same one. So a pair
     /// that blipped more than five minutes into a visit had **no** door 3 at all, and
     /// `isSessionLive` stayed true for the rest of the process unless the user bounced the Social
     /// tab and then stayed on it for five uninterrupted minutes — the review, the shop window and
@@ -1334,9 +1337,11 @@ struct MeshPairwiseFoundingTests {
         #expect(manager.clothingShop.window != nil, "and the shop window opens on slot loss")
     }
 
-    /// The app's discovery entry, as a table rather than as two private lines nothing could redden
-    /// (review finding P2-5). `ContentView.startFriendsDiscovery()` switches on this value and
-    /// arms its five-minute timeout off `armsDiscoveryTimeout`.
+    /// The discovery entry, as a table rather than as two private lines nothing could redden
+    /// (review finding P2-5). Its reader is `MeshNetworkManager.armFriendRadios()` since P7 item 3's
+    /// pass B: it switches on this value and arms the five-minute give-up clock on exactly the two
+    /// rows ``FriendsDiscoveryEntry/armsDiscoveryTimeout`` names. Before that it was
+    /// `ContentView.startFriendsDiscovery()`, which is retired.
     @Test func theFriendsDiscoveryEntryTableIsTotal() {
         #expect(FriendsDiscoveryEntry.entry(isInSession: false, hasCommittedPeer: false) == .fresh,
                 "no session at all is a fresh `startJoin()` cycle")

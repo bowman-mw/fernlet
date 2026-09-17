@@ -69,16 +69,22 @@ struct FernletApp: App {
     /// act. The manager refuses a second attempt on its own (`sessionRestoreAttempts`), so this is
     /// the courtesy half — it keeps the audit trail down to one line per launch.
     @State private var didMountMeshSessionRestore = false
-    /// P7 item 2's single writer of the routed access gate. Holds one value per
-    /// ``ProximityRunInputs`` leg, re-decides whenever the scene, protected data or the duress
-    /// session moves, and writes `MeshRoutedAccessGate` through the door
+    /// P7 items 2 and 3's single writer of the routed access gate AND of the four proximity radios.
+    /// Holds one value per ``ProximityRunInputs`` leg, re-decides on every leg change, and writes
+    /// the gate, the four directives and the teardown through the five doors
     /// `mountRoutedRunPolicy(_:)` installs into it — see ``ProximityRunPolicyHost``.
     ///
     /// **`@State` here rather than a `FernletStore` property**, because this is where the legs are:
     /// the scene phase is this scene's `@Environment`, both protected-data notifications are
-    /// observed on this scene, and the duress session lives on `lockService`, which is this type's
-    /// `@State` and not the store's. The store was only ever the DESTINATION of the six pushes —
-    /// each reached it through `loader.phase` — and it still is, through the injected closure.
+    /// observed on this scene, and the app lock (duress included) lives on `lockService`, which is
+    /// this type's `@State` and not the store's. The store was only ever the DESTINATION of the six
+    /// pushes — each reached it through `loader.phase` — and it still is, through the injected
+    /// closures.
+    ///
+    /// **Exactly one instance exists.** `ContentView` is handed THIS object as an `init` parameter
+    /// (it owns the tab, consent, age and committed-peer edges), and `FernletStore` reaches it only
+    /// through `deletingAllDataHook`, which `ContentView.attachDeleteAllHooks()` wires — so nothing
+    /// constructs a second host and the store keeps no reference back to it.
     @State private var runPolicyHost = ProximityRunPolicyHost()
     /// Presents the one-time existing-install backup-exclusion prompt (see
     /// `BackupExclusionLaunchGate`); only ever set when the gate classifies this launch as an
@@ -293,24 +299,39 @@ struct FernletApp: App {
         )
     }
 
-    /// Seeds every run-policy leg this launch can answer for, installs the mesh door, and makes the
-    /// launch push (network migration P7 item 2; P5 item 10's launch site).
+    /// Seeds every run-policy leg this launch can answer for, installs the five doors, and makes the
+    /// launch push (network migration P7 items 2 and 3; P5 item 10's launch site).
     ///
     /// The ORDER inside is load-bearing, and what it buys depends on which mount this is. On the
-    /// FIRST mount every leg is seeded BEFORE ``ProximityRunPolicyHost/connect(_:)``, so the seeding
-    /// writes nothing and the launch is ONE gate push — `pushNow()`, the single explicit act. On a
-    /// re-fired `.onAppear` the door is already latched, so each seed DOES push; those pushes are
-    /// harmless rather than absent, because every seed re-reads the current truth and
-    /// `MeshNetworkManager.applyRoutedAccessGate(_:now:)` silently ignores a gate it already holds.
+    /// FIRST mount every leg is seeded BEFORE
+    /// ``ProximityRunPolicyHost/connect(accessGate:meshRadios:presence:recipeShare:tearDownSession:)``,
+    /// so the seeding writes nothing and the launch is ONE push — `pushNow()`, the single explicit
+    /// act. On a re-fired `.onAppear` the doors are already installed, so each seed DOES push; those
+    /// pushes are harmless rather than absent, because every seed re-reads the current truth and
+    /// every seam ignores a value it already holds.
     ///
     /// Four of the legs are read off the store because that is where they live —
     /// `AgeAssuranceStore.record`, the mesh manager's `hasCommittedPeer`, and the two nearby
-    /// consents. None of them is a GATE leg, so the gate is exact from this commit; they are seeded
-    /// anyway so that the radio directives P7 item 3 acts on start from facts rather than defaults.
-    /// The tab and the delete-all flag have no launch-time fact to read — see the two legs' own
-    /// documentation on ``ProximityRunPolicyHost``.
+    /// consents — and each of the four also has a live edge in `ContentView` from P7 item 3, so the
+    /// seed is the launch value and the `.onChange` is every later one. The tab starts at
+    /// `ContentView.selectedTab`'s own initial value and the delete-all flag at `false`; see the two
+    /// legs' own documentation on ``ProximityRunPolicyHost``.
     ///
-    /// - Parameter store: The loaded store, whose mesh manager holds the gate.
+    /// **This body is the ONE place in the app target that names a proximity radio.**
+    /// `ProximityRunPolicyHostTests.theProximityRadiosAreDrivenOnlyFromTheHostsDoors()` counts
+    /// `startJoin()`, `stopJoin()`, `resumeSearchingForPartitionedMesh()`, both listeners'
+    /// `start()` / `stop()` and `applyRunState(` across `App/` and requires every occurrence to sit
+    /// inside these braces (the DEBUG rejection-matrix harness is exempted by file name).
+    ///
+    /// The teardown door is what plan §13's three dominating inputs — a delete-all, a final
+    /// below-age verdict and a duress session — reach instead of reaching around the policy.
+    /// `stopJoin()` is the mesh's teardown and not merely its stand-down: it runs `stopSearching()`,
+    /// which empties the committed slots, cancels every slot coordinator and clears the group-key
+    /// state, and it is idempotent, so a second teardown moves nothing. The two listener stops are
+    /// the calls `FernletStore.setAllowNearbyPresence(_:)`, `setAllowNearbyRecipeShares(_:)` and the
+    /// wipe funnel's leg 7b used to make directly.
+    ///
+    /// - Parameter store: The loaded store, whose managers hold the gate and the four radios.
     private func mountRoutedRunPolicy(_ store: FernletStore) {
         runPolicyHost.setChatAgeGate(ProximityChatAgeGate.resolve(store.ageAssurance.record))
         runPolicyHost.setHasCommittedPeer(store.meshNetworkManager.hasCommittedPeer)
@@ -319,9 +340,21 @@ struct FernletApp: App {
         runPolicyHost.setAppLockState(currentAppLockState)
         runPolicyHost.setProtectedDataAvailable(protectedDataAvailableNow)
         runPolicyHost.setScenePhase(scenePhase)
-        runPolicyHost.connect { accessGate, now in
-            store.meshNetworkManager.applyRoutedAccessGate(accessGate, now: now)
-        }
+        runPolicyHost.connect(
+            accessGate: { accessGate, now in
+                store.meshNetworkManager.applyRoutedAccessGate(accessGate, now: now)
+            },
+            meshRadios: { links, discovery in
+                store.meshNetworkManager.applyRunState(links: links, discovery: discovery)
+            },
+            presence: { state in store.presenceManager.applyRunState(state) },
+            recipeShare: { state in store.recipeShareManager.applyRunState(state) },
+            tearDownSession: {
+                store.meshNetworkManager.stopJoin()
+                store.presenceManager.stop()
+                store.recipeShareManager.stop()
+            }
+        )
         runPolicyHost.pushNow()
     }
 
@@ -335,8 +368,9 @@ struct FernletApp: App {
     ///
     /// **It arms no radio.** The restore makes the ledger, the roster, the restored key
     /// advertisements and the routed store addressable; whether this device then goes looking for
-    /// peers stays the Friends tab's three-way (`FriendsDiscoveryEntry`) and, from P7 item 3,
-    /// ``ProximityRunPolicyHost``'s radio directives. Nothing here is presented to the user
+    /// peers is ``ProximityRunPolicyHost``'s two mesh directives since P7 item 3, resolved through
+    /// `FriendsDiscoveryEntry`'s three-way inside `MeshNetworkManager.applyRunState(links:discovery:)`
+    /// rather than in a view. Nothing here is presented to the user
     /// either — no app surface reads
     /// `lastSessionRestoreOutcome`, `offersForegroundResume`, `restoredSessionContext` or
     /// `rejoinBar`.
@@ -433,6 +467,16 @@ struct FernletApp: App {
             .onOpenURL { _ = FernletMessagesRecipeImportRequest.request(from: $0) }
             // Relock on background and on device lock
             .onChange(of: scenePhase) { _, newPhase in handleScenePhaseChange(newPhase) }
+            // P7 item 3's half of the app-lock leg, outside the UIKit block because neither half of
+            // this fact is UIKit's. The GATE reads only the duress clause (D-10.3), which is why the
+            // duress edge below was the whole leg for item 2 — but `.locked` / `.unlocked` is what
+            // the presence and recipe listeners are gated on, and those are radios the policy now
+            // owns. Its own observer rather than a re-read inside the duress one:
+            // `lock(reason: .background)`, `refreshStateFromKeychain()` and every unlock move
+            // `state` without touching `isDuressSessionActive`.
+            .onChange(of: lockService.state) { _, _ in
+                runPolicyHost.setAppLockState(currentAppLockState)
+            }
             #if canImport(UIKit)
             .onReceive(
                 NotificationCenter.default.publisher(
@@ -539,6 +583,26 @@ struct FernletApp: App {
         .environment(storagePreferencesStore)
     }
 
+    /// ``ContentView`` with the three environments it re-injects per sheet, and the ONE
+    /// ``ProximityRunPolicyHost`` — handed down rather than environment-injected, because the host
+    /// is not `@Observable` (nothing reads it from a `body`) and because a second instance is the
+    /// one thing that would make "single writer" false.
+    ///
+    /// Split out of ``readyContent(store:)`` for the 60-line rule; the modifier order is unchanged.
+    ///
+    /// - Parameter store: The loaded store.
+    /// - Returns: the post-onboarding root shell.
+    private func mainContent(store: FernletStore) -> some View {
+        ContentView(
+            store: store,
+            healthKitService: healthKitService,
+            runPolicyHost: runPolicyHost
+        )
+        .environment(lockService)
+        .environment(storagePreferencesStore)
+        .environment(captureProtection)
+    }
+
     /// The post-load surface: onboarding until it completes, then ``ContentView``. Also watches
     /// storage-preference changes (reloading persistence / stopping workout observation) and kicks
     /// the delayed startup CloudKit-sync activation.
@@ -546,10 +610,7 @@ struct FernletApp: App {
     private func readyContent(store: FernletStore) -> some View {
         Group {
             if hasCompletedOnboarding {
-                ContentView(store: store, healthKitService: healthKitService)
-                    .environment(lockService)
-                    .environment(storagePreferencesStore)
-                    .environment(captureProtection)
+                mainContent(store: store)
             } else {
                 OnboardingCoordinator(
                     store: store,

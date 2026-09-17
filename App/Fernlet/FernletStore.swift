@@ -376,9 +376,12 @@ final class FernletStore {
     /// The standing presence radio (mesh redesign Phase 4a/4b): broadcasts rotating pairwise-DH
     /// tags so KEPT friends recognize each other nearby, and — Phase 4b — carries in-person hearts
     /// over on-demand short-lived pairwise connections (the standalone heart radio is deleted).
-    /// Lifecycle is owned by ContentView (opt-in `allowNearbyPresence` + scene + tab + lock),
-    /// mirroring the other proximity listeners; the opt-out setter stops it immediately. Hearts are
-    /// gated by the separate `allowNearbyHearts` setting (send + receive), consulted via the host.
+    /// Lifecycle is owned by `ProximityRunPolicy` since network migration P7 item 3 — the same
+    /// four conditions (opt-in `allowNearbyPresence`, foreground, one of the four non-Private tabs,
+    /// an app lock that is not `.locked`), decided once and pushed through
+    /// `PresenceManager.applyRunState(_:)`. No view and no setter here starts or stops it any more;
+    /// the consent is a policy INPUT. Hearts are gated by the separate `allowNearbyHearts` setting
+    /// (send + receive), consulted via the host.
     @ObservationIgnored private(set) lazy var presenceManager: PresenceManager = {
         let manager = PresenceManager(store: self, ledger: heartLedger)
         // Hearts sent/received in person feed the closeness signal (day-capped downstream).
@@ -1695,11 +1698,19 @@ final class FernletStore {
         diary.setShowProximityDebugTools(value)
     }
 
+    /// Toggle the nearby recipe-share listener's consent.
+    ///
+    /// **Writes the setting and nothing else since network migration P7 item 3.** It used to call
+    /// `recipeShareManager.stop()` here on the way down, which made this a second owner of a radio
+    /// `ContentView` was also starting and stopping. The consent is a policy INPUT now:
+    /// `ContentView` watches `settings.allowNearbyRecipeShares` — the VALUE, so a wipe's `resetAll()`
+    /// and a snapshot synced in from another device are covered too, neither of which runs this
+    /// setter — feeds it to ``ProximityRunPolicyHost``, and the resolved directive reaches
+    /// `ProximityRecipeShareManager.applyRunState(_:)`, the one door that moves this radio.
+    ///
+    /// - Parameter value: The new consent.
     func setAllowNearbyRecipeShares(_ value: Bool) {
         settings.allowNearbyRecipeShares = value
-        if !value {
-            recipeShareManager.stop()
-        }
         snapshotSaveCoordinator.schedule()
     }
 
@@ -1859,14 +1870,16 @@ final class FernletStore {
         }
     }
 
-    /// Toggle the nearby-friends presence layer (mirrors `setAllowNearbyRecipeShares`). Turning
-    /// it OFF stops the presence radio immediately; turning it ON is picked up by ContentView's
-    /// listener chain (scene/tab/lock gated), which also observes this setting directly.
+    /// Toggle the nearby-friends presence layer (mirrors ``setAllowNearbyRecipeShares(_:)``, and
+    /// retired its direct `presenceManager.stop()` in the same commit — see that setter for why).
+    ///
+    /// Both directions are the run policy's now: `ContentView` observes
+    /// `settings.allowNearbyPresence` and feeds ``ProximityRunPolicyHost``, which pushes the
+    /// resolved directive into `PresenceManager.applyRunState(_:)`.
+    ///
+    /// - Parameter value: The new consent.
     func setAllowNearbyPresence(_ value: Bool) {
         settings.allowNearbyPresence = value
-        if !value {
-            presenceManager.stop()
-        }
         snapshotSaveCoordinator.schedule()
     }
 
@@ -4962,6 +4975,22 @@ final class FernletStore {
     /// the launch-time reconcile will catch, never a byte of the user's data.
     @ObservationIgnored var identityRotatedHook: (() -> Void)?
 
+    /// Raised at the top of ``deleteAllData(includingHealthKitSamples:)`` and lowered from its
+    /// `defer`, so the run policy can see a wipe as one of plan §13's three dominating inputs
+    /// (network migration P7 item 3).
+    ///
+    /// A HOOK rather than a reference to ``ProximityRunPolicyHost``, for the reason every other
+    /// hook on this type is one: the host lives on `FernletApp` (that is where the scene,
+    /// protected-data and app-lock legs are), its five doors are closures capturing THIS store, and
+    /// a stored reference back would close that loop. `ContentView.attachDeleteAllHooks()` wires it
+    /// beside the sealed-row and store-rebuild hooks, which is also what puts it inside
+    /// `PrivacyWipeCoverageTests`' scan of the wipe path — an unwired hook is a wipe that no longer
+    /// stands the radios down, and that has to be visible.
+    ///
+    /// Unwired (tests, previews) the wipe behaves exactly as it did before P7: the radios are simply
+    /// not touched.
+    @ObservationIgnored var deletingAllDataHook: ((Bool) -> Void)?
+
     /// Persists a per-payload re-upload deferral into `StoragePreferences` so the obligation survives
     /// relaunch. A hook (like `storagePreferencesResetHook`) because the preferences store is
     /// app-scoped: writing through a second `StoragePreferencesStore` instance would leave the app's
@@ -5022,14 +5051,29 @@ final class FernletStore {
     func deleteAllData(includingHealthKitSamples deleteHealthSamples: Bool) async -> DeleteAllOutcome {
         var outcome = DeleteAllOutcome()
 
-        // 0. The live chat transcript, through the manager's ONE clear funnel so the transcript
+        // 0. The FOUR PROXIMITY RADIOS, before anything is removed (P7 item 3). A delete-all is one
+        // of plan §13's three dominating inputs, so raising this leg makes the run policy answer
+        // `stop` on every radio and call its teardown door — which is `stopJoin()` plus both
+        // listener stops, through the ONE host. Until pass B this funnel spelled a bare
+        // `presenceManager.stop()` for itself on leg 7b: one radio of four, a third of the way in,
+        // while the mesh kept advertising and admitting peers for the whole wipe. First, on the same
+        // argument the writer stops below rest on. Lowered from a `defer` registered BEFORE
+        // `endPrivacyWipe`'s, so the LIFO order restores the routed projection first and only then
+        // lets the policy arm anything again.
+        deletingAllDataHook?(true)
+        defer { deletingAllDataHook?(false) }
+
+        // 0b. The live chat transcript, through the manager's ONE clear funnel so the transcript
         // generation moves with it — and the routed projection switched OFF for the whole funnel.
         // Both halves are the P6 item 4 fix-review finding P2-1: leg 7b used to call
         // `sessionMessages.clear()` directly, which bypassed the generation bump, and the routed
         // ciphertext is not destroyed until leg 11 — so every suspension point between them was a
         // window in which a rising access edge re-projected the just-wiped messages into a
         // transcript that is still live, in the same mesh, at the same generation. `defer`, so no
-        // exit leaves the projection off for the rest of the process.
+        // exit leaves the projection off for the rest of the process. The teardown above can reach
+        // the same clear (`stopSearching()` runs `clearSessionMessagesIfSessionEnded()` over an
+        // ended session), which is safe precisely because that path goes through the one funnel too
+        // and bumps the generation with it.
         meshNetworkManager.beginPrivacyWipe()
         defer { meshNetworkManager.endPrivacyWipe() }
 
@@ -5290,7 +5334,10 @@ final class FernletStore {
     }
 
     /// Wipe legs 5-7b: the share-extension inbox, the plaintext export dump, and the session-scoped
-    /// social surfaces (friends' clothing catalogs, temp messages, the presence radio).
+    /// social surface that is left here — friends' clothing catalogs. The transcript moved to leg 0
+    /// and the radios to leg 0; 7b is now a signpost rather than a call.
+    ///
+    /// - Parameter outcome: The running report of what could not be removed.
     private func clearInboxesAndExports(into outcome: inout DeleteAllOutcome) {
         // The share-extension inbox, which is drained on the next foreground. A recipe shared into
         // Fernlet before the wipe would otherwise import itself back into the emptied store — and the
@@ -5319,12 +5366,14 @@ final class FernletStore {
         // their social data visibly surviving a wipe in the running session.
         meshNetworkManager.clothingShop.clearAll()
 
-        // 7b. The presence radio, which keeps advertising and matching until stopped, is the
-        // remaining session-scoped social surface here (PrivacyWipeCoverage gap, 2026-07-25). The
-        // temp-message transcript used to be cleared on this line; it moved to leg 0 in the P6 item
-        // 4 fix review, because `sessionMessages.clear()` is not the manager's clear FUNNEL and
-        // therefore did not bump `transcriptGeneration` — see `beginPrivacyWipe()`.
-        presenceManager.stop()
+        // 7b. The presence radio used to be stopped on this line (PrivacyWipeCoverage gap,
+        // 2026-07-25). It moved to leg 0 in P7 item 3, and became the whole radio set rather than
+        // one radio: `deletingAllDataHook?(true)` makes the wipe a dominating policy input, so the
+        // mesh links, the admission door, presence AND the recipe listener all stand down and the
+        // session tears down — at the TOP of the funnel instead of a third of the way through it.
+        // The temp-message transcript left this line earlier, in the P6 item 4 fix review, because
+        // `sessionMessages.clear()` is not the manager's clear FUNNEL and therefore did not bump
+        // `transcriptGeneration` — see `beginPrivacyWipe()`.
     }
 
     private func clearMessagesImportInboxes() -> Bool {

@@ -10,10 +10,12 @@
 // oracle.
 //
 // The oracle is not a second spelling of the policy. It takes the RAW `ScenePhase` and spells the
-// SHIPPING conditions wherever plan §13 is silent: `ContentView.shouldRunPresence`
-// (`App/Fernlet/ContentView.swift:1778–1788`), `shouldListenForRecipeShares` (`:1719–1729`), and the
-// Friends-tab start/stop pair (`:329`, `:348–369`) with its `stopFriendsDiscovery()` bail on a
-// committed peer (`:1858–1863`). Every one of those asks for `scenePhase == .active` — a fact
+// SHIPPING conditions wherever plan §13 is silent: `ContentView.shouldRunPresence`,
+// `shouldListenForRecipeShares`, and the Friends-tab start/stop pair with its
+// `stopFriendsDiscovery()` bail on a committed peer. All five were RETIRED by P7 item 3's pass B,
+// which is what makes them an oracle rather than a second implementation: this file is now the only
+// written record of what the app did before the policy owned it, and every row still holds the
+// policy against it. Every one of those asked for `scenePhase == .active` — a fact
 // `ProximityRunInputs` cannot carry, which is exactly why the old oracle, reading `row.isForeground`
 // back off the value the policy's own initialiser computed, could never check that leg. Where §13
 // speaks, §13 wins and the clause says so: a granted continuation task over a committed peer keeps
@@ -248,12 +250,11 @@ private struct ProximityRunRowVerdict {
 
     // MARK: - The independent oracle
 
-    /// The tabs `ContentView.shouldRunPresence` permits — everything but Private
-    /// (`App/Fernlet/ContentView.swift:1781`).
+    /// The tabs the retired `ContentView.shouldRunPresence` permitted — everything but Private.
     static let presenceTabs: Set<FernletTab> = [.home, .food, .move, .social]
 
-    /// The tabs `ContentView.shouldListenForRecipeShares` permits
-    /// (`App/Fernlet/ContentView.swift:1722`). Friends is deliberately absent.
+    /// The tabs the retired `ContentView.shouldListenForRecipeShares` permitted. Friends is
+    /// deliberately absent.
     static let recipeTabs: Set<FernletTab> = [.home, .food, .move]
 
     /// Plan §13's three dominating inputs, spelled from the three FIELDS rather than read back off
@@ -266,8 +267,8 @@ private struct ProximityRunRowVerdict {
         inputs.isDeletingAllData || inputs.chatAgeGate == .below || inputs.lockState == .duress
     }
 
-    /// `ContentView.shouldRunPresence` (`App/Fernlet/ContentView.swift:1778–1788`), spelled out:
-    /// consent, the ACTIVE phase, one of the four non-Private tabs, and a lock that is not `.locked`.
+    /// The retired `ContentView.shouldRunPresence`, spelled out: consent, the ACTIVE phase, one of
+    /// the four non-Private tabs, and a lock that is not `.locked`.
     ///
     /// - Parameter row: One row of the product.
     /// - Returns: whether shipping runs the presence radio in this row's phase.
@@ -278,9 +279,8 @@ private struct ProximityRunRowVerdict {
             && row.inputs.lockState != .locked
     }
 
-    /// `ContentView.shouldListenForRecipeShares` (`App/Fernlet/ContentView.swift:1719–1729`):
-    /// consent, the ACTIVE phase, one of the three Home/Food/Move tabs, and a lock that is not
-    /// `.locked`.
+    /// The retired `ContentView.shouldListenForRecipeShares`: consent, the ACTIVE phase, one of the
+    /// three Home/Food/Move tabs, and a lock that is not `.locked`.
     ///
     /// - Parameter row: One row of the product.
     /// - Returns: whether shipping runs the recipe listener in this row's phase.
@@ -291,11 +291,11 @@ private struct ProximityRunRowVerdict {
             && row.inputs.lockState != .locked
     }
 
-    /// The Friends search as `ContentView` actually drives it. `handleTabChange`
-    /// (`App/Fernlet/ContentView.swift:329`) and `handleScenePhaseChange` (`:348–369`) arm it only on
-    /// the Friends tab in the ACTIVE phase and stand it down otherwise — except that
-    /// `stopFriendsDiscovery()` (`:1858–1863`) bails on a committed peer, so a committed mesh survives
-    /// every tab exit and every scene change.
+    /// The Friends search as `ContentView` drove it before P7 item 3. `handleTabChange` and
+    /// `handleScenePhaseChange` armed it only on the Friends tab in the ACTIVE phase and stood it
+    /// down otherwise — except that `stopFriendsDiscovery()` bailed on a committed peer, so a
+    /// committed mesh survived every tab exit and every scene change. That bail is
+    /// `MeshNetworkManager.applyRunState(links:discovery:)`'s now, unchanged.
     ///
     /// - Parameter row: One row of the product.
     /// - Returns: whether shipping has the friend radios armed in this row's phase.

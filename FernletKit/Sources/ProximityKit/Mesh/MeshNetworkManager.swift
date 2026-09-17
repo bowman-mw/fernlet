@@ -1217,10 +1217,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     ///    peer's record) carries `.stopParticipation`, and `sessionState` is assigned BEFORE the
     ///    effects run, so `stopSearching()` sees the ending;
     /// 3. **the five-minute discovery timeout with no committed peer** —
-    ///    ``endSessionAfterDiscoveryTimeout()``, whose clock is armed HERE, at the slot-loss doors
-    ///    (``sessionGiveUpDeadline``), and not only by the Friends tab: the tab's arm fires once per
-    ///    visit, so a pair that blipped more than five minutes in had no door 3 at all (fix review
-    ///    finding P2-1);
+    ///    ``endSessionAfterDiscoveryTimeout()``, whose clock (``sessionGiveUpDeadline``) is armed at
+    ///    the two slot-loss doors, where the peer is actually lost (fix review finding P2-1), and —
+    ///    since P7 item 3's pass B — at `armFriendRadios()`, where a search that has never had a
+    ///    peer begins. The second arm is the successor to the app's retired
+    ///    `ContentView.armDiscoveryTimeout()`; no view arms anything any more;
     /// 4. **slot loss, and only while there is no mesh** (`currentMesh == nil`) — the legacy
     ///    pairwise session, which had no mesh to outlive its links and is still reachable by tests
     ///    and by any session that never founded.
@@ -2268,19 +2269,28 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// ceiling that can never be re-armed (``promoteToMesh()`` fires only on `currentMesh == nil`)
     /// and drop this session's photos, film quota and removal set.
     ///
-    /// **The give-up clock has no successor yet, and this names the gap rather than papering over
-    /// it** (P7 item 3 pass A fix, review finding P2-2). `ContentView.startFriendsDiscovery()` arms
-    /// `armDiscoveryTimeout()` beside its radio call — the five-minute "found nobody" clock that
-    /// ends a fresh, peerless search. This door arms nothing, and P7 item 4's one poller is **not**
-    /// its successor: that poller runs only while ``isSessionLive``, and a ``FriendsDiscoveryEntry``
-    /// `.fresh` row is by construction no mesh and no committed slot, which makes `isSessionLive`
-    /// false. So on this path the `.fresh` row currently has **no give-up clock at all**. The
-    /// `.resume` row does — ``armSessionGiveUpClock(now:)`` is armed at the slot-loss doors, which is
-    /// how a mesh that outlived its links still ends — and `.none` needs none. Nothing regresses
-    /// today, because `startFriendsDiscovery()` still ships and still arms its own clock; **pass B
-    /// must give that arm a home before `startFriendsDiscovery()` is retired**, and the ledger
-    /// carries the obligation. No timer is added here: this pass arms none, and a clock this door
-    /// could not cancel from the same door would be worse than a named gap.
+    /// **The give-up clock lives here now** (P7 item 3, pass B — the obligation pass A recorded,
+    /// review finding P2-2). `ContentView.startFriendsDiscovery()` used to arm `armDiscoveryTimeout()`
+    /// beside its radio call: the five-minute "found nobody" clock that ends a search which never
+    /// had a peer. Retiring that function without a successor would have left the `.fresh` row with
+    /// no door 3 at all — P7 item 4's poller is not one, because it runs only while ``isSessionLive``
+    /// and a `.fresh` row is by construction no mesh and no committed slot.
+    ///
+    /// The arms below reproduce `FriendsDiscoveryEntry.armsDiscoveryTimeout`'s table exactly —
+    /// `.fresh` and `.resume` arm, `.none` does not — with the door each row can actually use:
+    /// ``armFreshSearchGiveUpClock(now:)`` for the meshless search, and ``armSessionGiveUpClock(now:)``
+    /// for the resumed one, whose guard already fits a mesh that outlived its links. Both schedule
+    /// the SAME deadline and the same interval, and `stopSearching()` cancels it, so every path that
+    /// stands these radios down also stands the clock down. Arming is bounded by the `isSearching`
+    /// bail at the top: the policy host re-decides on every leg change, but only a transition from
+    /// quiet to searching reaches an arm — which is precisely the tab-entry edge the app's one-shot
+    /// fired on.
+    ///
+    /// The one deliberate delta from the retired pair: the app kept a SECOND clock, so a tab entry
+    /// over a mesh whose slot-loss clock was already running left the earlier deadline to win. With
+    /// one clock, re-entering the tab restarts the five minutes — the same semantic the slot-loss
+    /// doors already have (each loss restarts them) and the same one `startSearching()` states by
+    /// clearing `sessionSearchGaveUp`.
     ///
     /// - Returns: the radio and frozen reason to hold on, or `nil` when nothing was refused. Only
     ///   the `.resume` row can refuse — ``resumeSearchingForPartitionedMesh()`` bails on a session
@@ -2293,11 +2303,14 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         ) {
         case .fresh:
             startJoin()
+            armFreshSearchGiveUpClock(now: Date())
         case .resume:
             resumeSearchingForPartitionedMesh()
-            guard !isSearching else { return nil }
-            return (radio: ProximityRunStateSeam.friendRadios,
-                    reason: ProximityRunStateSeam.resumeRefused)
+            guard isSearching else {
+                return (radio: ProximityRunStateSeam.friendRadios,
+                        reason: ProximityRunStateSeam.resumeRefused)
+            }
+            armSessionGiveUpClock(now: Date())
         case .none:
             break
         }
@@ -2375,6 +2388,52 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             cancelSessionGiveUpClock()
             return
         }
+        scheduleSessionGiveUp(now: now)
+    }
+
+    /// Arms door 3's clock for a **fresh, peerless search** — the successor to the app's retired
+    /// `ContentView.armDiscoveryTimeout()` (network migration P7 item 3, pass B).
+    ///
+    /// A second arming door rather than a widened guard, because the two rows are different
+    /// sessions. ``armSessionGiveUpClock(now:)`` above is the SLOT-LOSS arm and refuses a session
+    /// with no mesh by name — the ledgerless pairwise shape ends at slot loss, door 4 — while a
+    /// `FriendsDiscoveryEntry.fresh` row is by construction `currentMesh == nil` and
+    /// `hasCommittedPeer == false`, which makes ``isSessionLive`` false as well. Both of that
+    /// guard's terms would therefore refuse exactly the row this door exists for, and relaxing them
+    /// would quietly re-arm the clock over door 4's pairwise ending.
+    ///
+    /// **Same clock, same interval, same verdict.** It schedules the one
+    /// ``sessionGiveUpDeadline`` / `sessionGiveUpTask` pair through the shared
+    /// ``scheduleSessionGiveUp(now:)``, so a fresh search and a blip cannot drift to different
+    /// timeouts, and it is cancelled wherever the existing clock is: `stopSearching()` (so
+    /// ``stopJoin()`` and every teardown stand it down), ``endSessionAfterDiscoveryTimeout()``, and
+    /// `evaluateSessionGiveUp(now:)` itself the moment a peer is committed. Nothing else changes:
+    /// the on-fire effect is `endSessionAfterDiscoveryTimeout()`, exactly what the app's one-shot
+    /// called, and no display copy moved anywhere — the app renders the ending off the frozen
+    /// ``isSessionLive`` state it already reads.
+    ///
+    /// The `!hasCommittedPeer` guard is the whole precondition: a search with a peer in it is not
+    /// giving up on anything, and `endSessionAfterDiscoveryTimeout()` refuses that case a second
+    /// time at the far end.
+    ///
+    /// - Parameter now: The injected instant the deadline is measured from.
+    private func armFreshSearchGiveUpClock(now: Date) {
+        guard !hasCommittedPeer else {
+            cancelSessionGiveUpClock()
+            return
+        }
+        scheduleSessionGiveUp(now: now)
+    }
+
+    /// Replaces door 3's deadline and its sleeping half — the two arming doors' shared body.
+    ///
+    /// Split out so ``armSessionGiveUpClock(now:)`` and ``armFreshSearchGiveUpClock(now:)`` are each
+    /// only their own guard: one clock, one interval, one `Task` marker, and no way for a fresh
+    /// search and a blip to be counting different five minutes. Idempotent — re-arming cancels the
+    /// standing task and replaces the deadline rather than stacking a second one.
+    ///
+    /// - Parameter now: The injected instant the deadline is measured from.
+    private func scheduleSessionGiveUp(now: Date) {
         sessionGiveUpTask?.cancel()
         sessionGiveUpDeadline = now.addingTimeInterval(Self.discoveryGiveUpInterval)
         FernletAuditLog.log("mesh.session.giveUpClockArmed")

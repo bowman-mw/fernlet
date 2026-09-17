@@ -74,8 +74,10 @@ public enum ProximityRecipeShareDiagnostics {
 /// manager-level record eviction, never on MC disconnect events (a failed handshake fires none).
 /// Timeouts: a 12 s pre-connect timer (the peer-is-busy case), the coordinator's 25 s handshake
 /// budget, and a parked-connection sweep for coordinators stalled pre-verification. Inbound
-/// shares are rate-limited per sender and capped at 8 pending. Lifecycle is owned by the app
-/// (ContentView gates on tab/scene/lock). `@MainActor @Observable`.
+/// shares are rate-limited per sender and capped at 8 pending. Lifecycle is owned by the app's
+/// `ProximityRunPolicy` since network migration P7 item 3 (consent + tab + scene + lock, decided
+/// once and pushed through ``applyRunState(_:)``); the active-share sheet is the one other caller of
+/// ``start()`` / ``stop()``, because a sheet dismissal is not a policy leg. `@MainActor @Observable`.
 @MainActor
 @Observable
 public final class ProximityRecipeShareManager: ProximityPayloadHandling {

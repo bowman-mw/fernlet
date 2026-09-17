@@ -242,11 +242,19 @@ struct ProximityRecipeShareSheet: View {
         // implicit: the post-send auto-dismiss can race a backgrounding (onDisappear
         // then fires with the scene inactive), and restarting there would broadcast
         // while backgrounded — the privacy line every listener holds. No unit seam
-        // reaches this view closure; ContentView's updateRecipeShareListener chain
-        // remains the authoritative gate — any later scene/tab/lock/opt-out change
-        // re-evaluates and stops the manager again (an inactive-scene dismissal is
-        // then restarted by the next scene-active event, not left dark). Tab is
-        // implicitly satisfied (the sheet only presents over recipe-share tabs).
+        // reaches this view closure; since network migration P7 item 3 the authoritative
+        // gate is `ProximityRunPolicy`'s recipe directive, pushed through
+        // `ProximityRecipeShareManager.applyRunState(_:)` — any later scene/tab/lock/
+        // opt-out change is a policy leg that re-decides and stops the manager again (an
+        // inactive-scene dismissal is then restarted by the next scene-active leg, not
+        // left dark). This restart is still owed because a SHEET DISMISSAL is not one of
+        // the policy's legs, so nothing else would push until the user's next lifecycle
+        // move. The three conditions below are deliberately the recipe directive's own,
+        // minus the tab, which is implicitly satisfied (the sheet only presents over
+        // recipe-share tabs). Both calls here are the ACTIVE share flow's, reached through
+        // this sheet's injected `manager` rather than through `store.recipeShareManager` —
+        // which is why `ProximityRunPolicyHostTests`' zero wall, whose needles name the
+        // store's property, does not and should not count them.
         if scenePhase == .active, store.settings.allowNearbyRecipeShares, isUnlockedForListening {
             manager.start()
         }

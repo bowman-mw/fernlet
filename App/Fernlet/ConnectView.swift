@@ -138,9 +138,11 @@ struct FriendsView: View {
     /// `ContentView.isDisposableCameraSessionActive` dresses the tab in camera chrome for. A founded
     /// mesh outlives its links by design (P6 item 2), so a blip deliberately does **not** take the
     /// camera down: the pair still holds a mesh with a ledger, a capture during the blip is sealed
-    /// into custody and drained when the link heals, and the radios come back through
-    /// `startFriendsDiscovery`'s resume arm. Only a session that is really over — End Session, or a
-    /// launch with no mesh — swaps back to the album.
+    /// into custody and drained when the link heals, and the radios come back through the run
+    /// policy's mesh directives — `MeshNetworkManager.applyRunState(links:discovery:)`'s `.resume`
+    /// row, which is where `ContentView.startFriendsDiscovery()`'s three-way went in P7 item 3. Only
+    /// a session that is really over — End Session, or a launch with no mesh — swaps back to the
+    /// album.
     private func handleSessionSurfaceChange(wasInSession: Bool, nowInSession: Bool) {
         guard wasInSession, !nowInSession else { return }
         sessionReady = false

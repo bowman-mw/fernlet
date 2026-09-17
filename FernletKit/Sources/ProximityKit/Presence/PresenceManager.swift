@@ -37,9 +37,10 @@
 //  - Accepted residual (spec): an active adversary replaying a tag within its epoch can spoof
 //    "friend nearby"; connection-forming flows add invitation gating in 4b.
 //
-// Lifecycle is owned by ContentView (opt-in setting + scene phase + tab + lock), exactly like the
-// recipe/heart listeners; the opt-out setter (`FernletStore.setAllowNearbyPresence`) stops the
-// manager immediately.
+// Lifecycle is owned by the app's `ProximityRunPolicy` since network migration P7 item 3 (opt-in
+// setting + scene phase + tab + lock, decided once and pushed through `applyRunState(_:)`), exactly
+// like the recipe listener. Before that it was `ContentView`, with `FernletStore.setAllowNearbyPresence`
+// stopping the manager directly; both of those are retired, and the consent is a policy INPUT now.
 //
 // Manager-Task lifetime rule (Phase-3 crash): every escaping Task below captures `[weak self]`,
 // and the epoch-rotation loop re-acquires `self` in a SCOPED binding each iteration so no strong
