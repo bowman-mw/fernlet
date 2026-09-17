@@ -2040,6 +2040,9 @@
     "Dismiss photo shelf notice" : {
 
     },
+    "Dismiss session notice" : {
+
+    },
     "Dismiss storage notice" : {
 
     },
@@ -2471,6 +2474,9 @@
 
     },
     "Fernlet removed everything it stored on this device." : {
+
+    },
+    "Fernlet still has your last session. It isn't looking for anyone until you say so." : {
 
     },
     "Fernlet will contact %@ and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept." : {
@@ -2911,6 +2917,15 @@
 
     },
     "It leaves your closet and your companion. This can't be undone." : {
+
+    },
+    "It ran out of new keys, so it closed." : {
+
+    },
+    "It reached its six-hour limit." : {
+
+    },
+    "It was ended by the group." : {
 
     },
     "It won't be logged — you can plan it again any time." : {
@@ -3651,6 +3666,9 @@
     "Nothing yet. Memories grow as you write." : {
 
     },
+    "Nothing you shared was lost — it stays sealed on this device." : {
+
+    },
     "Notice body tension" : {
 
     },
@@ -3998,6 +4016,9 @@
 
     },
     "Pick recipes, then share the combined list to Notes." : {
+
+    },
+    "Pick up where you left off?" : {
 
     },
     "Plan" : {
@@ -4496,6 +4517,9 @@
 
     },
     "Resume" : {
+
+    },
+    "Resume session" : {
 
     },
     "Resume workout" : {
@@ -5214,6 +5238,9 @@
     "That promise is unchanged, and it is why three of the six Phase 3 gates cannot be answered here. Those are answered next door, in the Phase 3 gate readout, at a stated cost." : {
 
     },
+    "That session has ended." : {
+
+    },
     "That was %lld whole minutes of care. Nicely done." : {
 
     },
@@ -5257,6 +5284,9 @@
 
     },
     "The census above counts marker bytes and writes nothing. This one also reads completion latches, can fetch and decrypt three iCloud manifests on request, can run a media at-rest conversion pass, and can clear one latch to arm a keyed pass on the next hub unlock." : {
+
+    },
+    "The group removed you from it." : {
 
     },
     "The lock guards period, intimacy, and other sensitive areas before they open." : {
@@ -5861,6 +5891,9 @@
     "You" : {
 
     },
+    "You and the last person in it ended it together." : {
+
+    },
     "You appear as" : {
 
     },
@@ -5891,10 +5924,16 @@
     "You don't need an app lock to delete what Fernlet has stored. This works for the entries Fernlet keeps encrypted too." : {
 
     },
+    "You finished it and developed the photos." : {
+
+    },
     "You have a workout in progress" : {
 
     },
     "You just sent %@ some warmth — hearts settle for a few minutes." : {
+
+    },
+    "You left it." : {
 
     },
     "You will stop sharing with everyone in this session." : {
@@ -6007,6 +6046,9 @@
 
     },
     "Your keepsake shelf" : {
+
+    },
+    "Your last session couldn't be reopened." : {
 
     },
     "Your local data will upload to iCloud and sync to your other Fernlet devices." : {
