@@ -1,0 +1,526 @@
+// ProximityRunPolicyTests.swift
+// FernletTests
+//
+// Network migration P7 item 1: `ProximityRunPolicy`'s matrix over the FULL input product — the
+// phase's central test, and one that needs no simulator, no scene and no manager.
+//
+// The table is the artefact. `ProximityRunPolicyProduct.rows()` enumerates every row of the input
+// product (3 phases × 5 tabs × 4 continuation states × 3 session presences × 2⁷ Bool facts =
+// 23 040) from the enums' own `allCases`, so a new input widens the pinned count deliberately and
+// a dropped dimension collapses the set visibly. Over that product the suite states each claim
+// the policy makes — the gate reads only its three facts, `.inactive` is a foreground scene, nothing
+// but a continued mesh claims the background, discovery never runs there (invariant 5), a hard stop
+// stops every radio, the app lock moves presence and recipe only, the three non-running continuation
+// states are one row — and pins plan §13's load-bearing rows by hand. A flat re-statement of every
+// radio's rule (`expectedMesh` and friends) is compared on all 23 040 rows as the named expectation
+// per row; being a re-statement, its value is catching a guard-order slip, not proving the
+// semantics — the clauses do that.
+//
+// House rules: `#expect(_, "one literal")` only, every `allSatisfy` bound to a `let` first, no
+// `@Test(arguments: [])`, no rig, no clock, no RNG.
+
+import Foundation
+import SwiftUI
+import Testing
+import ProximityKit
+@testable import Fernlet
+
+// MARK: - ProximityRunPolicyProduct
+
+/// The whole input product, enumerated dimension by dimension so no row can be skipped by a typo,
+/// plus the hand-written rows and the flat re-statements the cells compare against.
+enum ProximityRunPolicyProduct {
+
+    /// The three phases SwiftUI declares today. `ScenePhase` is neither `CaseIterable` nor frozen,
+    /// so this is a literal list; a fourth phase widens ``count`` deliberately.
+    static let scenePhases: [ScenePhase] = [.active, .inactive, .background]
+
+    /// The size of the product: 3 phases × 5 tabs × 4 continuation states × 3 presences × 2⁷.
+    static let count = 3 * 5 * 4 * 3 * 128
+
+    /// Every row of the product.
+    static func rows() -> [ProximityRunPolicy.Input] {
+        var rows: [ProximityRunPolicy.Input] = []
+        rows.reserveCapacity(count)
+        for phase in scenePhases {
+            for tab in FernletTab.allCases {
+                for continuation in ProximityContinuationState.allCases {
+                    for session in ProximitySessionPresence.allCases {
+                        rows.append(contentsOf: flagRows(
+                            phase: phase, tab: tab, continuation: continuation, session: session
+                        ))
+                    }
+                }
+            }
+        }
+        return rows
+    }
+
+    /// The seven Bool inputs as one 7-bit counter, so none can be left out.
+    private static func flagRows(
+        phase: ScenePhase,
+        tab: FernletTab,
+        continuation: ProximityContinuationState,
+        session: ProximitySessionPresence
+    ) -> [ProximityRunPolicy.Input] {
+        (0..<128).map { bits in
+            ProximityRunPolicy.Input(
+                scenePhase: phase,
+                selectedTab: tab,
+                appLockEngaged: (bits & 1) != 0,
+                duressSessionActive: (bits & 2) != 0,
+                protectedDataAvailable: (bits & 4) != 0,
+                belowMinimumAge: (bits & 8) != 0,
+                deleteAllInProgress: (bits & 16) != 0,
+                continuation: continuation,
+                session: session,
+                allowNearbyPresence: (bits & 32) != 0,
+                allowNearbyRecipeShares: (bits & 64) != 0
+            )
+        }
+    }
+
+    /// One row with named defaults — a fresh, unlocked, opted-in Friends visit — for the
+    /// hand-written cells.
+    static func row(
+        phase: ScenePhase = .active,
+        tab: FernletTab = .social,
+        lock: Bool = false,
+        duress: Bool = false,
+        protected: Bool = true,
+        belowAge: Bool = false,
+        wipe: Bool = false,
+        continuation: ProximityContinuationState = .notRequested,
+        session: ProximitySessionPresence = .absent,
+        presence: Bool = true,
+        recipe: Bool = true
+    ) -> ProximityRunPolicy.Input {
+        ProximityRunPolicy.Input(
+            scenePhase: phase,
+            selectedTab: tab,
+            appLockEngaged: lock,
+            duressSessionActive: duress,
+            protectedDataAvailable: protected,
+            belowMinimumAge: belowAge,
+            deleteAllInProgress: wipe,
+            continuation: continuation,
+            session: session,
+            allowNearbyPresence: presence,
+            allowNearbyRecipeShares: recipe
+        )
+    }
+
+    /// A copy of one row with the named facts replaced and every other fact kept.
+    static func copy(
+        _ r: ProximityRunPolicy.Input,
+        phase: ScenePhase? = nil,
+        lock: Bool? = nil,
+        belowAge: Bool? = nil,
+        wipe: Bool? = nil,
+        continuation: ProximityContinuationState? = nil
+    ) -> ProximityRunPolicy.Input {
+        ProximityRunPolicy.Input(
+            scenePhase: phase ?? r.scenePhase,
+            selectedTab: r.selectedTab,
+            appLockEngaged: lock ?? r.appLockEngaged,
+            duressSessionActive: r.duressSessionActive,
+            protectedDataAvailable: r.protectedDataAvailable,
+            belowMinimumAge: belowAge ?? r.belowMinimumAge,
+            deleteAllInProgress: wipe ?? r.deleteAllInProgress,
+            continuation: continuation ?? r.continuation,
+            session: r.session,
+            allowNearbyPresence: r.allowNearbyPresence,
+            allowNearbyRecipeShares: r.allowNearbyRecipeShares
+        )
+    }
+
+    /// The policy's verdict for one row — a shorthand.
+    static func verdict(_ r: ProximityRunPolicy.Input) -> ProximityRunPolicy.Verdict {
+        ProximityRunPolicy.verdict(for: r)
+    }
+
+    // MARK: The flat re-statements
+
+    /// The raw foreground fact, spelled as a phase compare ON PURPOSE: this is the independent
+    /// statement the policy's `routedGateForeground(for:)` call is checked against.
+    static func foreground(_ r: ProximityRunPolicy.Input) -> Bool {
+        r.scenePhase != .background
+    }
+
+    /// The three hard stops, flat.
+    static func hardStop(_ r: ProximityRunPolicy.Input) -> Bool {
+        r.deleteAllInProgress || r.duressSessionActive || r.belowMinimumAge
+    }
+
+    /// The mesh rule as an `if` chain.
+    static func expectedMesh(_ r: ProximityRunPolicy.Input) -> ProximityRunState {
+        if hardStop(r) { return .stop }
+        let somethingToContinue = r.session == .meshHeld || r.session == .peerCommitted
+        if r.continuation == .running && somethingToContinue { return .run }
+        return foreground(r) ? .foregroundOnly : .hold
+    }
+
+    /// The discovery rule as an `if` chain.
+    static func expectedDiscovery(_ r: ProximityRunPolicy.Input) -> ProximityRunState {
+        if hardStop(r) { return .stop }
+        let keep: ProximityRunState = r.session == .peerCommitted ? .hold : .stop
+        if foreground(r) { return r.selectedTab == .social ? .foregroundOnly : keep }
+        if r.continuation == .running { return .stop }
+        return keep
+    }
+
+    /// Today's `ContentView.shouldRunPresence`, flat, with `.inactive` counted as foreground.
+    static func expectedPresence(_ r: ProximityRunPolicy.Input) -> ProximityRunState {
+        let mainTab = r.selectedTab == .home || r.selectedTab == .food
+            || r.selectedTab == .move || r.selectedTab == .social
+        let runs = r.allowNearbyPresence && foreground(r) && !r.appLockEngaged && mainTab && !hardStop(r)
+        return runs ? .foregroundOnly : .stop
+    }
+
+    /// Today's `ContentView.shouldListenForRecipeShares`, flat, with `.inactive` counted as
+    /// foreground.
+    static func expectedRecipeShare(_ r: ProximityRunPolicy.Input) -> ProximityRunState {
+        let listeningTab = r.selectedTab == .home || r.selectedTab == .food || r.selectedTab == .move
+        let runs = r.allowNearbyRecipeShares && foreground(r) && !r.appLockEngaged && listeningTab
+            && !hardStop(r)
+        return runs ? .foregroundOnly : .stop
+    }
+}
+
+// MARK: - ProximityRunPolicyTests
+
+/// The matrix, whole.
+@Suite struct ProximityRunPolicyTests {
+
+    /// The product and its helpers, shortened.
+    private typealias Product = ProximityRunPolicyProduct
+
+    // MARK: The product
+
+    /// The product is the size it says, and no dimension collapsed into another.
+    @Test func theInputProductIsWholeAndDistinct() {
+        let rows = Product.rows()
+        #expect(Product.scenePhases.count == 3,
+                "the three phases SwiftUI declares today; a fourth widens the product on purpose")
+        #expect(Product.count == 23_040, "3 × 5 × 4 × 3 × 128 — a new input must move this deliberately")
+        #expect(rows.count == 23_040, "every row was built")
+        #expect(Set(rows).count == 23_040, "and no two rows are the same input — no dimension collapsed")
+        #expect(FernletTab.allCases.count == 5, "the five tabs")
+        #expect(ProximityContinuationState.allCases.count == 4, "not requested, running, refused, expired")
+        #expect(ProximitySessionPresence.allCases.count == 3, "absent, mesh held, peer committed")
+    }
+
+    // MARK: §13's load-bearing rows, by hand
+
+    /// §13: user-started mesh + CPT granted → mesh `run` in the background, discovery foreground-only
+    /// (invariant 5), presence and recipe `stop` on background.
+    @Test func aContinuedMeshRunsInTheBackgroundAndAdmitsNobody() {
+        let background = Product.verdict(Product.row(
+            phase: .background, continuation: .running, session: .peerCommitted
+        ))
+        #expect(background.mesh == .run, "a running task lets the mesh keep its links in the background")
+        #expect(background.discovery == .stop, "and a live background process never browses or admits")
+        #expect(background.presence == .stop, "presence stops on background, as today")
+        #expect(background.recipeShare == .stop, "recipe stops on background, as today")
+        #expect(!background.routedAccessGate.appIsForeground,
+                "while the gate's foreground leg fell with the scene — a continued mesh decrypts nothing")
+
+        let foreground = Product.verdict(Product.row(continuation: .running, session: .peerCommitted))
+        #expect(foreground.mesh == .run, "the task still exists in the foreground, so the claim stands")
+        #expect(foreground.discovery == .foregroundOnly, "the Friends tab wants discovery")
+        #expect(foreground.presence == .foregroundOnly, "presence runs on the Friends tab")
+        #expect(foreground.recipeShare == .stop, "recipe never listens on the Friends tab")
+
+        let held = Product.verdict(Product.row(
+            phase: .background, continuation: .running, session: .meshHeld
+        ))
+        #expect(held.mesh == .run,
+                "a held mesh with no links is still something to continue — reconnecting members is what invariant 5 allows")
+        let nothing = Product.verdict(Product.row(
+            phase: .background, continuation: .running, session: .absent
+        ))
+        #expect(nothing.mesh == .hold, "a task with nothing to continue grants nothing")
+    }
+
+    /// §13: CPT refused → mesh `foregroundOnly`; and an expired task is the same row.
+    @Test func aRefusedOrExpiredTaskLeavesTheMeshForegroundOnly() {
+        let refused = Product.verdict(Product.row(continuation: .refused, session: .peerCommitted))
+        #expect(refused.mesh == .foregroundOnly, "no background claim, so the mesh is a foreground radio")
+        let refusedBackground = Product.verdict(Product.row(
+            phase: .background, continuation: .refused, session: .peerCommitted
+        ))
+        #expect(refusedBackground.mesh == .hold, "and in the background it is held for the OS to suspend")
+        #expect(refusedBackground.discovery == .hold, "with its committed link kept, not stood down")
+        let expired = Product.verdict(Product.row(
+            phase: .background, continuation: .expired, session: .peerCommitted
+        ))
+        #expect(expired == refusedBackground, "an expired task is the same row as a refused one")
+    }
+
+    /// §13: delete-all / below-age / duress → `stop` + teardown — every radio, and the gate touched
+    /// only through its own duress leg.
+    @Test func theThreeHardStopsStopEveryRadio() {
+        let wipe = Product.verdict(Product.row(wipe: true, session: .peerCommitted))
+        #expect(wipe.mesh == .stop && wipe.discovery == .stop, "a delete-all tears the session down")
+        #expect(wipe.presence == .stop && wipe.recipeShare == .stop, "and stops both listeners")
+        #expect(wipe.routedAccessGate.isOpen,
+                "while the gate reads no wipe fact — the wipe's own guard is the manager's, not the gate's")
+
+        let age = Product.verdict(Product.row(belowAge: true, session: .peerCommitted))
+        #expect(age.mesh == .stop && age.discovery == .stop, "a below-minimum-age ruling tears the session down")
+        #expect(age.presence == .stop && age.recipeShare == .stop, "and stops both listeners")
+        #expect(age.routedAccessGate.isOpen, "and the gate reads no age fact either")
+
+        let duress = Product.verdict(Product.row(duress: true, session: .peerCommitted))
+        #expect(duress.mesh == .stop && duress.discovery == .stop, "a duress session tears the session down")
+        #expect(duress.presence == .stop && duress.recipeShare == .stop, "and stops both listeners")
+        #expect(duress.routedAccessGate.duressActive, "and closes the gate through its own leg")
+        #expect(!duress.routedAccessGate.isOpen, "so nothing is decrypted under duress")
+    }
+
+    /// Today's sessions, one row each: the fresh visit, a blip off-tab, a committed session off-tab.
+    @Test func todaysForegroundSessionsAsRows() {
+        let fresh = Product.verdict(Product.row())
+        #expect(fresh.discovery == .foregroundOnly, "a fresh Friends visit searches")
+        #expect(fresh.mesh == .foregroundOnly, "and a session may form")
+        #expect(fresh.presence == .foregroundOnly, "presence runs on the Friends tab")
+        #expect(fresh.recipeShare == .stop, "recipe does not")
+
+        let blipOffTab = Product.verdict(Product.row(tab: .home, session: .meshHeld))
+        #expect(blipOffTab.discovery == .stop,
+                "a mesh that outlived its links stands its radios down off-tab — nothing is dropped")
+        #expect(blipOffTab.mesh == .foregroundOnly, "and the held mesh is never torn down by a tab")
+
+        let committedOffTab = Product.verdict(Product.row(tab: .home, session: .peerCommitted))
+        #expect(committedOffTab.discovery == .hold,
+                "a committed peer's links are kept off-tab, exactly the `hasCommittedPeer` guard today")
+        #expect(committedOffTab.mesh == .foregroundOnly, "the session continues")
+        #expect(committedOffTab.presence == .foregroundOnly && committedOffTab.recipeShare == .foregroundOnly,
+                "and Home runs both listeners")
+
+        let privateTab = Product.verdict(Product.row(tab: .personal, session: .peerCommitted))
+        #expect(privateTab.presence == .stop && privateTab.recipeShare == .stop,
+                "the Private tab runs no listener")
+        #expect(privateTab.discovery == .hold, "but keeps a committed link")
+    }
+
+    /// Today's backgrounded session, and the app lock, one row each.
+    @Test func todaysBackgroundedSessionAndTheAppLockAsRows() {
+        let suspended = Product.verdict(Product.row(phase: .background, session: .peerCommitted))
+        #expect(suspended.mesh == .hold, "no task, so the session is kept for the OS to suspend")
+        #expect(suspended.discovery == .hold, "with its link kept — today's guard, as a value")
+        #expect(suspended.presence == .stop && suspended.recipeShare == .stop, "and both listeners stop")
+        #expect(!suspended.anyRadioRuns, "nothing is up in a suspended session")
+
+        let searchingBackgrounded = Product.verdict(Product.row(phase: .background))
+        #expect(searchingBackgrounded.discovery == .stop, "a search with nobody stands down on background")
+        #expect(searchingBackgrounded.mesh == .hold, "and there is nothing to tear down")
+
+        let locked = Product.verdict(Product.row(tab: .home, lock: true, session: .peerCommitted))
+        #expect(locked.presence == .stop && locked.recipeShare == .stop, "the app lock stops both listeners")
+        #expect(locked.discovery == .hold && locked.mesh == .foregroundOnly,
+                "and gates nothing in the mesh (D-10.3)")
+        #expect(locked.routedAccessGate.isOpen, "nor does it close the gate — the OS lock does that")
+    }
+
+    // MARK: Clauses over the whole product
+
+    /// The gate is the same three facts the app assembles today, and nothing else.
+    @Test func theGateReadsOnlyItsThreeFacts() {
+        let rows = Product.rows()
+        let agrees = rows.allSatisfy { r in
+            Product.verdict(r).routedAccessGate == MeshRoutedAccessGate(
+                protectedDataAvailable: r.protectedDataAvailable,
+                appIsForeground: FernletApp.routedGateForeground(for: r.scenePhase),
+                duressActive: r.duressSessionActive
+            )
+        }
+        #expect(agrees, "on every row the gate is protected data, the one foreground mapping, and duress")
+        let blindToStops = rows.allSatisfy { r in
+            let flipped = Product.copy(r, belowAge: !r.belowMinimumAge, wipe: !r.deleteAllInProgress)
+            return Product.verdict(r).routedAccessGate == Product.verdict(flipped).routedAccessGate
+        }
+        #expect(blindToStops, "and flipping the wipe and age facts moves no gate leg — radios only, never plaintext")
+        let blindToLockAndTask = rows.allSatisfy { r in
+            let flipped = Product.copy(r, lock: !r.appLockEngaged, continuation: .running)
+            return Product.verdict(r).routedAccessGate == Product.verdict(flipped).routedAccessGate
+        }
+        #expect(blindToLockAndTask, "nor does the app lock or a continuation task")
+    }
+
+    /// `.inactive` is a foreground scene: every inactive row equals its active twin.
+    @Test func anInactiveSceneIsAForegroundScene() {
+        let rows = Product.rows()
+        let inactive = rows.filter { $0.scenePhase == .inactive }
+        #expect(inactive.count == 7_680, "one third of the product")
+        let sameAsActive = inactive.allSatisfy { Product.verdict($0) == Product.verdict(Product.copy($0, phase: .active)) }
+        #expect(sameAsActive,
+                "Control Center, a call banner, the Face ID sheet and Split View change no radio and no gate leg")
+        let backgroundDiffers = rows.filter { $0.scenePhase == .active }.contains {
+            Product.verdict($0) != Product.verdict(Product.copy($0, phase: .background))
+        }
+        #expect(backgroundDiffers, "while a background scene IS a different row — the claim is not vacuous")
+    }
+
+    /// Only a mesh continued by a running task ever claims the background — and it always does.
+    @Test func nothingButAContinuedMeshClaimsTheBackground() {
+        let rows = Product.rows()
+        let continued = rows.filter { r in
+            r.continuation == .running && r.session != .absent && !ProximityRunPolicy.isHardStop(r)
+        }
+        #expect(continued.count == 480, "3 phases × 5 tabs × 2 presences × the 16 hard-stop-free flag rows")
+        let everyContinuedRuns = continued.allSatisfy { Product.verdict($0).mesh == .run }
+        #expect(everyContinuedRuns, "a running task with something to continue always grants the background")
+        let onlyContinuedRuns = rows.filter { Product.verdict($0).mesh == .run }.count == continued.count
+        #expect(onlyContinuedRuns, "and nothing else does")
+        let otherRadiosNeverRun = rows.allSatisfy { r in
+            let v = Product.verdict(r)
+            return v.discovery != .run && v.presence != .run && v.recipeShare != .run
+        }
+        #expect(otherRadiosNeverRun, "`run` is the mesh's alone")
+        let background = rows.filter { $0.scenePhase == .background }
+        let noForegroundOnlyInBackground = background.allSatisfy { r in
+            let v = Product.verdict(r)
+            return v.mesh != .foregroundOnly && v.discovery != .foregroundOnly
+                && v.presence != .foregroundOnly && v.recipeShare != .foregroundOnly
+        }
+        #expect(noForegroundOnlyInBackground, "`foregroundOnly` is a foreground verdict, never a mode")
+        let listenersStopInBackground = background.allSatisfy { r in
+            let v = Product.verdict(r)
+            return v.presence == .stop && v.recipeShare == .stop
+        }
+        #expect(listenersStopInBackground, "presence and recipe stop on every background row")
+    }
+
+    /// Invariant 5: admission is foreground-only. Discovery never runs in the background, and a
+    /// live background process stops it outright.
+    @Test func discoveryNeverRunsInTheBackground() {
+        let background = Product.rows().filter { $0.scenePhase == .background }
+        let heldOrStopped = background.allSatisfy { r in
+            let d = Product.verdict(r).discovery
+            return d == .hold || d == .stop
+        }
+        #expect(heldOrStopped, "in the background discovery is held or stopped, never up")
+        let stoppedUnderATask = background.filter { $0.continuation == .running }
+            .allSatisfy { Product.verdict($0).discovery == .stop }
+        #expect(stoppedUnderATask, "and a live background process must not browse or admit — P8's seam")
+        let heldForALink = background.filter { r in
+            r.session == .peerCommitted && r.continuation != .running && !ProximityRunPolicy.isHardStop(r)
+        }.allSatisfy { Product.verdict($0).discovery == .hold }
+        #expect(heldForALink, "while without a task a committed link is kept for the OS to suspend")
+        let stoodDownWithNobody = background.filter { $0.session != .peerCommitted }
+            .allSatisfy { Product.verdict($0).discovery == .stop }
+        #expect(stoodDownWithNobody, "and a search with nobody stands down")
+    }
+
+    /// A hard stop stops every radio; and the mesh's `stop` is a teardown that only a hard stop asks
+    /// for.
+    @Test func aHardStopStopsEveryRadioAndOnlyAHardStopTearsTheMeshDown() {
+        let rows = Product.rows()
+        let hard = rows.filter { ProximityRunPolicy.isHardStop($0) }
+        #expect(hard.count == 20_160, "seven of every eight rows carry at least one of the three")
+        let allStopped = hard.allSatisfy { r in
+            let v = Product.verdict(r)
+            return v.mesh == .stop && v.discovery == .stop && v.presence == .stop && v.recipeShare == .stop
+        }
+        #expect(allStopped, "every radio, whatever the scene, tab, lock, task or session says")
+        let meshStopsOnlyForAHardStop = rows.filter { !ProximityRunPolicy.isHardStop($0) }
+            .allSatisfy { Product.verdict($0).mesh != .stop }
+        #expect(meshStopsOnlyForAHardStop,
+                "a tab bounce or a scene exit never tears the session down — that is `hold`'s whole job")
+    }
+
+    /// Fernlet's app lock moves presence and recipe only.
+    @Test func theAppLockMovesOnlyPresenceAndRecipe() {
+        let rows = Product.rows()
+        let meshAndGateUnmoved = rows.allSatisfy { r in
+            let a = Product.verdict(r)
+            let b = Product.verdict(Product.copy(r, lock: !r.appLockEngaged))
+            return a.mesh == b.mesh && a.discovery == b.discovery && a.routedAccessGate == b.routedAccessGate
+        }
+        #expect(meshAndGateUnmoved, "the app lock gates nothing in the mesh and closes no gate leg (D-10.3)")
+        let lockedListenersStop = rows.filter { $0.appLockEngaged }.allSatisfy { r in
+            let v = Product.verdict(r)
+            return v.presence == .stop && v.recipeShare == .stop
+        }
+        #expect(lockedListenersStop, "and both listeners stop behind it, as today")
+        let unlockedListenersRun = rows.contains { r in
+            !r.appLockEngaged && Product.verdict(r).presence == .foregroundOnly
+        }
+        #expect(unlockedListenersRun, "which is not vacuous — an unlocked row runs presence")
+    }
+
+    /// The three non-running continuation states are one row, and under the only state the app can
+    /// feed today no radio claims the background — "inert until P8" stated positively.
+    @Test func theNonRunningContinuationStatesAreOneRow() {
+        let rows = Product.rows()
+        let oneRow = rows.filter { $0.continuation == .refused || $0.continuation == .expired }
+            .allSatisfy { Product.verdict($0) == Product.verdict(Product.copy($0, continuation: .notRequested)) }
+        #expect(oneRow, "refused and expired decide exactly what not-requested decides — the difference is P8's copy")
+        let nothingRunsInert = rows.filter { $0.continuation == .notRequested }.allSatisfy { r in
+            let v = Product.verdict(r)
+            return v.mesh != .run && v.discovery != .run && v.presence != .run && v.recipeShare != .run
+        }
+        #expect(nothingRunsInert, "so P7's wiring, which can only feed not-requested, never asserts a running task")
+    }
+
+    /// The listener rules are today's `ContentView` chains, flat, on every row.
+    @Test func thePresenceAndRecipeRulesAreTodaysListenerChains() {
+        let rows = Product.rows()
+        let presenceAgrees = rows.allSatisfy { Product.verdict($0).presence == Product.expectedPresence($0) }
+        #expect(presenceAgrees, "presence: opted in, foreground, unlocked, on Home / Food / Move / Friends")
+        let recipeAgrees = rows.allSatisfy { Product.verdict($0).recipeShare == Product.expectedRecipeShare($0) }
+        #expect(recipeAgrees, "recipe: opted in, foreground, unlocked, on Home / Food / Move")
+        let recipeNeverOnFriends = rows.filter { $0.selectedTab == .social }
+            .allSatisfy { Product.verdict($0).recipeShare == .stop }
+        #expect(recipeNeverOnFriends, "the recipe listener never runs on the Friends tab")
+        let someRecipeRuns = rows.contains { Product.verdict($0).recipeShare == .foregroundOnly }
+        #expect(someRecipeRuns, "and it does run somewhere — the rule is not vacuous")
+    }
+
+    /// The flat re-statements of the mesh and discovery rules agree on every row — the named
+    /// expectation per row, whose value is catching a guard-order slip.
+    @Test func theMirrorOracleAgreesOnEveryRow() {
+        let rows = Product.rows()
+        let meshAgrees = rows.allSatisfy { Product.verdict($0).mesh == Product.expectedMesh($0) }
+        #expect(meshAgrees, "mesh: hard stop, then a continued mesh, then the scene")
+        let discoveryAgrees = rows.allSatisfy { Product.verdict($0).discovery == Product.expectedDiscovery($0) }
+        #expect(discoveryAgrees, "discovery: hard stop, then the tab in the foreground, then the task, then the link")
+    }
+
+    // MARK: The fold, and what is not claimed
+
+    /// `ProximitySessionPresence.folding` is total, and answers the unrepresentable row rather than
+    /// trapping on it.
+    @Test func theSessionPresenceFoldIsTotal() {
+        #expect(ProximitySessionPresence.folding(isInSession: false, hasCommittedPeer: false) == .absent,
+                "no mesh and no slot is nothing to keep")
+        #expect(ProximitySessionPresence.folding(isInSession: true, hasCommittedPeer: false) == .meshHeld,
+                "a mesh with no committed slot is held")
+        #expect(ProximitySessionPresence.folding(isInSession: true, hasCommittedPeer: true) == .peerCommitted,
+                "a committed slot is a peer")
+        #expect(ProximitySessionPresence.folding(isInSession: false, hasCommittedPeer: true) == .peerCommitted,
+                "and the unrepresentable row is ANSWERED as a peer, not trapped — `FriendsDiscoveryEntry`'s rule")
+    }
+
+    /// What this table does not claim: no scene, no manager, no seam (items 2–4 wire the policy; until
+    /// then no shipping code calls it), no continuation task (`.running` is P8's, and
+    /// `.continuingInBackground` is unreachable), and no derivation of `belowMinimumAge` (item 3's).
+    /// What it does pin: the vocabulary's shape.
+    @Test func whatThisTableDoesNotClaim() {
+        #expect(ProximityRunState.allCases.count == 4,
+                "four run states — `hold` is the one §13's sketch lacks, and it is a recorded deviation")
+        #expect(ProximityRunState.run.isRunning && ProximityRunState.foregroundOnly.isRunning,
+                "two of them mean the radio is up")
+        #expect(!ProximityRunState.hold.isRunning && !ProximityRunState.stop.isRunning,
+                "and two mean it is not")
+        let silent = ProximityRunPolicy.Verdict(
+            mesh: .hold, discovery: .stop, presence: .stop, recipeShare: .stop, routedAccessGate: .closed
+        )
+        #expect(!silent.anyRadioRuns, "a held session with everything else stopped has no radio up")
+        let up = ProximityRunPolicy.Verdict(
+            mesh: .foregroundOnly, discovery: .stop, presence: .stop, recipeShare: .stop, routedAccessGate: .closed
+        )
+        #expect(up.anyRadioRuns, "and one foreground radio is enough to say something is up")
+    }
+}

@@ -69,7 +69,12 @@ enum FernletAppearanceMode: String, CaseIterable, Identifiable {
 /// `ContentView` keys the paged `TabView`, the custom floating tab bar, and the per-tab
 /// listener/health-refresh gating on this; the raw value doubles as a stable identifier for
 /// per-tab reset tokens. `next`/`previous` support ordered paging helpers.
-enum FernletTab: String, CaseIterable, Hashable, Identifiable {
+///
+/// Explicitly `nonisolated` since network migration P7 item 1: `ProximityRunPolicy.Input` stores a
+/// tab inside a `nonisolated`, `Hashable` value, so the tab's synthesized conformances must be
+/// reachable off the main actor under the Release configuration's `MainActor` default isolation. A
+/// pure value with no actor state, so nothing is lost.
+nonisolated enum FernletTab: String, CaseIterable, Hashable, Identifiable {
     case home
     case food
     case move
