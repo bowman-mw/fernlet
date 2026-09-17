@@ -2,14 +2,21 @@
 // FernletTests
 //
 // Network migration **P7's acceptance battery** (plan §13, launcher item 7): one serialized suite
-// per §13 clause, each promoting the named tier-1 claims of the item it speaks for and adding the
-// property the item's own cells could not reach.
+// per §13 clause, each RE-RUNNING that clause end to end under one gated name, so CI can fail the
+// phase on this file's own assertions rather than on a list of other suites' names.
+//
+// **That idiom is mostly RE-STATEMENT, and saying otherwise would be the first dishonest line in a
+// file about honesty.** Roughly a dozen of the thirty-five cells here are near-verbatim re-runs of
+// a cell the doc comment beside them cites, and each of those says so where it stands. A handful
+// do reach a property no unit cell had reached — the whole-product vocabulary pin, the zero wall
+// re-measured from this file's own sweep, the yielding founder that arms nothing by hand — and
+// those are named as additions rather than left to be inferred from being here.
 //
 // The shape is `MeshP5AcceptanceTests.swift`'s and `MeshP6AcceptanceTests.swift`'s, deliberately:
-// one clause per suite, run END TO END against the same shipping seams rather than as a list of
-// other suites' names, so CI gating a clause fails on this battery's own assertions. Where an
+// one clause per suite, driven against the same shipping seams the clause ships on. Where an
 // exhaustive space already exists it is CITED in the doc comment and the canonical corner of it is
-// run here — §11.4's idiom.
+// run here — §11.4's idiom, and the reason a re-run is not a waste: the citation is what says which
+// suite holds the whole space, and the corner is what CI can fail on when only this line is gated.
 //
 // **Six suites**, matching §13's five clauses plus the honesty clause P5 and P6 both earned:
 // `MeshP7PolicyMatrixAcceptanceTests` (item 1), `MeshP7GateWriterAcceptanceTests` (item 2),
@@ -19,11 +26,12 @@
 //
 // **Which helpers are REUSED and which are re-stated, named rather than left to be discovered.**
 // Reused because they are `internal` in this target: `ProximityRunPolicyTests.inputs(…)` and its
-// `scenePhases`; `ProximityRunPolicyHostTests.appSources()`, `occurrences(of:in:)`,
-// `connectedHost()`, `polledHost(interval:)`, `waitForPolls(_:in:)`, `connect(_:to:poll:)`,
-// `pollerRig(createdAt:)`, `sessionConsumerDoor(for:)`, `radioCalls`, `byNameExemptions` and
-// `mountRadioCallCount`; `ProximityResumeDecisionTests.allOutcomes()`, `barReasons()`, `kind(for:)`
-// and `label(_:)`; `MeshP3Acceptance.install` / `mesh(for:)` / `attachSlot(to:fingerprint:)`;
+// `scenePhases`; `ProximityRunPolicyHostTests.appSources()`, `proximityKitSources()`,
+// `occurrences(of:in:)`, `connectedHost()`, `polledHost(interval:)`, `waitForPolls(_:in:)`,
+// `connect(_:to:poll:)`, `pollerRig(createdAt:)`, `sessionConsumerDoor(for:)`, `radioCalls` and
+// `byNameExemptions`; `ProximityRunDoorRecorder`, which that suite declares at file scope beside
+// itself; `ProximityResumeDecisionTests.allOutcomes()`, `barReasons()`, `kind(for:)`
+// and `label(_:)`; `MeshP3Acceptance.install` / `attachSlot(to:fingerprint:)`;
 // `CIGateSelectorBoundaryTests.declaredTopLevelTypes()`; `MeshFoundingRig`;
 // `MeshRoutedBackpressureAuditCapture` (the audit capture `ProximityRunStateSeamTests` keeps
 // `private` to its own file, already promoted once for exactly this reason);
@@ -37,6 +45,11 @@
 // their signatures name a file-scope `private` type) is re-stated as
 // ``MeshP7Acceptance/resumeRows()``; and the sealed-launch fixture (`ProximityResumeLaunch`,
 // `private` to its file) is re-stated as ``MeshP7ResumeLaunch``.
+// **Deliberately NOT reused: `ProximityRunPolicyHostTests.mountRadioCallCount`.** It is `internal`
+// and would import cleanly, which is exactly the problem — an acceptance clause that re-makes a
+// count from its own sweep and then compares it against the cited suite's own pin stays green
+// through a move of the code AND the pin together. The zero-wall cell writes its seven as a
+// literal with the decomposition beside it.
 //
 // **Every audit-counting cell is `@MainActor` and SYNCHRONOUS**, for the reason
 // `ProximityRunStateSeamTests`' header gives: `FernletAuditLog`'s registry is process-global and
@@ -278,12 +291,21 @@ struct MeshP7PolicyMatrixAcceptanceTests {
 
     /// **The artefact: the product is enumerated whole, and no row is left undecided.**
     ///
+    /// **This cell is a SUBSTITUTION, and says so.** The item-7 row asked for `deferred` to be shown
+    /// EMPTY as a positive claim. There is no `deferred` to show: the decision vocabulary is
+    /// `ProximityRunState`, whose three cases are `.run`, `.foregroundOnly` and `.stop`, and no
+    /// other type on the policy's answer side carries such a case either. An empty-`deferred`
+    /// assertion could therefore only be written by first inventing the case it claims is unused,
+    /// which is a test of this file rather than of the policy.
+    ///
+    /// What is asserted instead is the property the absent case was standing in for: DEFAULTING.
     /// "Undecided" is not a case `ProximityRunState` has, so the claim that can actually fail is
-    /// about DEFAULTING: a policy that answered one directive everywhere would agree with every
-    /// containment check and still be wrong. So the observed vocabulary is pinned per radio — three
-    /// answers for the mesh links, exactly two for the admission door (invariant 5 forbids the
-    /// third), and two each for the listeners — beside the row count and the distinct-value count
-    /// the collapse of the two foreground phases produces.
+    /// that a policy answering one directive everywhere would agree with every containment check
+    /// and still be wrong. So the observed vocabulary is pinned per radio — three answers for the
+    /// mesh links, exactly two for the admission door (invariant 5 forbids the third), and two each
+    /// for the listeners — beside the row count and the distinct-value count the collapse of the two
+    /// foreground phases produces. An empty set and a one-element set both fail it, which is the
+    /// half an "is `deferred` empty?" question would have answered.
     @Test func theTenInputProductIsEnumeratedWholeAndNoRowIsLeftUndecided() {
         let rows = MeshP7Acceptance.policyRows()
         #expect(rows.count == 23_040,
@@ -801,7 +823,18 @@ struct MeshP7RadioSeamAcceptanceTests {
     /// clause re-making the count from its own sweep, so gating this suite fails on its own
     /// evidence. Two files are exempt BY NAME — the `#if DEBUG` rejection-matrix harness and the
     /// active-share sheet — and each exemption is shown to be IN the sweep, because an exemption
-    /// that matches nothing is a hole nobody can see.
+    /// that matches nothing is a hole nobody can see. The exemption set is checked NON-EMPTY first,
+    /// because `allSatisfy` over an empty set is true and would report a swept exemption list that
+    /// does not exist.
+    ///
+    /// **The expected seven is a LITERAL, not `ProximityRunPolicyHostTests.mountRadioCallCount`.**
+    /// That constant is `internal` and would import cleanly, and importing it would undo the whole
+    /// point of re-measuring: a change that moved the code and that suite's pin together would pass
+    /// here in silence. MEASURED over the comment-stripped `App/Fernlet/FernletApp.swift` at this
+    /// commit: `stopJoin()` 1, `leaveSession()` 1, `presenceManager.stop()` 1 and
+    /// `recipeShareManager.stop()` 1 — the teardown door — plus `applyRunState(` 3, being the mesh
+    /// pair, presence and the recipe listener. 1 + 1 + 1 + 1 + 3 = 7. The two suites agreeing on
+    /// seven by two independent routes is the claim; the day they disagree, one of them is right.
     @Test func theZeroWallStillCountsEveryRadioCallInsideTheMount() throws {
         let sources = try ProximityRunPolicyHostTests.appSources()
         #expect(!sources.isEmpty, "the App/ sweep found no Swift files at all")
@@ -809,24 +842,41 @@ struct MeshP7RadioSeamAcceptanceTests {
                 "the sweep no longer reaches the view the retirement is ABOUT")
         #expect(sources.contains(where: { $0.name == "FernletStore.swift" }),
                 "nor the store that reached around it at three more sites")
-        let exemptionsAreSwept = ProximityRunPolicyHostTests.byNameExemptions.allSatisfy { name in
+        let exemptions = ProximityRunPolicyHostTests.byNameExemptions
+        #expect(!exemptions.isEmpty, "an empty exemption list makes the sweep check below vacuous")
+        let exemptionsAreSwept = exemptions.allSatisfy { name in
             sources.contains(where: { $0.name == name })
         }
         #expect(exemptionsAreSwept, "an exempted file is not in the sweep at all, so it excuses nothing")
         var strays: [String] = []
         var inFernletApp = 0
         // R2: the needle list over the app target's own file list.
-        for source in sources
-        where !ProximityRunPolicyHostTests.byNameExemptions.contains(source.name) {
+        for source in sources where !exemptions.contains(source.name) {
             for needle in ProximityRunPolicyHostTests.radioCalls {
                 let hits = ProximityRunPolicyHostTests.occurrences(of: needle, in: source.code)
                 guard hits > 0 else { continue }
-                if source.name == "FernletApp.swift" { inFernletApp += hits } else { strays.append(needle) }
+                if source.name == "FernletApp.swift" {
+                    inFernletApp += hits
+                } else {
+                    strays.append("\(source.name) spells \(needle) \(hits)×")
+                }
             }
         }
+        // `Issue.record` rather than an interpolated `#expect` comment (house rule: literal
+        // comments only). A stray that names only the NEEDLE — which is all the first version of
+        // this cell reported — is a red nobody can act on without re-running the sweep by hand.
+        if !strays.isEmpty {
+            Issue.record("""
+                a proximity radio is driven from outside the run policy's doors — \
+                \(strays.joined(separator: "; "))
+                """)
+        }
         #expect(strays.isEmpty, "a proximity radio is driven from outside the run policy's doors")
-        #expect(inFernletApp == ProximityRunPolicyHostTests.mountRadioCallCount,
-                "the number of radio calls in FernletApp moved without its pin moving")
+        #expect(inFernletApp == 7, """
+            the mount's doors hold seven radio calls — stopJoin(), leaveSession(), \
+            presenceManager.stop() and recipeShareManager.stop() once each, plus applyRunState( \
+            three times — and FernletApp no longer spells exactly that many
+            """)
     }
 }
 
@@ -1328,28 +1378,54 @@ struct MeshP7HonestyAcceptanceTests {
     /// **No continuation task exists.** `ProximityContinuationTaskState.inert` is the only value
     /// shipping ever passes, so every `.run` directive in the policy matrix is an answer about P8.
     ///
-    /// Three counts, measured over the comment-stripped app target: the type is named in exactly two
-    /// files, the host binds its one mention to `.inert` as a `let` rather than a leg, and the
-    /// granted case is spelled NOWHERE outside the file that declares it. (`.refused` and `.expired`
-    /// are deliberately not counted: both are ordinary spellings elsewhere in the app —
-    /// `RoutedShareRefusalCopy`, `DuressRecoveryCoordinator`, `ProximityResumeDecision` — and a
-    /// zero-list over them would be a wall about the wrong vocabulary.)
+    /// Measured over the comment-stripped app target: the type is named in exactly two files, the
+    /// host binds its one mention to `.inert` as a `let` rather than a leg, and NOT ONE of the three
+    /// non-inert cases is handed to the policy or set on the host anywhere outside the file that
+    /// declares them.
+    ///
+    /// **All three cases are counted, because the needles are SCOPED TO THE TYPE.** The first
+    /// version of this cell zero-listed a bare `.granted` and could not reach `.refused` or
+    /// `.expired` at all: all three are ordinary spellings elsewhere in the app —
+    /// `RoutedShareRefusalCopy`, `DuressRecoveryCoordinator`, `ProximityResumeDecision` — so an
+    /// unscoped needle is a wall about the wrong vocabulary, and a name promising that no
+    /// continuation task exists was carrying a count over one case in three. Scoping fixes both
+    /// halves at once. Three spellings per case, being the three ways a non-inert task could reach
+    /// the policy: the initialiser's argument (`continuationTask: .granted`), the fully qualified
+    /// case (`ProximityContinuationTaskState.granted`), and the setter P8 will have to add
+    /// (`setContinuationTask(.granted`). NINE needles, every one of them 0 at this commit, and none
+    /// of them matchable by prose about a refusal or an expiry that has nothing to do with P8.
     @Test func noContinuationTaskExistsAndInertIsTheOnlyValueShipping() throws {
         let sources = try ProximityRunPolicyHostTests.appSources()
         #expect(!sources.isEmpty, "the App/ sweep found no Swift files at all")
         var named: [String] = []
-        var granted = 0
-        // R2: bounded by the app target's own file list.
+        var liveTasks: [String] = []
+        // R2: three cases × three spellings over the app target's own file list.
         for source in sources {
             if source.code.contains("ProximityContinuationTaskState") { named.append(source.name) }
             guard source.name != "ProximityRunPolicy.swift" else { continue }
-            granted += ProximityRunPolicyHostTests.occurrences(of: ".granted", in: source.code)
+            for state in ["granted", "refused", "expired"] {
+                for needle in ["continuationTask: .\(state)",
+                               "ProximityContinuationTaskState.\(state)",
+                               "setContinuationTask(.\(state)"] {
+                    let hits = ProximityRunPolicyHostTests.occurrences(of: needle, in: source.code)
+                    guard hits > 0 else { continue }
+                    liveTasks.append("\(source.name) spells \(needle) \(hits)×")
+                }
+            }
         }
         #expect(named.sorted() == ["ProximityRunPolicy.swift", "ProximityRunPolicyHost.swift"],
                 "the continuation task is named in exactly the two files P7 gave it")
-        #expect(granted == 0, """
-            a granted continuation task is spelled somewhere in the app target outside the file that \
-            declares the case — P7 ships `.inert` and nothing else until P8's coordinator exists
+        if !liveTasks.isEmpty {
+            // `Issue.record` for the dynamic detail; the `#expect` comment below stays literal.
+            Issue.record("""
+                a non-inert continuation task reaches the policy — \
+                \(liveTasks.joined(separator: "; "))
+                """)
+        }
+        #expect(liveTasks.isEmpty, """
+            a granted, refused or expired continuation task is handed to the policy or set on the \
+            host somewhere in the app target outside the file that declares the cases — P7 ships \
+            `.inert` and nothing else until P8's coordinator exists
             """)
         let host = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("App/Fernlet/ProximityRunPolicyHost.swift")
@@ -1457,12 +1533,44 @@ struct MeshP7HonestyAcceptanceTests {
     /// today. That is a gap named rather than papered over: the tap that raises the session surface
     /// is its subject, and this battery's resume clause asserts the DECISION and the two manager
     /// doors instead.
+    ///
+    /// **EVERY workflow is read, not `s3-wall.yml` alone.** "Named in no workflow step" is a claim
+    /// about the whole of `.github/workflows`, and a one-file read makes it silently unfalsifiable
+    /// the day a second file adds a UI-test step. The sweep is derived from the directory rather
+    /// than from a list written here, guarded non-empty and checked to contain the gated workflow,
+    /// because an enumeration that found nothing passes a zero-list green. Both YAML extensions are
+    /// taken, since GitHub accepts either and a `.yaml` step would otherwise walk straight past a
+    /// `.yml`-only filter. The BUNDLE name is on the needle list beside the suite name: a step that
+    /// runs the whole `FernletUITests` target names no suite at all and would be invisible to a
+    /// suite-name needle. Three files match at this commit — `pages.yml`, `power-of-10.yml` and
+    /// `s3-wall.yml` — and none of them names either needle.
     @Test func theResumeCardsUiSuiteIsNamedInNoWorkflowStep() throws {
-        let workflow = try RepoRoot.source(".github/workflows/s3-wall.yml")
-        #expect(workflow.contains("Scripts/run-gated-suites.sh"),
-                "non-vacuity: the workflow really is being read")
-        #expect(!workflow.contains("ProximityResumeCardUITests"),
-                "the UI suite is named in the workflow, so this honesty note is out of date")
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: RepoRoot.url(".github/workflows"), includingPropertiesForKeys: nil
+        )
+        let workflows = entries
+            .filter { $0.pathExtension == "yml" || $0.pathExtension == "yaml" }
+            .sorted { $0.path < $1.path }
+        #expect(!workflows.isEmpty, "the workflow sweep enumerated nothing, so its zero-list is vacuous")
+        #expect(workflows.contains(where: { $0.lastPathComponent == "s3-wall.yml" }),
+                "and the gated workflow itself is not in the sweep, so neither is any step it holds")
+        var namers: [String] = []
+        // R2: two needles over the workflow directory's own file list.
+        for workflow in workflows {
+            let text = try String(contentsOf: workflow, encoding: .utf8)
+            for needle in ["ProximityResumeCardUITests", "FernletUITests"] where text.contains(needle) {
+                namers.append("\(workflow.lastPathComponent) names \(needle)")
+            }
+        }
+        if !namers.isEmpty {
+            // `Issue.record` for the dynamic detail; the `#expect` comment below stays literal.
+            Issue.record("a workflow step reaches the UI target — \(namers.joined(separator: "; "))")
+        }
+        #expect(namers.isEmpty,
+                "the UI suite or its bundle is named in a workflow, so this honesty note is stale")
+        let wall = try RepoRoot.source(".github/workflows/s3-wall.yml")
+        #expect(wall.contains("Scripts/run-gated-suites.sh"),
+                "non-vacuity: the gated workflow really is being read")
         let declared = try CIGateSelectorBoundaryTests.declaredTopLevelTypes()
         #expect(!declared.isEmpty, "non-vacuity: the declaration sweep really found the test tree")
         #expect(!declared.contains("ProximityResumeCardUITests"), """
