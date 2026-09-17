@@ -33,6 +33,14 @@
 //     with a named test, not an omission.
 //   * **A rejoin bar names the mesh ENDED, never "failed".** Nothing failed: a mesh that was left,
 //     developed, terminated by the group or that reached its ceiling ended exactly as designed.
+//   * **And it speaks only when the user TRIES** (pass 2 fix review, P1-3). The bar is durable and
+//     is cleared nowhere, a `terminated` context is never reaped, and an `expired` one is written
+//     back as terminated — so a clause written over the bar as a LAUNCH-derived fact said "That
+//     session has ended." on every cold start for the rest of the install. The input is the HIT:
+//     the reason carried by the last entry `rejoinRefusal(for:)` actually refused this run, at the
+//     descriptor door, the admission-grant door or `acceptForegroundResume(now:)`. A `terminated`
+//     or `expired` launch is silent until then, which is plan §24.1's own framing — "what a rejoin
+//     bar looks like when the user tries anyway".
 //
 // ## Why the decision is written over an app-side flattening
 //
@@ -43,8 +51,8 @@
 // app-side flattening below, and pass 1 recorded that pass 2 owed exactly one public projection.
 //
 // **Pass 2 built it**: `MeshNetworkManager.sessionResumeProjection` answers a
-// `MeshSessionResumeProjection` — the outcome kind, the offer flag, and the bar's reason **matched
-// to the mesh in hand** — and ``ProximityResumeInputs/init(projection:)`` at the foot of this file
+// `MeshSessionResumeProjection` — the outcome kind, the offer flag, and the bar's reason **as a hit
+// this run** — and ``ProximityResumeInputs/init(projection:)`` at the foot of this file
 // is the one mapping into the vocabulary below. The mapping was not invented there: the test bundle
 // can `@testable import ProximityKit`, so `ProximityResumeDecisionTests` had already enumerated
 // every real `MeshSessionRestoreOutcome` case — payload variants included — through it and held the
@@ -99,11 +107,13 @@ nonisolated enum ProximityRestoreOutcomeKind: String, CaseIterable, Hashable, Se
     case resumable
 
     /// A context that already records an ending (`terminated`), whether it ended the mesh for
-    /// everyone or took this device out of one that carries on. The reason rides the rejoin bar.
+    /// everyone or took this device out of one that carries on. It raises the durable rejoin bar
+    /// and, on its own, presents NOTHING: the reason reaches the user when a door refuses a try.
     case terminated
 
     /// A live context whose ceiling passed while the process was gone (`expired`). The restore
-    /// writes the termination mark, which raises the bar with `hardDeadlineSigned`.
+    /// writes the termination mark, which raises the bar with `hardDeadlineSigned` — and is written
+    /// back as `terminated`, which is why a launch derived from the bar never went quiet again.
     case expired
 
     /// No file at all (`noSession`): genuinely a green field.
@@ -204,7 +214,7 @@ nonisolated enum ProximityMeshEndedReason: String, CaseIterable, Hashable, Senda
 /// the launch restore has run.
 ///
 /// Each field names its source, so pass 2's projection has one honest shape to expose:
-/// `lastSessionRestoreOutcome` (flattened), `offersForegroundResume`, and `rejoinBar?.reason`.
+/// `lastSessionRestoreOutcome` (flattened), `offersForegroundResume`, and `lastRejoinBarHit`.
 /// `restoredSessionContext` is deliberately absent — see the file header on the member count.
 nonisolated struct ProximityResumeInputs: Equatable, Hashable, Sendable {
 
@@ -223,13 +233,17 @@ nonisolated struct ProximityResumeInputs: Equatable, Hashable, Sendable {
     /// arrives this surface already reads it.
     let offersForegroundResume: Bool
 
-    /// `MeshNetworkManager.rejoinBar?.reason`, the permanent bar against re-entering one mesh —
-    /// re-derived from the sealed context at every launch, which is the half that makes it
-    /// survive a force-quit.
+    /// `MeshNetworkManager.lastRejoinBarHit`: the reason carried by the last entry the permanent
+    /// rejoin bar actually REFUSED this run, or nil while nothing has been refused.
+    ///
+    /// **A hit, not the standing bar** (pass 2 fix review, P1-3). The bar itself is durable and
+    /// cleared nowhere, so reading it at launch re-presented an ended session on every cold start;
+    /// the hit is run-scoped, raised at the three doors that enforce the bar against this device
+    /// (`rejoinRefusal(for:)`'s callers) and cleared by the next founding or a successful accept.
     ///
     /// The mesh's id is not carried: the user is not shown a UUID, and "which mesh" is answered by
-    /// the bar itself at the two doors that enforce it (`rejoinRefusal(for:)`).
-    let rejoinBarReason: ProximityMeshEndedReason?
+    /// the door that refused.
+    let rejoinBarHit: ProximityMeshEndedReason?
 }
 
 // MARK: - The presentation
@@ -278,32 +292,40 @@ nonisolated enum ProximityResumePresentation: Equatable, Hashable, Sendable, Cas
 ///
 /// | # | clause | presentation |
 /// | --- | --- | --- |
-/// | 1 | a rejoin bar is up | ``ProximityResumePresentation/ended(_:)`` with its reason |
+/// | 1 | a rejoin bar was HIT this run | ``ProximityResumePresentation/ended(_:)`` with its reason |
 /// | 2 | the outcome is ``ProximityRestoreOutcomeKind/corrupt`` | ``ProximityResumePresentation/couldNotReopen`` |
 /// | 3 | the outcome says nothing whatever the offer says (`deferred`, `refused`, `notAttempted`) | ``ProximityResumePresentation/nothing`` — silent |
 /// | 4 | `offersForegroundResume` | ``ProximityResumePresentation/offerResume`` |
 /// | 5 | anything else | ``ProximityResumePresentation/nothing`` |
 ///
-/// **Clause 1 is first because the bar outranks the offer**, and that is the clause worth stating
-/// out loud: offering to resume a mesh this device may never re-enter would be an offer the user
-/// would act on and the admission door would then refuse (`rejoinRefusal(for:)`, enforced at both
-/// doors). It also outranks `corrupt`, which cannot co-occur at launch — the bar is re-derived from
-/// the sealed context, and a file that did not decode produced no context to derive it from — so
-/// the order is stated rather than exercised, and the test says which rows are reachable.
+/// **Clause 1 is first because a HIT outranks everything**, and that is the clause worth stating
+/// out loud: the user has just tried to get back into a mesh that ended and a door refused them, so
+/// an offer, a file that would not decode and a silence are all answers to a question they are no
+/// longer asking. A hit also cannot co-occur with `corrupt` at launch — a file that did not decode
+/// produced no context, no offer and no door to walk into — so that half of the order is stated
+/// rather than exercised, and the test says which rows are reachable.
 ///
-/// **Clause 3 before clause 4** keeps that silence unconditional on anything but the bar: a restore
+/// **What clause 1 is NOT** (pass 2 fix review, P1-3): the standing `rejoinBar`, and not that bar
+/// matched to the mesh in hand either. Both are launch-derived, both survive every session, and a
+/// `terminated` context is never reaped — so either spelling re-presented "That session has ended."
+/// on every cold start, with a per-launch `@State` dismissal that resets each time. A `terminated`
+/// or `expired` launch with no hit falls through clause 1 to clause 5's silence (both carry
+/// `offersForegroundResume == false`), and the sentence waits for the try.
+///
+/// **Clause 3 before clause 4** keeps that silence unconditional on anything but the hit: a restore
 /// that read nothing this launch has nothing to offer, whatever a flag left over from an earlier
 /// idle lapse says. Pass 2 folded ``ProximityRestoreOutcomeKind/notAttempted`` into the same clause
 /// (see ``ProximityRestoreOutcomeKind/saysNothingWhateverTheOffer``), so "a restore that has not
 /// concluded is silent" is true by RULE rather than by the circumstance that the restore happens to
 /// raise no offer before it runs.
 ///
-/// **Clause 5 is where `resumable`, `terminated` and `expired` land when their partner fact is
-/// missing.** At launch that cannot happen — the restore sets the offer and the bar in the same
-/// breath as the outcome (see the test's reachable-rows cell) — and the fail-safe for the
-/// impossible row is silence, never an offer and never a reasonless "ended": the Friends three-way
-/// resolves `.fresh`, the user starts a new session, and the rejoin bar (if there really is one)
-/// still refuses at the door.
+/// **Clause 5 is where `resumable`, `terminated` and `expired` land with no offer and no hit** —
+/// and for the latter two that is the ORDINARY launch, not an impossible row: an ended context
+/// raises no offer, and no door has been walked into yet. `resumable` reaches it only if the offer
+/// flag is missing, which the restore cannot produce (it sets the two in the same breath; see the
+/// test's reachable-rows cell). The fail-safe is silence, never an offer and never a reasonless
+/// "ended": the Friends three-way resolves `.fresh`, the user starts a new session, and the rejoin
+/// bar (if there really is one) still refuses at the door — which is where the sentence comes from.
 nonisolated enum ProximityResumeDecision {
 
     /// Decides what one launch restore presents.
@@ -313,7 +335,7 @@ nonisolated enum ProximityResumeDecision {
     /// - Returns: the presentation, which shows text for three of its four cases and arms nothing
     ///   in any of them.
     static func decide(_ inputs: ProximityResumeInputs) -> ProximityResumePresentation {
-        if let reason = inputs.rejoinBarReason { return .ended(reason) }
+        if let reason = inputs.rejoinBarHit { return .ended(reason) }
         guard inputs.outcome != .corrupt else { return .couldNotReopen }
         if inputs.outcome.saysNothingWhateverTheOffer { return .nothing }
         return inputs.offersForegroundResume ? .offerResume : .nothing
@@ -338,21 +360,21 @@ extension ProximityResumeInputs {
     /// chosen in advance to stand in for a kind nobody has thought about — and a new restore outcome
     /// would ship silently as whatever that fallback says. The switch is a build error instead.
     ///
-    /// The bar's reason is the one field that DOES round-trip, because
+    /// The bar hit's reason is the one field that DOES round-trip, because
     /// `MeshSessionTerminationReason` crossed the wall whole:
     /// ``ProximityMeshEndedReason`` carries its eight `rawValue`s one for one and
     /// `theEndedReasonVocabularyIsTheSealedContextsOwn` fails before a ninth can reach a user. Were
-    /// one ever to slip through, the `flatMap` reads it as "no bar" — which presents whatever the
-    /// outcome alone says (silence, for the `terminated` restore that is the only way to get one)
-    /// and leaves `rejoinRefusal(for:)` refusing at both admission doors regardless, which is where
-    /// the bar is actually enforced.
+    /// one ever to slip through, the `flatMap` reads it as "no hit" — which presents whatever the
+    /// outcome alone says (silence, for every launch that is not an offer) and leaves
+    /// `rejoinRefusal(for:)` refusing at both admission doors regardless, which is where the bar is
+    /// actually enforced.
     ///
     /// - Parameter projection: `MeshNetworkManager.sessionResumeProjection`.
     nonisolated init(projection: MeshSessionResumeProjection) {
         self.init(
             outcome: Self.kind(of: projection.outcome),
             offersForegroundResume: projection.offersForegroundResume,
-            rejoinBarReason: projection.rejoinBarReason
+            rejoinBarHit: projection.rejoinBarHit
                 .flatMap { ProximityMeshEndedReason(rawValue: $0.rawValue) }
         )
     }

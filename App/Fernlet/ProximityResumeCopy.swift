@@ -42,6 +42,15 @@ import SwiftUI
 /// shows neither, and the two `nil`s are the silence the decisions table asks for — a deferred
 /// restore retries at the next protected-data rise, and apologising for it on every cold start is
 /// the noise the "nothing modal" decision exists to avoid.
+///
+/// **"That session has ended." is a sentence about a TRY, not about a launch** (pass 2 fix review,
+/// P1-3). The rejoin bar is durable and is cleared nowhere, a `terminated` context is never reaped
+/// and an `expired` one is written back as terminated — so an `ended` clause read off the bar at
+/// launch said it again on every cold start, for the rest of the install, to a reader who had done
+/// nothing but open the app. The decision now takes the bar as a HIT: a door refused an entry this
+/// run (`rejoinRefusal(for:)`'s three callers), and THAT is when these words are owed. An ended
+/// context the user has not tried to re-enter is one of ``ProximityResumePresentation/nothing``'s
+/// silences, and this file has nothing to say about it.
 enum ProximityResumeCopy {
 
     /// The resume affordance's button label.

@@ -7,14 +7,20 @@
 // `ProximityResumeDecision.decide(_:)` is a pure function over three enumerable facts, so this
 // suite enumerates the WHOLE product — every `MeshSessionRestoreOutcome` case with every payload
 // variant that can be constructed (29 outcome values, nil included) × both offer flags × every
-// rejoin-bar reason plus nil = 522 rows — and holds each row against an INDEPENDENT oracle.
+// rejoin-bar-hit reason plus nil = 522 rows — and holds each row against an INDEPENDENT oracle.
 //
 // The oracle is not a second spelling of the policy. It takes the RAW outcome and answers from
 // ProximityKit's own vocabulary — the `quarantineCorruptFile` case itself and
 // `MeshSessionRestoreOutcome.isRetryable` — rather than from the app's flattened
 // `ProximityRestoreOutcomeKind`, and it is written as the decisions table's ordered clauses: the
-// bar first (an offer to resume a barred mesh is an offer the admission door would refuse), then
-// the corrupt file, then the retryable silence, then the offer.
+// bar HIT first (a door refused this device an entry this run, which is the one thing the reader is
+// owed a sentence about), then the corrupt file, then the retryable silence, then the offer.
+//
+// **The bar axis is the HIT, since pass 2's fix review (P1-3).** It was the bar as the launch
+// derived it, which is durable, is cleared nowhere and is re-derived from a `terminated` context
+// nothing reaps — so "That session has ended." re-appeared on every cold start for the rest of the
+// install. The cells that name it say HIT now, and two of them say what a launch onto an ended
+// context does instead: nothing at all, until the user tries.
 //
 // **The flattening's mapping is pinned here because the app target cannot spell it yet.**
 // `MeshSessionRestoreOutcome`, `MeshSessionRejoinBar` and `MeshSessionTerminationReason` are
@@ -53,8 +59,8 @@ private struct ProximityResumeProductRow {
     /// The outcome as ProximityKit spells it, or nil for a launch whose restore has not concluded.
     let outcome: MeshSessionRestoreOutcome?
 
-    /// The rejoin bar's reason as the sealed context spells it, or nil for no bar.
-    let barReason: MeshSessionTerminationReason?
+    /// The reason of a rejoin bar HIT this run, as the sealed context spells it, or nil for no hit.
+    let barHitReason: MeshSessionTerminationReason?
 
     /// `MeshNetworkManager.offersForegroundResume`.
     let offersForegroundResume: Bool
@@ -76,7 +82,7 @@ private struct ProximityResumeReachableRow {
     /// `MeshNetworkManager.offersForegroundResume`.
     let offers: Bool
 
-    /// The rejoin bar's reason, or nil for no bar.
+    /// The reason of a bar hit this run, or nil for no hit.
     let bar: ProximityMeshEndedReason?
 
     /// What the decisions table must answer for this row.
@@ -138,7 +144,7 @@ private struct ProximityEndedSentencePin {
         return built
     }
 
-    /// Every rejoin-bar reason the product runs over, nil first.
+    /// Every rejoin-bar-hit reason the product runs over, nil first.
     ///
     /// A sealed reason with no app twin is DROPPED here rather than carried as nil, so the row
     /// count pin in ``everyRowOfTheLaunchRestoreProductMatchesTheDecisionsTable()`` fails loudly
@@ -175,35 +181,40 @@ private struct ProximityEndedSentencePin {
 
     /// Builds one row.
     ///
+    /// `private`, like every member below whose signature names ``ProximityResumeProductRow``: that
+    /// type is `private` at file scope (so, fileprivate), and an internal member of an internal
+    /// suite cannot expose it — "method must be declared fileprivate because its result uses a
+    /// fileprivate type" (pass 2 fix review, P1-2). Every caller is inside the suite.
+    ///
     /// - Parameters:
     ///   - outcome: The raw outcome.
     ///   - offers: `offersForegroundResume`.
-    ///   - barReason: The raw bar reason, or nil.
+    ///   - barHitReason: The raw reason of a bar hit this run, or nil.
     /// - Returns: the row, raw facts and flattened inputs together.
-    static func row(
+    private static func row(
         outcome: MeshSessionRestoreOutcome?,
         offers: Bool,
-        barReason: MeshSessionTerminationReason?
+        barHitReason: MeshSessionTerminationReason?
     ) -> ProximityResumeProductRow {
         let inputs = ProximityResumeInputs(
             outcome: kind(for: outcome),
             offersForegroundResume: offers,
-            rejoinBarReason: barReason.flatMap { ProximityMeshEndedReason(rawValue: $0.rawValue) }
+            rejoinBarHit: barHitReason.flatMap { ProximityMeshEndedReason(rawValue: $0.rawValue) }
         )
         return ProximityResumeProductRow(
-            outcome: outcome, barReason: barReason, offersForegroundResume: offers, inputs: inputs
+            outcome: outcome, barHitReason: barHitReason, offersForegroundResume: offers, inputs: inputs
         )
     }
 
-    /// The whole product: 29 outcomes × 2 offer flags × 9 bar reasons = 522 rows.
+    /// The whole product: 29 outcomes × 2 offer flags × 9 bar-hit reasons = 522 rows.
     ///
     /// - Returns: every row, enumerated.
-    static func productRows() -> [ProximityResumeProductRow] {
+    private static func productRows() -> [ProximityResumeProductRow] {
         var rows: [ProximityResumeProductRow] = []
         for outcome in allOutcomes() {
             for offers in [false, true] {
-                for barReason in barReasons() {
-                    rows.append(row(outcome: outcome, offers: offers, barReason: barReason))
+                for barHitReason in barReasons() {
+                    rows.append(row(outcome: outcome, offers: offers, barHitReason: barHitReason))
                 }
             }
         }
@@ -219,10 +230,13 @@ private struct ProximityEndedSentencePin {
     /// `MeshSessionRestoreOutcome.isRetryable` — ProximityKit's own answer, which is also the reason
     /// the deferral and the refusal present alike.
     ///
+    /// `private` for the same reason ``row(outcome:offers:barHitReason:)`` is: its parameter names a
+    /// file-scope `private` type (P1-2).
+    ///
     /// - Parameter row: One row of the product.
     /// - Returns: what the decisions table says that row presents.
-    static func oracle(_ row: ProximityResumeProductRow) -> ProximityResumePresentation {
-        if let reason = row.barReason, let ended = ProximityMeshEndedReason(rawValue: reason.rawValue) {
+    private static func oracle(_ row: ProximityResumeProductRow) -> ProximityResumePresentation {
+        if let reason = row.barHitReason, let ended = ProximityMeshEndedReason(rawValue: reason.rawValue) {
             return .ended(ended)
         }
         // Pass 2's correction: a launch whose restore has not CONCLUDED is silent by rule, not by
@@ -267,8 +281,8 @@ private struct ProximityEndedSentencePin {
         let rows = Self.productRows()
         #expect(Self.allOutcomes().count == 29,
                 "every MeshSessionRestoreOutcome case, payload variants included: 1 nil + 1 + 8 + 1 + 1 + 3 + 10 + 4")
-        #expect(Self.barReasons().count == 9, "eight sealed reasons that map, plus no bar at all")
-        #expect(rows.count == 522, "29 outcome values × 2 offer flags × 9 bar reasons — the whole product")
+        #expect(Self.barReasons().count == 9, "eight sealed reasons that map, plus no hit at all")
+        #expect(rows.count == 522, "29 outcome values × 2 offer flags × 9 bar-hit reasons — the whole product")
         var mismatch: String?
         var seen: Set<String> = []
         // R2: bounded by the enumerated product above.
@@ -280,19 +294,20 @@ private struct ProximityEndedSentencePin {
             }
         }
         #expect(mismatch == nil,
-                "a row disagreed with the decisions table: bar, then corrupt, then the retryable silence, then the offer")
+                "a row disagreed with the decisions table: the hit, then corrupt, then the retryable silence, then the offer")
         #expect(seen == ["nothing", "offerResume", "couldNotReopen", "ended"],
                 "and all four presentations are reached, so the agreement is not one answer everywhere")
     }
 
-    /// The nine (outcome, offer, bar) shapes a real launch can produce, each with a literal.
+    /// The nine (outcome, offer, hit) shapes a real launch can produce, each with a literal.
     ///
     /// Read off the shipping restore's own arms rather than off the policy:
     /// `MeshSessionStateMachine.restored(_:)` raises `offerForegroundResume` for `.resumable` and
-    /// nothing at all for `.none`; `restoreSessionContextAtLaunch(now:)` sets the bar directly on the
-    /// `terminated` arm; and the `.expired` arm's `markTerminated` reaches `barRejoin(reason:)` with
-    /// `hardDeadlineSigned`, because `MeshSessionEvent.contextRestored(.expired)` is the one
-    /// disposition that writes a reason.
+    /// nothing at all for `.none`; the `terminated` and `expired` arms raise the durable bar and no
+    /// offer, so at LAUNCH they carry no hit — nobody has tried anything — and the table answers
+    /// them with silence (pass 2 fix review, P1-3). The two `ended` rows below are therefore rows a
+    /// launch cannot produce by itself: they are a launch plus a refused TRY, which is the only way
+    /// `lastRejoinBarHit` is ever set, and they are here because that pair is what the user sees.
     @Test func theReachableLaunchOutcomesArePresentedAsTheRestoreArmsThem() {
         let rows = [
             ProximityResumeReachableRow(outcome: .notAttempted, offers: false, bar: nil, shows: .nothing),
@@ -301,20 +316,20 @@ private struct ProximityEndedSentencePin {
             ProximityResumeReachableRow(outcome: .refused, offers: false, bar: nil, shows: .nothing),
             ProximityResumeReachableRow(outcome: .corrupt, offers: false, bar: nil, shows: .couldNotReopen),
             ProximityResumeReachableRow(outcome: .resumable, offers: true, bar: nil, shows: .offerResume),
-            ProximityResumeReachableRow(outcome: .terminated, offers: false, bar: .ownDeparture,
-                                        shows: .ended(.ownDeparture)),
+            ProximityResumeReachableRow(outcome: .terminated, offers: false, bar: nil, shows: .nothing),
+            ProximityResumeReachableRow(outcome: .expired, offers: false, bar: nil, shows: .nothing),
             ProximityResumeReachableRow(outcome: .terminated, offers: false, bar: .verifiedTerminationRecord,
-                                        shows: .ended(.verifiedTerminationRecord)),
-            ProximityResumeReachableRow(outcome: .expired, offers: false, bar: .hardDeadlineSigned,
-                                        shows: .ended(.hardDeadlineSigned))
+                                        shows: .ended(.verifiedTerminationRecord))
         ]
-        #expect(rows.count == 9,
-                "the five state-machine arms, the terminated arm's two flavours, the quarantine and the nil outcome")
+        #expect(rows.count == 9, """
+            the five state-machine arms, the two ended launches that are now SILENT, the quarantine \
+            and the one refused try that earns the sentence
+            """)
         var wrong: String?
         // R2: bounded by the list above.
         for row in rows {
             let inputs = ProximityResumeInputs(
-                outcome: row.outcome, offersForegroundResume: row.offers, rejoinBarReason: row.bar
+                outcome: row.outcome, offersForegroundResume: row.offers, rejoinBarHit: row.bar
             )
             let decided = ProximityResumeDecision.decide(inputs)
             if decided != row.shows, wrong == nil {
@@ -322,6 +337,11 @@ private struct ProximityEndedSentencePin {
             }
         }
         #expect(wrong == nil, "a launch the shipping restore can really produce was presented wrongly")
+        let silent = rows.filter { $0.shows == .nothing }
+        #expect(silent.count == 6, """
+            and six of the nine say nothing at all, which is what a launch mostly owes a reader: \
+            two of them are ENDED contexts, the rows the fix made quiet
+            """)
     }
 
     // MARK: - The four presentations, one at a time
@@ -333,27 +353,27 @@ private struct ProximityEndedSentencePin {
     /// sentence about either would be a cold-start apology for something about to succeed.
     @Test func aDeferredRestoreSaysNothingAtAll() {
         let deferred = ProximityResumeInputs(
-            outcome: .deferred, offersForegroundResume: false, rejoinBarReason: nil
+            outcome: .deferred, offersForegroundResume: false, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(deferred) == .nothing,
                 "a deferral retries at the next protected-data rise and is never read as emptiness OR as news")
         let refused = ProximityResumeInputs(
-            outcome: .refused, offersForegroundResume: false, rejoinBarReason: nil
+            outcome: .refused, offersForegroundResume: false, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(refused) == .nothing,
                 "custody's refusal is retried the same way and says the same nothing")
         let staleOffer = ProximityResumeInputs(
-            outcome: .deferred, offersForegroundResume: true, rejoinBarReason: nil
+            outcome: .deferred, offersForegroundResume: true, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(staleOffer) == .nothing,
                 "and a restore that read nothing this launch offers nothing, whatever an earlier idle lapse left set")
         let notAttempted = ProximityResumeInputs(
-            outcome: .notAttempted, offersForegroundResume: false, rejoinBarReason: nil
+            outcome: .notAttempted, offersForegroundResume: false, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(notAttempted) == .nothing,
                 "and the window before the launch mount has run is silent too")
         let notAttemptedOffered = ProximityResumeInputs(
-            outcome: .notAttempted, offersForegroundResume: true, rejoinBarReason: nil
+            outcome: .notAttempted, offersForegroundResume: true, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(notAttemptedOffered) == .nothing, """
             and it is silent WITH the offer flag set, which is pass 2's correction: pass 1 left \
@@ -375,12 +395,12 @@ private struct ProximityEndedSentencePin {
     /// sealed on this device.
     @Test func aCorruptFileSaysItCouldNotBeReopenedAndThatNothingWasLost() {
         let inputs = ProximityResumeInputs(
-            outcome: .corrupt, offersForegroundResume: false, rejoinBarReason: nil
+            outcome: .corrupt, offersForegroundResume: false, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(inputs) == .couldNotReopen,
                 "the one outcome that owes the user a sentence")
         let offered = ProximityResumeInputs(
-            outcome: .corrupt, offersForegroundResume: true, rejoinBarReason: nil
+            outcome: .corrupt, offersForegroundResume: true, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(offered) == .couldNotReopen,
                 "and a file that did not decode is never offered as a resume")
@@ -391,22 +411,25 @@ private struct ProximityEndedSentencePin {
                 "the reassurance is half the decision, not decoration")
     }
 
-    /// A rejoin bar names the mesh as ENDED, never as failed, and it outranks the offer.
+    /// A rejoin bar HIT names the mesh as ENDED, never as failed, and it outranks everything.
     ///
-    /// Clause 1 of the table, and the clause worth a cell of its own: offering to resume a mesh this
-    /// device may never re-enter is an offer `rejoinRefusal(for:)` would refuse at both doors.
-    @Test func aRejoinBarNamesTheMeshAsEndedAndOutranksTheOffer() {
+    /// Clause 1 of the table, and the clause worth a cell of its own: the user has just tried to get
+    /// back into a mesh a door refused them (`rejoinRefusal(for:)`, enforced at both admission doors
+    /// and at the accept), so an offer standing beside the hit is an offer about a question they are
+    /// no longer asking. The HIT is the input, never the standing bar — see
+    /// ``aTerminatedOrExpiredContextIsSilentAtLaunchUntilTheUserTries()`` for the other half.
+    @Test func aRejoinBarHitNamesTheMeshAsEndedAndOutranksTheOffer() {
         var wrong: String?
         // R2: bounded by the enum's cases.
         for reason in ProximityMeshEndedReason.allCases {
             let inputs = ProximityResumeInputs(
-                outcome: .resumable, offersForegroundResume: true, rejoinBarReason: reason
+                outcome: .resumable, offersForegroundResume: true, rejoinBarHit: reason
             )
             if ProximityResumeDecision.decide(inputs) != .ended(reason), wrong == nil {
                 wrong = reason.rawValue
             }
         }
-        #expect(wrong == nil, "a barred mesh is ENDED even where the manager still offers a resume")
+        #expect(wrong == nil, "a refused try is ENDED even where the manager still offers a resume")
         let title: LocalizedStringKey? = "That session has ended."
         #expect(ProximityResumeCopy.title(.ended(.ownDeparture)) == title, "ended — never failed; nothing failed")
         let sentences = [
@@ -430,17 +453,57 @@ private struct ProximityEndedSentencePin {
         #expect(sentences.count == ProximityMeshEndedReason.allCases.count, "one pin per reason, no reason unpinned")
     }
 
+    /// **A launch onto an ended context says nothing at all** — the other half of clause 1.
+    ///
+    /// The defect this closes shipped for one pass (pass 2 fix review, P1-3): the bar was read as a
+    /// launch-derived fact, a `terminated` context is never reaped, an `expired` one is written back
+    /// AS terminated, and the card's dismissal is per-launch `@State` — so "That session has ended."
+    /// was re-presented on every cold start, for the rest of the install, to a reader who had done
+    /// nothing but open the app. Plan §24.1 asks for the sentence when the user TRIES; both kinds
+    /// are enumerated here against both offer flags, and every row is a literal.
+    @Test func aTerminatedOrExpiredContextIsSilentAtLaunchUntilTheUserTries() {
+        let terminated = ProximityResumeInputs(
+            outcome: .terminated, offersForegroundResume: false, rejoinBarHit: nil
+        )
+        #expect(ProximityResumeDecision.decide(terminated) == .nothing,
+                "a relaunch onto an ended session is not news, and it is not the user's doing")
+        let terminatedOffered = ProximityResumeInputs(
+            outcome: .terminated, offersForegroundResume: true, rejoinBarHit: nil
+        )
+        #expect(ProximityResumeDecision.decide(terminatedOffered) == .offerResume, """
+            and with an offer beside it the OFFER is what shows — an impossible row at launch (an \
+            ended context raises no offer), stated so the table's order is exercised either way
+            """)
+        let expired = ProximityResumeInputs(
+            outcome: .expired, offersForegroundResume: false, rejoinBarHit: nil
+        )
+        #expect(ProximityResumeDecision.decide(expired) == .nothing,
+                "a ceiling that passed while the process was gone is silent on the same rule")
+        let expiredOffered = ProximityResumeInputs(
+            outcome: .expired, offersForegroundResume: true, rejoinBarHit: nil
+        )
+        #expect(ProximityResumeDecision.decide(expiredOffered) == .offerResume,
+                "and the same impossible row, answered the same way")
+        let tried = ProximityResumeInputs(
+            outcome: .terminated, offersForegroundResume: false, rejoinBarHit: .finalPairTermination
+        )
+        #expect(ProximityResumeDecision.decide(tried) == .ended(.finalPairTermination),
+                "and THEN the sentence is owed: a door refused this device an entry this run")
+        #expect(ProximityResumeCopy.title(.nothing) == nil,
+                "so the silent launch draws no headline at all, whatever the sealed file records")
+    }
+
     /// The offer offers, and promises no reconnection.
     ///
     /// A restore arms no radio (invariant 5), so the second line says what is true: Fernlet is not
     /// looking for anyone until the user says so. The action behind the button is pass 2's.
     @Test func anOfferedResumeIsAnOfferAndPromisesNoReconnection() {
         let inputs = ProximityResumeInputs(
-            outcome: .resumable, offersForegroundResume: true, rejoinBarReason: nil
+            outcome: .resumable, offersForegroundResume: true, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(inputs) == .offerResume, "the one affordance the restore earns")
         let noOffer = ProximityResumeInputs(
-            outcome: .resumable, offersForegroundResume: false, rejoinBarReason: nil
+            outcome: .resumable, offersForegroundResume: false, rejoinBarHit: nil
         )
         #expect(ProximityResumeDecision.decide(noOffer) == .nothing,
                 "the flag IS the offer: a resumable context the machine did not offer says nothing")
@@ -649,7 +712,7 @@ private struct ProximityEndedSentencePin {
             let projection = MeshSessionResumeProjection(
                 outcome: MeshSessionResumeProjection.Outcome(restoring: row.outcome),
                 offersForegroundResume: row.offersForegroundResume,
-                rejoinBarReason: row.barReason
+                rejoinBarHit: row.barHitReason
             )
             let crossed = ProximityResumeDecision.decide(ProximityResumeInputs(projection: projection))
             if crossed != ProximityResumeDecision.decide(row.inputs), mismatch == nil {
@@ -662,7 +725,7 @@ private struct ProximityEndedSentencePin {
 
     // MARK: - The manager's own doors (pass 2)
 
-    /// A live context restores into an offer, no bar, and no radio.
+    /// A live context restores into an offer, no bar hit, and no radio.
     @Test func aRestoredLiveContextProjectsAnOfferAndNoBar() throws {
         let created = Date(timeIntervalSince1970: 1_800_000_000)
         let context = MeshSessionContext(
@@ -673,20 +736,22 @@ private struct ProximityEndedSentencePin {
         let projection = launch.manager.sessionResumeProjection
         #expect(projection.outcome == .resumable, "a live context well inside its ceiling")
         #expect(projection.offersForegroundResume, "the one restore arm that raises the offer")
-        #expect(projection.rejoinBarReason == nil, "nothing ended, so nothing is barred")
+        #expect(projection.rejoinBarHit == nil, "nothing ended, so no door has refused anything")
         #expect(ProximityResumeDecision.decide(ProximityResumeInputs(projection: projection))
                 == .offerResume, "which is the one presentation with an action behind it")
         #expect(launch.manager.currentMesh == nil, "and the restore itself adopted nothing")
         #expect(!launch.manager.isSearching, "and armed no radio — invariant 5")
     }
 
-    /// **The stale-bar negative.** The bar is matched to the mesh in hand, never read globally.
+    /// **The stale-bar negative.** A launch onto an ended context says NOTHING, and the standing bar
+    /// never reaches the surface — not for the mesh it names, and not for the next one either.
     ///
     /// The bar is durable and is cleared **nowhere** — `resetSessionStateMachine(keepingTerminalState:)`
-    /// says so by name — so a projection that exported `rejoinBar?.reason` would name whatever mesh
-    /// came NEXT as ended, with the previous one's reason, for the rest of the install. Both halves
-    /// are exercised: the matched read names the restored mesh's own reason, and once the run-scoped
-    /// context is gone the same standing bar names nothing.
+    /// says so by name — a `terminated` context is never reaped, and an `expired` one is written back
+    /// AS terminated. So a projection that exported it, however it was matched, told the Friends
+    /// surface "that session has ended" on every cold start for the rest of the install (pass 2 fix
+    /// review, P1-3). Three legs: the ended launch is silent, the standing bar still refuses at the
+    /// door where it belongs, and a FRESH mesh in hand is never named ended by the old bar.
     @Test func aTerminatedContextProjectsItsOwnMeshsBarAndNeverAnothers() throws {
         let created = Date(timeIntervalSince1970: 1_800_000_000)
         let meshID = UUID()
@@ -699,20 +764,29 @@ private struct ProximityEndedSentencePin {
         let projection = launch.manager.sessionResumeProjection
         #expect(projection.outcome == .terminated, "the file already records an ending")
         #expect(!projection.offersForegroundResume, "an ended mesh is never offered")
-        #expect(projection.rejoinBarReason == .finalPairTermination, "the bar, matched to that mesh")
+        #expect(projection.rejoinBarHit == nil, "and nothing was HIT: the reader has only opened the app")
         #expect(ProximityResumeDecision.decide(ProximityResumeInputs(projection: projection))
-                == .ended(.finalPairTermination), "ENDED, never failed — nothing failed")
+                == .nothing, "so the launch is SILENT — the sentence waits for a try")
         #expect(launch.manager.rejoinBar?.meshID == meshID, "the durable bar names exactly one mesh")
+        #expect(launch.manager.rejoinRefusal(for: meshID) == .finalPairTermination,
+                "and still refuses at the door, which is where a bar is enforced")
         #expect(launch.manager.rejoinRefusal(for: UUID()) == nil,
                 "and refuses nothing for a mesh it was never raised for")
         launch.manager.leaveMesh()
         #expect(launch.manager.rejoinBar?.reason == .finalPairTermination,
                 "leaving keeps the durable half: the bar is cleared nowhere")
         #expect(launch.manager.restoredSessionContext == nil, "the restored context is run-scoped and went")
-        #expect(launch.manager.sessionResumeProjection.rejoinBarReason == nil, """
-            so with no mesh in hand the projection names no bar — a global `rejoinBar?.reason` read \
-            would still be telling the Friends surface that a session had ended
+        #expect(launch.manager.sessionResumeProjection.rejoinBarHit == nil,
+                "and the projection still names no bar, because none has been hit")
+        launch.manager.currentMesh = MeshP3Acceptance.mesh(for: launch.manager)
+        #expect(launch.manager.sessionResumeProjection.rejoinBarHit == nil, """
+            and a mesh held AFTER the ending is never named ended by the old bar — the defect a \
+            global `rejoinBar?.reason` read shipped, with mesh A's reason, about mesh B
             """)
+        #expect(ProximityResumeDecision.decide(
+            ProximityResumeInputs(projection: launch.manager.sessionResumeProjection)) == .nothing,
+            "which the surface reads as silence, beside the session it is actually in")
+        launch.manager.leaveMesh()
     }
 
     /// **Accepting adopts the restored context, clears the offer, and arms nothing.**
@@ -733,7 +807,7 @@ private struct ProximityEndedSentencePin {
         let audit = ProximityResumeAuditCapture()
         audit.install()
         defer { audit.uninstall() }
-        #expect(launch.manager.acceptForegroundResume(now: created.addingTimeInterval(120)),
+        #expect(launch.manager.acceptForegroundResume(now: created.addingTimeInterval(120)) == .accepted,
                 "the offer was standing and the context was there")
         #expect(launch.manager.currentMesh?.meshID == meshID, "the restored context IS the mesh now")
         #expect(launch.manager.currentMesh?.createdAt == created,
@@ -748,10 +822,15 @@ private struct ProximityEndedSentencePin {
         #expect(ProximityResumeDecision.decide(
             ProximityResumeInputs(projection: launch.manager.sessionResumeProjection)) == .nothing,
             "and the card goes quiet on its own, with no second state to keep in step")
-        #expect(!launch.manager.acceptForegroundResume(now: created.addingTimeInterval(180)),
-                "a second accept is refused rather than re-adopting")
+        #expect(launch.manager.acceptForegroundResume(now: created.addingTimeInterval(180))
+                == .refused(.noOffer), """
+            a second accept is refused rather than re-adopting, and the refusal NAMES its guard — \
+            the spent offer, which is the first one it meets
+            """)
         #expect(audit.count("mesh.sessionResume.accepted") == 1, "so nothing is audited twice")
         #expect(audit.count("mesh.sessionResume.refused") == 1, "the refusal says so in its own line")
+        #expect(audit.reasons(of: "mesh.sessionResume.refused") == ["noOffer"],
+                "with the frozen token it has always logged, unchanged by the outcome type")
         launch.manager.leaveMesh()
     }
 
@@ -785,6 +864,59 @@ private struct ProximityEndedSentencePin {
         #expect(ProximityResumeDecision.decide(
             ProximityResumeInputs(projection: launch.manager.sessionResumeProjection)) == .nothing,
             "and the offer is not re-presented on the next visit to the tab")
+    }
+
+    /// **The hit is raised by a refused TRY and cleared by the next founding** (pass 2 fix review,
+    /// P1-3f) — the whole life of the fact the `ended` clause now reads.
+    ///
+    /// Three phases on real managers: an ended context restored at launch publishes NO hit (the
+    /// silence the fix exists for); an offer answered after the session ended underneath it is
+    /// refused at the bar, which is the user trying, and the refusal names the reason; and founding
+    /// the next mesh takes the notice down, because the hit is run-scoped and
+    /// `resetSessionStateMachine(keepingTerminalState:)` — which every founding runs — clears it.
+    ///
+    /// The try is driven through `acceptForegroundResume(now:)`, the one barred door a cell can
+    /// reach: the descriptor and admission-grant doors are `private` and need a committed slot and a
+    /// sealed envelope to enter, while this one is public and takes the same `rejoinRefusal(for:)`
+    /// answer. The departure raises the bar for the RESTORED mesh (`barRejoin(reason:)` coalesces
+    /// `currentMesh` then `restoredSessionContext`) and resets nothing, so the offer is still
+    /// standing when the user taps — which is exactly the race the sentence exists for.
+    @Test func aRejoinBarHitIsRaisedByARefusedTryAndClearedByTheNextFounding() throws {
+        let created = Date(timeIntervalSince1970: 1_800_000_000)
+        let ended = MeshSessionContext(
+            meshID: UUID(), protocolVersion: 3, createdAt: created,
+            hardDeadline: created.addingTimeInterval(MeshSessionCeiling.ceilingSeconds),
+            localTermination: MeshSessionLocalTermination(reason: .verifiedTerminationRecord, at: created)
+        )
+        let atLaunch = try ProximityResumeLaunch(sealing: ended, at: created.addingTimeInterval(60))
+        #expect(atLaunch.manager.lastRejoinBarHit == nil, "a launch refuses nothing: nobody has tried")
+        #expect(atLaunch.manager.sessionResumeProjection.rejoinBarHit == nil,
+                "so the projection carries no hit, and the card says nothing on this cold start")
+        let live = MeshSessionContext(
+            meshID: UUID(), protocolVersion: 3, createdAt: created,
+            hardDeadline: created.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
+        )
+        let launch = try ProximityResumeLaunch(sealing: live, at: created.addingTimeInterval(60))
+        _ = DeviceBindingID.$testOverride.withValue(.identifier(ProximityResumeLaunch.install)) {
+            launch.manager.applySessionEvent(.departureRequested)
+        }
+        #expect(launch.manager.rejoinRefusal(for: live.meshID) == .ownDeparture, "the bar is up for that mesh")
+        #expect(launch.manager.offersForegroundResume, "and the offer the card is showing still stands")
+        #expect(launch.manager.acceptForegroundResume(now: created.addingTimeInterval(120))
+                == .refused(.rejoinBarred(.ownDeparture)), "so the tap is refused, and the refusal says why")
+        #expect(launch.manager.lastRejoinBarHit == .ownDeparture, "which is the HIT this run")
+        #expect(ProximityResumeDecision.decide(
+            ProximityResumeInputs(projection: launch.manager.sessionResumeProjection))
+            == .ended(.ownDeparture), "and the card answers in the same turn: that session has ended")
+        #expect(launch.manager.currentMesh == nil, "the refused try adopted nothing")
+        _ = DeviceBindingID.$testOverride.withValue(.identifier(ProximityResumeLaunch.install)) {
+            launch.manager.promoteToMeshForTesting()
+        }
+        #expect(launch.manager.lastRejoinBarHit == nil, "founding the next mesh takes the notice down with it")
+        #expect(ProximityResumeDecision.decide(
+            ProximityResumeInputs(projection: launch.manager.sessionResumeProjection)) == .nothing,
+            "so a session that really started is never captioned with the last one's ending")
+        launch.manager.leaveMesh()
     }
 
     /// **An unanswered offer HOLDS the fresh search**, and answering it releases the hold.
@@ -839,27 +971,102 @@ private struct ProximityEndedSentencePin {
     /// radios still standing where the last push left them, and adopting it from two places would be
     /// two owners of one act.
     ///
-    /// Three claims, each counted rather than asserted: exactly one occurrence across the whole app
-    /// target; that occurrence inside the brace-matched body of `resumeLastSession()`, with
-    /// `runPolicyHost.pushNow()` AFTER it; and the card itself naming no radio, no door and no
-    /// manager, because it is a pure view over a decided value.
+    /// Four claims, each counted rather than asserted: exactly one occurrence of each door across
+    /// the whole app target; each inside the brace-matched body of its own action
+    /// (`resumeLastSession()`, `dismissResumeCard()`), with `runPolicyHost.pushNow()` AFTER it; and
+    /// the card itself naming no radio, no door and no manager, because it is a pure view over a
+    /// decided value.
+    ///
+    /// **The decline is walled beside the accept** (pass 2 fix review, P2-1). It is the other half of
+    /// one answer and it has the same two-owner failure mode: the offer HOLDS the fresh search
+    /// (`ProximityRunStateSeam.resumeOffered`), so a decline that did not re-decide the policy would
+    /// leave the radios held for a hold nobody is under any more, and a second call site would be a
+    /// second owner of the user's "not now".
     @Test func theResumeAcceptanceHasOneAppCallSiteAndHandsTheRadiosBack() throws {
         let sources = try ProximityRunPolicyHostTests.appSources()
         #expect(!sources.isEmpty, "the App/ sweep found no Swift files at all")
         #expect(sources.contains(where: { $0.name == "ProximityResumeCard.swift" }),
                 "the sweep no longer reaches the card, so every count below is vacuous")
         var sites: [String] = []
+        var declineSites: [String] = []
         var calls = 0
+        var declines = 0
         // R2: bounded by the app target's own file list.
         for source in sources {
             let hits = ProximityRunPolicyHostTests.occurrences(of: "acceptForegroundResume(", in: source.code)
-            guard hits > 0 else { continue }
+            let declined = ProximityRunPolicyHostTests.occurrences(of: "declineForegroundResume(", in: source.code)
             calls += hits
-            sites.append(source.name)
+            declines += declined
+            if hits > 0 { sites.append(source.name) }
+            if declined > 0 { declineSites.append(source.name) }
         }
         #expect(sites == ["ConnectView.swift"], "the resume is accepted from exactly one file")
         #expect(calls == 1, "and from exactly one call site inside it")
+        #expect(declineSites == ["ConnectView.swift"], "and declined from exactly one file")
+        #expect(declines == 1, "and from exactly one call site inside it")
         try Self.expectTheAcceptanceHandsTheRadiosBack()
+        try Self.expectTheDeclineHandsTheRadiosBack()
+    }
+
+    /// The decline's half of the third wall: one action, and the policy re-decided after it.
+    private static func expectTheDeclineHandsTheRadiosBack() throws {
+        let connect = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/ConnectView.swift")
+        )
+        let action = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "private func dismissResumeCard(", in: connect),
+            "the dismissal action was renamed, or its brace-matched body does not close"
+        )
+        let decline = try #require(action.range(of: "declineForegroundResume("),
+                                   "the one decline no longer sits inside the dismissal action")
+        let push = try #require(action.range(of: "runPolicyHost.pushNow()"), """
+            the dismissal no longer hands the radios back, so the fresh search would stay held for \
+            an offer the user has already answered
+            """)
+        #expect(decline.lowerBound < push.lowerBound,
+                "the policy is re-decided AFTER the offer is cleared, or the hold is still standing")
+    }
+
+    /// **An accepted resume raises the session surface the tab chrome already assumes** (pass 2 fix
+    /// review, P1-1).
+    ///
+    /// The strand is a two-predicate disagreement, so it is stated over both: the accept sets
+    /// `currentMesh`, `ContentView.isDisposableCameraSessionActive` reads `isInSession` alone and
+    /// dresses the Social tab in camera chrome (no tab bar, no bottom clearance, dark background),
+    /// while `FriendsView.body` swaps to the camera on `isInSession && sessionReady` — and nothing
+    /// on the resume path wrote `sessionReady`. The album would have been drawn in camera chrome
+    /// with no tab bar to leave by. A source cell rather than a behaviour one because the flag is
+    /// `@State` on a `View`: the two spellings that must agree are both in source, and the tap
+    /// itself is `ProximityResumeCardUITests`'s.
+    @Test func theAcceptedResumeRaisesTheSessionSurfaceTheTabChromeAssumes() throws {
+        let connect = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/ConnectView.swift")
+        )
+        let action = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "private func resumeLastSession(", in: connect),
+            "the resume action was renamed, or its brace-matched body does not close"
+        )
+        #expect(action.contains("sessionReady = true"), """
+            an accepted resume no longer raises the session surface: `isInSession` flips, the tab \
+            loses its bar to the camera chrome, and `body` keeps drawing the album underneath it
+            """)
+        #expect(action.contains("== .accepted"),
+                "and it raises it for an ACCEPT alone — a refused try adopts nothing and shows a notice")
+        #expect(connect.contains("if manager.isInSession && sessionReady {"),
+                "non-vacuity: the swap the flag exists for is still the predicate it is read by")
+        let content = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/ContentView.swift")
+        )
+        let chrome = try #require(
+            MeshRoutedSourceScan.bracedBody(
+                after: "private var isDisposableCameraSessionActive: Bool", in: content
+            ),
+            "the camera-chrome predicate was renamed, so the disagreement below is unmeasured"
+        )
+        #expect(chrome.contains("meshNetworkManager.isInSession"),
+                "the chrome half still reads `isInSession` — which is why the accept must raise the flag")
+        #expect(!chrome.contains("sessionReady"),
+                "and it cannot read a view's `@State`, which is exactly why the two can disagree")
     }
 
     /// The containment half of the third wall, split out only to stay inside the 60-line rule.
@@ -913,6 +1120,16 @@ private final class ProximityResumeLaunch {
 
     /// Seals `context` into a fresh, per-test session scope and runs the launch mount over it.
     ///
+    /// **The radio is the in-memory fake**, not this build's. Every cell here asserts that nothing
+    /// arms a radio, and one of them founds the next mesh (`promoteToMeshForTesting()`), whose
+    /// success ends in `updateDiscoveryInfo()` — a real `MeshMultipeerSession` would start a live
+    /// advertiser out of a unit test. The fake changes nothing else: `isSearching` is the manager's
+    /// own flag either way.
+    ///
+    /// `_ =` on the binding because the closure YIELDS: `restoreSessionContextOncePerLaunch(now:)`
+    /// answers a `Bool`, so a single-expression closure makes `withValue` return one (pass 2 fix
+    /// review, P2-5).
+    ///
     /// - Parameters:
     ///   - context: The sealed context this launch finds on the disk.
     ///   - now: The instant the restore judges the ceiling against.
@@ -920,8 +1137,8 @@ private final class ProximityResumeLaunch {
         let host = makeTestStore()
         let sessionStore = MeshSessionStore(scope: host.meshSessionStorage)
         try MeshSessionStoreFixtures.save(context, into: sessionStore, install: Self.install)
-        let restored = MeshNetworkManager(store: host)
-        DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+        let restored = MeshNetworkManager(store: host, transport: FakeMeshTransportSession())
+        _ = DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
             restored.restoreSessionContextOncePerLaunch(now: now)
         }
         store = host

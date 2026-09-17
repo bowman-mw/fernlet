@@ -28,6 +28,10 @@ import XCTest
 // NOT RUN BY THE LANDING SESSION: there is no Swift toolchain in the environment this suite was
 // written in, so nothing here has been compiled or executed. It is offered as written, and the first
 // run of the round's gauntlet is what proves it.
+//
+// NOT RUN BY CI EITHER: `FernletUITests` is named in no workflow — `.github/workflows` holds
+// `pages.yml`, `power-of-10.yml` and `s3-wall.yml`, and none of them mentions it — so this suite
+// runs exactly when somebody runs it from a Mac session, and never on a push.
 
 final class ProximityResumeCardUITests: XCTestCase {
 
@@ -51,6 +55,13 @@ final class ProximityResumeCardUITests: XCTestCase {
     /// The launch switch that forces one presentation.
     private static let presentationKey = "FERNLET_MESH_RESUME_PRESENTATION"
 
+    /// The Friends album surface's own header — "the surface is up", as `ScreenHeader` publishes it.
+    private static let screen = "screen.friends"
+
+    /// The disposable camera's shutter: the element that exists only while the in-session surface
+    /// has replaced the album (`DisposableCameraView`).
+    private static let shutter = "camera.shutter"
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
@@ -59,14 +70,23 @@ final class ProximityResumeCardUITests: XCTestCase {
 
     /// Launches with one forced presentation and lands on the Friends tab.
     ///
+    /// **It waits for the surface, not just for the tap.** The tab button existing says the tab bar
+    /// rendered; it says nothing about the Friends surface having drawn, and every assertion below
+    /// is about something on that surface — an absence cell would pass against a screen that had not
+    /// appeared yet. `screen.friends` is the album layout's own `ScreenHeader` identifier, which is
+    /// what the silence cell already anchors on.
+    ///
     /// - Parameter token: The `FERNLET_MESH_RESUME_PRESENTATION` value.
-    /// - Returns: the launched app, already on the Friends tab.
+    /// - Returns: the launched app, already on the Friends tab, with its surface up.
     @MainActor
     private func launchOnFriends(_ token: String) -> XCUIApplication {
         let app = UXTestApp.launch(extraEnvironment: [Self.presentationKey: token])
         let friends = app.buttons["Friends"].firstMatch
         XCTAssertTrue(friends.waitForExistence(timeout: 10), "the Friends tab button never appeared")
         friends.tap()
+        let screen = app.descendants(matching: .any)[Self.screen]
+        XCTAssertTrue(screen.waitForExistence(timeout: 10),
+                      "the Friends surface never rendered, so nothing asserted about it means anything")
         return app
     }
 
@@ -168,10 +188,59 @@ final class ProximityResumeCardUITests: XCTestCase {
     @MainActor
     func testNothingPresentsNoCardAtAll() throws {
         let app = launchOnFriends("nothing")
-        XCTAssertTrue(app.descendants(matching: .any)["screen.friends"].waitForExistence(timeout: 10),
+        XCTAssertTrue(app.descendants(matching: .any)[Self.screen].exists,
                       "the Friends surface never rendered, so the absence below proves nothing")
         XCTAssertFalse(cardElement(in: app).exists, "a silent restore drew a card")
         XCTAssertFalse(app.buttons[Self.accept].exists, "and offered a resume")
         XCTAssertFalse(app.buttons[Self.dismiss].exists, "and something to dismiss")
+    }
+
+    // MARK: - The accept
+
+    /// Tapping the accept pill leaves this tab USABLE — the strand negative (pass 2 fix review,
+    /// P1-1).
+    ///
+    /// **What this override can and cannot drive, stated plainly.**
+    /// `FERNLET_MESH_RESUME_PRESENTATION` substitutes the whole decision, so the card's shape here
+    /// is forced rather than derived — and, more to the point, the launch it forces has no sealed
+    /// context and no standing offer behind it, so the manager's real door
+    /// (`acceptForegroundResume(now:)`) refuses this tap at its first guard and adopts nothing. A
+    /// REAL accept therefore cannot be driven from here at all: it needs a sealed
+    /// `MeshSessionContext` inside its six-hour ceiling, written by a previous run, which is the
+    /// thing this whole suite exists because a single device cannot make.
+    ///
+    /// So what is pinned is the INVARIANT, which holds whichever way the tap went — and it has to
+    /// be written that way, because the simulator's container is not reset between runs: a sealed
+    /// context left inside its ceiling by an earlier run would make this tap a real accept. Either
+    /// the camera surface is up (the resume was adopted, and `sessionReady` rose with it), or it is
+    /// not and the album is still the album, with the floating tab bar still there to leave by.
+    /// The strand is exactly the third state — camera chrome, no camera, no tab bar — and it is the
+    /// one this cell forbids.
+    ///
+    /// The card itself is not asserted about: under the override the presentation is a constant, so
+    /// it stays up whatever the door answered. In shipping the projection takes it down
+    /// (`offersForegroundResume` is spent) or replaces it with the ended notice (a barred try raises
+    /// the hit); both are pinned at tier 1 in `ProximityResumeDecisionTests`, where a sealed context
+    /// is one line.
+    @MainActor
+    func testAcceptingTheOfferNeverStrandsTheFriendsTab() throws {
+        let app = launchOnFriends("offerResume")
+        let accept = app.buttons[Self.accept]
+        XCTAssertTrue(accept.waitForExistence(timeout: 10), "the accept action never appeared")
+        accept.tap()
+        let cameraCameUp = app.descendants(matching: .any)[Self.shutter].waitForExistence(timeout: 5)
+        if cameraCameUp {
+            XCTAssertFalse(app.descendants(matching: .any)[Self.screen].exists, """
+                the camera surface and the album are both up, so the Social tab is drawing two \
+                session states at once
+                """)
+        } else {
+            XCTAssertTrue(app.descendants(matching: .any)[Self.screen].exists,
+                          "no camera came up and the album is gone: the tab is drawing nothing at all")
+            XCTAssertTrue(app.buttons["Friends"].firstMatch.exists, """
+                the tab bar is gone with no camera to justify it — the Social tab took the camera \
+                chrome (ContentView drops the bar on `isInSession`) over the album, with no way back
+                """)
+        }
     }
 }

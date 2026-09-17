@@ -2019,6 +2019,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// - Parameter keepingTerminalState: `true` when a session ENDED — `departed`/`terminated`/
     ///   `expired` is the answer to "what happened to it", and only a new session resets that. The
     ///   rejoin bar is never cleared here; it is the durable half and it outlives every session.
+    ///   ``lastRejoinBarHit`` is the opposite case and IS cleared here: it is the run-scoped record
+    ///   of a refusal, and this is the one place every founding
+    ///   (``foundMesh(_:now:)``), the newborn-mesh yield's unwind and ``startJoin()`` pass through.
     private func resetSessionStateMachine(keepingTerminalState: Bool) {
         sessionCeiling = nil
         sessionMonotonicOrigin = nil
@@ -2027,6 +2030,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         lastSessionTransitionRejection = nil
         clearMergeWindow()
         offersForegroundResume = false
+        lastRejoinBarHit = nil
         idleLapseDeadline = nil
         // Presence is run-scoped: a new session has looked at nothing yet, and carrying a stale
         // branch view across one would scope the next session's rotation to the last one's branch.
@@ -9357,7 +9361,16 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     var awaitingResumeMerge: Bool { mergeWindow != nil }
 
     /// Whether the foreground may offer a resume for a restored or idle-stopped session.
-    @ObservationIgnored private(set) var offersForegroundResume = false
+    ///
+    /// **Observed, alone among the restore's four properties** (P7 item 5 pass 2 fix review, P2-4).
+    /// The other three are launch book-keeping nothing displays, but this one is the offer ITSELF,
+    /// and it moves at two instants a surface is already on screen for: a restore that DEFERRED at
+    /// launch and then succeeded at the next protected-data rise
+    /// (``retrySessionRestoreIfPending(now:)``) raises it after `FriendsView.body` has already run,
+    /// and ``acceptForegroundResume(now:)`` lowers it again. Ignoring it left the first of those
+    /// raising an offer nobody repainted for — the card would appear on the next unrelated
+    /// invalidation, or not at all.
+    private(set) var offersForegroundResume = false
 
     /// Plan §10.6's development decision, as the last development actually took it: which ending,
     /// which custodians, and the instant the 15-second window opened. Memory-only — a decision, not
@@ -9393,6 +9406,26 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// The mesh this device may never rejoin, and why (plan §8.2's permanent bar). Re-derived from
     /// the sealed context at every launch, so a restart cannot resurrect an ended session.
     @ObservationIgnored private(set) var rejoinBar: MeshSessionRejoinBar?
+
+    /// **The bar as a HIT, not as a standing fact**: the reason carried by the last entry
+    /// ``rejoinRefusal(for:)`` actually REFUSED this run, or nil while nothing has been refused.
+    ///
+    /// ``rejoinBar`` above is durable and permanent — a device that ended mesh A holds A's bar for
+    /// the rest of the install — so a surface written over the standing bar says "that session has
+    /// ended" on **every** cold start until some new session overwrites the sealed file. That is the
+    /// defect this property exists to close: plan §24.1 owes the user a sentence about a mesh that
+    /// ended when they TRY to get back into it, and nothing at all when they merely relaunch. So the
+    /// bar is announced at the three doors that enforce it against THIS device
+    /// (``handleMeshDescriptor(_:from:)``, ``handleAdmissionGrant(_:slot:senderSigningPublicKey:)``
+    /// and ``acceptForegroundResume(now:)``'s barred refusal) and nowhere else.
+    ///
+    /// **Run-scoped, and observed.** It is cleared wherever the run-scoped facts clear
+    /// (``resetSessionStateMachine(keepingTerminalState:)``, which every founding, the newborn-mesh
+    /// yield's unwind and ``startJoin()`` all run) and by a successful accept, so a session that
+    /// really starts takes the notice down with it. It is deliberately NOT `@ObservationIgnored`,
+    /// unlike the four restore properties beside it: a hit happens while a surface is on screen and
+    /// is the one fact here a view must repaint for in the same turn it is recorded.
+    private(set) var lastRejoinBarHit: MeshSessionTerminationReason?
 
     /// The context a launch restore opened, kept only until a session is joined or the restore is
     /// discarded. It is what lets an expiry found at launch be written back.
@@ -10295,35 +10328,43 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     // MARK: Launch restore (the surface's half — P7 item 5 pass 2)
 
     /// **The one thing the launch restore exports** (plan §24.1): the outcome kind, the offer flag,
-    /// and the rejoin bar's reason **for the mesh this device is actually holding**.
+    /// and the rejoin bar **as a hit this run**.
     ///
     /// Read-only, computed, and the only public reader of `lastSessionRestoreOutcome`,
-    /// ``offersForegroundResume`` and ``rejoinBar`` there is. The app's
+    /// ``offersForegroundResume`` and ``lastRejoinBarHit`` there is. The app's
     /// `ProximityResumeDecision.decide(_:)` is the one consumer, through
     /// `ProximityResumeInputs(projection:)`; nothing here decides anything.
     ///
-    /// **The bar is matched, not read globally**, and that is the whole reason this is a computed
-    /// projection rather than three `public` property wrappers. ``rejoinBar`` is the durable half of
-    /// plan §8.2 and is cleared **nowhere** — ``resetSessionStateMachine(keepingTerminalState:)``
-    /// says so by name — so a device that ended mesh A and later founded mesh B still holds A's bar.
-    /// Exporting `rejoinBar?.reason` would tell the Friends surface that B has ENDED, with A's
-    /// reason, on every launch for the rest of the install. ``rejoinRefusal(for:)`` is the answer the
-    /// two admission doors actually enforce, so it is the answer the surface shows.
+    /// **The bar is a HIT, not a standing fact** (P7 item 5 pass 2 fix review, P1-3). ``rejoinBar``
+    /// is durable and is cleared **nowhere** — ``resetSessionStateMachine(keepingTerminalState:)``
+    /// says so by name — and a `terminated` context is never reaped while an `expired` one is
+    /// written back AS terminated, so a projection derived from the bar at LAUNCH re-presented "that
+    /// session has ended" on every cold start for the rest of the install. Matching the bar to the
+    /// mesh in hand did not close that: at launch the mesh in hand IS the mesh the bar names.
+    /// ``lastRejoinBarHit`` is the fact the plan actually asks for — what a rejoin bar looks like
+    /// when the user TRIES anyway — so a `terminated` or `expired` launch is silent (both carry
+    /// `offersForegroundResume == false`) until a door refuses an entry.
     ///
-    /// The restored context's id comes first in the coalesce: at launch there is no mesh yet, and
-    /// after ``acceptForegroundResume(now:)`` the two name the same mesh.
-    ///
-    /// **Observation**: the four properties behind this are `@ObservationIgnored`, and deliberately
-    /// stay so. The one transition a surface must repaint on is the accept, which moves
-    /// ``currentMesh`` — an observed property this projection reads — and a decline is driven by the
-    /// view's own state. Registering the restore's book-keeping for observation would invalidate
-    /// every view on a launch-time write nothing displays.
+    /// **Observation**: both ids are bound and read **unconditionally**, before anything is decided.
+    /// The old spelling coalesced them (`restoredSessionContext?.meshID ?? currentMesh?.meshID`),
+    /// which short-circuited exactly while the offer stood — so the accept, whose whole job is to
+    /// move ``currentMesh``, moved nothing this projection had read. Neither id decides anything
+    /// now; the READ is the dependency. The two facts that do decide are observed as well:
+    /// ``offersForegroundResume`` (un-ignored by this same review) and ``lastRejoinBarHit``, so a
+    /// deferred-then-retried restore that finally raises an offer, an accept that spends it, and a
+    /// refused try that raises a hit all repaint in the turn they happen.
     public var sessionResumeProjection: MeshSessionResumeProjection {
-        let meshID = restoredSessionContext?.meshID ?? currentMesh?.meshID
+        // Read for the DEPENDENCY, not for the value (see the doc above): `currentMesh` is observed,
+        // and the old `restoredSessionContext?.meshID ?? currentMesh?.meshID` skipped it for exactly
+        // as long as the offer stood. Neither id decides anything now, so the pair is discarded
+        // where a reader can see that it is the READ that is load-bearing.
+        let heldMeshID = currentMesh?.meshID
+        let restoredMeshID = restoredSessionContext?.meshID
+        _ = (heldMeshID, restoredMeshID)
         return MeshSessionResumeProjection(
             outcome: MeshSessionResumeProjection.Outcome(restoring: lastSessionRestoreOutcome),
             offersForegroundResume: offersForegroundResume,
-            rejoinBarReason: meshID.flatMap { rejoinRefusal(for: $0) }
+            rejoinBarHit: lastRejoinBarHit
         )
     }
 
@@ -10357,20 +10398,27 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// already holds, against a rejoin bar for that same mesh, or after the session has ended, it
     /// changes nothing and audits why.
     ///
+    /// **The refusal carries its REASON**, and one of the five is load-bearing for the surface (P7
+    /// item 5 pass 2 fix review, P1-3d): a `rejoinBarred` refusal is the user TRYING to re-enter a
+    /// mesh that ended, which is the one moment plan §24.1 owes them the "that session has ended"
+    /// sentence. A `Bool` could not say which refusal happened, so the card had no way to tell a
+    /// barred try from an idempotent second tap.
+    ///
     /// - Parameter now: The instant this run of the resumed session begins — the monotonic ceiling's
     ///   origin. The signed bound is the context's own `hardDeadline`, never six fresh hours.
-    /// - Returns: `true` when the restored context was adopted.
+    /// - Returns: ``MeshForegroundResumeOutcome/accepted`` when the restored context was adopted, or
+    ///   ``MeshForegroundResumeOutcome/refused(_:)`` naming which guard closed.
     @discardableResult
-    public func acceptForegroundResume(now: Date = Date()) -> Bool {
-        guard offersForegroundResume else { return refuseForegroundResume(Self.resumeNoOffer) }
+    public func acceptForegroundResume(now: Date = Date()) -> MeshForegroundResumeOutcome {
+        guard offersForegroundResume else { return refuseForegroundResume(.noOffer) }
         guard let context = restoredSessionContext else {
-            return refuseForegroundResume(Self.resumeNoContext)
+            return refuseForegroundResume(.noContext)
         }
-        guard currentMesh == nil else { return refuseForegroundResume(Self.resumeMeshHeld) }
-        guard rejoinRefusal(for: context.meshID) == nil else {
-            return refuseForegroundResume(Self.resumeBarred)
+        guard currentMesh == nil else { return refuseForegroundResume(.meshHeld) }
+        if let barred = rejoinRefusal(for: context.meshID) {
+            return refuseForegroundResume(.rejoinBarred(barred))
         }
-        guard !sessionState.hasEnded else { return refuseForegroundResume(Self.resumeSessionEnded) }
+        guard !sessionState.hasEnded else { return refuseForegroundResume(.sessionEnded) }
         currentMesh = restoredMeshDescriptor(from: context)
         // The quota counter is pinned to the mesh it belongs to, exactly as `promoteToMesh()` pins
         // it, so the adoption cannot read as a new mesh and hand back a free film quota.
@@ -10381,8 +10429,12 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             startSessionCeiling(hardDeadline: context.hardDeadline, startedAt: now)
         }
         offersForegroundResume = false
+        // A session that really started takes any standing "that session has ended" notice down with
+        // it: the hit is run-scoped, and this is the one adoption that does not run
+        // `resetSessionStateMachine(keepingTerminalState:)` on its way in.
+        lastRejoinBarHit = nil
         FernletAuditLog.log("mesh.sessionResume.accepted")
-        return true
+        return .accepted
     }
 
     /// **Declines the foreground resume**, so the offer is not re-presented on the next tab visit.
@@ -10400,28 +10452,23 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         FernletAuditLog.log("mesh.sessionResume.declined")
     }
 
-    /// Frozen refusal token: ``acceptForegroundResume(now:)`` with no offer standing.
-    static let resumeNoOffer = "noOffer"
-
-    /// Frozen refusal token: an offer with no restored context behind it.
-    static let resumeNoContext = "noContext"
-
-    /// Frozen refusal token: a mesh is already held, so there is nothing to adopt into.
-    static let resumeMeshHeld = "meshHeld"
-
-    /// Frozen refusal token: the restored mesh carries a permanent rejoin bar.
-    static let resumeBarred = "rejoinBarred"
-
-    /// Frozen refusal token: this device's participation has already ended.
-    static let resumeSessionEnded = "sessionEnded"
-
-    /// Audits one refused resume and answers `false`, so every guard above is one line.
+    /// Records one refused resume and answers it, so every guard above is one line.
     ///
-    /// - Parameter reason: One of the five frozen tokens above. English forever, never display copy.
-    /// - Returns: `false`, always.
-    private func refuseForegroundResume(_ reason: String) -> Bool {
-        FernletAuditLog.log("mesh.sessionResume.refused", context: ["reason": reason])
-        return false
+    /// **The barred refusal is the one that publishes a HIT.** It is the user trying to re-enter a
+    /// mesh that ended, and ``lastRejoinBarHit`` is what turns that try into the Friends surface's
+    /// "that session has ended" — so the write lives here, beside the audit line, rather than at the
+    /// guard, and there is exactly one audit line per hit (the existing
+    /// `mesh.sessionResume.refused`, with the same frozen `reason` token it always carried).
+    ///
+    /// - Parameter reason: Which guard closed. Its ``MeshForegroundResumeOutcome/Reason/token`` is
+    ///   frozen English forever, never display copy.
+    /// - Returns: the refusal, wrapped.
+    private func refuseForegroundResume(
+        _ reason: MeshForegroundResumeOutcome.Reason
+    ) -> MeshForegroundResumeOutcome {
+        if case .rejoinBarred(let barred) = reason { lastRejoinBarHit = barred }
+        FernletAuditLog.log("mesh.sessionResume.refused", context: ["reason": reason.token])
+        return .refused(reason)
     }
 
     /// The descriptor a resumed session adopts, built from the sealed context and this device.
@@ -12228,6 +12275,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         // re-entered, so its descriptor is not adopted or merged — not even after a relaunch, which
         // re-derives the bar from the sealed context.
         if let reason = rejoinRefusal(for: descriptor.meshID) {
+            // The bar was HIT: this device walked back into range of a mesh it may never re-enter,
+            // which is the moment plan §24.1's "that session has ended" belongs to. One audit line
+            // per hit — this door's own, unchanged.
+            lastRejoinBarHit = reason
             FernletAuditLog.log("mesh.descriptor.droppedRejoinBarred", context: ["reason": reason.rawValue])
             return
         }
@@ -12653,6 +12704,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         guard let mesh = currentMesh, mesh.meshID == request.meshID, mesh.mode == .open,
               mesh.members.count == 1 else { return false }
         guard membershipVerifier?.roster.memberCount == 1 else { return false }
+        // Deliberately NOT a `lastRejoinBarHit` site, unlike the descriptor and admission-grant
+        // doors: this refuses to ADMIT somebody else without asking, it is not this device being
+        // refused an entry, and the user has tried nothing. Publishing a hit here would put "that
+        // session has ended" on the Friends surface because a stranger knocked.
         guard rejoinRefusal(for: mesh.meshID) == nil else { return false }
         guard !removedMemberFingerprints.contains(request.requesterFingerprint) else { return false }
         return slots.contains {
@@ -12699,6 +12754,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         // P3 item 6, plan §8.2: a developed or terminated mesh can never be rejoined, and the bar
         // is re-derived from the sealed context at launch, so a restart does not lift it.
         if let reason = rejoinRefusal(for: grant.meshID) {
+            // The other door, and the other hit: somebody admitted this device back into a mesh it
+            // ended. Same fact, same one audit line this door already wrote.
+            lastRejoinBarHit = reason
             FernletAuditLog.log("mesh.admissionGrant.droppedRejoinBarred", context: ["reason": reason.rawValue])
             return
         }

@@ -11,7 +11,9 @@ import FernletUI
 ///
 /// Swaps to ``DisposableCameraView`` once `MeshNetworkManager.isInSession` flips and the
 /// ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the "is there a peer right now"
-/// predicate (P6 item 2) — completes; otherwise it renders the album layout — the
+/// predicate (P6 item 2) — completes, or once ``resumeLastSession()`` adopts a restored session
+/// (which has no peer to celebrate and raises the surface itself, P7 item 5 pass 2 fix review);
+/// otherwise it renders the album layout — the
 /// post-session shop-window card, the nearby-peer banner (with the QR verify ceremony on manual
 /// commits), and the searchable photo wall. It also owns the session-end review flow:
 /// `presentDisconnectReviewIfNeeded()` presents either the full photo review or the compact
@@ -384,9 +386,19 @@ struct FriendsView: View {
     /// No second opinion exists anywhere: the card is a pure view over the answer, and the copy fork
     /// is the only thing that turns the answer into sentences.
     ///
+    /// **Computed, so a refused try repaints in the same turn.** `ProximityResumeCard` holds no
+    /// state of its own: when ``resumeLastSession()``'s accept is refused by the rejoin bar, the
+    /// manager records the HIT — an observed property this projection reads — and this recomputes to
+    /// `.ended(reason)` under the reader's finger. That is the whole of pass 2's answer to "what a
+    /// rejoin bar looks like when the user tries anyway" (plan §24.1), and it needs no second flag
+    /// to keep in step with the decision.
+    ///
     /// `MeshMatrixDebugOptions.forcedResumePresentation` is the walled DEBUG override the tier-1b UI
     /// suite drives (`FERNLET_MESH_RESUME_PRESENTATION`), and in release it is a hard-coded nil —
     /// the whole environment read is compiled out — so shipping always takes the decision below.
+    /// **The override substitutes the whole decision**, so under it a tap on the accept pill still
+    /// calls the manager's door but the card's shape never moves: the UI suite pins what that leaves
+    /// provable, and the decision above is what ships.
     private var resumePresentation: ProximityResumePresentation {
         if let forced = MeshMatrixDebugOptions.forcedResumePresentation { return forced }
         return ProximityResumeDecision.decide(
@@ -394,9 +406,10 @@ struct FriendsView: View {
         )
     }
 
-    /// Accepts the offer, then hands the radios back to the run policy.
+    /// Accepts the offer, raises the session surface with it, then hands the radios back to the run
+    /// policy.
     ///
-    /// **Two statements, and the order is the decision.** `acceptForegroundResume()` adopts the
+    /// **Three statements, and the order is the decision.** `acceptForegroundResume()` adopts the
     /// restored context into `currentMesh` and arms nothing; `pushNow()` then re-decides the whole
     /// policy against the facts that just moved, and — on the Friends tab in the foreground — the
     /// mesh directive reaches `MeshNetworkManager.armFriendRadios()`, where the SAME
@@ -405,11 +418,27 @@ struct FriendsView: View {
     /// would call `startJoin()`, which resets the session state machine and founds a SECOND mesh
     /// beside the one on the disk.
     ///
+    /// **`sessionReady` is the third statement, and without it the accept STRANDS this tab** (pass 2
+    /// fix review, P1-1). The adoption sets `currentMesh`, so `manager.isInSession` flips true — and
+    /// `ContentView.isDisposableCameraSessionActive` reads exactly that: it drops the floating tab
+    /// bar, zeroes the bottom clearance and darkens the scene background. But ``body`` swaps to
+    /// ``DisposableCameraView`` on `isInSession && sessionReady`, and nothing on this path raises
+    /// `sessionReady`: the flag is written by the celebration cover's completion, by the two
+    /// committed-peer arms and by `onAppear` for a tab re-entry, none of which a resume goes
+    /// through. The album would have been drawn in camera chrome with no way back. Raising it here
+    /// is not a fudge: a resumed mesh with no peer yet is a PARTITIONED session, which is the state
+    /// `DisposableCameraView` is already written to hold across a blip, and
+    /// `handleSessionSurfaceChange` lowers the flag again on the falling edge of `isInSession`.
+    ///
+    /// Only an ACCEPTED resume raises it. A refusal adopts nothing, so `isInSession` never moves,
+    /// and a barred refusal repaints this surface as the ended notice through the projection's
+    /// observed hit — see ``resumePresentation``.
+    ///
     /// This view names no radio door, which is P7 item 3's zero wall; `ProximityResumeDecisionTests`
     /// pins that `acceptForegroundResume(` appears exactly once in the app target and that this body
     /// names `runPolicyHost.pushNow()` after it.
     private func resumeLastSession() {
-        manager.acceptForegroundResume()
+        if manager.acceptForegroundResume() == .accepted { sessionReady = true }
         runPolicyHost.pushNow()
     }
 

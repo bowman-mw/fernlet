@@ -100,7 +100,11 @@ enum MeshMatrixDebugOptions {
     /// The tokens are ``ProximityResumePresentationToken``'s: `nothing`, `offerResume`,
     /// `couldNotReopen`, and `ended:<reason>` over ``ProximityMeshEndedReason``'s eight at-rest
     /// spellings. It seeds no mesh, writes no file and starts no radio — it substitutes one value
-    /// into one view — so unlike the rest of this family it is inert without `FERNLET_MESH_MATRIX`.
+    /// into one view — and, unlike the rest of this family, it is **active without**
+    /// `FERNLET_MESH_MATRIX`: ``forcedResumePresentation`` reads this variable directly and consults
+    /// ``isEnabled`` nowhere. That is deliberate and depended upon — `ProximityResumeCardUITests`
+    /// launches with this variable alone, and installing the whole rejection-matrix harness to look
+    /// at one card would seed a mesh the card is supposed to be drawn without.
     static let resumePresentationKey = "FERNLET_MESH_RESUME_PRESENTATION"
 
     /// `FERNLET_MESH_AUTO_KEEP_FRIENDS=1` — stand in for the user tapping "keep" on every candidate
