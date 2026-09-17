@@ -23,6 +23,16 @@ import FernletUI
 /// roster, which would clobber the next session's entries.
 struct FriendsView: View {
     var store: FernletStore
+
+    /// The app's one run-policy host, threaded from `ContentView` through `SocialHubView` exactly as
+    /// `FoodView` and `ProximityRecipeShareSheet` take it (P7 item 3 pass B).
+    ///
+    /// It is here for ONE act: ``resumeLastSession()`` accepts the launch restore's offer at the
+    /// manager and then calls `pushNow()`, so the radios come back through the policy's own
+    /// re-decision rather than through a view calling a radio door. Nothing else on this surface
+    /// touches it.
+    var runPolicyHost: ProximityRunPolicyHost
+
     @Binding var activeSheet: FernletSheet?
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
@@ -42,6 +52,16 @@ struct FriendsView: View {
     @State private var selectedAlbumPostID: UUID?
     @State private var sessionSearchText = ""
     @State private var cacheWarningDismissed = false
+
+    /// Whether the reader has put this launch's restore card away (P7 item 5, pass 2).
+    ///
+    /// **Per launch, and deliberately not persisted.** P7's decision is that the phase adds no
+    /// persisted surface, so there is no `UserDefaults` key, no `Docs/PrivacyWipeCoverage.md` row and
+    /// no delete-all wiring owed — the `cacheWarningDismissed` idiom directly above, for the same
+    /// reason. A bare `Bool` is right here in a way it is not for `RoutedDeliveryHoldBanner`: that
+    /// banner's fact is transient, recurring and two-valued, while a launch has exactly one restore
+    /// outcome and this card says exactly one thing about it.
+    @State private var resumeCardDismissed = false
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
 
@@ -307,6 +327,8 @@ struct FriendsView: View {
                     }
                     .padding(.top, 4)
 
+                    resumeCard
+
                     shopWindowCard
 
                     nearbyStatusBanner
@@ -332,6 +354,83 @@ struct FriendsView: View {
             .background(Color.parchment)
             .navigationTitle("")
         }
+    }
+
+    // MARK: - The launch restore's card (P7 item 5, pass 2)
+
+    /// The launch restore's affordance, above everything else on the album layout.
+    ///
+    /// **Top of the surface on purpose.** It is the first thing a relaunched member needs to answer
+    /// — "is the session I was in still there?" — and it sits above the shop window and the
+    /// discovery banner because those are both about a session that is already running. Nothing
+    /// modal: the launcher's decision is that a modal on launch fires on every cold start.
+    ///
+    /// Hidden for the rest of the launch once dismissed, whichever shape it took.
+    @ViewBuilder
+    private var resumeCard: some View {
+        if !resumeCardDismissed {
+            ProximityResumeCard(
+                presentation: resumePresentation,
+                onResume: resumeLastSession,
+                onDismiss: dismissResumeCard
+            )
+        }
+    }
+
+    /// What this launch's restore presents — **the app's one call to the decision**.
+    ///
+    /// Everything it reads arrives in `MeshNetworkManager.sessionResumeProjection`, the module's one
+    /// public projection of the restore, and `ProximityResumeDecision.decide(_:)` answers the shape.
+    /// No second opinion exists anywhere: the card is a pure view over the answer, and the copy fork
+    /// is the only thing that turns the answer into sentences.
+    ///
+    /// `MeshMatrixDebugOptions.forcedResumePresentation` is the walled DEBUG override the tier-1b UI
+    /// suite drives (`FERNLET_MESH_RESUME_PRESENTATION`), and in release it is a hard-coded nil —
+    /// the whole environment read is compiled out — so shipping always takes the decision below.
+    private var resumePresentation: ProximityResumePresentation {
+        if let forced = MeshMatrixDebugOptions.forcedResumePresentation { return forced }
+        return ProximityResumeDecision.decide(
+            ProximityResumeInputs(projection: manager.sessionResumeProjection)
+        )
+    }
+
+    /// Accepts the offer, then hands the radios back to the run policy.
+    ///
+    /// **Two statements, and the order is the decision.** `acceptForegroundResume()` adopts the
+    /// restored context into `currentMesh` and arms nothing; `pushNow()` then re-decides the whole
+    /// policy against the facts that just moved, and — on the Friends tab in the foreground — the
+    /// mesh directive reaches `MeshNetworkManager.armFriendRadios()`, where the SAME
+    /// `FriendsDiscoveryEntry` three-way every other entry to this surface uses now resolves
+    /// `.resume` instead of `.fresh`. That is the whole reason the adoption comes first: `.fresh`
+    /// would call `startJoin()`, which resets the session state machine and founds a SECOND mesh
+    /// beside the one on the disk.
+    ///
+    /// This view names no radio door, which is P7 item 3's zero wall; `ProximityResumeDecisionTests`
+    /// pins that `acceptForegroundResume(` appears exactly once in the app target and that this body
+    /// names `runPolicyHost.pushNow()` after it.
+    private func resumeLastSession() {
+        manager.acceptForegroundResume()
+        runPolicyHost.pushNow()
+    }
+
+    /// Puts the card away for this launch, and declines the offer if there was one.
+    ///
+    /// `declineForegroundResume()` is silent when no offer stands, so the one closure serves the
+    /// offer and both notices: for a notice it does nothing at the manager, and for the offer it
+    /// clears `offersForegroundResume` so the next visit to this tab does not ask again. Nothing
+    /// durable moves either way — the sealed context, the restored ledger and the restored key
+    /// advertisements all stay, so a routed item can still drain the moment a link forms.
+    ///
+    /// **The push is what RELEASES the hold.** While a resume is on offer,
+    /// `MeshNetworkManager.armFriendRadios()`'s `.fresh` row holds rather than calling `startJoin()`
+    /// — `startJoin()` resets the session state machine and would wipe the offer before the card
+    /// could be drawn — and it records `ProximityRunStateSeam.resumeOffered`. Declining clears the
+    /// flag, so re-deciding the policy here is what starts the ordinary fresh search the user asked
+    /// for by saying "not now". For the two notices there was no hold, and the push is a no-op.
+    private func dismissResumeCard() {
+        resumeCardDismissed = true
+        manager.declineForegroundResume()
+        runPolicyHost.pushNow()
     }
 
     // MARK: - Header button label (matches HeaderActionButton visual)

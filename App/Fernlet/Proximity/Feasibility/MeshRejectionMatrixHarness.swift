@@ -87,6 +87,22 @@ enum MeshMatrixDebugOptions {
     /// ordering constraint, not a convenience. Absent leaves the user's own setting untouched.
     static let allowHeartsKey = "FERNLET_MESH_ALLOW_HEARTS"
 
+    /// `FERNLET_MESH_RESUME_PRESENTATION=<token>` — force the Friends tab's launch-restore card into
+    /// one fixed shape for this launch (P7 item 5, pass 2).
+    ///
+    /// It exists because the shapes are otherwise unreachable on one device: `offerResume` needs a
+    /// sealed context inside its six-hour ceiling written by a previous run, `couldNotReopen` needs a
+    /// deliberately corrupted file, and `ended` needs a mesh that really ended. Absent means no
+    /// override at all, which is the shipping decision —
+    /// `ProximityResumeDecision.decide(ProximityResumeInputs(projection:))` — and is what every run
+    /// that does not name this variable gets.
+    ///
+    /// The tokens are ``ProximityResumePresentationToken``'s: `nothing`, `offerResume`,
+    /// `couldNotReopen`, and `ended:<reason>` over ``ProximityMeshEndedReason``'s eight at-rest
+    /// spellings. It seeds no mesh, writes no file and starts no radio — it substitutes one value
+    /// into one view — so unlike the rest of this family it is inert without `FERNLET_MESH_MATRIX`.
+    static let resumePresentationKey = "FERNLET_MESH_RESUME_PRESENTATION"
+
     /// `FERNLET_MESH_AUTO_KEEP_FRIENDS=1` — stand in for the user tapping "keep" on every candidate
     /// of a promoted `pendingFriendReview` batch, then consume the batch (P6 item 10).
     ///
@@ -158,6 +174,17 @@ enum MeshMatrixDebugOptions {
     /// Whether this launch keeps every candidate of a promoted friend-review batch.
     static let autoKeepsFriends = ProcessInfo.processInfo.environment[autoKeepFriendsKey] == "1"
 
+    /// The launch-restore card's forced shape, or nil when this launch left the decision alone.
+    ///
+    /// Computed rather than stored so it is a `let`-free read (Power of 10 rule 6 forbids a stored
+    /// `static var`) and so the parse is a pure function of the launch environment, testable at
+    /// tier 1 through ``ProximityResumePresentationToken/presentation(_:)`` without a process.
+    static var forcedResumePresentation: ProximityResumePresentation? {
+        ProximityResumePresentationToken.presentation(
+            ProcessInfo.processInfo.environment[resumePresentationKey]
+        )
+    }
+
     /// Frozen diagnostic English naming what the launch environment asked for, for the transcript.
     static var summary: String {
         let environment = ProcessInfo.processInfo.environment
@@ -210,6 +237,13 @@ enum MeshMatrixDebugOptions {
 
     /// Release: there is no run to name.
     static var summary: String { "off" }
+
+    /// Release: the launch-restore card is never forced — the whole environment read above is
+    /// compiled out, so shipping always takes `ProximityResumeDecision.decide(_:)`'s answer. It lives
+    /// here rather than behind a second `#if DEBUG` at the call site because Power of 10 rule 8
+    /// forbids nesting one inside another and this family is already the app's one walled home for a
+    /// `FERNLET_MESH_*` switch.
+    static var forcedResumePresentation: ProximityResumePresentation? { nil }
     #endif
 }
 

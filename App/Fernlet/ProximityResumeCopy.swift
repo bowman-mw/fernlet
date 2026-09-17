@@ -22,7 +22,8 @@
 //
 // **The new keys are listed verbatim in the handoff** and the catalog is synced at close-out from
 // `HEAD`'s blob (`f4a69f1`'s method) — never from a held working copy, which is why this pass adds
-// no `.xcstrings` diff of its own.
+// no `.xcstrings` diff of its own. Pass 1 owed thirteen; pass 2 adds **two** — the offer's decline
+// label and the notices' close-control label — for fifteen in all.
 //
 // Three wording rules the decisions table fixes and this file may not relax:
 //
@@ -49,6 +50,23 @@ enum ProximityResumeCopy {
     /// ("Pick up where you left off?") and a button is an instruction, and the two decline
     /// differently in most languages.
     static let resumeButton: LocalizedStringKey = "Resume session"
+
+    /// The offer's decline label (P7 item 5, pass 2).
+    ///
+    /// **"Not now", never "No" or "Dismiss".** Declining the offer clears
+    /// `MeshNetworkManager.offersForegroundResume` for this launch and nothing else — the sealed
+    /// context stays on the disk, the restored ledger stays addressable, and a later launch inside
+    /// the six-hour ceiling offers again. A label that said "No" would promise a permanence the door
+    /// behind it does not have.
+    static let notNowButton: LocalizedStringKey = "Not now"
+
+    /// The VoiceOver label for the close control on the two NOTICES (`couldNotReopen`, `ended`).
+    ///
+    /// Its own key rather than `RoutedDeliveryHoldBanner`'s "Dismiss storage notice": VoiceOver
+    /// reads these labels with no card around them, and the Friends surface can show both notices at
+    /// once, so two controls called the same thing would be two identical announcements for two
+    /// different acts. Names the ACT and not the glyph, which is `fernletIconButton`'s whole rule.
+    static let dismissNoticeLabel: LocalizedStringKey = "Dismiss session notice"
 
     /// The headline for one presentation, or nil when there is nothing to say.
     ///

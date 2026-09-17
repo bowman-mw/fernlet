@@ -131,6 +131,23 @@ nonisolated enum ProximityRunStateSeam {
     /// ``held``.
     static let resumeRefused = "resumeRefused"
 
+    /// ``held``'s reason when a `run` arrived while the launch restore is still OFFERING a resume
+    /// the user has not answered (network migration P7 item 5, pass 2).
+    ///
+    /// The `.fresh` row of `MeshNetworkManager.armFriendRadios()` runs `startJoin()`, and
+    /// `startJoin()` ends in `resetSessionStateMachine(keepingTerminalState: false)` — which clears
+    /// `offersForegroundResume`, `restoredSessionContext` and the session ceiling. Without this hold
+    /// the first visit to the Friends tab wipes the restore before the affordance can be drawn, so
+    /// the offer would be unreachable on a shipping device and the sentence the offer shows ("It
+    /// isn't looking for anyone until you say so") would be false at the instant it appeared.
+    ///
+    /// **Bounded by the answer, not by a timer.** The card is on screen for as long as the offer is,
+    /// and both of its actions clear it —
+    /// `MeshNetworkManager.acceptForegroundResume(now:)` adopts the mesh (so the next push takes the
+    /// `.resume` row) and `declineForegroundResume()` clears the flag (so the next push takes
+    /// `.fresh`) — and the app pushes the policy again after either.
+    static let resumeOffered = "resumeOffered"
+
     /// Resolves a directive that arrived at a seam, and names it when it arrived unresolved.
     ///
     /// The host is expected to apply ``ProximityRunState/isUp(inForeground:)`` before it calls,

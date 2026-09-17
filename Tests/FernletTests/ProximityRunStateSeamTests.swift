@@ -244,6 +244,11 @@ struct ProximityRunStateVocabularyTests {
                 "the P8-only combination's reason")
         #expect(ProximityRunStateSeam.resumeRefused == "resumeRefused",
                 "the refused-resume reason, so the ended-session row is never a silence again")
+        #expect(ProximityRunStateSeam.resumeOffered == "resumeOffered", """
+            P7 item 5 pass 2's fourth `held` reason: a fresh search over an UNANSWERED launch-restore \
+            offer holds, because `startJoin()` would clear `offersForegroundResume` and \
+            `restoredSessionContext` before the Friends card could be drawn
+            """)
         #expect(ProximityRunStateSeam.meshLinks == ProximityRadio.meshLinks.rawValue,
                 "the module's radio name is the app's, because the app type cannot cross the boundary")
         #expect(ProximityRunStateSeam.discoveryAdmission == ProximityRadio.discoveryAdmission.rawValue,

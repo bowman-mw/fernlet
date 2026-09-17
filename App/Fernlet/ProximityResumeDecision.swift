@@ -1,26 +1,31 @@
 // ProximityResumeDecision.swift
 // Fernlet
 //
-// Network migration P7 item 5, PASS 1 (plan §24.1, prompt §5c): the DECISION half of the resume
-// surface — what a launch restore's outcome presents to the user, as a pure value.
+// Network migration P7 item 5 (plan §24.1, prompt §5c): the DECISION half of the resume surface —
+// what a launch restore's outcome presents to the user, as a pure value.
+//
+// PASS 1 built the table. **PASS 2 added the one boundary crossing at the foot of this file**
+// (``ProximityResumeInputs/init(projection:)``) and folded `notAttempted` into the silent clause;
+// everything else here is pass 1's and unchanged.
 //
 // P6 item 7 wired `MeshNetworkManager.restoreSessionContextOncePerLaunch(now:)` and left its
 // user-facing half hollow: `lastSessionRestoreOutcome`, `offersForegroundResume`,
 // `restoredSessionContext` and `rejoinBar` have no app reader at all, which `FernletApp`'s own doc
 // comment on `restoreMeshSessionContextIfNeeded(_:)` states in as many words. This file is the
 // first half of the answer, and deliberately the half that can be a TABLE: five ordered clauses
-// over three enumerable facts, so the Friends-surface affordance that follows in pass 2 has
+// over three enumerable facts, so `ProximityResumeCard` — pass 2's Friends-surface affordance — has
 // nothing left to decide and is placement and wiring only.
 //
 // Three facts it is built against, none of them negotiable here:
 //
 //   * **A restore ARMS NO RADIO** (invariant 5, and `restoreSessionContextOncePerLaunch`'s own doc
 //     comment). Every case below PRESENTS; none of them starts a transport. The affordance's
-//     ACTION is pass 2's, and it goes through `ProximityRunPolicyHost` like every other radio
+//     ACTION is the card's, and it goes through `ProximityRunPolicyHost` like every other radio
 //     move, because P7 item 3's zero wall leaves `FernletApp.mountRoutedRunPolicy(_:)` as the only
 //     app-target body that may name a radio door. `ProximityResumeDecisionTests` scans this file
 //     and `ProximityResumeCopy.swift` for `startJoin`, `applyRunState` and `pushNow` and requires
-//     zero of each.
+//     zero of each — and pass 2 kept that true: the accept door lives on the MANAGER, its one app
+//     call site is `ConnectView.resumeLastSession()`, and the push beside it is the policy's.
 //   * **A deferred restore is SILENT, as a positive claim.** It is retried at the next
 //     protected-data rise (`retrySessionRestoreIfPending(now:)`, the routed re-entry's job 1,
 //     bounded by `MeshSessionRestoreBounds.maxAttempts`), so a sentence about it would be a
@@ -29,20 +34,24 @@
 //   * **A rejoin bar names the mesh ENDED, never "failed".** Nothing failed: a mesh that was left,
 //     developed, terminated by the group or that reached its ceiling ended exactly as designed.
 //
-// ## Why this file names no ProximityKit type
+// ## Why the decision is written over an app-side flattening
 //
-// `MeshSessionRestoreOutcome`, `MeshSessionRejoinBar` and `MeshSessionTerminationReason` are
-// INTERNAL to ProximityKit, and so are all four of the manager properties above. Measured at this
-// commit: the module exports `currentMesh`, `isInSession`, `hasCommittedPeer`, `isSessionLive` and
-// `restoreSessionContextOncePerLaunch(now:)` as `public` and stops there — which is the mechanical
-// reason "no app surface reads its outcome" was true, not merely an oversight. So the decision is
-// written over the app-side flattening below, and **pass 2 owes exactly one public projection** on
-// the manager (the outcome kind, the offer flag and the bar's reason) plus the one mapping into
-// ``ProximityRestoreOutcomeKind``. That mapping is not left to be invented: the test bundle can
-// `@testable import ProximityKit`, so `ProximityResumeDecisionTests` enumerates every real
-// `MeshSessionRestoreOutcome` case — payload variants included — through it and holds the whole
-// product against the decisions table. Pass 2 implements a mapping that is already pinned rather
-// than writing a second opinion about it.
+// Measured at pass 1's commit (`841abc8`): **none of the four restore properties, nor any of the
+// three types they are made of (`MeshSessionRestoreOutcome`, `MeshSessionRejoinBar`,
+// `MeshSessionTerminationReason`), was `public`** — which is the mechanical reason "no app surface
+// reads its outcome" was true, not merely an oversight. So the decision is written over the
+// app-side flattening below, and pass 1 recorded that pass 2 owed exactly one public projection.
+//
+// **Pass 2 built it**: `MeshNetworkManager.sessionResumeProjection` answers a
+// `MeshSessionResumeProjection` — the outcome kind, the offer flag, and the bar's reason **matched
+// to the mesh in hand** — and ``ProximityResumeInputs/init(projection:)`` at the foot of this file
+// is the one mapping into the vocabulary below. The mapping was not invented there: the test bundle
+// can `@testable import ProximityKit`, so `ProximityResumeDecisionTests` had already enumerated
+// every real `MeshSessionRestoreOutcome` case — payload variants included — through it and held the
+// whole product against the decisions table. Only one of the three types crossed the wall
+// (`MeshSessionTerminationReason`, so the reason arrives as a case and not as a `String` to
+// re-parse); the outcome is flattened by the projection's own frozen `Outcome` tokens, and
+// `MeshSessionRejoinBar` never crosses at all, because a surface has no business holding a mesh id.
 //
 // `ProximityAppLockState.resolve(_:isDuressSessionActive:)` is the precedent for the flattening
 // itself: an app-side `CaseIterable` enum standing in for a payload-carrying package enum, with one
@@ -50,13 +59,22 @@
 //
 // ## What is deliberately NOT an input
 //
-// The restored context's member count. A count in a sentence needs a hand-authored
+// **The restored context's member count.** A count in a sentence needs a hand-authored
 // `variations.plural` block in `App/Fernlet/Localizable.xcstrings` — a bare `%lld` in a
 // `defaultValue` offers a translator exactly one form, which is the defect
 // `LocalizationBoundaryTests.pluralRuledKeys` exists to forbid — and this pass must not touch the
 // catalog (it is held by another session and synced at close-out from `HEAD`'s blob). A resume
 // affordance is a button, not a census; if the owner later wants "3 people were here", it arrives
 // as its own key with its own plural rule, and this file gains one field.
+//
+// **`hasCommittedPeer`.** It is the launcher's named predicate for "the radio guards and the resume
+// ARM", and this is not the arm: what to OFFER is decided by what the restore concluded, and
+// whether the device then goes looking for anyone is `ProximityRunPolicy`'s and the Friends
+// three-way's. Reading it here would make the offer flicker with every link — a peer appearing or
+// going away would change a sentence about a file that was read once at launch — and it would put a
+// second opinion about the radios in the one place P7 item 3 spent a whole pass emptying.
+
+import ProximityKit
 
 // MARK: - The restore outcome, flattened
 
@@ -113,6 +131,27 @@ nonisolated enum ProximityRestoreOutcomeKind: String, CaseIterable, Hashable, Se
         case .deferred, .refused:
             return true
         case .notAttempted, .resumable, .terminated, .expired, .noSession, .corrupt:
+            return false
+        }
+    }
+
+    /// Whether this kind says nothing **whatever the offer flag says** — clause 3 of the decisions
+    /// table.
+    ///
+    /// Deliberately NOT ``isRetryable``, and deliberately not defined as it plus one case: the two
+    /// answer different questions and only one of them is a mirror. ``isRetryable`` is ProximityKit's
+    /// own vocabulary and must keep tracking it; this is the app's rule about SILENCE, and
+    /// ``notAttempted`` belongs to it for a reason of its own — a launch whose restore has not
+    /// concluded has read nothing, so a `true` offer flag beside it can only be one an earlier idle
+    /// lapse left set, and offering to resume off it would be an offer about a file nobody has
+    /// opened. Pass 1 left `notAttempted` out of the clause and leaned on the fact that the restore
+    /// raises no offer before it runs; that made "not attempted is silent" true by circumstance
+    /// rather than by rule, and this is the rule.
+    var saysNothingWhateverTheOffer: Bool {
+        switch self {
+        case .notAttempted, .deferred, .refused:
+            return true
+        case .resumable, .terminated, .expired, .noSession, .corrupt:
             return false
         }
     }
@@ -175,9 +214,13 @@ nonisolated struct ProximityResumeInputs: Equatable, Hashable, Sendable {
 
     /// `MeshNetworkManager.offersForegroundResume`.
     ///
-    /// Not derivable from ``outcome``: the state machine also raises it for an idle-lapsed session
-    /// inside a running process (`MeshSessionEffect.offerForegroundResume`), which is a second,
-    /// live source this surface will meet the moment P7's poller lapses a window.
+    /// Not derivable from ``outcome``, and the second raiser is worth naming precisely: the state
+    /// machine's other `offerForegroundResume` effect sits on a **local idle stop followed by
+    /// `.foregrounded`** (`MeshSessionStateMachine.swift:446`), and **nothing in shipping raises
+    /// `.foregrounded`** — the launcher forbids P7 from raising it at all, because doing so asserts
+    /// a continued-processing task is running, which is P8's claim. So today this flag has exactly
+    /// one live source, the restore's `.resumable` arm; the second raiser is P8's, and when it
+    /// arrives this surface already reads it.
     let offersForegroundResume: Bool
 
     /// `MeshNetworkManager.rejoinBar?.reason`, the permanent bar against re-entering one mesh —
@@ -237,7 +280,7 @@ nonisolated enum ProximityResumePresentation: Equatable, Hashable, Sendable, Cas
 /// | --- | --- | --- |
 /// | 1 | a rejoin bar is up | ``ProximityResumePresentation/ended(_:)`` with its reason |
 /// | 2 | the outcome is ``ProximityRestoreOutcomeKind/corrupt`` | ``ProximityResumePresentation/couldNotReopen`` |
-/// | 3 | the outcome is retryable (`deferred`, `refused`) | ``ProximityResumePresentation/nothing`` — silent |
+/// | 3 | the outcome says nothing whatever the offer says (`deferred`, `refused`, `notAttempted`) | ``ProximityResumePresentation/nothing`` — silent |
 /// | 4 | `offersForegroundResume` | ``ProximityResumePresentation/offerResume`` |
 /// | 5 | anything else | ``ProximityResumePresentation/nothing`` |
 ///
@@ -248,9 +291,12 @@ nonisolated enum ProximityResumePresentation: Equatable, Hashable, Sendable, Cas
 /// the sealed context, and a file that did not decode produced no context to derive it from — so
 /// the order is stated rather than exercised, and the test says which rows are reachable.
 ///
-/// **Clause 3 before clause 4** keeps the deferred silence unconditional on anything but the bar: a
-/// restore that read nothing this launch has nothing to offer, whatever a flag left over from an
-/// earlier idle lapse says.
+/// **Clause 3 before clause 4** keeps that silence unconditional on anything but the bar: a restore
+/// that read nothing this launch has nothing to offer, whatever a flag left over from an earlier
+/// idle lapse says. Pass 2 folded ``ProximityRestoreOutcomeKind/notAttempted`` into the same clause
+/// (see ``ProximityRestoreOutcomeKind/saysNothingWhateverTheOffer``), so "a restore that has not
+/// concluded is silent" is true by RULE rather than by the circumstance that the restore happens to
+/// raise no offer before it runs.
 ///
 /// **Clause 5 is where `resumable`, `terminated` and `expired` land when their partner fact is
 /// missing.** At launch that cannot happen — the restore sets the offer and the bar in the same
@@ -269,7 +315,62 @@ nonisolated enum ProximityResumeDecision {
     static func decide(_ inputs: ProximityResumeInputs) -> ProximityResumePresentation {
         if let reason = inputs.rejoinBarReason { return .ended(reason) }
         guard inputs.outcome != .corrupt else { return .couldNotReopen }
-        if inputs.outcome.isRetryable { return .nothing }
+        if inputs.outcome.saysNothingWhateverTheOffer { return .nothing }
         return inputs.offersForegroundResume ? .offerResume : .nothing
+    }
+}
+
+// MARK: - The projection, mapped
+
+extension ProximityResumeInputs {
+
+    /// Flattens ProximityKit's one public projection of the launch restore.
+    ///
+    /// **The whole of the module boundary is this initialiser.** `MeshNetworkManager` exports
+    /// `sessionResumeProjection` and nothing else about the restore, and every clause of the table
+    /// above reads what comes out of here — so a surface cannot reach around the decision to the
+    /// manager, because there is nothing left on the manager to reach for.
+    ///
+    /// **An exhaustive `switch`, never `init?(rawValue:)` with a fallback.** The two vocabularies
+    /// are the same eight tokens and `ProximityResumeDecisionTests` holds their `rawValue` sets
+    /// equal; the reason the switch is written out anyway is what happens when a ninth arrives.
+    /// A `rawValue` round-trip would answer `nil` and need a non-optional fallback — some kind
+    /// chosen in advance to stand in for a kind nobody has thought about — and a new restore outcome
+    /// would ship silently as whatever that fallback says. The switch is a build error instead.
+    ///
+    /// The bar's reason is the one field that DOES round-trip, because
+    /// `MeshSessionTerminationReason` crossed the wall whole:
+    /// ``ProximityMeshEndedReason`` carries its eight `rawValue`s one for one and
+    /// `theEndedReasonVocabularyIsTheSealedContextsOwn` fails before a ninth can reach a user. Were
+    /// one ever to slip through, the `flatMap` reads it as "no bar" — which presents whatever the
+    /// outcome alone says (silence, for the `terminated` restore that is the only way to get one)
+    /// and leaves `rejoinRefusal(for:)` refusing at both admission doors regardless, which is where
+    /// the bar is actually enforced.
+    ///
+    /// - Parameter projection: `MeshNetworkManager.sessionResumeProjection`.
+    nonisolated init(projection: MeshSessionResumeProjection) {
+        self.init(
+            outcome: Self.kind(of: projection.outcome),
+            offersForegroundResume: projection.offersForegroundResume,
+            rejoinBarReason: projection.rejoinBarReason
+                .flatMap { ProximityMeshEndedReason(rawValue: $0.rawValue) }
+        )
+    }
+
+    /// The projection's outcome token in this target's vocabulary.
+    ///
+    /// - Parameter outcome: The projection's frozen kind.
+    /// - Returns: the app-side kind, one for one.
+    nonisolated static func kind(of outcome: MeshSessionResumeProjection.Outcome) -> ProximityRestoreOutcomeKind {
+        switch outcome {
+        case .notAttempted: return .notAttempted
+        case .resumable: return .resumable
+        case .terminated: return .terminated
+        case .expired: return .expired
+        case .noSession: return .noSession
+        case .deferred: return .deferred
+        case .refused: return .refused
+        case .corrupt: return .corrupt
+        }
     }
 }

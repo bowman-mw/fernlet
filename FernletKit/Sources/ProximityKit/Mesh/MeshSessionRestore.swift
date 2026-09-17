@@ -149,6 +149,130 @@ nonisolated struct MeshSessionRejoinBar: Equatable, Sendable {
     let reason: MeshSessionTerminationReason
 }
 
+// MARK: - MeshSessionResumeProjection
+
+/// **The launch restore, as the app may see it** (network migration P7 item 5 pass 2, plan §24.1).
+///
+/// P6 item 7 wired ``MeshNetworkManager/restoreSessionContextOncePerLaunch(now:)`` and left its
+/// user-facing half with no reader at all, for a mechanical reason: `MeshSessionRestoreOutcome`,
+/// ``MeshSessionRejoinBar`` and the four manager properties the restore publishes are INTERNAL to
+/// this module, so `App/Fernlet` could not name any of them. This value is the whole of what crosses
+/// that wall — three facts, no context, no payloads, nothing to re-derive — and
+/// `MeshNetworkManager.sessionResumeProjection` is its one producer.
+///
+/// ## The bar is matched to the mesh in hand, never read globally
+///
+/// ``rejoinBarReason`` is ``MeshNetworkManager/rejoinRefusal(for:)``'s answer for the mesh this
+/// device actually holds (the restored context's, or the live mesh's), and **not**
+/// `rejoinBar?.reason`. The difference is a real defect the app would otherwise ship: the bar is
+/// durable by design and is cleared **nowhere** — `resetSessionStateMachine(keepingTerminalState:)`
+/// says so in as many words — so a device that ended mesh A and later founded mesh B still holds A's
+/// bar, and a global read would name B "ended" with A's reason on every launch for the rest of the
+/// install.
+///
+/// ## Why the payloads are dropped
+///
+/// A deferral's reason, a refusal's cause and a corruption's detail change what is LOGGED and never
+/// what is presented — all three are silence or one sentence — so the projection carries the kind
+/// and stops. `ProximityResumeDecisionTests` enumerates every payload variant through the mapping
+/// and holds the whole product against the app's decision table, which is what makes "the payload
+/// changes nothing" a tested claim rather than an assumption.
+public nonisolated struct MeshSessionResumeProjection: Equatable, Sendable {
+
+    /// What a launch restore concluded, in the eight kinds an app surface can act on.
+    ///
+    /// **Frozen tokens, and they are the app's `ProximityRestoreOutcomeKind` spellings one for
+    /// one** — `ProximityResumeDecisionTests` holds the two `rawValue` sets equal, so a ninth kind
+    /// added here reddens there before it can reach a surface with no sentence. They are diagnostic
+    /// vocabulary and never display copy: the sentence a user reads is the app's
+    /// `ProximityResumeCopy`'s and lives nowhere else.
+    ///
+    /// ``notAttempted`` has no counterpart in ``MeshSessionRestoreOutcome``: it is the `nil` outcome
+    /// — the window before the launch mount runs, and a second mount the per-process latch refused.
+    public nonisolated enum Outcome: String, CaseIterable, Sendable {
+
+        /// No restore has concluded yet.
+        case notAttempted
+
+        /// A live context inside its ceiling. The one kind that raises the offer.
+        case resumable
+
+        /// A context that already records an ending. The reason rides ``rejoinBarReason``.
+        case terminated
+
+        /// A live context whose ceiling passed while the process was gone.
+        case expired
+
+        /// No file at all: a green field.
+        case noSession
+
+        /// The load deferred — a locked device, a transient keychain. Retried, never spoken about.
+        case deferred
+
+        /// Custody refused. Retried like a deferral and logged apart.
+        case refused
+
+        /// A file exists and does not decode; it has been quarantined beside itself.
+        case corrupt
+
+        /// Flattens one restore outcome, with `nil` spelled ``notAttempted``.
+        ///
+        /// Internal because its argument is: `MeshSessionRestoreOutcome` does not cross the module
+        /// wall and this is the door instead of it. Exhaustive rather than defaulted, so an eighth
+        /// outcome case is a build error here.
+        ///
+        /// - Parameter outcome: `MeshNetworkManager.lastSessionRestoreOutcome`.
+        nonisolated init(restoring outcome: MeshSessionRestoreOutcome?) {
+            guard let outcome else {
+                self = .notAttempted
+                return
+            }
+            switch outcome {
+            case .resumable: self = .resumable
+            case .terminated: self = .terminated
+            case .expired: self = .expired
+            case .noSession: self = .noSession
+            case .retryAfterUnlock: self = .deferred
+            case .retryAfterRefusal: self = .refused
+            case .quarantineCorruptFile: self = .corrupt
+            }
+        }
+    }
+
+    /// What the last restore attempt concluded, flattened.
+    public let outcome: Outcome
+
+    /// `MeshNetworkManager.offersForegroundResume` — whether the foreground may offer to pick the
+    /// last session back up.
+    ///
+    /// Not derivable from ``outcome``: the state machine raises the same effect for a local idle
+    /// stop inside a running process, so this is a second source the surface must read rather than
+    /// infer.
+    public let offersForegroundResume: Bool
+
+    /// Why this device may never re-enter **the mesh it is holding or restored**, or nil if it may.
+    ///
+    /// See the type's discussion: this is `rejoinRefusal(for:)`'s per-mesh answer, never the global
+    /// bar, because the bar outlives every session it was raised for.
+    public let rejoinBarReason: MeshSessionTerminationReason?
+
+    /// Builds a projection.
+    ///
+    /// - Parameters:
+    ///   - outcome: The flattened restore outcome.
+    ///   - offersForegroundResume: Whether a resume is on offer.
+    ///   - rejoinBarReason: The bar's reason **for the mesh in hand**, or nil.
+    public init(
+        outcome: Outcome,
+        offersForegroundResume: Bool,
+        rejoinBarReason: MeshSessionTerminationReason?
+    ) {
+        self.outcome = outcome
+        self.offersForegroundResume = offersForegroundResume
+        self.rejoinBarReason = rejoinBarReason
+    }
+}
+
 // MARK: - MeshSessionRestore
 
 /// The pure classifier from a five-state load to a seven-way launch outcome.

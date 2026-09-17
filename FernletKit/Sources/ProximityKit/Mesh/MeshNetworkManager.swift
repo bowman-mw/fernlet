@@ -2197,6 +2197,13 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// re-derive the predicate — it reads the refusal off ``isSearching``, which is what the bail is
     /// observable as — so the two cannot drift apart the day the resume grows a third guard.
     ///
+    /// **A fresh search over an UNANSWERED resume is the second `held` row** (P7 item 5, pass 2).
+    /// `startJoin()` resets the session state machine, which clears ``offersForegroundResume`` and
+    /// ``restoredSessionContext``, so arming it would wipe the launch restore before its Friends-tab
+    /// affordance could be drawn — the offer would be unreachable on a shipping device. The row
+    /// holds and records ``ProximityRunStateSeam/resumeOffered``; see ``armFriendRadios()`` for why
+    /// the hold is bounded by the user's ANSWER rather than by a clock.
+    ///
     /// `stop` means **stand down**, never "end the session". Nothing here nils the mesh, signs a
     /// record, promotes the friend batch or opens the shop window.
     ///
@@ -2324,16 +2331,38 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// doors already have (each loss restarts them) and the same one `startSearching()` states by
     /// clearing `sessionSearchGaveUp`.
     ///
-    /// - Returns: the radio and frozen reason to hold on, or `nil` when nothing was refused. Only
-    ///   the `.resume` row can refuse — ``resumeSearchingForPartitionedMesh()`` bails on a session
-    ///   that has already ended — and the refusal is read off ``isSearching`` rather than re-derived
-    ///   from `sessionState`, so a resume that grows a fourth guard is still reported honestly.
+    /// **The `.fresh` row holds for an UNANSWERED resume** (P7 item 5, pass 2). `startJoin()` ends
+    /// in `resetSessionStateMachine(keepingTerminalState: false)`, which clears
+    /// ``offersForegroundResume``, ``restoredSessionContext`` and the ceiling — so without the guard
+    /// the first Friends visit after a relaunch wipes the launch restore before its affordance can
+    /// be drawn, and the offer would be unreachable on any shipping device. The hold is bounded by
+    /// the ANSWER rather than by a clock: the card is up for exactly as long as the offer is, and
+    /// both of its actions clear it — ``acceptForegroundResume(now:)`` adopts the mesh so the next
+    /// push takes the `.resume` row, ``declineForegroundResume()`` clears the flag so the next push
+    /// takes `.fresh` — and the app re-pushes the policy after either.
+    ///
+    /// - Returns: the radio and frozen reason to hold on, or `nil` when nothing was refused. Two
+    ///   rows can refuse: `.resume`, when ``resumeSearchingForPartitionedMesh()`` bails on a session
+    ///   that has already ended — read off ``isSearching`` rather than re-derived from
+    ///   `sessionState`, so a resume that grows a fourth guard is still reported honestly — and
+    ///   `.fresh`, when a resume is still on offer.
     private func armFriendRadios() -> (radio: String, reason: String)? {
         guard !isSearching else { return nil }
         switch FriendsDiscoveryEntry.entry(
             isInSession: isInSession, hasCommittedPeer: hasCommittedPeer
         ) {
         case .fresh:
+            // P7 item 5 pass 2: a fresh search is not allowed to trample an UNANSWERED resume.
+            // `startJoin()` ends in `resetSessionStateMachine(keepingTerminalState: false)`, which
+            // clears `offersForegroundResume`, `restoredSessionContext` and the ceiling — so the
+            // first Friends visit after a relaunch would wipe the restore before the affordance
+            // could be drawn, and the offer's own sentence ("It isn't looking for anyone until you
+            // say so") would be false at the instant it appeared. Bounded by the ANSWER: both of
+            // the card's actions clear the offer and the app pushes the policy again after either.
+            guard !offersForegroundResume else {
+                return (radio: ProximityRunStateSeam.friendRadios,
+                        reason: ProximityRunStateSeam.resumeOffered)
+            }
             startJoin()
             armFreshSearchGiveUpClock(now: Date())
         case .resume:
@@ -10261,6 +10290,170 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             return nil
         }
         return restoreSessionContextAtLaunch(now: now)
+    }
+
+    // MARK: Launch restore (the surface's half — P7 item 5 pass 2)
+
+    /// **The one thing the launch restore exports** (plan §24.1): the outcome kind, the offer flag,
+    /// and the rejoin bar's reason **for the mesh this device is actually holding**.
+    ///
+    /// Read-only, computed, and the only public reader of `lastSessionRestoreOutcome`,
+    /// ``offersForegroundResume`` and ``rejoinBar`` there is. The app's
+    /// `ProximityResumeDecision.decide(_:)` is the one consumer, through
+    /// `ProximityResumeInputs(projection:)`; nothing here decides anything.
+    ///
+    /// **The bar is matched, not read globally**, and that is the whole reason this is a computed
+    /// projection rather than three `public` property wrappers. ``rejoinBar`` is the durable half of
+    /// plan §8.2 and is cleared **nowhere** — ``resetSessionStateMachine(keepingTerminalState:)``
+    /// says so by name — so a device that ended mesh A and later founded mesh B still holds A's bar.
+    /// Exporting `rejoinBar?.reason` would tell the Friends surface that B has ENDED, with A's
+    /// reason, on every launch for the rest of the install. ``rejoinRefusal(for:)`` is the answer the
+    /// two admission doors actually enforce, so it is the answer the surface shows.
+    ///
+    /// The restored context's id comes first in the coalesce: at launch there is no mesh yet, and
+    /// after ``acceptForegroundResume(now:)`` the two name the same mesh.
+    ///
+    /// **Observation**: the four properties behind this are `@ObservationIgnored`, and deliberately
+    /// stay so. The one transition a surface must repaint on is the accept, which moves
+    /// ``currentMesh`` — an observed property this projection reads — and a decline is driven by the
+    /// view's own state. Registering the restore's book-keeping for observation would invalidate
+    /// every view on a launch-time write nothing displays.
+    public var sessionResumeProjection: MeshSessionResumeProjection {
+        let meshID = restoredSessionContext?.meshID ?? currentMesh?.meshID
+        return MeshSessionResumeProjection(
+            outcome: MeshSessionResumeProjection.Outcome(restoring: lastSessionRestoreOutcome),
+            offersForegroundResume: offersForegroundResume,
+            rejoinBarReason: meshID.flatMap { rejoinRefusal(for: $0) }
+        )
+    }
+
+    /// **Accepts the foreground resume the launch restore offered** — and arms no radio doing it.
+    ///
+    /// This is the door P6 item 7 left un-built. A restore makes a relaunched device *addressable*
+    /// (the re-proved ledger, its derived roster, the restored key advertisements, the epoch heads)
+    /// and stops there: ``currentMesh`` stays nil, `isInSession` is false, and
+    /// `FriendsDiscoveryEntry.entry(isInSession:hasCommittedPeer:)` therefore resolves `.fresh` — so
+    /// the first Friends visit after a relaunch would call ``startJoin()``, which resets the session
+    /// state machine and founds a **second** mesh beside the one on the disk. Adopting the restored
+    /// context first is what makes that visit resolve `.resume` instead, into
+    /// ``resumeSearchingForPartitionedMesh()``, whose own doc already names this caller ("a mesh
+    /// restored at launch reaches this arm on the first Friends visit").
+    ///
+    /// **It moves no transport.** No `startJoin()`, no `startSearching()`, not even
+    /// ``updateDiscoveryInfo()`` — the advertisement is built from ``currentMesh`` when a radio
+    /// really starts, and the decision to start one is the run policy's. The app's call site pairs
+    /// this with `ProximityRunPolicyHost.pushNow()` for exactly that reason, and P7 item 3's zero
+    /// wall stays at its pins because nothing here is a radio call.
+    ///
+    /// **The descriptor is fabricated, and it is the weakest possible claim.** ``MeshSessionContext``
+    /// carries no mesh NAME and no mode — the sealed schema never had either — so the adopted
+    /// descriptor takes a generated name and this device's own session mode, with `nameSetAt` and
+    /// `modeSetAt` at `.distantPast`: ``mergeMeshDescriptor(_:incoming:)`` is last-write-wins on
+    /// those two instants, so the first descriptor any surviving member gossips replaces both
+    /// fields. `meshID` and `createdAt` come off the sealed context, which is what keeps the ceiling
+    /// and every routed expiry agreeing with the rest of the mesh.
+    ///
+    /// Idempotent and fail-closed: without an offer, without a context, over a mesh this device
+    /// already holds, against a rejoin bar for that same mesh, or after the session has ended, it
+    /// changes nothing and audits why.
+    ///
+    /// - Parameter now: The instant this run of the resumed session begins — the monotonic ceiling's
+    ///   origin. The signed bound is the context's own `hardDeadline`, never six fresh hours.
+    /// - Returns: `true` when the restored context was adopted.
+    @discardableResult
+    public func acceptForegroundResume(now: Date = Date()) -> Bool {
+        guard offersForegroundResume else { return refuseForegroundResume(Self.resumeNoOffer) }
+        guard let context = restoredSessionContext else {
+            return refuseForegroundResume(Self.resumeNoContext)
+        }
+        guard currentMesh == nil else { return refuseForegroundResume(Self.resumeMeshHeld) }
+        guard rejoinRefusal(for: context.meshID) == nil else {
+            return refuseForegroundResume(Self.resumeBarred)
+        }
+        guard !sessionState.hasEnded else { return refuseForegroundResume(Self.resumeSessionEnded) }
+        currentMesh = restoredMeshDescriptor(from: context)
+        // The quota counter is pinned to the mesh it belongs to, exactly as `promoteToMesh()` pins
+        // it, so the adoption cannot read as a new mesh and hand back a free film quota.
+        sessionQuotaMeshID = context.meshID
+        // The launch restore already armed this from the same `hardDeadline`; the guard is what
+        // makes a resume that follows a retried restore idempotent rather than a second origin.
+        if sessionCeiling == nil {
+            startSessionCeiling(hardDeadline: context.hardDeadline, startedAt: now)
+        }
+        offersForegroundResume = false
+        FernletAuditLog.log("mesh.sessionResume.accepted")
+        return true
+    }
+
+    /// **Declines the foreground resume**, so the offer is not re-presented on the next tab visit.
+    ///
+    /// It adopts nothing and clears nothing else: ``restoredSessionContext`` stays, because it is
+    /// still what lets an expiry found at launch be written back, and the ledger, roster and
+    /// advertisements the restore re-proved stay addressable for a routed drain. The only thing that
+    /// moves is the offer, which is the only thing the user answered.
+    ///
+    /// Silent when there was no offer, so the app's one dismissal closure can call it for the two
+    /// NOTICES as well without minting a decline nobody made.
+    public func declineForegroundResume() {
+        guard offersForegroundResume else { return }
+        offersForegroundResume = false
+        FernletAuditLog.log("mesh.sessionResume.declined")
+    }
+
+    /// Frozen refusal token: ``acceptForegroundResume(now:)`` with no offer standing.
+    static let resumeNoOffer = "noOffer"
+
+    /// Frozen refusal token: an offer with no restored context behind it.
+    static let resumeNoContext = "noContext"
+
+    /// Frozen refusal token: a mesh is already held, so there is nothing to adopt into.
+    static let resumeMeshHeld = "meshHeld"
+
+    /// Frozen refusal token: the restored mesh carries a permanent rejoin bar.
+    static let resumeBarred = "rejoinBarred"
+
+    /// Frozen refusal token: this device's participation has already ended.
+    static let resumeSessionEnded = "sessionEnded"
+
+    /// Audits one refused resume and answers `false`, so every guard above is one line.
+    ///
+    /// - Parameter reason: One of the five frozen tokens above. English forever, never display copy.
+    /// - Returns: `false`, always.
+    private func refuseForegroundResume(_ reason: String) -> Bool {
+        FernletAuditLog.log("mesh.sessionResume.refused", context: ["reason": reason])
+        return false
+    }
+
+    /// The descriptor a resumed session adopts, built from the sealed context and this device.
+    ///
+    /// See ``acceptForegroundResume(now:)`` for why the name and the mode are the weakest claim the
+    /// merge can hold: the sealed schema carries neither, so both are stamped `.distantPast` and any
+    /// gossiped descriptor wins them. The member list is this device alone — the same shape
+    /// ``promoteToMesh()`` mints — because the descriptor is GOSSIP and the restored
+    /// ``MeshMembershipLedger`` is the membership truth; peers rejoin the list as they reconnect.
+    ///
+    /// - Parameter context: The restored context.
+    /// - Returns: The descriptor to adopt.
+    private func restoredMeshDescriptor(from context: MeshSessionContext) -> MeshDescriptor {
+        let localFingerprint = identity.localFingerprint
+        let local = MeshMember(
+            fingerprint: localFingerprint,
+            displayName: displayName,
+            signingPublicKey: identity.localSigningPublicKey,
+            keyAgreementPublicKey: identity.localKeyAgreementPublicKey,
+            joinedAt: context.createdAt
+        )
+        return MeshDescriptor(
+            meshID: context.meshID,
+            name: MeshNameGenerator.generate(),
+            mode: isSessionOpen ? .open : .closed,
+            members: [local],
+            nameSetAt: .distantPast,
+            nameSetBy: localFingerprint,
+            modeSetAt: .distantPast,
+            modeSetBy: localFingerprint,
+            createdAt: context.createdAt
+        )
     }
 
     /// Resumes a lapsed or partitioned session **through the merge path** (plan §8.2, §10.3).

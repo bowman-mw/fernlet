@@ -1881,6 +1881,24 @@ Protected-data availability is deliberately not a precondition of the call: a la
 unlock must still attempt it, because the attempt is what produces the `retryAfterUnlock` outcome
 the re-entry's retry then finds pending.
 
+**Network migration P7 item 5 gave the restore its user-facing half.** ``MeshNetworkManager/sessionResumeProjection`` is the one thing about it that crosses the module
+wall — a ``MeshSessionResumeProjection`` carrying the flattened outcome kind, the offer flag and the
+rejoin bar's reason **for the mesh in hand** (``MeshNetworkManager/rejoinRefusal(for:)``'s answer,
+never the global bar, which is cleared nowhere and would otherwise name the next mesh ended with the
+last one's reason) — and ``MeshNetworkManager/acceptForegroundResume(now:)`` /
+``MeshNetworkManager/declineForegroundResume()`` are the two doors the offer is answered through.
+The accept adopts the restored context into `currentMesh` so the Friends three-way resolves a
+**resume** rather than founding a second mesh beside the one on the disk, and it still arms **no**
+radio: deciding whether this device looks for anyone stays the app's run policy's.
+
+One seam moved with it: `armFriendRadios()`'s `.fresh` row now **holds** while a resume is on
+offer, logging ``ProximityRunStateSeam/resumeOffered``. `startJoin()` ends in
+`resetSessionStateMachine(keepingTerminalState: false)`, which clears the offer, the restored
+context and the ceiling, and the Friends tab's discovery directive is `foregroundOnly` — so without
+the hold the first visit to the tab after a relaunch would wipe the restore before its affordance
+could be drawn. The hold is bounded by the user's answer, not by a clock: both actions on the card
+clear the offer.
+
 **P6 item 9 corrected the join-ack's own re-assert.**
 ``MeshNetworkManager/reassertCommitIntoAdoptedMesh(admittedBy:)`` names the **grant's own sender**,
 threaded down from `handleAdmissionGrant`'s authenticated sender, rather than the first committed

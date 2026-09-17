@@ -866,7 +866,7 @@ struct ContentView: View {
                 tabResetToken: resetTokenBinding(for: .move)
             )
                 .tabPage(.move)
-            SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
+            SocialHubView(store: store, runPolicyHost: runPolicyHost, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
                 .tabPage(.social)
             // `!rootSheetIsCoveringTabs`: the hub stays alive beneath a root-presented sheet, so
             // its capture-friction pulse must not fire (and spend the once-per-session nudge

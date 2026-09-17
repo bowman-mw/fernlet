@@ -96,7 +96,14 @@ nonisolated enum MeshSessionContextDecodingError: Error, Equatable, Sendable {
 /// The distinction ``endsTheMeshForEveryone`` draws is plan §8.3's: a departure or a removal takes
 /// **this device** out of a mesh that carries on without it, while a termination, a development or
 /// the ceiling ends the mesh itself.
-nonisolated enum MeshSessionTerminationReason: String, Codable, Equatable, Sendable, CaseIterable {
+///
+/// **`public` since network migration P7 item 5 pass 2**, and this is the only one of the restore's
+/// three types that crossed the wall. ``MeshSessionResumeProjection`` carries the reason a rejoin bar
+/// records, and carrying it as its `rawValue` token would have handed the app a `String` to re-parse
+/// — the shape `ProximityAppLockState` exists to avoid. Nothing else about the type moved: it is
+/// still `nonisolated`, still `Sendable`, still `CaseIterable`, still eight frozen at-rest tokens,
+/// and ``endsTheMeshForEveryone`` stays internal because no app surface asks that question.
+public nonisolated enum MeshSessionTerminationReason: String, Codable, Equatable, Sendable, CaseIterable {
 
     /// This device sent its own signed departure record.
     case ownDeparture = "own-departure"
