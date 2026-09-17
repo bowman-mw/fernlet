@@ -1069,6 +1069,84 @@ private struct ProximityEndedSentencePin {
                 "and it cannot read a view's `@State`, which is exactly why the two can disagree")
     }
 
+    /// **A SILENT presentation never leaves the Friends search held** (P7 post-close review, P2-1).
+    ///
+    /// Two rules that can disagree, and the disagreement is a device that cannot search. The hold is
+    /// the mesh seam's: `MeshNetworkManager.armFriendRadios()`'s `.fresh` row refuses to call
+    /// `startJoin()` while `offersForegroundResume` stands, and records
+    /// `ProximityRunStateSeam.resumeOffered`. The affordance is this table's: clause 3 runs BEFORE
+    /// clause 4, so `notAttempted`, `deferred` and `refused` answer ``ProximityResumePresentation/nothing``
+    /// **whatever the offer says**, and `ProximityResumeCard` draws that as an `EmptyView`. A
+    /// standing offer behind a silent presentation is therefore a held search with no accept and no
+    /// decline anywhere on screen — a Friends tab that can never look for anyone, for the rest of
+    /// the launch.
+    ///
+    /// Shipping cannot reach the pair today (the restore writes the outcome and the offer in one
+    /// breath, and the second raiser needs a `.foregrounded` nothing raises until P8), but the
+    /// walled `FERNLET_MESH_RESUME_PRESENTATION=nothing` override substitutes the whole decision, so
+    /// a simulator holding a sealed context inside its ceiling launches straight into it under
+    /// `ProximityResumeCardUITests.testNothingPresentsNoCardAtAll`.
+    ///
+    /// **A source cell, and it pins the ROUTE as well as the rule.** The release must go through
+    /// `dismissResumeCard()` — the card's own dismissal — rather than call the manager again,
+    /// because ``theResumeAcceptanceHasOneAppCallSiteAndHandsTheRadiosBack()`` counts
+    /// `declineForegroundResume(` across the whole app target and requires exactly one. One door,
+    /// two reasons to walk through it.
+    @Test func theSilentPresentationReleasesTheHeldSearchThroughTheDismissPath() throws {
+        let connect = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/ConnectView.swift")
+        )
+        let release = try #require(
+            MeshRoutedSourceScan.bracedBody(
+                after: "private func releaseTheHeldSearchIfTheCardSaysNothing(", in: connect
+            ),
+            "the silent-presentation release was renamed, or its brace-matched body does not close"
+        )
+        #expect(release.contains("resumePresentation == .nothing"),
+                "the release no longer keys on the SILENT presentation, so it releases the wrong thing")
+        #expect(release.contains("sessionResumeProjection.offersForegroundResume"), """
+            the release no longer keys on a STANDING offer: it is idempotent only because the \
+            decline spends the flag the guard reads
+            """)
+        #expect(release.contains("dismissResumeCard()"), """
+            the release no longer routes through the card's one dismiss path, so either the offer is \
+            never spent or the decline has a second app call site
+            """)
+        #expect(!release.contains("declineForegroundResume("),
+                "the release calls the manager itself, which is the second call site the third wall forbids")
+        #expect(!release.contains("runPolicyHost.pushNow()"),
+                "the release pushes the policy itself instead of leaving that to the dismissal it calls")
+        try Self.expectTheSilentReleaseIsWiredOnAppearAndOnChange(connect)
+    }
+
+    /// The wiring half of the silent-presentation release: on appear, and on every rise of the offer.
+    ///
+    /// Split from the cell above only to stay inside the 60-line rule; the two are one claim. The
+    /// watched fact is the OFFER rather than the presentation, because the presentation does not
+    /// move when the offer rises behind a silent outcome — `.nothing` before and `.nothing` after —
+    /// so an `onChange` over it would never fire for the one transition this exists to catch.
+    ///
+    /// - Parameter connect: `ConnectView.swift`, comments stripped.
+    private static func expectTheSilentReleaseIsWiredOnAppearAndOnChange(_ connect: String) throws {
+        let calls = ProximityRunPolicyHostTests.occurrences(
+            of: "releaseTheHeldSearchIfTheCardSaysNothing()", in: connect
+        )
+        #expect(calls == 3, """
+            the release is declared once and called twice — from onAppear and from the offer's \
+            onChange — so three occurrences is the whole wiring
+            """)
+        let appear = try #require(MeshRoutedSourceScan.bracedBody(after: ".onAppear", in: connect),
+                                  "the Friends surface's first onAppear does not close")
+        #expect(appear.contains("releaseTheHeldSearchIfTheCardSaysNothing()"), """
+            a launch that lands on the Friends tab with the offer already standing never releases \
+            the hold, because nothing after it changes
+            """)
+        #expect(appear.contains("presentDisconnectReviewIfNeeded()"),
+                "non-vacuity: the matched body really is FriendsView's own onAppear")
+        #expect(connect.contains("onChange(of: manager.sessionResumeProjection.offersForegroundResume)"),
+                "an offer that rises after this surface appeared would hold the search unreleased")
+    }
+
     /// The containment half of the third wall, split out only to stay inside the 60-line rule.
     private static func expectTheAcceptanceHandsTheRadiosBack() throws {
         let connect = MeshRoutedSourceScan.codeOnly(

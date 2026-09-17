@@ -2345,6 +2345,16 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// push takes the `.resume` row, ``declineForegroundResume()`` clears the flag so the next push
     /// takes `.fresh` — and the app re-pushes the policy after either.
     ///
+    /// **And the app releases the hold itself when the card cannot be drawn** (P7 post-close review,
+    /// P2-1). "Bounded by the ANSWER" is only a bound while there is something to answer: the
+    /// surface's decision answers `.nothing` for a `notAttempted`, `deferred` or `refused` outcome
+    /// **whatever this flag says**, and a `.nothing` presentation renders no card and no actions —
+    /// so an offer standing behind one would hold this row with no affordance anywhere to clear it.
+    /// `FriendsView.releaseTheHeldSearchIfTheCardSaysNothing()` closes that: a silent presentation
+    /// over a standing offer declines it and re-pushes the policy, so this row falls through to the
+    /// ordinary `startJoin()` on the next push. Nothing here changes — the guard is still the offer
+    /// — but the offer is no longer something only a visible card can spend.
+    ///
     /// - Returns: the radio and frozen reason to hold on, or `nil` when nothing was refused. Two
     ///   rows can refuse: `.resume`, when ``resumeSearchingForPartitionedMesh()`` bails on a session
     ///   that has already ended — read off ``isSearching`` rather than re-derived from
@@ -10345,22 +10355,26 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// when the user TRIES anyway — so a `terminated` or `expired` launch is silent (both carry
     /// `offersForegroundResume == false`) until a door refuses an entry.
     ///
-    /// **Observation**: both ids are bound and read **unconditionally**, before anything is decided.
-    /// The old spelling coalesced them (`restoredSessionContext?.meshID ?? currentMesh?.meshID`),
-    /// which short-circuited exactly while the offer stood — so the accept, whose whole job is to
-    /// move ``currentMesh``, moved nothing this projection had read. Neither id decides anything
-    /// now; the READ is the dependency. The two facts that do decide are observed as well:
-    /// ``offersForegroundResume`` (un-ignored by this same review) and ``lastRejoinBarHit``, so a
-    /// deferred-then-retried restore that finally raises an offer, an accept that spends it, and a
-    /// refused try that raises a hit all repaint in the turn they happen.
+    /// **Observation**: ``currentMesh`` is read **unconditionally**, before anything is decided, and
+    /// it is the ONE load-bearing read of the two this getter used to take (P7 post-close review,
+    /// P3-4). The pair said both ids were "the dependency", which was half false:
+    /// ``restoredSessionContext`` is `@ObservationIgnored`, so reading it registers nothing at all
+    /// and never could. One read suffices because `currentMesh` is precisely the field the ACCEPT
+    /// moves, which is the edge the read was added for — the retired spelling
+    /// (`restoredSessionContext?.meshID ?? currentMesh?.meshID`) coalesced onto the ignored id and
+    /// short-circuited past the observed one for exactly as long as the offer stood, so the accept
+    /// moved nothing this projection had read. The id itself decides nothing here; the READ is the
+    /// dependency. The two facts that do decide are observed in their own right —
+    /// ``offersForegroundResume`` (un-ignored by the pass 2 fix review) and ``lastRejoinBarHit`` —
+    /// so a deferred-then-retried restore that finally raises an offer, an accept that spends it,
+    /// and a refused try that raises a hit all repaint in the turn they happen.
     public var sessionResumeProjection: MeshSessionResumeProjection {
-        // Read for the DEPENDENCY, not for the value (see the doc above): `currentMesh` is observed,
-        // and the old `restoredSessionContext?.meshID ?? currentMesh?.meshID` skipped it for exactly
-        // as long as the offer stood. Neither id decides anything now, so the pair is discarded
-        // where a reader can see that it is the READ that is load-bearing.
-        let heldMeshID = currentMesh?.meshID
-        let restoredMeshID = restoredSessionContext?.meshID
-        _ = (heldMeshID, restoredMeshID)
+        // Read for the DEPENDENCY, not for the value (see the doc above), in the shape this tree
+        // already uses for a read-for-the-dependency inside a computed property: one plain property
+        // read, discarded on the spot. `restoredSessionContext` is NOT read beside it — it is
+        // `@ObservationIgnored`, so that read observed nothing and only made the honest half look
+        // optional.
+        _ = currentMesh?.meshID
         return MeshSessionResumeProjection(
             outcome: MeshSessionResumeProjection.Outcome(restoring: lastSessionRestoreOutcome),
             offersForegroundResume: offersForegroundResume,

@@ -102,6 +102,11 @@ struct FriendsView: View {
             // transaction as the isInSession flip, so its onChange never fires. The review is
             // model-state (pendingFriendReview / post-teardown sessionPhotos), not a view-event.
             presentDisconnectReviewIfNeeded()
+            // A silent presentation must never leave the search held: see the function's own doc.
+            releaseTheHeldSearchIfTheCardSaysNothing()
+        }
+        .onChange(of: manager.sessionResumeProjection.offersForegroundResume) { _, _ in
+            releaseTheHeldSearchIfTheCardSaysNothing()
         }
         .onChange(of: manager.pendingFriendReview) { _, _ in
             presentDisconnectReviewIfNeeded()
@@ -456,10 +461,46 @@ struct FriendsView: View {
     /// could be drawn — and it records `ProximityRunStateSeam.resumeOffered`. Declining clears the
     /// flag, so re-deciding the policy here is what starts the ordinary fresh search the user asked
     /// for by saying "not now". For the two notices there was no hold, and the push is a no-op.
+    ///
+    /// **It has a second caller, and deliberately not a second `declineForegroundResume()`**
+    /// (P7 post-close review, P2-1): ``releaseTheHeldSearchIfTheCardSaysNothing()`` routes through
+    /// this exact function rather than repeating its three statements, because
+    /// `ProximityResumeDecisionTests.theResumeAcceptanceHasOneAppCallSiteAndHandsTheRadiosBack`
+    /// counts `declineForegroundResume(` across the whole app target and requires exactly one. One
+    /// door, two reasons to walk through it: the reader's "not now", and a standing offer that has
+    /// no affordance at all.
     private func dismissResumeCard() {
         resumeCardDismissed = true
         manager.declineForegroundResume()
         runPolicyHost.pushNow()
+    }
+
+    /// **A silent presentation never holds the search** (P7 post-close review, P2-1).
+    ///
+    /// The hold and the affordance are decided by two different rules, and they can disagree.
+    /// `MeshNetworkManager.armFriendRadios()`'s `.fresh` row holds the Friends search for as long as
+    /// `offersForegroundResume` stands, and the only things that clear it are this card's two
+    /// actions — but `ProximityResumeDecision.decide(_:)` answers `.nothing` for every outcome in
+    /// `{notAttempted, deferred, refused}` **whatever the offer says** (clause 3 runs before clause
+    /// 4), and `ProximityResumeCard` draws `.nothing` as an `EmptyView`. A standing offer behind a
+    /// silent presentation is therefore a Friends tab that can never search, with nothing on screen
+    /// to release it.
+    ///
+    /// Shipping cannot reach that pair today — the restore sets the outcome and the offer in one
+    /// breath, and the only other raiser needs a `.foregrounded` event nothing raises until P8 — but
+    /// `FERNLET_MESH_RESUME_PRESENTATION=nothing` substitutes the whole decision (see
+    /// ``resumePresentation``), so a simulator holding a sealed context inside its ceiling launches
+    /// into exactly that state under `ProximityResumeCardUITests.testNothingPresentsNoCardAtAll`.
+    ///
+    /// **Idempotent by the guard, not by a flag.** ``dismissResumeCard()`` clears the offer, so the
+    /// second guard fails on every subsequent call and no second decline is ever minted — which is
+    /// why this needs no `@State` of its own and can run on appear and on every rise of the offer.
+    /// It answers nothing for the reader: the card was already invisible, so putting it away changes
+    /// no pixel, and what moves is the radio hold.
+    private func releaseTheHeldSearchIfTheCardSaysNothing() {
+        guard resumePresentation == .nothing else { return }
+        guard manager.sessionResumeProjection.offersForegroundResume else { return }
+        dismissResumeCard()
     }
 
     // MARK: - Header button label (matches HeaderActionButton visual)

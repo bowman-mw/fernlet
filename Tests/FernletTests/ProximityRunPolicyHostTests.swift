@@ -400,47 +400,92 @@ final class ProximityRunDoorRecorder {
     /// the lock leg is `.duress`. Six of the thirteen steps drive a setter the GATE does not read
     /// and repeat the previous literal unchanged, which is the claim that those legs stay out of it;
     /// the `.inactive` → `.active` step repeats too, because both phases are foreground.
-    static let legSteps: [(step: LegStep, expected: MeshRoutedAccessGate)] = [
-        (step: { $0.setScenePhase(.background) }, expected: MeshRoutedAccessGate(
+    ///
+    /// **Built statement by statement, never as one array literal** (P7 post-close review, P2-2).
+    /// The retired spelling was a single 13-element literal of LABELLED TUPLES, each carrying a
+    /// closure and a three-argument initialiser, under one type annotation — one expression for the
+    /// type checker to solve whole, of a shape with no precedent in this tree, and "unable to
+    /// type-check this expression in reasonable time" is what that shape fails as. The two builders
+    /// below append one entry per statement with every `expected` bound to an annotated local first,
+    /// so each step is its own small solve. Every literal is byte-for-byte the one it replaced and
+    /// the ORDER is unchanged, because the order is the claim.
+    static let legSteps: [(step: LegStep, expected: MeshRoutedAccessGate)] =
+        legStepsThroughDuress() + legStepsAfterDuress()
+
+    /// The first seven steps: the two fail-closed legs rising, the scene into `.inactive`, and the
+    /// lock in and out of duress with two gate-blind setters between them.
+    ///
+    /// Split from ``legStepsAfterDuress()`` only to stay inside the 60-line rule; the two are one
+    /// list and `legSteps` concatenates them in this order.
+    ///
+    /// - Returns: steps 1 through 7, each with its hand-derived gate.
+    private static func legStepsThroughDuress() -> [(step: LegStep, expected: MeshRoutedAccessGate)] {
+        var steps: [(step: LegStep, expected: MeshRoutedAccessGate)] = []
+        let failClosed: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: false, appIsForeground: false, duressActive: false
-        )),
-        (step: { $0.setProtectedDataAvailable(true) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setScenePhase(.background) }, expected: failClosed))
+        let dataUpStillBackground: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: false, duressActive: false
-        )),
-        (step: { $0.setScenePhase(.inactive) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setProtectedDataAvailable(true) }, expected: dataUpStillBackground))
+        let inactiveIsForeground: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: false
-        )),
-        (step: { $0.setAppLockState(.duress) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setScenePhase(.inactive) }, expected: inactiveIsForeground))
+        let duressRaised: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: true
-        )),
-        (step: { $0.setSelectedTab(.social) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setAppLockState(.duress) }, expected: duressRaised))
+        let tabIsNotAGateLeg: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: true
-        )),
-        (step: { $0.setHasCommittedPeer(true) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setSelectedTab(.social) }, expected: tabIsNotAGateLeg))
+        let committedPeerIsNotAGateLeg: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: true
-        )),
-        (step: { $0.setAppLockState(.unlocked) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setHasCommittedPeer(true) }, expected: committedPeerIsNotAGateLeg))
+        let duressCleared: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: false
-        )),
-        (step: { $0.setChatAgeGate(.below) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setAppLockState(.unlocked) }, expected: duressCleared))
+        return steps
+    }
+
+    /// The last six steps: four more setters the gate does not read, then the scene to `.active` and
+    /// protected data back down.
+    ///
+    /// Split from ``legStepsThroughDuress()`` only to stay inside the 60-line rule.
+    ///
+    /// - Returns: steps 8 through 13, each with its hand-derived gate.
+    private static func legStepsAfterDuress() -> [(step: LegStep, expected: MeshRoutedAccessGate)] {
+        var steps: [(step: LegStep, expected: MeshRoutedAccessGate)] = []
+        let ageGateIsNotAGateLeg: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: false
-        )),
-        (step: { $0.setAllowsNearbyPresence(true) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setChatAgeGate(.below) }, expected: ageGateIsNotAGateLeg))
+        let presenceConsentIsNotAGateLeg: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: false
-        )),
-        (step: { $0.setAllowsNearbyRecipeShares(true) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setAllowsNearbyPresence(true) }, expected: presenceConsentIsNotAGateLeg))
+        let recipeConsentIsNotAGateLeg: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: false
-        )),
-        (step: { $0.setDeletingAllData(true) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setAllowsNearbyRecipeShares(true) }, expected: recipeConsentIsNotAGateLeg))
+        let deleteAllIsNotAGateLeg: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: false
-        )),
-        (step: { $0.setScenePhase(.active) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setDeletingAllData(true) }, expected: deleteAllIsNotAGateLeg))
+        let activeIsForegroundToo: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: true, appIsForeground: true, duressActive: false
-        )),
-        (step: { $0.setProtectedDataAvailable(false) }, expected: MeshRoutedAccessGate(
+        )
+        steps.append((step: { $0.setScenePhase(.active) }, expected: activeIsForegroundToo))
+        let dataDownStillForeground: MeshRoutedAccessGate = MeshRoutedAccessGate(
             protectedDataAvailable: false, appIsForeground: true, duressActive: false
-        ))
-    ]
+        )
+        steps.append((step: { $0.setProtectedDataAvailable(false) }, expected: dataDownStillForeground))
+        return steps
+    }
 
     /// Every `.swift` file under `App/`, comments stripped, sorted by path.
     ///
@@ -734,6 +779,25 @@ final class ProximityRunDoorRecorder {
     ///
     /// Non-vacuity twice over: the mount and the exempted sheet are both shown to be IN the sweep,
     /// because a mention list that stopped matching them would sweep an empty set and pass green.
+    ///
+    /// **The trap, named here so the next red is diagnosable** (P7 post-close review, P2-3).
+    /// Dropping the receiver is what lets this sweep catch what ``radioCalls`` cannot, and it is
+    /// also what makes it over-broad: the needles are BARE `.start()` and `.stop()`, matched against
+    /// the WHOLE of every `App/` file that so much as mentions a listener — ten of them today
+    /// (`AmbientCards`, `ContentView`, `DisposableCameraView`, `FernletApp`, `FernletStore`,
+    /// `FoodView`, `FriendListView`, both recipe-share sheets and `SessionHeartStatusCopy`). So an
+    /// unrelated `.start()` in any of those ten — a timer, an animation, a scanner, a service that
+    /// has nothing to do with proximity — reddens this cell with a message about radios that names
+    /// the wrong defect entirely, and the file it names is only where the two happen to cohabit.
+    ///
+    /// **The intended fix is to scope the match to the RECEIVER on the same line, never to add the
+    /// file to ``byNameExemptions``.** The sweep is whole-file today because the miss it was written
+    /// for hid behind a receiver name (`manager.start()` on the store's own
+    /// `ProximityRecipeShareManager`), so the honest narrowing is per-LINE: keep the bare needle,
+    /// and count a hit only where the receiver on that line is not demonstrably something else —
+    /// the file stays swept, and the line that is really a listener still cannot hide. An exemption
+    /// hands a whole file back to the blind spot this half exists to close, which is exactly how the
+    /// receiver-qualified wall came to be green over a second radio owner.
     @Test func theListenerRadiosAreNotMovedByAnyOtherReceiver() throws {
         let sources = try Self.appSources()
         #expect(!sources.isEmpty, "the App/ sweep found no Swift files at all")

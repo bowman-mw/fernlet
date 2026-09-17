@@ -185,6 +185,25 @@ final class ProximityResumeCardUITests: XCTestCase {
     /// This is the cell that keeps the other four honest: without it they would pass just as well
     /// against a card that is always up, and "a deferred restore says nothing" is a positive claim
     /// of the decisions table rather than an omission.
+    ///
+    /// **And the silence must not cost the tab its search** (P7 post-close review, P2-1). This is
+    /// the one launch where the two rules could disagree: the override forces `.nothing`, so no card
+    /// is drawn — while a simulator whose container still holds a sealed context inside its ceiling
+    /// raises a REAL `offersForegroundResume` behind it, and that flag holds the mesh seam's fresh
+    /// search (`ProximityRunStateSeam.resumeOffered`). Before the fix the two together were a
+    /// Friends tab that could never look for anyone, with nothing on screen to release it.
+    /// `FriendsView.releaseTheHeldSearchIfTheCardSaysNothing()` declines the standing offer through
+    /// the card's own dismiss path and re-pushes the policy, so the ordinary search arms instead.
+    ///
+    /// **What is asserted, and why it is the weaker pair.** Nothing on this surface publishes the
+    /// search state under an identifier — the "Looking for nearby friends…" pulse carries none, and
+    /// asserting its English would break on the first translation, which this suite's header
+    /// forbids. Nor could a pulse be required: the simulator may have no Local Network permission,
+    /// in which case the discovery-failure banner is the honest render. So the pair pinned is the
+    /// one that is true on every device: the card is absent, AND the tab is still a usable tab —
+    /// its surface up and its floating tab bar there to leave by, which is the same "the tab is
+    /// drawing something and can be left" invariant ``testAcceptingTheOfferNeverStrandsTheFriendsTab()``
+    /// rests on. A held search is invisible here; a strand or a vanished tab bar is not.
     @MainActor
     func testNothingPresentsNoCardAtAll() throws {
         let app = launchOnFriends("nothing")
@@ -193,6 +212,14 @@ final class ProximityResumeCardUITests: XCTestCase {
         XCTAssertFalse(cardElement(in: app).exists, "a silent restore drew a card")
         XCTAssertFalse(app.buttons[Self.accept].exists, "and offered a resume")
         XCTAssertFalse(app.buttons[Self.dismiss].exists, "and something to dismiss")
+        XCTAssertFalse(app.descendants(matching: .any)[Self.shutter].exists, """
+            a silent restore adopted a session: the camera surface is up over a launch that was \
+            never offered one
+            """)
+        XCTAssertTrue(app.buttons["Friends"].firstMatch.exists, """
+            the album is up with no tab bar under it: the tab cannot be left, and a search held \
+            behind a card nobody can see would be held for the rest of the launch
+            """)
     }
 
     // MARK: - The accept

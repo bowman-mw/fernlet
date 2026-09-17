@@ -57,8 +57,15 @@ import SwiftUI
 /// its teardown flag through the injected doors. `FernletApp` and `ContentView` own the edges; this
 /// type owns the assembly.
 ///
-/// **There is exactly ONE instance, and it is `FernletApp`'s `@State`.** That is where the legs
-/// are: the scene phase is the scene's `@Environment`, both protected-data notifications are
+/// **There is exactly ONE CONNECTED instance, and it is `FernletApp`'s `@State`.** *Connected* is
+/// the word that carries the claim (P7 post-close review, P3-5): ``pushNow()`` bails on
+/// `guard let writeAccessGate`, so a host that has never been handed doors by
+/// ``connect(accessGate:meshRadios:presence:recipeShare:tearDownSession:poll:)`` never even consults
+/// the policy, and every setter on it is a value written to a field nothing reads. An unconnected
+/// second instance is therefore inert by construction — which is what lets `ContentView`'s
+/// `#Preview` construct one of its own to satisfy the `init` parameter without a second owner of the
+/// radios existing for an instant. The legs belong to the connected one: the scene phase is the
+/// scene's `@Environment`, both protected-data notifications are
 /// observed on that scene, and the app lock (with the duress session folded in) lives on
 /// `FernletLockService`, which is `FernletApp`'s `@State` and not the store's. The other two
 /// feeders are handed the same object rather than making one of their own — `ContentView` takes it
