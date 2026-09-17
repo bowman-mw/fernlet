@@ -29,7 +29,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 Item 5 pass 1 (`841abc8`), all measured ABSENT from the committed catalog; one em dash (U+2014) in key 5, straight apostrophes, no interpolation:
 `Pick up where you left off?` · `Fernlet still has your last session. It isn't looking for anyone until you say so.` · `Resume session` · `Your last session couldn't be reopened.` · `Nothing you shared was lost — it stays sealed on this device.` · `That session has ended.` · `You left it.` · `The group removed you from it.` · `It was ended by the group.` · `You and the last person in it ended it together.` · `It reached its six-hour limit.` · `It ran out of new keys, so it closed.` · `You finished it and developed the photos.`
 Item 5 pass 2 (`d91d3dc`), 2 more: `Not now` · `Dismiss session notice` — **15 keys owed in all.**
-`Scripts/sync-string-catalogs.sh --check` is red on the app catalog until the sync — P6's known-red shape.
+**SYNCED at `2389d01`** from `HEAD`'s blob (sorted position, empty entries, no existing line touched): **14 added + 1 already present** (`Not now`), catalog 1936 → 1950 keys. Only the wording is still the owner's.
 
 ## Decisions taken (defaults from §3 unless the owner overrides)
 | Decision | Choice | Taken on |
