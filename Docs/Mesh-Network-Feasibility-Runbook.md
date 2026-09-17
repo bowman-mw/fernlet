@@ -1040,6 +1040,19 @@ xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
 | `FERNLET_MESH_ALLOW_HEARTS=1` *(2026-09-12, P6 item 10)* | same | Off, and off leaves the device's own `allowNearbyHearts` setting untouched. The setting ships **off** and `localCapabilities()` advertises `.hearts` only when it is on, so this is applied **before `startJoin()`** — a flip afterwards would never reach a peer's capability list. |
 | `FERNLET_MESH_AUTO_KEEP_FRIENDS=1` *(2026-09-12, P6 item 10)* | same | Off: no friend-review batch is ever kept, which is what every Lane C run before this one did. On, it stands in for **one tap** — `ConnectView.finalizeFriendKeeps()`'s — by calling the shipping `FernletStore.keepProximityFriends(from:keptFingerprints:)` and `MeshNetworkManager.completeFriendReview(_:)` on a batch a real session end promoted. It is checked in the poll **and again after `leave()` returns**, because the departer's poll ends inside `leave` and the batch is promoted by that very departure. |
 
+**The harness tells the run policy where the run is** *(2026-09-17, P7 item 3 pass-B fix review)*.
+Since P7 item 3 the four radios belong to `ProximityRunPolicy`, and its tab leg seeds to `.home`
+because `ContentView.handleTabChange(from:to:)` is its only shipping feeder — which a Lane C run
+never reaches, since it drives no UI. The harness installs at `readyContent`'s `.task`, i.e. after
+the launch push, so without help its `startJoin()` would sit under a policy that believes the user
+is on Home: the next leg change of any kind (a scene bounce, a protected-data notification, a lock
+edge) would re-decide `(.stop, .stop)` and stand the lane's search down mid-run. So
+`MeshRejectionMatrixHarness.install(manager:store:runPolicyHost:)` sets the tab leg to `.social`
+immediately AFTER `startJoin()` — after, because `applyRunState(links:discovery:)`'s arm guards on
+`isSearching`, so the push finds the radios already up and moves nothing. The transcript says so:
+the `radios started;` line now carries `policyTab=social`. Nothing about the lane's invocation
+changes, and a run whose transcript lacks `policyTab=social` is running against an older build.
+
 **The launch restore is bypassed on this lane, by construction** *(2026-09-12, P6 item 10; the
 sentence P6 item 7's handoff left owed)*. P6 item 7 mounted `restoreSessionContextOncePerLaunch(now:)`
 at `FernletApp.swift:496`, in the ready view's `.onAppear` one statement after the routed gate push

@@ -1,7 +1,6 @@
 import ProximityKit
 import SwiftUI
 import FernletDomainModel
-import FernletLock
 import FernletUI
 
 /// One recipe the user chose to share, packaged for the share sheet.
@@ -28,17 +27,21 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// and an "Include picture" toggle (default ON, shown only when the draft carries one) strips the
 /// attached recipe photo — the picture can be the sender's own kitchen shot, so it gets the same
 /// per-share control as their notes.
-/// On disappear it also restarts passive listening behind the same opt-in + active-scene + lock
-/// gates ContentView enforces — the go-dark-after-share fix, since `stop()` would otherwise leave
-/// the device undiscoverable for inbound recipes until the next scene/tab/lock event.
+/// On disappear it ends the share session and then asks ``ProximityRunPolicyHost`` to re-decide, so
+/// the RESTING listener state after a share is the policy's answer and never this sheet's — the
+/// go-dark-after-share fix without a second owner of the radio (P7 item 3, pass B fix review).
 struct ProximityRecipeShareSheet: View {
     var draft: ProximityRecipeShareDraft
     var manager: ProximityRecipeShareManager
-    var store: FernletStore
+    /// The app's one proximity run-policy writer, handed down from `ContentView` through `FoodView`
+    /// / ``RecipeBookSheet`` / the import sheet rather than injected through `@Environment` — the
+    /// host is not `@Observable`, so nothing can read it out of a `body`.
+    ///
+    /// This sheet asks it exactly ONE thing — re-decide now — and only when the share ends. It sets
+    /// no leg, and it decides no radio for itself.
+    var runPolicyHost: ProximityRunPolicyHost
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
-    @Environment(FernletLockService.self) private var lockService
     @State private var includeNotes = true
     /// Whether the recipe's attached picture rides the share. Default ON (owner decision: the
     /// image rides the share); the toggle exists because the picture can be the sender's own
@@ -222,42 +225,42 @@ struct ProximityRecipeShareSheet: View {
         }
     }
 
-    /// Starts the recipe radio and arms the "nothing nearby" timeout.
+    /// Starts the recipe radio for the ACTIVE share and arms the "nothing nearby" timeout.
+    ///
+    /// This `start()` is a user-initiated act — they tapped "Share" on a recipe — and not the
+    /// resting listener, which is why it is unconditional: the radio runs for as long as this sheet
+    /// is up, whatever the policy would have said about passive listening.
+    ///
+    /// **The RESTING state after this sheet goes away is the host's decision, never this sheet's.**
+    /// See ``handleDisappear()``: the sheet hands the question back rather than answering it.
     private func handleAppear() {
         manager.start()
         scheduleNoNearbyState()
     }
 
-    /// Tears the sheet's work down and — the go-dark-after-share fix — restarts passive listening
-    /// behind the same gates ContentView enforces.
+    /// Ends the share session, then hands the RESTING state back to the run policy.
+    ///
+    /// `stop()` is the share session's teardown and not a stand-down: it cancels the observation,
+    /// connect-timeout and parked-sweep tasks, cancels every coordinator, stops the multipeer
+    /// session and clears the recipient list, the engaged recipient, the pending outgoing payload
+    /// and the send status. A dismissed sheet must not leave a half-finished pairing or a stale
+    /// "Sent to …" behind it, so that part is unconditional.
+    ///
+    /// Then `pushNow()`, and nothing else. Until this fix the line after `stop()` was a
+    /// three-condition `manager.start()` — scene active, `allowNearbyRecipeShares`, unlocked —
+    /// which LOOKED like the recipe directive and was not it. `manager` IS
+    /// `store.recipeShareManager`, the instance ``ProximityRunPolicyHost`` drives, so a dismissal
+    /// during a duress session (whose lock state still reads `.unlocked`), under a `.below` age
+    /// verdict, or in the middle of a delete-all restarted the radio against the policy's `stop`,
+    /// and nothing re-pushed until some other leg moved. A sheet dismissal is still not one of the
+    /// policy's legs — which is why something IS owed here — but what is owed is a re-decision, not
+    /// an opinion: `pushNow()` re-runs ``ProximityRunPolicy`` over the facts the host already holds
+    /// and restarts passive listening only if the policy says so.
     private func handleDisappear() {
         searchDelayTask?.cancel()
         dismissAfterSendTask?.cancel()
         manager.stop()
-        // Go-dark-after-share fix (mesh redesign Phase 3b): stop() tears the recipe
-        // radio down, and historically nothing restarted passive listening until the
-        // next tab/scene/lock event — after one share the device silently stopped
-        // being discoverable for inbound recipes. Restart it here behind the same
-        // opt-in + scene + lock gates ContentView enforces. The scene check is NOT
-        // implicit: the post-send auto-dismiss can race a backgrounding (onDisappear
-        // then fires with the scene inactive), and restarting there would broadcast
-        // while backgrounded — the privacy line every listener holds. No unit seam
-        // reaches this view closure; since network migration P7 item 3 the authoritative
-        // gate is `ProximityRunPolicy`'s recipe directive, pushed through
-        // `ProximityRecipeShareManager.applyRunState(_:)` — any later scene/tab/lock/
-        // opt-out change is a policy leg that re-decides and stops the manager again (an
-        // inactive-scene dismissal is then restarted by the next scene-active leg, not
-        // left dark). This restart is still owed because a SHEET DISMISSAL is not one of
-        // the policy's legs, so nothing else would push until the user's next lifecycle
-        // move. The three conditions below are deliberately the recipe directive's own,
-        // minus the tab, which is implicitly satisfied (the sheet only presents over
-        // recipe-share tabs). Both calls here are the ACTIVE share flow's, reached through
-        // this sheet's injected `manager` rather than through `store.recipeShareManager` —
-        // which is why `ProximityRunPolicyHostTests`' zero wall, whose needles name the
-        // store's property, does not and should not count them.
-        if scenePhase == .active, store.settings.allowNearbyRecipeShares, isUnlockedForListening {
-            manager.start()
-        }
+        runPolicyHost.pushNow()
     }
 
     private var searchingView: some View {
@@ -371,13 +374,6 @@ struct ProximityRecipeShareSheet: View {
                 return
             }
             dismiss()
-        }
-    }
-
-    private var isUnlockedForListening: Bool {
-        switch lockService.state {
-        case .notConfigured, .unlocked: true
-        case .locked: false
         }
     }
 

@@ -233,8 +233,22 @@ enum MeshMatrixDebugOptions {
 /// every run in the lane advertises byte-identical TXT records. The only thing that varies between
 /// runs is the membership state being tested.
 ///
-/// **Release cannot install it.** The whole body is compiled out; the release ``install(manager:)``
-/// is empty, reads no environment, and can seed nothing.
+/// ## It tells the run policy where the run is
+///
+/// Since P7 item 3 the four radios are ``ProximityRunPolicyHost``'s, and the host's tab leg starts
+/// at `.home` — `ContentView.handleTabChange(from:to:)` is its only shipping feeder and a Lane C
+/// run touches no UI. This harness installs at `readyContent`'s `.task`, i.e. AFTER the launch
+/// push, so its `startJoin()` lands on a policy that believes the user is on Home: the next leg
+/// change of any kind (a scene bounce, a protected-data notification, a lock edge) would re-decide
+/// `(.stop, .stop)` and stand the lane's search down mid-run. So the harness sets the tab leg to
+/// `.social` once the radios are up. It is a LEG and not a radio — the harness says where the run
+/// is and the policy still decides — and it is set AFTER `startJoin()` deliberately, because
+/// `MeshNetworkManager.applyRunState(links:discovery:)` guards on `isSearching` and a push before
+/// the join would re-mint the radio's Bonjour name.
+///
+/// **Release cannot install it.** The whole body is compiled out; the release
+/// ``install(manager:store:runPolicyHost:)`` is empty, reads no environment, seeds nothing and
+/// touches no leg.
 @MainActor
 enum MeshRejectionMatrixHarness {
 
@@ -252,7 +266,18 @@ enum MeshRejectionMatrixHarness {
     ///
     /// Idempotent through `isSearching`: the SwiftUI `.task` that calls this can re-fire, and a
     /// second `startJoin()` would re-mint the radio's Bonjour name mid-run.
-    static func install(manager: @autoclosure () -> MeshNetworkManager, store: FernletStore) {
+    ///
+    /// - Parameters:
+    ///   - manager: The loaded store's mesh manager, as an autoclosure so an ordinary launch never
+    ///     forces it into existence.
+    ///   - store: The loaded store, for the flow driver's hearts script.
+    ///   - runPolicyHost: The app's one run-policy host, so the lane's search survives the next leg
+    ///     change — see this type's documentation.
+    static func install(
+        manager: @autoclosure () -> MeshNetworkManager,
+        store: FernletStore,
+        runPolicyHost: ProximityRunPolicyHost
+    ) {
         guard MeshMatrixDebugOptions.isEnabled else { return }
         let manager = manager()
         guard !manager.isSearching else { return }
@@ -265,7 +290,11 @@ enum MeshRejectionMatrixHarness {
         // The hearts opt-in (P6 item 10) is in that same window for the same reason.
         MeshFlowDriver.prepare(manager: manager, store: store)
         manager.startJoin()
-        echo("radios started; searching=\(manager.isSearching)")
+        // AFTER the join, never before: `applyRunState(links:discovery:)`'s arm guards on
+        // `isSearching`, so this push finds the radios already up and moves nothing — while every
+        // LATER leg change now re-decides over `.social` and leaves the lane's search running.
+        runPolicyHost.setSelectedTab(.social)
+        echo("radios started; searching=\(manager.isSearching) policyTab=social")
         MeshFlowDriver.start(manager: manager, store: store)
     }
 
@@ -319,8 +348,18 @@ enum MeshRejectionMatrixHarness {
     }
     #else
     /// Release no-op — the autoclosure is never evaluated, so nothing is read, nothing is seeded,
-    /// no radio is started, and the lazy mesh manager is not even built. The store arrives by
-    /// reference and is not touched either.
-    static func install(manager: @autoclosure () -> MeshNetworkManager, store: FernletStore) {}
+    /// no radio is started, and the lazy mesh manager is not even built. The store and the run-policy
+    /// host arrive by reference and neither is touched, so no leg moves and the policy never hears
+    /// from this file in a shipping build.
+    ///
+    /// - Parameters:
+    ///   - manager: Unused.
+    ///   - store: Unused.
+    ///   - runPolicyHost: Unused.
+    static func install(
+        manager: @autoclosure () -> MeshNetworkManager,
+        store: FernletStore,
+        runPolicyHost: ProximityRunPolicyHost
+    ) {}
     #endif
 }

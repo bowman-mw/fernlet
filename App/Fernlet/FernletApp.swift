@@ -317,11 +317,28 @@ struct FernletApp: App {
     /// `ContentView.selectedTab`'s own initial value and the delete-all flag at `false`; see the two
     /// legs' own documentation on ``ProximityRunPolicyHost``.
     ///
-    /// **This body is the ONE place in the app target that names a proximity radio.**
-    /// `ProximityRunPolicyHostTests.theProximityRadiosAreDrivenOnlyFromTheHostsDoors()` counts
-    /// `startJoin()`, `stopJoin()`, `resumeSearchingForPartitionedMesh()`, both listeners'
-    /// `start()` / `stop()` and `applyRunState(` across `App/` and requires every occurrence to sit
-    /// inside these braces (the DEBUG rejection-matrix harness is exempted by file name).
+    /// It is attached to `readyContent(store:)`, which covers the ONBOARDING branch as well as
+    /// ``ContentView`` — so the mount and its launch push really do run before onboarding finishes.
+    /// That push is unreachable as a radio start in practice and by construction: both nearby
+    /// consents ship OFF, so the two listener directives are `stop`, and the tab leg's seed is
+    /// `.home`, so both mesh directives are `stop` too. Nothing is armed until a consent is given
+    /// and a leg moves, and both of those need the post-onboarding shell.
+    ///
+    /// **This body is the ONE place in the app target that names a proximity radio, bar two files
+    /// exempted BY NAME.** `ProximityRunPolicyHostTests.theProximityRadiosAreDrivenOnlyFromTheHostsDoors()`
+    /// counts nine RECEIVER-QUALIFIED spellings across `App/` — `startJoin()`, `stopJoin()`,
+    /// `resumeSearchingForPartitionedMesh()`, `presenceManager.start()` / `.stop()`,
+    /// `recipeShareManager.start()` / `.stop()`, `applyRunState(` and `armDiscoveryTimeout` — and
+    /// requires every occurrence to sit inside these braces. Because those needles name a RECEIVER,
+    /// a caller holding the same instance under another name is invisible to them, so
+    /// `…theListenerRadiosAreNotMovedByAnyOtherReceiver()` sweeps the bare `.start()` / `.stop()`
+    /// over every `App/` file that so much as mentions the two listeners, and that sweep is the one
+    /// the exemptions are really for. The two exempted files are `MeshRejectionMatrixHarness.swift`
+    /// (the DEBUG Lane C harness) and `ProximityRecipeShareSheet.swift` (the ACTIVE share flow,
+    /// which drives the recipe radio through its own injected `manager` for as long as the sheet is
+    /// up and hands the resting state back with `pushNow()`); both carry a fixture pinning their
+    /// exact surviving call counts, so an exemption that stops matching what it was written for
+    /// reddens.
     ///
     /// The teardown door is what plan §13's three dominating inputs — a delete-all, a final
     /// below-age verdict and a duress session — reach instead of reaching around the policy.
@@ -539,7 +556,13 @@ struct FernletApp: App {
                     // P2 rejection-matrix lane (runbook Lane C). Absent FERNLET_MESH_MATRIX=1 this
                     // does nothing — the mesh manager is not even built — and in release it is a
                     // compiled-out no-op.
-                    .task { MeshRejectionMatrixHarness.install(manager: store.meshNetworkManager, store: store) }
+                    .task {
+                        MeshRejectionMatrixHarness.install(
+                            manager: store.meshNetworkManager,
+                            store: store,
+                            runPolicyHost: runPolicyHost
+                        )
+                    }
                     // P5 item 10's launch push, now P7 item 2's run-policy mount.
                     // `.onChange(of: scenePhase)` carries no `initial:`, and on a cold launch the
                     // loader reaches `.ready` AFTER the `.inactive → .active` edge — without this

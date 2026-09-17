@@ -307,10 +307,57 @@ final class ProximityRunDoorRecorder {
         "armDiscoveryTimeout"
     ]
 
-    /// The one file exempted BY NAME: the DEBUG rejection-matrix harness (runbook Lane C), whose
-    /// `startJoin()` is compiled out of release entirely and gated on
-    /// `MeshMatrixDebugOptions.isEnabled` at runtime.
+    /// The DEBUG rejection-matrix harness (runbook Lane C), exempted BY NAME: its `startJoin()` is
+    /// compiled out of release entirely and gated on `MeshMatrixDebugOptions.isEnabled` at runtime.
     static let debugHarnessFile = "MeshRejectionMatrixHarness.swift"
+
+    /// The active-share sheet, exempted BY NAME — the second and last exemption (P7 item 3, pass B
+    /// fix review).
+    ///
+    /// It drives the recipe radio through its OWN injected `manager`, which is the same instance
+    /// `store.recipeShareManager` names, so the receiver-qualified needles in ``radioCalls`` were
+    /// blind to it and ``listenerCalls`` is not. The exemption is written for the ACTIVE share
+    /// flow and nothing else: a user tapped "Share", so the radio runs for as long as the sheet is
+    /// up whatever the policy would have said about PASSIVE listening. What the sheet may not do is
+    /// decide the RESTING state — the dismissal hands that back with `pushNow()`, and
+    /// ``theActiveShareSheetsExemptionIsExactlyTheShareFlow()`` pins both halves.
+    static let recipeShareSheetFile = "ProximityRecipeShareSheet.swift"
+
+    /// Its path under the repo root, for the fixture that reads it directly.
+    static let recipeShareSheetPath = "App/Fernlet/Proximity/UI/ProximityRecipeShareSheet.swift"
+
+    /// Every file either wall lets off, by name. Two, and each one carries a fixture pinning the
+    /// exact calls it was written for — an exemption that stops matching what it excuses is a hole
+    /// nobody can see.
+    static let byNameExemptions: Set<String> = [debugHarnessFile, recipeShareSheetFile]
+
+    /// How many `manager.start()` calls the exempted share sheet may hold — MEASURED after the fix
+    /// review, never inherited: `handleAppear()`'s (the share the user asked for) and the "Search
+    /// again" button's. The third, `handleDisappear()`'s three-condition restart, is what the
+    /// review removed; it was a second opinion about the RESTING listener.
+    static let recipeShareSheetStarts = 2
+
+    /// How many `manager.stop()` calls it may hold — one, `handleDisappear()`'s, which ends the
+    /// share SESSION (coordinators, recipient list, send status) rather than standing a radio down.
+    static let recipeShareSheetStops = 1
+
+    /// The mentions that put an `App/` file into the receiver-agnostic sweep: either listener named
+    /// as a store property, or either manager named as a TYPE (which is how a view that takes one as
+    /// a parameter refers to it).
+    static let listenerMentions = [
+        "recipeShareManager",
+        "presenceManager",
+        "RecipeShareManager",
+        "PresenceManager"
+    ]
+
+    /// The two spellings that move a listener whatever the receiver is called. Deliberately bare:
+    /// the point is to catch the instance reached under another name.
+    static let listenerCalls = [".start()", ".stop()"]
+
+    /// How many ``listenerCalls`` the mount's door closures hold — MEASURED: the teardown door's
+    /// two listener stops, and nothing else in the file.
+    static let mountListenerCallCount = 2
 
     /// How many occurrences of ``radioCalls`` the mount's door closures are allowed to hold —
     /// MEASURED, never inherited: `stopJoin()`, `presenceManager.stop()` and
@@ -330,10 +377,18 @@ final class ProximityRunDoorRecorder {
     ///     body of `mountRoutedRunPolicy(`, and the total inside equals the total in the file — so a
     ///     tenth call added anywhere else in `FernletApp` reddens this even though the file list
     ///     stays at one element.
-    ///   * **The DEBUG harness is exempt by NAME**, and the exemption is fixtured: the file is shown
-    ///     to be in the sweep, to carry exactly the one `startJoin()` the exemption is written for,
-    ///     and to guard it with `#if DEBUG`. An exemption that matches nothing is a hole nobody can
-    ///     see.
+    ///   * **Two files are exempt by NAME**, and each exemption is fixtured: the DEBUG harness is
+    ///     shown to be in the sweep, to carry exactly the one `startJoin()` it was written for, and
+    ///     to guard it with `#if DEBUG`; the active-share sheet is pinned at its exact surviving
+    ///     `manager.start()` / `manager.stop()` counts by
+    ///     ``theActiveShareSheetsExemptionIsExactlyTheShareFlow()``. An exemption that matches
+    ///     nothing is a hole nobody can see.
+    ///
+    /// **These nine needles name a RECEIVER, and that is their blind spot.** The share sheet held
+    /// `manager.start()` — the same instance `store.recipeShareManager` names, injected under
+    /// another name — and no needle here could see it, which is the miss the pass-B fix review
+    /// found. ``theListenerRadiosAreNotMovedByAnyOtherReceiver()`` is the receiver-agnostic half,
+    /// and it is the sweep the two by-name exemptions actually exist for.
     ///
     /// Non-vacuity first, and it names the two files the retirement is ABOUT: a sweep that stopped
     /// reaching `ContentView.swift` or `FernletStore.swift` would report a clean retirement of code
@@ -345,12 +400,14 @@ final class ProximityRunDoorRecorder {
                 "the sweep no longer reaches ContentView.swift")
         #expect(sources.contains(where: { $0.name == "FernletStore.swift" }),
                 "the sweep no longer reaches FernletStore.swift")
-        #expect(sources.contains(where: { $0.name == Self.debugHarnessFile }),
-                "the exempted file is not in the sweep at all")
+        let everyExemptionIsInTheSweep = Self.byNameExemptions.allSatisfy { name in
+            sources.contains(where: { $0.name == name })
+        }
+        #expect(everyExemptionIsInTheSweep, "an exempted file is not in the sweep at all")
         var strays: [String] = []
         var inFernletApp = 0
         // R2: nine needles over the app target's own file list.
-        for source in sources where source.name != Self.debugHarnessFile {
+        for source in sources where !Self.byNameExemptions.contains(source.name) {
             for needle in Self.radioCalls {
                 let hits = Self.occurrences(of: needle, in: source.code)
                 guard hits > 0 else { continue }
@@ -396,6 +453,95 @@ final class ProximityRunDoorRecorder {
                 "the exempted call is no longer compiled out of release")
         #expect(harness.contains("MeshMatrixDebugOptions.isEnabled"),
                 "the exempted call is no longer gated on the Lane C launch flag")
+    }
+
+    /// **Neither listener is moved through a receiver the needle list cannot see** (P7 item 3, pass
+    /// B fix review).
+    ///
+    /// ``radioCalls`` names a RECEIVER — `recipeShareManager.start()`, `presenceManager.stop()` —
+    /// and that is exactly what the share sheet slipped past: it holds the very same
+    /// `ProximityRecipeShareManager` the store's property names, injected under the name `manager`,
+    /// and called `manager.start()` on it from a dismissal. The wall was green and the radio had two
+    /// owners.
+    ///
+    /// So this half drops the receiver entirely. Any `App/` file whose comment-stripped code so much
+    /// as MENTIONS a listener — as `store.presenceManager` / `store.recipeShareManager`, or as the
+    /// type a view takes as a parameter — is swept for bare `.start()` / `.stop()`, and a file that
+    /// holds one must be `FernletApp.swift` (where the containment half puts it inside the mount) or
+    /// one of the two ``byNameExemptions``. Nothing else may spell either call at all.
+    ///
+    /// Non-vacuity twice over: the mount and the exempted sheet are both shown to be IN the sweep,
+    /// because a mention list that stopped matching them would sweep an empty set and pass green.
+    @Test func theListenerRadiosAreNotMovedByAnyOtherReceiver() throws {
+        let sources = try Self.appSources()
+        #expect(!sources.isEmpty, "the App/ sweep found no Swift files at all")
+        var swept: [String] = []
+        var strays: [String] = []
+        var inFernletApp = 0
+        // R2: bounded by the app target's own file list.
+        for source in sources {
+            let mentionsAListener = Self.listenerMentions.contains { source.code.contains($0) }
+            guard mentionsAListener else { continue }
+            swept.append(source.name)
+            var hits = 0
+            for needle in Self.listenerCalls {
+                hits += Self.occurrences(of: needle, in: source.code)
+            }
+            guard hits > 0 else { continue }
+            if source.name == "FernletApp.swift" {
+                inFernletApp += hits
+            } else if !Self.byNameExemptions.contains(source.name) {
+                strays.append("\(source.name): ×\(hits)")
+            }
+        }
+        #expect(swept.contains("FernletApp.swift"), "the sweep no longer reaches the launch mount")
+        #expect(swept.contains(Self.recipeShareSheetFile),
+                "the sweep no longer reaches the exempted share sheet, so the exemption is vacuous")
+        #expect(strays.isEmpty, "a listener radio is moved through a receiver the wall cannot see")
+        #expect(inFernletApp == Self.mountListenerCallCount,
+                "the listener calls in FernletApp moved without this pin moving")
+        let appCode = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
+        guard let mount = MeshRoutedSourceScan.bracedBody(
+            after: "private func mountRoutedRunPolicy(", in: appCode
+        ) else {
+            Issue.record("the launch mount was renamed, or its brace-matched body does not close")
+            return
+        }
+        var insideMount = 0
+        // R2: bounded by the needle list.
+        for needle in Self.listenerCalls {
+            insideMount += Self.occurrences(of: needle, in: mount)
+        }
+        #expect(insideMount == Self.mountListenerCallCount,
+                "a listener call sits in FernletApp OUTSIDE the mount's door closures")
+    }
+
+    /// **The share sheet's exemption is exactly the ACTIVE share flow, and the resting state is
+    /// still the policy's** (P7 item 3, pass B fix review).
+    ///
+    /// Two calls survive and they are both the user's own act: `handleAppear()` starts the radio
+    /// because they tapped "Share", and "Search again" restarts discovery because they asked it to.
+    /// The third — `handleDisappear()`'s `scenePhase == .active && allowNearbyRecipeShares &&
+    /// unlocked` restart — is gone, and its absence is the point of the pin: those three conditions
+    /// LOOKED like the recipe directive and were not it, so a dismissal during a duress session
+    /// (still `.unlocked`), under a `.below` verdict or mid-delete-all restarted the radio against
+    /// the policy's `stop`.
+    ///
+    /// What replaced it is counted too: the sheet must name `runPolicyHost.pushNow()`, which is the
+    /// whole difference between handing the question back and answering it.
+    @Test func theActiveShareSheetsExemptionIsExactlyTheShareFlow() throws {
+        let sheet = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(Self.recipeShareSheetPath))
+        #expect(!sheet.isEmpty, "the exempted sheet could not be read, so every count below is vacuous")
+        #expect(Self.occurrences(of: "manager.start()", in: sheet) == Self.recipeShareSheetStarts,
+                "the share sheet's surviving start() count moved without this pin moving")
+        #expect(Self.occurrences(of: "manager.stop()", in: sheet) == Self.recipeShareSheetStops,
+                "the share sheet's surviving stop() count moved without this pin moving")
+        #expect(sheet.contains("runPolicyHost.pushNow()"),
+                "the dismissal no longer hands the resting listener state back to the policy")
+        #expect(!sheet.contains("isUnlockedForListening"),
+                "the sheet is deciding the lock half of the recipe directive for itself again")
+        #expect(!sheet.contains("allowNearbyRecipeShares"),
+                "the sheet is reading the recipe consent, which is a policy INPUT and not its own gate")
     }
 
     // MARK: - The wall
@@ -676,7 +822,12 @@ final class ProximityRunDoorRecorder {
         host.setAllowsNearbyRecipeShares(true)
         host.setSelectedTab(.social)
         host.setScenePhase(.active)
-        let up = try #require(recorder.meshDirectives.last, "the mesh seam was never pushed")
+        // The mesh seam records a LABELLED TUPLE, which has no precedent as a `#require` subject in
+        // this tree — destructured into a local instead, and the miss recorded by hand.
+        guard let up = recorder.meshDirectives.last else {
+            Issue.record("the mesh seam was never pushed")
+            return
+        }
         let presenceUp = try #require(recorder.presenceDirectives.last, "presence was never pushed")
         let recipeUp = try #require(recorder.recipeShareDirectives.last, "recipe was never pushed")
         #expect(up.links == .run, "a Friends-tab foreground search runs the links")
@@ -684,7 +835,10 @@ final class ProximityRunDoorRecorder {
         #expect(presenceUp == .run, "presence runs on the Friends tab")
         #expect(recipeUp == .stop, "and the recipe listener does not — its tab set excludes Friends")
         host.setScenePhase(.background)
-        let down = try #require(recorder.meshDirectives.last, "the backgrounding leg pushed nothing")
+        guard let down = recorder.meshDirectives.last else {
+            Issue.record("the backgrounding leg pushed nothing")
+            return
+        }
         let presenceDown = try #require(recorder.presenceDirectives.last, "presence pushed nothing")
         #expect(down.links == .stop, "backgrounding resolves foregroundOnly links to stop")
         #expect(down.discovery == .stop, "and the admission door with them — invariant 5")
@@ -705,7 +859,12 @@ final class ProximityRunDoorRecorder {
         #expect(recorder.teardowns == 0, "no dominating input is in force at launch")
         host.setDeletingAllData(true)
         #expect(recorder.teardowns == 1, "the wipe's rising edge tears the session down once")
-        let wiping = try #require(recorder.meshDirectives.last, "the wipe pushed no mesh directive")
+        // A labelled tuple again — bound through a `guard` rather than `#require`, like the pair in
+        // `theMeshDoorReceivesTheResolvedLinksAndDiscoveryPair()`.
+        guard let wiping = recorder.meshDirectives.last else {
+            Issue.record("the wipe pushed no mesh directive")
+            return
+        }
         #expect(wiping.links == .stop && wiping.discovery == .stop,
                 "and every mesh radio is stood down in the same push")
         host.setSelectedTab(.social)

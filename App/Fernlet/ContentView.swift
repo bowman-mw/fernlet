@@ -199,9 +199,14 @@ struct ContentView: View {
             .alert("Turn on Nearby Friends?", isPresented: presenceEnablePromptBinding) {
                 Button("Turn on") {
                     // The consent's own `.onChange` in `proximityRunPolicyEdges` carries the new
-                    // value to the run policy, which is what starts the radio — the button writes
-                    // the setting and nothing else (P7 item 3).
+                    // value to the run policy, which is what starts the RADIO — the button decides
+                    // no radio for itself (P7 item 3).
                     store.setAllowNearbyPresence(true)
+                    // The away-hearts sync is not a radio and never was: the retired
+                    // `updatePresenceListener()` this button used to call WAS the heart-drop sync's
+                    // fifth trigger, and pass B moved only the radio half. Here beside the setter,
+                    // exactly where it used to be reached from.
+                    syncHeartDropsIfActive()
                 }
                 Button("Not now", role: .cancel) {}
             } message: {
@@ -229,6 +234,12 @@ struct ContentView: View {
         rootSheetHost
             .onChange(of: store.settings.allowNearbyPresence) { _, allows in
                 runPolicyHost.setAllowsNearbyPresence(allows)
+                // The retired `updatePresenceListener()` was TWO things — the radio and the
+                // away-hearts sync — and this consent edge is where both of them used to be
+                // decided. Pass B carried the radio half over as the leg above; this is the other
+                // half, and without it a consent flip lost a heart-drop pass (the purge retry
+                // included, which is precisely the toggle-OFF case).
+                syncHeartDropsIfActive()
             }
             .onChange(of: store.settings.allowNearbyRecipeShares) { _, allows in
                 runPolicyHost.setAllowsNearbyRecipeShares(allows)
@@ -429,8 +440,16 @@ struct ContentView: View {
         syncHeartDropsIfActive()
     }
 
-    /// The away-hearts drop sync, on the same events the retired listener chain fired on (tab
-    /// change, scene activation, lock change, launch).
+    /// The away-hearts drop sync, on all FIVE events the retired listener chain fired on: a tab
+    /// change (`handleTabChange(from:to:)`), scene activation (`handleScenePhaseChange(_:)`), a lock
+    /// change (`handleLockStateChange(_:)`), launch (`runPostLaunchSequence()`), and a
+    /// nearby-presence CONSENT change (`proximityRunPolicyEdges`, plus the "Turn on" alert button
+    /// beside its setter — the one direct call the retired `updatePresenceListener()` had).
+    ///
+    /// The fifth was lost for one commit (P7 item 3, pass B): `updatePresenceListener()`'s BODY was
+    /// the heart-drop sync as well as the radio, so retiring it in favour of the run policy's
+    /// consent leg silently dropped the consent edge here. The radio half belongs to the policy;
+    /// this half never did.
     ///
     /// Piggybacks that chain exactly as it did inside `updatePresenceListener()` — reentrancy-
     /// guarded inside the service, rate-limited to `HeartDropService.minimumSyncInterval` there
@@ -808,7 +827,7 @@ struct ContentView: View {
                 isActive: selectedTab == .home && !rootSheetIsCoveringTabs
             )
             .tabPage(.home)
-            FoodView(store: store, onMealsLogged: showMealLogNotification, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
+            FoodView(store: store, runPolicyHost: runPolicyHost, onMealsLogged: showMealLogNotification, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
                 .tabPage(.food)
             MoveView(
                 store: store,
@@ -1082,6 +1101,7 @@ struct ContentView: View {
             // without it those logs would land silently.
             RecipeBookSheet(
                 store: store,
+                runPolicyHost: runPolicyHost,
                 editingRecipe: $editingRecipeFromHome,
                 editingSavedRecipe: $editingSavedRecipeFromHome,
                 onMealsLogged: showMealLogNotification

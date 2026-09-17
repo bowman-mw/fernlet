@@ -85,7 +85,12 @@ private struct FriendPhotoWallPreferences: Codable, Equatable {
 /// chat age gate — enforced at advertisement, send, AND receive. `wipeIdentityForDeleteAll` is
 /// this manager's leg of the delete-all seam. Memory-only session state everywhere except the
 /// photo cache, wall preferences, and the activity sidecar — none of it synced.
-/// `@MainActor @Observable`; the app owns start/stop via tab/scene/lock gating.
+/// Lifecycle is owned by the app's `ProximityRunPolicy` since network migration P7 item 3 (tab +
+/// scene + lock + committed-peer, decided once and pushed as a PAIR through
+/// ``applyRunState(links:discovery:)``), exactly like the two listeners. Before that it was
+/// `ContentView`, resolving a three-way into `startJoin()` / `resumeSearchingForPartitionedMesh()`
+/// and calling `stopJoin()` on the way out; both are retired, and the tab is a policy INPUT now.
+/// `@MainActor @Observable`.
 @MainActor
 @Observable
 public final class MeshNetworkManager: ProximityPayloadHandling {

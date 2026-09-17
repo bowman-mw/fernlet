@@ -128,6 +128,15 @@ final class ProximityRunPolicyHost {
     /// setter re-decides. Without this latch a tab switch during a wipe would run the whole teardown
     /// again. Cleared the moment the decision stops demanding one, so a second duress session in the
     /// same launch tears down again.
+    ///
+    /// **Clearing it RE-ARMS the radios, and for a delete-all that is reachable and deliberate.**
+    /// `FernletStore.deleteAllData(includingHealthKitSamples:)` lowers its leg from a `defer`, so a
+    /// wipe that finishes with the user parked on the Friends tab, foreground and unlocked, pushes
+    /// `run` again the instant the success sheet appears — a fresh `startJoin()` and a fresh
+    /// give-up clock, with no further user act. That is an IMPROVEMENT rather than a leak: leg 11
+    /// (`wipeIdentityForDeleteAll()`) runs before the `defer`, so the new search advertises a
+    /// freshly minted identity, where before pass B the mesh advertised on the OLD identity
+    /// straight through the wipe and after it.
     private var didTearDownSession = false
 
     // MARK: - The legs
@@ -160,6 +169,12 @@ final class ProximityRunPolicyHost {
     /// The tab on screen, fed by `ContentView.handleTabChange(from:to:)`. The launch value is
     /// `ContentView.selectedTab`'s own initial value (`.home`), so the seed is honest
     /// until the user moves. The gate does not read it.
+    ///
+    /// One further feeder, DEBUG-only and never on a user's device: `MeshRejectionMatrixHarness`
+    /// sets it to `.social` after arming the Lane C search, because a runbook lane drives no UI and
+    /// the `.home` seed would otherwise have the policy stand that search down at the next leg
+    /// change. It is a leg, not a radio — the harness tells the policy where the run is, and the
+    /// policy still decides.
     private var selectedTab: FernletTab = .home
 
     /// The 13+ chat gate, read off `AgeAssuranceStore.record` at the launch mount and re-fed by

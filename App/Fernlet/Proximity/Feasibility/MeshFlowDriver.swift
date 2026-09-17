@@ -9,7 +9,7 @@
 //  what each side observed so a `--console-pty` transcript is the evidence.
 //
 //  The whole file is compiled out of release builds. Its only caller is the DEBUG half of
-//  MeshRejectionMatrixHarness.install(manager:).
+//  MeshRejectionMatrixHarness.install(manager:store:runPolicyHost:).
 //
 
 #if DEBUG

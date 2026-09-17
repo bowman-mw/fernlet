@@ -23,6 +23,11 @@ import ImageIO
 /// from the app group so a step advance made from the Live Activity or Siri is picked up.
 struct FoodView: View {
     var store: FernletStore
+    /// The app's one ``ProximityRunPolicyHost``, handed down from `ContentView` purely so the
+    /// proximity recipe-share sheet can ask it to re-decide when a share ends (P7 item 3, pass B fix
+    /// review). An init parameter rather than an `@Environment` value because the host is not
+    /// `@Observable`. Nothing on this screen reads it.
+    var runPolicyHost: ProximityRunPolicyHost
     /// Reports meals logged from THIS tab's own surfaces (the Planned-today card, recipe rows,
     /// the recipe detail and book) so the host can raise the post-log toast (FLOW-15). The host
     /// (ContentView) passes its `showMealLogNotification` here; the MealSheet keeps its separate
@@ -307,6 +312,7 @@ struct FoodView: View {
                 NavigationLink {
                     RecipeBookSheet(
                         store: store,
+                        runPolicyHost: runPolicyHost,
                         editingRecipe: $editingRecipe,
                         editingSavedRecipe: $editingSavedRecipe,
                         isEmbeddedInNavigationStack: true,
@@ -467,7 +473,8 @@ struct FoodView: View {
                     .fernletSheetChrome(anchor: "sheet.nutritionTargets", detents: [.medium, .large])
             }
             .sheet(item: $recipeShareDraft) { draft in
-                ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
+                ProximityRecipeShareSheet(
+                    draft: draft, manager: store.recipeShareManager, runPolicyHost: runPolicyHost)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(20)
@@ -730,6 +737,9 @@ struct NutritionPill: View {
 private struct RecipeImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
+    /// Threaded through for the proximity share sheet this screen can push, which asks the host to
+    /// re-decide when a share ends (P7 item 3, pass B fix review). Nothing else here reads it.
+    var runPolicyHost: ProximityRunPolicyHost
     /// Called instead of `dismiss()` once a recipe has actually been imported, so the host can pop
     /// past the create-recipe chooser to the book rather than leaving the user on it. `nil` keeps the
     /// plain one-level dismiss.
@@ -854,7 +864,8 @@ private struct RecipeImportSheet: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(item: $recipeShareDraft) { draft in
-                ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
+                ProximityRecipeShareSheet(
+                    draft: draft, manager: store.recipeShareManager, runPolicyHost: runPolicyHost)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(20)
@@ -6094,6 +6105,9 @@ private struct MacroInputRow: View {
 /// levels come off together.
 private struct RecipeCreationOptionsView: View {
     var store: FernletStore
+    /// Threaded through to the import screen this chooser pushes, which in turn hands it to the
+    /// proximity share sheet (P7 item 3, pass B fix review). Nothing on the chooser reads it.
+    var runPolicyHost: ProximityRunPolicyHost
     /// Reports a finished creation to the recipe book, which collapses the branch and shows the
     /// confirmation line. Both branches hand their saved name straight to it.
     var onCreated: (String) -> Void = { _ in }
@@ -6148,7 +6162,7 @@ private struct RecipeCreationOptionsView: View {
         .navigationDestination(item: $step) { destination in
             switch destination {
             case .importing:
-                RecipeImportSheet(store: store, onSaved: onCreated)
+                RecipeImportSheet(store: store, runPolicyHost: runPolicyHost, onSaved: onCreated)
             case .manual:
                 RecipeSheet(store: store, isEmbeddedInNavigationStack: true, onSaved: onCreated)
             }
@@ -6335,6 +6349,11 @@ private struct WebImportedFoodRow: View {
 struct RecipeBookSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
+    /// The app's one ``ProximityRunPolicyHost``, threaded through from whichever host presented the
+    /// book (`FoodView` when pushed, `ContentView` when presented from Home) so the proximity share
+    /// sheet reached from a recipe can ask it to re-decide when the share ends (P7 item 3, pass B
+    /// fix review). The book itself never reads it.
+    var runPolicyHost: ProximityRunPolicyHost
     @Binding var editingRecipe: RecipeDefinition?
     @Binding var editingSavedRecipe: RecipeDefinition?
     /// True when the book is PUSHED inside a host stack (the Food tab) rather than presented as a
@@ -6438,7 +6457,10 @@ struct RecipeBookSheet: View {
         // The create branch hangs off the book, not off the chooser, so `finishCreation` collapses
         // chooser + editor in one go and the user lands back here — the new recipe's home.
         .navigationDestination(isPresented: $isCreatingRecipe) {
-            RecipeCreationOptionsView(store: store, onCreated: { name in finishCreation(named: name) })
+            RecipeCreationOptionsView(
+                store: store,
+                runPolicyHost: runPolicyHost,
+                onCreated: { name in finishCreation(named: name) })
         }
         .task(id: createdNotice) {
             guard createdNotice != nil else { return }
@@ -6451,7 +6473,8 @@ struct RecipeBookSheet: View {
             createdNotice = nil
         }
         .sheet(item: $recipeShareDraft) { draft in
-            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
+            ProximityRecipeShareSheet(
+                draft: draft, manager: store.recipeShareManager, runPolicyHost: runPolicyHost)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
