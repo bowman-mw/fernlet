@@ -1244,6 +1244,21 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// keeps that one). This is the liveness a projection keys on: P6 item 4's live-transcript
     /// gate reads THIS, so a message that completes during a blip is neither dropped nor marked
     /// final against a transcript that was never cleared.
+    ///
+    /// **And, since network migration P7 item 4, it is the poller's switch.** `ContentView` feeds
+    /// it to `ProximityRunPolicyHost.setSessionLive(_:)`, which arms the one timer that drives
+    /// ``enforceSessionCeiling(now:monotonicElapsed:)``, ``evaluateIdleLapse(now:)`` and
+    /// ``evaluatePartition(now:)`` on the rise and cancels it on the fall. That is the same job
+    /// description — a judgement ABOUT the session, not about a radio or a screen — so it is this
+    /// predicate and not one of the other two.
+    ///
+    /// **Three of the four properties it reads are observed**, which is what makes that
+    /// `.onChange` edge fire: ``currentMesh`` and `sessionSearchGaveUp` are observed stored
+    /// properties, and ``hasCommittedPeer`` reads the observed `slots`. ``sessionState`` is
+    /// `@ObservationIgnored` — and does not need to be, for the same reason `sessionSearchGaveUp`'s
+    /// own documentation gives: every terminal `sessionState` carries `.stopParticipation`, which
+    /// empties `slots`, and ``leaveMesh()`` nils ``currentMesh``. Both are observed, and the view
+    /// that owns the edge reads `slots` through the `hasCommittedPeer` edge sitting beside it.
     public var isSessionLive: Bool {
         guard currentMesh != nil else { return hasCommittedPeer }
         return !sessionState.hasEnded && !sessionSearchGaveUp
@@ -1943,11 +1958,14 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// has exactly two shipping callers — ``foundMesh(_:now:)`` and the launch restore — while
     /// `handleAdmissionGrant` restarts the beacon and arms no ceiling. So the yielder, which is one
     /// half of every symmetric pair, ends at `.idle` with `sessionCeiling == nil`, exactly as every
-    /// proximity JOINER has since P3. It is latent rather than live because `enforceSessionCeiling`
-    /// still has no shipping caller at all: the poller that would read it is P7's
-    /// (`ProximityRunPolicy`), and arming the ceiling on the joiner side is that poller's
-    /// prerequisite, not this commit's. Nothing routed depends on it — `routedHardDeadline` is
-    /// derived from `mesh.createdAt`, which the adopted descriptor carries.
+    /// proximity JOINER has since P3. **It stopped being latent at network migration P7 item 4**,
+    /// which gave ``enforceSessionCeiling(now:monotonicElapsed:)`` its shipping caller — the app's
+    /// `ProximityRunPolicyHost` poller, one timer started on the rise of ``isSessionLive``. The
+    /// poller can only enforce a ceiling that was ARMED, and nothing arms one here: a yielder still
+    /// ends at `.idle` with `sessionCeiling == nil`, so the residual is now a live gap with a
+    /// named owner (arming the ceiling on the joiner side) rather than a gap nothing could have
+    /// noticed. Nothing routed depends on it — `routedHardDeadline` is derived from
+    /// `mesh.createdAt`, which the adopted descriptor carries.
     private func unwindNewbornMesh() {
         // `clearGroupKeyState()` nils `lastRotationBlockReason` — and on the founding-failure path
         // that string is the ONE surface saying why the founding was abandoned, written by
@@ -2278,8 +2296,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// review finding P2-2). `ContentView.startFriendsDiscovery()` used to arm `armDiscoveryTimeout()`
     /// beside its radio call: the five-minute "found nobody" clock that ends a search which never
     /// had a peer. Retiring that function without a successor would have left the `.fresh` row with
-    /// no door 3 at all — P7 item 4's poller is not one, because it runs only while ``isSessionLive``
-    /// and a `.fresh` row is by construction no mesh and no committed slot.
+    /// no door 3 at all — P7 item 4's poller, which now exists, is not one: it is armed only on the
+    /// RISE of ``isSessionLive``, and a `.fresh` row is by construction no mesh and no committed
+    /// slot, so that predicate is false for exactly as long as this clock is the only door there is.
     ///
     /// The arms below reproduce `FriendsDiscoveryEntry.armsDiscoveryTimeout`'s table exactly —
     /// `.fresh` and `.resume` arm, `.none` does not — with the door each row can actually use:
@@ -9862,12 +9881,24 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// follows stops the radio the frame needs. A refused save abandons the emit — an expiry
     /// nobody could write down is not announced (plan §3.6).
     ///
+    /// **Its shipping caller is the app's poller** (network migration P7 item 4): the first of the
+    /// three calls `ProximityRunPolicyHost`'s 30-second tick makes, before ``evaluateIdleLapse(now:)``
+    /// and ``evaluatePartition(now:)``. That poller passes `monotonicElapsed: nil`, so the elapsed
+    /// runtime is measured HERE, from ``sessionMonotonicOrigin`` — the `ContinuousClock` instant
+    /// ``startSessionCeiling(hardDeadline:startedAt:)`` armed. That is deliberate and it is what
+    /// makes the number reusable: the app owns no session clock, this one keeps counting across a
+    /// wall-clock change and across device sleep, and P8's progress strategy reads the same origin
+    /// through ``sessionCeilingVerdict(now:monotonicElapsed:)``'s
+    /// ``MeshSessionCeilingVerdict/live(remainingSeconds:)``. Idempotent at either bound: once the
+    /// session is `.expired` the next tick's ``applySessionEvent(_:)`` refuses
+    /// `.sessionAlreadyEnded` and nothing else moves.
+    ///
     /// - Parameters:
     ///   - now: The wall-clock instant to judge against.
     ///   - monotonicElapsed: Local runtime seconds, or nil to measure.
     /// - Returns: The verdict, or nil when no ceiling is armed.
     @discardableResult
-    func enforceSessionCeiling(now: Date, monotonicElapsed: TimeInterval?) async -> MeshSessionCeilingVerdict? {
+    public func enforceSessionCeiling(now: Date, monotonicElapsed: TimeInterval?) async -> MeshSessionCeilingVerdict? {
         guard let verdict = sessionCeilingVerdict(now: now, monotonicElapsed: monotonicElapsed) else {
             return nil
         }
@@ -9881,10 +9912,17 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
 
     /// Plan §8.2's idle window, evaluated on demand.
     ///
+    /// **Its shipping caller is the app's poller** (network migration P7 item 4), second of the
+    /// three calls one tick makes — after ``enforceSessionCeiling(now:monotonicElapsed:)``, which
+    /// may already have ended the session, and before ``evaluatePartition(now:)``, which is what
+    /// arms the window in the first place. No timer of its own, then or now: the deadline is a
+    /// stored instant and this reads it. Idempotent — with no deadline armed, or before it, the
+    /// answer is `false` and nothing moves.
+    ///
     /// - Parameter now: The instant to measure against.
     /// - Returns: `true` when the window had lapsed and the lapse was applied.
     @discardableResult
-    func evaluateIdleLapse(now: Date) -> Bool {
+    public func evaluateIdleLapse(now: Date) -> Bool {
         guard let deadline = idleLapseDeadline, now >= deadline else { return false }
         return applySessionEvent(.idleLapsed).nextState == .localIdleStop
     }
@@ -9921,19 +9959,29 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
 
     /// Re-derives the branch view from the live transport and raises whatever it implies.
     ///
+    /// **Its shipping caller is the app's poller** (network migration P7 item 4), the LAST of the
+    /// three calls one tick makes. This overload rather than
+    /// ``evaluatePartition(reachable:now:)`` is the one the app may reach, and the split is the
+    /// point: the reachable set is the live transport's answer
+    /// (``reachableRosterFingerprints()``), so the app supplies an instant and never an opinion
+    /// about who is present.
+    ///
     /// - Parameter now: The instant a fresh idle window would be measured from.
     /// - Returns: What changed.
     @discardableResult
-    func evaluatePartition(now: Date) -> MeshPartitionVerdict {
+    public func evaluatePartition(now: Date) -> MeshPartitionVerdict {
         evaluatePartition(reachable: reachableRosterFingerprints(), now: now)
     }
 
     /// Plan §10.2's partition detection, evaluated **on demand** against a supplied reachable set.
     ///
-    /// There is deliberately **no new timer**: this is the same shape as
-    /// ``enforceSessionCeiling(now:monotonicElapsed:)`` and ``evaluateIdleLapse(now:)``, and P7
-    /// wires the one poller that drives all three (plan §21.5). Inventing a timer here would
-    /// duplicate that seam and give partition its own clock.
+    /// There is deliberately **no timer here**: this is the same shape as
+    /// ``enforceSessionCeiling(now:monotonicElapsed:)`` and ``evaluateIdleLapse(now:)``, and since
+    /// network migration P7 item 4 the ONE poller that drives all three exists — it is
+    /// `ProximityRunPolicyHost`'s 30-second tick in the app target, started on the rise of
+    /// ``isSessionLive`` and cancelled on its fall, and it calls them in the order ceiling → idle
+    /// lapse → partition (plan §21.5). Inventing a timer here would duplicate that seam and give
+    /// partition its own clock.
     ///
     /// A verdict raises a session event and nothing else: **no record is minted, and the derived
     /// roster does not move.** That is the whole of "disconnect ≠ removal" at this seam.
@@ -13639,9 +13687,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// The branch is applied as an **intersection with the current full roster**, not as a
     /// substitute for it: ``branchView`` is a snapshot that a departure or removal since the last
     /// evaluation could have outdated, and a rotation must never present a member the records have
-    /// already excluded. Off a partition — including everywhere in shipping code today, since
-    /// nothing calls ``evaluatePartition(reachable:now:)`` until P7 wires the poller — this is
-    /// exactly the value it always was.
+    /// already excluded. Off a partition this is exactly the value it always was — and since
+    /// network migration P7 item 4 that is a claim about running code rather than about a seam
+    /// nothing reached: the app's `ProximityRunPolicyHost` poller calls
+    /// ``evaluatePartition(now:)`` every 30 seconds while ``isSessionLive``, so ``branchView`` is
+    /// now re-derived on a real cadence and this scoping is live.
     private func presentedRotationRoster() -> [String] {
         let full = fullRotationRoster()
         guard let branch = branchView, branch.isPartitioned else { return full }

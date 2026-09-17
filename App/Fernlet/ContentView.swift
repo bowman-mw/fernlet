@@ -214,8 +214,9 @@ struct ContentView: View {
             }
     }
 
-    /// `rootSheetHost` plus the four ``ProximityRunPolicyHost`` legs this view owns (network
-    /// migration P7 item 3): the two nearby consents, the 13+ chat gate and the committed-peer fact.
+    /// `rootSheetHost` plus the five ``ProximityRunPolicyHost`` legs this view owns: the two nearby
+    /// consents, the 13+ chat gate and the committed-peer fact (network migration P7 item 3), and
+    /// the session-liveness fact that switches the poller on and off (item 4).
     ///
     /// Split out of `body` for length, and kept together because they are one idea — each watches a
     /// VALUE rather than a setter, so every writer is covered by construction. That matters most for
@@ -225,10 +226,21 @@ struct ContentView: View {
     ///
     /// `hasCommittedPeer` is read off the manager's own observable state, so the commit door and
     /// both slot-loss doors feed the policy without any of them needing to know it exists. It is
-    /// deliberately not `isSessionLive` (projections and ceremonies) and not `isInSession` (the
-    /// layout swap): three predicates, three jobs.
+    /// deliberately not `isSessionLive` (projections, ceremonies — and, since item 4, the poller)
+    /// and not `isInSession` (the layout swap): three predicates, three jobs. Both of the first two
+    /// now have an edge here, one line apart, which is the clearest place in the tree to see that
+    /// they are not the same fact.
     ///
-    /// The fifth leg this view owns — the tab — rides `handleTabChange(from:to:)`, because that
+    /// **Why `isSessionLive`'s `.onChange` fires at all**, given that it is a computed property:
+    /// three of the four things it reads are observed stored state — `currentMesh`,
+    /// `sessionSearchGaveUp`, and the `slots` behind `hasCommittedPeer` — and the fourth,
+    /// `sessionState`, is `@ObservationIgnored`. It does not need to be observed, for the reason
+    /// `sessionSearchGaveUp`'s own documentation in `MeshNetworkManager` gives: every terminal
+    /// `sessionState` carries `.stopParticipation`, which empties `slots`, and `leaveMesh()` nils
+    /// `currentMesh`. This body reads `slots` through the `hasCommittedPeer` edge above, so the
+    /// invalidation that recomputes one recomputes the other.
+    ///
+    /// The sixth leg this view owns — the tab — rides `handleTabChange(from:to:)`, because that
     /// handler already exists and already runs on exactly the edge the leg needs.
     private var proximityRunPolicyEdges: some View {
         rootSheetHost
@@ -246,6 +258,14 @@ struct ContentView: View {
             }
             .onChange(of: store.meshNetworkManager.hasCommittedPeer) { _, hasPeer in
                 runPolicyHost.setHasCommittedPeer(hasPeer)
+            }
+            // P7 item 4's leg, and the only one here that is NOT a policy input: it is the poller's
+            // switch. Deliberately `isSessionLive` and not the `hasCommittedPeer` above it — that
+            // one goes false on every link blip, and a poller keyed on it would stop enforcing the
+            // ceiling exactly when a partition most needs evaluating — and not `isInSession`, which
+            // is the layout swap's question and is true for a pairwise session that never founded.
+            .onChange(of: store.meshNetworkManager.isSessionLive) { _, isLive in
+                runPolicyHost.setSessionLive(isLive)
             }
             .onChange(of: store.ageAssurance.record) { _, record in
                 runPolicyHost.setChatAgeGate(ProximityChatAgeGate.resolve(record))

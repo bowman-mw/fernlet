@@ -21,7 +21,12 @@ import Foundation
 // MARK: - MeshSessionCeilingBound
 
 /// Which of the two bounds ended a session. Frozen English; a log token, never display copy.
-nonisolated enum MeshSessionCeilingBound: String, Equatable, Sendable, CaseIterable {
+///
+/// `public` since network migration P7 item 4, because it rides
+/// ``MeshSessionCeilingVerdict`` out of ``MeshNetworkManager/enforceSessionCeiling(now:monotonicElapsed:)``,
+/// which the app's poller now calls. Its ``terminationReason`` stays internal: which durable reason
+/// a bound writes is the sealed context's business and no app surface's.
+public nonisolated enum MeshSessionCeilingBound: String, Equatable, Sendable, CaseIterable {
 
     /// The signed, absolute `hardDeadline` (plus the skew tolerance) passed.
     case signedAbsolute
@@ -41,7 +46,14 @@ nonisolated enum MeshSessionCeilingBound: String, Equatable, Sendable, CaseItera
 // MARK: - MeshSessionCeilingVerdict
 
 /// The answer to "may this session still run?".
-nonisolated enum MeshSessionCeilingVerdict: Equatable, Sendable {
+///
+/// `public` since network migration P7 item 4: it is what
+/// ``MeshNetworkManager/enforceSessionCeiling(now:monotonicElapsed:)`` returns, and that door is now
+/// called from the app's `ProximityRunPolicyHost` poller. The shipping caller discards it — the
+/// enforcement has already happened by the time it is handed back — but P8's progress strategy
+/// (plan §12.3 finding 3, §2672–2679) reads ``live(remainingSeconds:)``, which is the same
+/// monotonic-by-construction number the ceiling judges on.
+public nonisolated enum MeshSessionCeilingVerdict: Equatable, Sendable {
 
     /// Still live, with the smaller of the two bounds' remaining seconds — never negative.
     case live(remainingSeconds: TimeInterval)

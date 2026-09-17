@@ -56,11 +56,35 @@
 // literals, each written out from the gate's three rules rather than re-computed from the policy.
 // Re-deciding over the host's own inputs would restate the host's arithmetic back to it and could
 // not fail.
+//
+// **Item 4 adds the poller**, the one `Task` this host owns, and with it a third wall and a live
+// mesh. What the poller half says:
+//
+//   * **The arm is an EDGE on `isSessionLive`.** Armed on the rise, nil on the fall, one handle
+//     however many times the leg is re-fed, cancelled again when the doors are replaced and when
+//     the teardown door runs. `isPollerArmed` is read rather than tick counts, because "nothing may
+//     spin" is a claim about the task not EXISTING and a cancelled task ticks exactly as little as
+//     an absent one.
+//   * **The interval is injected.** `pollInterval` defaults to the shipping 30 s and one cell passes
+//     milliseconds, so the REAL arm — sleep, tick, re-arm — is exercised rather than only
+//     `pollNow(at:)`. That cell also pins that two ticks never arrive inside one interval, which is
+//     what a second stacked timer would look like.
+//   * **The three consumers are driven to their verdicts THROUGH a tick**, over a real
+//     `MeshNetworkManager` on a fake transport — the rig `MeshPartitionDetectionTests` builds, cut
+//     to what a tick needs. The headline is P6 item 2's live consequence (plan §12.3 finding 3): a
+//     live mesh whose ceiling has elapsed is ENDED by ONE tick, and the same rig inside its ceiling
+//     is not.
+//   * **The wall.** `enforceSessionCeiling(`, `evaluateIdleLapse(` and `evaluatePartition(` appear
+//     EXACTLY ONCE each across `App/`, all three inside `mountRoutedRunPolicy(`'s brace-matched
+//     body, in that index order — the order is the decision, so the wall is where it is pinned. The
+//     ProximityKit side is pinned too, as MEASURED counts: these three had no shipping caller at all
+//     before this item, and the wall is what makes that stay true of the package.
 
 import Foundation
-import ProximityKit
 import SwiftUI
 import Testing
+@testable import FernletCrypto
+@testable import ProximityKit
 @testable import Fernlet
 
 /// Records what the host writes through all five doors, standing in for
@@ -91,6 +115,11 @@ final class ProximityRunDoorRecorder {
 
     /// How many times the teardown door was called.
     private(set) var teardowns = 0
+
+    /// Every instant a poller tick handed the session door, oldest first (network migration P7
+    /// item 4). The list rather than a count, because the gaps between them are what a second
+    /// stacked timer would show up in.
+    private(set) var polls: [Date] = []
 
     /// Records one gate write.
     ///
@@ -130,6 +159,26 @@ final class ProximityRunDoorRecorder {
         teardowns += 1
     }
 
+    /// Records one poller tick.
+    ///
+    /// - Parameter now: The instant the tick handed the session door.
+    func recordPoll(at now: Date) {
+        polls.append(now)
+    }
+
+    /// The gap between each consecutive pair of ticks, in seconds — empty for fewer than two.
+    ///
+    /// One timer produces gaps of at least its interval; two stacked timers produce a gap near
+    /// zero, which is the whole reason ``polls`` keeps instants rather than a count.
+    var pollGaps: [TimeInterval] {
+        var gaps: [TimeInterval] = []
+        // R2: bounded by the ticks this recorder has already stored.
+        for (index, instant) in polls.enumerated() where index > 0 {
+            gaps.append(instant.timeIntervalSince(polls[index - 1]))
+        }
+        return gaps
+    }
+
     /// Every directive any radio seam received, in push order — the list the "no seam ever sees
     /// `foregroundOnly`" claim is made over.
     var everyRadioDirective: [ProximityRunState] {
@@ -143,14 +192,15 @@ final class ProximityRunDoorRecorder {
     }
 }
 
-/// P7 items 2 and 3's wiring: the single writer of the routed access gate and of the four proximity
-/// radios, and the two walls that count them.
+/// P7 items 2, 3 and 4's wiring: the single writer of the routed access gate and of the four
+/// proximity radios, the poller that drives the three session judgements, and the three walls that
+/// count all of it.
 @MainActor
 @Suite struct ProximityRunPolicyHostTests {
 
     // MARK: - Fixtures
 
-    /// A connected host and the recorder holding all five of its doors.
+    /// A connected host and the recorder holding all six of its doors.
     ///
     /// - Returns: the host, and the recorder every write lands in.
     static func connectedHost() -> (host: ProximityRunPolicyHost, recorder: ProximityRunDoorRecorder) {
@@ -160,15 +210,24 @@ final class ProximityRunDoorRecorder {
         return (host, recorder)
     }
 
-    /// Installs one recorder as all five of a host's doors.
+    /// Installs one recorder as all six of a host's doors.
     ///
     /// Hoisted out of ``connectedHost()`` so the cells that build a host by hand — the launch
     /// sequence, and the re-mount — install the same set rather than a gate door alone.
     ///
+    /// The poll door always records, and additionally runs `poll` when one is supplied: the cells
+    /// that only care whether a tick happened get a count, and the cells that drive a real
+    /// `MeshNetworkManager` get the mount's three consumers behind the same recorder.
+    ///
     /// - Parameters:
     ///   - host: The host to connect.
     ///   - recorder: The recorder every door writes into.
-    static func connect(_ host: ProximityRunPolicyHost, to recorder: ProximityRunDoorRecorder) {
+    ///   - poll: What the tick runs after recording, or nil to only record.
+    static func connect(
+        _ host: ProximityRunPolicyHost,
+        to recorder: ProximityRunDoorRecorder,
+        poll: (@MainActor (Date) async -> Void)? = nil
+    ) {
         host.connect(
             accessGate: { gate, now in recorder.record(gate, at: now) },
             meshRadios: { links, discovery in
@@ -176,7 +235,131 @@ final class ProximityRunDoorRecorder {
             },
             presence: { state in recorder.recordPresence(state) },
             recipeShare: { state in recorder.recordRecipeShare(state) },
-            tearDownSession: { recorder.recordTeardown() }
+            tearDownSession: { recorder.recordTeardown() },
+            poll: { now in
+                recorder.recordPoll(at: now)
+                if let poll {
+                    await poll(now)
+                }
+            }
+        )
+    }
+
+    /// A connected host whose poller ticks every `interval` seconds instead of every 30.
+    ///
+    /// The injection is what lets a cell exercise the REAL arm — sleep, tick, re-arm — rather than
+    /// only `pollNow(at:)`. Shipping never passes it.
+    ///
+    /// - Parameter interval: Seconds between ticks.
+    /// - Returns: the host, and the recorder every door writes into.
+    static func polledHost(
+        interval: TimeInterval
+    ) -> (host: ProximityRunPolicyHost, recorder: ProximityRunDoorRecorder) {
+        let recorder = ProximityRunDoorRecorder()
+        let host = ProximityRunPolicyHost(pollInterval: interval)
+        Self.connect(host, to: recorder)
+        return (host, recorder)
+    }
+
+    /// Waits until the recorder has seen `count` ticks, or until a generous ceiling — never a fixed
+    /// sleep, so a slow machine makes the cell slower and not red.
+    ///
+    /// - Parameters:
+    ///   - count: How many ticks to wait for.
+    ///   - recorder: The recorder the ticks land in.
+    static func waitForPolls(_ count: Int, in recorder: ProximityRunDoorRecorder) async {
+        // R2: at most 400 checks, 5 ms apart — a two-second ceiling, whatever the scheduler does.
+        for _ in 0..<400 where recorder.polls.count < count {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    // MARK: - A live mesh for the poller to judge
+
+    /// Everything a poller cell drives: a live mesh, the host whose tick judges it, and the recorder.
+    struct PollerRig {
+
+        /// The `ProximityHost` the manager reads `unowned`. The CELL holds this, which is the whole
+        /// reason it is on the rig: a store that died at the end of the building call would leave
+        /// the manager with a dangling host from birth (rule HP0/ML5).
+        let store: FernletStore
+
+        /// The mesh manager the mount's three consumers run on.
+        let manager: MeshNetworkManager
+
+        /// The seeded roster's fingerprints, ascending — three of them, this device among them.
+        let names: [String]
+
+        /// The policy host whose poll door is those three consumers, in the mount's order.
+        let host: ProximityRunPolicyHost
+
+        /// Every tick, recorded.
+        let recorder: ProximityRunDoorRecorder
+    }
+
+    /// The three session consumers, in the mount's order, as a poller door over one manager.
+    ///
+    /// Written out here rather than reached from `FernletApp`, whose production door is a closure
+    /// inside a `private func` on a `App` type that no test can call.
+    /// ``thePollDoorsThreeCallsSitInsideTheMountInTheDecidedOrder()`` is what pins that the two are
+    /// the same three calls in the same order, `monotonicElapsed: nil` included — so this is a
+    /// COPY the wall keeps honest, not a second opinion.
+    ///
+    /// - Parameter manager: The mesh manager a tick judges.
+    /// - Returns: the door to hand `connect(…)`.
+    static func sessionConsumerDoor(
+        for manager: MeshNetworkManager
+    ) -> @MainActor (Date) async -> Void {
+        { now in
+            await manager.enforceSessionCeiling(now: now, monotonicElapsed: nil)
+            manager.evaluateIdleLapse(now: now)
+            manager.evaluatePartition(now: now)
+        }
+    }
+
+    /// A LIVE mesh with an armed ceiling, and a host whose poll door is the mount's three calls
+    /// over it.
+    ///
+    /// Cut down from `MeshPartitionDetectionTests.makeRig(memberCount:)` to what one tick needs: a
+    /// descriptor created at `createdAt`, a seeded roster of three (so the partition call has
+    /// something to be partitioned from), the two events that make `sessionState` live, and the
+    /// ceiling `foundMesh(_:now:)` arms in shipping. Every seal runs under `MeshP3Acceptance`'s
+    /// pinned install identity, so a refused save cannot quietly change what a cell sees.
+    ///
+    /// `createdAt` is anchored to the REAL clock by its callers, because the ceiling's signed bound
+    /// is judged against the instant the tick hands the door and the shipping tick hands `Date()`.
+    ///
+    /// - Parameter createdAt: The instant the mesh was founded and the ceiling armed from.
+    /// - Returns: the rig, `store` included so the caller can hold it.
+    static func pollerRig(createdAt: Date) throws -> PollerRig {
+        let store = makeTestStore()
+        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let meshID = UUID()
+        manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: meshID, createdAt: createdAt)
+        let local = manager.identityForTesting
+        let others = try (0..<2).map { try MeshPartitionFixtures.identity("poller\($0)") }
+        manager.seedMembershipLedgerForTesting(
+            meshID: meshID,
+            founderSigningPublicKey: local.localSigningPublicKey,
+            ledger: try MeshPartitionFixtures.ledger(founder: local, others: others, meshID: meshID)
+        )
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            manager.applySessionEvent(.founded)
+            manager.applySessionEvent(.peerCommitted)
+            manager.startSessionCeiling(
+                hardDeadline: createdAt.addingTimeInterval(MeshSessionCeiling.ceilingSeconds),
+                startedAt: createdAt
+            )
+        }
+        let host = ProximityRunPolicyHost()
+        let recorder = ProximityRunDoorRecorder()
+        Self.connect(host, to: recorder, poll: Self.sessionConsumerDoor(for: manager))
+        return PollerRig(
+            store: store,
+            manager: manager,
+            names: manager.membershipVerifier?.roster.memberFingerprints ?? [],
+            host: host,
+            recorder: recorder
         )
     }
 
@@ -262,6 +445,29 @@ final class ProximityRunDoorRecorder {
         let files = (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
         var sources: [(name: String, code: String)] = []
         // R2: bounded by the app target's own file list.
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            sources.append((
+                file.lastPathComponent,
+                MeshRoutedSourceScan.codeOnly(try String(contentsOf: file, encoding: .utf8))
+            ))
+        }
+        return sources
+    }
+
+    /// Every `.swift` file under `FernletKit/Sources/ProximityKit`, comments stripped, sorted by
+    /// path — the package half of item 4's wall.
+    ///
+    /// Same body as ``appSources()`` over the other root, and kept separate for the same reason
+    /// that one is: the two claims are about two trees and a shared helper taking a root would make
+    /// each cell one argument away from measuring the wrong one.
+    ///
+    /// - Returns: each file's name and its comment-stripped source.
+    static func proximityKitSources() throws -> [(name: String, code: String)] {
+        let root = RepoRoot.url("FernletKit/Sources/ProximityKit")
+        let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        let files = (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
+        var sources: [(name: String, code: String)] = []
+        // R2: bounded by ProximityKit's own file list.
         for file in files.sorted(by: { $0.path < $1.path }) {
             sources.append((
                 file.lastPathComponent,
@@ -363,7 +569,40 @@ final class ProximityRunDoorRecorder {
     /// MEASURED, never inherited: `stopJoin()`, `presenceManager.stop()` and
     /// `recipeShareManager.stop()` once each in the teardown door, plus `applyRunState(` three
     /// times (the mesh pair, presence, recipe).
+    ///
+    /// **Item 4 did not move it**, and that is checked rather than assumed: the poll door adds three
+    /// calls to the same body, and not one of them is a radio.
     static let mountRadioCallCount = 6
+
+    /// The three session judgements the poller drives, **in the order one tick makes them**.
+    ///
+    /// The order is the decision, not a detail: the ceiling can END the session, after which the
+    /// other two are refused by the state machine rather than acting on an expired one; and the
+    /// partition call is what ARMS the idle window the lapse reads, so running it first would let a
+    /// single tick both arm a thirty-minute window and judge it. The list is used twice — as a set
+    /// of needles for the "exactly once, and only in the mount" count, and as an ORDER for the
+    /// index comparison inside the brace-matched body.
+    static let sessionConsumers = [
+        "enforceSessionCeiling(",
+        "evaluateIdleLapse(",
+        "evaluatePartition("
+    ]
+
+    /// How often each of ``sessionConsumers`` may be spelled inside
+    /// `FernletKit/Sources/ProximityKit` — **MEASURED at this commit, and they move only with a
+    /// decision.**
+    ///
+    /// Before item 4 these three had **no shipping caller anywhere**: every caller in the tree was a
+    /// test, and the only exception inside the package was `evaluatePartition(now:)`'s call to its
+    /// own `evaluatePartition(reachable:now:)`. So the counts here are declarations plus that one
+    /// in-module convenience — one, one and three — and the point of pinning them is that item 4
+    /// gave these doors a caller in the APP and must not have quietly given them a second one in
+    /// the package, where a timer would be exactly the thing the on-demand design refuses.
+    static let proximityKitConsumerCounts = [
+        "enforceSessionCeiling(": 1,
+        "evaluateIdleLapse(": 1,
+        "evaluatePartition(": 3
+    ]
 
     /// **The four proximity radios are driven from the run policy's doors and nowhere else**
     /// (P7 item 3, pass B — the retirement pass's wall).
@@ -906,5 +1145,358 @@ final class ProximityRunDoorRecorder {
                 "a written gate differs from the literal the gate's own rules derive for that step")
         #expect(recorder.instants.count == recorder.gates.count,
                 "every write is stamped with the instant the manager judges it against")
+    }
+
+    // MARK: - The poller's wall (P7 item 4)
+
+    /// **The three session consumers are called from the poller's door and nowhere else in the app
+    /// target**, each exactly once.
+    ///
+    /// The counting shape is `theProximityRadiosAreDrivenOnlyFromTheHostsDoors()`'s, and it is owed
+    /// for a sharper reason here: these three have had NO shipping caller since P3 — detection is on
+    /// demand *by design so that nothing spins* — so the first caller is the one that decides
+    /// whether the design survives. A second call site anywhere would be a second cadence, and the
+    /// counts are occurrences rather than a file list because a second call parked inside
+    /// `FernletApp.swift` would leave the list right and the claim already false.
+    ///
+    /// Non-vacuity first: a sweep handed a wrong root enumerates nothing and passes green.
+    @Test func theSessionConsumersAreCalledOnlyFromThePollersDoor() throws {
+        let sources = try Self.appSources()
+        #expect(!sources.isEmpty, "the App/ sweep found no Swift files at all")
+        #expect(sources.contains(where: { $0.name == "FernletApp.swift" }),
+                "the App/ sweep no longer reaches FernletApp.swift, so every count below is vacuous")
+        #expect(sources.contains(where: { $0.name == "ProximityRunPolicyHost.swift" }),
+                "the sweep no longer reaches the host, which is the other file that could grow one")
+        var strays: [String] = []
+        var inFernletApp = 0
+        // R2: three needles over the app target's own file list.
+        for source in sources {
+            for needle in Self.sessionConsumers {
+                let hits = Self.occurrences(of: needle, in: source.code)
+                guard hits > 0 else { continue }
+                if source.name == "FernletApp.swift" {
+                    inFernletApp += hits
+                } else {
+                    strays.append("\(source.name): \(needle) ×\(hits)")
+                }
+            }
+        }
+        #expect(strays.isEmpty, "a session consumer is called from outside the poller's one door")
+        #expect(inFernletApp == Self.sessionConsumers.count,
+                "each of the three consumers must be spelled exactly once in the app target")
+    }
+
+    /// The containment and ORDER half: all three calls sit inside `mountRoutedRunPolicy(`'s
+    /// brace-matched body, in the order one tick makes them.
+    ///
+    /// Split from the count above only to stay inside the 60-line rule; the two are one claim. The
+    /// order is asserted by INDEX inside that body rather than by reading the closure, because the
+    /// order is the decision this item took: ceiling first (it can end the session, after which the
+    /// other two are refused rather than acting on an expired one), then the idle lapse, then the
+    /// partition evaluation — which is what ARMS the window the lapse reads, so swapping the last
+    /// two would let one tick both arm a thirty-minute window and judge it.
+    @Test func thePollDoorsThreeCallsSitInsideTheMountInTheDecidedOrder() throws {
+        let appCode = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
+        let mount = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "private func mountRoutedRunPolicy(", in: appCode),
+            "the launch mount was renamed, or its brace-matched body does not close"
+        )
+        #expect(!mount.contains("private func restoreMeshSessionContextIfNeeded"),
+                "the body matcher is measuring the file rather than the brace-matched mount")
+        var indices: [Int] = []
+        // R2: bounded by the three needles.
+        for needle in Self.sessionConsumers {
+            #expect(Self.occurrences(of: needle, in: mount) == 1,
+                    "a session consumer is not spelled exactly once inside the mount")
+            guard let found = mount.range(of: needle) else { continue }
+            indices.append(mount.distance(from: mount.startIndex, to: found.lowerBound))
+        }
+        #expect(indices.count == Self.sessionConsumers.count,
+                "a needle in the order list is not in the mount at all, so the order below is vacuous")
+        let inTheDecidedOrder = indices == indices.sorted() && Set(indices).count == indices.count
+        #expect(inTheDecidedOrder, "ceiling, then idle lapse, then partition — the order IS the decision")
+        #expect(mount.contains("monotonicElapsed: nil"),
+                "the ceiling call must measure from the manager's own monotonic origin, not the app's")
+        #expect(mount.contains("runPolicyHost.setSessionLive("),
+                "the mount no longer seeds the leg that switches the poller on")
+    }
+
+    /// **Inside ProximityKit the three consumers gained no caller**, which is what keeps "on demand,
+    /// so that nothing spins" true of the package after the app grew a cadence.
+    ///
+    /// The counts are MEASURED at this commit and move only with a decision: one declaration each
+    /// for the ceiling and the idle lapse, and three for partition — its two declarations plus
+    /// `evaluatePartition(now:)`'s call to its own `reachable:` overload, which was the ONLY
+    /// non-test caller of any of them before this item.
+    @Test func theSessionConsumersGainedNoCallerInsideProximityKit() throws {
+        let sources = try Self.proximityKitSources()
+        #expect(!sources.isEmpty, "the ProximityKit sweep found no Swift files at all")
+        #expect(sources.contains(where: { $0.name == "MeshNetworkManager.swift" }),
+                "the sweep no longer reaches the file that declares all three, so the counts are vacuous")
+        var counted: [String: Int] = [:]
+        // R2: three needles over ProximityKit's own file list.
+        for source in sources {
+            for needle in Self.sessionConsumers {
+                counted[needle, default: 0] += Self.occurrences(of: needle, in: source.code)
+            }
+        }
+        var mismatched: [String] = []
+        // R2: bounded by the three pinned needles.
+        for (needle, pinned) in Self.proximityKitConsumerCounts where counted[needle] != pinned {
+            mismatched.append("\(needle): \(counted[needle] ?? 0), pinned at \(pinned)")
+        }
+        #expect(counted.count == Self.sessionConsumers.count, "a needle was never counted at all")
+        #expect(mismatched.isEmpty, """
+            a session consumer's spelling count inside ProximityKit moved without this pin moving — \
+            re-measure it and say which decision moved it, because a new in-package caller is a \
+            second cadence beside the app's one poller
+            """)
+    }
+
+    // MARK: - The poller, armed and cancelled
+
+    /// **Nothing is armed until a session is live**, and arming is not a push.
+    ///
+    /// `isPollerArmed` rather than a tick count, because "nothing may spin" is a claim about the
+    /// task not EXISTING: a cancelled task and an absent one tick equally little, and only one of
+    /// them is what this host promises.
+    @Test func thePollerIsNilUntilASessionIsLiveAndArmsOnTheRise() {
+        let (host, recorder) = Self.connectedHost()
+        #expect(!host.isPollerArmed, "with the liveness leg false there is no task at all")
+        host.setSessionLive(true)
+        #expect(host.isPollerArmed, "the liveness RISE arms the one timer this host owns")
+        #expect(recorder.polls.isEmpty, "arming is not a tick")
+        #expect(recorder.gates.isEmpty,
+                "the liveness leg is the poller's switch, not a policy input — it must push nothing")
+        #expect(recorder.everyRadioDirective.isEmpty, "and move no radio")
+        host.setSessionLive(false)
+    }
+
+    /// A FALL cancels and nils the handle; a second rise arms again; a repeated `true` is the same
+    /// one timer.
+    ///
+    /// The repeat matters more than it looks: re-arming cancels the sleeping one-shot and starts its
+    /// interval over, so a leg re-fed faster than the interval would never tick at all. This setter
+    /// is the ONE on the host that deduplicates, and this is the cell that says so.
+    @Test func aLivenessFallCancelsThePollerAndASecondRiseArmsItAgain() {
+        let (host, recorder) = Self.connectedHost()
+        host.setSessionLive(true)
+        host.setSessionLive(false)
+        #expect(!host.isPollerArmed, "the FALL cancels the handle and nils it")
+        host.setSessionLive(true)
+        #expect(host.isPollerArmed, "a second rise arms it again")
+        host.setSessionLive(true)
+        host.setSessionLive(true)
+        #expect(host.isPollerArmed, "and a repeated true is the same one timer")
+        #expect(recorder.polls.isEmpty,
+                "none of that ticked — this host carries the shipping 30-second interval")
+        host.setSessionLive(false)
+        #expect(!host.isPollerArmed, "the last fall leaves nothing behind")
+    }
+
+    /// **The real arm, exercised**: an injected millisecond interval, a sleeping one-shot, a tick,
+    /// and the one-shot it arms in its place.
+    ///
+    /// The other poller cells drive `pollNow(at:)` directly, which proves what a tick DOES and
+    /// nothing about whether one ever happens; this is the cell that awaits the timer itself. The
+    /// gap assertion is the "exactly one timer" claim made observable: one self-re-arming one-shot
+    /// can never produce two ticks inside one interval, and a second stacked timer would produce a
+    /// gap near zero. Half the interval is the threshold, which leaves a 2× margin for a loaded
+    /// scheduler — and a loaded scheduler makes ticks LATER, never sooner.
+    @Test func theArmedPollerTicksOnItsIntervalAndNeverStacksASecondTimer() async {
+        let interval: TimeInterval = 0.05
+        let (host, recorder) = Self.polledHost(interval: interval)
+        host.setSessionLive(true)
+        host.setSessionLive(false)
+        host.setSessionLive(true)
+        host.setSessionLive(true)
+        await Self.waitForPolls(3, in: recorder)
+        host.setSessionLive(false)
+        #expect(!host.isPollerArmed, "the fall must cancel the re-armed one-shot as well as the first")
+        #expect(recorder.polls.count >= 3,
+                "the armed poller must tick and RE-ARM itself, not fire once and stop")
+        let gaps = recorder.pollGaps
+        let everyGapIsAWholeInterval = gaps.allSatisfy { $0 >= interval / 2 }
+        #expect(!gaps.isEmpty, "fewer than two ticks, so the gap claim below is vacuous")
+        #expect(everyGapIsAWholeInterval,
+                "two ticks arrived inside one interval, so a second timer is in flight")
+    }
+
+    /// **The no-spin cell.** With the liveness leg false, several intervals pass and nothing ticks.
+    @Test func nothingTicksWhileNoSessionIsLive() async {
+        let (host, recorder) = Self.polledHost(interval: 0.01)
+        #expect(!host.isPollerArmed, "with the leg false there is no task to spin")
+        // R2: twenty sleeps of 10 ms — twenty of the injected intervals, and then some.
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(recorder.polls.isEmpty, "a poller that never armed cannot have ticked")
+        #expect(!host.isPollerArmed, "and nothing armed itself in the meantime")
+    }
+
+    /// One tick is ONE call of the ONE door, carrying the instant it woke at — and it decides
+    /// nothing: no gate, no directive, no teardown.
+    @Test func aTickCallsThePollDoorOnceWithTheInstantItWokeAt() async {
+        let (host, recorder) = Self.connectedHost()
+        let before = Date()
+        await host.pollNow()
+        #expect(recorder.polls.count == 1, "one tick is one call of the one door")
+        let stamp = recorder.polls.last ?? Date.distantPast
+        #expect(stamp >= before, "the tick hands the door the instant it woke at")
+        #expect(recorder.gates.isEmpty, "a tick is not a push — the policy decides nothing here")
+        #expect(recorder.everyRadioDirective.isEmpty, "and no radio moves")
+        #expect(recorder.teardowns == 0, "and nothing is torn down")
+    }
+
+    /// A tick before the doors are installed reaches nothing — the same latch every other write on
+    /// this host carries.
+    @Test func aTickBeforeTheDoorsAreInstalledReachesNothing() async {
+        let host = ProximityRunPolicyHost()
+        host.setSessionLive(true)
+        #expect(host.isPollerArmed,
+                "the leg is recorded and the timer armed before there is a store, exactly like every leg")
+        await host.pollNow()
+        let recorder = ProximityRunDoorRecorder()
+        Self.connect(host, to: recorder)
+        await host.pollNow()
+        #expect(recorder.polls.count == 1,
+                "only the tick after the doors were installed may have reached one")
+        host.setSessionLive(false)
+    }
+
+    /// **A re-mount moves the poller to the new door.** A tick in flight closes over the door it was
+    /// installed with, so a second `connect(…)` cancels it and arms a fresh one against the
+    /// replaced set.
+    @Test func aSecondConnectMovesThePollerToTheNewDoor() async {
+        let first = ProximityRunDoorRecorder()
+        let host = ProximityRunPolicyHost()
+        Self.connect(host, to: first)
+        host.setSessionLive(true)
+        #expect(host.isPollerArmed, "the first mount's poller is armed")
+        let second = ProximityRunDoorRecorder()
+        Self.connect(host, to: second)
+        #expect(host.isPollerArmed, "a re-mount replaces the tick in flight rather than losing it")
+        await host.pollNow()
+        #expect(second.polls.count == 1, "the tick reaches the re-mounted door")
+        #expect(first.polls.isEmpty, "and never the replaced one")
+        host.setSessionLive(false)
+        #expect(!host.isPollerArmed, "and the fall still cancels after a re-mount")
+    }
+
+    /// **The teardown cancels the poller**, by lowering the liveness leg rather than by reaching
+    /// past it.
+    ///
+    /// `stopJoin()` empties the committed slots and clears the group-key state, so the session the
+    /// poller was judging is over the moment that door returns; waiting for `ContentView`'s
+    /// `.onChange` to notice would be waiting for an observation edge in the middle of a delete-all.
+    @Test func theTeardownLowersTheLivenessLegAndCancelsThePoller() {
+        let (host, recorder) = Self.connectedHost()
+        host.setScenePhase(.active)
+        host.setSessionLive(true)
+        #expect(host.isPollerArmed, "a live session arms the poller")
+        host.setDeletingAllData(true)
+        #expect(recorder.teardowns == 1, "the wipe's rising edge tears the session down once")
+        #expect(!host.isPollerArmed,
+                "and the teardown lowers the liveness leg, so no tick outlives the session it judged")
+        host.setSessionLive(true)
+        #expect(host.isPollerArmed,
+                "the leg is a value again afterwards: a fresh session re-arms in the ordinary way")
+        host.setSessionLive(false)
+    }
+
+    // MARK: - The three consumers, driven to their verdicts through a tick
+
+    /// **THE HEADLINE (plan §12.3 finding 3).** A live mesh whose ceiling has elapsed is ENDED by
+    /// ONE tick.
+    ///
+    /// P6 item 2's founding change made this the item's first live consequence: a mesh outlives its
+    /// links, `enforceSessionCeiling(now:monotonicElapsed:)` had no shipping caller, and so a
+    /// session could run past the six-hour bound with nothing left to notice. The rig is founded six
+    /// hours and an hour ago against the REAL clock, because the signed bound is judged against the
+    /// instant the tick hands the door — the SIGNED bound is what this cell drives, since
+    /// `monotonicElapsed: nil` measures a monotonic origin armed seconds ago.
+    ///
+    /// What it claims is the LOCAL ending, and that is deliberate: the rig's roster is three, and
+    /// `MeshDevelopmentPlan.permitsTermination(_:)` refuses to sign a `terminated.v1` above a final
+    /// pair, so the announcement half is refused here and is `MeshSessionLifecycleManagerTests`'
+    /// subject over its own two-member rig. `enforceSessionCeiling` ends local participation either
+    /// way — the state moves before the effects run — and "the session is over on this device" is
+    /// the thing that was missing.
+    @Test func oneTickEndsALiveMeshWhoseCeilingHasElapsed() async throws {
+        let elapsed = MeshSessionCeiling.ceilingSeconds + 3_600
+        let rig = try Self.pollerRig(createdAt: Date().addingTimeInterval(-elapsed))
+        #expect(rig.manager.isSessionLive, "the rig must start from a LIVE mesh or the cell is vacuous")
+        rig.host.setSessionLive(true)
+        #expect(rig.host.isPollerArmed, "which is what arms the poller in the first place")
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await rig.host.pollNow()
+        }
+        rig.host.setSessionLive(false)
+        #expect(rig.recorder.polls.count == 1, "exactly one tick ran")
+        #expect(rig.manager.sessionState == .expired,
+                "a live mesh whose ceiling has elapsed must be ENDED by one tick")
+        #expect(!rig.manager.isSessionLive, "and the session predicate must agree that it ended")
+        rig.manager.leaveMesh()
+    }
+
+    /// The same rig INSIDE its ceiling ends nothing — the negative the headline needs to mean
+    /// anything.
+    ///
+    /// The tick still runs all three consumers, and the partition call still finds a roster of three
+    /// with one reachable member, so the session is `partitioned` rather than untouched. That is the
+    /// point: `partitioned` is a LIVE state, and the cell is about the ceiling.
+    @Test func aTickInsideTheCeilingEndsNothing() async throws {
+        let rig = try Self.pollerRig(createdAt: Date())
+        rig.host.setSessionLive(true)
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await rig.host.pollNow()
+        }
+        rig.host.setSessionLive(false)
+        #expect(rig.recorder.polls.count == 1, "the same rig, the same one tick")
+        #expect(rig.manager.sessionState != .expired,
+                "a ceiling six hours away must end nothing at all")
+        #expect(rig.manager.isSessionLive, "and the session stays live")
+        rig.manager.leaveMesh()
+    }
+
+    /// **Partition, through a tick.** A roster of three that can reach only itself is a partition of
+    /// one, and the tick's third call is what finds it.
+    @Test func oneTickPartitionsALiveMeshThatCanReachNobody() async throws {
+        let rig = try Self.pollerRig(createdAt: Date())
+        #expect(rig.names.count == 3, "a roster of three, or there is nothing to be partitioned from")
+        #expect(rig.manager.branchView == nil, "this device has not looked yet")
+        rig.host.setSessionLive(true)
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await rig.host.pollNow()
+        }
+        rig.host.setSessionLive(false)
+        #expect(rig.manager.sessionState == .partitioned,
+                "the tick's third call finds a roster of three and one reachable member")
+        #expect(rig.manager.branchView?.isAlone == true, "a partition of one")
+        #expect(rig.manager.idleLapseDeadline != nil,
+                "and the partition ARMS the window the tick's second call reads")
+        rig.manager.leaveMesh()
+    }
+
+    /// **The idle lapse, through a tick — and the ORDER, made behavioural.**
+    ///
+    /// Two ticks with an injected clock thirty minutes apart. The FIRST tick's partition call arms
+    /// the idle window; the SECOND tick's idle-lapse call reads it and stops participation. That
+    /// dependency is exactly why the partition call is last: were it first, one tick could arm a
+    /// thirty-minute window and judge it in the same breath.
+    @Test func aLaterTickLapsesTheWindowAnEarlierTicksPartitionArmed() async throws {
+        let rig = try Self.pollerRig(createdAt: Date())
+        let start = Date()
+        rig.host.setSessionLive(true)
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await rig.host.pollNow(at: start)
+            await rig.host.pollNow(at: start.addingTimeInterval(MeshNetworkManager.idleWindowSeconds))
+        }
+        rig.host.setSessionLive(false)
+        #expect(rig.recorder.polls.count == 2, "two ticks, thirty minutes apart on the injected clock")
+        #expect(rig.manager.sessionState == .localIdleStop,
+                "the second tick's idle-lapse call must stop participation")
+        #expect(rig.manager.idleLapseDeadline == nil, "and clear the window it just spent")
+        rig.manager.leaveMesh()
     }
 }

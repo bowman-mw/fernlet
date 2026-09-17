@@ -29,7 +29,9 @@
 //
 // There is also no timer in this file and none behind it. Detection is **on demand**, in the idiom
 // of `MeshNetworkManager.enforceSessionCeiling(now:monotonicElapsed:)` and `evaluateIdleLapse(now:)`
-// — P7 wires the poller that calls all three (plan §21.5).
+// — and since network migration P7 item 4 the ONE poller that calls all three exists, in the app
+// target rather than here: `ProximityRunPolicyHost`'s 30-second self-re-arming one-shot, armed on
+// the rise of `isSessionLive` and cancelled on its fall (plan §21.5).
 
 import Foundation
 
@@ -157,7 +159,12 @@ nonisolated struct MeshBranchView: Equatable, Sendable {
 /// What re-evaluating reachability concluded — the session event it implies, or nothing.
 ///
 /// Frozen English tokens: logged verbatim beside the transition they raised, never display copy.
-nonisolated enum MeshPartitionVerdict: String, Equatable, Sendable, CaseIterable {
+///
+/// `public` since network migration P7 item 4, because it is what
+/// ``MeshNetworkManager/evaluatePartition(now:)`` returns and that convenience is the poller's third
+/// call. Its ``sessionEvent`` stays internal: which event a verdict raises is the state machine's
+/// business, and the app is deliberately not allowed to raise one.
+public nonisolated enum MeshPartitionVerdict: String, Equatable, Sendable, CaseIterable {
 
     /// Reachability moved, or did not, without crossing the partition boundary. No event is raised.
     case unchanged

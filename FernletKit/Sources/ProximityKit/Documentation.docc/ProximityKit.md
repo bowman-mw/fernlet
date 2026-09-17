@@ -1341,7 +1341,16 @@ and lets the returning peer take `peerCommitted` into the merge path.
 
 Detection is **on demand**: `MeshNetworkManager.evaluatePartition(reachable:now:)` is the same shape
 as `enforceSessionCeiling(now:monotonicElapsed:)` and `evaluateIdleLapse(now:)`, with no timer of its
-own — P7 wires the one poller that drives all three. The radios themselves are already seamed for
+own — and since **P7 item 4** the one poller that drives all three exists. It is
+`ProximityRunPolicyHost`'s single `Task` handle in the app target, armed on the RISE of
+``MeshNetworkManager/isSessionLive`` and cancelled on its fall, a self-re-arming one-shot at
+`pollInterval` (30 s, a starting value to be measured against the 30-minute idle stop) whose tick
+calls the three in one fixed order: ceiling, then idle lapse, then partition. The ceiling call passes
+`monotonicElapsed: nil`, so the elapsed runtime is measured from the manager's own
+`ContinuousClock` origin — the app owns no session clock, and that origin is the same
+monotonic-by-construction number P8's continued-task progress bar reads. Nothing spins while no
+session is live: with the leg false there is no task at all, and a tick that finds it false re-arms
+nothing. The radios themselves are already seamed for
 that phase: P7 item 3 gave each manager one `apply(_:)` door taking the RESOLVED directive
 (``MeshNetworkManager/applyRunState(links:discovery:)``, ``PresenceManager/applyRunState(_:)`` and
 ``ProximityRecipeShareManager/applyRunState(_:)``), and its pass B made the app's

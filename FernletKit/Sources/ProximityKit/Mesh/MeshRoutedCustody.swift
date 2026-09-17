@@ -973,8 +973,13 @@ nonisolated extension MeshRoutedStore {
     /// Removes every item whose expiry has passed, taking its payload files and its stored receipts
     /// with it.
     ///
-    /// On demand only — P7 owns the poller, exactly as `enforceSessionCeiling` and
-    /// `evaluatePartition` are on-demand.
+    /// On demand only, and **still not on the poller**. Network migration P7 item 4 built the one
+    /// timer `enforceSessionCeiling`, `evaluateIdleLapse` and `evaluatePartition` had been waiting
+    /// for — `ProximityRunPolicyHost`'s 30-second tick in the app target — and this sweep is
+    /// deliberately not a fourth call on it: those three are SESSION judgements that run only while
+    /// a session is live, while custody outlives the session it was sealed in, so a sweep hung off
+    /// a session poller would stop running exactly when the expiries it collects start mattering.
+    /// Its callers stay the routed doors that already touch the index.
     func sweepingExpired(now: Date) -> MeshRoutedOutcome<MeshRoutedSweepReport> {
         var index: MeshRoutedIndex
         let token: LoadToken

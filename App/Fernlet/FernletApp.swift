@@ -69,10 +69,12 @@ struct FernletApp: App {
     /// act. The manager refuses a second attempt on its own (`sessionRestoreAttempts`), so this is
     /// the courtesy half — it keeps the audit trail down to one line per launch.
     @State private var didMountMeshSessionRestore = false
-    /// P7 items 2 and 3's single writer of the routed access gate AND of the four proximity radios.
-    /// Holds one value per ``ProximityRunInputs`` leg, re-decides on every leg change, and writes
-    /// the gate, the four directives and the teardown through the five doors
-    /// `mountRoutedRunPolicy(_:)` installs into it — see ``ProximityRunPolicyHost``.
+    /// P7 items 2 and 3's single writer of the routed access gate AND of the four proximity radios,
+    /// and — item 4 — the owner of the session poller. Holds one value per ``ProximityRunInputs``
+    /// leg, re-decides on every leg change, and writes the gate, the four directives and the
+    /// teardown through the six doors `mountRoutedRunPolicy(_:)` installs into it; the sixth is the
+    /// poll door, and the eleventh leg (`setSessionLive(_:)`) is what arms and cancels the one timer
+    /// that drives it — see ``ProximityRunPolicyHost``.
     ///
     /// **`@State` here rather than a `FernletStore` property**, because this is where the legs are:
     /// the scene phase is this scene's `@Environment`, both protected-data notifications are
@@ -82,7 +84,8 @@ struct FernletApp: App {
     /// closures.
     ///
     /// **Exactly one instance exists.** `ContentView` is handed THIS object as an `init` parameter
-    /// (it owns the tab, consent, age and committed-peer edges), and `FernletStore` reaches it only
+    /// (it owns the tab, consent, age, committed-peer and session-liveness edges), and
+    /// `FernletStore` reaches it only
     /// through `deletingAllDataHook`, which `ContentView.attachDeleteAllHooks()` wires — so nothing
     /// constructs a second host and the store keeps no reference back to it.
     @State private var runPolicyHost = ProximityRunPolicyHost()
@@ -299,23 +302,30 @@ struct FernletApp: App {
         )
     }
 
-    /// Seeds every run-policy leg this launch can answer for, installs the five doors, and makes the
-    /// launch push (network migration P7 items 2 and 3; P5 item 10's launch site).
+    /// Seeds every run-policy leg this launch can answer for, installs the six doors, and makes the
+    /// launch push (network migration P7 items 2, 3 and 4; P5 item 10's launch site).
     ///
     /// The ORDER inside is load-bearing, and what it buys depends on which mount this is. On the
     /// FIRST mount every leg is seeded BEFORE
-    /// ``ProximityRunPolicyHost/connect(accessGate:meshRadios:presence:recipeShare:tearDownSession:)``,
+    /// ``ProximityRunPolicyHost/connect(accessGate:meshRadios:presence:recipeShare:tearDownSession:poll:)``,
     /// so the seeding writes nothing and the launch is ONE push — `pushNow()`, the single explicit
     /// act. On a re-fired `.onAppear` the doors are already installed, so each seed DOES push; those
     /// pushes are harmless rather than absent, because every seed re-reads the current truth and
     /// every seam ignores a value it already holds.
     ///
-    /// Four of the legs are read off the store because that is where they live —
-    /// `AgeAssuranceStore.record`, the mesh manager's `hasCommittedPeer`, and the two nearby
-    /// consents — and each of the four also has a live edge in `ContentView` from P7 item 3, so the
-    /// seed is the launch value and the `.onChange` is every later one. The tab starts at
-    /// `ContentView.selectedTab`'s own initial value and the delete-all flag at `false`; see the two
-    /// legs' own documentation on ``ProximityRunPolicyHost``.
+    /// FIVE of the legs are read off the store because that is where they live —
+    /// `AgeAssuranceStore.record`, the mesh manager's `hasCommittedPeer` and (item 4) its
+    /// `isSessionLive`, and the two nearby consents — and each of the five also has a live edge in
+    /// `ContentView`, so the seed is the launch value and the `.onChange` is every later one. The
+    /// tab starts at `ContentView.selectedTab`'s own initial value and the delete-all flag at
+    /// `false`; see the two legs' own documentation on ``ProximityRunPolicyHost``.
+    ///
+    /// The liveness seed is the one leg whose position in this body does not matter, and that is
+    /// worth saying rather than leaving to be rediscovered: `setSessionLive(_:)` makes no push — it
+    /// arms or cancels the poller — and `connect(…)` re-arms against whatever the leg then holds, so
+    /// seeding it before or after the install gives the same answer. It is seeded beside
+    /// `hasCommittedPeer` because the two come off the same manager and are deliberately NOT the
+    /// same fact.
     ///
     /// It is attached to `readyContent(store:)`, which covers the ONBOARDING branch as well as
     /// ``ContentView`` — so the mount and its launch push really do run before onboarding finishes.
@@ -348,10 +358,33 @@ struct FernletApp: App {
     /// the calls `FernletStore.setAllowNearbyPresence(_:)`, `setAllowNearbyRecipeShares(_:)` and the
     /// wipe funnel's leg 7b used to make directly.
     ///
-    /// - Parameter store: The loaded store, whose managers hold the gate and the four radios.
+    /// **The poll door is item 4's, and this body is the ONE place in the app target that names its
+    /// three consumers.** `enforceSessionCeiling(now:monotonicElapsed:)`,
+    /// `evaluateIdleLapse(now:)` and `evaluatePartition(now:)` have had no shipping caller since P3
+    /// — detection is on demand *by design so that nothing spins* — and
+    /// `ProximityRunPolicyHostTests.theSessionConsumersAreCalledOnlyFromThePollersDoor()` counts
+    /// each of the three exactly once across `App/`, and
+    /// `…thePollDoorsThreeCallsSitInsideTheMountInTheDecidedOrder()` requires all three to sit
+    /// inside these braces, in that index order. **The order
+    /// is the decision:** the ceiling can END the session, after which the idle lapse and the
+    /// partition evaluation are refused by the state machine rather than acting on a session that
+    /// has expired; and the partition evaluation is what ARMS the idle window the lapse reads, so
+    /// running it first would let one tick both arm a 30-minute window and judge it.
+    ///
+    /// `monotonicElapsed: nil` is deliberate and it is the whole clock decision. The manager already
+    /// keeps a monotonic session origin — a `ContinuousClock.Instant` armed by
+    /// `startSessionCeiling(hardDeadline:startedAt:)`, which keeps counting across a wall-clock
+    /// change and across device sleep — so passing `nil` asks it to measure from that origin instead
+    /// of inventing a second clock in the app. It is also the number P8 reuses: plan §2672–2679
+    /// makes elapsed session time toward the ceiling the continued task's progress unit precisely
+    /// because it is monotonic by construction, and that is this origin.
+    ///
+    /// - Parameter store: The loaded store, whose managers hold the gate, the four radios and the
+    ///   three session judgements the poller drives.
     private func mountRoutedRunPolicy(_ store: FernletStore) {
         runPolicyHost.setChatAgeGate(ProximityChatAgeGate.resolve(store.ageAssurance.record))
         runPolicyHost.setHasCommittedPeer(store.meshNetworkManager.hasCommittedPeer)
+        runPolicyHost.setSessionLive(store.meshNetworkManager.isSessionLive)
         runPolicyHost.setAllowsNearbyPresence(store.settings.allowNearbyPresence)
         runPolicyHost.setAllowsNearbyRecipeShares(store.settings.allowNearbyRecipeShares)
         runPolicyHost.setAppLockState(currentAppLockState)
@@ -370,6 +403,11 @@ struct FernletApp: App {
                 store.meshNetworkManager.stopJoin()
                 store.presenceManager.stop()
                 store.recipeShareManager.stop()
+            },
+            poll: { now in
+                await store.meshNetworkManager.enforceSessionCeiling(now: now, monotonicElapsed: nil)
+                store.meshNetworkManager.evaluateIdleLapse(now: now)
+                store.meshNetworkManager.evaluatePartition(now: now)
             }
         )
         runPolicyHost.pushNow()
