@@ -10,8 +10,8 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
 | 1 | `ProximityRunPolicy` as a pure value + the matrix over the full input product | 1 | — | done | pass A `27fb026`, fixes `2f3a8a1` | no wiring; 10 inputs (7 + `hasCommittedPeer` + 2 consents), 4 radios; 23 040 rows enumerated / 15 360 distinct inputs; oracle over the raw phase + shipping predicates, deviation pinned at **832 rows** (every radio up through `.inactive` where shipping asks `.active` — a policy act for §13.2); `FernletTab` made `nonisolated`; verify 3 P1 / 5 P2 fixed, re-verify "commit as is"; **build-unverified**, both new walls never shown red — owed to a Mac session |
-| 2 | The policy is the single writer of `applyRoutedAccessGate` (6 sites → 1) | 1 | 1 | in-flight | pass A `f0325e3` | `ProximityRunPolicyHost` (`@MainActor`, FernletApp `@State`, injected door closure, 10 legs, no Task/timer/persistence); 6 sites → leg setters, `pushRoutedAccessGate` deleted; wall: 1 writer in comment-stripped `App/`, W6/W7 rewritten; stale prose in `ProximityRunPolicy.swift` names the deleted helper (fix pass); verify in flight; **build-unverified** |
-| 3 | The radios get `apply(_:)` seams; ContentView + FernletStore stop calling them | 1 | 1, 2 | todo | | two passes |
+| 2 | The policy is the single writer of `applyRoutedAccessGate` (6 sites → 1) | 1 | 1 | done | pass A `f0325e3`, fixes `d35f9d8` | `ProximityRunPolicyHost` (`@MainActor`, FernletApp `@State`, injected door closure, 10 legs, no Task/timer/persistence); 6 sites → leg setters, `pushRoutedAccessGate` deleted; wall: 1 writer counted by call site AND by file over comment-stripped `App/`, W6/W7 rewritten stronger; verify 0 compile findings, 2 P1 (tautology, file-count) fixed; residual: the `.locked`/`.unlocked` leg refreshes only at duress/launch until item 3 adds the lock edge; **build-unverified** |
+| 3 | The radios get `apply(_:)` seams; ContentView + FernletStore stop calling them | 1 | 1, 2 | in-flight | | pass A = seams in the managers (no app wiring); pass B = the host drives them, the direct callers retire, the zero wall lands |
 | 4 | The poller — one timer, three consumers (ceiling → idle lapse → partition) | 1 | 1, 3 | todo | | |
 | 5 | The resume surface over `MeshSessionRestoreOutcome` | 1 + 1b | 1 | todo | | two passes |
 | 6 | Gate `MeshRoutedDrainTests` (43) and price P6's ~286 ungated cells | 1 | — | todo | | P6 §12.3 finding 14; needs a Mac to measure |
@@ -57,4 +57,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Other sessions may hold `App/Fernlet/Localizable.xcstrings` + `xcschememanagement.plist` on the owner's Mac — never stage them; commit with explicit pathspecs. (This container's clone was clean at seed.)
 
 ## Next item
-2 — in flight (iteration 2). Then 3 (two passes), 4, 5, 7. Items 6 and 8 need a Mac.
+3 pass A (the seams) — in flight (iteration 3). Then 3 pass B, 4, 5, 7. Items 6 and 8 need a Mac.
