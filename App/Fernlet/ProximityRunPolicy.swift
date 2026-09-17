@@ -388,7 +388,10 @@ nonisolated struct ProximityRunDecision: Equatable, Sendable {
 ///    and each keeps its own shipping condition: its consent, an unlocked-or-unconfigured app lock,
 ///    and its own tab set.
 ///
-/// The one deliberate widening against today's code is named on ``presenceDirective(_:)``.
+/// The one deliberate widening against today's code reaches EVERY radio, not just presence, and is
+/// named in full on ``presenceDirective(_:)``: shipping asks for the ACTIVE phase at all four of its
+/// gates, this policy has one foreground fact and an inactive scene is foreground, so an inactive
+/// scene keeps `foregroundOnly` radios up where `ContentView` stands them down.
 nonisolated enum ProximityRunPolicy {
 
     /// Decides every radio for one set of facts.
@@ -464,12 +467,19 @@ nonisolated enum ProximityRunPolicy {
     /// The presence radio's directive: consent, an app lock that is not locked, and one of the four
     /// tabs that are not Private (`ContentView.shouldRunPresence`, `ContentView.swift:1778`).
     ///
-    /// **The one deliberate widening.** Shipping code asks for the ACTIVE phase, so a Control Centre
-    /// pull or a call banner stands presence down today. The policy has one foreground fact and an
-    /// inactive scene is foreground, so `foregroundOnly` keeps presence up across that bounce. The
-    /// alternative is a second scene fact, which means a raw phase comparison in this file for a
-    /// state that is momentary, still unlocked, still user-present and which P5 already ruled a
-    /// foreground state for the far more sensitive plaintext question.
+    /// **The one deliberate widening, and it covers all four radios.** Shipping code asks for the
+    /// ACTIVE phase at every one of its gates, so a Control Centre pull or a call banner stands the
+    /// whole set down today: `ContentView.shouldRunPresence` (`ContentView.swift:1780`) and
+    /// `shouldListenForRecipeShares` (`:1721`) each guard `scenePhase == .active`, and
+    /// `handleScenePhaseChange` (`:348`) runs `stopFriendsDiscovery()` on ANY non-active phase —
+    /// which stands the mesh links and the admission door down too whenever no peer is committed
+    /// (`:1858`, where the stop bails on a committed peer). The policy has one foreground fact and
+    /// an inactive scene is foreground, so `foregroundOnly` keeps presence, the recipe listener, a
+    /// peerless Friends search and its admission door up across that bounce. The alternative is a
+    /// second scene fact, which means a raw phase comparison in this file for a state that is
+    /// momentary, still unlocked, still user-present and which P5 already ruled a foreground state
+    /// for the far more sensitive plaintext question. `ProximityRunPolicyTests` pins the widening's
+    /// exact extent: every deviating row is an inactive one, and it counts them.
     ///
     /// - Parameter inputs: The app's lifecycle facts.
     /// - Returns: the directive for ``ProximityRadio/presence``.

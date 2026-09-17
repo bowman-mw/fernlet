@@ -69,7 +69,16 @@ enum FernletAppearanceMode: String, CaseIterable, Identifiable {
 /// `ContentView` keys the paged `TabView`, the custom floating tab bar, and the per-tab
 /// listener/health-refresh gating on this; the raw value doubles as a stable identifier for
 /// per-tab reset tokens. `next`/`previous` support ordered paging helpers.
-enum FernletTab: String, CaseIterable, Hashable, Identifiable {
+///
+/// **`nonisolated`, unlike the appearance enum above it.** The app target builds with
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` and `SWIFT_APPROACHABLE_CONCURRENCY = YES`, so an
+/// unmarked type's `Equatable`/`Hashable` conformances are inferred main-actor-isolated (SE-0470).
+/// `ProximityRunPolicy`'s `ProximityRunInputs` is a `nonisolated` `Hashable` value that STORES a
+/// tab, and its synthesised `==` / `hash(into:)` run off the main actor, so the tab's own
+/// conformances have to be reachable from there. Every member is main-actor-free — the raw value,
+/// the two string properties and the `allCases` walks in `next`/`previous` — except ``label``,
+/// which builds a SwiftUI view and keeps its isolation explicitly.
+nonisolated enum FernletTab: String, CaseIterable, Hashable, Identifiable {
     case home
     case food
     case move
@@ -109,7 +118,15 @@ enum FernletTab: String, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    var label: Label<Text, Image> {
+    /// ``title`` and ``systemImage`` as one SwiftUI `Label`.
+    ///
+    /// The one member kept `@MainActor` when the type went `nonisolated`: it constructs a SwiftUI
+    /// view, and `View` is a `@MainActor @preconcurrency` protocol whose conforming value types
+    /// carry that isolation, so building one off the actor is a diagnostic this target turns into a
+    /// build failure (`SWIFT_TREAT_WARNINGS_AS_ERRORS`). Keeping it isolated is free: it is exactly
+    /// the isolation this property had before, and the tab bar draws the two halves itself
+    /// (`ContentView.tabButton`), so nothing calls it from anywhere.
+    @MainActor var label: Label<Text, Image> {
         Label(title, systemImage: systemImage)
     }
 
