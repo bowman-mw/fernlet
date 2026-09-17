@@ -9,7 +9,7 @@
 States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per §2.
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
-| 1 | `ProximityRunPolicy` as a pure value + the matrix over the full input product | 1 | — | in-flight | pass A `27fb026` | no wiring; 10 inputs (7 + `hasCommittedPeer` + 2 consents), 4 radios, 23 040-row product; deviation: presence/recipe up through `.inactive` (shipping asks `.active`); adversarial verify in flight, fixes follow as their own commit; **build-unverified** |
+| 1 | `ProximityRunPolicy` as a pure value + the matrix over the full input product | 1 | — | in-flight | pass A `27fb026`, fixes `2f3a8a1` | no wiring; 10 inputs (7 + `hasCommittedPeer` + 2 consents), 4 radios; 23 040 rows enumerated / 15 360 distinct inputs; oracle over the raw phase + shipping predicates, deviation pinned at **832 rows** (every radio up through `.inactive` where shipping asks `.active`); `FernletTab` made `nonisolated`; verify: 3 P1 / 5 P2 fixed, re-verify in flight; **build-unverified** |
 | 2 | The policy is the single writer of `applyRoutedAccessGate` (6 sites → 1) | 1 | 1 | todo | | |
 | 3 | The radios get `apply(_:)` seams; ContentView + FernletStore stop calling them | 1 | 1, 2 | todo | | two passes |
 | 4 | The poller — one timer, three consumers (ceiling → idle lapse → partition) | 1 | 1, 3 | todo | | |
