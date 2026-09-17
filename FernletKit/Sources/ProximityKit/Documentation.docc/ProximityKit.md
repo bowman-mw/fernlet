@@ -1882,10 +1882,13 @@ unlock must still attempt it, because the attempt is what produces the `retryAft
 the re-entry's retry then finds pending.
 
 **Network migration P7 item 5 gave the restore its user-facing half.** ``MeshNetworkManager/sessionResumeProjection`` is the one thing about it that crosses the module
-wall — a ``MeshSessionResumeProjection`` carrying the flattened outcome kind, the offer flag and the
-rejoin bar's reason **for the mesh in hand** (``MeshNetworkManager/rejoinRefusal(for:)``'s answer,
-never the global bar, which is cleared nowhere and would otherwise name the next mesh ended with the
-last one's reason) — and ``MeshNetworkManager/acceptForegroundResume(now:)`` /
+wall — a ``MeshSessionResumeProjection`` carrying the flattened outcome kind, the offer flag and
+`rejoinBarHit`, **a rejoin-bar HIT this run** (``MeshNetworkManager/lastRejoinBarHit``: the reason of
+the last entry ``MeshNetworkManager/rejoinRefusal(for:)`` actually REFUSED), never the durable bar's
+reason matched against the mesh in hand — that bar is cleared nowhere, so matching it still
+re-presented "that session has ended" on every cold start until some new session overwrote the sealed
+file — and ``MeshNetworkManager/acceptForegroundResume(now:)`` (now returning
+``MeshForegroundResumeOutcome`` rather than `Bool`) /
 ``MeshNetworkManager/declineForegroundResume()`` are the two doors the offer is answered through.
 The accept adopts the restored context into `currentMesh` so the Friends three-way resolves a
 **resume** rather than founding a second mesh beside the one on the disk, and it still arms **no**
