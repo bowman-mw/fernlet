@@ -10,7 +10,7 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
 | 1 | `ProximityRunPolicy` as a pure value + the matrix over the full input product | 1 | — | done | pass A `27fb026`, fixes `2f3a8a1` | no wiring; 10 inputs (7 + `hasCommittedPeer` + 2 consents), 4 radios; 23 040 rows enumerated / 15 360 distinct inputs; oracle over the raw phase + shipping predicates, deviation pinned at **832 rows** (every radio up through `.inactive` where shipping asks `.active` — a policy act for §13.2); `FernletTab` made `nonisolated`; verify 3 P1 / 5 P2 fixed, re-verify "commit as is"; **build-unverified**, both new walls never shown red — owed to a Mac session |
-| 2 | The policy is the single writer of `applyRoutedAccessGate` (6 sites → 1) | 1 | 1 | in-flight | | |
+| 2 | The policy is the single writer of `applyRoutedAccessGate` (6 sites → 1) | 1 | 1 | in-flight | pass A `f0325e3` | `ProximityRunPolicyHost` (`@MainActor`, FernletApp `@State`, injected door closure, 10 legs, no Task/timer/persistence); 6 sites → leg setters, `pushRoutedAccessGate` deleted; wall: 1 writer in comment-stripped `App/`, W6/W7 rewritten; stale prose in `ProximityRunPolicy.swift` names the deleted helper (fix pass); verify in flight; **build-unverified** |
 | 3 | The radios get `apply(_:)` seams; ContentView + FernletStore stop calling them | 1 | 1, 2 | todo | | two passes |
 | 4 | The poller — one timer, three consumers (ceiling → idle lapse → partition) | 1 | 1, 3 | todo | | |
 | 5 | The resume surface over `MeshSessionRestoreOutcome` | 1 + 1b | 1 | todo | | two passes |
