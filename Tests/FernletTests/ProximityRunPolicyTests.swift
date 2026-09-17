@@ -37,9 +37,11 @@
 // with the teardown flag up.
 //
 // Four more cells guard the rules P5 item 10 handed forward: the decision carries exactly the
-// `MeshRoutedAccessGate` the app already assembles, both gate-construction sites are brace-matched
-// and shown to name the same three facts, an inactive scene is a foreground scene, and the policy
-// file itself contains no raw scene-phase comparison (`ScenePhase` is not frozen).
+// `MeshRoutedAccessGate` the app used to assemble at six sites, `decide(_:)` is now the ONLY
+// gate-construction site outside ProximityKit (brace-matched, and shown to name the same three
+// facts), an inactive scene is a foreground scene, and the policy file itself contains no raw
+// scene-phase comparison (`ScenePhase` is not frozen). The WIRING that made the policy that single
+// writer is P7 item 2's, and its walls are `ProximityRunPolicyHostTests`.
 
 import Foundation
 import SwiftUI
@@ -572,7 +574,7 @@ private struct ProximityRunRowVerdict {
 
     // MARK: - The two rules P5 item 10 handed forward
 
-    /// The decision carries exactly the gate `FernletApp.pushRoutedAccessGate` assembles today —
+    /// The decision carries exactly the gate the app used to assemble at its six push sites —
     /// protected data, `routedGateForeground(for:)`'s answer, and the duress session — for every
     /// phase, and its own foreground fact never drifts from the gate's leg.
     @Test func theDecisionCarriesTheGateTheAppAlreadyAssembles() {
@@ -597,20 +599,20 @@ private struct ProximityRunRowVerdict {
         #expect(consistent, "every row carries the app's gate, and one foreground fact only")
     }
 
-    /// Both places that BUILD a `MeshRoutedAccessGate` outside ProximityKit name the same three
-    /// facts, measured by CONTAINMENT in a brace-matched body rather than by text proximity.
+    /// The ONE place that BUILDS a `MeshRoutedAccessGate` outside ProximityKit is
+    /// `ProximityRunPolicy.decide(_:)`, and it names the same three facts the app used to assemble
+    /// — measured by CONTAINMENT in a brace-matched body rather than by text proximity.
     ///
-    /// The named cell above pins the gate's three VALUES; nothing pinned the app's own construction
-    /// site, so `FernletApp.pushRoutedAccessGate` could have gained or lost a leg with the whole
-    /// matrix still green. The negative fixture proves the body is really the body: six call sites
-    /// of `routedGateForeground(for:` sit in `FernletApp.swift`, and none of them is inside this one.
-    @Test func bothGateConstructionSitesNameTheSameThreeFacts() throws {
+    /// **P7 item 2 turned "both sites agree" into "there is one site."** Until it landed, the app
+    /// assembled a second gate in `FernletApp.pushRoutedAccessGate(_:protectedData:foreground:)` and
+    /// this cell held the two spellings against each other; that helper is retired, so the claim is
+    /// now a file-level count with the policy named as the survivor, and the app-wide count of
+    /// `applyRoutedAccessGate(` lives in `ProximityRunPolicyHostTests` beside the wiring it binds.
+    /// The negative fixture proves the body is really the body: `meshLinksDirective(_:)` is DECLARED
+    /// a few lines past `decide(_:)`'s closing brace while being CALLED from inside it, so a matcher
+    /// that had drifted onto the whole file would find the declaration.
+    @Test func thePolicyIsTheOnlyGateConstructionSiteOutsideProximityKit() throws {
         let labels = ["protectedDataAvailable:", "appIsForeground:", "duressActive:"]
-        let appCode = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
-        let appBody = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "private func pushRoutedAccessGate(", in: appCode),
-            "the app's gate-push site was renamed, or its brace-matched body does not close"
-        )
         let policyCode = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("App/Fernlet/ProximityRunPolicy.swift")
         )
@@ -618,14 +620,17 @@ private struct ProximityRunRowVerdict {
             MeshRoutedSourceScan.bracedBody(after: "static func decide(", in: policyCode),
             "the policy's decide(_:) was renamed, or its brace-matched body does not close"
         )
-        let appNamesThem = labels.allSatisfy { appBody.contains($0) }
-        let policyNamesThem = labels.allSatisfy { policyBody.contains($0) }
-        #expect(appNamesThem, "pushRoutedAccessGate no longer assembles the gate from the three facts")
-        #expect(policyNamesThem, "the policy no longer assembles the gate from the same three facts")
-        #expect(appBody.contains("applyRoutedAccessGate("), "the push site no longer reaches the door")
+        #expect(labels.allSatisfy { policyBody.contains($0) },
+                "the policy no longer assembles the gate from the app's three facts")
         #expect(policyBody.contains("MeshRoutedAccessGate("), "the policy no longer builds a gate here")
-        #expect(!appBody.contains("routedGateForeground(for:"),
+        #expect(!policyBody.contains("private static func meshLinksDirective("),
                 "the body matcher is measuring the file rather than the braced body")
+        #expect(policyCode.components(separatedBy: "MeshRoutedAccessGate(").count - 1 == 1,
+                "the policy file builds more than one gate")
+        #expect(!policyCode.contains("applyRoutedAccessGate("), """
+            the policy is a pure value: the door is ProximityRunPolicyHost's, and \
+            ProximityRunPolicyHostTests counts it across the whole app target
+            """)
     }
 
     /// An INACTIVE scene is a FOREGROUND scene (P5's post-close correction): Control Center, a call

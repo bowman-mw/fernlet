@@ -1010,24 +1010,37 @@ extension MeshRoutedLockedDeviceTests {
         #expect(scanned == files.count, "the keychain-class scan lost a file")
     }
 
-    /// **W6.** The app pushes the gate from every site the three facts actually move at.
+    /// **W6.** The app still observes every site the three facts actually move at — six EDGES —
+    /// even though P7 item 2 collapsed the six gate pushes into one writer.
     ///
-    /// Six call sites: the launch mount (`.onChange(of: scenePhase)` carries no `initial:`, and the
-    /// loader becomes ready after the first activation), the two scene legs, the two protected-data
-    /// notifications — which pass the fact **literally**, because `isProtectedDataAvailable` still
-    /// answers `true` inside the will-become-unavailable handler — and duress, which moves at
-    /// neither transition.
-    @Test func theAppPushesTheGateFromEverySiteTheFactsMoveAt() throws {
+    /// Six edges, each now a leg update on `ProximityRunPolicyHost`: the launch mount
+    /// (`.onChange(of: scenePhase)` carries no `initial:`, and the loader becomes ready after the
+    /// first activation), the two scene legs, the two protected-data notifications — which pass the
+    /// fact **literally**, because `isProtectedDataAvailable` still answers `true` inside the
+    /// will-become-unavailable handler — and duress, which moves at neither transition and is the
+    /// one clause of Fernlet's own app lock that reaches the mesh (D-10.3).
+    ///
+    /// The counts are three, three and two rather than two, two and one because the launch mount
+    /// seeds all three legs before it connects the door: that seeding is what makes the launch push
+    /// carry this launch's facts instead of the host's fail-closed defaults.
+    @Test func theAppFeedsThePolicyFromEverySiteTheFactsMoveAt() throws {
         let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
-        let calls = code.split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { $0.contains("pushRoutedAccessGate(") && !$0.contains("private func") }
-        #expect(calls.count == 6, "the app pushes the routed access gate from the wrong number of sites")
-        #expect(code.contains("protectedData: false"),
+        let scene = Self.occurrences(of: "runPolicyHost.setScenePhase(", in: code)
+        let protectedData = Self.occurrences(of: "runPolicyHost.setProtectedDataAvailable(", in: code)
+        let lock = Self.occurrences(of: "runPolicyHost.setAppLockState(", in: code)
+        #expect(scene == 3, "the two scene legs plus the launch seed feed the phase")
+        #expect(protectedData == 3, "the two notification legs plus the launch seed feed the fact")
+        #expect(lock == 2, "the duress edge plus the launch seed feed the app lock")
+        #expect(code.contains("runPolicyHost.setProtectedDataAvailable(false)"),
                 "the will-become-unavailable handler must pass the fact literally")
-        #expect(code.contains("protectedData: true"),
+        #expect(code.contains("runPolicyHost.setProtectedDataAvailable(true)"),
                 "the did-become-available handler must pass the fact literally")
         #expect(code.contains("onChange(of: lockService.isDuressSessionActive)"),
                 "duress moves at neither a scene nor a protected-data transition")
+        #expect(Self.occurrences(of: "runPolicyHost.connect", in: code) == 1,
+                "the production door is installed in exactly one place")
+        #expect(Self.occurrences(of: "runPolicyHost.pushNow()", in: code) == 1,
+                "the launch push is the one explicit push the app makes")
     }
 
     /// **W7.** Foreground means NOT BACKGROUNDED, and it is decided in one place.
@@ -1037,9 +1050,10 @@ extension MeshRoutedLockedDeviceTests {
     /// process is live, which is exactly what the leg exists to tell apart from a backgrounded
     /// (CPT-continued) mesh. Before the P5 review four of the six push sites compared `== .active`
     /// while the scene handler fell only on `.background`, so the stored gate for one physical state
-    /// depended on which event pushed last. Now every site routes through
-    /// `FernletApp.routedGateForeground(for:)`, and no raw phase compare or literal fact may decide
-    /// it.
+    /// depended on which event pushed last. Since P7 item 2 the mapping has exactly ONE caller in
+    /// the whole app target — `ProximityRunInputs`' initialiser, the only way to build the policy's
+    /// inputs — so a site that wanted to disagree would have to build the fact itself, and no app
+    /// file does.
     @Test func foregroundMeansNotBackgroundedAndIsDecidedOnce() throws {
         #expect(FernletApp.routedGateForeground(for: .active))
         #expect(FernletApp.routedGateForeground(for: .inactive),
@@ -1050,8 +1064,21 @@ extension MeshRoutedLockedDeviceTests {
                 "a raw phase compare decides the foreground fact outside the one mapping")
         #expect(!code.contains("foreground: true") && !code.contains("foreground: false"),
                 "a literal foreground fact bypasses the one mapping")
-        let routed = code.components(separatedBy: "foreground: Self.routedGateForeground(for:").count - 1
-        #expect(routed == 6, "every push site routes its foreground fact through the one mapping")
+        #expect(Self.occurrences(of: "routedGateForeground(for:", in: code) == 0, """
+            FernletApp no longer translates a phase itself: it hands the raw phase to the run \
+            policy host, whose ProximityRunInputs initialiser is the one door onto this mapping
+            """)
+        var callers = 0
+        // R2: bounded by the app target's own file list.
+        for source in try Self.codeSources(under: "App/Fernlet") {
+            callers += Self.occurrences(of: "routedGateForeground(for:", in: source.code)
+        }
+        #expect(callers == 1, "the phase-to-foreground translation has exactly one caller in App/")
+        let policy = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/ProximityRunPolicy.swift")
+        )
+        #expect(policy.contains("FernletApp.routedGateForeground(for: scenePhase)"),
+                "and that caller is ProximityRunInputs' initialiser")
     }
 
     /// **P6 item 7: the launch mount's decision, and its single call site.**
@@ -1066,7 +1093,8 @@ extension MeshRoutedLockedDeviceTests {
     ///
     /// The source half is the other wall, and it pins the ORDER rather than an impossibility (P6
     /// item 7 fix review, P3-6). The mount has exactly one call site, and that site sits inside the
-    /// ready view's `.onAppear` **after** the routed gate push — which is what makes a launch on an
+    /// ready view's `.onAppear` **after** the run-policy mount that makes the launch's gate push
+    /// (P7 item 2 renamed the push, not the order) — which is what makes a launch on an
     /// unlocked device consume its own rising protected-data edge before the restore runs, so the
     /// re-entry's job 1 finds nothing pending and the next real rise is what retries a deferral.
     /// Swap the two statements and this reddens; the line it replaced (`FernletApp` never names the
@@ -1123,9 +1151,9 @@ extension MeshRoutedLockedDeviceTests {
             further down the file satisfies "some earlier closure pushes the gate" and runs at a \
             different moment
             """)
-        let push = try #require(block.range(of: "pushRoutedAccessGate("), """
-            the closure holding the launch mount does not push the routed access gate, so the \
-            launch no longer consumes its own rising protected-data edge before restoring
+        let push = try #require(block.range(of: "mountRoutedRunPolicy(store)"), """
+            the closure holding the launch mount does not mount the run policy, so the launch no \
+            longer consumes its own rising protected-data edge before restoring
             """)
         let inBlock = try #require(block.range(of: callSite))
         #expect(push.lowerBound < inBlock.lowerBound,

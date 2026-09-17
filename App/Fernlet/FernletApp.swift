@@ -69,6 +69,17 @@ struct FernletApp: App {
     /// act. The manager refuses a second attempt on its own (`sessionRestoreAttempts`), so this is
     /// the courtesy half — it keeps the audit trail down to one line per launch.
     @State private var didMountMeshSessionRestore = false
+    /// P7 item 2's single writer of the routed access gate. Holds one value per
+    /// ``ProximityRunInputs`` leg, re-decides whenever the scene, protected data or the duress
+    /// session moves, and writes `MeshRoutedAccessGate` through the door
+    /// `mountRoutedRunPolicy(_:)` installs into it — see ``ProximityRunPolicyHost``.
+    ///
+    /// **`@State` here rather than a `FernletStore` property**, because this is where the legs are:
+    /// the scene phase is this scene's `@Environment`, both protected-data notifications are
+    /// observed on this scene, and the duress session lives on `lockService`, which is this type's
+    /// `@State` and not the store's. The store was only ever the DESTINATION of the six pushes —
+    /// each reached it through `loader.phase` — and it still is, through the injected closure.
+    @State private var runPolicyHost = ProximityRunPolicyHost()
     /// Presents the one-time existing-install backup-exclusion prompt (see
     /// `BackupExclusionLaunchGate`); only ever set when the gate classifies this launch as an
     /// existing install with no recorded choice.
@@ -208,12 +219,17 @@ struct FernletApp: App {
     /// plaintext it would not hold a moment later while `.active`. Device lock always traverses
     /// `.inactive → .background`, and data protection has its own leg.
     ///
-    /// Every gate push in this file routes its `foreground:` argument through here, so the six
-    /// sites cannot disagree about what foreground means — before the review four of them compared
-    /// `== .active` while the scene handler fell only on `.background`, so the stored gate for one
-    /// physical state depended on which event pushed last. `!=` rather than a `switch`:
-    /// `ScenePhase` is not frozen, and an `@unknown default` under warnings-as-errors would have to
-    /// pick a side for a phase that does not exist yet.
+    /// **Still the one phase-to-foreground translation, and since P7 item 2 it has exactly one
+    /// caller.** The six gate-push sites each routed their `foreground:` argument through here so
+    /// they could not disagree about what foreground means — before the P5 review four of them
+    /// compared `== .active` while the scene handler fell only on `.background`, so the stored gate
+    /// for one physical state depended on which event pushed last. Now the six sites are leg
+    /// updates on ``ProximityRunPolicyHost``, which hands the raw phase to `ProximityRunInputs`'
+    /// initialiser — the ONLY way to build one — and that initialiser calls this. A site that wanted
+    /// to disagree would have to build the fact itself, which no app-target file does:
+    /// `ProximityRunPolicyHostTests` counts the call sites across `App/` at one. `!=` rather than a
+    /// `switch`: `ScenePhase` is not frozen, and an `@unknown default` under warnings-as-errors
+    /// would have to pick a side for a phase that does not exist yet.
     ///
     /// - Parameter phase: The scene phase.
     /// - Returns: `false` for `.background`, `true` otherwise.
@@ -266,44 +282,61 @@ struct FernletApp: App {
         MeshMatrixDebugOptions.isEnabled
     }
 
-    /// Pushes the three lock facts into the mesh manager (network migration P5 item 10).
+    /// This device's app lock with the duress session folded in — the one lock fact the mesh reads
+    /// (D-10.3), assembled where both halves live.
     ///
-    /// The app is the only place all three live: the OS device lock (data protection), the scene,
-    /// and `FernletLockService`'s duress session — ProximityKit deliberately observes no lifecycle
-    /// and cannot import `FernletLock`. P7's `ProximityRunPolicy` replaces every call site below
-    /// with one policy call; this seam does not move.
-    ///
-    /// - Parameters:
-    ///   - store: The loaded store, whose mesh manager holds the gate.
-    ///   - protectedData: Whether protected data is available — passed **literally** from the two
-    ///     notifications, sampled at the scene sites.
-    ///   - foreground: Whether the scene is not backgrounded — always
-    ///     ``routedGateForeground(for:)``'s answer, never a raw phase compare.
-    private func pushRoutedAccessGate(
-        _ store: FernletStore, protectedData: Bool, foreground: Bool
-    ) {
-        store.meshNetworkManager.applyRoutedAccessGate(
-            MeshRoutedAccessGate(
-                protectedDataAvailable: protectedData,
-                appIsForeground: foreground,
-                duressActive: lockService.isDuressSessionActive
-            ),
-            now: Date()
+    /// `FernletLockService` is this type's `@State` and is not on the store, which is why the run
+    /// policy's lock leg is fed from here rather than from `FernletStore`.
+    private var currentAppLockState: ProximityAppLockState {
+        ProximityAppLockState.resolve(
+            lockService.state, isDuressSessionActive: lockService.isDuressSessionActive
         )
+    }
+
+    /// Seeds every run-policy leg this launch can answer for, installs the mesh door, and makes the
+    /// launch push (network migration P7 item 2; P5 item 10's launch site).
+    ///
+    /// The ORDER inside is load-bearing. Every leg is seeded BEFORE
+    /// ``ProximityRunPolicyHost/connect(_:)``, so the seeding writes nothing and a launch is ONE
+    /// gate push rather than one per leg; `pushNow()` is then the single explicit act. On a
+    /// re-fired `.onAppear` the door is already latched and each seed re-reads the current truth, so
+    /// every push carries the gate the manager already holds and is silently ignored there.
+    ///
+    /// Four of the legs are read off the store because that is where they live —
+    /// `AgeAssuranceStore.record`, the mesh manager's `hasCommittedPeer`, and the two nearby
+    /// consents. None of them is a GATE leg, so the gate is exact from this commit; they are seeded
+    /// anyway so that the radio directives P7 item 3 acts on start from facts rather than defaults.
+    /// The tab and the delete-all flag have no launch-time fact to read — see the two legs' own
+    /// documentation on ``ProximityRunPolicyHost``.
+    ///
+    /// - Parameter store: The loaded store, whose mesh manager holds the gate.
+    private func mountRoutedRunPolicy(_ store: FernletStore) {
+        runPolicyHost.setChatAgeGate(ProximityChatAgeGate.resolve(store.ageAssurance.record))
+        runPolicyHost.setHasCommittedPeer(store.meshNetworkManager.hasCommittedPeer)
+        runPolicyHost.setAllowsNearbyPresence(store.settings.allowNearbyPresence)
+        runPolicyHost.setAllowsNearbyRecipeShares(store.settings.allowNearbyRecipeShares)
+        runPolicyHost.setAppLockState(currentAppLockState)
+        runPolicyHost.setProtectedDataAvailable(protectedDataAvailableNow)
+        runPolicyHost.setScenePhase(scenePhase)
+        runPolicyHost.connect { accessGate, now in
+            store.meshNetworkManager.applyRoutedAccessGate(accessGate, now: now)
+        }
+        runPolicyHost.pushNow()
     }
 
     /// Mounts the sealed mesh session context, once per launch (network migration P6 item 7).
     ///
-    /// Called from the ready view's `.onAppear`, **after** `pushRoutedAccessGate(_:protectedData:
-    /// foreground:)` in the same closure, and that order is the whole wiring decision: the store is
+    /// Called from the ready view's `.onAppear`, **after** ``mountRoutedRunPolicy(_:)`` in the same
+    /// closure, and that order is the whole wiring decision (plan §24.1): the store is
     /// loaded (so the manager's identity is provisioned), and the gate already carries this launch's
     /// three lock facts, so a `deferred` restore has a gate to be retried against at the next
     /// protected-data rise (`retrySessionRestoreIfPending(now:)`, the routed re-entry's job 1).
     ///
     /// **It arms no radio.** The restore makes the ledger, the roster, the restored key
     /// advertisements and the routed store addressable; whether this device then goes looking for
-    /// peers stays the Friends tab's three-way (`FriendsDiscoveryEntry`) and, later, P7's run
-    /// policy. Nothing here is presented to the user either — no app surface reads
+    /// peers stays the Friends tab's three-way (`FriendsDiscoveryEntry`) and, from P7 item 3,
+    /// ``ProximityRunPolicyHost``'s radio directives. Nothing here is presented to the user
+    /// either — no app surface reads
     /// `lastSessionRestoreOutcome`, `offersForegroundResume`, `restoredSessionContext` or
     /// `rejoinBar`.
     ///
@@ -319,26 +352,26 @@ struct FernletApp: App {
 
     /// Everything one scene transition owes: the snapshot flush and relock on background, the
     /// keychain re-derivation and store self-heals on activation, and P5 item 10's two foreground
-    /// legs of the routed access gate. `.inactive` is deliberately not a leg — see
-    /// ``routedGateForeground(for:)``.
+    /// legs — which since P7 item 2 are leg updates on ``ProximityRunPolicyHost`` rather than gate
+    /// pushes of their own. `.inactive` is deliberately not a leg, and neither branch compares a
+    /// phase to decide the foreground fact — see ``routedGateForeground(for:)``.
     ///
     /// A method rather than an inline closure so `body` stays inside the 60-line rule after item
-    /// 10's push; the ordering inside it is load-bearing and unchanged — the gate is pushed on
-    /// activation only AFTER `refreshStateFromKeychain()`, so the duress fact it carries is the
-    /// current one.
+    /// 10's push; the ordering inside it is load-bearing and unchanged — the phase leg is set on
+    /// activation only AFTER `refreshStateFromKeychain()`, and the duress fact the host already
+    /// holds cannot have moved under that call (it re-derives `state` from the keychain and never
+    /// touches `isDuressSessionActive`, which is why duress keeps its own `.onChange` edge).
     ///
     /// - Parameter newPhase: The phase the scene just entered.
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
         if newPhase == .background {
             if case .ready(let store) = loader.phase {
                 store.flushPendingSnapshotSave()
-                // P5 item 10: the foreground falling leg. Custody keeps running on
-                // ciphertext; plaintext stops here.
-                pushRoutedAccessGate(
-                    store, protectedData: protectedDataAvailableNow,
-                    foreground: Self.routedGateForeground(for: newPhase)
-                )
             }
+            // P5 item 10's foreground falling leg, now one leg of P7 item 2's run policy: custody
+            // keeps running on ciphertext; plaintext stops here. No `.ready` guard of its own —
+            // the host writes nothing until `mountRoutedRunPolicy(_:)` has connected its door.
+            runPolicyHost.setScenePhase(newPhase)
             lockService.lock(reason: .background)
         } else if newPhase == .active {
             // A launch that could not read the keychain (background relaunch / pre-first-unlock
@@ -378,13 +411,10 @@ struct FernletApp: App {
                 // foreground activation retries until it resolves. A no-op once
                 // `didResolveBackupExclusionDefault` is set.
                 resolveBackupExclusionDefaultIfNeeded()
-                // P5 item 10: the foreground rising leg, pushed AFTER
-                // `refreshStateFromKeychain()` so the duress fact is the current one.
-                pushRoutedAccessGate(
-                    store, protectedData: protectedDataAvailableNow,
-                    foreground: Self.routedGateForeground(for: newPhase)
-                )
             }
+            // P5 item 10's foreground rising leg, now a run-policy leg, set AFTER
+            // `refreshStateFromKeychain()` so the lock facts the host holds are the current ones.
+            runPolicyHost.setScenePhase(newPhase)
         }
     }
 
@@ -412,12 +442,7 @@ struct FernletApp: App {
                 // P5 item 10: the notification IS the fact. `isProtectedDataAvailable` still
                 // answers `true` here — this is posted before lockdown so an app can finish its
                 // reads — so the literal is the only honest value.
-                if case .ready(let store) = loader.phase {
-                    pushRoutedAccessGate(
-                        store, protectedData: false,
-                        foreground: Self.routedGateForeground(for: scenePhase)
-                    )
-                }
+                runPolicyHost.setProtectedDataAvailable(false)
             }
             .onReceive(
                 NotificationCenter.default.publisher(
@@ -431,25 +456,15 @@ struct FernletApp: App {
                 lockService.refreshStateFromKeychain()
                 // P5 item 10: the unlock edge, literal for the same reason, and the one that fires
                 // while the app is BACKGROUNDED — the ciphertext jobs the re-entry owes run there.
-                if case .ready(let store) = loader.phase {
-                    pushRoutedAccessGate(
-                        store, protectedData: true,
-                        foreground: Self.routedGateForeground(for: scenePhase)
-                    )
-                }
+                runPolicyHost.setProtectedDataAvailable(true)
             }
             .onChange(of: lockService.isDuressSessionActive) { _, _ in
                 // P5 item 10: duress is entered at an already-foreground lock screen and cleared by
                 // a real-passcode unlock in the same foreground — it moves at NEITHER a scene nor a
-                // protected-data transition, so it needs its own observer or the stored gate would
-                // report `duressActive: false` for the whole duress session.
-                if case .ready(let store) = loader.phase {
-                    pushRoutedAccessGate(
-                        store,
-                        protectedData: protectedDataAvailableNow,
-                        foreground: Self.routedGateForeground(for: scenePhase)
-                    )
-                }
+                // protected-data transition, so it keeps its own observer or the stored gate would
+                // report `duressActive: false` for the whole duress session. P7 item 2 keeps the
+                // edge and moves only the assembly.
+                runPolicyHost.setAppLockState(currentAppLockState)
             }
             .onReceive(
                 NotificationCenter.default.publisher(
@@ -480,19 +495,15 @@ struct FernletApp: App {
                     // does nothing — the mesh manager is not even built — and in release it is a
                     // compiled-out no-op.
                     .task { MeshRejectionMatrixHarness.install(manager: store.meshNetworkManager, store: store) }
-                    // P5 item 10's launch push. `.onChange(of: scenePhase)` carries no `initial:`,
-                    // and on a cold launch the loader reaches `.ready` AFTER the
-                    // `.inactive → .active` edge — without this the gate would sit fail-closed for
-                    // the whole foreground session and the re-entry would never run.
-                    // P6 item 7's launch mount for the sealed session context, in the same closure
-                    // and deliberately AFTER the gate push — see
-                    // `restoreMeshSessionContextIfNeeded(_:)`.
+                    // P5 item 10's launch push, now P7 item 2's run-policy mount.
+                    // `.onChange(of: scenePhase)` carries no `initial:`, and on a cold launch the
+                    // loader reaches `.ready` AFTER the `.inactive → .active` edge — without this
+                    // the gate would sit fail-closed for the whole foreground session and the
+                    // re-entry would never run. P6 item 7's launch mount for the sealed session
+                    // context follows in the same closure and deliberately AFTER the gate push
+                    // (plan §24.1) — see `restoreMeshSessionContextIfNeeded(_:)`.
                     .onAppear {
-                        pushRoutedAccessGate(
-                            store,
-                            protectedData: protectedDataAvailableNow,
-                            foreground: Self.routedGateForeground(for: scenePhase)
-                        )
+                        mountRoutedRunPolicy(store)
                         restoreMeshSessionContextIfNeeded(store)
                     }
             case .failed(let error):
