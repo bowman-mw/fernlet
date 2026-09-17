@@ -164,6 +164,13 @@ serially, environment pinned; and a confirmation that the gated mesh step report
 S3 Wall job once against the red on `82fc4d7`. It is P8's item 0, and nothing else may start until
 it is green.
 
+## Post-close review corrections (2026-09-17)
+A whole-tree post-close review (P5's pattern) at `06f3065`: **no integration failure found** — 56 new top-level declarations swept for collisions, 211 call sites checked against every changed signature, all 13 deleted symbols at zero code references, every P7 wall re-executed in Python and green by construction. Findings, with what moved (landed as `⟦SHA⟧`):
+- **P2-1 (fixed):** a silent presentation (`.nothing` for `notAttempted`/`deferred`/`refused` whatever the offer) left the mesh seam's `resumeOffered` hold with no affordance to release it — unreachable in shipping until P8's `.foregrounded`, but reachable today through `FERNLET_MESH_RESUME_PRESENTATION=nothing` on a simulator holding a sealed context. Rule added app-side: a silent presentation declines a standing offer through the card's one dismiss path and re-pushes the policy.
+- **P2-2 (fixed):** `ProximityRunPolicyHostTests.legSteps`, a 13-element labelled-tuple literal of closures and initialisers under one annotation, was the phase's one real type-check-time risk; rebuilt one `append` per step.
+- **P2-3 (recorded, not changed):** the receiver-agnostic listener sweep reddens for an unrelated `.start()`/`.stop()` in any of the 10 files that name a listener — a trap with no diagnostic; its DocC now names the intended fix (scope the receiver on the same line).
+- **P3 (fixed):** the projection's "both ids read unconditionally" comment was false (`restoredSessionContext` is `@ObservationIgnored`; only `currentMesh`'s read registers) and the tree's only `_ = (a, b)` discard is gone; the host's "exactly ONE instance" doc now says one CONNECTED instance (a preview's host is never connected).
+
 ## Memory note
 
 *Condensed at close-out from `scratchpad/closeout/memory-note.md`. The full record is plan §13 (**BUILT**, with §13.1–§13.4's 12 policy acts and 15 findings) and plan §25 (the P8 handoff).*
