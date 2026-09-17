@@ -1341,7 +1341,12 @@ and lets the returning peer take `peerCommitted` into the merge path.
 
 Detection is **on demand**: `MeshNetworkManager.evaluatePartition(reachable:now:)` is the same shape
 as `enforceSessionCeiling(now:monotonicElapsed:)` and `evaluateIdleLapse(now:)`, with no timer of its
-own — P7 wires the one poller that drives all three. While a device is partitioned its rotation
+own — P7 wires the one poller that drives all three. The radios themselves are already seamed for
+that phase: P7 item 3 gave each manager one `apply(_:)` door taking the RESOLVED directive
+(``MeshNetworkManager/applyRunState(links:discovery:)``, ``PresenceManager/applyRunState(_:)`` and
+``ProximityRecipeShareManager/applyRunState(_:)``), and a mesh `stop` there is **stand down, never
+session end** — it refuses outright while a peer is committed, because `stopJoin()` empties the slots
+and clears the group-key state. While a device is partitioned its rotation
 roster is scoped to the branch (intersected with the current full roster, so a departure since the
 last evaluation still excludes), which makes the **branch coordinator the lowest fingerprint
 present** and is exactly why two branches rotating independently at the same counter mint distinct

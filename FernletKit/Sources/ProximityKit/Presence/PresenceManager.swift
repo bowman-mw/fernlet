@@ -297,6 +297,40 @@ public final class PresenceManager: ProximityPayloadHandling {
         heartSendState = .idle
     }
 
+    /// Applies the policy's RESOLVED directive for the presence radio (P7 item 3, pass A).
+    ///
+    /// The whole seam: `run` ⇒ ``start()`` if it is not already running, `stop` ⇒ ``stop()`` if it
+    /// is. Both underlying doors already guard themselves — `start()` bails on `isRunning`, and
+    /// `stop()` logs its diagnostic only when there was something to stop — so the guards here are
+    /// about the AUDIT rather than about safety: ``ProximityRunStateSeam/applied`` names a CHANGE,
+    /// so pushing the same directive twice logs once.
+    ///
+    /// `stop` is "stand down", never "end the session": presence holds no session, and the mesh's
+    /// teardown is not this door's (or this manager's) business. Turning the consent off, a wipe and
+    /// a below-age verdict all reach the radio as a policy INPUT that produces `stop` here, rather
+    /// than as a second owner reaching around the policy — which is the whole point of the seam.
+    ///
+    /// ``ProximityRunState/foregroundOnly`` is a policy answer about two scene phases and this
+    /// manager knows about neither, so a seam handed one treats it as ``ProximityRunState/run`` and
+    /// ``ProximityRunStateSeam/unresolved`` records that it arrived unresolved.
+    ///
+    /// Starts no `Task` of its own, arms no timer and registers no observer.
+    ///
+    /// - Parameter state: The presence radio's directive, already resolved by the host.
+    public func applyRunState(_ state: ProximityRunState) {
+        let wasRunning = isRunning
+        if ProximityRunStateSeam.isUp(state, radio: ProximityRunStateSeam.presence) {
+            if !isRunning { start() }
+        } else if isRunning {
+            stop()
+        }
+        guard isRunning != wasRunning else { return }
+        FernletAuditLog.log(
+            ProximityRunStateSeam.applied,
+            context: ["radio": ProximityRunStateSeam.presence, "state": state.rawValue]
+        )
+    }
+
     /// The vault roster changed (friend kept / blocked / revoked / unblocked): re-derive tags
     /// and restart the advertiser with the fresh set. No-op while not running — `start()`
     /// derives from the live vault anyway.

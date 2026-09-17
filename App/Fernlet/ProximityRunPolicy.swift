@@ -42,6 +42,15 @@ import ProximityKit
 import SwiftUI
 
 // MARK: - Vocabulary
+//
+// `ProximityRunState` — the `run` / `foregroundOnly` / `stop` directive itself — is NOT declared
+// here. P7 item 3 pass A moved it to ProximityKit
+// (`FernletKit/Sources/ProximityKit/Mesh/ProximityRunState.swift`), because the seams the policy
+// drives are package-target managers and a package cannot name an app type. The POLICY stayed up
+// here (§13 option A, unchanged: ProximityKit imports no UIKit and cannot import `FernletLock`);
+// only the vocabulary went down, so there is exactly one spelling of the directive in the build and
+// nothing to map between two modules. `ProximityRadio` below stays app-side: it names the app's four
+// radios, and ProximityKit's seams take a directive per radio rather than the radio itself.
 
 /// One of the four radios the policy answers for.
 ///
@@ -50,7 +59,12 @@ import SwiftUI
 /// transport down AND empties the committed slots — so `meshLinks` and `discoveryAdmission` are a
 /// single radio in shipping code. Plan §13 needs them apart (a CPT-continued mesh keeps its links
 /// while its admission door stays a foreground affair, invariant 5), so the vocabulary splits them
-/// here and P7 item 3 owes each manager the `apply(_:)` seam that can honour the split.
+/// here.
+///
+/// P7 item 3 pass A gave each manager the `apply(_:)` seam that carries the split as far as the
+/// radios really go: `MeshNetworkManager.applyRunState(links:discovery:)` takes BOTH directives at
+/// once precisely because one door serves both, and it names the P8-only combination (links `run`,
+/// discovery `stop`) as one no primitive can honour rather than pretending otherwise.
 nonisolated enum ProximityRadio: String, CaseIterable, Hashable, Sendable {
 
     /// The committed peer-to-peer links of a founded mesh, and the routed traffic that rides them.
@@ -64,36 +78,6 @@ nonisolated enum ProximityRadio: String, CaseIterable, Hashable, Sendable {
 
     /// `FernletStore.recipeShareManager`: the nearby recipe-share listener.
     case recipeShare
-}
-
-/// What one radio is directed to do, in plan §13's vocabulary.
-///
-/// A directive is not yet an answer about right now: ``ProximityRunState/foregroundOnly`` resolves
-/// against the one foreground fact through ``isUp(inForeground:)``, which is what lets §13's rows be
-/// read literally — "discovery/admission is `foregroundOnly`" is true in both scene phases, and it
-/// is the RESOLUTION that puts the radio down in the background.
-nonisolated enum ProximityRunState: String, CaseIterable, Hashable, Sendable {
-
-    /// Up in both scene phases. Only a granted continuation task ever earns this (plan §13).
-    case run
-
-    /// Up while the app is foreground, down once it is backgrounded.
-    case foregroundOnly
-
-    /// Down, unconditionally.
-    case stop
-
-    /// The directive resolved against the one foreground fact.
-    ///
-    /// - Parameter isForeground: ``FernletApp/routedGateForeground(for:)``'s answer for this scene.
-    /// - Returns: whether the radio is up right now.
-    func isUp(inForeground isForeground: Bool) -> Bool {
-        switch self {
-        case .run: return true
-        case .foregroundOnly: return isForeground
-        case .stop: return false
-        }
-    }
 }
 
 /// The app-lock fact the policy takes, flattened into four enumerable cases.

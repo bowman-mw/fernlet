@@ -2089,6 +2089,142 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         startSearching()
     }
 
+    // MARK: - The run-state seam (network migration P7 item 3, plan §13)
+
+    /// Applies the policy's RESOLVED directives for the two mesh radios (P7 item 3, pass A).
+    ///
+    /// **One door for two radios, because `startJoin()` / `stopJoin()` already is one.** Plan §13
+    /// splits the mesh into `meshLinks` and `discoveryAdmission` (a continued mesh keeps its links
+    /// while admitting a NEW peer stays a foreground act — invariant 5), and shipping code cannot:
+    /// `stopJoin()` runs `stopSearching()`, which stands the transport down AND empties the
+    /// committed slots AND clears the group-key state. Two doors would let a caller push half a
+    /// decision and have this manager act on a state it cannot see, so both directives arrive
+    /// together and the manager decides once. The split is honoured as far as the radios really go,
+    /// and where it cannot be, this says so out loud rather than guessing.
+    ///
+    /// **The table** (each directive already resolved by the host; see ``ProximityRunStateSeam``):
+    ///
+    /// | links | discovery | current state | action | line |
+    /// | --- | --- | --- | --- | --- |
+    /// | any | `run` | searching | nothing | — |
+    /// | any | `run` | not searching, no session | ``startJoin()`` | `applied` |
+    /// | any | `run` | not searching, mesh outlived its links | ``resumeSearchingForPartitionedMesh()`` | `applied` |
+    /// | any | `run` | not searching, a peer is committed | nothing (`FriendsDiscoveryEntry.none`) | — |
+    /// | `run` | `stop` | any | **nothing** | `held` (`noStandAloneDiscoveryStop`) |
+    /// | `stop` | `stop` | not searching | nothing | — |
+    /// | `stop` | `stop` | searching, a peer is committed | **nothing** | `held` (`committedPeer`) |
+    /// | `stop` | `stop` | searching, no committed peer | ``stopJoin()`` | `applied` |
+    ///
+    /// **The committed-peer bail is preserved exactly**, and it is the trap this seam exists to not
+    /// fall into. `ContentView.stopFriendsDiscovery()` guards `!hasCommittedPeer` before
+    /// `stopJoin()`, for the reason `stopSearching()`'s own body makes plain: it empties `slots`,
+    /// drops `slotTrustPolicies`, cancels every slot coordinator and runs `clearGroupKeyState()`. A
+    /// links `stop` over a committed peer is the app being backgrounded or leaving the tab — the OS
+    /// suspends the links, the session survives as `.linksLost` → partition → restore — and running
+    /// the teardown there would END a live mesh, which is what `tearsDownSession` is for and this
+    /// door is not. The guard is ``hasCommittedPeer`` and nothing else: never ``isSessionLive``
+    /// (projections and ceremonies) and never ``isInSession`` (the layout swap). P6 item 2's pass-B
+    /// P1 is what collapsing the three costs.
+    ///
+    /// **The P8-only combination** — links `run`, discovery `stop` — is a mesh continued in the
+    /// background whose admission door should be shut. No primitive stops browsing and advertising
+    /// while KEEPING the committed links: `stopSearching()` is the only stand-down there is, and it
+    /// takes the slots and the group key with it. So this door does the SAFE thing, which is
+    /// nothing, and records ``ProximityRunStateSeam/noStandAloneDiscoveryStop``. Inventing that
+    /// primitive is P8's work, not this pass's; until then the combination is unreachable anyway
+    /// (the policy's continuation task is inert, and its two mesh directives pass the same guard).
+    ///
+    /// `stop` means **stand down**, never "end the session". Nothing here nils the mesh, signs a
+    /// record, promotes the friend batch or opens the shop window; the three session-end hooks
+    /// inside `stopSearching()` are gated on ``isSessionLive`` and stay so.
+    ///
+    /// Idempotent, bounded (it adds no loop of its own — only what `startJoin` / `stopJoin` already
+    /// do), and it starts no `Task`, arms no timer and registers no observer.
+    ///
+    /// - Parameters:
+    ///   - links: The mesh-links radio's directive, already resolved by the host.
+    ///   - discovery: The discovery/admission radio's directive, already resolved by the host.
+    public func applyRunState(links: ProximityRunState, discovery: ProximityRunState) {
+        let linksUp = ProximityRunStateSeam.isUp(links, radio: ProximityRunStateSeam.meshLinks)
+        let discoveryUp = ProximityRunStateSeam.isUp(
+            discovery, radio: ProximityRunStateSeam.discoveryAdmission
+        )
+        let wasSearching = isSearching
+        switch (linksUp, discoveryUp) {
+        case (_, true):
+            armFriendRadios()
+        case (true, false):
+            FernletAuditLog.log(
+                ProximityRunStateSeam.held,
+                context: ["radio": ProximityRunStateSeam.discoveryAdmission,
+                          "reason": ProximityRunStateSeam.noStandAloneDiscoveryStop]
+            )
+            return
+        case (false, false):
+            standFriendRadiosDown()
+        }
+        guard isSearching != wasSearching else { return }
+        FernletAuditLog.log(
+            ProximityRunStateSeam.applied,
+            context: ["radio": ProximityRunStateSeam.friendRadios,
+                      "state": links.rawValue,
+                      "discovery": discovery.rawValue,
+                      "searching": String(isSearching)]
+        )
+    }
+
+    /// Ensures the friend radios are up, through the same three-way the Friends tab resolves.
+    ///
+    /// Idempotent on ``isSearching``, exactly as `ContentView.startFriendsDiscovery()` is — a second
+    /// `startJoin()` would re-mint the radio's Bonjour name mid-run. The three-way is
+    /// ``FriendsDiscoveryEntry``'s and not a fourth copy of it: `startJoin()` resets the session
+    /// state machine, so running it over a founded mesh that merely lost its links would nil a
+    /// ceiling that can never be re-armed (``promoteToMesh()`` fires only on `currentMesh == nil`)
+    /// and drop this session's photos, film quota and removal set.
+    ///
+    /// It deliberately does **not** arm the five-minute discovery timeout that
+    /// `startFriendsDiscovery()` arms beside it. That clock is the app's, P7 item 4 owns the one
+    /// poller the policy drives, and this pass adds no timer.
+    private func armFriendRadios() {
+        guard !isSearching else { return }
+        switch FriendsDiscoveryEntry.entry(
+            isInSession: isInSession, hasCommittedPeer: hasCommittedPeer
+        ) {
+        case .fresh: startJoin()
+        case .resume: resumeSearchingForPartitionedMesh()
+        case .none: break
+        }
+    }
+
+    /// Stands the friend radios down — unless a peer is committed, in which case it stands nothing
+    /// down and says why.
+    ///
+    /// The `!hasCommittedPeer` guard IS `ContentView.stopFriendsDiscovery()`'s, moved behind the
+    /// seam; see ``applyRunState(links:discovery:)`` for why `stopSearching()` cannot run over a
+    /// committed slot.
+    ///
+    /// The `isSearching` guard is FIRST, which is the one deliberate difference from the shipping
+    /// call site and is strictly the safer order. `stopFriendsDiscovery()` has no such guard, so a
+    /// tab exit over an already-quiet manager ran `stopJoin()` → `stopSearching()` anyway — emptying
+    /// slots and clearing group-key state that were already gone. Both orders reach the same
+    /// OUTCOME for a committed peer (nothing is torn down, which is the bail), so the bail is
+    /// preserved whichever guard is reached first; what the order buys is idempotence — a second
+    /// `stop` over a radio that is already down does nothing and says nothing.
+    private func standFriendRadiosDown() {
+        guard isSearching else { return }
+        guard !hasCommittedPeer else {
+            FernletAuditLog.log(
+                ProximityRunStateSeam.held,
+                context: ["radio": ProximityRunStateSeam.meshLinks,
+                          "reason": ProximityRunStateSeam.committedPeer]
+            )
+            return
+        }
+        stopJoin()
+    }
+
+    // MARK: - Public API (continued)
+
     /// The five-minute discovery timeout expired with no committed peer: this session is over
     /// (P6 item 2 fix — door 3 of ``isSessionLive``).
     ///

@@ -200,6 +200,40 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         sendState = .idle
     }
 
+    /// Applies the policy's RESOLVED directive for the recipe-share listener (P7 item 3, pass A).
+    ///
+    /// The twin of ``PresenceManager/applyRunState(_:)``, and deliberately the same three lines:
+    /// `run` ⇒ ``start()`` if it is not already running, `stop` ⇒ ``stop()`` if it is. Both doors
+    /// already guard themselves on `isRunning`, so the guards here are about the AUDIT —
+    /// ``ProximityRunStateSeam/applied`` names a CHANGE, so pushing the same directive twice logs
+    /// once.
+    ///
+    /// `stop` is "stand down", never "end the session": this listener holds no session, and the
+    /// mesh's teardown is not this door's business. The consent toggle, a wipe and a below-age
+    /// verdict reach the radio as policy INPUTS that produce `stop` here rather than as second
+    /// owners reaching around the policy.
+    ///
+    /// ``ProximityRunState/foregroundOnly`` is a policy answer about two scene phases and this
+    /// manager knows about neither, so a seam handed one treats it as ``ProximityRunState/run`` and
+    /// ``ProximityRunStateSeam/unresolved`` records that it arrived unresolved.
+    ///
+    /// Starts no `Task` of its own, arms no timer and registers no observer.
+    ///
+    /// - Parameter state: The recipe-share radio's directive, already resolved by the host.
+    public func applyRunState(_ state: ProximityRunState) {
+        let wasRunning = isRunning
+        if ProximityRunStateSeam.isUp(state, radio: ProximityRunStateSeam.recipeShare) {
+            if !isRunning { start() }
+        } else if isRunning {
+            stop()
+        }
+        guard isRunning != wasRunning else { return }
+        FernletAuditLog.log(
+            ProximityRunStateSeam.applied,
+            context: ["radio": ProximityRunStateSeam.recipeShare, "state": state.rawValue]
+        )
+    }
+
     public func refreshDiscovery() {
         // Hard 2-device cap: refreshing must NEVER tear down a live pairing — the old
         // stop-and-restart body would have dropped the verified connection mid-share. Refuse
