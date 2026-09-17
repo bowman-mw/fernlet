@@ -29,9 +29,20 @@
 // `MeshP3Acceptance.attachSlot(to:fingerprint:)` for the committed slot. Hosts are hoisted into
 // their own `let` before the manager is built (rule ML5: `store` is `unowned`).
 //
-// Serialized, because the audit log's capture handler is process-global. Counting is honest here
-// for one reason only: `mesh.runState.*` has no other emitter in the build — these three seams are
-// its only source and nothing ships a caller — so within this suite a count is this cell's own.
+// **Two suites live in this file**, so a `-only-testing` line must name each of them by struct:
+// `ProximityRunStateVocabularyTests` (the shared vocabulary and its resolver) and
+// `ProximityRunStateSeamTests` (the three doors). A filter that names only one runs half of this
+// file and reports green.
+//
+// Serialized, because the audit log's capture handler is process-global — but `.serialized` is NOT
+// what makes the counts honest, and saying so was a review finding (P2-3). `.serialized` orders a
+// suite's OWN cells; cells of these two suites can still run in parallel with each other. What
+// makes every audit count in this file this cell's own is that **every cell body is `@MainActor`
+// and synchronous**: a synchronous main-actor body cannot suspend, so `install()` → drive → assert
+// → `uninstall()` can never interleave with another cell's capture handler. One `async` cell added
+// to either suite would silently break every count in both. The second fact the counts rest on is
+// that `mesh.runState.*` has no other emitter in the build: these three seams are its only source
+// and nothing ships a caller yet.
 
 import Foundation
 import Testing
@@ -75,11 +86,29 @@ private final class RunStateSeamHost: ProximityHost {
     }
 }
 
+/// A heart ledger under a fresh temp directory that EXISTS (review finding P3-10).
+///
+/// The seam cells never write through the ledger — `PresenceManager`'s door only flips a run flag —
+/// but a `fileURL` whose parent directory was never created is a trap for the next cell that does
+/// write, and creating it is one call. `try?`, because a temp directory that cannot be made is not
+/// any of these cells' claim: the manager is built either way and every seam assertion stands on
+/// the run flag alone. Hoisted out of the two cells that were spelling the same three lines.
+///
+/// - Returns: a ledger rooted at its own directory, so no two cells can collide.
+@MainActor
+private func makeSeamHeartLedger() -> ProximityHeartLedger {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("run-state-seam-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return ProximityHeartLedger(fileURL: directory.appendingPathComponent("HeartLedger.json"))
+}
+
 /// The audit lines one cell saw, so "fires once per change, never on a no-op" is a count.
 ///
 /// The same shape as `MeshFoundingAuditCapture`, and it may count rather than only assert existence
-/// for the reason this file's header gives: `mesh.runState.*` has exactly three emitters and no
-/// shipping caller, so nothing else in the process can add to the tally.
+/// for the two reasons this file's header gives: every cell body is `@MainActor` and synchronous,
+/// so no other cell's capture window overlaps this one's, and `mesh.runState.*` has exactly three
+/// emitters and no shipping caller, so nothing else in the process can add to the tally.
 private final class RunStateAuditCapture {
 
     /// The lock guarding ``storedLines`` — the handler is invoked off the installing actor.
@@ -202,6 +231,8 @@ struct ProximityRunStateVocabularyTests {
         #expect(ProximityRunStateSeam.committedPeer == "committedPeer", "the committed-peer bail's reason")
         #expect(ProximityRunStateSeam.noStandAloneDiscoveryStop == "noStandAloneDiscoveryStop",
                 "the P8-only combination's reason")
+        #expect(ProximityRunStateSeam.resumeRefused == "resumeRefused",
+                "the refused-resume reason, so the ended-session row is never a silence again")
         #expect(ProximityRunStateSeam.meshLinks == ProximityRadio.meshLinks.rawValue,
                 "the module's radio name is the app's, because the app type cannot cross the boundary")
         #expect(ProximityRunStateSeam.discoveryAdmission == ProximityRadio.discoveryAdmission.rawValue,
@@ -312,6 +343,144 @@ struct ProximityRunStateSeamTests {
                 "and the refusal names the predicate it bailed on")
     }
 
+    /// The `.resume` row: a `run` over a mesh that outlived its links RESUMES, never restarts.
+    ///
+    /// The arm that had no cell at all before this fix (review finding P2-4). Construction is the
+    /// cheapest one that produces the state the row names — a mesh held, no committed slot, radios
+    /// down — by assigning the descriptor the way a dozen mesh suites already do
+    /// (`MeshP3Acceptance.mesh(for:)`), rather than standing a two-node founding rig up for it.
+    ///
+    /// **`isProximityJoin` is the observable that separates the two arms.** `startJoin()` sets it
+    /// `true` unconditionally, while `resumeSearchingForPartitionedMesh()` RESTORES it from
+    /// `sessionEnteredByProximityJoin`, which is `false` for a session this cell never entered by
+    /// proximity join. So "searching, over the same mesh, and still not in proximity-join mode" is
+    /// exactly "the resume ran and the fresh start did not" — which is the whole claim of the row,
+    /// because `startJoin()` here would have nilled a session ceiling that can never be re-armed.
+    @Test func aRunOverAMeshThatOutlivedItsLinksResumesRatherThanRestarts() {
+        let audit = RunStateAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        // The host is held for the manager's whole life (rule ML5): `store` is `unowned`, so an
+        // inline `makeTestStore()` would die at the end of the expression that built the manager.
+        let host = makeTestStore()
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession())
+        defer { manager.stopJoin() }
+        let mesh = MeshP3Acceptance.mesh(for: manager)
+        manager.currentMesh = mesh
+
+        #expect(manager.isInSession, "a mesh is held")
+        #expect(!manager.hasCommittedPeer, "with nobody committed — the `.resume` row exactly")
+        #expect(!manager.isSearching, "and the radios are down, as a tab exit leaves them")
+
+        manager.applyRunState(links: .run, discovery: .run)
+
+        #expect(manager.isSearching, "the radios come back")
+        #expect(!manager.isProximityJoin, "through the resume: startJoin() would have set this true")
+        #expect(manager.currentMesh?.meshID == mesh.meshID, "over the SAME mesh — nothing re-founded")
+        #expect(audit.count(of: ProximityRunStateSeam.applied) == 1, "and the change is named once")
+        #expect(audit.count(of: ProximityRunStateSeam.held) == 0, "with nothing refused")
+    }
+
+    /// The `.resume` row's refusal: an ENDED session's mesh is never re-entered, and now it says so.
+    ///
+    /// `resumeSearchingForPartitionedMesh()` bails on `sessionState.hasEnded` — the rejoin bar: a
+    /// departed, terminated or expired session can never be resumed, and its mesh object outlives
+    /// the ending until `leaveMesh()` runs. It bails by RETURNING, so before this fix this was the
+    /// one "moved nothing" row of the door's table with no audit line at all, while every other one
+    /// logs `held` (review finding P2-4).
+    ///
+    /// The ending is driven through the state machine's cheapest terminal edge — a launch restore
+    /// that finds a terminated context, which moves `idle → terminated` carrying no effects at all,
+    /// so nothing here tears a session down behind the cell's back.
+    @Test func aRunOverAnEndedSessionsMeshIsRefusedAndNamed() {
+        let audit = RunStateAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        // The host is held for the manager's whole life (rule ML5): `store` is `unowned`, so an
+        // inline `makeTestStore()` would die at the end of the expression that built the manager.
+        let host = makeTestStore()
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession())
+        defer { manager.stopJoin() }
+        let mesh = MeshP3Acceptance.mesh(for: manager)
+        manager.currentMesh = mesh
+        manager.applySessionEvent(.contextRestored(.terminated))
+
+        #expect(manager.sessionState == .terminated, "the session ended under a mesh that is still held")
+        #expect(manager.isInSession, "so the door still reads this as the `.resume` row")
+        #expect(!manager.isSearching, "with the radios down")
+
+        manager.applyRunState(links: .run, discovery: .run)
+
+        #expect(!manager.isSearching, "the radios stay down: an ended session is never re-entered")
+        #expect(manager.currentMesh?.meshID == mesh.meshID, "and the mesh object outlives the ending")
+        #expect(audit.count(of: ProximityRunStateSeam.applied) == 0, "nothing moved, so nothing is claimed")
+        #expect(audit.heldReasons() == [ProximityRunStateSeam.resumeRefused],
+                "and the refusal has a name, which is the row that used to be silent")
+    }
+
+    /// The `.none` row: a `run` over a committed peer with the radios down does nothing, silently.
+    ///
+    /// The radios already have a peer, so re-entering discovery is never the safe move — and unlike
+    /// the two `held` rows this one refuses nothing: no directive was denied, the entry decision
+    /// simply has no call to make. A silence rather than a line is the claim, so the cell counts
+    /// both tokens at zero.
+    @Test func aRunOverACommittedPeerWithTheRadiosDownDoesNothingAtAll() {
+        let audit = RunStateAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        // The host is held for the manager's whole life (rule ML5): `store` is `unowned`, so an
+        // inline `makeTestStore()` would die at the end of the expression that built the manager.
+        let host = makeTestStore()
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession())
+        defer { manager.stopJoin() }
+        MeshP3Acceptance.attachSlot(to: manager, fingerprint: "00000000000000bb")
+
+        #expect(manager.hasCommittedPeer, "a peer is committed")
+        #expect(!manager.isSearching, "and the radios are down — `FriendsDiscoveryEntry.none`")
+
+        manager.applyRunState(links: .run, discovery: .run)
+
+        #expect(!manager.isSearching, "nothing was armed")
+        #expect(audit.count(of: ProximityRunStateSeam.applied) == 0, "nothing moved, so nothing is claimed")
+        #expect(audit.count(of: ProximityRunStateSeam.held) == 0, "and nothing was refused, so nothing is named")
+    }
+
+    /// A refusal is named once per CHANGE, not once per call (review finding P2-5).
+    ///
+    /// `applied` has always been a change line; `held` was a per-call one, and from pass B the
+    /// caller is `ProximityRunPolicyHost`, which deduplicates nothing and re-decides on every leg
+    /// setter. A backgrounded session holding a committed peer would then have emitted one
+    /// `held committedPeer` per lifecycle edge for as long as the session lasted. The door now
+    /// remembers the last `(links, discovery)` pair and the last reason, which is the smallest
+    /// memory that makes the second identical push silent while keeping a CHANGED refusal loud.
+    @Test func aRepeatedRefusalIsNamedOnceAndAChangedOneIsNamedAgain() {
+        let audit = RunStateAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        // The host is held for the manager's whole life (rule ML5): `store` is `unowned`, so an
+        // inline `makeTestStore()` would die at the end of the expression that built the manager.
+        let host = makeTestStore()
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession())
+        defer { manager.stopJoin() }
+
+        manager.applyRunState(links: .run, discovery: .run)
+        MeshP3Acceptance.attachSlot(to: manager, fingerprint: "00000000000000cc")
+
+        manager.applyRunState(links: .stop, discovery: .stop)
+        #expect(audit.heldReasons() == [ProximityRunStateSeam.committedPeer], "the refusal is named once")
+
+        manager.applyRunState(links: .stop, discovery: .stop)
+        #expect(audit.heldReasons() == [ProximityRunStateSeam.committedPeer],
+                "and an identical second push adds nothing: `held` is a CHANGE line too now")
+        #expect(manager.isSearching, "with the committed session still up, which is what it refused for")
+
+        manager.applyRunState(links: .run, discovery: .stop)
+        #expect(audit.heldReasons() == [ProximityRunStateSeam.committedPeer,
+                                        ProximityRunStateSeam.noStandAloneDiscoveryStop],
+                "a DIFFERENT pair is a different refusal, and the dedupe never swallows one")
+        #expect(audit.count(of: ProximityRunStateSeam.applied) == 1, "and only the first arm ever moved anything")
+    }
+
     /// The **P8-only** combination — links `run`, discovery `stop` — moves nothing, and says why.
     ///
     /// A mesh continued in the background whose admission door should be shut needs a primitive that
@@ -372,12 +541,7 @@ struct ProximityRunStateSeamTests {
         audit.install()
         defer { audit.uninstall() }
         let host = RunStateSeamHost()
-        let ledger = ProximityHeartLedger(
-            fileURL: FileManager.default.temporaryDirectory
-                .appendingPathComponent("run-state-seam-\(UUID().uuidString)", isDirectory: true)
-                .appendingPathComponent("HeartLedger.json")
-        )
-        let manager = PresenceManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: makeSeamHeartLedger())
         manager.activateForTesting()
         #expect(manager.isRunning, "the radio is up (without a real advertiser)")
 
@@ -424,12 +588,7 @@ struct ProximityRunStateSeamTests {
         audit.install()
         defer { audit.uninstall() }
         let presenceHost = RunStateSeamHost()
-        let ledger = ProximityHeartLedger(
-            fileURL: FileManager.default.temporaryDirectory
-                .appendingPathComponent("run-state-seam-\(UUID().uuidString)", isDirectory: true)
-                .appendingPathComponent("HeartLedger.json")
-        )
-        let presence = PresenceManager(store: presenceHost, ledger: ledger)
+        let presence = PresenceManager(store: presenceHost, ledger: makeSeamHeartLedger())
         let recipeHost = RunStateSeamHost()
         let recipe = ProximityRecipeShareManager(store: recipeHost)
         presence.activateForTesting()

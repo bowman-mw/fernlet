@@ -2091,6 +2091,28 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
 
     // MARK: - The run-state seam (network migration P7 item 3, plan §13)
 
+    /// The `(links, discovery)` pair the last ``applyRunState(links:discovery:)`` call carried — the
+    /// whole of what this door remembers (P7 item 3 pass A fix, review finding P2-5).
+    ///
+    /// ``ProximityRunStateSeam/applied`` dedupes itself, because it is a CHANGE line: a radio that
+    /// did not move says nothing. ``ProximityRunStateSeam/held`` is a per-CALL line, and from pass B
+    /// the caller is `ProximityRunPolicyHost`, which deduplicates nothing and re-decides on every leg
+    /// setter — so a backgrounded session holding a committed peer would emit one
+    /// `held committedPeer` per lifecycle edge, for as long as the session lasts. Remembering the
+    /// last input is enough to make the refusal a per-CHANGE line too, and it is bounded by
+    /// construction: two scalars, no window, no timer, no growth.
+    @ObservationIgnored
+    private var lastRunStateDirectives: (links: ProximityRunState, discovery: ProximityRunState)?
+
+    /// The reason the last ``applyRunState(links:discovery:)`` call was held for, or `nil` when that
+    /// call was not a refusal.
+    ///
+    /// Kept beside ``lastRunStateDirectives`` so a CHANGED refusal still gets its line over an
+    /// unchanged pair: the same `(run, run)` push is refused nothing while the resume works and
+    /// ``ProximityRunStateSeam/resumeRefused`` once the session ends under it, and both are worth
+    /// saying once.
+    @ObservationIgnored private var lastRunStateHeldReason: String?
+
     /// Applies the policy's RESOLVED directives for the two mesh radios (P7 item 3, pass A).
     ///
     /// **One door for two radios, because `startJoin()` / `stopJoin()` already is one.** Plan §13
@@ -2109,6 +2131,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// | any | `run` | searching | nothing | — |
     /// | any | `run` | not searching, no session | ``startJoin()`` | `applied` |
     /// | any | `run` | not searching, mesh outlived its links | ``resumeSearchingForPartitionedMesh()`` | `applied` |
+    /// | any | `run` | not searching, that mesh's session ENDED | **nothing** — the resume refuses | `held` (`resumeRefused`) |
     /// | any | `run` | not searching, a peer is committed | nothing (`FriendsDiscoveryEntry.none`) | — |
     /// | `run` | `stop` | any | **nothing** | `held` (`noStandAloneDiscoveryStop`) |
     /// | `stop` | `stop` | not searching | nothing | — |
@@ -2134,12 +2157,34 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// primitive is P8's work, not this pass's; until then the combination is unreachable anyway
     /// (the policy's continuation task is inert, and its two mesh directives pass the same guard).
     ///
+    /// **The refused resume is a `held` row, not a silence.** A `run` over a mesh that outlived its
+    /// links but whose SESSION has ended reaches ``resumeSearchingForPartitionedMesh()``, which
+    /// refuses the terminal states by name (the rejoin bar: a departed, terminated or expired
+    /// session is never re-entered). It returns nothing and moves nothing, so before this fix that
+    /// row was the one "moved nothing" row of the table with no line at all. The door does not
+    /// re-derive the predicate — it reads the refusal off ``isSearching``, which is what the bail is
+    /// observable as — so the two cannot drift apart the day the resume grows a third guard.
+    ///
     /// `stop` means **stand down**, never "end the session". Nothing here nils the mesh, signs a
-    /// record, promotes the friend batch or opens the shop window; the three session-end hooks
-    /// inside `stopSearching()` are gated on ``isSessionLive`` and stay so.
+    /// record, promotes the friend batch or opens the shop window.
+    ///
+    /// The three session-end hooks inside `stopSearching()` are gated on **`!isSessionLive`** —
+    /// they fire only once the session has ALREADY ended, which is why standing radios down is safe,
+    /// not why they stay quiet. In this door's one ``stopJoin()`` row — searching, no committed peer
+    /// — they DO run whenever `currentMesh == nil`, because with no mesh and no committed slot
+    /// ``isSessionLive`` is already false. That row is the peerless, meshless search the Friends tab
+    /// stands down today, and running the hooks over it costs nothing: `sessionRoster` is empty so
+    /// the review promotion promotes nobody, the transcript clear clears an empty room, and
+    /// `openWindowAtSessionEnd` self-guards on `window == nil` with a non-empty catalog set. A mesh
+    /// that outlived its links keeps all three silent for the other reason — `currentMesh != nil`
+    /// with no terminal state makes ``isSessionLive`` TRUE — so the same ``stopJoin()`` stands its
+    /// radios down and ends nothing.
     ///
     /// Idempotent, bounded (it adds no loop of its own — only what `startJoin` / `stopJoin` already
-    /// do), and it starts no `Task`, arms no timer and registers no observer.
+    /// do), and it starts no `Task`, arms no timer and registers no observer. Idempotent in what it
+    /// SAYS as well as in what it does: `applied` is per change, and `held` is deduped against
+    /// ``lastRunStateDirectives`` so a caller that re-pushes an unchanged pair cannot turn one
+    /// refusal into a log line per scene edge (review finding P2-5).
     ///
     /// - Parameters:
     ///   - links: The mesh-links radio's directive, already resolved by the host.
@@ -2150,26 +2195,67 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             discovery, radio: ProximityRunStateSeam.discoveryAdmission
         )
         let wasSearching = isSearching
+        let refusal: (radio: String, reason: String)?
         switch (linksUp, discoveryUp) {
         case (_, true):
-            armFriendRadios()
+            refusal = armFriendRadios()
         case (true, false):
+            refusal = (radio: ProximityRunStateSeam.discoveryAdmission,
+                       reason: ProximityRunStateSeam.noStandAloneDiscoveryStop)
+        case (false, false):
+            refusal = standFriendRadiosDown()
+        }
+        recordRunState(refusal, links: links, discovery: discovery, wasSearching: wasSearching)
+    }
+
+    /// Writes the one audit line this push earned — and remembers the push, so an identical one
+    /// earns nothing.
+    ///
+    /// Split out of ``applyRunState(links:discovery:)`` rather than inlined so the door stays a
+    /// decision and this stays a recording: every row of the table reaches exactly one of the two
+    /// lines here, and the dedupe is in one place instead of once per refusal.
+    ///
+    /// ``ProximityRunStateSeam/applied`` is emitted on a CHANGE to ``isSearching`` and nothing else,
+    /// which is why it needs no dedupe of its own. ``ProximityRunStateSeam/held`` is emitted when
+    /// this push was refused AND either the directive pair or the reason differs from the last push
+    /// — so a policy host that re-decides on every leg setter says a refusal once, not once per
+    /// edge (review finding P2-5). Both remembered fields are written before either line, so an
+    /// early return cannot leave the memory stale.
+    ///
+    /// - Parameters:
+    ///   - refusal: The radio and frozen reason this push was held for, or `nil` when it was not
+    ///     held. A `nil` refusal does not mean something moved — the `.none` entry and both
+    ///     already-in-position rows refuse nothing and change nothing.
+    ///   - links: The mesh-links directive exactly as it arrived (unresolved spelling included).
+    ///   - discovery: The discovery/admission directive exactly as it arrived.
+    ///   - wasSearching: ``isSearching`` as it stood before the arm or the stand-down ran.
+    private func recordRunState(
+        _ refusal: (radio: String, reason: String)?,
+        links: ProximityRunState,
+        discovery: ProximityRunState,
+        wasSearching: Bool
+    ) {
+        let repeatedPair = lastRunStateDirectives.map {
+            $0.links == links && $0.discovery == discovery
+        } ?? false
+        let previousReason = lastRunStateHeldReason
+        lastRunStateDirectives = (links: links, discovery: discovery)
+        lastRunStateHeldReason = refusal?.reason
+        guard let refusal else {
+            guard isSearching != wasSearching else { return }
             FernletAuditLog.log(
-                ProximityRunStateSeam.held,
-                context: ["radio": ProximityRunStateSeam.discoveryAdmission,
-                          "reason": ProximityRunStateSeam.noStandAloneDiscoveryStop]
+                ProximityRunStateSeam.applied,
+                context: ["radio": ProximityRunStateSeam.friendRadios,
+                          "links": links.rawValue,
+                          "discovery": discovery.rawValue,
+                          "searching": String(isSearching)]
             )
             return
-        case (false, false):
-            standFriendRadiosDown()
         }
-        guard isSearching != wasSearching else { return }
+        guard !repeatedPair || previousReason != refusal.reason else { return }
         FernletAuditLog.log(
-            ProximityRunStateSeam.applied,
-            context: ["radio": ProximityRunStateSeam.friendRadios,
-                      "state": links.rawValue,
-                      "discovery": discovery.rawValue,
-                      "searching": String(isSearching)]
+            ProximityRunStateSeam.held,
+            context: ["radio": refusal.radio, "reason": refusal.reason]
         )
     }
 
@@ -2182,18 +2268,40 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// ceiling that can never be re-armed (``promoteToMesh()`` fires only on `currentMesh == nil`)
     /// and drop this session's photos, film quota and removal set.
     ///
-    /// It deliberately does **not** arm the five-minute discovery timeout that
-    /// `startFriendsDiscovery()` arms beside it. That clock is the app's, P7 item 4 owns the one
-    /// poller the policy drives, and this pass adds no timer.
-    private func armFriendRadios() {
-        guard !isSearching else { return }
+    /// **The give-up clock has no successor yet, and this names the gap rather than papering over
+    /// it** (P7 item 3 pass A fix, review finding P2-2). `ContentView.startFriendsDiscovery()` arms
+    /// `armDiscoveryTimeout()` beside its radio call — the five-minute "found nobody" clock that
+    /// ends a fresh, peerless search. This door arms nothing, and P7 item 4's one poller is **not**
+    /// its successor: that poller runs only while ``isSessionLive``, and a ``FriendsDiscoveryEntry``
+    /// `.fresh` row is by construction no mesh and no committed slot, which makes `isSessionLive`
+    /// false. So on this path the `.fresh` row currently has **no give-up clock at all**. The
+    /// `.resume` row does — ``armSessionGiveUpClock(now:)`` is armed at the slot-loss doors, which is
+    /// how a mesh that outlived its links still ends — and `.none` needs none. Nothing regresses
+    /// today, because `startFriendsDiscovery()` still ships and still arms its own clock; **pass B
+    /// must give that arm a home before `startFriendsDiscovery()` is retired**, and the ledger
+    /// carries the obligation. No timer is added here: this pass arms none, and a clock this door
+    /// could not cancel from the same door would be worse than a named gap.
+    ///
+    /// - Returns: the radio and frozen reason to hold on, or `nil` when nothing was refused. Only
+    ///   the `.resume` row can refuse — ``resumeSearchingForPartitionedMesh()`` bails on a session
+    ///   that has already ended — and the refusal is read off ``isSearching`` rather than re-derived
+    ///   from `sessionState`, so a resume that grows a fourth guard is still reported honestly.
+    private func armFriendRadios() -> (radio: String, reason: String)? {
+        guard !isSearching else { return nil }
         switch FriendsDiscoveryEntry.entry(
             isInSession: isInSession, hasCommittedPeer: hasCommittedPeer
         ) {
-        case .fresh: startJoin()
-        case .resume: resumeSearchingForPartitionedMesh()
-        case .none: break
+        case .fresh:
+            startJoin()
+        case .resume:
+            resumeSearchingForPartitionedMesh()
+            guard !isSearching else { return nil }
+            return (radio: ProximityRunStateSeam.friendRadios,
+                    reason: ProximityRunStateSeam.resumeRefused)
+        case .none:
+            break
         }
+        return nil
     }
 
     /// Stands the friend radios down — unless a peer is committed, in which case it stands nothing
@@ -2210,17 +2318,20 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// OUTCOME for a committed peer (nothing is torn down, which is the bail), so the bail is
     /// preserved whichever guard is reached first; what the order buys is idempotence — a second
     /// `stop` over a radio that is already down does nothing and says nothing.
-    private func standFriendRadiosDown() {
-        guard isSearching else { return }
+    ///
+    /// - Returns: the radio and frozen reason to hold on, or `nil` when the radios really were
+    ///   stood down (or were already down). The radio named is
+    ///   ``ProximityRunStateSeam/friendRadios`` and not `meshLinks` (review finding P3-6): the
+    ///   refused push stands BOTH radios down, so the line names both, exactly as the `applied`
+    ///   line for the same door does.
+    private func standFriendRadiosDown() -> (radio: String, reason: String)? {
+        guard isSearching else { return nil }
         guard !hasCommittedPeer else {
-            FernletAuditLog.log(
-                ProximityRunStateSeam.held,
-                context: ["radio": ProximityRunStateSeam.meshLinks,
-                          "reason": ProximityRunStateSeam.committedPeer]
-            )
-            return
+            return (radio: ProximityRunStateSeam.friendRadios,
+                    reason: ProximityRunStateSeam.committedPeer)
         }
         stopJoin()
+        return nil
     }
 
     // MARK: - Public API (continued)

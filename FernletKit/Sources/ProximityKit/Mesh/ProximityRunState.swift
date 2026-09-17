@@ -121,6 +121,16 @@ nonisolated enum ProximityRunStateSeam {
     /// move nothing.
     static let noStandAloneDiscoveryStop = "noStandAloneDiscoveryStop"
 
+    /// ``held``'s reason when a `run` arrived over a mesh that outlived its links but whose SESSION
+    /// has already ended.
+    ///
+    /// `MeshNetworkManager.resumeSearchingForPartitionedMesh()` refuses the terminal states by name
+    /// — a departed, terminated or expired session is never re-entered (the rejoin bar) — and it
+    /// refuses by returning, not by reporting. Without this token that row of the mesh door's table
+    /// was the one "moved nothing" row that said nothing at all, while every other such row logs
+    /// ``held``.
+    static let resumeRefused = "resumeRefused"
+
     /// Resolves a directive that arrived at a seam, and names it when it arrived unresolved.
     ///
     /// The host is expected to apply ``ProximityRunState/isUp(inForeground:)`` before it calls,
