@@ -194,7 +194,7 @@ jobs:
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests
 
-      - name: Mesh acceptance batteries (P3 / P4 / P5 / P6) + the CI selector wall
+      - name: Mesh acceptance batteries (P3 / P4 / P5 / P6 / P7) + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
         # §11.4, §23.4) ran only by hand until 2026-09-06. Tier 1 throughout: FakePeerNetwork, an
         # injected clock, no radio, no wall-clock sleeps — ~2 minutes on a hosted runner.
@@ -229,21 +229,33 @@ jobs:
         #  + 21  P6 item 9's eight acceptance suites (2 + 2 + 2 + 3 + 2 + 3 + 2 + 5): key
         #        advertisement, pairwise identity, per-type caps, text routing, projection retry,
         #        the heart ceremony, honesty and determinism.
-        #  = 300 tests in 50 suites.
+        #  + 35  P7 item 7's SIX acceptance suites (5 + 4 + 7 + 6 + 6 + 7): the policy matrix, the
+        #        gate's single writer, the radios' seams, the poller and its three consumers, the
+        #        launch-restore decision, and honesty.
+        #        *** THIS INCREMENT IS A STATIC COUNT, NOT A MEASUREMENT. *** It is the number of
+        #        `@Test` declarations in Tests/FernletTests/MeshP7AcceptanceTests.swift at this
+        #        commit, counted from the file's text: the session that wrote it had NO Swift
+        #        toolchain, so nothing here was built or run. Every other term above was read off a
+        #        result bundle. Before this floor is trusted, run this exact step on a Mac and
+        #        confirm the `Test run with N tests` line reads 335 — and if it does not, correct
+        #        the term rather than lowering the floor.
+        #  = 335 tests in 56 suites.
         # `MeshRoutedDrainTests`' own 37 cells stay ungated — that is item 11's call, as its ledger
         # row says; so do item 1's three key-agreement suites (30) and the 51 photo-delivery cells
         # the key-advertisement clause promotes by citation.
-        # The floor is MEASURED, never inferred: 300 is what this exact step list executed at P6
-        # item 9. Note the count is over `@Test` FUNCTIONS, not parameterized cases — measured, not
-        # assumed: MeshRoutedDrainConvergenceTests contributes 19 while running a 40-cell and a
-        # 12-cell rectangle. RAISE this as suites grow; never lower it in passing.
+        # The floor is MEASURED, never inferred: 300 was what this step list executed at P6 item 9,
+        # and the 35 P7 adds to it is the one term that is a STATIC declaration count rather than a
+        # bundle reading — see its own note above. Note the count is over `@Test` FUNCTIONS, not
+        # parameterized cases — measured, not assumed: MeshRoutedDrainConvergenceTests contributes
+        # 19 while running a 40-cell and a 12-cell rectangle. RAISE this as suites grow; never lower
+        # it in passing.
         # CIGateSelectorBoundaryTests is the static half of this guard — every suite named on any
         # run-gated-suites.sh line must be a declared suite, and every MeshP<n>*AcceptanceTests /
         # convergence battery declared in the tree must be named here — and it also runs on the first
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 300 \
+          Scripts/run-gated-suites.sh mesh-batteries 335 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -293,4 +305,10 @@ jobs:
             MeshP6ProjectionRetryAcceptanceTests \
             MeshP6HeartCeremonyAcceptanceTests \
             MeshP6HonestyAcceptanceTests \
-            MeshP6DeterminismAcceptanceTests
+            MeshP6DeterminismAcceptanceTests \
+            MeshP7PolicyMatrixAcceptanceTests \
+            MeshP7GateWriterAcceptanceTests \
+            MeshP7RadioSeamAcceptanceTests \
+            MeshP7PollerAcceptanceTests \
+            MeshP7ResumeAcceptanceTests \
+            MeshP7HonestyAcceptanceTests

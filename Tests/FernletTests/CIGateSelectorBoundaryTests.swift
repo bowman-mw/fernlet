@@ -152,9 +152,19 @@ import Testing
         let batteries = try Self.declaredTopLevelTypes().filter(Self.isMeshBattery)
         // MEASURED at the commit that moved it, never inherited: 28 at P6 item 7 (2 convergence
         // generators + the routed convergence battery + 4×P3 + 9×P4 + 12×P5), plus P6 item 9's
-        // eight clause suites. Items 6 and 7 declared no `MeshP6*AcceptanceTests` of their own, so
-        // the arithmetic below is the whole of it.
-        #expect(batteries.count >= 36, "the mesh batteries shrank: \(batteries.count) declared")
+        // eight clause suites = 36. Items 6 and 7 of P6 declared no `MeshP6*AcceptanceTests` of
+        // their own, so that arithmetic was the whole of it.
+        //
+        // P7 item 7 moves it to 42: its SIX clause suites (`MeshP7PolicyMatrixAcceptanceTests`,
+        // `…GateWriter…`, `…RadioSeam…`, `…Poller…`, `…Resume…`, `…Honesty…`), all in
+        // `Tests/FernletTests/MeshP7AcceptanceTests.swift`. This number is a count of DECLARATIONS
+        // in the tree, not of tests that ran, so it is measurable without a simulator and it WAS
+        // measured here — `declaredTopLevelTypes()` is the same sweep this cell runs. What is NOT a
+        // measurement is the +35 those six suites add to the mesh step's floor in
+        // `.github/workflows/s3-wall.yml`: that is a static count of `@Test` declarations, taken on
+        // a machine with no Swift toolchain, and the step's own comment says so and says what to run
+        // on a Mac before trusting it.
+        #expect(batteries.count >= 42, "the mesh batteries shrank: \(batteries.count) declared")
         let ungated = batteries.subtracting(gated).sorted()
         #expect(ungated.isEmpty, """
             Mesh acceptance batteries declared in Tests/FernletTests but not named in \
