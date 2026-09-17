@@ -237,8 +237,17 @@ struct ContentView: View {
     /// `sessionState`, is `@ObservationIgnored`. It does not need to be observed, for the reason
     /// `sessionSearchGaveUp`'s own documentation in `MeshNetworkManager` gives: every terminal
     /// `sessionState` carries `.stopParticipation`, which empties `slots`, and `leaveMesh()` nils
-    /// `currentMesh`. This body reads `slots` through the `hasCommittedPeer` edge above, so the
-    /// invalidation that recomputes one recomputes the other.
+    /// `currentMesh`.
+    ///
+    /// **The two edges are COUPLED, and that is a wiring fact rather than a tidy coincidence.**
+    /// `.onChange(of:)` tracks only what its own `value` expression reads, and `isSessionLive`'s
+    /// mesh-less arm is `hasCommittedPeer` — which reads `slots`. Both are read here, one line
+    /// apart, so the invalidation that recomputes one recomputes the other and a pairwise session
+    /// that never founded a mesh still raises and lowers this leg. Deleting or moving the
+    /// `hasCommittedPeer` edge above would therefore be a change to the LIVENESS edge as well, in a
+    /// way no compiler notices: keep them together, or give the liveness edge its own read of
+    /// `slots` (SwiftUI's `.onChange` takes one `Equatable` value, not a tuple, so "watch both" is
+    /// spelled as two modifiers and not as one).
     ///
     /// The sixth leg this view owns — the tab — rides `handleTabChange(from:to:)`, because that
     /// handler already exists and already runs on exactly the edge the leg needs.

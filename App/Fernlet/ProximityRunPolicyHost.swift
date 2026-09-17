@@ -63,9 +63,11 @@ import SwiftUI
 /// `FernletLockService`, which is `FernletApp`'s `@State` and not the store's. The other two
 /// feeders are handed the same object rather than making one of their own — `ContentView` takes it
 /// as an `init` parameter (an `@Environment` injection would need `@Observable`, and nothing here
-/// is observed), and `FernletStore` never holds it at all: the wipe funnel reaches it through
-/// ``FernletStore/deletingAllDataHook``, a closure `ContentView.attachDeleteAllHooks()` wires, so
-/// the store holds no reference to the host that holds closures capturing the store.
+/// is observed), and `FernletStore` declares no property of this type: the wipe funnel reaches it
+/// through ``FernletStore/deletingAllDataHook``, a closure `ContentView.attachDeleteAllHooks()`
+/// wires. That closure does capture this host strongly — it has to, to call a setter on it — so
+/// the honest statement is about SHAPE and not about the object graph: there is no stored reference
+/// to keep in step with a rebuilt store, only a hook the view re-wires when it re-appears.
 ///
 /// **It deliberately does not deduplicate** — with one exception, the teardown, which is an edge
 /// rather than a value and says so on ``didTearDownSession``. A setter pushes whether or not the
@@ -167,6 +169,12 @@ final class ProximityRunPolicyHost {
     /// are different acts and the seams above deliberately only do the first: the mesh door refuses
     /// a links `stop` over a committed peer precisely so a backgrounding cannot end a live mesh, and
     /// a teardown has to get past that refusal.
+    ///
+    /// **And it really must END one** (item 4 pass B, review finding P1-1). Production's closure is
+    /// `stopJoin()` — the stand-down — followed by `leaveSession()`, the manager's own end path, and
+    /// the second half is not optional: `stopJoin()` leaves `currentMesh` and `sessionState` where
+    /// they were, so over a founded mesh the session it was meant to tear down was still LIVE by
+    /// `MeshNetworkManager.isSessionLive` when the door returned.
     private var tearDownSession: (@MainActor () -> Void)?
 
     /// The injected poller tick (network migration P7 item 4): ONE door for the three session
@@ -346,7 +354,8 @@ final class ProximityRunPolicyHost {
     ///   - presence: Production passes `store.presenceManager.applyRunState(_:)`.
     ///   - recipeShare: Production passes `store.recipeShareManager.applyRunState(_:)`.
     ///   - tearDownSession: Production runs the mesh, presence and recipe teardown the app used to
-    ///     spell across `FernletStore`'s wipe funnel and the lock service's duress purge.
+    ///     spell across `FernletStore`'s wipe funnel and the lock service's duress purge —
+    ///     `stopJoin()` **and** `leaveSession()`, then both listener stops.
     ///   - poll: Production runs, on the mesh manager and in this order,
     ///     `enforceSessionCeiling(now:monotonicElapsed:)` with `monotonicElapsed: nil`,
     ///     `evaluateIdleLapse(now:)` and `evaluatePartition(now:)`.
@@ -443,13 +452,25 @@ final class ProximityRunPolicyHost {
     /// real-passcode unlock, a below-age verdict for good. Every leg setter re-decides, so without
     /// the latch a tab switch or a scene bounce mid-wipe would re-run the whole teardown.
     ///
-    /// **The teardown lowers the liveness leg**, which cancels the poller (item 4). It is recording
-    /// the fact the teardown just made true rather than taking a second opinion: the door runs
-    /// `stopJoin()`, which empties the committed slots and clears the group-key state, so
-    /// `MeshNetworkManager.isSessionLive` answers false from the next read onwards. Waiting for
-    /// `ContentView`'s `.onChange` to notice would be waiting for an observation edge in the middle
-    /// of a delete-all, which is the one moment the view tree is least trustworthy — and the edge
-    /// still fires, re-feeding the same `false`, where ``setSessionLive(_:)`` deduplicates it.
+    /// **The teardown ENDS the session, and the liveness leg follows the manager's predicate down**
+    /// (item 4 pass B, review finding P1-1). This function lowers no leg of its own.
+    ///
+    /// Pass A wrote `setSessionLive(false)` here, on the argument that the door had already made it
+    /// true. It had not. The door ran `stopJoin()` → `stopSearching()`, which empties `slots` and
+    /// clears the group-key state but touches neither ``MeshNetworkManager/currentMesh`` nor
+    /// `sessionState` — so for a FOUNDED mesh `MeshNetworkManager.isSessionLive` stayed TRUE while
+    /// this host's leg said false. The two then disagreed for the life of that mesh:
+    /// `ContentView`'s `.onChange` fires on a CHANGE of the predicate, the predicate never moved,
+    /// and ``setSessionLive(_:)`` deduplicates — so no later edge could re-arm the poller after a
+    /// duress session, a below-age verdict or a delete-all (and the wipe funnel never calls
+    /// `leaveMesh()` for itself).
+    ///
+    /// The fix is at the door rather than here: `FernletApp.mountRoutedRunPolicy(_:)`'s teardown
+    /// closure now runs `leaveSession()` after `stopJoin()` — the manager's OWN end path, the one
+    /// `enforceSessionCeiling(now:monotonicElapsed:)` takes at either bound — which nils
+    /// `currentMesh`, resets the state machine and fires the session-end hooks. `isSessionLive` then
+    /// really does answer false, the observation edge really does fire, and the leg falls through
+    /// ``setSessionLive(_:)`` exactly as it does for every other ending. One predicate, one owner.
     ///
     /// - Parameter decision: The policy's answer for the facts the host currently holds.
     private func pushTeardown(_ decision: ProximityRunDecision) {
@@ -460,7 +481,6 @@ final class ProximityRunPolicyHost {
         guard !didTearDownSession else { return }
         didTearDownSession = true
         tearDownSession?()
-        setSessionLive(false)
     }
 
     // MARK: - The poller (network migration P7 item 4, plan §21.5)
@@ -548,15 +568,34 @@ final class ProximityRunPolicyHost {
         }
     }
 
-    /// The woken task's whole body: tick, then re-arm only if a session is still live.
+    /// The woken task's whole body: tick, then re-arm only if a session is still live — with the
+    /// SAME guard on both sides of the tick.
+    ///
+    /// **A cancelled tick must not poll** (item 4 pass B, review finding P1-2). `Task.sleep`
+    /// throwing is not the only way this body is reached after a cancellation: once the sleep has
+    /// COMPLETED, the continuation is already queued on the main actor, and ``cancelPoller()`` —
+    /// from a liveness fall, from ``rearmPollerForReplacedDoors()``, or from a teardown — cancels
+    /// and nils the handle without unqueueing it. Without the leading guard that continuation still
+    /// ran a full tick: three consumers judging a session that had just been torn down, landing
+    /// mid-wipe (after `wipeIdentityForDeleteAll()` the local fingerprint is `""`, so
+    /// `evaluatePartition` could raise a spurious `linksLost`), and then RE-ARMING — cancelling the
+    /// handle a fresh `connect(…)` had just installed.
     ///
     /// **A tick that finds the leg false re-arms nothing**, which is the other half of "nothing may
-    /// spin": the tick itself can be what ends the session — `enforceSessionCeiling` at either
-    /// bound runs `leaveSession()` — and ``pushTeardown(_:)`` lowers the leg when a dominating input
-    /// ends one, so this guard is reached in shipping and not only in a test.
+    /// spin": the tick itself can be what ends the session — `enforceSessionCeiling` at either bound
+    /// runs `leaveSession()` — so the trailing guard is reached in shipping and not only in a test.
+    ///
+    /// The leg can LAG the manager by one SwiftUI frame, and this says so rather than pretending it
+    /// cannot: `isSessionLive` here is what `ContentView`'s `.onChange` has delivered, and a tick
+    /// that ends the session inside `pollNow()` moves the manager's predicate before that edge
+    /// arrives. So at most ONE further interval may be armed over a session that has just ended.
+    /// It is bounded (the next tick's leading guard sees the lowered leg), and its consumers are
+    /// idempotent over an ended session — no ceiling armed, no idle deadline, and a partition call
+    /// that answers `.unchanged` because `sessionState.isLive` is false.
     private func tickAndRearm() async {
+        guard !Task.isCancelled, isSessionLive else { return }
         await pollNow()
-        guard isSessionLive else { return }
+        guard !Task.isCancelled, isSessionLive else { return }
         armPoller()
     }
 

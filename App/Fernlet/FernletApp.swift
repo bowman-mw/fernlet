@@ -336,7 +336,9 @@ struct FernletApp: App {
     ///
     /// **This body is the ONE place in the app target that names a proximity radio, bar two files
     /// exempted BY NAME.** `ProximityRunPolicyHostTests.theProximityRadiosAreDrivenOnlyFromTheHostsDoors()`
-    /// counts nine RECEIVER-QUALIFIED spellings across `App/` — `startJoin()`, `stopJoin()`,
+    /// counts ten RECEIVER-QUALIFIED spellings across `App/` — `startJoin()`, `stopJoin()`,
+    /// `leaveSession()` (item 4 pass B's addition: it reaches `stopSearching()` through
+    /// `leaveMesh()`, so it moves a radio as surely as `stopJoin()` does),
     /// `resumeSearchingForPartitionedMesh()`, `presenceManager.start()` / `.stop()`,
     /// `recipeShareManager.start()` / `.stop()`, `applyRunState(` and `armDiscoveryTimeout` — and
     /// requires every occurrence to sit inside these braces. Because those needles name a RECEIVER,
@@ -352,11 +354,29 @@ struct FernletApp: App {
     ///
     /// The teardown door is what plan §13's three dominating inputs — a delete-all, a final
     /// below-age verdict and a duress session — reach instead of reaching around the policy.
-    /// `stopJoin()` is the mesh's teardown and not merely its stand-down: it runs `stopSearching()`,
-    /// which empties the committed slots, cancels every slot coordinator and clears the group-key
-    /// state, and it is idempotent, so a second teardown moves nothing. The two listener stops are
-    /// the calls `FernletStore.setAllowNearbyPresence(_:)`, `setAllowNearbyRecipeShares(_:)` and the
-    /// wipe funnel's leg 7b used to make directly.
+    /// `stopJoin()` stands the radios down: it runs `stopSearching()`, which empties the committed
+    /// slots, cancels every slot coordinator and clears the group-key state, and it is idempotent,
+    /// so a second teardown moves nothing. The two listener stops are the calls
+    /// `FernletStore.setAllowNearbyPresence(_:)`, `setAllowNearbyRecipeShares(_:)` and the wipe
+    /// funnel's leg 7b used to make directly.
+    ///
+    /// **`leaveSession()` is what ENDS the session, and standing the radios down is not** (P7 item 4
+    /// pass B, review finding P1-1). `stopJoin()` touches neither `currentMesh` nor `sessionState`,
+    /// so over a FOUNDED mesh `MeshNetworkManager.isSessionLive` stayed true straight through a
+    /// duress purge, a below-age verdict and a delete-all — and the wipe funnel calls no ending of
+    /// its own. The poller's leg was lowered by hand in `ProximityRunPolicyHost.pushTeardown(_:)`
+    /// while the predicate stayed true, so the two disagreed and the `.onChange` that re-arms had no
+    /// edge left to fire on: the poller was dead for the life of that mesh. This is the manager's
+    /// OWN end path — the one `enforceSessionCeiling(now:monotonicElapsed:)` takes at either bound
+    /// (`leaveSession()` → `leaveMesh()`) — so the ending here is the ending every other door makes:
+    /// session photos dropped, `currentMesh` nilled, the ledger and run-scoped state reset, the
+    /// terminal state kept, and the three session-end hooks fired from `stopSearching()`. It is
+    /// idempotent with no mesh — every step is a clear or a removal — and the host no longer lowers
+    /// the leg at all: `ContentView`'s edge on `isSessionLive` does, like every other ending.
+    ///
+    /// It is spelled AFTER `stopJoin()` and not instead of it: `stopJoin()` also clears
+    /// `isProximityJoin`, which is what stops the next `applyRunState` resolving a `resume` over a
+    /// mesh that has just been torn down.
     ///
     /// **The poll door is item 4's, and this body is the ONE place in the app target that names its
     /// three consumers.** `enforceSessionCeiling(now:monotonicElapsed:)`,
@@ -401,6 +421,7 @@ struct FernletApp: App {
             recipeShare: { state in store.recipeShareManager.applyRunState(state) },
             tearDownSession: {
                 store.meshNetworkManager.stopJoin()
+                store.meshNetworkManager.leaveSession()
                 store.presenceManager.stop()
                 store.recipeShareManager.stop()
             },

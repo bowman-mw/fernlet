@@ -5053,8 +5053,13 @@ final class FernletStore {
 
         // 0. The FOUR PROXIMITY RADIOS, before anything is removed (P7 item 3). A delete-all is one
         // of plan §13's three dominating inputs, so raising this leg makes the run policy answer
-        // `stop` on every radio and call its teardown door — which is `stopJoin()` plus both
-        // listener stops, through the ONE host. Until pass B this funnel spelled a bare
+        // `stop` on every radio and call its teardown door — which is `stopJoin()`, `leaveSession()`
+        // and both listener stops, through the ONE host. The `leaveSession()` is P7 item 4 pass B's
+        // fix: this funnel calls no ending of its own, and `stopJoin()` empties `slots` without
+        // touching `currentMesh` or `sessionState`, so before it a delete-all over a FOUNDED mesh
+        // left `isSessionLive` true — a session nothing had ended, with the policy's poller stuck on
+        // the wrong side of an edge that could no longer fire. Until pass B of item 3 this funnel
+        // spelled a bare
         // `presenceManager.stop()` for itself on leg 7b: one radio of four, a third of the way in,
         // while the mesh kept advertising and admitting peers for the whole wipe. First, on the same
         // argument the writer stops below rest on. Lowered from a `defer` registered BEFORE

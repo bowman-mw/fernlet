@@ -32,11 +32,12 @@
 //
 // What the ZERO WALL says (pass B):
 //
-//   * `startJoin()`, `stopJoin()`, `resumeSearchingForPartitionedMesh()`, both listeners'
-//     `start()` / `stop()`, `applyRunState(` and `armDiscoveryTimeout` appear in `App/` ONLY inside
-//     `FernletApp.mountRoutedRunPolicy(_:)`'s door closures — counted, not file-listed, and the
-//     surviving occurrences are shown to be CONTAINED in that brace-matched body rather than merely
-//     near it.
+//   * `startJoin()`, `stopJoin()`, `leaveSession()`, `resumeSearchingForPartitionedMesh()`, both
+//     listeners' `start()` / `stop()`, `applyRunState(` and `armDiscoveryTimeout` appear in `App/`
+//     ONLY inside `FernletApp.mountRoutedRunPolicy(_:)`'s door closures — counted, not file-listed,
+//     and the surviving occurrences are shown to be CONTAINED in that brace-matched body rather
+//     than merely near it. (`leaveSession()` joined the list at item 4's pass B, when the teardown
+//     door grew the call that actually ENDS a session.)
 //   * The DEBUG rejection-matrix harness is exempt **by file name**, and the exemption is fixtured
 //     against the one `startJoin()` and the `#if DEBUG` / `MeshMatrixDebugOptions.isEnabled` pair it
 //     was written for, because an exemption that matches nothing is a hole nobody can see.
@@ -61,19 +62,26 @@
 // mesh. What the poller half says:
 //
 //   * **The arm is an EDGE on `isSessionLive`.** Armed on the rise, nil on the fall, one handle
-//     however many times the leg is re-fed, cancelled again when the doors are replaced and when
-//     the teardown door runs. `isPollerArmed` is read rather than tick counts, because "nothing may
-//     spin" is a claim about the task not EXISTING and a cancelled task ticks exactly as little as
-//     an absent one.
+//     however many times the leg is re-fed, and cancelled again when the doors are replaced.
+//     `isPollerArmed` is read rather than tick counts, because "nothing may spin" is a claim about
+//     the task not EXISTING and a cancelled task ticks exactly as little as an absent one. The
+//     teardown does NOT reach past that edge (pass B, review finding P1-1): its door ENDS the
+//     session through `leaveSession()`, and the leg follows the manager's predicate down like every
+//     other ending. One cell holds the other half — an armed, TICKING poller whose count does not
+//     move once the leg falls, which is the only shape that could catch a cancelled tick still
+//     polling from a continuation already queued on the main actor.
 //   * **The interval is injected.** `pollInterval` defaults to the shipping 30 s and one cell passes
 //     milliseconds, so the REAL arm — sleep, tick, re-arm — is exercised rather than only
 //     `pollNow(at:)`. That cell also pins that two ticks never arrive inside one interval, which is
 //     what a second stacked timer would look like.
 //   * **The three consumers are driven to their verdicts THROUGH a tick**, over a real
 //     `MeshNetworkManager` on a fake transport — the rig `MeshPartitionDetectionTests` builds, cut
-//     to what a tick needs. The headline is P6 item 2's live consequence (plan §12.3 finding 3): a
-//     live mesh whose ceiling has elapsed is ENDED by ONE tick, and the same rig inside its ceiling
-//     is not.
+//     to what a tick needs. That rig arms its ceiling BY HAND, so it proves the enforcement and
+//     nothing about the device that needed it. **The headline is P6 item 2's live consequence
+//     (plan §12.3 finding 3), and pass B is where it stopped being hollow:** a YIELDING FOUNDER,
+//     built through `MeshFoundingRig`'s real pairwise founding with nothing seeded and nothing
+//     armed by hand, now holds the winner's ceiling after adopting — and one tick past that adopted
+//     deadline ends its session.
 //   * **The wall.** `enforceSessionCeiling(`, `evaluateIdleLapse(` and `evaluatePartition(` appear
 //     EXACTLY ONCE each across `App/`, all three inside `mountRoutedRunPolicy(`'s brace-matched
 //     body, in that index order — the order is the decision, so the wall is where it is pinned. The
@@ -195,8 +203,13 @@ final class ProximityRunDoorRecorder {
 /// P7 items 2, 3 and 4's wiring: the single writer of the routed access gate and of the four
 /// proximity radios, the poller that drives the three session judgements, and the three walls that
 /// count all of it.
+///
+/// Serialized, like every sibling suite that drives a REAL `MeshNetworkManager` through sealed
+/// writes (`MeshPairwiseFoundingTests`, `MeshRoutedLockedDeviceTests`): item 4's consumer cells seal
+/// a session context under one pinned install binding and the poller cells hold live `Task`s on the
+/// main actor, and two of those running at once share both the binding and the actor.
 @MainActor
-@Suite struct ProximityRunPolicyHostTests {
+@Suite(.serialized) struct ProximityRunPolicyHostTests {
 
     // MARK: - Fixtures
 
@@ -492,11 +505,18 @@ final class ProximityRunDoorRecorder {
     /// Every spelling that MOVES a proximity radio, and which the app target may therefore name
     /// only inside `FernletApp.mountRoutedRunPolicy(_:)`'s door closures.
     ///
-    /// Nine needles, chosen because each is a call the app used to make for itself:
+    /// Ten needles, chosen because each is a call the app used to make for itself:
     /// `ContentView.startFriendsDiscovery()` resolved a three-way into `startJoin()` or
     /// `resumeSearchingForPartitionedMesh()`, `stopFriendsDiscovery()` called `stopJoin()`,
     /// `updatePresenceListener()` and `updateRecipeShareListener()` called both listeners'
     /// `start()` / `stop()`, and `FernletStore` reached around all of it at three more sites.
+    ///
+    /// **`leaveSession()` joined the list at item 4's pass B** (review finding P1-1), when the
+    /// teardown door grew one: it reaches `stopSearching()` through `leaveMesh()`, so it stands
+    /// every radio down exactly as `stopJoin()` does, and a second app-target caller would be a
+    /// second owner of the same act. It is written with its parentheses, so
+    /// `leaveSessionAfterNotifyingPeers()` — which three views legitimately call, and which is an
+    /// announced ENDING rather than a stand-down — is not matched by it.
     /// `applyRunState(` is here as the door's OWN spelling — the point of the wall is that it too
     /// has exactly one caller — and `armDiscoveryTimeout` is a pure zero-list: its successor is
     /// `MeshNetworkManager.armFriendRadios()`, and keeping both alive is what makes a retirement a
@@ -504,6 +524,7 @@ final class ProximityRunDoorRecorder {
     static let radioCalls = [
         "startJoin()",
         "stopJoin()",
+        "leaveSession()",
         "resumeSearchingForPartitionedMesh()",
         "presenceManager.start()",
         "presenceManager.stop()",
@@ -566,13 +587,15 @@ final class ProximityRunDoorRecorder {
     static let mountListenerCallCount = 2
 
     /// How many occurrences of ``radioCalls`` the mount's door closures are allowed to hold —
-    /// MEASURED, never inherited: `stopJoin()`, `presenceManager.stop()` and
+    /// MEASURED, never inherited: `stopJoin()`, `leaveSession()`, `presenceManager.stop()` and
     /// `recipeShareManager.stop()` once each in the teardown door, plus `applyRunState(` three
     /// times (the mesh pair, presence, recipe).
     ///
-    /// **Item 4 did not move it**, and that is checked rather than assumed: the poll door adds three
-    /// calls to the same body, and not one of them is a radio.
-    static let mountRadioCallCount = 6
+    /// **Item 4's pass A did not move it** — the poll door added three calls to the same body and
+    /// not one of them was a radio — and **pass B moved it by one, deliberately**: the teardown door
+    /// gained `leaveSession()` (review finding P1-1), which is the call that actually ENDS the
+    /// session `stopJoin()` only stood the radios down for. Re-measured at 7, not incremented.
+    static let mountRadioCallCount = 7
 
     /// The three session judgements the poller drives, **in the order one tick makes them**.
     ///
@@ -1245,7 +1268,16 @@ final class ProximityRunDoorRecorder {
         for (needle, pinned) in Self.proximityKitConsumerCounts where counted[needle] != pinned {
             mismatched.append("\(needle): \(counted[needle] ?? 0), pinned at \(pinned)")
         }
-        #expect(counted.count == Self.sessionConsumers.count, "a needle was never counted at all")
+        // Per needle, because the dictionary above is populated for all three unconditionally: its
+        // COUNT is three however little the sweep matched, so `counted.count == 3` was a claim about
+        // this loop and not about ProximityKit (item 4 pass B, review finding P3).
+        let everyNeedleIsPinned = Self.sessionConsumers.allSatisfy {
+            Self.proximityKitConsumerCounts[$0] != nil
+        }
+        let everyNeedleMatchedSomething = Self.sessionConsumers.allSatisfy { (counted[$0] ?? 0) > 0 }
+        #expect(everyNeedleIsPinned, "a consumer in the order list has no pinned package count")
+        #expect(everyNeedleMatchedSomething,
+                "a needle matched nothing at all in ProximityKit, so its pin is vacuous")
         #expect(mismatched.isEmpty, """
             a session consumer's spelling count inside ProximityKit moved without this pin moving — \
             re-measure it and say which decision moved it, because a new in-package caller is a \
@@ -1383,38 +1415,145 @@ final class ProximityRunDoorRecorder {
         #expect(!host.isPollerArmed, "and the fall still cancels after a re-mount")
     }
 
-    /// **The teardown cancels the poller**, by lowering the liveness leg rather than by reaching
-    /// past it.
+    /// **The teardown calls its door, and the LEG is what cancels the poller** (item 4 pass B,
+    /// review finding P1-1).
     ///
-    /// `stopJoin()` empties the committed slots and clears the group-key state, so the session the
-    /// poller was judging is over the moment that door returns; waiting for `ContentView`'s
-    /// `.onChange` to notice would be waiting for an observation edge in the middle of a delete-all.
-    @Test func theTeardownLowersTheLivenessLegAndCancelsThePoller() {
+    /// Pass A had `pushTeardown(_:)` call `setSessionLive(false)` itself, on the argument that
+    /// `stopJoin()` had already ended the session. It had not: `stopJoin()` → `stopSearching()`
+    /// empties `slots` and clears the group-key state but touches neither `currentMesh` nor
+    /// `sessionState`, so over a FOUNDED mesh `MeshNetworkManager.isSessionLive` stayed TRUE — the
+    /// host's leg and the manager's predicate disagreed, the `.onChange` had no edge left to fire,
+    /// and the poller could never be re-armed for that mesh's life.
+    ///
+    /// So the ENDING moved into the door (`FernletApp`'s teardown closure now runs `leaveSession()`
+    /// after `stopJoin()`) and the leg went back to following the predicate. This cell holds a
+    /// RECORDING door rather than a manager, so the edge is driven explicitly, which is exactly the
+    /// claim: the host lowers nothing by itself, and the poller falls when — and only when — the leg
+    /// does. That the production door really ends the session is the wall's business
+    /// (``theProximityRadiosAreDrivenOnlyFromTheHostsDoors()`` counts `leaveSession()` inside the
+    /// mount) and `MeshPairwiseFoundingTests`'.
+    @Test func theTeardownCallsItsDoorAndTheLegIsWhatCancelsThePoller() {
         let (host, recorder) = Self.connectedHost()
         host.setScenePhase(.active)
         host.setSessionLive(true)
         #expect(host.isPollerArmed, "a live session arms the poller")
         host.setDeletingAllData(true)
         #expect(recorder.teardowns == 1, "the wipe's rising edge tears the session down once")
+        #expect(host.isPollerArmed,
+                "the host takes no second opinion about liveness: the predicate owns that leg")
+        host.setSessionLive(false)
         #expect(!host.isPollerArmed,
-                "and the teardown lowers the liveness leg, so no tick outlives the session it judged")
+                "and the leg falling is what cancels it, so no tick outlives the session it judged")
         host.setSessionLive(true)
         #expect(host.isPollerArmed,
                 "the leg is a value again afterwards: a fresh session re-arms in the ordinary way")
         host.setSessionLive(false)
     }
 
+    /// **An ARMED, TICKING poller really stops** (item 4 pass B, review finding P2-5).
+    ///
+    /// Every other cancel cell reads `isPollerArmed` — the honest claim about the handle — or starts
+    /// from a poller that never ticked. None of them could have caught a tick already queued on the
+    /// main actor when the leg fell: `Task.sleep` had completed, so nothing threw, and the
+    /// continuation ran a full tick and RE-ARMED against a handle that had been cancelled and
+    /// nilled. This one arms a real millisecond poller, waits for real ticks, lowers the leg, and
+    /// then lets twenty more intervals pass over a recorded count that must not move.
+    @Test func anArmedPollerStopsTickingWhenTheLegFalls() async {
+        let (host, recorder) = Self.polledHost(interval: 0.01)
+        host.setSessionLive(true)
+        await Self.waitForPolls(2, in: recorder)
+        #expect(recorder.polls.count >= 2, "the cell needs a poller that really ticked, or it is vacuous")
+        host.setSessionLive(false)
+        let atTheFall = recorder.polls.count
+        #expect(!host.isPollerArmed, "the fall cancels the handle and nils it")
+        // R2: twenty sleeps of 10 ms — twenty of the injected intervals, and then some.
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(recorder.polls.count == atTheFall,
+                "a tick arrived after the leg fell, so a cancelled tick still polls")
+        #expect(!host.isPollerArmed, "and nothing re-armed itself from inside one")
+    }
+
     // MARK: - The three consumers, driven to their verdicts through a tick
 
-    /// **THE HEADLINE (plan §12.3 finding 3).** A live mesh whose ceiling has elapsed is ENDED by
-    /// ONE tick.
+    /// **THE HEADLINE (plan §12.3 finding 3): the YIELDING FOUNDER's adopted ceiling is armed by
+    /// shipping code, and one tick past it ends the session.**
     ///
-    /// P6 item 2's founding change made this the item's first live consequence: a mesh outlives its
-    /// links, `enforceSessionCeiling(now:monotonicElapsed:)` had no shipping caller, and so a
-    /// session could run past the six-hour bound with nothing left to notice. The rig is founded six
-    /// hours and an hour ago against the REAL clock, because the signed bound is judged against the
-    /// instant the tick hands the door — the SIGNED bound is what this cell drives, since
-    /// `monotonicElapsed: nil` measures a monotonic origin armed seconds ago.
+    /// P6 item 2's founding change is what made this the item's first live consequence, and pass A
+    /// claimed it without proving it: `startSessionCeiling(hardDeadline:startedAt:)` had exactly two
+    /// callers — `foundMesh(_:now:)` and the launch restore — so the half of every symmetric pair
+    /// that YIELDS ran with `sessionCeiling == nil` and every tick returned nil for it. A poller can
+    /// only enforce a ceiling that was armed. The cell above arms one by hand, which proves the
+    /// enforcement and says nothing about the device that needed it (review finding P1-3).
+    ///
+    /// So this one arms NOTHING. It builds the real pairwise founding `MeshPairwiseFoundingTests`
+    /// drives — two proximity-join managers on `FakePeerNetwork`, no seeded mesh, no seeded ledger,
+    /// both halves committing and both founding — lets the election decide which half yields, and
+    /// then asserts the ceiling the YIELDER holds after adopting. It is the WINNER's deadline:
+    /// `handleMeshDescriptor`'s yield arm derives `createdAt + 6 h` from the ADOPTED descriptor, so
+    /// the two halves of one mesh expire at one instant rather than six hours apart (plan §8.2 —
+    /// "six hours of membership, whatever any clock says").
+    ///
+    /// The tick is handed an instant past the signed bound AND past its ±120 s skew tolerance, which
+    /// is what `MeshSessionCeiling.verdict(now:monotonicElapsed:)` actually compares against.
+    @Test func aYieldingFoundersAdoptedCeilingIsEnforcedByOneTick() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "poller-yield")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        // Roles, not indices: the identities are freshly provisioned, so the election decides which
+        // half yields per run.
+        let lowerFounds = MeshNetworkManager.foundsPairwiseMesh(
+            local: rig.identities[0].localFingerprint, peer: rig.identities[1].localFingerprint
+        )
+        let winner = lowerFounds ? 0 : 1
+        let manager = rig.nodes[lowerFounds ? 1 : 0].manager
+        try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+
+        let adopted = try #require(manager.currentMesh, "the yielder must have adopted a mesh at all")
+        #expect(adopted.meshID == rig.nodes[winner].manager.currentMesh?.meshID,
+                "the side the order names keeps its mesh and the other adopts it")
+        let ceiling = try #require(manager.sessionCeiling, """
+            the yielder holds NO ceiling, so the poller has nothing to enforce for it — which is \
+            the gap the headline is about
+            """)
+        #expect(ceiling.hardDeadline == adopted.createdAt.addingTimeInterval(
+            MeshSessionCeiling.ceilingSeconds
+        ), "the yielder adopts the WINNER's deadline, not a fresh six hours of its own")
+        #expect(manager.isSessionLive, "and its session is live, or the tick below judges nothing")
+
+        let recorder = ProximityRunDoorRecorder()
+        let host = ProximityRunPolicyHost()
+        Self.connect(host, to: recorder, poll: Self.sessionConsumerDoor(for: manager))
+        host.setSessionLive(true)
+        #expect(host.isPollerArmed, "which is what arms the poller in the first place")
+        let past = ceiling.hardDeadline.addingTimeInterval(
+            MeshSessionCeiling.skewToleranceSeconds + 60
+        )
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await host.pollNow(at: past)
+        }
+        host.setSessionLive(false)
+        #expect(recorder.polls.count == 1, "exactly one tick ran")
+        #expect(manager.sessionState == .expired,
+                "one tick past the ADOPTED deadline must end the yielder's session")
+        #expect(!manager.isSessionLive, "and the session predicate must agree that it ended")
+    }
+
+    /// **The WINNER's shape: a live mesh whose ceiling has elapsed is ENDED by ONE tick.**
+    ///
+    /// The ceiling here is armed BY HAND, which is what makes this the winner's cell and not the
+    /// headline: `pollerRig(createdAt:)` spells `startSessionCeiling(hardDeadline:startedAt:)`
+    /// itself, exactly as `foundMesh(_:now:)` does for the device that kept its mesh. It proves the
+    /// enforcement — that a poller tick reaches the signed bound and ends the session — over a rig
+    /// whose ceiling is a given. The half that had to be ARMED by shipping code is
+    /// ``aYieldingFoundersAdoptedCeilingIsEnforcedByOneTick()`` below.
+    ///
+    /// The rig is founded six hours and an hour ago against the REAL clock, because the signed bound
+    /// is judged against the instant the tick hands the door — the SIGNED bound is what this cell
+    /// drives, since `monotonicElapsed: nil` measures a monotonic origin armed seconds ago.
     ///
     /// What it claims is the LOCAL ending, and that is deliberate: the rig's roster is three, and
     /// `MeshDevelopmentPlan.permitsTermination(_:)` refuses to sign a `terminated.v1` above a final
@@ -1422,7 +1561,7 @@ final class ProximityRunDoorRecorder {
     /// subject over its own two-member rig. `enforceSessionCeiling` ends local participation either
     /// way — the state moves before the effects run — and "the session is over on this device" is
     /// the thing that was missing.
-    @Test func oneTickEndsALiveMeshWhoseCeilingHasElapsed() async throws {
+    @Test func oneTickEndsAHandArmedCeilingThatHasElapsed() async throws {
         let elapsed = MeshSessionCeiling.ceilingSeconds + 3_600
         let rig = try Self.pollerRig(createdAt: Date().addingTimeInterval(-elapsed))
         #expect(rig.manager.isSessionLive, "the rig must start from a LIVE mesh or the cell is vacuous")
@@ -1478,13 +1617,21 @@ final class ProximityRunDoorRecorder {
         rig.manager.leaveMesh()
     }
 
-    /// **The idle lapse, through a tick — and the ORDER, made behavioural.**
+    /// **The idle lapse, reached through TWO ticks** — the 30-minute window armed by one and spent
+    /// by the next.
     ///
-    /// Two ticks with an injected clock thirty minutes apart. The FIRST tick's partition call arms
-    /// the idle window; the SECOND tick's idle-lapse call reads it and stops participation. That
-    /// dependency is exactly why the partition call is last: were it first, one tick could arm a
-    /// thirty-minute window and judge it in the same breath.
-    @Test func aLaterTickLapsesTheWindowAnEarlierTicksPartitionArmed() async throws {
+    /// Two ticks with an injected clock thirty minutes apart: the first tick's partition call arms
+    /// the window, the second tick's idle-lapse call reads it and stops participation. Nothing else
+    /// in the suite drives `evaluateIdleLapse(now:)` to a verdict at all, which is what this cell is
+    /// for.
+    ///
+    /// **It is deliberately NOT the order made behavioural** (item 4 pass B, review finding P2-4).
+    /// `applyPartitionVerdict(_:at:)` anchors `idleLapseDeadline = now + 1800`, so a window armed at
+    /// `now` can never lapse at `now` whatever order the three calls are made in — swapping calls 2
+    /// and 3 inside one tick passes this cell identically. The order is pinned where it can be:
+    /// ``thePollDoorsThreeCallsSitInsideTheMountInTheDecidedOrder()``'s INDEX assertion over the
+    /// mount's brace-matched body.
+    @Test func theIdleLapseIsReachedThroughTwoTicksThirtyMinutesApart() async throws {
         let rig = try Self.pollerRig(createdAt: Date())
         let start = Date()
         rig.host.setSessionLive(true)

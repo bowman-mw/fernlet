@@ -744,11 +744,14 @@ struct MeshPairwiseFoundingTests {
     /// AFTER the resume, and a re-formed link is asserted to MERGE rather than found.
     ///
     /// Driven on the election's **winner**, by role and never by index, because the ceiling claim
-    /// belongs to the side that kept the mesh it founded: a yielder's `unwindNewbornMesh()` nils its
-    /// ceiling and `handleAdmissionGrant` arms no new one, so the yielder ends with a mesh and no
-    /// ceiling — asserted below as the named residual it is (P7's `ProximityRunPolicy` owns the
-    /// poller that would read it; nothing today does). Written as `nodes[0]` this cell passed or
-    /// failed on which of two random fingerprints was lower.
+    /// belongs to the side that kept the mesh it founded. The yielder's ceiling is asserted here
+    /// too, and since network migration P7 item 4's pass B it is a POSITIVE: `unwindNewbornMesh()`
+    /// still nils the ceiling, but `handleMeshDescriptor`'s yield arm re-arms it off the ADOPTED
+    /// descriptor's `createdAt`, so both halves of one mesh expire at one instant. Before that the
+    /// yielder ended with a mesh that could never expire — harmless only while
+    /// `enforceSessionCeiling` had no caller, and a live gap the moment item 4 gave it the poller.
+    /// Written as `nodes[0]` this cell passed or failed on which of two random fingerprints was
+    /// lower.
     @Test func aPartitionedPairReArmsItsRadiosWithoutReFoundingItsMesh() async throws {
         let rig = try MeshFoundingRig.build(2, label: "re-arm")
         defer { rig.teardown() }
@@ -762,10 +765,13 @@ struct MeshPairwiseFoundingTests {
         let winner = lowerFounds ? 0 : 1
         let yielder = lowerFounds ? 1 : 0
         let manager = rig.nodes[winner].manager
-        #expect(rig.nodes[yielder].manager.sessionCeiling == nil, """
-            named residual, not a claim about the fix: a yielder ends with a mesh and NO ceiling, \
-            exactly as every proximity joiner has since P3 — latent only because \
-            `enforceSessionCeiling` still has no shipping caller (P7's poller)
+        let adopted = try #require(rig.nodes[yielder].manager.currentMesh,
+                                   "the yielder must have adopted the winner's mesh")
+        #expect(rig.nodes[yielder].manager.sessionCeiling?.hardDeadline == adopted.createdAt
+            .addingTimeInterval(MeshSessionCeiling.ceilingSeconds), """
+            the named residual is CLOSED (P7 item 4 pass B): the yield arm arms the adopted mesh's \
+            own ceiling, so the side that yielded expires at the same instant as the side that kept \
+            the mesh — where before it held a session nothing could ever end
             """)
         rig.capturePhoto(at: winner)
         let founded = try #require(manager.currentMesh?.meshID)

@@ -1953,19 +1953,27 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// fire unless this device's routed index is provably EMPTY, and a roster of one can never have
     /// staged an item of its own (`originateRoutedItem` answers `.noDestinations` first).
     ///
-    /// **Named, not fixed: a yielder ends with a mesh and no session ceiling.**
-    /// `resetSessionStateMachine` nils `sessionCeiling`, and ``startSessionCeiling(hardDeadline:startedAt:)``
-    /// has exactly two shipping callers — ``foundMesh(_:now:)`` and the launch restore — while
-    /// `handleAdmissionGrant` restarts the beacon and arms no ceiling. So the yielder, which is one
-    /// half of every symmetric pair, ends at `.idle` with `sessionCeiling == nil`, exactly as every
-    /// proximity JOINER has since P3. **It stopped being latent at network migration P7 item 4**,
-    /// which gave ``enforceSessionCeiling(now:monotonicElapsed:)`` its shipping caller — the app's
-    /// `ProximityRunPolicyHost` poller, one timer started on the rise of ``isSessionLive``. The
-    /// poller can only enforce a ceiling that was ARMED, and nothing arms one here: a yielder still
-    /// ends at `.idle` with `sessionCeiling == nil`, so the residual is now a live gap with a
-    /// named owner (arming the ceiling on the joiner side) rather than a gap nothing could have
-    /// noticed. Nothing routed depends on it — `routedHardDeadline` is derived from
-    /// `mesh.createdAt`, which the adopted descriptor carries.
+    /// **This unwind nils the ceiling, and the ADOPTION re-arms it — closed at network migration P7
+    /// item 4 pass B.** `resetSessionStateMachine` nils `sessionCeiling`, and for three phases
+    /// ``startSessionCeiling(hardDeadline:startedAt:)`` had exactly two shipping callers —
+    /// ``foundMesh(_:now:)`` and the launch restore — while `handleAdmissionGrant` restarts the
+    /// beacon and arms no ceiling. So a yielder, which is one half of every symmetric pair, ended at
+    /// `.idle` with `sessionCeiling == nil`. That was latent only while
+    /// ``enforceSessionCeiling(now:monotonicElapsed:)`` had no shipping caller; item 4 gave it one
+    /// (the app's `ProximityRunPolicyHost` poller, one timer started on the rise of
+    /// ``isSessionLive``), and a poller can only enforce a ceiling that was ARMED — so every tick
+    /// returned nil for exactly the device this unwind had just stripped. The yield arm of
+    /// ``handleMeshDescriptor(_:from:)`` now calls ``adoptSessionCeiling(of:now:)`` immediately
+    /// after it assigns the winner's descriptor, with that descriptor's `createdAt` as the base, so
+    /// the yielder adopts the WINNER's deadline rather than a fresh six hours. Nothing routed ever
+    /// depended on it — `routedHardDeadline` is derived from `mesh.createdAt`, which the adopted
+    /// descriptor carries.
+    ///
+    /// **Still open, and narrower than it was:** an ordinary proximity JOINER — one that never
+    /// founded, so this unwind never ran — reaches `currentMesh = incoming` down the other arm of
+    /// that door and arms no ceiling. It is the same shape as the yielder's and it is deliberately
+    /// not closed in the same pass: the joiner arm is the path every routed rig in the suite drives,
+    /// and changing what those sessions expire against is a decision with its own blast radius.
     private func unwindNewbornMesh() {
         // `clearGroupKeyState()` nils `lastRotationBlockReason` — and on the founding-failure path
         // that string is the ONE surface saying why the founding was abandoned, written by
@@ -9853,6 +9861,40 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         sessionMonotonicOrigin = ContinuousClock.now
     }
 
+    /// Arms the ceiling a device ADOPTS along with somebody else's mesh — the yielding founder's
+    /// (network migration P7 item 4 pass B, review finding P1-3).
+    ///
+    /// **The ceiling is a property of the MESH, not of this run**, which is the whole of why the
+    /// deadline is derived rather than restarted: `hardDeadline` is `createdAt + 6 h` off the
+    /// ADOPTED descriptor, exactly as ``foundMesh(_:now:)`` derives it off the one it minted, so the
+    /// yielder ends at the winner's instant and not six fresh hours later. Plan §8.2's bound is
+    /// "six hours of membership, whatever any clock says", and two members of one mesh that
+    /// disagreed about when it ends would be two sessions. `startedAt` is this run's own instant, so
+    /// the monotonic budget is what is LEFT of the deadline rather than the whole ceiling — which is
+    /// `MeshSessionCeiling`'s own clamp, unchanged.
+    ///
+    /// Until this existed the yielding half of a pairwise founding ran with no ceiling at all:
+    /// ``unwindNewbornMesh()`` nils it (through `resetSessionStateMachine`), and
+    /// ``startSessionCeiling(hardDeadline:startedAt:)`` had exactly two callers — the founding and
+    /// the launch restore. That was latent while ``enforceSessionCeiling(now:monotonicElapsed:)``
+    /// had no shipping caller and stopped being latent the moment item 4 gave it one: every tick
+    /// returned nil for the yielder, so the app's poller enforced a bound that had never been armed.
+    ///
+    /// Idempotent by guard rather than by argument: a device that already holds a ceiling keeps it,
+    /// so an adoption re-entered by a re-broadcast descriptor cannot restart the monotonic budget.
+    /// In practice the guard is always open on the yield path, where the unwind has just nilled it.
+    ///
+    /// - Parameters:
+    ///   - adopted: The descriptor this device just took as its own.
+    ///   - now: The instant this run of the adopted session began.
+    private func adoptSessionCeiling(of adopted: MeshDescriptor, now: Date) {
+        guard sessionCeiling == nil else { return }
+        startSessionCeiling(
+            hardDeadline: adopted.createdAt.addingTimeInterval(MeshSessionCeiling.ceilingSeconds),
+            startedAt: now
+        )
+    }
+
     /// Judges the session against both ceiling bounds without changing anything.
     ///
     /// - Parameters:
@@ -12013,6 +12055,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
                 )
                 unwindNewbornMesh()
                 currentMesh = incoming
+                adoptSessionCeiling(of: incoming, now: Date())
             } else {
                 mergeMeshDescriptor(existing, incoming: incoming)
             }
