@@ -32,6 +32,14 @@ final class FakeMeshTransportSession: MeshTransportSession {
     private(set) var startedDiscoveryInfo: [[String: String]] = []
     private(set) var republishedDiscoveryInfo: [[String: String]] = []
     private(set) var stopCount = 0
+    /// How many times the owner stood the browser/advertiser down while KEEPING the session — the
+    /// radio half of `MeshNetworkManager.holdCommittedLinks()`, and the counter that tells a hold
+    /// apart from a `stop()`.
+    private(set) var pauseDiscoveryCount = 0
+    /// How many times a paused radio was reopened through the protocol's own verb. Zero in every
+    /// tier-1 run today: the owner's one re-arm funnel goes through `startRadios(discoveryInfo:)`,
+    /// and each real conformer reopens itself from there.
+    private(set) var resumeDiscoveryCount = 0
     private(set) var invitedPeers: [PeerHandle] = []
     private(set) var disconnectedPeers: [PeerHandle] = []
 
@@ -51,6 +59,14 @@ final class FakeMeshTransportSession: MeshTransportSession {
 
     func stop() {
         stopCount += 1
+    }
+
+    func pauseDiscovery() {
+        pauseDiscoveryCount += 1
+    }
+
+    func resumeDiscovery() {
+        resumeDiscoveryCount += 1
     }
 
     func updateDiscoveryInfo(_ info: [String: String]) {

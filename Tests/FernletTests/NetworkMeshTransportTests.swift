@@ -1031,6 +1031,58 @@ struct NetworkMeshSessionTests {
         #expect(!session.isRunning)
     }
 
+    /// **P8 item 3, review findings F-3 / F-5: a republish must not un-pause a held radio.**
+    ///
+    /// `updateDiscoveryInfo(_:)` re-mints the listener, which is the only way to withdraw and
+    /// re-register the Bonjour name — and re-registering is exactly what a hold may not do, because
+    /// the accept path comes back up with it. `MeshMultipeerSession` has always guarded this; the
+    /// QUIC copy did not. The fields are still RECORDED, because `resumeDiscovery()` re-mints from
+    /// them and a resume that republished stale fields would advertise another moment's member
+    /// count — the same reason `startRadios(discoveryInfo:)`'s early return may not throw the
+    /// caller's fields away.
+    ///
+    /// Tier 1 cannot start this radio (a real listener, and the Local Network permission with it),
+    /// so the behaviour is asserted on the shape tier 1 does own — a radio that never started takes
+    /// the same early return — plus the ORDER of the three statements, which is the whole rule. The
+    /// proof behind a live listener is owed to the tier-2 lane.
+    @Test func aRepublishIsRememberedRatherThanReMintedWhileDiscoveryIsPaused() throws {
+        let session = NetworkMeshSession()
+        session.pauseDiscovery()
+        #expect(!session.isDiscoveryPausedForTesting,
+                "a radio that never started has no discovery to pause")
+
+        session.updateDiscoveryInfo(["sid": "abcd", "memberCount": "3"])
+        #expect(session.advertisedFieldsForTesting["sid"] == "abcd", """
+            the fields are recorded before either early return, so what a held radio is told is \
+            what it advertises when it comes back
+            """)
+        #expect(session.advertisedFieldsForTesting["memberCount"] == "3")
+        session.stop()
+        #expect(!session.isDiscoveryPausedForTesting, "and a stop clears the pause with the rest")
+
+        let quic = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
+        )
+        let republish = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "func updateDiscoveryInfo(_ discoveryInfo:", in: quic
+        ))
+        let recorded = try #require(republish.range(of: "advertisedFields = MeshLinkAdvertisement"))
+        let held = try #require(republish.range(of: "guard !isDiscoveryPaused else { return }"))
+        let reMint = try #require(republish.range(of: "cancelListener()"))
+        #expect(recorded.upperBound < held.lowerBound,
+                "record the caller's fields FIRST, or a held radio resumes onto stale ones")
+        #expect(held.upperBound < reMint.lowerBound,
+                "and refuse while held BEFORE the re-mint, or the pause is silently undone")
+
+        let selection = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/MeshTransportSelection.swift")
+        )
+        #expect(selection.contains("updateDiscoveryInfo(discoveryInfo)\n            resumeDiscovery()"), """
+            and the one re-arm funnel's early return records the caller's fields before resuming, \
+            instead of resuming onto whatever was advertised when the radio last started
+            """)
+    }
+
     /// A connection that never finishes its introduction is dropped, not held forever.
     ///
     /// The seat it holds is pre-authentication and there are only eight of them, so an unbounded

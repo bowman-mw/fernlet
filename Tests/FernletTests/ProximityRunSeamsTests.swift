@@ -7,10 +7,16 @@
 // manager's three live predicates → an ordered action list — so every "which radio verb, and
 // when" claim the old `ContentView` chain made by construction is a row here: the fresh Friends
 // visit, the tab exit that keeps a committed link, the tab exit that stands a blipped search down,
-// the background exit, the return after a blip, the three hard stops, the cleared hard stop, and
-// the one transition this phase refuses by name. The executor is a `switch` with nothing to
-// decide, and the two listener seams are `switch`es too; neither is driven here, because a real
-// manager starts a real radio — the honesty cell says so.
+// the background exit, the return after a blip, the three hard stops, the cleared hard stop, the
+// background-continuation row P7 could only refuse and P8 item 3 now HOLDS, and the foreground
+// return out of that hold. The executor is a `switch` with nothing to decide, and the two listener
+// seams are `switch`es too; neither is driven here, because a real manager starts a real radio —
+// the honesty cell says so.
+//
+// Two walls beside the retirement one, both P8 item 3's: `.holdCommittedLinks(` has exactly one
+// home, and `proximityRunPolicy.unsupportedTransition` has NONE — the app refuses no policy row
+// any more. A third cell names the three spellings of the hold, so pass 1 cannot ship without
+// pass 2: a verb nobody calls has no home for the retirement wall to count.
 //
 // The wall: every radio verb under `App/` lives in `ProximityRunSeams.swift`, exactly once each,
 // except the DEBUG Lane C harness's own `startJoin()`, exempted BY NAME; the two listeners are
@@ -238,17 +244,75 @@ import ProximityKit
                 "the real passcode clears duress: search, timeout, presence — recipe stays off on Friends")
     }
 
-    /// The one transition this phase cannot execute is refused by name rather than executed:
-    /// discovery `stop` while the mesh keeps `run` needs a seam that stops browsing and admitting
-    /// while KEEPING the links, which P8 builds. `stopJoin()` would drop them.
-    @Test func theOneTransitionThisPhaseCannotExecuteIsRefusedByName() {
+    /// The row P7 could only refuse is executed now: discovery `stop` while the mesh keeps `run`
+    /// runs `holdCommittedLinks()`, which stops browsing and admission and keeps every committed
+    /// link. `stopJoin()` would drop them, and is still not emitted here.
+    @Test func theBackgroundContinuationRowHoldsTheLinksInsteadOfRefusing() {
         let continued = Self.actions(
             from: Self.verdict(continuation: .running, session: .peerCommitted),
             to: Self.verdict(phase: .background, continuation: .running, session: .peerCommitted),
             Self.facts(searching: true, inSession: true, committed: true)
         )
-        #expect(continued == [.refuseBackgroundDiscoveryStop, .presence(.stop)],
-                "no `stopJoin()`, no `leaveSession()` — the refusal is audible and the links are kept")
+        #expect(continued == [.holdLinks, .presence(.stop)],
+                "the hold, not `stopJoin()` and not `leaveSession()` — and no timeout to cancel")
+    }
+
+    /// **The way back out**, which the three-way alone does not have (P8 item 3).
+    ///
+    /// After the hold the radios are down with a peer still committed, and
+    /// `FriendsDiscoveryEntry.entry(true, true)` is `.none` — right for a Friends visit over a live
+    /// session, and a ONE-WAY DOOR here: the session would never browse, admit or re-dial again.
+    /// The explicit row emits `.resumeSearch` and arms NO timeout, because a committed peer is not
+    /// "found nobody".
+    @Test func aForegroundReturnFromTheBackgroundHoldResumesTheSearch() {
+        let held = Self.verdict(phase: .background, continuation: .running, session: .peerCommitted)
+        let returned = Self.actions(
+            from: held,
+            to: Self.verdict(continuation: .running, session: .peerCommitted),
+            Self.facts(inSession: true, committed: true)
+        )
+        #expect(returned == [.resumeSearch, .presence(.foregroundOnly)],
+                "the radios come back, and no `armDiscoveryTimeout` rides along")
+        #expect(!FriendsDiscoveryEntry.entry(isInSession: true, hasCommittedPeer: true).armsDiscoveryTimeout,
+                "the three-way it overrides answers `.none` here — read through the property, never `== .none`")
+        let stillUp = Self.actions(
+            from: held,
+            to: Self.verdict(continuation: .running, session: .peerCommitted),
+            Self.facts(searching: true, inSession: true, committed: true)
+        )
+        #expect(stillUp == [.presence(.foregroundOnly)], """
+            and the row is gated on the radios actually being DOWN: a session still searching asks \
+            for nothing, exactly as the tab's own `!isSearching` arm always did
+            """)
+        let heldWithNoPeer = Self.actions(
+            from: Self.verdict(phase: .background, continuation: .running, session: .meshHeld),
+            to: Self.verdict(continuation: .running, session: .meshHeld),
+            Self.facts(inSession: true)
+        )
+        #expect(heldWithNoPeer == [.resumeSearch, .armDiscoveryTimeout, .presence(.foregroundOnly)],
+                "a hold with no committed peer falls through to the three-way, which arms the clock")
+    }
+
+    /// The way out is not required to be DIRECT, which is why the row reads the facts and not the
+    /// verdict it is leaving.
+    ///
+    /// Foreground on any tab but Friends is discovery `hold` — "keep what you have" — which after a
+    /// background hold means "keep the radios down", and leaves the hold row two verdicts behind by
+    /// the time the user opens Friends. A row keyed on `previous` would see `(run, hold)` there and
+    /// answer nothing, and the session would be just as stranded as before item 3.
+    @Test func theWayOutOfAHoldSurvivesAStopOnAnotherTab() {
+        let held = Self.verdict(phase: .background, continuation: .running, session: .peerCommitted)
+        let downstairs = Self.verdict(tab: .home, continuation: .running, session: .peerCommitted)
+        let ontoHome = Self.actions(from: held, to: downstairs, Self.facts(inSession: true, committed: true))
+        #expect(ontoHome == [.cancelDiscoveryTimeout, .presence(.foregroundOnly), .recipeShare(.foregroundOnly)],
+                "discovery `hold` touches no radio — the mesh is still held, and still dark")
+        let ontoFriends = Self.actions(
+            from: downstairs,
+            to: Self.verdict(continuation: .running, session: .peerCommitted),
+            Self.facts(inSession: true, committed: true)
+        )
+        #expect(ontoFriends == [.resumeSearch, .recipeShare(.stop)],
+                "and the next Friends visit still gets its radios back")
     }
 
     /// A discovery verdict of `run` never occurs (invariant 5); the transition answers it with no
@@ -302,6 +366,8 @@ import ProximityKit
         #expect(Self.homes(of: ".stopJoin(", in: sources) == [seams], "`stopJoin()` is spoken by the seams once")
         #expect(Self.homes(of: ".resumeSearchingForPartitionedMesh(", in: sources) == [seams],
                 "the resume seam is spoken by the seams once")
+        #expect(Self.homes(of: ".holdCommittedLinks(", in: sources) == [seams],
+                "P8 item 3's hold is spoken by the seams once — and by no continuation coordinator")
         #expect(Self.homes(of: ".leaveSession()", in: sources) == [seams],
                 "the silent teardown is spoken by the seams once — user endings go through `leaveSessionAfterNotifyingPeers()`")
         #expect(Self.homes(of: ".endSessionAfterDiscoveryTimeout(", in: sources) == [seams],
@@ -314,6 +380,42 @@ import ProximityKit
         }
         let applied = Self.homes(of: ".apply(", in: sources)
         #expect(applied.filter { $0 == seams }.count == 2, "each listener's `apply(_:)` seam is called exactly once, by the executor")
+    }
+
+    /// **The zero-count wall.** P7's refusal is gone from the app — the action case, the executor
+    /// arm and the audit token with it.
+    ///
+    /// The token is the wall's subject rather than the case name because it is what a device
+    /// transcript is read for (`Docs/Mesh-P7-Physical-Device-Test-Plan-2026-09-18.md`: one sighting
+    /// is a bug), and because a dead refusal arm left standing beside the verb that replaced it is
+    /// exactly the shape this must forbid. Scanned over `App/` only, so this file's own literal can
+    /// never be the thing it counts.
+    @Test func theRefusedRowsTokenIsGoneFromTheApp() throws {
+        let sources = try Self.appSources()
+        #expect(sources.count >= 100, "the app-target scan lost its files")
+        #expect(Self.homes(of: "proximityRunPolicy.unsupportedTransition", in: sources).isEmpty,
+                "no shipping file refuses a policy row any more — item 3 executes the only one there was")
+        #expect(Self.homes(of: "refuseBackgroundDiscoveryStop", in: sources).isEmpty,
+                "and the action case it rode on is gone with it")
+    }
+
+    /// **The gate's proof that pass 2 ran.** Pass 1 could ship the verb and leave the seam refusing,
+    /// and every other wall here would survive it — `everyRadioVerbLivesInTheSeamsFile` counts the
+    /// verb's *home*, and a verb nobody calls has no home to count, so `[]` would be its answer and
+    /// `== [seams]` its only complaint. This says the two halves out loud instead: the transition
+    /// EMITS the action for the mesh-`run` row, and the executor RUNS the verb.
+    ///
+    /// Deliberately **not** a check that `case holdLinks` is declared. A source scan cannot police a
+    /// rename: the needle is a literal in this file, so renaming the case here and there in one
+    /// sweep satisfies the cell by accident (observed, when this cell's own red-once was planted as
+    /// a rename). What a rename cannot survive is the row cells above, which name the actions by
+    /// case and stop compiling — that is where a rename is caught, and this is where a missing
+    /// pass 2 is.
+    @Test func theSeamsFileDeclaresEmitsAndExecutesTheHold() throws {
+        let seams = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ProximityRunSeams.swift"))
+        #expect(seams.contains("return [.holdLinks]"), "the transition emits it for the mesh-`run` row")
+        #expect(seams.contains("meshNetworkManager.holdCommittedLinks()"), "and the executor runs the verb")
+        #expect(seams.contains("case .resumeSearch:"), "the inverse still has its arm")
     }
 
     /// The retired chain is gone from the view, and the store's own edges run the policy.

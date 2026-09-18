@@ -943,6 +943,276 @@ struct MeshPairwiseFoundingTests {
         #expect(rig.roster(winner).count == 2, "on the same derived roster")
     }
 
+    /// P8 item 3: the verb the policy's background row needed and P7 could only refuse — stop
+    /// browsing, close the doors, **keep every committed link**.
+    ///
+    /// Written directly against `stopJoin()`'s losses, which the re-arm cell above records one by
+    /// one: the slots, their coordinators and the group key. Every one of them is asserted to STAY,
+    /// and the radio is asserted through the fake — `pauseDiscovery()` once, `stop()` never, which
+    /// is the whole difference between going quiet and disconnecting.
+    ///
+    /// The radios are brought up by the production resume rather than by a seam, because
+    /// `startSearching()` is private and `markProximityJoinForTesting()` deliberately does not set
+    /// `isSearching` — so without it every flag claim below would be true before the verb ran.
+    @Test func holdingCommittedLinksKeepsEverySlotItsCoordinatorAndItsKey() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "hold-links")
+        defer { rig.teardown() }
+        let audit = MeshFoundingAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        let manager = rig.nodes[0].manager
+        MeshDepartureRig.seedEpoch(rig.nodes[0], head: MeshEpochRef(
+            counter: 1, epochID: UUID(),
+            coordinatorFingerprint: rig.identities[0].localFingerprint
+        ))
+        #expect(manager.currentGroupKey?.epoch == 1, "the session really holds a key to lose")
+
+        manager.resumeSearchingForPartitionedMesh()
+        #expect(manager.isSearching, "the radios are up, so lowering the flag below says something")
+        let radio = try #require(manager.transportForTesting as? FakeMeshTransportSession)
+        let founded = try #require(manager.currentMesh?.meshID)
+        let seated = try #require(manager.slots.first, "the commit must have seated a slot")
+        let coordinator = seated.coordinator
+        let coordinatorState = seated.coordinator.state
+
+        manager.holdCommittedLinks()
+
+        #expect(!manager.isSearching, "browsing is down")
+        #expect(radio.pauseDiscoveryCount == 1, "through the radio's own pause, exactly once")
+        #expect(radio.stopCount == 0, """
+            and NEVER through `stop()`, which disconnects every peer and drops every peer-keyed \
+            record it holds — that call is what makes `stopJoin()` the wrong verb for this row
+            """)
+        #expect(manager.hasCommittedPeer, "the committed peer is still committed")
+        #expect(manager.isInSession, "the session surface stays up")
+        #expect(manager.isSessionLive, "and the session has not ended — no hook may have fired")
+        #expect(manager.slots.count == 1, "the slot is still seated")
+        #expect(manager.slots.first?.coordinator === coordinator,
+                "the SAME coordinator object, neither cancelled away nor replaced")
+        #expect(manager.slots.first?.coordinator.state == coordinatorState, "and not moved")
+        #expect(manager.currentGroupKey?.epoch == 1, """
+            and the group key is still here: `clearGroupKeyState()` is the loss the partitioned \
+            resume documents as the one it cannot avoid, and the one this verb exists not to take
+            """)
+        #expect(manager.currentMesh?.meshID == founded, "over the same mesh")
+        #expect(rig.roster(0).count == 2, "on the same derived roster")
+        #expect(audit.count(of: "mesh.session.linksHeld", where: { $0["committed"] == "true" }) >= 1,
+                "and the hold is audible, scoped to a line this rig's committed peer produced")
+    }
+
+    /// The doors, all three, driven through the radio rather than around it — and the inverse.
+    ///
+    /// `MeshFoundingRig.link` seats slots directly, so a door claim has to go the other way: the
+    /// fake radio fires `onPeerDiscovered` and `shouldAcceptInvitation` exactly as a live one does,
+    /// and `channelAdmission(for:)` is the seat decision itself. The open-door probe first is what
+    /// keeps the three refusals from being true for reasons that have nothing to do with the hold —
+    /// and the same probe after the resume is what proves the door is not a one-way latch.
+    @Test func aHeldMeshAdmitsNobodyNewUntilTheResumeReopensTheDoor() async throws {
+        let rig = try MeshFoundingRig.build(3, label: "hold-door")
+        defer { rig.teardown() }
+        let audit = MeshFoundingAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle([0, 1], until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        let manager = rig.nodes[0].manager
+        let radio = try #require(manager.transportForTesting as? FakeMeshTransportSession)
+        let stranger = rig.nodes[2].handle
+        let committed = rig.nodes[1].handle
+        manager.resumeSearchingForPartitionedMesh()
+        let dialled = radio.invitedPeers.count
+
+        radio.discover(stranger)
+        #expect(radio.invitedPeers.count == dialled + 1, "an open door dials a stranger it discovers")
+        #expect(radio.offerInboundConnection(from: stranger), "accepts its invitation")
+        #expect(manager.channelAdmission(for: stranger) == .seat, "and seats its channel")
+
+        manager.holdCommittedLinks()
+
+        radio.discover(stranger)
+        #expect(radio.invitedPeers.count == dialled + 1, "door 1: a held mesh dials nobody new")
+        #expect(!radio.offerInboundConnection(from: stranger), "door 2: and accepts no invitation")
+        #expect(manager.channelAdmission(for: stranger) == .kick, "door 3: and seats no channel")
+        #expect(manager.channelAdmission(for: committed) == .alreadySeated, """
+            while the peer that already holds a seat is left entirely alone — the door is shut to \
+            NEW peers, and kicking the committed link would be the very thing the hold exists to \
+            prevent
+            """)
+
+        manager.resumeSearchingForPartitionedMesh()
+
+        #expect(manager.isSearching, "the inverse brings browsing back")
+        radio.discover(stranger)
+        #expect(radio.invitedPeers.count == dialled + 2, "door 1 reopens")
+        #expect(radio.offerInboundConnection(from: stranger), "door 2 reopens")
+        #expect(manager.channelAdmission(for: stranger) == .seat, "door 3 reopens")
+        #expect(audit.count(of: "mesh.session.linksResumed", where: { $0["committed"] == "true" }) >= 1,
+                "and the reopening is audible too")
+    }
+
+    /// **Review finding F-1: door 3's give-up clock pauses with the radios.**
+    ///
+    /// The hold takes the browser and advertiser down, so a committed link lost DURING one used to
+    /// do the single thing the hold exists to prevent: `removeSlot` armed door 3, and five minutes
+    /// later `endSessionAfterDiscoveryTimeout()` ran `stopJoin()` over the session being kept — a
+    /// fuse lit BY the hold, and uncancellable by the re-link the dark radios made impossible.
+    ///
+    /// Driven with an injected instant and no sleep, the way every other door-3 cell is: the
+    /// deadline is the decision, and `evaluateSessionGiveUp(now:)` is the only thing that reads it.
+    @Test func aLinkLostBehindAHoldLightsNoFiveMinuteFuse() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "hold-clock")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        let manager = rig.nodes[0].manager
+        let radio = try #require(manager.transportForTesting as? FakeMeshTransportSession)
+        manager.resumeSearchingForPartitionedMesh()
+        #expect(!manager.isSessionGiveUpClockArmed, "a linked pair is counting down to nothing")
+
+        manager.holdCommittedLinks()
+        let blipAt = Date()
+        radio.drop(rig.nodes[1].handle)
+
+        #expect(!manager.hasCommittedPeer, "the blip really took the committed link")
+        #expect(!manager.isSessionGiveUpClockArmed, """
+            and door 3 did NOT start counting behind the shut doors: there is no search to give up \
+            on, and the re-link that cancels this clock is exactly what the hold made impossible
+            """)
+        manager.evaluateSessionGiveUp(now: blipAt.addingTimeInterval(6 * 60))
+        #expect(manager.isSessionLive, "so six minutes of holding is not an ending")
+        #expect(manager.currentMesh != nil, "the mesh the hold was keeping is still here")
+        #expect(!manager.isSearching, "and nothing un-held the radios on the way")
+
+        let resumedAt = Date()
+        manager.resumeSearchingForPartitionedMesh()
+
+        #expect(manager.isSearching, "the foreground return reopens the doors")
+        #expect(manager.isSessionGiveUpClockArmed, """
+            and restarts door 3 from HERE, so the five minutes are counted against a search that is \
+            really running rather than against the time the app spent in the background
+            """)
+        manager.evaluateSessionGiveUp(now: resumedAt.addingTimeInterval(6 * 60))
+        #expect(!manager.isSessionLive,
+                "while a genuine timeout AFTER the resume still ends the session, unchanged")
+    }
+
+    /// The other order, and the row the policy reaches the hold from with the clock ALREADY
+    /// running: `.meshHeld` is a mesh with no committed peer, which is the exact shape door 3
+    /// counts in (finding F-1's second half).
+    @Test func aHoldStandsDownAGiveUpClockThatWasAlreadyRunning() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "hold-armed-clock")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        let manager = rig.nodes[0].manager
+        let radio = try #require(manager.transportForTesting as? FakeMeshTransportSession)
+        manager.resumeSearchingForPartitionedMesh()
+        let blipAt = Date()
+        radio.drop(rig.nodes[1].handle)
+        #expect(manager.isSessionGiveUpClockArmed,
+                "with the radios UP a blip arms door 3, exactly as it always did")
+
+        manager.holdCommittedLinks()
+
+        #expect(!manager.isSessionGiveUpClockArmed, """
+            and the hold stands the running clock down: the clock times a SEARCH, the hold is that \
+            search stopping, and leaving it armed would end the very session the hold is keeping
+            """)
+        manager.evaluateSessionGiveUp(now: blipAt.addingTimeInterval(6 * 60))
+        #expect(manager.isSessionLive, "so the wake that arrives late finds nothing to end")
+
+        manager.resumeSearchingForPartitionedMesh()
+        #expect(manager.isSessionGiveUpClockArmed, "and the resume puts the clock back where it was")
+    }
+
+    /// **Review finding F-2: the hold leaves EXACTLY the committed links.**
+    ///
+    /// Shutting the doors does nothing to a handshake already inside them — an uncommitted slot
+    /// keeps its live `ProximityCoordinator`, and a dwell that finishes behind shut doors commits
+    /// into the mesh the doors just refused. So the verb disconnects every slot with no
+    /// fingerprint, through the same `disconnectSlot(_:)` every other eviction uses, and door 3's
+    /// excuse is narrowed to COMMITTED slots so the candidate cannot simply re-seat itself.
+    @Test func aHoldDisconnectsTheSlotsItIsNotKeepingAndSeatsNoneBack() async throws {
+        let rig = try MeshFoundingRig.build(3, label: "hold-uncommitted")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle([0, 1], until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        let manager = rig.nodes[0].manager
+        manager.resumeSearchingForPartitionedMesh()
+        // A third device seated but NOT committed: a candidate mid-dwell when the app backgrounds.
+        rig.link(0, 2)
+        let candidate = rig.nodes[2].handle
+        #expect(manager.slots.count == 2, "two slots — one committed, one still proving itself")
+        #expect(manager.channelAdmission(for: candidate) == .alreadySeated,
+                "and with the doors open the candidate really holds a seat")
+
+        manager.holdCommittedLinks()
+
+        #expect(manager.slots.count == 1, "the hold kept one slot")
+        #expect(manager.slots.first?.fingerprint != nil, "and it is the COMMITTED one")
+        #expect(!manager.slots.contains(where: { $0.peer.isSameEndpoint(as: candidate) }), """
+            while the uncommitted candidate is disconnected rather than left holding a live \
+            coordinator that could finish its dwell and commit into a mesh whose doors are shut
+            """)
+        #expect(manager.channelAdmission(for: candidate) == .kick, """
+            and it cannot re-seat on the way back in: door 3's excuse is a COMMITTED slot, not any \
+            slot — which is the whole of finding F-2
+            """)
+        #expect(manager.hasCommittedPeer, "the link the hold exists for is untouched")
+        #expect(manager.isSessionLive, "and no session-end hook fired on the way through")
+    }
+
+    /// **Review finding F-4: a held mesh still heals its own committed link.**
+    ///
+    /// A committed peer that re-asks across a hold — its tunnel died, ours did not, so its slot is
+    /// still seated — is the one caller the shut doors excuse. Refusing it would drop the link the
+    /// hold exists to keep, on a device that cannot dial it back because the browser is down. A
+    /// stranger asking the same question in the same instant is still refused, which is what makes
+    /// the excuse an excuse rather than an opening.
+    ///
+    /// What a hold cannot heal is a link that dropped all the way through `handlePeerDisconnected`
+    /// (the F-1 cell above): that slot is gone, and the dark listener means the peer cannot reach
+    /// this device anyway — so it waits for the foreground, which F-1 makes a wait and not an
+    /// ending.
+    @Test func aHeldMeshHealsItsCommittedPeerAndStillRefusesAStranger() async throws {
+        let rig = try MeshFoundingRig.build(3, label: "hold-heal")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle([0, 1], until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+        let manager = rig.nodes[0].manager
+        let radio = try #require(manager.transportForTesting as? FakeMeshTransportSession)
+        let committed = rig.nodes[1].handle
+        let stranger = rig.nodes[2].handle
+        manager.resumeSearchingForPartitionedMesh()
+
+        manager.holdCommittedLinks()
+
+        #expect(radio.offerInboundConnection(from: committed), """
+            door 2 excuses the committed peer: its invitation across a blip is a HEAL, and a held \
+            device that refused it could never dial the link back — the browser is down
+            """)
+        #expect(manager.channelAdmission(for: committed) == .alreadySeated,
+                "and door 3 leaves the seat it already holds entirely alone")
+        #expect(!radio.offerInboundConnection(from: stranger),
+                "while a stranger is refused at door 2 in the same instant")
+        #expect(manager.channelAdmission(for: stranger) == .kick, "and at door 3")
+        #expect(manager.hasCommittedPeer, "with the committed link still committed throughout")
+    }
+
     /// The edge each half of `ConnectView`'s split transition handler hangs off (review finding
     /// P2-4): `hasCommittedPeer` moves in BOTH directions across a blip and a heal while
     /// `isInSession` never moves at all.

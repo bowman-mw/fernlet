@@ -255,6 +255,9 @@ jobs:
         # P6 item 9's handoff said "~243 across fourteen suites" and its itemisation lived in a scratch
         # file that is gone; these fourteen MEASURE 247. The measured delta is what is recorded here,
         # never the remembered estimate. Gating all fourteen would put the step at 606 cells / 168 s.
+        # RE-MEASURED at P8 item 3 (2026-09-18): the same 57-suite line executed 365 (359 + the six
+        # founding cells item 3 added to MeshPairwiseFoundingTests, now 35: the hold's doors, its clock,
+        # its uncommitted slots, the committed heal). The floor is the measured 365.
         # The floor is MEASURED, never inferred: 300 is what this exact step list executed at P6
         # item 9. Note the count is over `@Test` FUNCTIONS, not parameterized cases — measured, not
         # assumed: MeshRoutedDrainConvergenceTests contributes 19 while running a 40-cell and a
@@ -275,7 +278,7 @@ jobs:
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 359 \
+          Scripts/run-gated-suites.sh mesh-batteries 365 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

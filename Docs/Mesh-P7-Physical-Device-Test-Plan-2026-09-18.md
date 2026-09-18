@@ -40,6 +40,10 @@ acceptance; it is here so the phone drawer is opened once, not twice.
   - `mesh.routedAccess.gateChanged` — the routed access gate moved (item 2); one line per real edge.
   - `proximityRunPolicy.unsupportedTransition` — **must be zero in every run.** One sighting is a
     defect: it means the policy asked for "mesh runs, discovery stops", which P7 refuses and P8 owns.
+    **Retired by P8 item 3** (2026-09-18): that row is now EXECUTED — `holdCommittedLinks()` — so the
+    token is emitted by nothing and the rule above is vacuously true; `ProximityRunSeamsTests` holds
+    it at zero occurrences under `App/`. Watch `mesh.session.linksHeld` / `mesh.session.linksResumed`
+    instead — one pair per background hold and foreground return.
   - `mesh.sessionState.rejoinBarred` — a re-join into a terminated mesh was refused (item 5's
     "ended" cards).
 

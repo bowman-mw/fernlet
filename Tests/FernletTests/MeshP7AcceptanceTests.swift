@@ -262,8 +262,8 @@ struct MeshP7RadioSeamsAcceptanceTests {
             phase: .background, continuation: .running, session: .peerCommitted
         ))
         #expect(ProximityRunTransition.actions(from: continued, to: continuedBackground, mesh: live)
-                == [.refuseBackgroundDiscoveryStop, .presence(.stop)],
-                "the one transition P7 cannot execute is refused by name, links kept")
+                == [.holdLinks, .presence(.stop)],
+                "the row P7 could only refuse is P8 item 3's hold: browsing down, links kept")
     }
 
     /// Every mesh radio verb under `App/` lives in the seams file once (the DEBUG harness's
@@ -276,6 +276,8 @@ struct MeshP7RadioSeamsAcceptanceTests {
                 "startJoin(): the seams once, the Lane C harness once, by name")
         #expect(MeshP7Acceptance.homes(of: ".stopJoin(", in: sources) == [seams], "stopJoin(): the seams once")
         #expect(MeshP7Acceptance.homes(of: ".resumeSearchingForPartitionedMesh(", in: sources) == [seams], "the resume: the seams once")
+        #expect(MeshP7Acceptance.homes(of: ".holdCommittedLinks(", in: sources) == [seams],
+                "P8 item 3's hold: the seams once — this clause counts every radio verb, so a new one joins it")
         #expect(MeshP7Acceptance.homes(of: ".leaveSession()", in: sources) == [seams], "the silent teardown: the seams once")
         let listeners = ["presenceManager.start(", "presenceManager.stop(", "recipeShareManager.start(", "recipeShareManager.stop("]
         let noQualifiedListenerCall = listeners.allSatisfy { MeshP7Acceptance.homes(of: $0, in: sources).isEmpty }

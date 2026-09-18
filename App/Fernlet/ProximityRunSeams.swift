@@ -41,11 +41,21 @@
 // read by nothing here, because projections and ceremonies own it (P6 item 2's pass-B P1).
 // `FriendsDiscoveryEntry` is still the three-way, unmoved.
 //
-// What this phase cannot execute, said out loud: discovery `stop` with mesh `run` — a live
+// The row P7 could not execute is P8 item 3's verb: discovery `stop` with mesh `run` — a live
 // background process that must stop browsing and admitting while KEEPING its links (invariant 5).
-// `stopJoin()` would drop the links. Unreachable while the app feeds `.notRequested`; the executor
-// refuses it audibly (`proximityRunPolicy.unsupportedTransition`) rather than doing the wrong
-// thing quietly. P8 builds that seam.
+// `stopJoin()` would drop them, so P7 refused the row aloud; the seam now emits `.holdLinks` and
+// the executor calls `MeshNetworkManager.holdCommittedLinks()`, which lowers `isSearching`, closes
+// the admission doors and pauses the radio's browser/advertiser while every committed slot, its
+// coordinator and the group-key state stay exactly where they are. The refusal, its action case and
+// its audit token are gone, and `ProximityRunSeamsTests` holds the token at zero under `App/`.
+//
+// The row back out is explicit, and it has to be: after the hold the facts are `!isSearching` with
+// a committed peer, which `FriendsDiscoveryEntry` answers `.none` — right for a Friends visit over
+// a live session, and a one-way door for a foreground return whose radios are down. So
+// `discoveryStart` emits `.resumeSearch` for exactly that pair of facts, without arming the "found
+// nobody" timeout: a committed peer is not nobody. Off the FACTS, not off the previous verdict —
+// the way out of a hold need not be direct, and foreground-on-Home (discovery `hold`) leaves the
+// radios down with the hold row already behind it.
 
 import Foundation
 import FernletFoundation
@@ -77,9 +87,11 @@ nonisolated enum ProximityRunAction: Equatable, Sendable {
     /// Cancel that timeout.
     case cancelDiscoveryTimeout
 
-    /// Refuse, audibly, the one transition this phase cannot execute: discovery `stop` while the
-    /// mesh keeps `run` (P8's seam).
-    case refuseBackgroundDiscoveryStop
+    /// `MeshNetworkManager.holdCommittedLinks()` — stop browsing and admission, keep every
+    /// committed link (P8 item 3). The row is discovery `stop` while the mesh keeps `run`, which P7
+    /// could only refuse. Deliberately spelled differently from the verb it runs, so the retirement
+    /// wall's needle counts the manager call and nothing else.
+    case holdLinks
 
     /// `PresenceManager.apply(_:)` with the presence verdict.
     case presence(ProximityRunState)
@@ -206,9 +218,26 @@ nonisolated enum ProximityRunTransition {
     }
 
     /// A discovery edge INTO `foregroundOnly`: the three-way, guarded on `isSearching` exactly as
-    /// the tab's arm was, and arming the timeout for exactly the entries that arm it.
+    /// the tab's arm was, and arming the timeout for exactly the entries that arm it — plus the one
+    /// way in that the three-way cannot see, the return from P8 item 3's background hold.
     private static func discoveryStart(_ mesh: MeshFacts) -> [ProximityRunAction] {
         guard !mesh.isSearching else { return [] }
+        // The re-entry row (P8 item 3). **Radios down with a peer still committed** is a state only
+        // `holdCommittedLinks()` can produce — `stopJoin()` lowers `isSearching` too, but it empties
+        // the slots on the way, so `hasCommittedPeer` is false there — and it is the one state
+        // `FriendsDiscoveryEntry` answers wrongly: `entry(true, true)` is `.none`, which is right
+        // for a Friends visit over a session whose radios are already up, and a ONE-WAY DOOR here.
+        // Without this row a held session could never browse, admit or re-dial again.
+        //
+        // Read off the FACTS rather than off the previous verdict on purpose: the return out of a
+        // hold need not be direct. Foreground on Home is discovery `hold` ("keep what you have"),
+        // which leaves the radios down and the previous verdict no longer the hold row, so a test
+        // on `previous` would miss the next Friends visit entirely.
+        //
+        // No timeout is armed: a committed peer is not "found nobody", and the manager arms its own
+        // give-up clock at the slot-loss doors. A hold with NO committed peer is deliberately not
+        // here — it falls through to `.resume` plus the arm, which is already the right answer.
+        if mesh.hasCommittedPeer { return [.resumeSearch] }
         let entry = FriendsDiscoveryEntry.entry(
             isInSession: mesh.isInSession, hasCommittedPeer: mesh.hasCommittedPeer
         )
@@ -222,13 +251,13 @@ nonisolated enum ProximityRunTransition {
         return actions
     }
 
-    /// A discovery edge INTO `stop`: the stand-down, or the one refusal this phase owes P8.
+    /// A discovery edge INTO `stop`: the stand-down, or — while the mesh keeps running — P8's hold.
     private static func discoveryStop(
         _ meshState: ProximityRunState, mesh: MeshFacts
     ) -> [ProximityRunAction] {
         switch meshState {
         case .run:
-            return [.refuseBackgroundDiscoveryStop]
+            return [.holdLinks]
         case .foregroundOnly, .hold, .stop:
             return mesh.isSearching ? [.cancelDiscoveryTimeout, .stopJoin] : [.cancelDiscoveryTimeout]
         }
@@ -260,11 +289,8 @@ extension FernletStore {
                 armDiscoveryTimeout()
             case .cancelDiscoveryTimeout:
                 cancelDiscoveryTimeout()
-            case .refuseBackgroundDiscoveryStop:
-                FernletAuditLog.log(
-                    "proximityRunPolicy.unsupportedTransition",
-                    context: ["transition": "discoveryStopWhileMeshRuns"]
-                )
+            case .holdLinks:
+                meshNetworkManager.holdCommittedLinks()
             case .presence(let state):
                 presenceManager.apply(state)
             case .recipeShare(let state):
