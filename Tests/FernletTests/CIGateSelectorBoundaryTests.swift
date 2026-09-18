@@ -186,7 +186,9 @@ import Testing
         // `MeshRoutedLockedDeviceTests` is gated beside it but is deliberately NOT on this pin: it
         // is 26 behaviour cells over five store states (measured at item 9's own gated run, and the
         // number the workflow's floor decomposition uses), not a zero-list, and
-        // `MeshP5LockedDeviceAcceptanceTests` is already its acceptance clause.
+        // `MeshP5LockedDeviceAcceptanceTests` is already its acceptance clause. `MeshRoutedDrainTests`
+        // (gated at P8 item 1, 2026-09-18) is the same case and is left off this pin for the same
+        // reason: 43 behaviour cells, walled by the step's measured floor of 359, not by a name here.
         #expect(gated.contains("MeshRoutedDrainWallTests"),
                 "the routed path's retirement and parking zero-lists are gated")
         let script = try RepoRoot.source(Self.floorScript)

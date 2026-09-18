@@ -230,9 +230,31 @@ jobs:
         #        advertisement, pairwise identity, per-type caps, text routing, projection retry,
         #        the heart ceremony, honesty and determinism.
         #  = 300 tests in 50 suites.
-        # `MeshRoutedDrainTests`' own 37 cells stay ungated — that is item 11's call, as its ledger
-        # row says; so do item 1's three key-agreement suites (30) and the 51 photo-delivery cells
-        # the key-advertisement clause promotes by citation.
+        # `MeshRoutedDrainTests` is GATED from P8 item 1 (2026-09-18): 43 behaviour cells (the block used to say 37 — a number never measured; the suite already held 43 at the P6 close-out `82fc4d7`) — one of
+        # them P6 item 8's handed-over departed-origin custodian cell — that ran on no CI line until
+        # then. Like `MeshRoutedLockedDeviceTests` it is deliberately NOT pinned by name in
+        # CIGateSelectorBoundaryTests: it is a behaviour suite, not a zero-list wall, and THIS floor
+        # is what stops it being dropped from the line.
+        # MEASURED at P8 item 1 on a Mac, 2026-09-18, three runs back to back on one warm bundle:
+        #   without `MeshRoutedDrainTests` (the 56-suite list)  — 316 ran, 0 failed, 153 s
+        #   with    `MeshRoutedDrainTests` (57 suites)          — 359 ran, 0 failed, 157 s  (+43, +4 s;
+        #     the same 57-suite list measured 157 / 159 / 160 s across three runs, so +4 s is inside noise
+        #     and +11 s for the fourteen is three to four times it)
+        #   plus the fourteen named below (71 suites)           — 606 ran, 0 failed, 168 s  (+247, +11 s)
+        # The fourteen are PRICED and still ungated — the owner's call; cost = 11 s for 247 cells:
+        #   item 1's three key-agreement suites (30): MeshKeyAgreementFoldTests 14,
+        #     MeshKeyAgreementVerificationTests 11, MeshKeyAgreementSchemaTests 5;
+        #   the 51 photo-delivery cells the key-advertisement clause promotes by citation:
+        #     MeshKeyAdvertisementDeliveryTests 26, MeshRoutedPhotoDeliveryTests 17,
+        #     MeshRoutedPhotoSenderTests 8;
+        #   eight of the larger remaining ungated routed suites (166) — NOT the eight largest: the
+        #     32-cell MeshRoutedInventoryDeltaTests is deliberately outside this price — MeshRoutedManifestSigningTests 27,
+        #     MeshRoutedCustodyHandoffTests 26, MeshRoutedCapacityTests 22, MeshRoutedItemSealTests 21,
+        #     MeshRoutedTypeRegistryTests 19, MeshRoutedInventoryBuilderTests 18,
+        #     MeshRoutedCustodyEvidenceTests 17, MeshRoutedStoreIsolationTests 16.
+        # P6 item 9's handoff said "~243 across fourteen suites" and its itemisation lived in a scratch
+        # file that is gone; these fourteen MEASURE 247. The measured delta is what is recorded here,
+        # never the remembered estimate. Gating all fourteen would put the step at 606 cells / 168 s.
         # The floor is MEASURED, never inferred: 300 is what this exact step list executed at P6
         # item 9. Note the count is over `@Test` FUNCTIONS, not parameterized cases — measured, not
         # assumed: MeshRoutedDrainConvergenceTests contributes 19 while running a 40-cell and a
@@ -243,14 +265,17 @@ jobs:
         # script's own bundle count). 316 = 300 + 13 (P7) + 2 (P8 item 0 (a) and (d): the
         # two-ordering asymmetric-commit cell — one @Test function — and the custody-yield cell in
         # MeshPairwiseFoundingTests, now 29) + 1 that the console total does not attribute to a
-        # suite; the floor is the measured number, never the arithmetic.
+        # suite; the floor is the measured number, never the arithmetic. RAISED to **359** at P8
+        # item 1 (2026-09-18) by gating `MeshRoutedDrainTests`: 316 + 43, measured on the same bundle
+        # (`mesh-with` run, "359 test(s) ran, 0 failed"), and shown red once at 359 with the suite
+        # removed before it was committed.
         # CIGateSelectorBoundaryTests is the static half of this guard — every suite named on any
         # run-gated-suites.sh line must be a declared suite, and every MeshP<n>*AcceptanceTests /
         # convergence battery declared in the tree must be named here — and it also runs on the first
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 316 \
+          Scripts/run-gated-suites.sh mesh-batteries 359 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -260,6 +285,7 @@ jobs:
             MeshRoutedRetryPlanTests \
             MeshRoutedRetryAllowanceTests \
             MeshRoutedDrainWallTests \
+            MeshRoutedDrainTests \
             MeshRoutedHeartBodyTests \
             MeshRoutedHeartTargetTests \
             MeshRoutedHeartCeremonyTests \
