@@ -322,6 +322,9 @@ struct ContentView: View {
 
     private func handleTabChange(from oldTab: FernletTab, to newTab: FernletTab) {
         isHomeTabBarCompact = false
+        // P7 item 2: the run policy's tab fact, mirrored into the store the way `lockState` and
+        // `duressSessionActive` are — the scene's edges live in `FernletApp`, which has no tab.
+        store.selectedTab = newTab
         if oldTab == .personal || newTab == .personal {
             updatePrivateDataActivation(section: privateHubSection, lockState: lockService.state)
         }
@@ -391,6 +394,8 @@ struct ContentView: View {
         // persisted, so at launch this is only ever a mirror of `false` — it is here for
         // the invariant, not for a case that exists today).
         store.duressSessionActive = lockService.isDuressSessionActive
+        // P7 item 2: the run policy's tab fact, same mirror; `handleTabChange` keeps it current.
+        store.selectedTab = selectedTab
         // Retire a duress-recovery enrollment this device's identity has outlived, before
         // anything can arm or fire the response over it. Cheap (two keychain reads and a
         // comparison when an enrollment exists, one when it does not) and idempotent; the

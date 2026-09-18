@@ -1010,18 +1010,21 @@ extension MeshRoutedLockedDeviceTests {
         #expect(scanned == files.count, "the keychain-class scan lost a file")
     }
 
-    /// **W6.** The app pushes the gate from every site the three facts actually move at.
+    /// **W6.** The app hands the run-policy funnel every edge the three facts actually move at —
+    /// six edges, one funnel (P7 item 2 replaced the six gate pushes 1:1).
     ///
     /// Six call sites: the launch mount (`.onChange(of: scenePhase)` carries no `initial:`, and the
     /// loader becomes ready after the first activation), the two scene legs, the two protected-data
     /// notifications — which pass the fact **literally**, because `isProtectedDataAvailable` still
     /// answers `true` inside the will-become-unavailable handler — and duress, which moves at
-    /// neither transition.
+    /// neither transition. The scene file itself neither writes nor assembles the gate any more.
     @Test func theAppPushesTheGateFromEverySiteTheFactsMoveAt() throws {
         let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletApp.swift"))
         let calls = code.split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { $0.contains("pushRoutedAccessGate(") && !$0.contains("private func") }
-        #expect(calls.count == 6, "the app pushes the routed access gate from the wrong number of sites")
+            .filter { $0.contains("pushProximityRunPolicy(") && !$0.contains("private func") }
+        #expect(calls.count == 6, "the app hands the run-policy funnel the wrong number of edges")
+        #expect(!code.contains("applyRoutedAccessGate(") && !code.contains("MeshRoutedAccessGate("),
+                "since P7 item 2 the scene file neither writes nor assembles the gate — the store's funnel does")
         #expect(code.contains("protectedData: false"),
                 "the will-become-unavailable handler must pass the fact literally")
         #expect(code.contains("protectedData: true"),
@@ -1037,9 +1040,9 @@ extension MeshRoutedLockedDeviceTests {
     /// process is live, which is exactly what the leg exists to tell apart from a backgrounded
     /// (CPT-continued) mesh. Before the P5 review four of the six push sites compared `== .active`
     /// while the scene handler fell only on `.background`, so the stored gate for one physical state
-    /// depended on which event pushed last. Now every site routes through
-    /// `FernletApp.routedGateForeground(for:)`, and no raw phase compare or literal fact may decide
-    /// it.
+    /// depended on which event pushed last. Since P7 item 2 the run policy reads
+    /// `FernletApp.routedGateForeground(for:)` exactly once and every edge hands the raw phase down,
+    /// so no raw phase compare or literal fact may decide it anywhere in the app target.
     @Test func foregroundMeansNotBackgroundedAndIsDecidedOnce() throws {
         #expect(FernletApp.routedGateForeground(for: .active))
         #expect(FernletApp.routedGateForeground(for: .inactive),
@@ -1050,8 +1053,14 @@ extension MeshRoutedLockedDeviceTests {
                 "a raw phase compare decides the foreground fact outside the one mapping")
         #expect(!code.contains("foreground: true") && !code.contains("foreground: false"),
                 "a literal foreground fact bypasses the one mapping")
-        let routed = code.components(separatedBy: "foreground: Self.routedGateForeground(for:").count - 1
-        #expect(routed == 6, "every push site routes its foreground fact through the one mapping")
+        let routed = code.components(separatedBy: "routedGateForeground(for:").count - 1
+        #expect(routed == 0,
+                "since P7 item 2 no edge in the scene file reads the mapping — the run policy is its one caller")
+        let policy = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ProximityRunPolicy.swift"))
+        let policyReads = policy.components(separatedBy: "FernletApp.routedGateForeground(for:").count - 1
+        #expect(policyReads == 1, "the run policy reads the one mapping exactly once")
+        #expect(!policy.contains("== .background") && !policy.contains("== .active"),
+                "and spells no raw phase compare of its own")
     }
 
     /// **P6 item 7: the launch mount's decision, and its single call site.**
@@ -1123,9 +1132,9 @@ extension MeshRoutedLockedDeviceTests {
             further down the file satisfies "some earlier closure pushes the gate" and runs at a \
             different moment
             """)
-        let push = try #require(block.range(of: "pushRoutedAccessGate("), """
-            the closure holding the launch mount does not push the routed access gate, so the \
-            launch no longer consumes its own rising protected-data edge before restoring
+        let push = try #require(block.range(of: "pushProximityRunPolicy("), """
+            the closure holding the launch mount does not hand the run-policy funnel its edge, so \
+            the launch no longer consumes its own rising protected-data edge before restoring
             """)
         let inBlock = try #require(block.range(of: callSite))
         #expect(push.lowerBound < inBlock.lowerBound,
@@ -1151,5 +1160,39 @@ extension MeshRoutedLockedDeviceTests {
         let resume = MeshRoutedAccessEdge(from: gate(.background), to: gate(.active))
         #expect(!leave.foregroundRose && resume.foregroundRose,
                 "only the background leg moves the foreground fact")
+    }
+
+    /// **W8 (P7 item 2).** The routed access gate has exactly ONE writer outside ProximityKit — the
+    /// store's run-policy funnel — and the gate value is assembled in exactly one place, the policy.
+    ///
+    /// Counted across every Swift file under `App/` (the extensions and the DEBUG harnesses
+    /// included) rather than asserted about one file, and the one write is located by
+    /// brace-matching the funnel's own body — `theDrainFiresOnlyFromTheMergeDoor`'s shape, which
+    /// is why P5's drain door survived three phases. A second writer anywhere in the app target
+    /// reddens this by name.
+    @Test func theGateHasExactlyOneWriterOutsideProximityKit() throws {
+        var writers: [String] = []
+        var assemblies: [String] = []
+        for source in try Self.codeSources(under: "App") {
+            let writes = Self.occurrences(of: "applyRoutedAccessGate(", in: source.code)
+            writers.append(contentsOf: Array(repeating: source.name, count: writes))
+            let builds = Self.occurrences(of: "MeshRoutedAccessGate(", in: source.code)
+            assemblies.append(contentsOf: Array(repeating: source.name, count: builds))
+        }
+        #expect(writers == ["FernletStore.swift"],
+                "exactly one call site writes the gate outside ProximityKit, and it is the store's funnel")
+        #expect(assemblies == ["ProximityRunPolicy.swift"],
+                "and the gate value is assembled exactly once, by the policy")
+        let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
+        let funnel = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "func applyProximityRunPolicy(", in: store),
+            "the run-policy funnel is gone from the store"
+        )
+        #expect(funnel.contains("applyRoutedAccessGate("),
+                "the one write sits inside the funnel's own body, brace-matched — not merely in the file")
+        #expect(funnel.contains("ProximityRunPolicy.verdict(for:"),
+                "and the funnel decides through the policy, never by hand")
+        #expect(funnel.contains("continuation: .notRequested"),
+                "and feeds the continuation state inert — P7 must never assert a running task")
     }
 }

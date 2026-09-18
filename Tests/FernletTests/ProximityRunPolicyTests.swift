@@ -16,12 +16,20 @@
 // per row; being a re-statement, its value is catching a guard-order slip, not proving the
 // semantics — the clauses do that.
 //
+// Item 2 added the two projections (`appLockEngaged(_:)`, `belowMinimumAge(_:)`) and the second
+// suite in this file, `ProximityRunPolicyFunnelTests`: the store's funnel driven without a scene,
+// asserting the manager holds exactly the gate the policy decided. `-only-testing:` names a SUITE,
+// so this file answers to two names.
+//
 // House rules: `#expect(_, "one literal")` only, every `allSatisfy` bound to a `let` first, no
 // `@Test(arguments: [])`, no rig, no clock, no RNG.
 
 import Foundation
 import SwiftUI
 import Testing
+import FernletDomainModel
+import FernletLock
+import LocalPersistence
 import ProximityKit
 @testable import Fernlet
 
@@ -522,5 +530,139 @@ enum ProximityRunPolicyProduct {
             mesh: .foregroundOnly, discovery: .stop, presence: .stop, recipeShare: .stop, routedAccessGate: .closed
         )
         #expect(up.anyRadioRuns, "and one foreground radio is enough to say something is up")
+    }
+
+    // MARK: The projections (item 2)
+
+    /// `appLockEngaged(_:)` is today's `ContentView` projection of the lock state: `.locked` only.
+    @Test func theAppLockProjectionIsLockedOnly() {
+        #expect(!ProximityRunPolicy.appLockEngaged(.notConfigured), "no credential is no lock")
+        #expect(!ProximityRunPolicy.appLockEngaged(.unlocked(scope: .privateHub)),
+                "an unlock for any scope is not a lock")
+        #expect(ProximityRunPolicy.appLockEngaged(.locked(cooldownDeadline: nil)), "locked is locked")
+        #expect(ProximityRunPolicy.appLockEngaged(.locked(cooldownDeadline: Date(timeIntervalSince1970: 0))),
+                "and a cooldown does not make it less so")
+    }
+
+    /// `belowMinimumAge(_:)` is a RULING, never an absence: only the system's final `.below` against
+    /// the chat gate, or a guardian's communication limits, stop the radios.
+    @Test func theAgeProjectionIsARulingNeverAnAbsence() {
+        let epoch = Date(timeIntervalSince1970: 0)
+        let never = AgeAssuranceRecord.unknown
+        #expect(!ProximityRunPolicy.belowMinimumAge(never), "a device that never asked keeps its radios")
+        let declined = never.undetermined(now: epoch)
+        #expect(!ProximityRunPolicy.belowMinimumAge(declined), "and so does one that declined to share")
+        let below = never.determining(lowerBound: nil, upperBound: 13, provenance: .confirmed, now: epoch)
+        #expect(ProximityRunPolicy.belowMinimumAge(below), "a bracket under the line is final")
+        let atTheLineUnproven = never.determining(lowerBound: 13, upperBound: nil, provenance: nil, now: epoch)
+        #expect(!ProximityRunPolicy.belowMinimumAge(atTheLineUnproven),
+                "a bracket at the line with no provenance is undetermined, not below — chat stays shut, the radios do not")
+        let meets = never.determining(lowerBound: 16, upperBound: nil, provenance: .confirmed, now: epoch)
+        #expect(!ProximityRunPolicy.belowMinimumAge(meets), "a bracket over the line keeps everything")
+        let limited = never.determining(
+            lowerBound: 16, upperBound: nil, provenance: .confirmed, hasCommunicationLimits: true, now: epoch
+        )
+        #expect(ProximityRunPolicy.belowMinimumAge(limited),
+                "a guardian's communication limits close every interpersonal gate, whatever the age says")
+        let agreesWithTheChatGate = !below.allows(.chat) && !limited.allows(.chat) && meets.allows(.chat)
+        #expect(agreesWithTheChatGate, "and on the rulings the projection agrees with the chat gate itself")
+    }
+}
+
+// MARK: - ProximityRunPolicyFunnelTests
+
+/// The store's funnel (P7 item 2): the ONE place the app assembles the policy's input, and the only
+/// writer of the routed access gate outside ProximityKit — driven here without a scene.
+///
+/// Serialized and main-actor like `AgeGateWiringTests`, whose store construction this mirrors: each
+/// cell pins its own directories so the manager's sidecars are never shared across cells.
+@MainActor
+@Suite(.serialized)
+struct ProximityRunPolicyFunnelTests {
+
+    /// One instant every push is judged against; nothing here reads a clock.
+    private static let epoch = Date(timeIntervalSince1970: 1_700_000_000)
+
+    private func makeStore(_ name: String) -> FernletStore {
+        FernletStore(
+            repository: LocalFernletRepository(
+                fileURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("\(name)-\(UUID().uuidString).json")
+            ),
+            sensitiveVisibilityDefaults: UserDefaults(suiteName: "\(name)-\(UUID().uuidString)") ?? .standard,
+            appGroupDirectory: uniqueAppGroupDirectory(),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory(),
+            heartDropKeychainService: uniqueHeartDropKeychainService()
+        )
+    }
+
+    /// The manager holds exactly the gate the policy decided, on every edge.
+    @Test func theFunnelWritesTheGateItDecided() {
+        let store = makeStore("run-policy-funnel")
+        #expect(store.meshNetworkManager.routedAccessGate == .closed, "every manager starts fail-closed")
+        #expect(store.proximityRunVerdict == nil, "and no verdict exists before the first edge")
+
+        let opened = store.applyProximityRunPolicy(
+            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: false,
+            duressSessionActive: false, now: Self.epoch
+        )
+        let openGate = MeshRoutedAccessGate(protectedDataAvailable: true, appIsForeground: true, duressActive: false)
+        #expect(opened.routedAccessGate == openGate, "an unlocked, foreground, duress-free edge opens the gate")
+        #expect(store.meshNetworkManager.routedAccessGate == openGate,
+                "and the manager holds exactly the gate the policy decided")
+        #expect(store.proximityRunVerdict == opened, "the store keeps the last verdict for item 3's seams")
+
+        let backgrounded = store.applyProximityRunPolicy(
+            scenePhase: .background, protectedDataAvailable: true, appLockEngaged: false,
+            duressSessionActive: false, now: Self.epoch
+        )
+        #expect(!store.meshNetworkManager.routedAccessGate.appIsForeground, "a background edge drops the foreground leg")
+        #expect(backgrounded.mesh == .hold && backgrounded.discovery == .stop,
+                "and the radio half is decided even though nothing applies it yet")
+
+        let duress = store.applyProximityRunPolicy(
+            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: true,
+            duressSessionActive: true, now: Self.epoch
+        )
+        let held = store.meshNetworkManager.routedAccessGate
+        #expect(held.duressActive && !held.isOpen, "duress closes the gate through its own leg")
+        #expect(duress.mesh == .stop && duress.presence == .stop, "and stops every radio in the verdict")
+    }
+
+    /// The funnel's input is the store's own facts plus the edge's, with the task inert and the
+    /// session absent on a fresh store — and the tab it reads is the mirror.
+    @Test func theFunnelReadsTheStoresFactsAndTheEdgesFacts() {
+        let store = makeStore("run-policy-funnel-facts")
+        store.selectedTab = .social
+        let friends = store.applyProximityRunPolicy(
+            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: false,
+            duressSessionActive: false, now: Self.epoch
+        )
+        let expected = ProximityRunPolicy.verdict(for: ProximityRunPolicy.Input(
+            scenePhase: .active,
+            selectedTab: .social,
+            appLockEngaged: false,
+            duressSessionActive: false,
+            protectedDataAvailable: true,
+            belowMinimumAge: false,
+            deleteAllInProgress: false,
+            continuation: .notRequested,
+            session: .absent,
+            allowNearbyPresence: store.settings.allowNearbyPresence,
+            allowNearbyRecipeShares: store.settings.allowNearbyRecipeShares
+        ))
+        #expect(friends == expected,
+                "a fresh store's input is the edge's four facts, the mirrored tab, the two opt-ins, no ruling, no wipe, no task, no session")
+        #expect(friends.discovery == .foregroundOnly, "so the Friends tab wants discovery")
+        #expect(!store.deleteAllInProgress, "no wipe is in flight on a fresh store")
+
+        store.selectedTab = .home
+        let home = store.applyProximityRunPolicy(
+            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: false,
+            duressSessionActive: false, now: Self.epoch
+        )
+        #expect(home.discovery == .stop, "and the tab mirror is what the policy reads")
+        #expect(home.routedAccessGate == friends.routedAccessGate, "while the gate never reads a tab")
     }
 }

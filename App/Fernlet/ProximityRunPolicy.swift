@@ -12,10 +12,12 @@
 // in a table a test can enumerate, not in a control flow only a scene can reach. §13 rejects a
 // self-observing ProximityKit (option B: it imports no UIKit and cannot import `FernletLock`) and a
 // coordinator that intercepts (option C: two owners for one radio). This file is option A's
-// decision half. **It wires nothing**: items 2–4 make it the single writer of
-// `MeshNetworkManager.applyRoutedAccessGate(_:now:)`, give each manager one `apply(_:)` seam, and
-// own the poller. Until then no shipping code calls it, and `ProximityRunPolicyTests` is its whole
-// audience.
+// decision half. Item 2 made it the single writer of
+// `MeshNetworkManager.applyRoutedAccessGate(_:now:)`: `FernletStore.applyProximityRunPolicy(…)` is
+// the ONE funnel that assembles an `Input` — the store's own facts plus the four the scene hands
+// it — and writes the verdict's gate; the six edges in `FernletApp` call it and decide nothing.
+// The radio half of the verdict is computed and kept (`FernletStore.proximityRunVerdict`) but
+// applied by nothing yet: items 3 and 4 give each manager one `apply(_:)` seam and own the poller.
 //
 // **It decides radios, never plaintext.** `routedAccessGate` is the same three facts
 // `FernletApp.pushRoutedAccessGate(_:protectedData:foreground:)` assembles today and nothing else:
@@ -59,6 +61,8 @@
 
 import Foundation
 import SwiftUI
+import FernletDomainModel
+import FernletLock
 import ProximityKit
 
 // MARK: - ProximityRunState
@@ -319,6 +323,39 @@ nonisolated enum ProximityRunPolicy {
         /// 4's poller keys on the mesh's own liveness, never on this.
         var anyRadioRuns: Bool {
             mesh.isRunning || discovery.isRunning || presence.isRunning || recipeShare.isRunning
+        }
+    }
+
+    // MARK: The projections
+
+    /// ``Input/appLockEngaged`` from the lock service's state: `.locked` only, exactly as
+    /// `ContentView.shouldRunPresence` and `shouldListenForRecipeShares` read it today.
+    ///
+    /// - Parameter state: `FernletLockService.state`.
+    /// - Returns: `true` for `.locked` (with or without a cooldown), `false` for `.notConfigured`
+    ///   and every `.unlocked` scope.
+    static func appLockEngaged(_ state: FernletLockState) -> Bool {
+        switch state {
+        case .locked: return true
+        case .notConfigured, .unlocked: return false
+        }
+    }
+
+    /// ``Input/belowMinimumAge`` from the age record: a **ruling**, never an absence.
+    ///
+    /// `true` only for the system's final `.below` verdict against the mesh's minimum age
+    /// (`AgeGate.chat`, 13) or a guardian's communication limits — the two things that close the
+    /// chat gate for good. An `.undetermined` verdict (never asked, declined, or a bracket at the
+    /// line with no provenance) answers `false`: that account keeps its radios and is refused chat
+    /// only, exactly as it is today, because no radio was ever age-gated before this input existed.
+    ///
+    /// - Parameter record: `AgeAssuranceStore.record`.
+    /// - Returns: Whether the radios must stop for age.
+    static func belowMinimumAge(_ record: AgeAssuranceRecord) -> Bool {
+        if record.hasCommunicationLimits { return true }
+        switch record.verdict(for: .chat) {
+        case .below: return true
+        case .meets, .undetermined: return false
         }
     }
 

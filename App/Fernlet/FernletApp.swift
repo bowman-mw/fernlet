@@ -208,12 +208,13 @@ struct FernletApp: App {
     /// plaintext it would not hold a moment later while `.active`. Device lock always traverses
     /// `.inactive → .background`, and data protection has its own leg.
     ///
-    /// Every gate push in this file routes its `foreground:` argument through here, so the six
-    /// sites cannot disagree about what foreground means — before the review four of them compared
-    /// `== .active` while the scene handler fell only on `.background`, so the stored gate for one
-    /// physical state depended on which event pushed last. `!=` rather than a `switch`:
-    /// `ScenePhase` is not frozen, and an `@unknown default` under warnings-as-errors would have to
-    /// pick a side for a phase that does not exist yet.
+    /// Since network migration P7 item 2 its ONE caller is `ProximityRunPolicy.isForeground(_:)`:
+    /// the six edges in this file hand the raw phase to the store's run-policy funnel and decide
+    /// nothing, so they cannot disagree about what foreground means — before the P5 review four of
+    /// them compared `== .active` while the scene handler fell only on `.background`, so the stored
+    /// gate for one physical state depended on which event pushed last. `!=` rather than a
+    /// `switch`: `ScenePhase` is not frozen, and an `@unknown default` under warnings-as-errors
+    /// would have to pick a side for a phase that does not exist yet.
     ///
     /// - Parameter phase: The scene phase.
     /// - Returns: `false` for `.background`, `true` otherwise.
@@ -266,36 +267,36 @@ struct FernletApp: App {
         MeshMatrixDebugOptions.isEnabled
     }
 
-    /// Pushes the three lock facts into the mesh manager (network migration P5 item 10).
+    /// Hands one lifecycle edge to the run-policy funnel (network migration P7 item 2; the gate
+    /// push it replaced was P5 item 10's).
     ///
-    /// The app is the only place all three live: the OS device lock (data protection), the scene,
-    /// and `FernletLockService`'s duress session — ProximityKit deliberately observes no lifecycle
-    /// and cannot import `FernletLock`. P7's `ProximityRunPolicy` replaces every call site below
-    /// with one policy call; this seam does not move.
+    /// `FernletStore.applyProximityRunPolicy(scenePhase:protectedDataAvailable:appLockEngaged:duressSessionActive:now:)`
+    /// is the ONE place the app assembles a `ProximityRunPolicy.Input` and the ONLY writer of
+    /// `MeshNetworkManager.applyRoutedAccessGate(_:now:)` outside ProximityKit. This file owns only
+    /// the facts the scene knows — the phase, the sampled or literal protected-data fact, and the
+    /// lock service's two facts, read at the edge itself so the activation edge carries the state
+    /// `refreshStateFromKeychain()` just derived. It decides nothing: the raw phase goes down, and
+    /// `ProximityRunPolicy.isForeground(_:)` is the one place ``routedGateForeground(for:)`` is read.
     ///
     /// - Parameters:
-    ///   - store: The loaded store, whose mesh manager holds the gate.
+    ///   - store: The loaded store, which owns the funnel and the mesh manager.
+    ///   - phase: The scene phase at this edge — the handler's `newPhase`, the environment value
+    ///     everywhere else.
     ///   - protectedData: Whether protected data is available — passed **literally** from the two
     ///     notifications, sampled at the scene sites.
-    ///   - foreground: Whether the scene is not backgrounded — always
-    ///     ``routedGateForeground(for:)``'s answer, never a raw phase compare.
-    private func pushRoutedAccessGate(
-        _ store: FernletStore, protectedData: Bool, foreground: Bool
-    ) {
-        store.meshNetworkManager.applyRoutedAccessGate(
-            MeshRoutedAccessGate(
-                protectedDataAvailable: protectedData,
-                appIsForeground: foreground,
-                duressActive: lockService.isDuressSessionActive
-            ),
-            now: Date()
+    private func pushProximityRunPolicy(_ store: FernletStore, phase: ScenePhase, protectedData: Bool) {
+        store.applyProximityRunPolicy(
+            scenePhase: phase,
+            protectedDataAvailable: protectedData,
+            appLockEngaged: ProximityRunPolicy.appLockEngaged(lockService.state),
+            duressSessionActive: lockService.isDuressSessionActive
         )
     }
 
     /// Mounts the sealed mesh session context, once per launch (network migration P6 item 7).
     ///
-    /// Called from the ready view's `.onAppear`, **after** `pushRoutedAccessGate(_:protectedData:
-    /// foreground:)` in the same closure, and that order is the whole wiring decision: the store is
+    /// Called from the ready view's `.onAppear`, **after** `pushProximityRunPolicy(_:phase:
+    /// protectedData:)` in the same closure, and that order is the whole wiring decision: the store is
     /// loaded (so the manager's identity is provisioned), and the gate already carries this launch's
     /// three lock facts, so a `deferred` restore has a gate to be retried against at the next
     /// protected-data rise (`retrySessionRestoreIfPending(now:)`, the routed re-entry's job 1).
@@ -333,11 +334,9 @@ struct FernletApp: App {
             if case .ready(let store) = loader.phase {
                 store.flushPendingSnapshotSave()
                 // P5 item 10: the foreground falling leg. Custody keeps running on
-                // ciphertext; plaintext stops here.
-                pushRoutedAccessGate(
-                    store, protectedData: protectedDataAvailableNow,
-                    foreground: Self.routedGateForeground(for: newPhase)
-                )
+                // ciphertext; plaintext stops here. Since P7 item 2 the edge hands the raw phase
+                // to the run-policy funnel, which decides the gate.
+                pushProximityRunPolicy(store, phase: newPhase, protectedData: protectedDataAvailableNow)
             }
             lockService.lock(reason: .background)
         } else if newPhase == .active {
@@ -380,10 +379,7 @@ struct FernletApp: App {
                 resolveBackupExclusionDefaultIfNeeded()
                 // P5 item 10: the foreground rising leg, pushed AFTER
                 // `refreshStateFromKeychain()` so the duress fact is the current one.
-                pushRoutedAccessGate(
-                    store, protectedData: protectedDataAvailableNow,
-                    foreground: Self.routedGateForeground(for: newPhase)
-                )
+                pushProximityRunPolicy(store, phase: newPhase, protectedData: protectedDataAvailableNow)
             }
         }
     }
@@ -413,10 +409,7 @@ struct FernletApp: App {
                 // answers `true` here — this is posted before lockdown so an app can finish its
                 // reads — so the literal is the only honest value.
                 if case .ready(let store) = loader.phase {
-                    pushRoutedAccessGate(
-                        store, protectedData: false,
-                        foreground: Self.routedGateForeground(for: scenePhase)
-                    )
+                    pushProximityRunPolicy(store, phase: scenePhase, protectedData: false)
                 }
             }
             .onReceive(
@@ -432,10 +425,7 @@ struct FernletApp: App {
                 // P5 item 10: the unlock edge, literal for the same reason, and the one that fires
                 // while the app is BACKGROUNDED — the ciphertext jobs the re-entry owes run there.
                 if case .ready(let store) = loader.phase {
-                    pushRoutedAccessGate(
-                        store, protectedData: true,
-                        foreground: Self.routedGateForeground(for: scenePhase)
-                    )
+                    pushProximityRunPolicy(store, phase: scenePhase, protectedData: true)
                 }
             }
             .onChange(of: lockService.isDuressSessionActive) { _, _ in
@@ -444,11 +434,7 @@ struct FernletApp: App {
                 // protected-data transition, so it needs its own observer or the stored gate would
                 // report `duressActive: false` for the whole duress session.
                 if case .ready(let store) = loader.phase {
-                    pushRoutedAccessGate(
-                        store,
-                        protectedData: protectedDataAvailableNow,
-                        foreground: Self.routedGateForeground(for: scenePhase)
-                    )
+                    pushProximityRunPolicy(store, phase: scenePhase, protectedData: protectedDataAvailableNow)
                 }
             }
             .onReceive(
@@ -488,11 +474,7 @@ struct FernletApp: App {
                     // and deliberately AFTER the gate push — see
                     // `restoreMeshSessionContextIfNeeded(_:)`.
                     .onAppear {
-                        pushRoutedAccessGate(
-                            store,
-                            protectedData: protectedDataAvailableNow,
-                            foreground: Self.routedGateForeground(for: scenePhase)
-                        )
+                        pushProximityRunPolicy(store, phase: scenePhase, protectedData: protectedDataAvailableNow)
                         restoreMeshSessionContextIfNeeded(store)
                     }
             case .failed(let error):
