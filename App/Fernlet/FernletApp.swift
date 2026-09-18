@@ -303,10 +303,11 @@ struct FernletApp: App {
     ///
     /// **It arms no radio.** The restore makes the ledger, the roster, the restored key
     /// advertisements and the routed store addressable; whether this device then goes looking for
-    /// peers stays the Friends tab's three-way (`FriendsDiscoveryEntry`) and, later, P7's run
-    /// policy. Nothing here is presented to the user either — no app surface reads
-    /// `lastSessionRestoreOutcome`, `offersForegroundResume`, `restoredSessionContext` or
-    /// `rejoinBar`.
+    /// peers is the run policy's (P7 item 3), through the Friends tab's three-way
+    /// (`FriendsDiscoveryEntry`). What it found is presented since P7 item 5 — the Friends surface
+    /// reads `MeshNetworkManager.sessionResumePresentation`, the one public fold of the four restore
+    /// surfaces (`lastSessionRestoreOutcome`, `offersForegroundResume`, `restoredSessionContext`,
+    /// `rejoinBar`) the app cannot see, and `SessionResumeCopy` is its copy.
     ///
     /// - Parameter store: The loaded store, whose mesh manager holds the sealed context.
     private func restoreMeshSessionContextIfNeeded(_ store: FernletStore) {

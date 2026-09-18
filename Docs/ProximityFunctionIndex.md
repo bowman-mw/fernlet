@@ -1276,6 +1276,16 @@ Network migration P7 item 4: the ONE poll seam the app's run policy drives, and 
 | `MeshNetworkManager.armSessionCeilingFromAdoptedMeshIfNeeded(now:)` | The third and fourth caller of `startSessionCeiling(hardDeadline:startedAt:)` — at descriptor adoption (`handleMeshDescriptor`) and at the admission grant (`handleAdmissionGrant`) — from `createdAt + 6 h`, the deadline every member shares (`routedHardDeadline`'s own derivation). Idempotent (an armed ceiling keeps its monotonic origin); no mesh, no arm. Closes P6 §12.3 finding 3: a yielding founder and every proximity joiner now hold a ceiling the poll can enforce. |
 | `MeshSessionPollReport` | Flags only, never fingerprints: `polled`, `ceilingReached`, `idleLapsed`, `partitionMoved`, `sessionLiveAfter`; `.skipped` for a poll that found no live session. |
 
+### `MeshSessionResumePresentation.swift`
+
+Network migration P7 item 5: the decision half of the resume surface — the seven-case restore outcome folded, once, into the four things a person can be told.
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshSessionResumePresentation` | **Public.** `nothing` / `offerResume` / `previousSessionEnded(MeshSessionEndingPresentation)` / `previousSessionCouldNotBeReopened`. `presentation(outcome:offersForegroundResume:isInSession:)` is the pure, total decision: a session surface up ⇒ nothing; `resumable` ⇒ an offer only while the foreground offer is raised; `terminated` / `expired` ⇒ ended, by how; `noSession` / `retryAfterUnlock` / `retryAfterRefusal` ⇒ nothing (silent — the re-entry retries a deferral); `quarantineCorruptFile` ⇒ could not be reopened. |
+| `MeshSessionEndingPresentation` | **Public.** The four-way fold of the eight frozen `MeshSessionTerminationReason`s: `ended` (verified termination, final pair, counter cap, developed), `expired` (either bound), `youLeft`, `youWereRemoved`. `MeshSessionTerminationReason.presentation` is the fold. |
+| `MeshNetworkManager.sessionResumePresentation` | **Public.** The one app read over the four observation-ignored restore surfaces; derived, never stored; sampled on appear. `SessionResumeCopy` (app) forks it into `LocalizedStringKey` cards. |
+
 ### `MeshSessionRestore.swift`
 
 The launch-time classifier: five load states → seven outcomes, none of which lets a token-less state

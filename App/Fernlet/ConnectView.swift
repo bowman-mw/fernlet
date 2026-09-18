@@ -42,6 +42,9 @@ struct FriendsView: View {
     @State private var selectedAlbumPostID: UUID?
     @State private var sessionSearchText = ""
     @State private var cacheWarningDismissed = false
+    /// P7 item 5: the restore card is dismissable for this instance of the surface; the value it
+    /// presents is the manager's, sampled on appear.
+    @State private var sessionResumeDismissed = false
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
 
@@ -303,6 +306,10 @@ struct FriendsView: View {
                             .accessibilityLabel("Friends and blocks")
                         }
                     }
+                    // P7 item 5: what the launch restore found, on the Friends surface and nothing
+                    // modal — an offer, an ending named as ended, or a file set aside; silent for a
+                    // deferral. Sampled from the manager, dismissable, gone once a session surface is up.
+                    sessionResumeBanner
                     .padding(.top, 4)
 
                     shopWindowCard
@@ -474,6 +481,39 @@ struct FriendsView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// The launch restore's card (network migration P7 item 5): `SessionResumeCopy.card(for:)` over
+    /// `manager.sessionResumePresentation`, which is `.nothing` — no card — for a green field, a
+    /// deferral or refusal the re-entry will retry, an offer already consumed, or a session surface
+    /// up. Not modal, dismissable for this instance, and the same visual grammar as the discovery
+    /// failure banner below.
+    @ViewBuilder
+    private var sessionResumeBanner: some View {
+        if !sessionResumeDismissed, let card = SessionResumeCopy.card(for: manager.sessionResumePresentation) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: card.symbolName)
+                    .foregroundStyle(Color.terracotta)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(card.title)
+                        .font(.fernlet(.headerMedium))
+                        .foregroundStyle(Color.bark)
+                    Text(card.message)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(SessionResumeCopy.dismiss) { sessionResumeDismissed = true }
+                        .font(.fernlet(.labelSmall))
+                        .padding(.vertical, 6)
+                        .accessibilityIdentifier("friends.sessionResume.dismiss")
+                }
+                Spacer(minLength: 4)
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
+            .accessibilityIdentifier("friends.sessionResume")
         }
     }
 
