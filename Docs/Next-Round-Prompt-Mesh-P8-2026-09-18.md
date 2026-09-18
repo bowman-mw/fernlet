@@ -1,6 +1,6 @@
 # Loop Prompt — ProximityKit Network Migration: P8 (background continuation), preceded by the P7 gauntlet
 
-**Written:** 2026-09-18, at the P7 boundary (branch `claude/zen-goodall-wejlxg` = `e8ffb44` + the close-out commit; **P7 is pushed to that branch, unmerged, and UNBUILT** — no P7 file has compiled).
+**Written:** 2026-09-18, at the P7 boundary (branch `claude/zen-goodall-wejlxg` = `9dcdc14`, the P7 close-out commit; **P7 is pushed to that branch, unmerged, and UNBUILT** — no P7 file has compiled).
 **Plan:** [Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md](Plan-ProximityKit-Network-Migration-2026-08-27.md) — the authority. **§14 is the P8 specification; §15 is the entry gate; §25 is the handoff; §13.3's findings 1–3 and 9–12 are the named obligations the gauntlet clears first.** This file is the launcher and the loop contract.
 **Ledger:** `Docs/Mesh-Migration-Loop-Ledger-P8.md` — the loop's memory, created on iteration 1 (§7). The P7 ledger is a finished record; **read its "Owed to a Mac" section once, then do not reuse it.**
 **Device plan:** [Docs/Mesh-P7-Physical-Device-Test-Plan-2026-09-18.md](Mesh-P7-Physical-Device-Test-Plan-2026-09-18.md) — the tier-3 lane's first document; its section F is §15 as a checklist.
