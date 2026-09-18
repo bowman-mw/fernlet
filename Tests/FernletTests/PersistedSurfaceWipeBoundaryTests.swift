@@ -397,6 +397,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         "hasSealedBackup",
         // Records the deferred-reupload flag for one sealed payload type.
         "recordSealedBackupReuploadDeferred",
+        // P7 item 3: re-runs the proximity run policy from the last scene facts — radios and the
+        // routed access gate only; reads the lock state and duress flag, writes no persisted surface.
+        // The wipe funnel calls it at leg 0 (the raise) and after the lower, so every radio stands
+        // down before the purge. Pinned here because the funnel now CALLS it; the P7 session that
+        // added the call had no toolchain to run this wall.
+        "reapplyProximityRunPolicy",
         // The sealed-backup toggle; the funnel calls it to delete the cloud backups per payload type.
         "setSealedBackupEnabled",
         // Stops the HealthKit workout observer query before the wipe.

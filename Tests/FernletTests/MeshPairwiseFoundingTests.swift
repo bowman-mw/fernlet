@@ -283,6 +283,15 @@ private final class MeshFoundingAuditCapture {
         }
     }
 
+    /// How many lines carried `event` AND satisfy `predicate` over their context — the way a cell
+    /// scopes a count to its own rig (a mesh id nobody else can mint), which is what turns an
+    /// `== N` over a process-wide signal into a per-cell claim (D-6a.10).
+    func count(of event: String, where predicate: ([String: String]) -> Bool) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedLines.filter { $0.event == event && predicate($0.context) }.count
+    }
+
     /// How many lines carried `event`.
     func count(of event: String) -> Int {
         lock.lock(); defer { lock.unlock() }
@@ -532,7 +541,11 @@ struct MeshPairwiseFoundingTests {
         #expect(rig.nodes[higher].manager.sessionState == .activeForeground
                 && rig.nodes[lower].manager.sessionState == .activeForeground,
                 "both halves are live")
-        let reannounced = capture.count(of: "mesh.descriptor.reannouncedToNewbornPeer")
+        // Scoped to THIS rig's mesh: the capture is process-global and the full suite runs other
+        // founding rigs in parallel, whose re-announcements would otherwise be counted here.
+        let reannounced = capture.count(of: "mesh.descriptor.reannouncedToNewbornPeer") {
+            $0["held"] == mintedByLower.uuidString
+        }
         #expect(reannounced == (lowerTapsFirst ? 1 : 0),
                 "the repair fires exactly once, and only in the ordering the yield alone cannot fix")
     }
@@ -568,14 +581,15 @@ struct MeshPairwiseFoundingTests {
         rig.link(0, 1)
         rig.commit(0, 1)
         rig.commit(1, 0)
+        let yielderMesh = try #require(rig.nodes[yielder].manager.currentMesh?.meshID)
         try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
 
         #expect(rig.roster(0).count == 2 && rig.roster(1).count == 2,
                 "the pair converges even though the yielder holds another mesh's custody")
         #expect(rig.nodes[0].manager.currentMesh?.meshID == rig.nodes[1].manager.currentMesh?.meshID,
                 "one mesh, not two")
-        #expect(capture.count(of: "mesh.descriptor.yieldRefusedRoutedContent") == 0,
-                "custody of ANOTHER mesh's item is not content this newborn mesh holds")
+        #expect(capture.count(of: "mesh.descriptor.yieldRefusedRoutedContent") { $0["held"] == yielderMesh.uuidString } == 0,
+                "custody of ANOTHER mesh's item is not content this newborn mesh holds (scoped to this rig's mesh)")
         #expect(rig.routedIndex(yielder)?.items.contains { $0.key == foreignKey } == true,
                 "and that custody survives the yield untouched")
     }
