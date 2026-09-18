@@ -87,7 +87,7 @@ struct MemoryLifecycleBoundaryTests {
     static let allowlist: [Exemption] = [
         Exemption(
             rule: "ML1", path: "App/Fernlet/FernletStore.swift",
-            invariant: "FernletStore is the process-lifetime composition root (created once by FernletStoreLoader, never released); its four settle/purge/sync tasks are one-shot, replace-on-restart, and die with the process."),
+            invariant: "FernletStore is the process-lifetime composition root (created once by FernletStoreLoader, never released); its four settle/purge/sync tasks are one-shot, replace-on-restart, and die with the process — and the fifth, the fresh-search discovery timeout the run policy's seams arm (P7 item 3, `discoveryTimeoutTask`), captures [weak self], replaces itself on re-arm and is cancelled at every stand-down."),
         Exemption(
             rule: "ML1", path: "FernletKit/Sources/StoreCore/SnapshotSaveCoordinator.swift",
             invariant: "Owned by the store for the process lifetime; both debounce tasks capture [weak self] and finish on their own after a bounded sleep, and cancelPending()/flushPending() end them early."),

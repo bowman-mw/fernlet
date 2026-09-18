@@ -1185,14 +1185,16 @@ extension MeshRoutedLockedDeviceTests {
                 "and the gate value is assembled exactly once, by the policy")
         let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
         let funnel = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "func applyProximityRunPolicy(", in: store),
-            "the run-policy funnel is gone from the store"
+            MeshRoutedSourceScan.bracedBody(after: "private func runProximityPolicy(", in: store),
+            "the run-policy core is gone from the store"
         )
         #expect(funnel.contains("applyRoutedAccessGate("),
-                "the one write sits inside the funnel's own body, brace-matched — not merely in the file")
+                "the one write sits inside the core's own body, brace-matched — not merely in the file")
         #expect(funnel.contains("ProximityRunPolicy.verdict(for:"),
-                "and the funnel decides through the policy, never by hand")
+                "and the core decides through the policy, never by hand")
         #expect(funnel.contains("continuation: .notRequested"),
                 "and feeds the continuation state inert — P7 must never assert a running task")
+        #expect(funnel.contains("executeProximityRunActions("),
+                "and hands the radio half to the seams' executor (P7 item 3), gate first")
     }
 }

@@ -149,6 +149,7 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``IslandViewfinderMetrics``
 - ``ConnectionInspector``
 - ``ProximityRunPolicy``
+- ``ProximityRunTransition``
 - ``FriendListView``
 - ``SendGoodVibesLabel``
 - ``AwayHeartsCopy``

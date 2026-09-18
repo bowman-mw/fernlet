@@ -1702,9 +1702,10 @@ final class FernletStore {
 
     func setAllowNearbyRecipeShares(_ value: Bool) {
         settings.allowNearbyRecipeShares = value
-        if !value {
-            recipeShareManager.stop()
-        }
+        // P7 item 3: the opt-in is a run-policy INPUT. Re-running the policy here is what stops the
+        // listener on OFF (immediately, as before) and starts it on ON; the view's observer of the
+        // value covers the synced-snapshot path, which never runs this setter.
+        reapplyProximityRunPolicy()
         snapshotSaveCoordinator.schedule()
     }
 
@@ -1864,45 +1865,73 @@ final class FernletStore {
         }
     }
 
-    /// Toggle the nearby-friends presence layer (mirrors `setAllowNearbyRecipeShares`). Turning
-    /// it OFF stops the presence radio immediately; turning it ON is picked up by ContentView's
-    /// listener chain (scene/tab/lock gated), which also observes this setting directly.
+    /// Toggle the nearby-friends presence layer (mirrors `setAllowNearbyRecipeShares`). Either way
+    /// the run policy re-runs here (P7 item 3): OFF stops the presence radio immediately, as it
+    /// always did, and ON starts it if the scene, tab and lock allow — `ContentView` also observes
+    /// the value, for the synced-snapshot path that never runs this setter.
     func setAllowNearbyPresence(_ value: Bool) {
         settings.allowNearbyPresence = value
-        if !value {
-            presenceManager.stop()
-        }
+        reapplyProximityRunPolicy()
         snapshotSaveCoordinator.schedule()
     }
 
     // MARK: - Proximity run policy (network migration P7)
 
-    /// The last verdict ``applyProximityRunPolicy(scenePhase:protectedDataAvailable:appLockEngaged:duressSessionActive:now:)``
-    /// computed. Its gate half is already pushed; its radio half is applied by nothing yet — P7
-    /// item 3 gives each manager its `apply(_:)` seam and reads this. Memory-only, never persisted;
-    /// nil until the first edge of the process.
+    /// The last verdict the run policy computed — its gate half pushed, its radio half executed
+    /// through the seams (`ProximityRunSeams.swift`), and the value the next edge is diffed against
+    /// (a radio verb runs only on a change). Memory-only, never persisted; nil until the first edge
+    /// of the process.
     private(set) var proximityRunVerdict: ProximityRunPolicy.Verdict?
 
     /// Whether `deleteAllData` is between its wipe brackets right now — the run policy's
     /// `deleteAllInProgress` fact (P7 item 2). Memory-only.
     private(set) var deleteAllInProgress = false
 
-    /// THE funnel (network migration P7 item 2): the one place the app turns its lifecycle facts
-    /// into a `ProximityRunPolicy` verdict, and the ONLY writer of
-    /// `MeshNetworkManager.applyRoutedAccessGate(_:now:)` outside ProximityKit. `FernletApp`'s six
-    /// edges — the launch mount, the two scene legs, the two protected-data notifications and the
-    /// duress observer — all land here, and `MeshRoutedLockedDeviceTests` W8 counts the write.
+    /// The fresh search's five-minute "found nobody" timeout — the tab's half of door 3 — armed and
+    /// cancelled by the seams (`ProximityRunSeams.swift`); `ContentView.discoveryTimeoutTask` until
+    /// P7 item 3. Replace-on-re-arm, `[weak self]`, cancelled at every stand-down; memory-only.
+    @ObservationIgnored var discoveryTimeoutTask: Task<Void, Never>?
+
+    /// The four scene-side facts of the last edge, retained so the view's and the store's own edges
+    /// can re-run the policy without a scene (P7 item 3).
+    @ObservationIgnored private var proximityEdgeFacts: ProximityEdgeFacts?
+
+    /// The scene-side facts of one edge: what only `FernletApp` samples (the phase and the
+    /// protected-data fact) and what the lock service says at that instant.
+    private struct ProximityEdgeFacts {
+
+        /// The scene phase at the edge.
+        let scenePhase: ScenePhase
+
+        /// iOS data protection at the edge.
+        let protectedDataAvailable: Bool
+
+        /// Fernlet's app lock is `.locked` at the edge.
+        let appLockEngaged: Bool
+
+        /// A duress session is active at the edge.
+        let duressSessionActive: Bool
+
+        /// The facts assumed before the first scene edge of the process: the most restrictive scene
+        /// (backgrounded, protected data unavailable), so a store-side or view-side edge that lands
+        /// before `FernletApp`'s launch push pushes the fail-closed gate every manager already holds
+        /// and asks every radio for `stop` or `hold` — never a start.
+        static func beforeFirstEdge(appLockEngaged: Bool, duressSessionActive: Bool) -> ProximityEdgeFacts {
+            ProximityEdgeFacts(
+                scenePhase: .background, protectedDataAvailable: false,
+                appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
+            )
+        }
+    }
+
+    /// A SCENE edge (network migration P7 item 2): `FernletApp`'s six — the launch mount, the two
+    /// scene legs, the two protected-data notifications and the duress observer. Retains the four
+    /// facts for the other two entries and runs the policy.
     ///
-    /// Two kinds of fact meet here. The store owns the tab mirror (``selectedTab``), the age record,
-    /// the wipe bracket, the two nearby opt-ins and the manager's two session predicates; the scene
-    /// owns the phase, the protected-data fact (literal from the notifications, sampled elsewhere)
-    /// and the lock service's two facts. The lock facts are PARAMETERS rather than reads of
-    /// ``lockState`` / ``duressSessionActive`` deliberately: those mirrors are written by
-    /// `ContentView`'s observers and can lag an edge by a runloop turn, while the activation edge
-    /// must carry the state `refreshStateFromKeychain()` just derived (P5 item 10's ordering).
-    ///
-    /// `continuation` is `.notRequested` until P8 exists — the policy is fed, never driven, and
-    /// under that value no radio ever claims the background (`ProximityRunPolicyTests` pins it).
+    /// The lock facts are PARAMETERS rather than reads of ``lockState`` / ``duressSessionActive``
+    /// deliberately: those mirrors are written by `ContentView`'s observers and can lag an edge by a
+    /// runloop turn, while the activation edge must carry the state `refreshStateFromKeychain()`
+    /// just derived (P5 item 10's ordering).
     ///
     /// - Parameters:
     ///   - scenePhase: The phase at this edge — the handler's `newPhase`, or the environment value.
@@ -1919,12 +1948,70 @@ final class FernletStore {
         duressSessionActive: Bool,
         now: Date = Date()
     ) -> ProximityRunPolicy.Verdict {
+        let facts = ProximityEdgeFacts(
+            scenePhase: scenePhase, protectedDataAvailable: protectedDataAvailable,
+            appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
+        )
+        proximityEdgeFacts = facts
+        return runProximityPolicy(facts, now: now)
+    }
+
+    /// A VIEW edge (P7 item 3): `ContentView`'s tab change, lock-state change, the presence opt-in
+    /// and the age record moving, and its launch wiring. The lock facts are read fresh at the edge;
+    /// the scene facts are the ones the last scene edge retained — a tab or lock change happens with
+    /// no scene transition in flight — or, before the first scene edge, the most restrictive scene.
+    ///
+    /// - Parameters:
+    ///   - appLockEngaged: `ProximityRunPolicy.appLockEngaged(_:)` of the lock service's state.
+    ///   - duressSessionActive: `FernletLockService.isDuressSessionActive`, read at the edge.
+    ///   - now: The instant the gate's re-entry pass is judged against.
+    /// - Returns: The verdict, also kept in ``proximityRunVerdict``.
+    @discardableResult
+    func applyProximityRunPolicy(
+        appLockEngaged: Bool, duressSessionActive: Bool, now: Date = Date()
+    ) -> ProximityRunPolicy.Verdict {
+        let scene = proximityEdgeFacts ?? .beforeFirstEdge(
+            appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
+        )
+        let facts = ProximityEdgeFacts(
+            scenePhase: scene.scenePhase, protectedDataAvailable: scene.protectedDataAvailable,
+            appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
+        )
+        proximityEdgeFacts = facts
+        return runProximityPolicy(facts, now: now)
+    }
+
+    /// A STORE edge (P7 item 3): the two nearby opt-out setters and the wipe bracket. Everything
+    /// retained is reused; the store's own facts are read live inside the core.
+    ///
+    /// - Parameter now: The instant the gate's re-entry pass is judged against.
+    /// - Returns: The verdict, also kept in ``proximityRunVerdict``.
+    @discardableResult
+    func reapplyProximityRunPolicy(now: Date = Date()) -> ProximityRunPolicy.Verdict {
+        let facts = proximityEdgeFacts ?? .beforeFirstEdge(
+            appLockEngaged: ProximityRunPolicy.appLockEngaged(lockState),
+            duressSessionActive: duressSessionActive
+        )
+        return runProximityPolicy(facts, now: now)
+    }
+
+    /// THE core (P7 items 2–3): the one place the app assembles a `ProximityRunPolicy.Input`, the
+    /// ONLY writer of `MeshNetworkManager.applyRoutedAccessGate(_:now:)` outside ProximityKit
+    /// (`MeshRoutedLockedDeviceTests` W8 brace-matches this body), and the one caller of the seams'
+    /// executor. Gate first, radios second: on activation the re-entry pass restores and drains
+    /// before discovery is re-armed; on a hard stop the gate closes before the session is torn down.
+    ///
+    /// The store owns the tab mirror (``selectedTab``), the age record, the wipe bracket, the two
+    /// nearby opt-ins and the manager's two session predicates; the edge owns the other four facts.
+    /// `continuation` is `.notRequested` until P8 exists — the policy is fed, never driven, and
+    /// under that value no radio ever claims the background (`ProximityRunPolicyTests` pins it).
+    private func runProximityPolicy(_ facts: ProximityEdgeFacts, now: Date) -> ProximityRunPolicy.Verdict {
         let input = ProximityRunPolicy.Input(
-            scenePhase: scenePhase,
+            scenePhase: facts.scenePhase,
             selectedTab: selectedTab,
-            appLockEngaged: appLockEngaged,
-            duressSessionActive: duressSessionActive,
-            protectedDataAvailable: protectedDataAvailable,
+            appLockEngaged: facts.appLockEngaged,
+            duressSessionActive: facts.duressSessionActive,
+            protectedDataAvailable: facts.protectedDataAvailable,
             belowMinimumAge: ProximityRunPolicy.belowMinimumAge(ageAssurance.record),
             deleteAllInProgress: deleteAllInProgress,
             continuation: .notRequested,
@@ -1936,8 +2023,17 @@ final class FernletStore {
             allowNearbyRecipeShares: settings.allowNearbyRecipeShares
         )
         let verdict = ProximityRunPolicy.verdict(for: input)
+        let previous = proximityRunVerdict
         proximityRunVerdict = verdict
         meshNetworkManager.applyRoutedAccessGate(verdict.routedAccessGate, now: now)
+        let meshFacts = ProximityRunTransition.MeshFacts(
+            isSearching: meshNetworkManager.isSearching,
+            isInSession: meshNetworkManager.isInSession,
+            hasCommittedPeer: meshNetworkManager.hasCommittedPeer
+        )
+        executeProximityRunActions(
+            ProximityRunTransition.actions(from: previous, to: verdict, mesh: meshFacts)
+        )
         return verdict
     }
 
@@ -5103,10 +5199,17 @@ final class FernletStore {
         // exit leaves the projection off for the rest of the process.
         meshNetworkManager.beginPrivacyWipe()
         defer { meshNetworkManager.endPrivacyWipe() }
-        // P7 item 2: the run policy's `deleteAllInProgress` fact is exactly this bracket. Memory-only;
-        // the policy answers `stop` for every radio while it is raised (item 3 applies that).
+        // P7 items 2–3: the run policy's `deleteAllInProgress` fact is exactly this bracket, and
+        // raising it re-runs the policy, which answers `stop` for EVERY radio — the session is torn
+        // down, the search and both listeners stand down — here at leg 0, before any leg below
+        // (PrivacyWipeCoverage row "Every proximity radio"). Lowering it re-runs the policy over
+        // whatever the wipe left; the opt-ins reset with the settings. Memory-only.
         deleteAllInProgress = true
-        defer { deleteAllInProgress = false }
+        reapplyProximityRunPolicy()
+        defer {
+            deleteAllInProgress = false
+            reapplyProximityRunPolicy()
+        }
 
         // 1. Stop the writers first (see `stopWritersForWipe`).
         stopWritersForWipe()
@@ -5394,12 +5497,14 @@ final class FernletStore {
         // their social data visibly surviving a wipe in the running session.
         meshNetworkManager.clothingShop.clearAll()
 
-        // 7b. The presence radio, which keeps advertising and matching until stopped, is the
-        // remaining session-scoped social surface here (PrivacyWipeCoverage gap, 2026-07-25). The
-        // temp-message transcript used to be cleared on this line; it moved to leg 0 in the P6 item
-        // 4 fix review, because `sessionMessages.clear()` is not the manager's clear FUNNEL and
-        // therefore did not bump `transcriptGeneration` — see `beginPrivacyWipe()`.
-        presenceManager.stop()
+        // 7b. The presence radio — and since P7 item 3 every proximity radio: the session, the
+        // search and both listeners — stood down at leg 0, through `reapplyProximityRunPolicy()`
+        // under the raised `deleteAllInProgress` fact. Nothing is called here any more; the direct
+        // `presenceManager.stop()` this line held (PrivacyWipeCoverage gap, 2026-07-25) is the
+        // policy's answer now, executed by `ProximityRunSeams.swift`. The temp-message transcript
+        // used to be cleared on this line too; it moved to leg 0 in the P6 item 4 fix review,
+        // because `sessionMessages.clear()` is not the manager's clear FUNNEL and therefore did not
+        // bump `transcriptGeneration` — see `beginPrivacyWipe()`.
     }
 
     private func clearMessagesImportInboxes() -> Bool {

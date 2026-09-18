@@ -90,7 +90,6 @@ struct ContentView: View {
     @State private var pendingFirstAidAfterDismiss = false
     @State private var didAutoImportHealthProfile = false
     @State private var didAutoImportHealthContext = false
-    @State private var discoveryTimeoutTask: Task<Void, Never>?
     /// Coalesces HealthKit change notifications. Tab selection is deliberately not a HealthKit
     /// trigger; launch performs the initial read and observer events are the only later trigger.
     @State private var healthRefreshTask: Task<Void, Never>?
@@ -175,18 +174,23 @@ struct ContentView: View {
                 consumePendingMessagesRecipeImport()
             }
             .onChange(of: store.settings.allowNearbyPresence) { _, _ in
-                // Enabling in Settings (or via the first-friend prompt) starts the radio right
-                // away; disabling is already stopped by the setter — this keeps both in sync
-                // with the scene/tab/lock gate.
-                updatePresenceListener()
+                // The opt-in can also arrive through the synced snapshot, which never runs this
+                // device's setter — so the run policy re-runs on the VALUE (P7 item 3), exactly as
+                // the setter already makes it.
+                applyProximityRunPolicyFromView()
+            }
+            // The age ruling is a run-policy input (P7 item 3): a final below-the-line verdict, or
+            // a guardian's communication limits, stops every radio — and clears the same way.
+            .onChange(of: store.ageAssurance.record) { _, _ in
+                applyProximityRunPolicyFromView()
             }
             // One-time "first kept friend" presence offer (Phase 4a). Attached to the stable
             // root — not the Social-tab layout (which is destroyed in the same transaction as
             // session teardown, the Phase-2 lesson) — and driven by observable store state.
             .alert("Turn on Nearby Friends?", isPresented: presenceEnablePromptBinding) {
                 Button("Turn on") {
+                    // The setter re-runs the run policy, which starts the radio (P7 item 3).
                     store.setAllowNearbyPresence(true)
-                    updatePresenceListener()
                 }
                 Button("Not now", role: .cancel) {}
             } message: {
@@ -311,7 +315,8 @@ struct ContentView: View {
         if newState.isUnlocked(for: .privateHub) {
             requestSealedBackupSettlement(for: privateHubSection)
         }
-        updateRecipeShareListener()
+        applyProximityRunPolicyFromView()
+        syncAwayHeartsIfActive()
     }
 
     private func handlePrivateHubSectionChange(_ section: PrivateHubSection) {
@@ -322,18 +327,15 @@ struct ContentView: View {
 
     private func handleTabChange(from oldTab: FernletTab, to newTab: FernletTab) {
         isHomeTabBarCompact = false
-        // P7 item 2: the run policy's tab fact, mirrored into the store the way `lockState` and
-        // `duressSessionActive` are — the scene's edges live in `FernletApp`, which has no tab.
+        // P7 items 2–3: the run policy's tab fact, mirrored into the store the way `lockState` and
+        // `duressSessionActive` are — and then the policy re-run, which is what arms or stands down
+        // the Friends radios and the two listeners now (`ProximityRunSeams.swift`).
         store.selectedTab = newTab
         if oldTab == .personal || newTab == .personal {
             updatePrivateDataActivation(section: privateHubSection, lockState: lockService.state)
         }
-        if newTab == .social {
-            startFriendsDiscovery()
-        } else if oldTab == .social {
-            stopFriendsDiscovery()
-        }
-        updateRecipeShareListener()
+        applyProximityRunPolicyFromView()
+        syncAwayHeartsIfActive()
     }
 
     /// Preserves each page's scroll position across tabs. Re-selecting its current tab is the
@@ -365,11 +367,12 @@ struct ContentView: View {
             // handler is the primary path, but if a token is present when the scene reactivates
             // (and within its expiry window), honor it here too.
             consumePendingNotificationSheet()
-            if selectedTab == .social { startFriendsDiscovery() }
-        } else if selectedTab == .social {
-            stopFriendsDiscovery()
         }
-        updateRecipeShareListener()
+        // P7 item 3: the radios no longer move here. A scene edge is `FernletApp`'s — its handler
+        // hands the phase to the run-policy funnel in the order P5 item 10 fixed (after
+        // `refreshStateFromKeychain()` on activation), and the seams act on the verdict. Only the
+        // away-hearts sync still rides this view's scene edge.
+        syncAwayHeartsIfActive()
     }
 
     // MARK: - Launch wiring
@@ -496,7 +499,10 @@ struct ContentView: View {
         // view finished preparing — open it now (live taps arrive via the onReceive handlers).
         consumePendingNotificationSheet()
         store.meshNetworkManager.injectUITestStateIfNeeded()
-        updateRecipeShareListener()
+        // P7 item 3: the launch edge of the run policy from this view's side. The scene's own edge
+        // is `FernletApp`'s launch push; whichever lands second applies with the tab mirror set.
+        applyProximityRunPolicyFromView()
+        syncAwayHeartsIfActive()
         store.deferredPostLaunchTasks()
         store.ensureBundledFoodItemsSeeded()
         // Widget bridge: wire the mirror, drain "+1 water" taps queued while the app was
@@ -1710,27 +1716,18 @@ struct ContentView: View {
         consumePendingMessagesRecipeImport()
     }
 
-    private func updateRecipeShareListener() {
-        if shouldListenForRecipeShares {
-            store.recipeShareManager.start()
-        } else {
-            store.recipeShareManager.stop()
-        }
-        // Phase 4b: hearts ride the presence radio (the standalone heart listener is gone), so the
-        // recipe listener chain hands straight off to the presence gate.
-        updatePresenceListener()
-    }
-
-    private var shouldListenForRecipeShares: Bool {
-        guard store.settings.allowNearbyRecipeShares else { return false }
-        guard scenePhase == .active else { return false }
-        guard selectedTab == .home || selectedTab == .food || selectedTab == .move else { return false }
-        switch lockService.state {
-        case .notConfigured, .unlocked:
-            return true
-        case .locked:
-            return false
-        }
+    /// Hands this view's edges — a tab change, a lock-state change, the presence opt-in moving, the
+    /// age record moving, and the launch wiring — to the run-policy funnel (network migration P7
+    /// item 3), with the lock service's two facts read fresh at the edge and the scene facts the
+    /// last scene edge handed down through `FernletApp`. What used to be three private guards here
+    /// (`shouldListenForRecipeShares`, `shouldRunPresence`, the Friends three-way arm) is one table,
+    /// `ProximityRunPolicy`, and what used to be six direct radio calls is one executor,
+    /// `ProximityRunSeams.swift`; this view speaks no radio verb (`ProximityRunSeamsTests`).
+    private func applyProximityRunPolicyFromView() {
+        store.applyProximityRunPolicy(
+            appLockEngaged: ProximityRunPolicy.appLockEngaged(lockService.state),
+            duressSessionActive: lockService.isDuressSessionActive
+        )
     }
 
     // Phase 3a: the clothing-shop listener chain that lived here is gone — the shop rides the friend
@@ -1740,133 +1737,39 @@ struct ContentView: View {
     // shop's held catalogs: the post-session window outlives the session by design, and radio privacy
     // is the mesh lifecycle's job.
 
-    /// Presence radio gating (mesh redesign Phase 4a/4b): runs only while opted in, foregrounded,
-    /// unlocked, and on a main tab — driven from the same listener chain events as the recipe
-    /// and heart listeners (tab / scene / lock changes all funnel through
-    /// `updateRecipeShareListener`), plus a direct observation of the setting so toggling it ON
-    /// in Settings starts the radio without waiting for the next scene event.
-    private func updatePresenceListener() {
-        if shouldRunPresence {
-            store.presenceManager.start()
-        } else {
-            store.presenceManager.stop()
-        }
-        // Away-hearts drop sync (bitchat adoptions Increment 3): piggybacks the same
-        // scene/tab/lock listener chain — reentrancy-guarded inside the service and a consent-
-        // gated no-op while `heartsAwayDelivery` is off, so this costs nothing when unused.
+    /// Away-hearts drop sync (bitchat adoptions Increment 3), on the same tab / scene / lock edges
+    /// the radio listener chain used to carry it on — beside the run policy now, not inside it,
+    /// because it is a CloudKit sync and not a radio. Reentrancy-guarded inside the service and a
+    /// consent-gated no-op while `heartsAwayDelivery` is off, so this costs nothing when unused.
+    ///
+    /// Each pass is a full public-database round trip (account check + upload flush + a tag query
+    /// per friend + cleanup). `syncNow()` rate-limits itself to `HeartDropService.minimumSyncInterval`
+    /// — the floor lives in the service so every caller inherits it. Sends are unaffected:
+    /// `queueHeart` schedules its own pass directly, so a heart still leaves immediately.
+    ///
+    /// `scenePhase == .active` here is the sync's own foreground rule, unchanged; the radios' rule is
+    /// the policy's, where `.inactive` is foreground.
+    private func syncAwayHeartsIfActive() {
+        guard scenePhase == .active else { return }
+        store.heartDropService.syncNow()
+        // Consent is off but our own records may still be on the public database. Retrying here
+        // is what keeps "off" eventually true; it self-cancels once nothing is outstanding.
         //
-        // This chain fires on every tab switch, scene change and lock change, and each pass is a
-        // full public-database round trip (account check + upload flush + a tag query per friend +
-        // cleanup). `syncNow()` rate-limits itself to `HeartDropService.minimumSyncInterval` — the
-        // floor lives in the service so every caller inherits it. Sends are unaffected: `queueHeart`
-        // schedules its own pass directly, so a heart still leaves immediately.
-        if scenePhase == .active {
-            store.heartDropService.syncNow()
-            // Consent is off but our own records may still be on the public database. Retrying here
-            // is what keeps "off" eventually true; it self-cancels once nothing is outstanding.
-            //
-            // The condition is DERIVED (consent off AND the outbox still names uploaded records),
-            // not a flag the toggle set, so this one call covers three cases the old wiring missed:
-            // a purge that failed at toggle-off, a purge still owed from a PREVIOUS launch (a
-            // process flag died with the process; the outbox did not), and consent withdrawn on
-            // ANOTHER device — `heartsAwayDelivery` rides the synced snapshot, so it lands here as a
-            // state change that never runs this device's setter. The launch `.task` reaches this
-            // same chain (via `updateRecipeShareListener`), which is what makes the relaunch case
-            // fire without waiting for a scene transition.
-            store.retryHeartsAwayPurgeIfNeeded()
-        }
+        // The condition is DERIVED (consent off AND the outbox still names uploaded records),
+        // not a flag the toggle set, so this one call covers three cases the old wiring missed:
+        // a purge that failed at toggle-off, a purge still owed from a PREVIOUS launch (a
+        // process flag died with the process; the outbox did not), and consent withdrawn on
+        // ANOTHER device — `heartsAwayDelivery` rides the synced snapshot, so it lands here as a
+        // state change that never runs this device's setter. The launch wiring reaches this same
+        // call, which is what makes the relaunch case fire without waiting for a scene transition.
+        store.retryHeartsAwayPurgeIfNeeded()
     }
 
-    /// Same tab set as hearts (Home/Food/Move/Social — everywhere but Private), same privacy
-    /// posture: never while backgrounded or locked, and the opt-out setter
-    /// (`FernletStore.setAllowNearbyPresence`) stops the radio immediately.
-    private var shouldRunPresence: Bool {
-        guard store.settings.allowNearbyPresence else { return false }
-        guard scenePhase == .active else { return false }
-        guard selectedTab == .home || selectedTab == .food || selectedTab == .move || selectedTab == .social else { return false }
-        switch lockService.state {
-        case .notConfigured, .unlocked:
-            return true
-        case .locked:
-            return false
-        }
-    }
-
-    /// Arms the friend radios, unless a session is already live.
-    ///
-    /// **Three cases, not two** (P6 item 2). `startJoin()` resets the session state machine and the
-    /// live roster but deliberately does not clear `currentMesh` or the membership ledger, and the
-    /// founding fires only on `currentMesh == nil` — so running it over a founded, partitioned mesh
-    /// would nil the ceiling on a mesh that can never re-found (a session that can no longer
-    /// expire) and would also drop this session's photos, film quota and removal set. Guarding on
-    /// `hasCommittedPeer` alone does exactly that, and guarding on `isInSession` alone leaves a
-    /// founded pair that blipped with its radios down and no way back — the two predicates stopped
-    /// agreeing at item 2, and this is the one site that reads both.
-    ///
-    /// The three-way lives in ``FriendsDiscoveryEntry`` rather than here (review finding P2-5):
-    /// `private` in the app target, it was the whole user-facing claim of item 2's P1 and deleting
-    /// it reddened nothing. Its truth table — including which entries arm the timeout — is pinned
-    /// there.
-    ///
-    /// Clearing the mesh in `startJoin()` was the other half of the choice and stays rejected:
-    /// `leaveMesh()` drops the membership verifier and the routed drain state, so a pair that
-    /// auto-left could never deliver its custodied photo when the peer came back.
-    private func startFriendsDiscovery() {
-        let manager = store.meshNetworkManager
-        guard !manager.isSearching else { return }
-        let entry = FriendsDiscoveryEntry.entry(
-            isInSession: manager.isInSession, hasCommittedPeer: manager.hasCommittedPeer
-        )
-        switch entry {
-        case .fresh: manager.startJoin()
-        case .resume: manager.resumeSearchingForPartitionedMesh()
-        case .none: break
-        }
-        if entry.armsDiscoveryTimeout { armDiscoveryTimeout() }
-    }
-
-    /// Ends the session after five minutes of finding nobody — the TAB's half of door 3, for the
-    /// case the tab really owns: a search this visit started that has never had a peer.
-    ///
-    /// **This function itself guards nothing** (fix review finding P3-11): the decision moved into
-    /// `endSessionAfterDiscoveryTimeout()`, which refuses while a peer is committed. Which entries
-    /// arm it at all is `FriendsDiscoveryEntry.armsDiscoveryTimeout`'s answer, pinned there.
-    ///
-    /// **And it is no longer the only arm** (fix review finding P2-1). It fires only from
-    /// `startFriendsDiscovery()` — tab entry or scene-active — and bails on `isSearching`, so it is
-    /// single-shot per visit: a pair that blipped more than five minutes into a visit got no door 3
-    /// from here at all. The manager now arms the same interval at the slot-loss doors, where the
-    /// peer is actually lost (`MeshNetworkManager.discoveryGiveUpInterval`, read below so the two
-    /// clocks cannot drift apart). This arm stays because a session that never had a peer never
-    /// loses one, so the manager's edge never fires for it.
-    ///
-    /// It calls `endSessionAfterDiscoveryTimeout()` rather than `stopJoin()` (the P6 item 2 fix):
-    /// since the session-end ceremony moved off slot loss, this is one of the four doors that ends
-    /// a session, and standing the radios down silently would leave a pair whose peer never came
-    /// back with no review, no shop window and no way to keep its photos short of End Session.
-    private func armDiscoveryTimeout() {
-        discoveryTimeoutTask?.cancel()
-        discoveryTimeoutTask = Task { @MainActor in
-            do {
-                try await Task.sleep(for: .seconds(MeshNetworkManager.discoveryGiveUpInterval))
-            } catch {
-                // Cancellation means the timeout was superseded (`stopFriendsDiscovery`, or a new
-                // discovery start), so returning WITHOUT ending anything is the intended behavior.
-                return
-            }
-            store.meshNetworkManager.endSessionAfterDiscoveryTimeout()
-        }
-    }
-
-    /// Stands the radios down on tab exit / scene change — unless a peer is actually committed.
-    /// `hasCommittedPeer`, not `isInSession`, for the reason the timeout above gives.
-    private func stopFriendsDiscovery() {
-        discoveryTimeoutTask?.cancel()
-        discoveryTimeoutTask = nil
-        let manager = store.meshNetworkManager
-        guard !manager.hasCommittedPeer else { return }
-        manager.stopJoin()
-    }
+    // P7 item 3: `startFriendsDiscovery()`, `armDiscoveryTimeout()` and `stopFriendsDiscovery()` —
+    // the Friends three-way arm, the tab's half of door 3 and the `hasCommittedPeer`-guarded
+    // stand-down — moved out of this view into `ProximityRunTransition` (the decision) and the
+    // store's executor (`ProximityRunSeams.swift`); `FriendsDiscoveryEntry` is still the three-way,
+    // unmoved.
 }
 
 extension View {

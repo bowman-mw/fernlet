@@ -119,7 +119,12 @@ struct PrivacyWipeCoverageTests {
         // wipe; the direct call did neither, so items whose ciphertext leg 11 was about to destroy
         // could re-project into a still-live transcript (P6 item 4 fix review, finding P2-1).
         "meshNetworkManager.beginPrivacyWipe",
-        "presenceManager.stop",
+        // Every proximity radio — the session, the search and both listeners — stands down at
+        // leg 0 through the run policy (P7 item 3): raising `deleteAllInProgress` and re-running
+        // the policy answers `stop` for every radio, and `ProximityRunSeams.swift` executes it.
+        // The direct `presenceManager.stop()` that leg 7b held is gone; this token is the funnel's
+        // own re-run, spelled at leg 0 and again when the fact is lowered.
+        "reapplyProximityRunPolicy",
         "proximityTrustVault.apply",
         "heartLedger.clearAll",
         "moderationLedger.clearAll",

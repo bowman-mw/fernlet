@@ -571,8 +571,15 @@ enum ProximityRunPolicyProduct {
 
 // MARK: - ProximityRunPolicyFunnelTests
 
-/// The store's funnel (P7 item 2): the ONE place the app assembles the policy's input, and the only
-/// writer of the routed access gate outside ProximityKit — driven here without a scene.
+/// The store's funnel (P7 items 2–3): the ONE place the app assembles the policy's input, the only
+/// writer of the routed access gate outside ProximityKit, and — since item 3 — the one caller of
+/// the seams' executor. Driven here without a scene, on a real `FernletStore`.
+///
+/// **Every row here keeps every radio stopped or held.** A row that starts a radio (`foregroundOnly`
+/// for discovery or a listener) would call the real manager's `startJoin()` / `start()` on the
+/// store's production transports inside a unit test, so the rows use the app lock (which stops both
+/// listeners without closing the gate), the background scene, or duress. Which tab the funnel reads
+/// is therefore pinned by the pure table and by construction, not by a row here.
 ///
 /// Serialized and main-actor like `AgeGateWiringTests`, whose store construction this mirrors: each
 /// cell pins its own directories so the manager's sidecars are never shared across cells.
@@ -597,29 +604,33 @@ struct ProximityRunPolicyFunnelTests {
         )
     }
 
-    /// The manager holds exactly the gate the policy decided, on every edge.
+    /// The manager holds exactly the gate the policy decided, on every edge, and the verdict is kept.
     @Test func theFunnelWritesTheGateItDecided() {
         let store = makeStore("run-policy-funnel")
         #expect(store.meshNetworkManager.routedAccessGate == .closed, "every manager starts fail-closed")
         #expect(store.proximityRunVerdict == nil, "and no verdict exists before the first edge")
 
         let opened = store.applyProximityRunPolicy(
-            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: false,
+            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: true,
             duressSessionActive: false, now: Self.epoch
         )
         let openGate = MeshRoutedAccessGate(protectedDataAvailable: true, appIsForeground: true, duressActive: false)
-        #expect(opened.routedAccessGate == openGate, "an unlocked, foreground, duress-free edge opens the gate")
+        #expect(opened.routedAccessGate == openGate,
+                "an unlocked-device, foreground, duress-free edge opens the gate — the APP lock closes no gate leg")
         #expect(store.meshNetworkManager.routedAccessGate == openGate,
                 "and the manager holds exactly the gate the policy decided")
-        #expect(store.proximityRunVerdict == opened, "the store keeps the last verdict for item 3's seams")
+        #expect(store.proximityRunVerdict == opened, "the store keeps the last verdict — the next edge is diffed against it")
+        #expect(opened.presence == .stop && opened.recipeShare == .stop,
+                "the app lock keeps both listeners stopped, so this row starts no radio")
+        #expect(opened.discovery == .stop, "and Home wants no search")
 
         let backgrounded = store.applyProximityRunPolicy(
-            scenePhase: .background, protectedDataAvailable: true, appLockEngaged: false,
+            scenePhase: .background, protectedDataAvailable: true, appLockEngaged: true,
             duressSessionActive: false, now: Self.epoch
         )
         #expect(!store.meshNetworkManager.routedAccessGate.appIsForeground, "a background edge drops the foreground leg")
         #expect(backgrounded.mesh == .hold && backgrounded.discovery == .stop,
-                "and the radio half is decided even though nothing applies it yet")
+                "and the radio half is decided — held, stopped — even though nothing was up")
 
         let duress = store.applyProximityRunPolicy(
             scenePhase: .active, protectedDataAvailable: true, appLockEngaged: true,
@@ -628,21 +639,48 @@ struct ProximityRunPolicyFunnelTests {
         let held = store.meshNetworkManager.routedAccessGate
         #expect(held.duressActive && !held.isOpen, "duress closes the gate through its own leg")
         #expect(duress.mesh == .stop && duress.presence == .stop, "and stops every radio in the verdict")
+        #expect(!store.meshNetworkManager.isInSession && !store.meshNetworkManager.isSearching,
+                "with nothing to tear down on a fresh store")
     }
 
-    /// The funnel's input is the store's own facts plus the edge's, with the task inert and the
-    /// session absent on a fresh store — and the tab it reads is the mirror.
+    /// The view's entry reuses the scene facts the last scene edge retained, the store's entry
+    /// reuses everything — and before any scene edge both assume the most restrictive scene.
+    @Test func theViewAndStoreEntriesReuseTheRetainedSceneFacts() {
+        let store = makeStore("run-policy-funnel-entries")
+        let beforeAnyEdge = store.reapplyProximityRunPolicy(now: Self.epoch)
+        #expect(beforeAnyEdge.routedAccessGate == .closed,
+                "before the first scene edge the store's entry assumes a backgrounded, locked-down scene")
+        #expect(store.meshNetworkManager.routedAccessGate == .closed,
+                "so the manager's fail-closed gate is left exactly as it was")
+        #expect(beforeAnyEdge.mesh == .hold && beforeAnyEdge.discovery == .stop,
+                "and every radio is held or stopped — never started")
+
+        store.applyProximityRunPolicy(
+            scenePhase: .background, protectedDataAvailable: true, appLockEngaged: false,
+            duressSessionActive: false, now: Self.epoch
+        )
+        let viewEdge = store.applyProximityRunPolicy(appLockEngaged: true, duressSessionActive: false, now: Self.epoch)
+        #expect(!viewEdge.routedAccessGate.appIsForeground, "a view edge reuses the retained background phase")
+        #expect(viewEdge.routedAccessGate.protectedDataAvailable, "and the retained protected-data fact")
+        #expect(viewEdge.presence == .stop, "while reading its own fresh lock fact")
+
+        let storeEdge = store.reapplyProximityRunPolicy(now: Self.epoch)
+        #expect(storeEdge == viewEdge, "a store edge reuses everything the view edge left retained")
+        #expect(store.proximityRunVerdict == storeEdge, "and the kept verdict is the latest")
+    }
+
+    /// The store's own facts reach the input: the tab mirror, no ruling, no wipe, no task, no session.
     @Test func theFunnelReadsTheStoresFactsAndTheEdgesFacts() {
         let store = makeStore("run-policy-funnel-facts")
-        store.selectedTab = .social
-        let friends = store.applyProximityRunPolicy(
-            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: false,
+        store.selectedTab = .personal
+        let verdict = store.applyProximityRunPolicy(
+            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: true,
             duressSessionActive: false, now: Self.epoch
         )
         let expected = ProximityRunPolicy.verdict(for: ProximityRunPolicy.Input(
             scenePhase: .active,
-            selectedTab: .social,
-            appLockEngaged: false,
+            selectedTab: .personal,
+            appLockEngaged: true,
             duressSessionActive: false,
             protectedDataAvailable: true,
             belowMinimumAge: false,
@@ -652,17 +690,9 @@ struct ProximityRunPolicyFunnelTests {
             allowNearbyPresence: store.settings.allowNearbyPresence,
             allowNearbyRecipeShares: store.settings.allowNearbyRecipeShares
         ))
-        #expect(friends == expected,
+        #expect(verdict == expected,
                 "a fresh store's input is the edge's four facts, the mirrored tab, the two opt-ins, no ruling, no wipe, no task, no session")
-        #expect(friends.discovery == .foregroundOnly, "so the Friends tab wants discovery")
         #expect(!store.deleteAllInProgress, "no wipe is in flight on a fresh store")
-
-        store.selectedTab = .home
-        let home = store.applyProximityRunPolicy(
-            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: false,
-            duressSessionActive: false, now: Self.epoch
-        )
-        #expect(home.discovery == .stop, "and the tab mirror is what the policy reads")
-        #expect(home.routedAccessGate == friends.routedAccessGate, "while the gate never reads a tab")
+        #expect(store.discoveryTimeoutTask == nil, "and no fresh-search timeout was armed — nothing here starts a search")
     }
 }

@@ -16,8 +16,11 @@
 // `MeshNetworkManager.applyRoutedAccessGate(_:now:)`: `FernletStore.applyProximityRunPolicy(…)` is
 // the ONE funnel that assembles an `Input` — the store's own facts plus the four the scene hands
 // it — and writes the verdict's gate; the six edges in `FernletApp` call it and decide nothing.
-// The radio half of the verdict is computed and kept (`FernletStore.proximityRunVerdict`) but
-// applied by nothing yet: items 3 and 4 give each manager one `apply(_:)` seam and own the poller.
+// Item 3 made it the only writer of the RADIOS too: the verdict's radio half goes through
+// `ProximityRunTransition` (pure: last verdict, new verdict, the manager's three live predicates →
+// an ordered action list) and the seams in `ProximityRunSeams.swift`, the one file that speaks a
+// radio verb; no view or store method calls a manager's `start` / `stop` / `startJoin` any more
+// (`ProximityRunSeamsTests` walls it). Item 4 owns the poller.
 //
 // **It decides radios, never plaintext.** `routedAccessGate` is the same three facts
 // `FernletApp.pushRoutedAccessGate(_:protectedData:foreground:)` assembles today and nothing else:
