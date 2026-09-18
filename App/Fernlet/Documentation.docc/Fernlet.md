@@ -150,6 +150,7 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``ConnectionInspector``
 - ``ProximityRunPolicy``
 - ``ProximityRunTransition``
+- ``ProximitySessionPoller``
 - ``FriendListView``
 - ``SendGoodVibesLabel``
 - ``AwayHeartsCopy``

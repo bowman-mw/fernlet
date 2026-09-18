@@ -270,7 +270,7 @@ import ProximityKit
             #expect(!view.contains(name), "a retired radio member came back to ContentView")
         }
         let viewEdges = view.components(separatedBy: "applyProximityRunPolicyFromView()").count - 1
-        #expect(viewEdges == 6, "the view hands the funnel five edges through one helper — tab, lock, opt-in, age, launch — plus that helper's declaration")
+        #expect(viewEdges == 7, "the view hands the funnel six edges through one helper — tab, lock, opt-in, age, session liveness, launch — plus that helper's declaration")
         let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
         let storeEdges = store.components(separatedBy: "reapplyProximityRunPolicy(").count - 1
         #expect(storeEdges == 5, "the store's own edges — two opt-in setters, the wipe's raise and lower — plus the declaration")

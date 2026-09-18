@@ -1892,6 +1892,11 @@ final class FernletStore {
     /// P7 item 3. Replace-on-re-arm, `[weak self]`, cancelled at every stand-down; memory-only.
     @ObservationIgnored var discoveryTimeoutTask: Task<Void, Never>?
 
+    /// The one session poller (P7 item 4): armed and stood down by `ProximitySessionPoller`'s sync
+    /// with `meshNetworkManager.isSessionLive`, `[weak self]`, bounded by the ceiling in ticks, and
+    /// self-stopping on a poll that reports the session gone. Memory-only.
+    @ObservationIgnored var sessionPollTask: Task<Void, Never>?
+
     /// The four scene-side facts of the last edge, retained so the view's and the store's own edges
     /// can re-run the policy without a scene (P7 item 3).
     @ObservationIgnored private var proximityEdgeFacts: ProximityEdgeFacts?
@@ -2034,6 +2039,9 @@ final class FernletStore {
         executeProximityRunActions(
             ProximityRunTransition.actions(from: previous, to: verdict, mesh: meshFacts)
         )
+        // P7 item 4: the poller follows liveness, after the seams have had their say — a hard stop
+        // that just tore the session down finds it dead here and stands the timer down at once.
+        syncSessionPoller()
         return verdict
     }
 

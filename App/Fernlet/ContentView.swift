@@ -184,6 +184,12 @@ struct ContentView: View {
             .onChange(of: store.ageAssurance.record) { _, _ in
                 applyProximityRunPolicyFromView()
             }
+            // Session liveness is the poller's predicate (P7 item 4): a session founded or ended
+            // between the scene's and this view's edges must start or stop the one timer too, and
+            // the policy's session presence moves with it.
+            .onChange(of: store.meshNetworkManager.isSessionLive) { _, _ in
+                applyProximityRunPolicyFromView()
+            }
             // One-time "first kept friend" presence offer (Phase 4a). Attached to the stable
             // root — not the Social-tab layout (which is destroyed in the same transaction as
             // session teardown, the Phase-2 lesson) — and driven by observable store state.

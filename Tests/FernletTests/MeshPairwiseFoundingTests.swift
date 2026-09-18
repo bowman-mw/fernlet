@@ -743,11 +743,11 @@ struct MeshPairwiseFoundingTests {
     /// AFTER the resume, and a re-formed link is asserted to MERGE rather than found.
     ///
     /// Driven on the election's **winner**, by role and never by index, because the ceiling claim
-    /// belongs to the side that kept the mesh it founded: a yielder's `unwindNewbornMesh()` nils its
-    /// ceiling and `handleAdmissionGrant` arms no new one, so the yielder ends with a mesh and no
-    /// ceiling — asserted below as the named residual it is (P7's `ProximityRunPolicy` owns the
-    /// poller that would read it; nothing today does). Written as `nodes[0]` this cell passed or
-    /// failed on which of two random fingerprints was lower.
+    /// belongs to the side that kept the mesh it founded. The yielder's `unwindNewbornMesh()` nils
+    /// its ceiling and, since P7 item 4, the adoption re-arms one from the winner's mesh
+    /// (`armSessionCeilingFromAdoptedMeshIfNeeded(now:)`) — asserted below as the closed residual
+    /// it now is; `MeshSessionPollTests` drives that ceiling to its end. Written as `nodes[0]` this
+    /// cell passed or failed on which of two random fingerprints was lower.
     @Test func aPartitionedPairReArmsItsRadiosWithoutReFoundingItsMesh() async throws {
         let rig = try MeshFoundingRig.build(2, label: "re-arm")
         defer { rig.teardown() }
@@ -761,10 +761,9 @@ struct MeshPairwiseFoundingTests {
         let winner = lowerFounds ? 0 : 1
         let yielder = lowerFounds ? 1 : 0
         let manager = rig.nodes[winner].manager
-        #expect(rig.nodes[yielder].manager.sessionCeiling == nil, """
-            named residual, not a claim about the fix: a yielder ends with a mesh and NO ceiling, \
-            exactly as every proximity joiner has since P3 — latent only because \
-            `enforceSessionCeiling` still has no shipping caller (P7's poller)
+        #expect(rig.nodes[yielder].manager.sessionCeiling != nil, """
+            P6's named residual, closed by P7 item 4: a yielder now arms a ceiling from the mesh it \
+            adopted, exactly as every proximity joiner does — and `pollSession(now:)` enforces it
             """)
         rig.capturePhoto(at: winner)
         let founded = try #require(manager.currentMesh?.meshID)
