@@ -116,6 +116,31 @@ struct PresenceManagerTests {
         #expect(eligible.map(\.fingerprint) == ["2222000022220000", "1111000011110000"])
     }
 
+    // MARK: - Transport-error self-stop (P8 item 0, device finding (b))
+
+    /// A `didNotStart*` — the Local Network prompt interrupting a fresh install's first start —
+    /// stands the radio down by its own account, so the run policy's seam can see a stopped
+    /// listener under a running verdict and start it again. Before this the manager recorded the
+    /// diagnostic and stayed `isRunning`, and an idempotent `start()` no-oped over a dead radio for
+    /// the rest of the launch. Mirrors `ProximityRecipeShareManager`'s handler.
+    @Test func aStartFailureStandsTheRadioDownByItsOwnAccount() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHost()
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { self.baseDate }
+        manager.activateForTesting()
+        #expect(manager.isListening, "up by its own account")
+
+        manager.handleTransportErrorForTesting("Advertising failed to start for service \"fernlet-presence\": test")
+
+        #expect(!manager.isListening, "a start failure is a stop, not a diagnostic over a radio still claimed up")
+        #expect(manager.diagnosticEvents.contains { $0.message.contains("failed to start") },
+                "and it says so in the connection log")
+        manager.activateForTesting()
+        #expect(manager.isListening, "so the next start is not refused by the idempotence gate")
+    }
+
     // MARK: - Advertise cap (24, most-recently-seen preferred; matching uncapped)
 
     @Test func advertisedTagsCapAt24PreferringRecentButCandidatesAreUncapped() throws {

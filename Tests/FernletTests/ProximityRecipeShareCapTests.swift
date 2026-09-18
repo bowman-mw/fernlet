@@ -152,6 +152,24 @@ struct ProximityRecipeShareCapTests {
         return latest
     }
 
+    // MARK: - Transport-error self-stop (P8 item 0, device finding (b))
+
+    /// The recipe listener's self-stop on a `didNotStart*`, pinned by the radio's own public
+    /// account (`isListening`) — the read the run policy's seam reconciles against. The presence
+    /// manager mirrors it (`PresenceManagerTests`).
+    @Test func aStartFailureStandsTheListenerDownByItsOwnAccount() {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+        manager.markRunningForTesting()
+        #expect(manager.isListening, "up by its own account")
+
+        manager.multipeerSessionForTesting.onTransportError?(
+            "Browsing failed to start for service \"fernlet-recipe\": test"
+        )
+
+        #expect(!manager.isListening, "a start failure with no connection held is a stop")
+    }
+
     // MARK: - Inbound acceptance gate
 
     @Test func invitationAcceptedWhenIdle() {

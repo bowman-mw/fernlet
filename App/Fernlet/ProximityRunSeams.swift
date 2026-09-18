@@ -20,11 +20,21 @@
 // `ProximityRunAction` — so "which verb, and when" is a tier-1 table rather than a condition only a
 // scene can reach. The executor below is a `switch` with nothing to decide.
 //
-// Edge-triggered on purpose. A radio verb runs only when that radio's verdict CHANGED (the first
-// application counts every radio as an edge): `stopJoin()` funnels through `stopSearching()`,
-// whose three "if the session ended" hooks are meant to fire once per ending, and today's chain
-// reached them only from the Friends tab's own exits. Presence and recipe `start()` / `stop()` are
-// idempotent (both guard `isRunning`) and lose nothing by the same discipline.
+// Edge-triggered on purpose — for the mesh radio. A mesh verb runs only when that radio's verdict
+// CHANGED (the first application counts every radio as an edge): `stopJoin()` funnels through
+// `stopSearching()`, whose three "if the session ended" hooks are meant to fire once per ending,
+// and today's chain reached them only from the Friends tab's own exits.
+//
+// The two listeners are reconciled against the radio, not the last verdict (P8 item 0, device
+// finding (b)). Both managers stand themselves down on a `didNotStart*` — which the Local Network
+// permission prompt guarantees on a fresh install's very first start — and the prompt's
+// inactive → active round trip is not a verdict change (`.inactive` is foreground by design), so a
+// seam whose only memory was the previous verdict believed the listener up while the manager knew
+// it was down, until the share sheet's own out-of-band `start()`: the owner's observed workaround.
+// `MeshFacts` therefore carries each listener's own `isListening`, and a listener's verdict is
+// re-applied whenever the two disagree. Both `start()` / `stop()` are idempotent (each guards
+// `isRunning`), and a policy run is event-driven, so nothing spins: a denied permission costs one
+// failed start per edge, not a loop.
 //
 // What the seams keep apart. `hasCommittedPeer` guards the radios — a `hold` verdict is its value;
 // `isInSession` picks `leaveSession()` over `stopJoin()` on a hard stop; and `isSessionLive` is
@@ -96,21 +106,36 @@ nonisolated enum ProximityRunTransition {
         /// `MeshNetworkManager.hasCommittedPeer` — a slot holds a committed fingerprint now.
         let hasCommittedPeer: Bool
 
+        /// `PresenceManager.isListening` — the presence radio is up, by its own account.
+        let presenceListening: Bool
+
+        /// `ProximityRecipeShareManager.isListening` — the recipe listener is up, by its own account.
+        let recipeShareListening: Bool
+
         /// Builds the facts.
         ///
         /// - Parameters:
         ///   - isSearching: Whether the discovery radios are up.
         ///   - isInSession: Whether a mesh is held or a slot committed.
         ///   - hasCommittedPeer: Whether a slot holds a committed fingerprint now.
-        init(isSearching: Bool, isInSession: Bool, hasCommittedPeer: Bool) {
+        ///   - presenceListening: Whether the presence radio is up now.
+        ///   - recipeShareListening: Whether the recipe listener is up now.
+        init(
+            isSearching: Bool, isInSession: Bool, hasCommittedPeer: Bool,
+            presenceListening: Bool, recipeShareListening: Bool
+        ) {
             self.isSearching = isSearching
             self.isInSession = isInSession
             self.hasCommittedPeer = hasCommittedPeer
+            self.presenceListening = presenceListening
+            self.recipeShareListening = recipeShareListening
         }
     }
 
     /// The actions, in the order the executor runs them: the mesh radios first, then presence,
-    /// then recipe share. A radio whose verdict did not move asks for nothing.
+    /// then recipe share. A mesh radio whose verdict did not move asks for nothing; a listener
+    /// asks for nothing while its own account matches its verdict, and is re-applied when it does
+    /// not (``listenerNeedsReconciling(_:listening:)``).
     ///
     /// - Parameters:
     ///   - previous: The last verdict applied, or nil before the first — when every radio is an edge.
@@ -123,13 +148,29 @@ nonisolated enum ProximityRunTransition {
         mesh: MeshFacts
     ) -> [ProximityRunAction] {
         var actions = meshActions(from: previous, to: verdict, mesh: mesh)
-        if previous?.presence != verdict.presence {
+        if previous?.presence != verdict.presence
+            || listenerNeedsReconciling(verdict.presence, listening: mesh.presenceListening) {
             actions.append(.presence(verdict.presence))
         }
-        if previous?.recipeShare != verdict.recipeShare {
+        if previous?.recipeShare != verdict.recipeShare
+            || listenerNeedsReconciling(verdict.recipeShare, listening: mesh.recipeShareListening) {
             actions.append(.recipeShare(verdict.recipeShare))
         }
         return actions
+    }
+
+    /// Whether a listener's verdict must be re-applied because the radio no longer matches it.
+    ///
+    /// - Parameters:
+    ///   - state: The listener's verdict.
+    ///   - listening: The radio's own account of whether it is up.
+    /// - Returns: Whether the seam re-applies the verdict.
+    static func listenerNeedsReconciling(_ state: ProximityRunState, listening: Bool) -> Bool {
+        switch state {
+        case .run, .foregroundOnly: return !listening
+        case .stop: return listening
+        case .hold: return false
+        }
     }
 
     /// The mesh half. A hard stop (mesh `stop`) tears down whatever is up — the session if one is

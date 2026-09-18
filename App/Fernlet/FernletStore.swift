@@ -2034,7 +2034,9 @@ final class FernletStore {
         let meshFacts = ProximityRunTransition.MeshFacts(
             isSearching: meshNetworkManager.isSearching,
             isInSession: meshNetworkManager.isInSession,
-            hasCommittedPeer: meshNetworkManager.hasCommittedPeer
+            hasCommittedPeer: meshNetworkManager.hasCommittedPeer,
+            presenceListening: presenceManager.isListening,
+            recipeShareListening: recipeShareManager.isListening
         )
         executeProximityRunActions(
             ProximityRunTransition.actions(from: previous, to: verdict, mesh: meshFacts)

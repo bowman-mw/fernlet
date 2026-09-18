@@ -43,22 +43,37 @@ import ProximityKit
         ))
     }
 
-    /// The mesh manager's facts, named by what is up.
-    private static func facts(
-        searching: Bool = false, inSession: Bool = false, committed: Bool = false
-    ) -> ProximityRunTransition.MeshFacts {
-        ProximityRunTransition.MeshFacts(
-            isSearching: searching, isInSession: inSession, hasCommittedPeer: committed
-        )
+    /// The mesh manager's facts, named by what is up. A listener left unnamed AGREES with the
+    /// verdict it is applied under — the steady state every cell below assumes unless it is the
+    /// reconcile it is testing.
+    private struct Facts {
+        var searching = false
+        var inSession = false
+        var committed = false
+        var presenceListening: Bool?
+        var recipeListening: Bool?
     }
 
-    /// The transition, shortened.
+    /// The facts, named by what is up.
+    private static func facts(
+        searching: Bool = false, inSession: Bool = false, committed: Bool = false,
+        presenceListening: Bool? = nil, recipeListening: Bool? = nil
+    ) -> Facts {
+        Facts(searching: searching, inSession: inSession, committed: committed,
+              presenceListening: presenceListening, recipeListening: recipeListening)
+    }
+
+    /// The transition, shortened: an unnamed listener is resolved to the verdict's own state.
     private static func actions(
         from previous: ProximityRunPolicy.Verdict?,
         to next: ProximityRunPolicy.Verdict,
-        _ mesh: ProximityRunTransition.MeshFacts
+        _ mesh: Facts
     ) -> [ProximityRunAction] {
-        ProximityRunTransition.actions(from: previous, to: next, mesh: mesh)
+        ProximityRunTransition.actions(from: previous, to: next, mesh: ProximityRunTransition.MeshFacts(
+            isSearching: mesh.searching, isInSession: mesh.inSession, hasCommittedPeer: mesh.committed,
+            presenceListening: mesh.presenceListening ?? next.presence.isRunning,
+            recipeShareListening: mesh.recipeListening ?? next.recipeShare.isRunning
+        ))
     }
 
     // MARK: The table
@@ -71,18 +86,59 @@ import ProximityKit
                 "a fresh Friends visit: `startJoin()`, the timeout, presence on, recipe off — in that order")
     }
 
-    /// An unchanged verdict asks for nothing — the discipline that keeps `stopSearching()`'s
-    /// once-per-ending hooks from firing on every tab bounce.
+    /// An unchanged verdict asks for nothing while the radios agree with it — the discipline that
+    /// keeps `stopSearching()`'s once-per-ending hooks from firing on every tab bounce. The mesh
+    /// radio is edge-triggered without exception; the two listeners are silent only while they
+    /// match (the next two cells are the exception).
     @Test func anUnchangedVerdictIsSilent() {
         let same = Self.verdict(session: .peerCommitted)
         let again = Self.actions(from: same, to: same, Self.facts(searching: true, inSession: true, committed: true))
-        #expect(again.isEmpty, "the same verdict twice runs no verb at all")
+        #expect(again.isEmpty, "the same verdict twice, radios matching, runs no verb at all")
         let stillStopped = Self.actions(
             from: Self.verdict(duress: true, session: .peerCommitted),
             to: Self.verdict(duress: true, wipe: true, session: .peerCommitted),
             Self.facts()
         )
         #expect(stillStopped.isEmpty, "a hard stop that stays a hard stop tears nothing down twice")
+    }
+
+    /// P8 item 0, device finding (b): a listener that stood itself down — the recipe manager's
+    /// self-stop on a `didNotStart*`, which the Local Network prompt guarantees on a fresh
+    /// install's very first start — is re-started on the next policy run even though the verdict
+    /// never moved. The prompt's inactive → active round trip is not a verdict change (`.inactive`
+    /// is foreground by design), so an edge-only seam left the listener dark until the share
+    /// sheet's own `start()` — the owner's observed workaround.
+    @Test func aStoppedListenerUnderAnUnchangedRunningVerdictIsRestarted() {
+        let home = Self.verdict(tab: .home)
+        let recipeDark = Self.actions(from: home, to: home, Self.facts(recipeListening: false))
+        #expect(recipeDark == [.recipeShare(.foregroundOnly)],
+                "the recipe listener the verdict wants up, and which is down, is started — nothing else runs")
+        let presenceDark = Self.actions(from: home, to: home, Self.facts(presenceListening: false))
+        #expect(presenceDark == [.presence(.foregroundOnly)],
+                "and the presence radio on the same terms")
+        let bothDark = Self.actions(from: home, to: home, Self.facts(presenceListening: false, recipeListening: false))
+        #expect(bothDark == [.presence(.foregroundOnly), .recipeShare(.foregroundOnly)],
+                "both, in the executor's order, and still no mesh verb")
+    }
+
+    /// The reconcile runs the other way too: a listener still up under a verdict that says `stop`
+    /// is stopped, and a listener the verdict would `hold` is never touched — `hold` keeps what it
+    /// has, up or down.
+    @Test func aRunningListenerUnderAnUnchangedStopVerdictIsStopped() {
+        let friends = Self.verdict()
+        let recipeUp = Self.actions(from: friends, to: friends, Self.facts(searching: true, recipeListening: true))
+        #expect(recipeUp == [.recipeShare(.stop)],
+                "the Friends tab wants the recipe listener down; one that is up is stopped")
+        let background = Self.verdict(phase: .background, session: .peerCommitted)
+        let presenceUp = Self.actions(
+            from: background, to: background,
+            Self.facts(searching: true, inSession: true, committed: true, presenceListening: true)
+        )
+        #expect(presenceUp == [.presence(.stop)],
+                "presence is stopped in the background, not held: the mesh is what `hold` is for")
+        #expect(!ProximityRunTransition.listenerNeedsReconciling(.hold, listening: true)
+                && !ProximityRunTransition.listenerNeedsReconciling(.hold, listening: false),
+                "`hold` reconciles nothing, whichever way the radio is")
     }
 
     /// Leaving the Friends tab with a committed peer keeps the link — `hold` — and only cancels the

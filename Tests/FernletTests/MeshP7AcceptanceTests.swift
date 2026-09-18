@@ -237,13 +237,19 @@ struct MeshP7RadioSeamsAcceptanceTests {
     /// The transition table's headline rows, end to end through the pure half.
     @Test func theHeadlineTransitionsDecideTheRightVerbs() {
         let fresh = ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row())
-        let none = ProximityRunTransition.MeshFacts(isSearching: false, isInSession: false, hasCommittedPeer: false)
+        let none = ProximityRunTransition.MeshFacts(
+            isSearching: false, isInSession: false, hasCommittedPeer: false,
+            presenceListening: false, recipeShareListening: false
+        )
         #expect(ProximityRunTransition.actions(from: nil, to: fresh, mesh: none)
                 == [.startJoin, .armDiscoveryTimeout, .presence(.foregroundOnly), .recipeShare(.stop)],
                 "a fresh Friends visit starts a search, arms the timeout, starts presence")
         let committed = ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(session: .peerCommitted))
         let offTab = ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(tab: .home, session: .peerCommitted))
-        let live = ProximityRunTransition.MeshFacts(isSearching: true, isInSession: true, hasCommittedPeer: true)
+        let live = ProximityRunTransition.MeshFacts(
+            isSearching: true, isInSession: true, hasCommittedPeer: true,
+            presenceListening: true, recipeShareListening: false
+        )
         #expect(ProximityRunTransition.actions(from: committed, to: offTab, mesh: live)
                 == [.cancelDiscoveryTimeout, .recipeShare(.foregroundOnly)],
                 "a tab exit keeps a committed link — no stopJoin over it")
