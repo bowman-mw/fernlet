@@ -537,6 +537,84 @@ struct MeshPairwiseFoundingTests {
                 "the repair fires exactly once, and only in the ordering the yield alone cannot fix")
     }
 
+    /// P8 item 0, device finding (d) — the second reason the owner's pair never merged, seen on two
+    /// Simulators with the audit stream open: the yield's "routed index provably empty" condition
+    /// read the WHOLE index, and the routed store keeps custody of other meshes' items until their
+    /// hard deadline. A device that had ever completed a session therefore refused every yield for
+    /// up to six hours (`mesh.descriptor.yieldRefusedRoutedContent`), and because the repair in
+    /// `reannounceToNewbornPeerIfNeeded` can only ask the peer to yield, the pair stayed apart in
+    /// BOTH orderings. The condition's own doc says what it was for — a roster of one can never
+    /// have staged an item of its own — so it is narrowed to "no item minted in this newborn mesh".
+    /// Custody of the other mesh's item survives the yield: the unwind never touches the store.
+    @Test func aYielderCarryingAnotherMeshsCustodyStillYields() async throws {
+        let capture = MeshFoundingAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        let rig = try MeshFoundingRig.build(2, label: "yield-custody")
+        defer { rig.teardown() }
+        let lowerFounds = MeshNetworkManager.foundsPairwiseMesh(
+            local: rig.identities[0].localFingerprint, peer: rig.identities[1].localFingerprint
+        )
+        let yielder = lowerFounds ? 1 : 0
+        // Another mesh's item, admitted and staged into the yielder's store BEFORE the founding —
+        // what a store looks like on any device that finished a session earlier today. LIVE dates,
+        // not the custody fixtures' pinned ones: the founding's expiry sweep would remove an item
+        // whose hard deadline is already in the past, and the cell would be green for nothing.
+        let foreignKey = try Self.seedLiveForeignCustody(into: rig.nodes[yielder].store.meshRoutedStorage)
+        #expect(rig.routedIndex(yielder)?.items.contains { $0.key == foreignKey } == true,
+                "the foreign item is really in the yielder's index")
+
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+
+        #expect(rig.roster(0).count == 2 && rig.roster(1).count == 2,
+                "the pair converges even though the yielder holds another mesh's custody")
+        #expect(rig.nodes[0].manager.currentMesh?.meshID == rig.nodes[1].manager.currentMesh?.meshID,
+                "one mesh, not two")
+        #expect(capture.count(of: "mesh.descriptor.yieldRefusedRoutedContent") == 0,
+                "custody of ANOTHER mesh's item is not content this newborn mesh holds")
+        #expect(rig.routedIndex(yielder)?.items.contains { $0.key == foreignKey } == true,
+                "and that custody survives the yield untouched")
+    }
+
+    /// Admits and stages one item of ANOTHER mesh into `scope`, with a hard deadline six hours out
+    /// so no sweep removes it during the cell. Mirrors `MeshRoutedCustodyFixtures.rig(scope:)` on
+    /// live dates; the origin and roster are a separate delivery rig's, so nothing about them is
+    /// admitted to the founding pair's mesh.
+    private static func seedLiveForeignCustody(into scope: MeshRoutedStorageScope) throws -> MeshRoutedItemKey {
+        let members = try MeshDeliveryFixtures.rig(memberCount: 3)
+        let origin = try #require(members.identities[members.fingerprints[0]])
+        let payload = Data(repeating: 0x5A, count: 2_048)
+        let now = Date()
+        let manifest = try MeshRoutedManifest.signed(
+            meshID: members.meshID,
+            target: MeshDeliveryTarget(
+                contentID: UUID(), roster: members.roster, selfFingerprint: origin.localFingerprint
+            ),
+            typeToken: MeshRoutedManifestFixtures.typeToken,
+            contentHash: MeshRoutedContentDigest.contentHash(of: payload),
+            size: UInt64(payload.count),
+            createdAt: now,
+            hardDeadline: now.addingTimeInterval(6 * 3_600),
+            contentKey: Data(repeating: 0x33, count: 32),
+            recipientKeys: members.identities.mapValues(\.localKeyAgreementPublicKey),
+            identity: origin
+        )
+        let chunks = try MeshChunker.chunks(of: payload, for: manifest, identity: origin)
+        let store = MeshRoutedStore(scope: scope)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            #expect(store.admittingManifest(manifest, now: now).value != nil, "the foreign manifest is admitted")
+            // R2: bounded by the chunker's own count for a 2 KiB payload.
+            for chunk in chunks {
+                #expect(store.stagingChunk(chunk, now: now).value != nil, "and every chunk is staged")
+            }
+        }
+        return MeshRoutedItemKey(manifest)
+    }
+
     @Test func aThirdCommitMergesIntoTheFoundedMeshAndInheritsItsAdvertisements() async throws {
         let capture = MeshFoundingAuditCapture()
         capture.install()
