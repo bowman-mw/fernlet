@@ -12,6 +12,7 @@
 
 import Foundation
 import Testing
+import FernletCrypto
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -22,6 +23,15 @@ struct MeshSessionPollTests {
 
     /// A stated instant for the idle rig; nothing here reads a clock.
     private static let epoch = Date(timeIntervalSince1970: 1_700_000_000)
+
+    /// A poll under the founding rig's pinned install binding, so a persisting effect — the
+    /// ceiling's termination mark — is written rather than refused (the rig pins every commit and
+    /// pump the same way).
+    private static func poll(_ manager: MeshNetworkManager, now: Date) async -> MeshSessionPollReport {
+        await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            await manager.pollSession(now: now)
+        }
+    }
 
     /// P6 §12.3 finding 3, closed: the yielding half of a symmetric founding arms a ceiling from
     /// the adopted mesh — the winner's own signed deadline — and a poll past it ends the session.
@@ -43,18 +53,18 @@ struct MeshSessionPollTests {
                 "the same signed deadline on both sides — createdAt + 6 h, the one every member shares")
         #expect(yielder.isSessionLive, "and the session is live")
 
-        let early = await yielder.pollSession(now: ceiling.hardDeadline.addingTimeInterval(-3600))
+        let early = await Self.poll(yielder, now: ceiling.hardDeadline.addingTimeInterval(-3600))
         #expect(early.polled && !early.ceilingReached && early.sessionLiveAfter,
                 "an hour before the deadline the poll runs and ends nothing")
         #expect(yielder.isSessionLive, "the session is still live")
 
-        let late = await yielder.pollSession(now: ceiling.hardDeadline.addingTimeInterval(3600))
+        let late = await Self.poll(yielder, now: ceiling.hardDeadline.addingTimeInterval(3600))
         #expect(late.polled && late.ceilingReached, "an hour past the deadline the ceiling is reached")
         #expect(!late.sessionLiveAfter && !yielder.isSessionLive,
                 "and the yielder's session ended there — the residual is closed")
         #expect(!late.idleLapsed && !late.partitionMoved,
                 "the ceiling ended the poll: idle lapse and partition were not judged after it (the order)")
-        let after = await yielder.pollSession(now: ceiling.hardDeadline.addingTimeInterval(7200))
+        let after = await Self.poll(yielder, now: ceiling.hardDeadline.addingTimeInterval(7200))
         #expect(after == .skipped, "and a poll over the ended session runs nothing — the timer's stop condition")
     }
 
@@ -64,7 +74,7 @@ struct MeshSessionPollTests {
         defer { rig.teardown() }
         let manager = rig.nodes[0].manager
         #expect(!manager.isSessionLive, "a fresh manager holds no session")
-        let report = await manager.pollSession(now: Self.epoch)
+        let report = await Self.poll(manager, now: Self.epoch)
         #expect(report == .skipped, "no session: no consumer runs, nothing to report")
         #expect(!report.polled && !report.sessionLiveAfter, "and both flags say so")
         #expect(!manager.armSessionCeilingFromAdoptedMeshIfNeeded(now: Self.epoch), "the arm refuses with no mesh")

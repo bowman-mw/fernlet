@@ -152,9 +152,10 @@ import Testing
         let batteries = try Self.declaredTopLevelTypes().filter(Self.isMeshBattery)
         // MEASURED at the commit that moved it, never inherited: 28 at P6 item 7 (2 convergence
         // generators + the routed convergence battery + 4×P3 + 9×P4 + 12×P5), plus P6 item 9's
-        // eight clause suites. Items 6 and 7 declared no `MeshP6*AcceptanceTests` of their own, so
-        // the arithmetic below is the whole of it.
-        #expect(batteries.count >= 36, "the mesh batteries shrank: \(batteries.count) declared")
+        // eight clause suites = 36, plus P7 item 7's six clause suites (run policy, gate writer,
+        // radio seams, poller, resume, honesty) = 42. A count of DECLARATIONS, which the session
+        // that added the six could take without a toolchain.
+        #expect(batteries.count >= 42, "the mesh batteries shrank: \(batteries.count) declared")
         let ungated = batteries.subtracting(gated).sorted()
         #expect(ungated.isEmpty, """
             Mesh acceptance batteries declared in Tests/FernletTests but not named in \

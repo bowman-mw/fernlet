@@ -237,6 +237,10 @@ jobs:
         # item 9. Note the count is over `@Test` FUNCTIONS, not parameterized cases — measured, not
         # assumed: MeshRoutedDrainConvergenceTests contributes 19 while running a 40-cell and a
         # 12-cell rectangle. RAISE this as suites grow; never lower it in passing.
+        # P7 item 7 added the six MeshP7*AcceptanceTests suites (13 `@Test` functions by count)
+        # WITHOUT raising the floor: the session that added them had no toolchain to measure with,
+        # and a floor is a lower bound — re-measure this step on the first Mac run and raise it to
+        # what it executed.
         # CIGateSelectorBoundaryTests is the static half of this guard — every suite named on any
         # run-gated-suites.sh line must be a declared suite, and every MeshP<n>*AcceptanceTests /
         # convergence battery declared in the tree must be named here — and it also runs on the first
@@ -293,4 +297,10 @@ jobs:
             MeshP6ProjectionRetryAcceptanceTests \
             MeshP6HeartCeremonyAcceptanceTests \
             MeshP6HonestyAcceptanceTests \
-            MeshP6DeterminismAcceptanceTests
+            MeshP6DeterminismAcceptanceTests \
+            MeshP7RunPolicyAcceptanceTests \
+            MeshP7GateWriterAcceptanceTests \
+            MeshP7RadioSeamsAcceptanceTests \
+            MeshP7PollerAcceptanceTests \
+            MeshP7ResumeAcceptanceTests \
+            MeshP7HonestyAcceptanceTests
