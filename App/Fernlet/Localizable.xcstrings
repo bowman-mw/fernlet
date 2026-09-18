@@ -675,6 +675,9 @@
     "%lld people connected" : {
 
     },
+    "%lld photos stayed on this phone. No one else was in the session when you took them." : {
+
+    },
     "%lld pieces of equipment" : {
 
     },
@@ -843,6 +846,9 @@
 
     },
     "1 person connected" : {
+
+    },
+    "1 photo stayed on this phone. No one else was in the session when you took it." : {
 
     },
     "1 planned" : {
@@ -2497,6 +2503,16 @@
     "Film remaining: %lld" : {
 
     },
+    "Film remaining: %lld. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Film remaining: %1$lld. %2$@"
+          }
+        }
+      }
+    },
     "Film wind" : {
 
     },
@@ -2650,6 +2666,9 @@
 
     },
     "Good vibes from %@. Tap to tuck away." : {
+
+    },
+    "Got it" : {
 
     },
     "Ground" : {
@@ -2907,6 +2926,9 @@
     "It came from Health, so manage it in the Health app." : {
 
     },
+    "It can't be reopened, but anything you kept is already saved." : {
+
+    },
     "It comes off your personal care list. Days you've already ticked it stay as they are." : {
 
     },
@@ -2923,6 +2945,9 @@
 
     },
     "Item color" : {
+
+    },
+    "Its saved state was set aside. Nothing that was already saved was lost." : {
 
     },
     "Journal" : {
@@ -2965,6 +2990,9 @@
 
     },
     "Keep this in your recipe book to log again later." : {
+
+    },
+    "Keep this tab open. When someone from that session is nearby again, you'll reconnect automatically, and anything still on its way will finish arriving." : {
 
     },
     "Keepsake shelf" : {
@@ -4000,6 +4028,9 @@
     "Pick recipes, then share the combined list to Notes." : {
 
     },
+    "Pick up your last session" : {
+
+    },
     "Plan" : {
 
     },
@@ -4788,6 +4819,9 @@
     "Session name" : {
 
     },
+    "Sessions last up to six hours. Anything you kept is already saved." : {
+
+    },
     "Set" : {
 
     },
@@ -5212,6 +5246,9 @@
 
     },
     "That promise is unchanged, and it is why three of the six Phase 3 gates cannot be answered here. Those are answered next door, in the Phase 3 gate readout, at a stated cost." : {
+
+    },
+    "That session is over, so it can't be reopened. Anything you kept is already saved." : {
 
     },
     "That was %lld whole minutes of care. Nicely done." : {
@@ -5897,6 +5934,12 @@
     "You just sent %@ some warmth — hearts settle for a few minutes." : {
 
     },
+    "You left your last session" : {
+
+    },
+    "You were removed from that session. Anything you kept is already saved." : {
+
+    },
     "You will stop sharing with everyone in this session." : {
 
     },
@@ -6007,6 +6050,18 @@
 
     },
     "Your keepsake shelf" : {
+
+    },
+    "Your last session couldn't be reopened" : {
+
+    },
+    "Your last session ended" : {
+
+    },
+    "Your last session ended for you" : {
+
+    },
+    "Your last session timed out" : {
 
     },
     "Your local data will upload to iCloud and sync to your other Fernlet devices." : {
