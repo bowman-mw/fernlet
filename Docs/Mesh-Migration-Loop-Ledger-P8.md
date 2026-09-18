@@ -1,7 +1,7 @@
 # Mesh Migration Loop Ledger — P8
 
 **Phase:** P8 (background continuation), preceded by the P7 gauntlet · **Prompt:** [Next-Round-Prompt-Mesh-P8-2026-09-18.md](Next-Round-Prompt-Mesh-P8-2026-09-18.md)
-**Started:** 2026-09-18 · **Iteration:** 1 · **Tree at seed:** `main` = the P7 close-out (fast-forwarded 2026-09-18, `292ea0e`); P7 UNBUILT until item 0
+**Started:** 2026-09-18 · **Iteration:** 2 (item 1 opened 2026-09-18) · **Tree at seed:** `main` = the P7 close-out (fast-forwarded 2026-09-18, `292ea0e`); P7 UNBUILT until item 0
 
 **Environment of this session:** a Mac with Xcode 26 and the iOS 26.5 SDK, the owner's primary checkout. Concurrent sessions hold `App/Fernlet/Localizable.xcstrings`, `xcuserdata/**` and several `Docs/*.md` uncommitted; every commit below is by explicit pathspec, and the catalog and plan edits land as index-only blobs (the held working copies are untouched).
 
@@ -10,10 +10,10 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
 | 0 | Build and run P7: the gauntlet, the red-onces, the floor and pin re-measured, the catalog sync, the UI suite, the full suite; §13 → BUILT | 1 + 1b | — | done | item 0 log | eight commits (`cb34622` `4b5a2d8` `32b2d5c` `a29197b` `90ba678` `45c8449` `b7606d2` `4b46f6b` + the flip); owed to the owner: the device re-run, the three eyeballs, two a11y ratchet baselines, the DayRecord assert family |
-| 1 | P7 item 6 carried: gate the drain cells, measured | 1 | 0 | todo | | |
+| 1 | P7 item 6 carried: gate the drain cells, measured | 1 | 0 | done | `c758bd9` | one warm bundle at `92f0b8e`, three runs: 316 / 153 s → with the drain suite **359** / 157 s (+43, inside the 157–160 s noise) → with the fourteen 606 / 168 s (+247 cells, +11 s). Floor 316 → 359 (measured); floor red-once refused at 316 (`only 316 test(s) ran but the floor is 359`, exit 1). The fourteen PRICED, not gated — the owner's call: gating all of them costs 11 s; the plan's "would roughly double the step" (§12.3 finding 14) is refuted. No static pin (behaviour suite, the locked-device precedent). Adversarial verify: SHIP, one comment mislabel fixed in-session (the fourteen are not "the eight largest": the 32-cell `MeshRoutedInventoryDeltaTests` sits outside the price) |
 | 2 | P7 item 8 carried: tier 2 (backgrounding half; eligibility negative; ARM_AFTER rows) | 2 | 0 | todo | | timebox 2 |
 | 3 | The stop-browsing-keep-links verb; the refused row executed; the token a zero-count wall | 1 | 0 | todo | | two passes |
-| 4 | `MeshContinuationCoordinator` as a pure value + the state table; progress arithmetic | 1 | 0 | todo | | |
+| 4 | `MeshContinuationCoordinator` as a pure value + the state table; progress arithmetic | 1 | 0 | in-flight | | six states × eight events (the launcher's six + `taskStarted`/`taskRefused`, else `running`/`refused` are unreachable); scalars only, no ProximityKit symbol |
 | 5 | The two raises (coordinator only) + the disagreement cell | 1 | 3, 4 | todo | | two passes |
 | 6 | Task wiring: register, submit, expire, cancel, complete once; keeps the tunnel; feeds the store; anchor suppressed | 1 + 3 | 4, 5 | todo | | |
 | 7 | Refusal / expiry presentation on the Friends card slot; privacy sentence | 1 + 1b | 4 | todo | | keys listed for sync |
@@ -56,6 +56,8 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - `DayRecordRepository` (and 18 sibling sites): `assertionFailure` inside a `catch` on a Core Data / file I/O failure traps DEBUG builds on an environmental error (`Task 437: Fatal error: day record delete failed`); the store loads with `FileProtectionType.complete` and nothing defers day writes while the device is locked. Diagnosed 2026-09-18, NOT built; the owner chooses the scope (day repository only, or the 19-site family).
 - Carried from plan §25.4: the hardware lanes (A report, B double-dial, AWDL, D cable-out); option (b); D-7.30; §18.2 copy; the legacy unsigned removal; transcript `sid`; the census/duress questions; the final wording of P6's 19 and P7's 13 sentences; §17.3.
 - P6 §12.3's open findings 4–13, 15–17, 19, 20; P7 §13.3's residuals 4–9, 13–14.
+- **Gate the fourteen?** Item 1 priced them at 11 s for 247 cells (`.github/workflows/s3-wall.yml`, the mesh-batteries comment lists them). Recommendation: gate them — the stated reason for leaving them out ("would double the step") did not survive measurement. Owner's call; one line edit + a re-measured floor.
+- **Latent, now on CI (item 1's verify, finding 4):** `MeshRoutedDrainTests.swift:673, 718, 752` (`== 1`) and `:792, 822, 853` (`== 0`) count the process-global `FernletAuditLog` capture unscoped to the rig (the D-6a.10 shape item 0 fixed in the founding suite). Green today because no suite on the line emits the counted tokens beside it; take the counts as deltas or scope them by the rig's context key. Its own small item, not P8's.
 
 ## Decisions taken (defaults from §3 unless the owner overrides)
 | Decision | Choice | Taken on |
@@ -65,6 +67,10 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | Finding (b)'s design | reconcile against the radio's own `isListening`, not a level-triggered seam | 2026-09-18 |
 | Finding (c)'s surface | a count, never an alert per shot; no offline queue (freeze-at-mint stays the design) | 2026-09-18 |
 | Finding (d)'s guard | this mesh's minted items only; a parked record never counts; load-state fail-closed unchanged | 2026-09-18 |
+| Item 1's shape | one implement agent (build → warm → measure without / with / with-the-fourteen → floor to the measured count → floor red-once), then an adversarial re-read; items 3 and 4 surveyed read-only in parallel (design briefs only, no build beside a timing run) | 2026-09-18 |
+| Item 1's three comment clauses | applied in-session after the verify (a `#`-only edit; the selector parser skips `#` lines — re-simulated: `mesh-batteries 359 57 suites`, YAML loads) — process deviation, recorded | 2026-09-18 |
+| Item 4's events and states | the launcher's six events + `taskStarted` / `taskRefused`; five states + `idle`; exactly-once oracle `completion != nil ⟺ (from == .running && next != .running)`; impossible rows absorbed with a frozen token, never a trap; the value takes scalars (no ProximityKit symbol — the public widenings are items 5/6's); the subtitle count is branch presence (`externalPresentFingerprints`), passed in — §14's "fresh authenticated heartbeats" has no per-member representation, a close-out wording correction | 2026-09-18 |
+| Full-suite runs | **OWNER (2026-09-18): no full-suite run until everything is built.** Per-item gates are the touched suites + the routed/wall subsets (§6); the one full invocation is item 10/11's, after the last P8 file compiles | 2026-09-18 |
 | How the coordinator reaches the radios | (default: feeds the store; never a verb) | — |
 | Who raises `.backgrounded` / `.foregrounded` | (default: the coordinator only) | — |
 | The stop-browsing verb | (default: one new public verb; `stopJoin()` unchanged) | — |
@@ -83,9 +89,16 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - **`MeshRoutedCustodyFixtures.rig` uses PINNED past dates**: the founding's expiry sweep removes the seeded item, and a yield cell over it is green for nothing. Seed with live dates (`seedLiveForeignCustody`).
 - **`Text + Text` is deprecated in iOS 26 and warnings are errors** — `Text("\(a). \(Text(b))")` interpolation instead.
 - **The store uses `FileProtectionType.complete`** and nothing in the persistence layer consults protected-data availability; a debounced day save landing after the device locks throws, and 19 `assertionFailure`-in-`catch` sites turn that into a DEBUG crash.
+- **Gating cost is not proportional to cell count**: +92 % cells cost +10 % wall time on the mesh-batteries step (tier 1, one process, no radio). Price before deferring a gate.
+- **Two mesh suites carry no `@Suite` attribute** (`MeshKeyAgreementSchemaTests`, `MeshRoutedItemSealTests`) — plain structs found by their `@Test` members; a grep for `@Suite` under-counts them.
+- **P6's "~243 across fourteen suites" itemisation lived in a scratch file that is gone**; the fourteen item 1 chose on a stated rule measure 247. Record what the bundle counted, never the remembered estimate.
+- **Three launcher anchors drifted at `92f0b8e`**: `mayCommitRoutedHeartLedgerJudgement` is at `MeshNetworkManager.swift:9014` (not ~8964) with **two** shipping readers (`:7184`, `:7669`); `completeBackgroundTask` `:1400` is exact; the anchor suppression item 6 names may already be done (`MeshNetworkManager.swift:14267` injects `NoopProximityForegroundAnchor()`).
+- **Nothing items 5/6 need is public**: `meshID` (`:14391`), `sessionState` (`:8971`), `applySessionEvent(` (`:9115`), `sessionCeiling` (`:9020`) are ProximityKit-internal; item 5 pass 1 cannot compile without a narrow public raise pair, pinned by name.
+- **W8 pins the very line item 6 changes** (`funnel.contains("continuation: .notRequested")`, `MeshRoutedLockedDeviceTests.swift:~1195`) and `ProximityRunSeamsTests` pins `storeEdges == 5` (`:~334`) — a third setter makes 6; both move in item 6's commit, each red-once.
+- **Item 3's hold is a one-way door unless the transition gets a re-entry row**: after the verb, `FriendsDiscoveryEntry.entry(true, true)` → `.none` (`FriendsDiscoveryEntry.swift:66`), so browsing never returns; `isSearching == false` closes no admission door (`mayLinkToDiscoveredPeers` is `isSessionOpen || currentMesh != nil`) — a new admitting flag is needed in all three doors; `NetworkMeshSession.start` guards `!isRunning`, so the QUIC conformer needs a `resumeDiscovery()` or tier-2 browsing stays dark after a pause (`MeshMultipeerSession` already ships `pauseDiscovery()`/`resumeDiscovery()`, `:238–256`).
 - Carried from P7 (all still binding): `stopJoin()` tears the slots down; `.inactive` is foreground for the radios; the three store stop sites were not all teardown; a helper repeating a counted spelling reads one too many; persisting effects on the founding rig need the pinned install binding; the chat age gate is `AgeGate.chat`; `FernletLockState` carries associated values; every P6 lesson (a log with `Restarting after unexpected exit` has no usable total; never chain a build and a run on one DerivedData; `-only-testing:` names the SUITE — one file can hold four, and `Suite/cell` runs 0 tests under a green banner; zsh passes an unquoted `$ARGS` as one argument).
 - Closed; do not re-audit: `MeshTunnelConvergence`, the id-vs-endpoint family, the crypto-purpose / `PayloadType` / record-kind spellings, plan §10.7–§10.10, §11.1–§11.4, §12.1–§12.4 and, as a record, §13.1–§13.4; `Docs/Proximity-Security-Followups-2026-08-18.md` §1.
 - Concurrent sessions share the tree; never stage the catalog working copy, `xcuserdata`, or the stray PDF.
 
 ## Next item
-1 — item 0 is done bar the owner-side rows above (a device re-run of the four founding fixes with the three eyeballs; the two accessibility-ratchet baselines; the DayRecord assert-in-catch family, which will crash P8's lock/background device rows in DEBUG if left). Items 1–7 need only item 0.
+3 (item 4 in flight; 3 follows it for the build slot — never two builds on the shared DerivedData) — item 0 is done bar the owner-side rows above (a device re-run of the four founding fixes with the three eyeballs; the two accessibility-ratchet baselines; the DayRecord assert-in-catch family, which will crash P8's lock/background device rows in DEBUG if left). Items 1–7 need only item 0.
