@@ -2641,9 +2641,9 @@ or P8's side:
 
 ---
 
-## 13. Phase P7 — app-layer lifecycle gating seam — **IMPLEMENTED, UNBUILT** (2026-09-18)
+## 13. Phase P7 — app-layer lifecycle gating seam — **BUILT** (2026-09-18, on a Mac at P8 item 0)
 
-**Not BUILT, and this heading says so on purpose.** Every P7 commit was written in a Linux container
+**BUILT on 2026-09-18 at P8 item 0** — see the measured block at the end of §13.4. The paragraph that follows is the record of how §13 was written and is kept as history: every P7 commit was written in a Linux container
 with **no Xcode and no Swift toolchain** (the swift.org and GitHub toolchain downloads are refused by
 the proxy), so **nothing in this phase has compiled, and no test in it has run** — not once. What ran:
 `Scripts/power-of-10-scan.py` (509 files, 0 violations, assertion density 0.778) and
@@ -2928,6 +2928,25 @@ tasks), `MeshPairwiseFoundingTests` (the finding-3 residual assertion flipped),
 comment that says why and what to do on the first run; `CIGateSelectorBoundaryTests`' battery pin is
 `>= 42`. Both hosted workflows will build P7 for the first time on the first push of a branch CI
 runs — this branch has not been through them.
+
+**Measured, 2026-09-18, on a Mac (P8 item 0; ledger `Docs/Mesh-Migration-Loop-Ledger-P8.md`).**
+The first compile found five errors (`cb34622`), the owner's phone ↔ Simulator run four defects
+(`4b5a2d8`, `32b2d5c`, `a29197b`, `90ba678` — findings (a)–(d) in the ledger), and the first full
+run one unpinned wipe-path callee plus two process-wide audit counts (`b7606d2`). Then:
+- the two scans: 0 violations, 0 undocumented, after every commit;
+- `ProximityRunPolicyTests` alone: 19 tests green; every per-item suite green in the fix batches;
+- every red-once as listed in the P7 ledger, each red by the named wall and green on restore with a
+  clean tree: item 1 (5 cells red with the foreground fact flipped, after a rebuild each way), item 2
+  (W8 red by file name; red on both halves with the gate line out of the core's body), item 3 (the
+  retirement wall red by verb and by name), item 7 (`everyMeshAcceptanceBatteryIsGated` red by name);
+- the mesh-batteries line exactly as the workflow spells it: **316 ran, 0 failed** (the script's own
+  bundle count) — floor raised 300 → 316 (`4b46f6b`); `CIGateSelectorBoundaryTests` green against it;
+- the catalog sync from `HEAD`'s blob: the 13 sentences plus three photo strings, index-only (`45c8449`);
+- the UI suite serially: 25 classes; on a freshly erased Simulator every case passes except two pre-existing accessibility-ratchet failures (Progress photos, Recent bites) that reproduce identically on the P6 close-out build `82fc4d7` — owed to baseline maintenance, not P7;
+- the strict wall build (`Scripts/spm-wall-check.sh`): **WALL CHECK PASSED** at `4b46f6b` (`DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`, `SUPPRESS_WARNINGS=NO`, warnings as errors);
+- the full suite, one invocation: the first invocation measured **4 939 tests in 499 suites** (EXIT=65 on three issues, all fixed in `b7606d2` and green in isolation); the second, after every fix, carried `Restarting after unexpected exit` — no usable total by the P6 rule — with three load-sensitive issues that each passed alone (`ConnectionInspectorTests` 13, `MeshKeyAdvertisementDeliveryTests` 26); the owner directed no further full runs (baseline 4 866 / 486 at P6 item 10).
+The three simulator eyeballs are NOT done here — they are the owner's device re-run, recorded in the
+ledger as owed. The physical-device plan (§13's sections A–E, then F) is unchanged and still owed.
 
 **The gauntlet that turns this section into evidence**, in order, at `HEAD` of
 `claude/zen-goodall-wejlxg`: `Docs/Mesh-Migration-Loop-Ledger-P7.md` § "Owed to a Mac" — the two
@@ -4351,7 +4370,7 @@ Carried from §23.4, with what P6 added or closed:
 
 ## 25. P8 handoff — written at the P7 boundary, 2026-09-18
 
-P0–P6 are **BUILT** (§5–§8, §10–§12); P7 is **IMPLEMENTED, UNBUILT** (§13). This is what a fresh
+P0–P7 are **BUILT** (§5–§8, §10–§13; P7 measured at P8 item 0, 2026-09-18). This is what a fresh
 session needs to start P8 and nothing more; **§14 is the specification, §15 is the entry gate**, and
 §13's policy is the surface P8 feeds. P8 is the first phase since P2 whose acceptance is irreducibly
 physical — but its **first job is not P8 at all**: it is the Mac gauntlet over P7's HEAD, because a
