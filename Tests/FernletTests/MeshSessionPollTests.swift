@@ -12,7 +12,7 @@
 
 import Foundation
 import Testing
-import FernletCrypto
+@testable import FernletCrypto
 @testable import ProximityKit
 @testable import Fernlet
 

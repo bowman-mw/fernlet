@@ -25,10 +25,20 @@ import ProximityKit
         #expect(SessionResumeCopy.card(for: .nothing) == nil, "nothing to say shows no card")
         let cards = Self.presented.compactMap { SessionResumeCopy.card(for: $0) }
         #expect(cards.count == 6, "the offer, the set-aside, and the four endings each have a card")
-        #expect(Set(cards.map(\.title)).count == cards.count, "no two cards share a headline")
-        #expect(Set(cards.map(\.message)).count == cards.count, "nor a sentence")
+        #expect(Self.allDistinct(cards.map(\.title)), "no two cards share a headline")
+        #expect(Self.allDistinct(cards.map(\.message)), "nor a sentence")
         let symbolsNamed = cards.allSatisfy { !$0.symbolName.isEmpty }
         #expect(symbolsNamed, "every card has a symbol")
+    }
+
+    /// Pairwise distinctness over `Equatable` values — `LocalizedStringKey` is not `Hashable`, so
+    /// a `Set` cannot answer this.
+    private static func allDistinct<Value: Equatable>(_ values: [Value]) -> Bool {
+        // R2: bounded by values.count squared — six cards here.
+        for (index, value) in values.enumerated() where values.dropFirst(index + 1).contains(value) {
+            return false
+        }
+        return true
     }
 
     /// The four endings fold the eight frozen reasons and are named as ended, never as failed.

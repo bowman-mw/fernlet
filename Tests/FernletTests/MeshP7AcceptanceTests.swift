@@ -21,7 +21,7 @@
 import Foundation
 import SwiftUI
 import Testing
-import FernletCrypto
+@testable import FernletCrypto
 import LocalPersistence
 @testable import ProximityKit
 @testable import Fernlet
