@@ -650,11 +650,18 @@ struct DisposableCameraView: View {
     /// the island. A single `CameraPreviewView` inside `cameraStage` keeps stable structural
     /// identity across rotation, so the live `AVCaptureSession` is never detached/reattached (the
     /// old freeze/black flash).
+    ///
+    /// Modifier order is load-bearing: `ignoresSafeArea()` must wrap the `overlay`, not the color
+    /// alone. `ignoresSafeArea()` extends only the view it modifies, so an overlay attached *after*
+    /// it is laid out in the un-extended safe-area frame and every `.position` inside the stage
+    /// measures from the safe-area top — the housing, LED, glass, and prompt then land one top
+    /// inset (~60pt) below the island. With the overlay inside, the stage's bounds are the whole
+    /// screen and `IslandViewfinderMetrics`' screen-absolute y-values mean what they say.
     private func cameraSurface(geometry: GeometryProxy) -> some View {
         ZStack {
             Color(red: 0.13, green: 0.10, blue: 0.08)
-                .ignoresSafeArea()
                 .overlay { cameraStage(geometry: geometry) }
+                .ignoresSafeArea()
 
             // Corner + edge chrome lives in the safe-area coordinate space so buttons never tuck
             // under the island or the home indicator.
