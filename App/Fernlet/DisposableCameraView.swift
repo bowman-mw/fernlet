@@ -777,6 +777,12 @@ struct DisposableCameraView: View {
                 .font(.system(size: 11, weight: .semibold))
             Text("\(manager.filmRemaining)")
                 .font(.fernlet(.stat))
+            // The always-visible half of the kept-photo notice: a glyph, with the sentence itself
+            // in the info sheet and in this badge's accessibility label.
+            if manager.photosKeptOnThisPhone > 0 {
+                Image(systemName: "iphone")
+                    .font(.system(size: 11, weight: .semibold))
+            }
         }
         .foregroundStyle(manager.filmRemaining > 0 ? Color.goldenrod : Color.terracotta)
         .padding(.horizontal, 12)
@@ -786,8 +792,17 @@ struct DisposableCameraView: View {
             RoundedRectangle(cornerRadius: 7)
                 .stroke(Color.white.opacity(0.15), lineWidth: 1)
         )
-        .accessibilityLabel("Film remaining: \(manager.filmRemaining)")
+        .accessibilityLabel(filmCounterAccessibilityLabel)
         .accessibilityIdentifier("camera.filmCounter")
+    }
+
+    /// The badge's label, with the kept-photo sentence appended when there is one — `Text`
+    /// interpolating `Text`, so both halves are harvested (review T2-1).
+    private var filmCounterAccessibilityLabel: Text {
+        guard let kept = RoutedShareRefusalCopy.photoKeptNotice(count: manager.photosKeptOnThisPhone) else {
+            return Text("Film remaining: \(manager.filmRemaining)")
+        }
+        return Text("Film remaining: \(manager.filmRemaining). \(Text(kept))")
     }
 
     // MARK: - Viewfinder
@@ -1457,6 +1472,16 @@ struct DisposableCameraView: View {
                 Text(shots == 1 ? "1 shot left" : "\(shots) shots left")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
+            }
+
+            // P8 item 0 (c): photos that reached nobody are said once, as a count — through the
+            // copy table, never composed here — and never as an alert per shot.
+            if let kept = RoutedShareRefusalCopy.photoKeptNotice(count: manager.photosKeptOnThisPhone) {
+                Text(kept)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.terracotta)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("camera.photosKeptNotice")
             }
         }
     }

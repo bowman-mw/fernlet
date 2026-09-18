@@ -49,6 +49,19 @@ enum RoutedShareRefusalCopy {
         }
     }
 
+    /// The sentence for photos this session that reached nobody — one count, one sentence, nil
+    /// for none (P8 item 0, device finding (c)).
+    ///
+    /// - Parameter count: `MeshNetworkManager.photosKeptOnThisPhone`.
+    /// - Returns: a `LocalizedStringKey`, or nil when every capture was shared.
+    static func photoKeptNotice(count: Int) -> LocalizedStringKey? {
+        guard count > 0 else { return nil }
+        if count == 1 {
+            return "1 photo stayed on this phone. No one else was in the session when you took it."
+        }
+        return "\(count) photos stayed on this phone. No one else was in the session when you took them."
+    }
+
     /// The inline notice the chat panel shows at the top of its compose bar — above the text
     /// field, between it and the transcript — or nil when there is nothing to say (P6 item 4).
     ///

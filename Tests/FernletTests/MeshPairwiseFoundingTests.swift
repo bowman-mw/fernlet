@@ -1465,6 +1465,8 @@ struct MeshPairwiseFoundingTests {
             like, and what every proximity session did before item 2
             """)
         #expect(rig.nodes[0].manager.routedShareRefusal == nil, "and it was not refused either")
+        #expect(rig.nodes[0].manager.photosKeptOnThisPhone == 0,
+                "a photo that reached its destination is not one that stayed on this phone")
         #expect(rig.nodes[0].manager.meshPhotos.count == 1, "the sender's own echo is unconditional")
         try await rig.settle(until: { rig.wallEntries(at: 1, itemID: outbound) == 1 })
         #expect(rig.wallEntries(at: 1, itemID: outbound) == 1,

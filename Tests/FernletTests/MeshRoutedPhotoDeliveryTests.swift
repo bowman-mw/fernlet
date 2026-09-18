@@ -442,6 +442,9 @@ struct MeshRoutedPhotoSenderTests {
     /// mint would break every session whose derived roster is one — a solo host, and the founder's
     /// window between the founding and its first admission grant.
     @Test func aCaptureWithNoDestinationsStillReachesTheOwnWallSilently() throws {
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
         let store = makeTestStore()
         defer { withExtendedLifetime(store) {} }
         let manager = MeshNetworkManager(store: store)
@@ -457,6 +460,9 @@ struct MeshRoutedPhotoSenderTests {
         #expect(manager.photosAddedThisSession == 1, "and so is the session counter")
         #expect(manager.meshError == nil, "sending to nobody is not an error")
         #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
+        #expect(manager.photosKeptOnThisPhone == 1,
+                "but it is COUNTED: the photo is on this wall and no other, and never will be (P8 item 0 (c))")
+        #expect(capture.count(of: "mesh.routedShare.skipped") == 1, "and the skip is audited, once")
         #expect(manager.membershipVerifier == nil,
                 "and the leg under test is the LEDGERLESS one, not a roster of one")
         var absent = false
@@ -480,6 +486,9 @@ struct MeshRoutedPhotoSenderTests {
     /// of this on the same door, so if the skip moved legs both could be green while the mechanism
     /// was wrong.
     @Test func aSoloMemberWithAnArmedLedgerStillReachesOnlyItsOwnWallSilently() throws {
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
         let store = makeTestStore()
         defer { withExtendedLifetime(store) {} }
         let identity = try MeshPartitionFixtures.identity("solo-armed")
@@ -504,9 +513,13 @@ struct MeshRoutedPhotoSenderTests {
         #expect(manager.photosAddedThisSession == 1, "and so is the session counter")
         #expect(manager.meshError == nil, "a roster of one is not an error")
         #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
+        #expect(manager.photosKeptOnThisPhone == 1, "but the capture that reached nobody is counted")
+        #expect(capture.count(of: "mesh.routedShare.skipped") == 1, "and audited, once")
         var absent = false
         if case .absent = MeshRoutedStore(scope: store.meshRoutedStorage).load() { absent = true }
         #expect(absent, "nothing is staged for a destination set of zero")
+        manager.leaveMesh()
+        #expect(manager.photosKeptOnThisPhone == 0, "the count is the session's, and leaves with it")
     }
 
     /// **R-12a, the negative control.** A destination NO source has stated a key for — no

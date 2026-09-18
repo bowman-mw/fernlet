@@ -44,6 +44,24 @@ import ProximityKit
                 "audit vocabulary; a rename breaks every reader of mesh.routedShare.refused")
     }
 
+    /// P8 item 0, device finding (c): photos that reached nobody are counted and said, once, as a
+    /// count — never an alert per shot — and the camera view reads that count only through this
+    /// table, by identifier, so the UI suite can find the sentence.
+    @Test func photosKeptOnThisPhoneAreSaidAsACount() throws {
+        #expect(RoutedShareRefusalCopy.photoKeptNotice(count: 0) == nil, "nothing kept, nothing said")
+        let one = try #require(RoutedShareRefusalCopy.photoKeptNotice(count: 1), "one photo speaks")
+        let two = try #require(RoutedShareRefusalCopy.photoKeptNotice(count: 2), "and so do two")
+        #expect(one != two, "the count is in the sentence")
+        #expect(one != RoutedShareRefusalCopy.title && two != RoutedShareRefusalCopy.title, "a sentence, not the title")
+        let view = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/DisposableCameraView.swift"))
+        let reads = view.components(separatedBy: "photosKeptOnThisPhone").count - 1
+        #expect(reads >= 1, "the camera view reads the count")
+        #expect(view.contains("RoutedShareRefusalCopy.photoKeptNotice(count: manager.photosKeptOnThisPhone)"),
+                "and only through the copy table — no sentence is composed in the view")
+        #expect(view.contains(".accessibilityIdentifier(\"camera.photosKeptNotice\")"),
+                "the sentence is reachable by identifier for the UI suite")
+    }
+
     /// The CHAT fork's own sweep (P6 item 4). `everyCauseHasLocalizedCopy` calls
     /// `RoutedShareRefusalCopy.message` **by name**, so nothing about it generalises to a second
     /// fork: without this loop the chat sentences would have zero coverage and a new
