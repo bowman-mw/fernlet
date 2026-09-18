@@ -490,6 +490,53 @@ struct MeshPairwiseFoundingTests {
                 "and so is the drop on the side that did NOT yield, which used to be silent")
     }
 
+    /// P8 item 0, device finding (a): without UWB the two commits are two taps seconds apart. The
+    /// first tapper founds and announces inside its own commit, but the second tapper's slot is
+    /// still uncommitted, so its door drops that descriptor and nothing re-sends it; the second
+    /// tapper then founds its own mesh. When the first tapper holds the LOWER fingerprint it refuses
+    /// that mesh as foreign — and, before the repair, nobody ever sent it anything to yield to, so
+    /// both sat alone for the whole session (chat `.noDestinations`, photos silent). Every earlier
+    /// cell committed both halves before its first `settle`, which is why the door was never
+    /// crossed here. Both orderings, because the higher-first one was always green.
+    @Test(arguments: [true, false])
+    func anAsymmetricCommitStillConvergesOnOneMesh(lowerTapsFirst: Bool) async throws {
+        let capture = MeshFoundingAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        let rig = try MeshFoundingRig.build(2, label: lowerTapsFirst ? "asym-lower" : "asym-higher")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        let lowerFounds = MeshNetworkManager.foundsPairwiseMesh(
+            local: rig.identities[0].localFingerprint, peer: rig.identities[1].localFingerprint
+        )
+        let lower = lowerFounds ? 0 : 1
+        let higher = 1 - lower
+        let first = lowerTapsFirst ? lower : higher
+        let second = 1 - first
+
+        rig.commit(first, second)
+        try await rig.settle()
+        #expect(capture.count(of: "mesh.meshDescriptor.droppedUncommittedSlot") == 1,
+                "the first tapper's descriptor reaches the second before it has committed, and dies there")
+        rig.commit(second, first)
+        let mintedByLower = try #require(rig.nodes[lower].manager.currentMesh?.meshID)
+        try await rig.settle(until: { rig.roster(0).count == 2 && rig.roster(1).count == 2 })
+
+        let both = Set([rig.identities[0].localFingerprint, rig.identities[1].localFingerprint])
+        #expect(Set(rig.roster(0)) == both && Set(rig.roster(1)) == both,
+                "both derived rosters name both devices")
+        #expect(rig.nodes[0].manager.currentMesh?.meshID == mintedByLower
+                && rig.nodes[1].manager.currentMesh?.meshID == mintedByLower,
+                "one mesh, the lower fingerprint's, whichever half tapped first")
+        #expect(rig.nodes[higher].manager.sessionState == .activeForeground
+                && rig.nodes[lower].manager.sessionState == .activeForeground,
+                "both halves are live")
+        let reannounced = capture.count(of: "mesh.descriptor.reannouncedToNewbornPeer")
+        #expect(reannounced == (lowerTapsFirst ? 1 : 0),
+                "the repair fires exactly once, and only in the ordering the yield alone cannot fix")
+    }
+
     @Test func aThirdCommitMergesIntoTheFoundedMeshAndInheritsItsAdvertisements() async throws {
         let capture = MeshFoundingAuditCapture()
         capture.install()
