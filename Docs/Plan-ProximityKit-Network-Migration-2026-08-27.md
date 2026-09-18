@@ -2655,8 +2655,9 @@ first item of the P8 launcher. §13.4 below states plainly that its evidence is 
 **Landed on `claude/zen-goodall-wejlxg`, oldest first** (`b7e428a..e8ffb44`, twelve commits before the
 close-out from the P6 boundary `82fc4d7`: **six item commits, each followed by its own ledger
 commit**). `Docs/Mesh-Migration-Loop-Ledger-P7.md` is the decision record; rows 1–9 carry every SHA,
-residual and owed command cited in §13.1–§13.4. **P7 is pushed** to its work branch and is not merged
-to `main`.
+residual and owed command cited in §13.1–§13.4. **P7 is merged to `main`** — a fast-forward from the
+P6 close-out on 2026-09-18, at the owner's request, so the hosted workflows build P7 for the first
+time on `main` itself; the heading above still reads UNBUILT until a build agrees with it.
 
 | SHA | Item | What it is |
 |---|---|---|
@@ -4488,9 +4489,9 @@ first device run P8 can make.
   hardware sample still stands: iOS ended a user-started continued-processing task ≈ 46 s in, with no
   progress reported. **Lane D** (cable out) is the cheapest first run. Lane A's report, Lane B's
   double-dial row and the AWDL half of item 11 are unchanged.
-- **The push to `main`.** P7 sits on `claude/zen-goodall-wejlxg`, pushed, unmerged; `origin/main` is
-  the P6 close-out. The first hosted CI run over P7 is whichever push first reaches a branch the
-  workflows watch.
+- **The push to `main` — done.** P7 was fast-forwarded onto `main` on 2026-09-18 at the owner's
+  request, unbuilt; the first hosted CI run over P7 is the one that push triggers, and its result is
+  item 0's first datum.
 - **Unchanged from §24.4:** option (b) for `handleEncryptedMetadata`; D-7.30's per-session re-gossip
   budget; the legacy unsigned two-party removal; transcript `sid`; §18.2's partition UX copy; the two
   census/duress questions; the final wording of P6's nineteen sentences (in the catalog, stubs
