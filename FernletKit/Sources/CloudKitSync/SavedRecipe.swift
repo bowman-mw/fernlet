@@ -220,8 +220,12 @@ public struct SavedRecipeRepository {
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
         request.sortDescriptors = [NSSortDescriptor(key: "savedAt", ascending: false)]
 
-        guard let records = try? context.fetch(request) else {
-            assertionFailure("saved recipe fetch failed")
+        let records: [NSManagedObject]
+        do {
+            records = try context.fetch(request)
+        } catch {
+            // Environmental (locked/unavailable store): audit and serve the empty list.
+            PersistenceFailureAudit.record("savedRecipe.fetch.failed", error: error)
             return []
         }
 
@@ -230,6 +234,12 @@ public struct SavedRecipeRepository {
 
     /// Inserts or updates the given recipes by UUID (writing both representations), never
     /// deleting rows it wasn't handed.
+    ///
+    /// A recipe whose structured blob will not encode still succeeds: `apply` clears `payloadData`
+    /// and the row persists legacy-only, so the return value stays `true`. That is deliberate — the
+    /// row IS durable, and a `false` would make the caller retry the same un-encodable value
+    /// forever — but it means `true` does not promise the structured half survived. The
+    /// `savedRecipe.payloadEncode.failed` audit record is what says it did not.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     public func upsert(_ recipes: [RecipeDefinition]) -> Bool {
@@ -258,7 +268,7 @@ public struct SavedRecipeRepository {
             }
             return true
         } catch {
-            assertionFailure("saved recipe Core Data upsert failed")
+            PersistenceFailureAudit.record("savedRecipe.upsert.failed", error: error)
             context.rollback()
             return false
         }
@@ -279,7 +289,7 @@ public struct SavedRecipeRepository {
             }
             return true
         } catch {
-            assertionFailure("saved recipe delete failed")
+            PersistenceFailureAudit.record("savedRecipe.delete.failed", error: error)
             context.rollback()
             return false
         }
@@ -301,7 +311,7 @@ public struct SavedRecipeRepository {
             }
             return true
         } catch {
-            assertionFailure("saved recipe delete-all failed")
+            PersistenceFailureAudit.record("savedRecipe.deleteAll.failed", error: error)
             context.rollback()
             return false
         }
@@ -430,6 +440,11 @@ public struct SavedRecipeRepository {
     /// WRITE-BOTH (STEP 0, §9.1 point 3). Every write encodes the full structured `RecipeDefinition` into
     /// the additive `payloadData` blob AND keeps populating every legacy typed column exactly as before —
     /// so an un-updated paired device (which reads only the legacy columns) keeps working indefinitely.
+    ///
+    /// When the blob encode FAILS the write degrades to legacy-only: the column is cleared (never left
+    /// holding the previous save's blob — see the `catch`) and the row reads back through
+    /// `legacyRecipe`. The structured `ingredients` of that one recipe are lost; the audit record is
+    /// the only trace.
     private static func apply(_ recipe: RecipeDefinition, to record: NSManagedObject, now: Date = Date()) {
         // --- Legacy typed columns (unchanged from pre-STEP-0) ---
         let webImport = recipe.webImport
@@ -463,10 +478,20 @@ public struct SavedRecipeRepository {
 
         // --- Additive structured blob (STEP 0) ---
         let payload = SavedRecipePayload(recipe: recipe, lastPayloadEncodedAt: now)
-        if let data = try? RowPayloadCoders.makeEncoder().encode(payload) {
-            record.setValue(data, forKey: "payloadData")
-        } else {
-            assertionFailure("saved recipe payload encode failed")
+        do {
+            record.setValue(try RowPayloadCoders.makeEncoder().encode(payload), forKey: "payloadData")
+        } catch {
+            // DROP the structured half — do not leave the previous save's blob sitting there. On an
+            // UPDATE the record already carries a `payloadData` from an earlier write, and
+            // `recipe(from:)` prefers a decodable blob whenever the legacy columns still match what
+            // that blob projected. An edit that touches only the structured `ingredients` is invisible
+            // to `legacyProjection`, so the divergence check would see "no legacy edit", the stale blob
+            // would win, and the user's edit would silently vanish on the next load. Clearing the
+            // column forces the read through `legacyRecipe`, which serves the columns written above —
+            // fresh, if structurally poorer. The structured half is lost either way; this loses it
+            // honestly instead of resurrecting the pre-edit recipe.
+            record.setValue(nil, forKey: "payloadData")
+            PersistenceFailureAudit.record("savedRecipe.payloadEncode.failed", error: error)
         }
     }
 }
@@ -512,7 +537,7 @@ nonisolated public struct LegacySavedRecipeJSONRepository {
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
             return true
         } catch {
-            assertionFailure("saved recipe write failed")
+            PersistenceFailureAudit.record("savedRecipe.legacyWrite.failed", error: error)
             return false
         }
     }
@@ -531,7 +556,7 @@ nonisolated public struct LegacySavedRecipeJSONRepository {
             try FileManager.default.removeItem(at: fileURL)
             return true
         } catch {
-            assertionFailure("saved recipe legacy file delete failed")
+            PersistenceFailureAudit.record("savedRecipe.legacyDelete.failed", error: error)
             return false
         }
     }

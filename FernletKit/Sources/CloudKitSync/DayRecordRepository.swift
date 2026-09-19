@@ -83,6 +83,12 @@ public struct DayRecordRepository: DayRecordRepositoring {
     /// Inserts or updates the given sanitized days by `dateKey`, never deleting rows it wasn't
     /// handed; existing duplicate rows for a key are all updated (they collapse on the next read).
     ///
+    /// A day whose payload will not encode (a non-finite number reaching JSON) is SKIPPED and
+    /// audited, and the batch still reports `true` — so `SnapshotSaveCoordinator` marks the
+    /// snapshot durable and the audit record is the only trace of the dropped day. `false` is
+    /// reserved for the save itself failing; returning it for an un-encodable value would make
+    /// every subsequent save retry the same value forever.
+    ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     ///   Not discardable (R7): a dropped save silently loses the day the caller just wrote.
     public func upsert(_ days: [DayRecordUpsert]) -> Bool {
@@ -104,8 +110,13 @@ public struct DayRecordRepository: DayRecordRepositoring {
             }
             let encoder = RowPayloadCoders.makeEncoder()
             for entry in days {
-                guard let payload = try? encoder.encode(entry.day) else {
-                    assertionFailure("day record encode failed")
+                let payload: Data
+                do {
+                    payload = try encoder.encode(entry.day)
+                } catch {
+                    // A day whose payload will not encode (a non-finite number reaching JSON) is
+                    // skipped and audited — never a DEBUG trap on a runtime data condition.
+                    PersistenceFailureAudit.record("dayRecord.encode.failed", error: error)
                     continue
                 }
                 let record = existingByKey[entry.dateKey]
@@ -119,7 +130,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
             }
             return true
         } catch {
-            assertionFailure("day record Core Data upsert failed")
+            PersistenceFailureAudit.record("dayRecord.upsert.failed", error: error)
             context.rollback()
             return false
         }
@@ -144,7 +155,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
             }
             return true
         } catch {
-            assertionFailure("day record delete failed")
+            PersistenceFailureAudit.record("dayRecord.delete.failed", error: error)
             context.rollback()
             return false
         }
@@ -163,7 +174,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
             }
             return true
         } catch {
-            assertionFailure("day record delete-all failed")
+            PersistenceFailureAudit.record("dayRecord.deleteAll.failed", error: error)
             context.rollback()
             return false
         }
@@ -184,8 +195,13 @@ public struct DayRecordRepository: DayRecordRepositoring {
     /// CloudKit's later merge and any subsequent real (strictly newer) edit collapse them safely.
     private func dedupedDays(fetching request: NSFetchRequest<NSManagedObject>) -> [String: FernletDay] {
         let context = controller.container.viewContext
-        guard let records = try? context.fetch(request) else {
-            assertionFailure("day record fetch failed")
+        let records: [NSManagedObject]
+        do {
+            records = try context.fetch(request)
+        } catch {
+            // Environmental (locked/unavailable store), not a programmer error: audit and serve
+            // the empty dictionary this function already documents as its failure result.
+            PersistenceFailureAudit.record("dayRecord.fetch.failed", error: error)
             return [:]
         }
         // Group every decodable row by `dateKey` (a stable per-row tiebreak accompanies each).

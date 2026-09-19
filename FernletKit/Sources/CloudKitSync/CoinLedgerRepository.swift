@@ -47,8 +47,7 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
             entityName: "CoinLedgerRecord",
             loadTimingLabel: "CoinLedgerRepository.load",
             loadAsyncTimingLabel: "CoinLedgerRepository.loadAsync",
-            debugLabel: "coin ledger",
-            saveFailureMessage: "coin ledger Core Data save failed",
+            auditStore: "coinLedger",
             idString: { $0.id },
             createdAt: { $0.createdAt }
         )
@@ -85,7 +84,7 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
             }
             return true
         } catch {
-            assertionFailure("coin ledger delete-all failed")
+            PersistenceFailureAudit.record("coinLedger.deleteAll.failed", error: error)
             context.rollback()
             return false
         }

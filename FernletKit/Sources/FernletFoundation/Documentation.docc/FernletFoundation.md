@@ -78,6 +78,26 @@ A few invariants in this module are load-bearing for the rest of the app:
 - **Audit events fan out.** ``FernletAuditLog`` writes privacy-relevant events to the unified
   logger (context marked `.private`) and to a token-keyed registry of capture handlers, so
   parallel test suites can each observe every event without clobbering one another.
+- **An environmental persistence failure is audited, never trapped.** ``PersistenceFailureAudit``
+  is the one seam for a failed Core Data fetch/save/delete, file write/remove, or the payload
+  encode that feeds one. Those failures are runtime conditions, not violated invariants — the
+  stores load with `FileProtectionType.complete` and nothing defers a day write while the device
+  is locked — so the per-row repositories in `CloudKitSync`, the local blob in `LocalPersistence`
+  and `DiaryStore`'s past-day write record here and return their existing `false`/empty result
+  instead of asserting (P9 item 1; a DEBUG build used to die on an ordinary locked-device write).
+  The record carries the frozen dotted token plus the error's `NSError` domain and code ONLY —
+  never `localizedDescription` (an `EncodingError`'s embeds the coding path, which can name a day
+  key), never `userInfo` (Cocoa file errors carry `NSFilePath`), and nothing user-derived: the
+  past-day write's old log carried the day key in its context and no longer does. Programmer-error
+  guards — an empty day key, an unreachable enum case — keep their `assertionFailure`.
+
+  One shape does NOT propagate a failure result: a batch row whose payload will not encode (a
+  non-finite number reaching JSON) is skipped and audited, and the batch still reports `true`, in
+  `AppendOnlyRowStore.append`, `DayRecordRepository.upsert`, and `SavedRecipeRepository`'s
+  structured blob. Returning `false` there would make the caller retry the same un-encodable value
+  forever, so the audit record is the only trace of the dropped row — which is why the saved-recipe
+  site also CLEARS `payloadData` rather than leaving the previous save's blob to out-vote the fresh
+  legacy columns.
 
 Concurrency: the target builds with `defaultIsolation(MainActor.self)` (SPM targets do not
 inherit the app's default-isolation build setting), but most of the module opts out — the
@@ -117,6 +137,7 @@ escape hatch for off-main readers that need the live persisted value.
 ### Auditing and Instrumentation
 
 - ``FernletAuditLog``
+- ``PersistenceFailureAudit``
 - ``StartupTiming``
 
 ### Time Sources

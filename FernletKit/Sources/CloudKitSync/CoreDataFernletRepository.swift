@@ -670,7 +670,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             for record in try context.fetch(request) { context.delete(record) }
             if context.hasChanges { try context.save() }
         } catch {
-            assertionFailure("database record purge failed")
+            PersistenceFailureAudit.record("coredata.purge.failed", error: error)
             context.rollback()
             succeeded = false
         }
@@ -707,8 +707,13 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             print("[Fernlet] Refusing to save after Core Data record fetch failed.")
             return false
         }
-        guard let data = try? encoder.encode(database) else {
-            assertionFailure("Core Data database encode failed")
+        let data: Data
+        do {
+            data = try encoder.encode(database)
+        } catch {
+            // Audited, not asserted: a non-finite number reaching JSON is a runtime data
+            // condition. `false` is the caller's existing not-durable signal.
+            PersistenceFailureAudit.record("coredata.encode.failed", error: error)
             return false
         }
 
@@ -738,7 +743,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             cachedRecordUpdatedAt = record.value(forKey: "updatedAt") as? Date
             return true
         } catch {
-            assertionFailure("Core Data database save failed")
+            PersistenceFailureAudit.record("coredata.save.failed", error: error)
             context.rollback()
             cachedDatabase = nil  // Invalidate on failure
             cachedAllDays = nil   // …and the day memo, so a caller that patched it in place re-reads fresh

@@ -55,8 +55,7 @@ public struct MilestoneLedgerRepository: MilestoneLedgerRepositoring {
             entityName: "MilestoneLedgerRecord",
             loadTimingLabel: "MilestoneLedgerRepository.load",
             loadAsyncTimingLabel: "MilestoneLedgerRepository.loadAsync",
-            debugLabel: "milestone ledger",
-            saveFailureMessage: "milestone ledger Core Data save failed",
+            auditStore: "milestoneLedger",
             idString: { $0.id },
             createdAt: { $0.createdAt }
         )
@@ -100,7 +99,7 @@ public struct MilestoneLedgerRepository: MilestoneLedgerRepositoring {
             }
             return true
         } catch {
-            assertionFailure("milestone ledger delete-all failed")
+            PersistenceFailureAudit.record("milestoneLedger.deleteAll.failed", error: error)
             context.rollback()
             return false
         }

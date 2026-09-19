@@ -1695,11 +1695,17 @@ public final class DiaryStore {
             for: dateKey, todayKey: todayKey
         )
         if !saved {
-            // An assert alone compiles out of Release, which left a failed past-day write (read-only
-            // recovery, a Core Data fault, a rolled-back context) completely silent: the UI showed the
-            // edit, nothing was persisted, and no record existed to explain the lost entry later.
-            FernletAuditLog.log("diary.pastDaySave.failed", context: ["date": dateKey])
-            assertionFailure("past-date save failed for \(dateKey)")
+            // Audited, NOT asserted (P9 item 1): a failed past-day write is environmental — read-only
+            // recovery, a Core Data fault, a complete-protection store unreadable while the device is
+            // locked — so trapping here killed DEBUG builds on an ordinary runtime condition. The audit
+            // is the whole record: without it the UI showed the edit, nothing was persisted, and
+            // nothing explained the lost entry later. `false` propagates to the caller unchanged.
+            //
+            // Routed through ``PersistenceFailureAudit`` like every other environmental persistence
+            // failure, and the `date` context the earlier log carried is GONE: `dateKey` is a
+            // user-derived day key, and the seam's whole contract is token + error kind only. The
+            // token alone plus the store's own failure record is enough to diagnose this.
+            PersistenceFailureAudit.record("diary.pastDaySave.failed")
         }
         return saved
     }

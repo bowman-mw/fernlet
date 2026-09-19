@@ -48,8 +48,7 @@ public struct CustomItemRepository: CustomItemRepositoring {
             entityName: "CustomItemRecord",
             loadTimingLabel: "CustomItemRepository.load",
             loadAsyncTimingLabel: "CustomItemRepository.loadAsync",
-            debugLabel: "custom item",
-            saveFailureMessage: "custom item Core Data upsert failed",
+            auditStore: "customItem",
             idString: { $0.id.uuidString },
             createdAt: { $0.createdAt }
         )
@@ -87,7 +86,7 @@ public struct CustomItemRepository: CustomItemRepositoring {
             }
             return true
         } catch {
-            assertionFailure("custom item delete failed")
+            PersistenceFailureAudit.record("customItem.delete.failed", error: error)
             context.rollback()
             return false
         }
@@ -106,7 +105,7 @@ public struct CustomItemRepository: CustomItemRepositoring {
             }
             return true
         } catch {
-            assertionFailure("custom item delete-all failed")
+            PersistenceFailureAudit.record("customItem.deleteAll.failed", error: error)
             context.rollback()
             return false
         }

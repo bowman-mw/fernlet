@@ -404,7 +404,7 @@ public struct LocalFernletRepository: FernletRepository {
             state.persistenceBlockedByDecodeFailure = false
             return true
         } catch {
-            assertionFailure("local database purge failed")
+            PersistenceFailureAudit.record("localStore.purge.failed", error: error)
             return false
         }
     }
@@ -419,8 +419,13 @@ public struct LocalFernletRepository: FernletRepository {
             return false
         }
         guard ensureDirectoryExists() else { return false }
-        guard let data = try? encoder.encode(database) else {
-            assertionFailure("database encode failed")
+        let data: Data
+        do {
+            data = try encoder.encode(database)
+        } catch {
+            // Audited, not asserted: a non-finite number reaching JSON is a runtime data
+            // condition, and `false` is the caller's existing not-durable signal.
+            PersistenceFailureAudit.record("localStore.encode.failed", error: error)
             return false
         }
         guard write(data) else { return false }
@@ -443,7 +448,7 @@ public struct LocalFernletRepository: FernletRepository {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             return true
         } catch {
-            assertionFailure("database directory create failed")
+            PersistenceFailureAudit.record("localStore.directoryCreate.failed", error: error)
             return false
         }
     }
@@ -456,7 +461,7 @@ public struct LocalFernletRepository: FernletRepository {
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
             return true
         } catch {
-            assertionFailure("database write failed")
+            PersistenceFailureAudit.record("localStore.write.failed", error: error)
             return false
         }
     }

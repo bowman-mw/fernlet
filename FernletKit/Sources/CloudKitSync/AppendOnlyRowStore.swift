@@ -24,9 +24,14 @@ import FernletFoundation
 /// (the load sort key). `append` upserts only the rows it is handed and never deletes
 /// others, so a stale in-memory set on one device cannot wipe rows synced in from
 /// another; the engine intentionally has **no delete method** — deletion policy stays
-/// per-repository (each wrapper keeps its own `deleteAll()` beside its contract). Failed
-/// saves assert in Debug builds, roll the context back, and return `false`; undecodable
-/// rows are dropped per row on read. MainActor-isolated by the module default, working
+/// per-repository (each wrapper keeps its own `deleteAll()` beside its contract). A failed
+/// fetch or save is ENVIRONMENTAL (a locked complete-protection store, a full disk), so it is
+/// recorded through ``PersistenceFailureAudit`` — tagged with ``auditStore`` — instead of
+/// trapping: a failed fetch returns empty, a failed save rolls the context back and returns
+/// `false`. A row whose payload will not ENCODE is a different shape and is documented
+/// separately: it is skipped and audited, and the batch still reports `true` — a `false` there
+/// would make the caller retry the same un-encodable value forever. Undecodable rows are
+/// dropped per row on read. MainActor-isolated by the module default, working
 /// on ``PersistenceController``'s view context.
 struct AppendOnlyRowStore<Entry: Codable> {
     /// The persistence controller whose view context all reads and writes run on.
@@ -38,16 +43,18 @@ struct AppendOnlyRowStore<Entry: Codable> {
     let loadTimingLabel: StaticString
     /// The `StartupTiming` signpost label for `loadAsync()` (e.g. `"CoinLedgerRepository.loadAsync"`).
     let loadAsyncTimingLabel: StaticString
-    /// The human label used in Debug `assertionFailure` messages (`"<label> fetch failed"`,
-    /// `"<label> encode failed"`).
-    let debugLabel: String
-    /// The full Debug `assertionFailure` message for a failed Core Data save (threaded through
-    /// whole because the wrappers' historical texts differ in more than the label).
-    let saveFailureMessage: String
+    /// The FROZEN English store token this engine's audit records are tagged with (`"coinLedger"`,
+    /// `"milestoneLedger"`, `"customItem"`). A token, never display text — it is audit data, so it
+    /// does not localize. Replaces the two per-wrapper `assertionFailure` message strings the
+    /// engine used to carry, which existed only to name the store inside a DEBUG trap.
+    let auditStore: String
     /// Maps an entry to the stable `idString` attribute value it is keyed by.
     let idString: (Entry) -> String
     /// Maps an entry to its `createdAt` attribute value (the load sort key).
     let createdAt: (Entry) -> Date
+
+    /// The audit context every failure record from this engine carries — which row store it was.
+    private var auditContext: [String: String] { ["store": auditStore] }
 
     /// Loads every entry, oldest first; undecodable rows are dropped per row.
     func load() -> [Entry] {
@@ -63,14 +70,25 @@ struct AppendOnlyRowStore<Entry: Codable> {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
         request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
-        guard let records = try? context.fetch(request) else {
-            assertionFailure("\(debugLabel) fetch failed")
+        let records: [NSManagedObject]
+        do {
+            records = try context.fetch(request)
+        } catch {
+            // Environmental, not a programmer error: a locked (complete-protection) or unavailable
+            // store fails the fetch. Audit and serve the empty list the caller already handles.
+            PersistenceFailureAudit.record("rowStore.fetch.failed", error: error, context: auditContext)
             return []
         }
         return records.compactMap { entry(from: $0) }
     }
 
     /// Upserts the given entries by `idString`, never deleting rows it wasn't handed.
+    ///
+    /// An entry whose payload will not encode (a non-finite number reaching JSON) is SKIPPED and
+    /// audited, and the rest of the batch is still written: the return value stays `true`, so a
+    /// caller that treats `true` as "every row I handed over is durable" would be wrong — the
+    /// audit record is the only trace of the dropped row. `false` is reserved for the save itself
+    /// failing, because a `false` on an un-encodable value would retry-loop forever.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     func append(_ entries: [Entry]) -> Bool {
@@ -91,8 +109,13 @@ struct AppendOnlyRowStore<Entry: Codable> {
             }
             let encoder = RowPayloadCoders.makeEncoder()
             for entry in entries {
-                guard let payload = try? encoder.encode(entry) else {
-                    assertionFailure("\(debugLabel) encode failed")
+                let payload: Data
+                do {
+                    payload = try encoder.encode(entry)
+                } catch {
+                    // A row whose payload will not encode (a non-finite number reaching JSON) is
+                    // skipped, audited, and never allowed to trap the process.
+                    PersistenceFailureAudit.record("rowStore.encode.failed", error: error, context: auditContext)
                     continue
                 }
                 let record = existingByID[idString(entry)]
@@ -106,7 +129,7 @@ struct AppendOnlyRowStore<Entry: Codable> {
             }
             return true
         } catch {
-            assertionFailure(saveFailureMessage)
+            PersistenceFailureAudit.record("rowStore.save.failed", error: error, context: auditContext)
             context.rollback()
             return false
         }
