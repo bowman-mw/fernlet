@@ -1805,6 +1805,20 @@ disabled". A Mac on an ordinary RFC1918 LAN is the cheapest control.
 for 80 s. **Until L-4 is cleared, every tier-2 row that needs a committed pair is un-runnable** —
 which tonight is rows (b) and (d), and it is also the gate on P6's four long-standing un-run rows.
 
+**THE VERDICT, at the P8 close-out — and it is not this lane's own fault:** attributed
+2026-09-19 by a baseline-commit probe (four lane runs, same hour, same Simulators, same CGNAT
+network): NOT a P8 regression — the P6 close-out `82fc4d7` and P2's `596bcf8` discover, the pre-P8
+tip `92f0b8e` and P8's tip fail identically; a P7 defect at `df0ce5b` (P7 item 3): the DEBUG matrix
+harness calls `startJoin()` on the Home tab and the store's first policy apply (previous nil, every
+radio an edge) resolves discovery `.stop` → `.stopJoin` → the QUIC listener is cancelled ~20 ms
+after creation, before Bonjour registers; the product path (entry via the Social tab) is unaffected;
+fix landing as a P7 fix commit — the harness selects the Social tab before `startJoin()`, with the
+pure-value cell `theMatrixHarnessSurvivesTheFirstRunPolicyVerdict` (no `.stopJoin` in the first
+verdict over the harness's facts) that would have reddened in `df0ce5b` itself, and a scan pinning
+every shipping `startJoin()` / `resumeSearchingForPartitionedMesh()` caller under `App/` to the
+seams file or the harness. The P7 fix commit's SHA is added to this section when it lands; until it
+is on `main` and a lane run discovers again, the rows above stay un-runnable.
+
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
 
 **The shipping transport has never run on hardware.** Lane A puts the *spike* on a device; Lane C
@@ -1934,18 +1948,27 @@ move the **Background operation** row, because the probe **tears its own tunnel 
 ends**; answering "does an established connection survive backgrounding?" needs a variant that keeps
 the tunnel and keeps logging past task expiry, and building it is part of P8.
 
+**Status at the P8 close-out (2026-09-19).** P8 is BUILT at tier 1 and 1b (plan §14) and **no row in
+this table has run on hardware.** One half of one row was earned on the sim lane — the Background
+operation row's gate half, P8 item 2 row (a), recorded in that row and in Lane C above. What else
+changed is that these rows are now *answerable*: the production coordinator keeps the tunnel when the
+task ends, where the probe tore its own down, so the "Background operation" row finally has a binary
+that can answer it. Every row below is the owner's devices, P8 launcher item 9, and the device plan
+`Docs/Mesh-P7-Physical-Device-Test-Plan-2026-09-18.md` § F is the same list as a checklist.
+
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |
-| Four-device topology | Simultaneous starts and topology changes leave at most one connection per peer pair, at `maxConnections = 4`. | Deferred to P8 — see plan §15.1 | — |
+| Four-device topology | Simultaneous starts and topology changes leave at most one connection per peer pair, at `maxConnections = 4`. | **NOT RUN — owner's devices (P8 item 9).** Unchanged by P8; four devices, plan §15.1, device row F7 | 2026-09-19 |
 | Background operation | An established connection survives backgrounding and lock; re-dial via cached endpoint works while backgrounded; a fresh background Bonjour browse is recorded either way (failure is the expected, documentable result). | **Still deferred to P8 / plan §15.1 — and the sim lane cannot stand in for it.** What the sim lane DID earn on 2026-09-19 (P8 item 2, row (a)) is the half above the transport: a real `.background` scene edge drops the pushed `appIsForeground` leg (`mesh.routedAccess.gateChanged … foreground=false`) and holds the routed re-entry down until the foreground push. Whether a **connection** survives that edge is untouched — the sim lane held no connection to survive it (finding L-4), and a Simulator answers `BGTaskSchedulerErrorDomain error 1` to the continuation that would keep the process alive on a device | 2026-09-19 (gate half only; transport half deferred) |
-| Low Power Mode | Behaviour on and off is recorded empirically. Apple documents neither direction. | Deferred to P8 — see plan §15.1 | — |
-| Progress soak | Three-hour and six-hour sessions survive while elapsed-based progress advances. Failure activates the degraded ladder in plan §14, it does not sink the plan. | Deferred to P8 — see plan §15.3 | — |
-| Resource budget | Battery, peak memory, throughput, and photo-size measurements meet an approved product budget. | Deferred to P8 — see plan §15.3 | — |
-| Continued task | A user-started request either begins with system activity or reports the `.fail` refusal clearly. | Deferred to P8 — see plan §14 | — |
-| Cancellation | Every path stops the probe and completes the task exactly once. | Deferred to P8 — see plan §14 | — |
-| Force quit | Evidence confirms durable production acknowledgements cannot depend on an expiration callback. | Deferred to P8 — see plan §14 | — |
-| Partition walks | The plan's §10 partition scenarios, physically. | Deferred to P8 — see plan §15.2 | — |
-| Wi-Fi Aware evaluation | A bounded two-day answer on hardware floor, whether `NetworkConnection` rides over it, and battery profile. Outcome is a recommendation, not a dependency. | Deferred to P8 — see plan §15.4 | — |
+| Low Power Mode | Behaviour on and off is recorded empirically. Apple documents neither direction. | **NOT RUN — owner's devices (P8 item 9).** Unchanged by P8; the empirical answer is the deliverable. Plan §15.1, device row F5 | 2026-09-19 |
+| Progress soak | Three-hour and six-hour sessions survive while elapsed-based progress advances. Failure activates the degraded ladder in plan §14, it does not sink the plan. | **NOT RUN — owner's devices (P8 item 9).** *Now answerable:* item 4's ratcheted elapsed-toward-ceiling progress, driven from the poller's tick by item 6. **This row decides the degraded ladder**, which is therefore unchosen. Plan §15.3, device rows F9 and F12 | 2026-09-19 |
+| Resource budget | Battery, peak memory, throughput, and photo-size measurements meet an approved product budget. | **NOT RUN — owner's devices (P8 item 9).** No approved product budget exists yet — that is the owner's, and it gates nothing until §15.3 says the task survives at all. Plan §15.3 | 2026-09-19 |
+| Continued task | A user-started request either begins with system activity or reports the `.fail` refusal clearly. | **NOT RUN — owner's devices (P8 item 9).** *Now answerable both ways:* a grant produces the running card, and the four refusal arms (register refused, identifier cap, missing identifier, submission cap) produce the refusal sentence on the Friends card. A Simulator returns error 1 for every submission, so **no grant has been observed anywhere**. Plan §14 | 2026-09-19 |
+| Cancellation | Every path stops the probe and completes the task exactly once. | **NOT RUN — owner's devices (P8 item 9).** *Proven at tier 1, unproven on a device:* exactly-once completion is a biconditional over all 48 rows and a 28 080-walk sweep, and a second completion audits as a no-op — but the real `SystemContinuationTaskHandle` conformer is exercised by no test. Plan §14 | 2026-09-19 |
+| Force quit | Evidence confirms durable production acknowledgements cannot depend on an expiration callback. | **NOT RUN — owner's devices (P8 item 9).** Unchanged by P8; the claim it tests (durable acknowledgements cannot depend on an expiration callback) is why the routed store's receipts never do. Plan §14 | 2026-09-19 |
+| Partition walks | The plan's §10 partition scenarios, physically. | **NOT RUN — owner's devices (P8 item 9).** Unchanged by P8. Plan §15.2, device rows F7–F8 | 2026-09-19 |
+| Wi-Fi Aware evaluation | A bounded two-day answer on hardware floor, whether `NetworkConnection` rides over it, and battery profile. Outcome is a recommendation, not a dependency. | **NOT RUN — owner's call (P8 item 9).** Unchanged by P8; a recommendation, not a dependency. Plan §15.4, device row F10 | 2026-09-19 |
+| QUIC hold on real radios | `holdCommittedLinks()` on a physical radio: browsing and admission stop, every committed link, its coordinator and the group-key state survive, and the transport's TXT republish is minted on resume rather than through the pause. | **NOT RUN — owner's devices (P8 item 9).** The sim↔sim half was P8 item 2's row (d) and **did not cross** — no committed pair was ever formed on this Mac (finding L-4 above; plan §14.3 finding 19). Evidence to look for: one `mesh.session.linksHeld` / `mesh.session.linksResumed` pair per background hold and foreground return | 2026-09-19 |
 
 ### Security, both lanes
 
