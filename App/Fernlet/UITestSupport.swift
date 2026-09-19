@@ -97,6 +97,23 @@ enum UITestSupport {
     /// moderation alert) is unreachable from a UI test.
     static var shouldSeedStudioCanvas: Bool { env["FERNLET_UI_TEST_SEED_STUDIO_CANVAS"] == "1" }
 
+    /// `FERNLET_MESH_CONTINUATION=refused|expired|endedBySystem` — seed `FernletStore`'s
+    /// background-continuation projection at launch, so the Friends tab renders P8 item 7's card.
+    ///
+    /// The value is a `MeshContinuationCardKind` rawValue and the claim seeded is that kind's own
+    /// `presentingState` / `presentingAudit` — the presentation table's inverse, so the hook can
+    /// never ask for a cell the table does not present, and an unrecognized value seeds nothing.
+    /// It is the only route to the card in a test: `BGTaskScheduler` refuses a continued-processing
+    /// request on a Simulator outright (error 1), and a claim only ever moves from a backgrounded
+    /// scene. Consumed by `ContentView`'s launch wiring.
+    ///
+    /// The name joins the `FERNLET_MESH` hook family for TH1's wall; it is not part of
+    /// `MeshRejectionMatrixHarness`'s Lane C set, and nothing in that harness reads it.
+    static var seededMeshContinuationCard: MeshContinuationCardKind? {
+        guard let token = env["FERNLET_MESH_CONTINUATION"] else { return nil }
+        return MeshContinuationCardKind(rawValue: token)
+    }
+
     /// True when a test harness owns this process: an XCTest runner is attached (the unit-test
     /// host app), or the app was launched by a UI test (`XCTestSessionIdentifier`, the
     /// `-completeOnboarding`/`-resetOnboarding` arguments, or any `FERNLET_UI_TEST_*` hook).
@@ -126,6 +143,7 @@ enum UITestSupport {
     static var shouldOpenDayEditSheet: Bool { false }
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
+    static var seededMeshContinuationCard: MeshContinuationCardKind? { nil }
     static var isTestHarnessActive: Bool { false }
     #endif
 }

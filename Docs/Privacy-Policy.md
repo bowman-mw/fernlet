@@ -185,6 +185,9 @@ leave your device.
 
 By default the friend features work **only when two people are physically near each other**, over a
 short-range, encrypted, peer-to-peer connection — no friend server, and no remote friend activity.
+When a session is live, Fernlet may ask iOS for a short spell of background time so the connection
+survives you leaving the app; that continuation uses your local network and some battery,
+iOS may refuse or end it at any time, and nothing already saved is lost when it does.
 When you add a friend in person, your devices exchange your display names, public keys, avatar
 appearances, and a **fuzzy** wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends **never**
 see your numeric score, your goals, your cycle information, or any raw health data. You can send

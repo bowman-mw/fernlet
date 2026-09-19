@@ -479,6 +479,13 @@ struct ContentView: View {
             // from petting in a previous test on the same simulator.
             PetInteractionGovernor.clearPersistentState()
         }
+        // P8 item 7: seed the background-continuation claim so the Friends tab can render the
+        // refused / expired / system-ended card. Through the kind's own inverse, so the hook can
+        // only ask for a cell the presentation table answers; no task, no radio, no scene edge.
+        if let seeded = UITestSupport.seededMeshContinuationCard {
+            store.meshContinuationState = seeded.presentingState
+            store.meshContinuationLastAudit = seeded.presentingAudit
+        }
         #endif
     }
 

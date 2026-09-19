@@ -50,7 +50,14 @@ struct PrivacyPolicyParityTests {
     /// gets caught by pinning it, because every copy was consistently wrong and the parity check
     /// was therefore green. `cervical mucus quality` pins the write list; the journal phrase pins
     /// the export's contents.
+    /// The background-continuation marker (added 2026-09-18, network migration P8 item 7, plan
+    /// §17.3) pins the sentence that says a live in-person session may keep running for a while
+    /// after the app leaves the screen — that it uses the local network and battery, and that iOS
+    /// may refuse or end it. It is the first thing the friend features do while the person is not
+    /// looking at them, so a copy that drifts out of sync on this one is a copy that under-describes
+    /// what the app does in the background.
     private static let substanceMarkers = [
+        "iOS may refuse or end it at any time",
         "never retroactively repurposed",
         "The no-collection guarantee does not expire",
         "requires your fresh, affirmative consent",
@@ -92,8 +99,12 @@ struct PrivacyPolicyParityTests {
     // verifiability paragraph (the "same substance" half of Release-Process.md §2.3).
     @Test func perpetualPromiseSubstanceExistsInAllThreeCopies() throws {
         for (path, text) in try loadCopies() {
+            // The Swift copy is read comment-stripped: a marker satisfied by a `//` line explaining
+            // the clause would be a green wall over a policy that no longer says it. The Markdown
+            // and the HTML are prose end to end, so they are read whole.
+            let policy = path.hasSuffix(".swift") ? MeshRoutedSourceScan.codeOnly(text) : text
             for marker in Self.substanceMarkers {
-                #expect(text.contains(marker), "\(path) is missing the clause: \(marker)")
+                #expect(policy.contains(marker), "\(path) is missing the clause: \(marker)")
             }
         }
     }

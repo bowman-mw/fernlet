@@ -309,6 +309,8 @@ struct FriendsView: View {
                     // P7 item 5: what the launch restore found, on the Friends surface and nothing
                     // modal — an offer, an ending named as ended, or a file set aside; silent for a
                     // deferral. Sampled from the manager, dismissable, gone once a session surface is up.
+                    // P8 item 7 shares the slot and takes it first: a refused, expired or
+                    // system-ended background continuation is news about the session running NOW.
                     sessionResumeBanner
                     .padding(.top, 4)
 
@@ -489,32 +491,95 @@ struct FriendsView: View {
     /// deferral or refusal the re-entry will retry, an offer already consumed, or a session surface
     /// up. Not modal, dismissable for this instance, and the same visual grammar as the discovery
     /// failure banner below.
+    ///
+    /// P8 item 7 shares the slot, and `MeshContinuationCardPresentation.slotDecision(continuation:resume:)`
+    /// is the precedence — a value, not an `if` chain here: a LIVE spent claim (iOS refused this
+    /// session background time, or ended the time it had) outranks a card about the last session,
+    /// and once the claim's own session has ENDED it yields, because a session the person can pick
+    /// back up is the more useful truth. The table answers nil for every claim that is idle, asked
+    /// for or running, so nothing changes until item 6 feeds the claim.
+    ///
+    /// Both presentations are sampled exactly ONCE, above the decision, so the two arms cannot read
+    /// different values of the same fact.
     @ViewBuilder
     private var sessionResumeBanner: some View {
-        if !sessionResumeDismissed, let card = SessionResumeCopy.card(for: manager.sessionResumePresentation) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: card.symbolName)
-                    .foregroundStyle(Color.terracotta)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(card.title)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Text(card.message)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button(SessionResumeCopy.dismiss) { sessionResumeDismissed = true }
-                        .font(.fernlet(.labelSmall))
-                        .padding(.vertical, 6)
-                        .accessibilityIdentifier("friends.sessionResume.dismiss")
-                }
-                Spacer(minLength: 4)
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
-            .accessibilityIdentifier("friends.sessionResume")
+        let continuation = MeshContinuationCardPresentation.card(
+            state: store.meshContinuationState,
+            lastAudit: store.meshContinuationLastAudit
+        )
+        let resume: SessionResumeCard? = sessionResumeDismissed
+            ? nil
+            : SessionResumeCopy.card(for: manager.sessionResumePresentation)
+        switch MeshContinuationCardPresentation.slotDecision(continuation: continuation, resume: resume) {
+        case .continuation:
+            if let continuation { continuationBanner(continuation) }
+        case .resume:
+            if let resume { resumeBanner(resume) }
+        case .nothing:
+            EmptyView()
         }
+    }
+
+    /// The launch restore's card itself, dismissable for this instance.
+    ///
+    /// - Parameter card: `SessionResumeCopy`'s answer for the manager's presentation.
+    /// - Returns: The card.
+    private func resumeBanner(_ card: SessionResumeCard) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: card.symbolName)
+                .foregroundStyle(Color.terracotta)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(card.title)
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
+                Text(card.message)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(SessionResumeCopy.dismiss) { sessionResumeDismissed = true }
+                    .font(.fernlet(.labelSmall))
+                    .padding(.vertical, 6)
+                    .accessibilityIdentifier("friends.sessionResume.dismiss")
+            }
+            Spacer(minLength: 4)
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
+        .accessibilityIdentifier("friends.sessionResume")
+    }
+
+    /// The background continuation's card (network migration P8 item 7): what a refusal, an expiry
+    /// or a system end means for the session the person is in.
+    ///
+    /// Same grammar as the resume card above and the discovery banner below, with no dismissal —
+    /// it describes the session running right now (or, for a claim whose session has since ended and
+    /// has no resume card to yield to, says so in the past tense), and it goes when the claim does.
+    /// Combined into one accessibility element so VoiceOver reads the card as one thing and the UI
+    /// suite can match its frozen identifier; there is nothing interactive inside it to swallow.
+    ///
+    /// - Parameter card: The table's answer for the store's claim.
+    /// - Returns: The card.
+    private func continuationBanner(_ card: MeshContinuationCard) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: card.symbolName)
+                .foregroundStyle(Color.terracotta)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(card.title)
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
+                Text(card.message)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(card.accessibilityIdentifier)
     }
 
     /// Shown in place of the "Looking for nearby friends…" pulse when the radios failed to start.

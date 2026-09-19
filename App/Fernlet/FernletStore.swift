@@ -1875,6 +1875,36 @@ final class FernletStore {
         snapshotSaveCoordinator.schedule()
     }
 
+    // MARK: - Mesh background continuation (network migration P8 item 7)
+
+    /// Where the background-continuation claim stands, as the Friends card reads it.
+    ///
+    /// **Observed, and deliberately a plain `var`.** A refusal that does not repaint the Friends
+    /// tab is a refusal nobody is told about, so this is neither derived nor
+    /// `@ObservationIgnored` — unlike the poller and timeout task handles below it, which no view
+    /// reads. Memory-only: no persisted key, no `snapshotSaveCoordinator.schedule()`, nothing for
+    /// the wipe wall to dispose of, and a fresh launch starts at `.idle` because a claim on a task
+    /// that no longer exists is a lie.
+    ///
+    /// **Item 6 sets it**, from the thin object that registers the handler, submits the request and
+    /// completes the task; item 7 ships only this projection and
+    /// ``MeshContinuationCardPresentation``, which reads it. There is deliberately NO setter method
+    /// here and no `reapplyProximityRunPolicy()` call: feeding `ProximityRunPolicy` its
+    /// `continuation:` fact is item 6's edge, and until then `ProximityRunSeamsTests`' count of the
+    /// store's own policy edges and `MeshRoutedLockedDeviceTests`' funnel wall stay exactly as P7
+    /// left them. Today's only writer is the DEBUG launch hook `FERNLET_MESH_CONTINUATION`.
+    var meshContinuationState: MeshContinuationState = .idle
+
+    /// The frozen audit token that named the claim's last MOVE, or nil before any.
+    ///
+    /// The card cannot be read off the state alone: ``MeshContinuationState/completed`` is the
+    /// terminal after ANY session end, whether or not a task ever ran, so the six-hour ceiling
+    /// would otherwise erase a refusal the person was never shown. Item 6 records the token of
+    /// every row that moved the claim and leaves ``MeshContinuationAudit/absorbed`` rows alone —
+    /// which is what keeps a refusal readable across the foreground return that a spent claim
+    /// absorbs. Observed and memory-only for the same reasons as the state above.
+    var meshContinuationLastAudit: MeshContinuationAudit?
+
     // MARK: - Proximity run policy (network migration P7)
 
     /// The last verdict the run policy computed — its gate half pushed, its radio half executed
