@@ -743,10 +743,14 @@ struct MeshP6HonestyAcceptanceTests {
 
     /// **What P6's battery deliberately does NOT claim, named rather than implied.**
     ///
-    /// - **The asleep quarter proves the gate's arithmetic, not a product state.** Nothing in
-    ///   shipping raises `MeshSessionEvent.backgrounded` or `.foregrounded` — the predicate's own
-    ///   source calls the leg inert until P8 — so `heartRecipientForegrounded == false` is driven by
-    ///   the state machine directly and no shipping path reaches it yet.
+    /// - **The asleep quarter proves the gate's arithmetic; since P8 item 5 a shipping path reaches
+    ///   that state too.** This battery still drives `MeshSessionEvent.backgrounded` /
+    ///   `.foregrounded` on the state machine directly, which is all it claims. What changed
+    ///   underneath it is that the two events now have one shipping raiser each —
+    ///   `MeshNetworkManager.beginBackgroundContinuation()` / `endBackgroundContinuation()`, spoken
+    ///   by `MeshContinuationDriver` while it holds a `BGContinuedProcessingTask` — so "no shipping
+    ///   path reaches it yet" is false as of that item, and `MeshContinuationDisagreementTests`
+    ///   asserts the same deferral through the shipping path.
     /// - **The trust-vault rows every heart cell seeds stand in for a second session.** A row
     ///   appears when `pendingFriendReview` completes, which fires at session END, so inside the
     ///   session that produced a heart it cannot exist. Item 10's two-session Lane C script is the

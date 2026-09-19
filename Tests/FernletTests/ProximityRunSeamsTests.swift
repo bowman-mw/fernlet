@@ -357,6 +357,12 @@ import ProximityKit
     /// **The retirement wall.** Every mesh radio verb under `App/` lives in the seams file exactly
     /// once — plus the DEBUG Lane C harness's own `startJoin()`, exempted by name — and the two
     /// listeners are started and stopped by no qualified call anywhere.
+    ///
+    /// **P8 item 5's raise pair is deliberately NOT on this needle list.**
+    /// `MeshNetworkManager.beginBackgroundContinuation()` / `endBackgroundContinuation()` touch no
+    /// radio whatever — each offers one event to the session state machine — so listing them here
+    /// would say the continuation driver is a radio speaker, which is the one claim P8 must not
+    /// make. They are counted by `MeshContinuationRaiseWallTests` instead.
     @Test func everyRadioVerbLivesInTheSeamsFile() throws {
         let sources = try Self.appSources()
         #expect(sources.count >= 100, "the app-target scan lost its files")

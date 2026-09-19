@@ -512,8 +512,10 @@ enum ProximityRunPolicyProduct {
     }
 
     /// What this table does not claim: no scene, no manager, no seam (items 2–4 wire the policy; until
-    /// then no shipping code calls it), no continuation task (`.running` is P8's, and
-    /// `.continuingInBackground` is unreachable), and no derivation of `belowMinimumAge` (item 3's).
+    /// then no shipping code calls it), no continuation task (`.running` is P8 item 6's line, and
+    /// `.continuingInBackground` — unreachable when this was written — is raised since P8 item 5 by
+    /// `MeshContinuationDriver`, which feeds this policy nothing), and no derivation of
+    /// `belowMinimumAge` (item 3's).
     /// What it does pin: the vocabulary's shape.
     @Test func whatThisTableDoesNotClaim() {
         #expect(ProximityRunState.allCases.count == 4,

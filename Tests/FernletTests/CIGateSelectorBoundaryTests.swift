@@ -189,6 +189,15 @@ import Testing
         // `MeshP5LockedDeviceAcceptanceTests` is already its acceptance clause. `MeshRoutedDrainTests`
         // (gated at P8 item 1, 2026-09-18) is the same case and is left off this pin for the same
         // reason: 43 behaviour cells, walled by the step's measured floor of 359, not by a name here.
+        // OWED, and deliberately not pinned here yet: P8's six `MeshContinuation*` suites —
+        // `MeshContinuationCoordinatorTests` and `MeshContinuationProgressTests` (item 4),
+        // `MeshContinuationCardPresentationTests` (item 7), and `MeshContinuationDriverTests`,
+        // `MeshContinuationRaiseWallTests` and `MeshContinuationDisagreementTests` (item 5). None is
+        // a `MeshP<n>…AcceptanceTests`, so `everyMeshAcceptanceBatteryIsGated` does not demand them
+        // and no workflow line names one; `MeshContinuationRaiseWallTests` in particular is a wall
+        // with no compiler half, exactly the case the pin above exists for. Item 10 owns the
+        // workflow line — the floor is measured at the commit that adds it — and adds them to this
+        // pin in the same commit. A pin without the line would redden every run until then.
         #expect(gated.contains("MeshRoutedDrainWallTests"),
                 "the routed path's retirement and parking zero-lists are gated")
         let script = try RepoRoot.source(Self.floorScript)

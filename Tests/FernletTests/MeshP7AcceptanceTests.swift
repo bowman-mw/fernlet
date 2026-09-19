@@ -402,7 +402,8 @@ struct MeshP7ResumeAcceptanceTests {
 struct MeshP7HonestyAcceptanceTests {
 
     /// No scene, no continuation task, no device lock and no UI run here; `.continuingInBackground`
-    /// is unreachable because nothing in shipping raises `.backgrounded` / `.foregrounded`; the app
+    /// is reached by no path P7 owns — P8 item 5 gave the two scene events one shipping raiser
+    /// each, so this cell pins that pair rather than a zero; the app
     /// feeds `.notRequested` and nothing else; the run vocabulary has four values; and the two
     /// determinism digests keep their one home. Written in a session with no toolchain: its first
     /// Mac run is its first execution.
@@ -416,9 +417,15 @@ struct MeshP7HonestyAcceptanceTests {
                 "it feeds .notRequested, once, in the run-policy core")
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         #expect(kit.count >= 100, "the ProximityKit scan lost its files")
-        let raised = MeshP7Acceptance.homes(of: "applySessionEvent(.backgrounded", in: kit).count
-            + MeshP7Acceptance.homes(of: "applySessionEvent(.foregrounded", in: kit).count
-        #expect(raised == 0, "nothing in shipping raises .backgrounded or .foregrounded, so .continuingInBackground is unreachable")
+        let raised = MeshP7Acceptance.homes(of: "applySessionEvent(.backgrounded", in: kit)
+            + MeshP7Acceptance.homes(of: "applySessionEvent(.foregrounded", in: kit)
+        #expect(raised == ["MeshNetworkManager.swift", "MeshNetworkManager.swift"], """
+            P8 item 5 gave the two scene events their first shipping raisers — the public \
+            beginBackgroundContinuation() / endBackgroundContinuation() pair, one each, in the \
+            manager — so .continuingInBackground is reachable from a shipping path as of that item \
+            and P7's unreachable claim retired with it. The live count lives in \
+            MeshContinuationRaiseWallTests
+            """)
         let me = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("Tests/FernletTests/MeshP7AcceptanceTests.swift"))
         let spellsADigest = me.contains("ca898" + "bcc") || me.contains("594b6" + "f77")
         #expect(!spellsADigest, "the two determinism digests keep their one home in MeshP5DeterminismAcceptanceTests")
