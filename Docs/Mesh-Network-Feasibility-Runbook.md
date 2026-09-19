@@ -1812,7 +1812,7 @@ tip `92f0b8e` and P8's tip fail identically; a P7 defect at `df0ce5b` (P7 item 3
 harness calls `startJoin()` on the Home tab and the store's first policy apply (previous nil, every
 radio an edge) resolves discovery `.stop` → `.stopJoin` → the QUIC listener is cancelled ~20 ms
 after creation, before Bonjour registers; the product path (entry via the Social tab) is unaffected;
-fix landing as a P7 fix commit — the harness selects the Social tab before `startJoin()`, with the
+fix landed as the P7 fix commit `80934b7` — the harness selects the Social tab before `startJoin()`, with the
 pure-value cell `theMatrixHarnessSurvivesTheFirstRunPolicyVerdict` (no `.stopJoin` in the first
 verdict over the harness's facts) that would have reddened in `df0ce5b` itself, and a scan pinning
 every shipping `startJoin()` / `resumeSearchingForPartitionedMesh()` caller under `App/` to the
