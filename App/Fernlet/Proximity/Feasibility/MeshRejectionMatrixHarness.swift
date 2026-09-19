@@ -223,7 +223,9 @@ enum MeshMatrixDebugOptions {
 /// It seeds ``MeshNetworkManager/currentMesh`` and calls `startJoin()`. Since P6 item 10 it also
 /// carries the `FernletStore` the flow driver needs for the hearts script — the nearby-hearts
 /// opt-in, the trust vault and the heart ledger all live there, and every one of them is reached
-/// through a shipping door. That is all. It does not
+/// through a shipping door — and since finding L-4 it selects the Social tab on that store before
+/// starting anything, because the run policy, not this harness, decides whether the radios stay up
+/// (see ``install(manager:store:)``). That is all. It does not
 /// touch the introduction, the roster derivation, the dial policy or the tie-break — the whole
 /// point is that the code under observation is the shipping code. The misbehaviours that produce
 /// the signature and replay rows live on the other side of the module wall, in ProximityKit's own
@@ -252,6 +254,21 @@ enum MeshRejectionMatrixHarness {
     ///
     /// Idempotent through `isSearching`: the SwiftUI `.task` that calls this can re-fire, and a
     /// second `startJoin()` would re-mint the radio's Bonjour name mid-run.
+    ///
+    /// ## The tab this selects, and why (finding L-4)
+    ///
+    /// Since P7 item 3 (`df0ce5b`) the run policy is the single writer of every radio verb, and
+    /// `ProximityRunPolicy.discoveryState` answers `.stop` for a foregrounded app on any tab but
+    /// `.social` with no committed peer. A matrix launch opens on Home, so the funnel's FIRST apply
+    /// — `previous == nil`, where every radio is an edge — resolved to `.stopJoin` and tore down
+    /// the radios this harness had just started, ~20 ms in and before the QUIC listener could
+    /// start (`nw_listener_start … In wrong state for start`). Bonjour was never registered and the
+    /// sim↔sim lane discovered nothing from `df0ce5b` until L-4 named it. The product path never
+    /// had the defect: a user reaches the mesh through the Social tab, where the same seam STARTS
+    /// the radios. Selecting that tab through the store's own mirror — the one
+    /// `ContentView.handleTabChange(from:to:)` writes — is what makes this start survive its own
+    /// first verdict, and it keeps the fix on the diagnostic's side of the wall rather than widening
+    /// the policy product with a harness leg.
     static func install(manager: @autoclosure () -> MeshNetworkManager, store: FernletStore) {
         guard MeshMatrixDebugOptions.isEnabled else { return }
         let manager = manager()
@@ -260,6 +277,9 @@ enum MeshRejectionMatrixHarness {
         echo("identity fingerprint=\(manager.localFingerprint) "
             + "signingKey=\(manager.localSigningPublicKey.base64EncodedString())")
         seedDescriptor(manager: manager)
+        // Before `startJoin()`, never after (L-4): the funnel's first apply reads this mirror, and
+        // on any tab but `.social` it answers `stopJoin()`. A frozen token, never display text.
+        store.selectedTab = .social
         // Before `startJoin()`, never after: a peer's capability list is snapshotted when its
         // coordinator is built, so a provider the flow driver sets later would never reach the wire.
         // The hearts opt-in (P6 item 10) is in that same window for the same reason.

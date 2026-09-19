@@ -18,6 +18,11 @@
 // any more. A third cell names the three spellings of the hold, so pass 1 cannot ship without
 // pass 2: a verb nobody calls has no home for the retirement wall to count.
 //
+// A pair added for finding L-4 (P8 item 2's tier-2 lane): the DEBUG Lane C harness is the one
+// starter of the radios that is not the policy, so its own first verdict is a row here — the
+// Social tab it now selects leaves its start standing, and the Home tab it used to launch on
+// stops it. That second row is the defect `df0ce5b` shipped, kept as documentation.
+//
 // The wall: every radio verb under `App/` lives in `ProximityRunSeams.swift`, exactly once each,
 // except the DEBUG Lane C harness's own `startJoin()`, exempted BY NAME; the two listeners are
 // never started or stopped by a qualified call anywhere; `ContentView` names none of the retired
@@ -325,6 +330,50 @@ import ProximityKit
         #expect(answered == [.presence(.stop), .recipeShare(.stop)], "no mesh verb for a value the policy never emits")
     }
 
+    // MARK: The one starter that is not the policy (finding L-4)
+
+    /// **The DEBUG Lane C harness's own first verdict — the defect `df0ce5b` shipped.**
+    ///
+    /// The matrix harness is the only starter of the radios that is not the run policy (the wall
+    /// below exempts its `startJoin()` by name), so it owes the policy the facts that leave its
+    /// start standing. It selects the Social tab before starting, and the funnel's first apply —
+    /// `previous == nil`, where every radio is an edge — then asks for no mesh verb at all: the
+    /// radios are already up, so `discoveryStart` has nothing to add and, crucially, nothing to
+    /// undo.
+    ///
+    /// Both halves are the cell. The pure transition alone would have stayed green through the
+    /// whole defect: `ProximityRunPolicyTests` pins the verdict product and
+    /// ``theFirstApplicationTreatsEveryRadioAsAnEdge()`` above pins `previous == nil ⇒ every radio
+    /// is an edge`, both correct, and `.stopJoin` over a Home tab with no peer is the intended
+    /// answer (the twin below). What was missing is the claim that the HARNESS stands on the right
+    /// side of that answer, which is why the harness source is read here: delete the tab line and
+    /// this cell goes red by name.
+    @Test func theMatrixHarnessSurvivesTheFirstRunPolicyVerdict() throws {
+        let harness = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/Proximity/Feasibility/MeshRejectionMatrixHarness.swift")
+        )
+        let selects = try #require(harness.range(of: "store.selectedTab = .social"),
+                                   "L-4: the Lane C harness must select the tab the policy runs discovery for")
+        let starts = try #require(harness.range(of: "manager.startJoin()"),
+                                  "the harness starts the radios itself — which is why it owes the tab")
+        #expect(selects.upperBound < starts.lowerBound,
+                "the tab is selected BEFORE the radios start, so the first verdict never stops them")
+        let survived = Self.actions(from: nil, to: Self.verdict(tab: .social, session: .absent), Self.facts(searching: true))
+        #expect(survived == [.presence(.foregroundOnly), .recipeShare(.stop)],
+                "the harness's start survives its own first verdict: no mesh verb, so no .stopJoin and no .leaveSession")
+    }
+
+    /// **The trap, stated as a row so nobody re-introduces it (L-4).** The same first apply from
+    /// the Home tab — where a matrix launch used to sit — DOES tear the start down: foreground,
+    /// no committed peer, any tab but Friends resolves discovery to `.stop`, and `previous == nil`
+    /// makes that a moved radio. Nothing here is a bug to fix; the verdict and the seam are both
+    /// right, and a `startJoin()` that runs outside the policy on this tab is the thing that is not.
+    @Test func aHomeTabStartIsTornDownByItsOwnFirstVerdict() {
+        let torn = Self.actions(from: nil, to: Self.verdict(tab: .home, session: .absent), Self.facts(searching: true))
+        #expect(torn == [.cancelDiscoveryTimeout, .stopJoin, .presence(.foregroundOnly), .recipeShare(.foregroundOnly)],
+                "L-4: the first verdict over a Home-tab start cancels the timeout and calls stopJoin()")
+    }
+
     // MARK: The wall
 
     /// Every Swift file under `App/`, comment-stripped.
@@ -357,6 +406,15 @@ import ProximityKit
     /// **The retirement wall.** Every mesh radio verb under `App/` lives in the seams file exactly
     /// once — plus the DEBUG Lane C harness's own `startJoin()`, exempted by name — and the two
     /// listeners are started and stopped by no qualified call anywhere.
+    ///
+    /// **The exemption carries an obligation, and finding L-4 is what it costs when it is missed.**
+    /// The two homes counted here are the whole population of `startJoin()` /
+    /// `resumeSearchingForPartitionedMesh()` under `App/`: the seams file, and the harness. A
+    /// starter that is not the policy must leave the policy's facts in a state whose first verdict
+    /// does not undo it — for the harness that is the Social tab, pinned by
+    /// ``theMatrixHarnessSurvivesTheFirstRunPolicyVerdict()`` above. A third home added here without
+    /// that check is `df0ce5b` again: a radio started and stopped ~20 ms later by the funnel's own
+    /// first apply, with a clean build and a green suite.
     ///
     /// **P8 item 5's raise pair is deliberately NOT on this needle list.**
     /// `MeshNetworkManager.beginBackgroundContinuation()` / `endBackgroundContinuation()` touch no
