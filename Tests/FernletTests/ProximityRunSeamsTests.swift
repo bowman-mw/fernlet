@@ -437,7 +437,7 @@ import ProximityKit
         #expect(viewEdges == 7, "the view hands the funnel six edges through one helper — tab, lock, opt-in, age, session liveness, launch — plus that helper's declaration")
         let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
         let storeEdges = store.components(separatedBy: "reapplyProximityRunPolicy(").count - 1
-        #expect(storeEdges == 5, "the store's own edges — two opt-in setters, the wipe's raise and lower — plus the declaration")
+        #expect(storeEdges == 6, "the store's own edges — two opt-in setters, P8 item 6's continuation feed, the wipe's raise and lower — plus the declaration")
         let wipe = try #require(
             MeshRoutedSourceScan.bracedBody(after: "func deleteAllData(includingHealthKitSamples", in: store),
             "the wipe funnel is gone"

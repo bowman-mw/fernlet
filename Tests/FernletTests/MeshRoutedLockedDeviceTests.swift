@@ -1192,8 +1192,10 @@ extension MeshRoutedLockedDeviceTests {
                 "the one write sits inside the core's own body, brace-matched — not merely in the file")
         #expect(funnel.contains("ProximityRunPolicy.verdict(for:"),
                 "and the core decides through the policy, never by hand")
-        #expect(funnel.contains("continuation: .notRequested"),
-                "and feeds the continuation state inert — P7 must never assert a running task")
+        #expect(funnel.contains("continuation: meshContinuationState.feed"),
+                "and feeds the continuation state from P8 item 6's claim, through the store's own projection")
+        #expect(!funnel.contains("continuation: .notRequested"),
+                "the P7 literal is gone — a funnel pinned to `.notRequested` cannot see a running task")
         #expect(funnel.contains("executeProximityRunActions("),
                 "and hands the radio half to the seams' executor (P7 item 3), gate first")
     }

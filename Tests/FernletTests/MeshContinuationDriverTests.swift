@@ -16,11 +16,13 @@
 //    that an ending with no task in hand raises nothing at all. On an `idle` manager every raise is
 //    refused BY NAME (`lastSessionTransitionRejection == .noSessionYet`), which makes "a raise
 //    arrived" and "no raise arrived" two different observable values rather than one silence.
-//    Under the spot cells sits the **exhaustive sweep** (the fix round's F3): every sequence of
-//    driver calls to depth three — 258 walks over a six-wide alphabet — with the two raises COUNTED
-//    through the `MeshContinuationRaising` seam and held to one per entry into `running` and one per
-//    exit from it. It is item 4's 48-row table one layer up: item 4 walls the table, this walls the
-//    two guards that decide when the driver speaks.
+//    Under the spot cells sits the **exhaustive sweep** (item 5's fix round, F3): every sequence of
+//    driver calls to depth three — 1463 walks over an eleven-wide alphabet — with the two raises
+//    COUNTED through the `MeshContinuationRaising` seam and held to one per entry into
+//    (`running` ∧ a dark scene) and one per exit from it. The SCENE is a letter of that alphabet as
+//    of item 6's fix round (F2): a delivery arrives lit or dark, and the scene can darken under a
+//    task already in hand. It is item 4's 48-row table one layer up: item 4 walls the table, this
+//    walls the two guards that decide when the driver speaks.
 //
 // 3. `MeshContinuationDisagreementTests` — **pass 2, the cell §24.1 and §25.1 name**, on a real
 //    two-node founding: a task running with the scene backgrounded means the pushed gate leg is
@@ -28,15 +30,17 @@
 //    stage's predicate is closed, a custodied heart DEFERS with nothing marked, and one foreground
 //    edge plus one reopened gate judge it exactly once. Then the four corners of the two legs, which
 //    is the independence claim: neither leg is written in terms of the other, and only both together
-//    open the stage. The fix round adds the two round trips that are only observable on a live
+//    open the stage. Item 5's fix round adds the two round trips that are only observable on a live
 //    session: a `reset()` **mid-task** gives the session leg back (F1 — the adversarial verify's
 //    probe, red on all three legs before `reset()` was split), and an ownerless delivery leaves
-//    nothing behind once it is ended (F5).
+//    nothing behind once it is ended (F5). Item 6's fix round adds the one that says WHEN the
+//    handover happens (F2): a task delivered while the app is still on screen keeps judging hearts,
+//    and only the scene going dark hands the session over.
 //
 // **The deferred-quarter cell this copies** is `MeshRoutedHeartCeremonyTests`'
 // `aBackgroundedRecipientDefersAndTheNextForegroundEdgeJudges`, which drives the state machine
 // directly. The difference is the whole item: this one drives it through the SHIPPING path —
-// `MeshContinuationDriver.taskDidStart()` → `MeshNetworkManager.beginBackgroundContinuation()` —
+// `MeshContinuationDriver.taskDidStart(sceneIsDark:)` → `MeshNetworkManager.beginBackgroundContinuation()` —
 // so `MeshP6HonestyAcceptanceTests`' note that "no shipping path reaches it yet" is false as of this
 // commit, and is corrected there in the same commit.
 //
@@ -129,9 +133,14 @@ struct MeshContinuationRaiseWallTests {
     }
 
     /// The driver submits nothing, spins nothing, speaks no radio verb, writes no routed access
-    /// gate and calls no store setter. Item 6 adds the `BackgroundTasks` half to this same file, so
-    /// the needles it will legitimately bring are named here rather than assumed absent forever —
-    /// removing one is then a deliberate edit with this list in front of the person making it.
+    /// gate and calls no store setter.
+    ///
+    /// **Item 6 did NOT add the `BackgroundTasks` half to this file.** It put it in a sibling,
+    /// `MeshContinuationTaskHost.swift`, which owns one of these — so this list was not shortened by
+    /// three, and every needle below stays forbidden here permanently. That is the whole reason the
+    /// sibling exists: the session-state half is provably free of the framework, the scheduler, the
+    /// store and the clock, and `MeshContinuationTaskHostTests` states the complementary claim about
+    /// the host (no radio verb, no gate, no persisted surface).
     @Test func theDriverIsSessionStateOnly() throws {
         let code = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("App/Fernlet/\(Self.driver)"))
@@ -201,7 +210,7 @@ struct MeshContinuationDriverTests {
         #expect(manager.lastSessionTransitionRejection == nil,
                 "and the precondition on the other side: nothing has been offered to the machine")
 
-        let adoption = driver.taskDidStart()
+        let adoption = driver.taskDidStart(sceneIsDark: true)
 
         #expect(adoption == .ownerless,
                 "nobody asked for this task, so item 6 must end it at once rather than rest in `running`")
@@ -212,13 +221,66 @@ struct MeshContinuationDriverTests {
         #expect(manager.sessionState == .idle, "and moved nothing: there is no session to continue")
     }
 
+    /// **The F2 rule at the driver's own door** (item 6's fix round). A delivery that arrives while
+    /// the app is still ON SCREEN — the normal shape of a continued-processing task, since the
+    /// system answers a submission promptly — is adopted and raises nothing at all. The raise waits
+    /// for the scene, and ``MeshContinuationDriver/sceneDidGoDark()`` is what makes it.
+    @Test func aDeliveryIntoALitSceneIsAdoptedAndRaisesNothingUntilTheSceneGoesDark() {
+        let (driver, manager) = driverOverAnIdleManager()
+
+        #expect(driver.taskDidStart(sceneIsDark: false) == .ownerless, "the delivery is still adopted")
+
+        #expect(driver.state == .running,
+                "an unadopted handle is uncompletable, so the ADOPTION is unconditional")
+        #expect(manager.lastSessionTransitionRejection == nil,
+                "but the session machine was offered NOTHING — the person is still looking at the app")
+
+        driver.sceneDidGoDark()
+
+        #expect(manager.lastSessionTransitionRejection == .noSessionYet,
+                "the scene's dark edge is what raises `begin`, and this manager refuses it BY NAME")
+    }
+
+    /// A task that comes and goes while the app is on screen raises NEITHER half of the pair — the
+    /// balance F2 has to keep. The debt is untouched: the gating moves the raises, never the
+    /// completion the system is owed.
+    @Test func aTaskThatEndsBeforeTheSceneWentDarkRaisesNeitherHalfAndStillCompletesOnce() {
+        let (driver, manager) = driverOverAnIdleManager()
+        driver.taskDidStart(sceneIsDark: false)
+
+        driver.taskDidEnd(.sessionEnded)
+
+        #expect(manager.lastSessionTransitionRejection == nil,
+                """
+                no `begin` was raised, so no `end` is owed: an unpaired `end` would tell a live \
+                foreground mesh it had just returned from a background it never entered
+                """)
+        #expect(driver.consumePendingCompletion() == .succeeded,
+                "and the system is still owed exactly one completion — the gating never touches the debt")
+        #expect(driver.consumePendingCompletion() == nil, "once")
+    }
+
+    /// The dark edge with NO task in hand raises nothing, however many times it arrives. A mesh that
+    /// merely went dark with no continued task is suspended along with the process; saying otherwise
+    /// would strand `continuingInBackground` with nothing left to end it.
+    @Test func aDarkSceneWithNoTaskInHandRaisesNothing() {
+        let (driver, manager) = driverOverAnIdleManager()
+
+        driver.sceneDidGoDark()
+        driver.sceneDidGoDark()
+
+        #expect(driver.state == .idle, "no claim moved")
+        #expect(manager.lastSessionTransitionRejection == nil,
+                "and the session machine was offered nothing at all — not even a refused event")
+    }
+
     /// **The ownerless delivery's obligation** (item 7's verify, obligation 2): end it at once —
     /// which still completes it exactly once, `false` — and then present NOTHING. Leaving
     /// `expired` / `cancelled` standing would put "iOS ended your background session" on the
     /// Friends tab for a session that never existed.
     @Test func anOwnerlessDeliveryIsEndedAtOnceCompletesFailedAndPresentsNothing() {
         let (driver, _) = driverOverAnIdleManager()
-        #expect(driver.taskDidStart() == .ownerless, "the precondition")
+        #expect(driver.taskDidStart(sceneIsDark: true) == .ownerless, "the precondition")
 
         driver.taskDidEnd(.cancelled)
 
@@ -239,7 +301,7 @@ struct MeshContinuationDriverTests {
         // R2: bounded by the ending vocabulary.
         for reason in MeshContinuationEndReason.allCases {
             let driver = MeshContinuationDriver(meshNetworkManager: manager)
-            driver.taskDidStart()
+            driver.taskDidStart(sceneIsDark: true)
 
             driver.taskDidEnd(reason)
 
@@ -256,7 +318,7 @@ struct MeshContinuationDriverTests {
     @Test func resetReturnsTheProjectionWithoutForgettingTheSystemsDebt() {
         let manager = MeshNetworkManager(store: store)
         let driver = MeshContinuationDriver(meshNetworkManager: manager)
-        driver.taskDidStart()
+        driver.taskDidStart(sceneIsDark: true)
         #expect(driver.state == .running && driver.lastAudit == .started, "the precondition: a task in hand")
 
         driver.reset()
@@ -267,7 +329,7 @@ struct MeshContinuationDriverTests {
                 "and the running task was ENDED rather than forgotten: cancelled, completed false, once")
         #expect(driver.consumePendingCompletion() == nil, "once — the debt is a slot, not a queue")
         let owing = MeshContinuationDriver(meshNetworkManager: manager)
-        owing.taskDidStart()
+        owing.taskDidStart(sceneIsDark: true)
         owing.taskDidEnd(.sessionEnded)
 
         owing.reset()
@@ -295,9 +357,9 @@ struct MeshContinuationDriverTests {
     /// re-raised and the handle the caller was just given is not this driver's to complete.
     @Test func aSecondDeliveryIsAbsorbedAndAdoptsNothingNew() {
         let (driver, _) = driverOverAnIdleManager()
-        #expect(driver.taskDidStart() == .ownerless, "the precondition: one task adopted")
+        #expect(driver.taskDidStart(sceneIsDark: true) == .ownerless, "the precondition: one task adopted")
 
-        let second = driver.taskDidStart()
+        let second = driver.taskDidStart(sceneIsDark: true)
 
         #expect(second == .absorbed, "a delivery arriving on a running claim is not a second adoption")
         #expect(driver.state == .running, "and the claim is where it was")
@@ -341,11 +403,14 @@ struct MeshContinuationDriverTests {
         func endBackgroundContinuation() { endCount += 1 }
     }
 
-    /// One call the sweep may make on a driver — the whole alphabet item 5 gives a caller.
+    /// One call the sweep may make on a driver — the whole alphabet a caller has.
     private enum SweepCall: Equatable {
 
-        /// A `BGContinuedProcessingTask` was delivered.
-        case start
+        /// A `BGContinuedProcessingTask` was delivered, into a lit or a dark scene.
+        case start(sceneIsDark: Bool)
+
+        /// The scene went dark under whatever the driver is holding (item 6's fix round, F2).
+        case sceneDark
 
         /// The task in hand is over, for one of the four reasons.
         case end(MeshContinuationEndReason)
@@ -353,24 +418,61 @@ struct MeshContinuationDriverTests {
         /// The projection is being returned (the hard stop, or a new mesh).
         case reset
 
+        /// This device is on a new mesh (item 6's registration edge).
+        case meshStart
+
+        /// The mesh's first peer committed (item 6's submission edge).
+        case firstPeerCommit
+
+        /// The system refused the request (item 6's refusal edge).
+        case taskRefused
+
         /// A frozen diagnostic name, for the failure message.
         var token: String {
             switch self {
-            case .start: return "start"
+            case .start(let isDark): return isDark ? "start(dark)" : "start(lit)"
+            case .sceneDark: return "sceneDark"
             case .end(let reason): return "end(\(reason.rawValue))"
             case .reset: return "reset"
+            case .meshStart: return "meshStart"
+            case .firstPeerCommit: return "firstPeerCommit"
+            case .taskRefused: return "taskRefused"
             }
+        }
+
+        /// The scene fact a DELIVERY supplies, and `false` for every call that is not one.
+        ///
+        /// The walk reads it only on an entry into `running`, because an absorbed delivery is not
+        /// this driver's — the handle it carries belongs to whoever must complete it — so it
+        /// supplies no scene fact either, exactly as the driver raises nothing for one.
+        var deliveredInTheDark: Bool {
+            if case .start(let isDark) = self { return isDark }
+            return false
         }
     }
 
-    /// The six calls, in a frozen order the walk indexes into.
+    /// The eleven calls, in a frozen order the walk indexes into.
+    ///
+    /// **Item 6 added the last three claim edges**, exactly as this suite predicted it would. They
+    /// are what makes `.claimed` reachable at all — `firstPeerCommitted` is the edge that breaks the
+    /// circle the expectation below used to describe — and they are also three more ways to leave
+    /// `running` (`meshStarted` completes a stale task), so putting them inside the sweep rather
+    /// than beside it is what keeps the begin/end pair balanced over the WHOLE alphabet a caller can
+    /// now spell.
+    ///
+    /// **Item 6's fix round then added the SCENE** (F2), as two letters rather than one: a delivery
+    /// arrives lit or dark, and the scene can darken under a task already in hand. A raise now sits
+    /// behind the entry into (`running` ∧ dark), so a sweep that could not spell a lit delivery
+    /// would be walking a predicate the driver no longer has.
     private static let sweepAlphabet: [SweepCall] =
-        [.start] + MeshContinuationEndReason.allCases.map(SweepCall.end) + [.reset]
+        [.start(sceneIsDark: false), .start(sceneIsDark: true), .sceneDark]
+        + MeshContinuationEndReason.allCases.map(SweepCall.end)
+        + [.reset, .meshStart, .firstPeerCommit, .taskRefused]
 
     /// How many calls deep the sweep goes. **Three**: one move cannot show a re-delivery, two
     /// cannot show a re-delivery after an ending that reset the projection, three can — and every
-    /// shorter sequence is a prefix of one, so nothing between the depths is skipped. With a
-    /// six-wide alphabet that is 6 + 36 + 216 = 258 walks, each over pure values.
+    /// shorter sequence is a prefix of one, so nothing between the depths is skipped. With the
+    /// eleven-wide alphabet that is 11 + 121 + 1331 = 1463 walks, each over pure values.
     private static let sweepDepth = 3
 
     /// **The exhaustive sweep** — item 4's 48-row table's counterpart one layer up, and the wall the
@@ -378,14 +480,19 @@ struct MeshContinuationDriverTests {
     ///
     /// Item 4 walls the TABLE; nothing walled the two guards that decide when the driver speaks. So
     /// this walks every sequence of driver calls up to ``sweepDepth`` from a driver born where every
-    /// driver is born, counting the raises through the seam, and asserts three things on each walk:
+    /// driver is born, counting the raises through the seam, and asserts four things on each walk:
     ///
-    /// - one `begin` per ENTRY into `running` — never a second for the same task, never one without
-    ///   an entry;
-    /// - one `end` per EXIT from `running` — item 4's oracle (`completion != nil ⟺ (from ==
-    ///   .running && next != .running)`) projected onto the driver, which is what keeps the pair
+    /// - one `begin` per ENTRY into (`running` ∧ a dark scene) — never a second for the same task,
+    ///   never one without an entry, and never one for a task delivered to an app still on screen
+    ///   (item 6's fix round, F2);
+    /// - one `end` per EXIT from that same predicate — item 4's oracle (`completion != nil ⟺ (from
+    ///   == .running && next != .running)`) narrowed by the scene, which is what keeps the pair
     ///   BALANCED for the system that granted the task;
-    /// - the completion an exit owes is takeable exactly once, and no other step owes one.
+    /// - the two counts agree with each other, up to the one task a walk may still be holding in the
+    ///   dark when it ends — so `end` never outruns `begin` and never lags it by two;
+    /// - the completion an exit owes is takeable exactly once, and no other step owes one. The debt
+    ///   is deliberately NOT narrowed by the scene: a task delivered to a lit app is still a task
+    ///   the system must be told about.
     ///
     /// The walk consumes after every call on purpose. `pendingCompletion` is a slot, not a queue —
     /// a completion nobody took is overwritten by the next one — so a walk that did not consume
@@ -402,17 +509,23 @@ struct MeshContinuationDriverTests {
                 walks += 1
             }
         }
-        #expect(walks == 258, "6 + 36 + 216 — a six-wide alphabet walked to depth three")
-        #expect(adoptions.map(\.rawValue).sorted() == ["absorbed", "ownerless"],
+        #expect(walks == 1463, "11 + 121 + 1331 — the eleven-wide alphabet walked to depth three")
+        #expect(adoptions.map(\.rawValue).sorted() == ["absorbed", "claimed", "ownerless"],
                 """
-                and `claimed` is NOT reachable through item 5's alphabet: item 4's table does land a \
-                foreground return on `requested`, but the driver's unclaimed arm resets the \
-                projection before any caller sees it, and nothing here can raise `firstPeerCommitted`. \
-                Item 6 adds that edge and this expectation changes with it — deliberately.
+                and `claimed` IS reachable now, which is the change item 6 was predicted to make: \
+                `firstPeerCommitted` lands the claim on `requested` without a task ever having run, \
+                so the next delivery is the one this device asked for. The other two stay reachable — \
+                a delivery with no claim behind it is still adopted, and a second one is still \
+                absorbed — and the begin/end counts stay balanced across all 1463 walks.
                 """)
     }
 
     /// Walks one sequence on a fresh driver over a counting recorder, asserting the invariants.
+    ///
+    /// The walk carries its own model of the scene — `dark`, which is the fact a DELIVERY supplied
+    /// at the entry into `running`, latched true by a `sceneDark` under a task in hand, and dropped
+    /// with the task on the way out. `(running ∧ dark)` is then the predicate the two raises are
+    /// counted against, independently of how the driver spells it.
     ///
     /// - Parameter sequence: The calls to make, in order.
     /// - Returns: The adoptions the deliveries in this walk answered with.
@@ -420,23 +533,33 @@ struct MeshContinuationDriverTests {
         let recorder = RaiseRecorder()
         let driver = MeshContinuationDriver(meshNetworkManager: recorder)
         let name = sequence.map(\.token).joined(separator: " → ")
-        var entries = 0
-        var exits = 0
+        var dark = false
+        var darkEntries = 0
+        var darkExits = 0
         var adoptions: [MeshContinuationAdoption] = []
         // R2: bounded by the sequence's length, which is at most `sweepDepth`.
         for call in sequence {
             let before = driver.state
+            let inTheDarkBefore = before == .running && dark
             if let adoption = perform(call, on: driver) { adoptions.append(adoption) }
             let left = before == .running && driver.state != .running
-            if before != .running && driver.state == .running { entries += 1 }
-            if left { exits += 1 }
+            if before != .running && driver.state == .running { dark = call.deliveredInTheDark }
+            if call == .sceneDark && driver.state == .running { dark = true }
+            if left { dark = false }
+            let inTheDarkAfter = driver.state == .running && dark
+            if !inTheDarkBefore && inTheDarkAfter { darkEntries += 1 }
+            if inTheDarkBefore && !inTheDarkAfter { darkExits += 1 }
             #expect((driver.consumePendingCompletion() != nil) == left,
                     "\(name): a completion is owed exactly on an exit from `running`, and nowhere else")
             #expect(driver.consumePendingCompletion() == nil,
                     "\(name): and it is takeable exactly once — a second read completes nothing twice")
         }
-        #expect(recorder.beginCount == entries, "\(name): one begin raise per entry into `running`")
-        #expect(recorder.endCount == exits, "\(name): one end raise per exit from `running`")
+        #expect(recorder.beginCount == darkEntries,
+                "\(name): one begin raise per entry into (`running` ∧ a dark scene), and none for a lit one")
+        #expect(recorder.endCount == darkExits, "\(name): one end raise per exit from it")
+        let stillHolding = driver.state == .running && dark ? 1 : 0
+        #expect(recorder.beginCount - recorder.endCount == stillHolding,
+                "\(name): the pair is balanced, but for the one task a walk may still hold in the dark")
         return adoptions
     }
 
@@ -448,14 +571,18 @@ struct MeshContinuationDriverTests {
     /// - Returns: The adoption, for a delivery; nil for the calls that answer nothing.
     private static func perform(_ call: SweepCall, on driver: MeshContinuationDriver) -> MeshContinuationAdoption? {
         switch call {
-        case .start: return driver.taskDidStart()
+        case .start(let isDark): return driver.taskDidStart(sceneIsDark: isDark)
+        case .sceneDark: driver.sceneDidGoDark(); return nil
         case .end(let reason): driver.taskDidEnd(reason); return nil
         case .reset: driver.reset(); return nil
+        case .meshStart: driver.meshDidStart(); return nil
+        case .firstPeerCommit: driver.firstPeerDidCommit(); return nil
+        case .taskRefused: driver.taskWasRefused(); return nil
         }
     }
 
-    /// The `index`-th sequence of `length` calls: the base-six expansion of the index, which is the
-    /// enumeration without a recursive generator (Power of 10 R1).
+    /// The `index`-th sequence of `length` calls: the expansion of the index in the alphabet's own
+    /// base, which is the enumeration without a recursive generator (Power of 10 R1).
     ///
     /// - Parameters:
     ///   - index: Which sequence, `0 ..< walkCount(length:)`.
@@ -483,28 +610,31 @@ struct MeshContinuationDriverTests {
         return total
     }
 
-    /// **`.claimed` is unreachable through item 5's alphabet, and the reason is the DRIVER's, not
-    /// the table's** (the fix round's F4, correcting both the report's handoff sentence and the
-    /// verify's correction of it).
+    /// **`.claimed` is unreachable through item 5's SUB-alphabet, and the reason is the DRIVER's,
+    /// not the table's** (item 5's fix round F4, corrected again by item 6's F6 — the sentence
+    /// described a future that has since arrived).
     ///
     /// Item 4 really does land a foreground return on `requested` — a foreground glance spends the
-    /// task, not the session's claim — so the row is there and item 6 will reach it. What the sweep
-    /// above measures is that no sequence of item 5's own calls can: entering `running` claimed
-    /// requires `requested` first, `requested` is reachable here only from `running` itself, and the
-    /// unclaimed arm resets the projection on the way. `firstPeerCommitted` is the edge that breaks
-    /// the circle, and it is item 6's.
+    /// task, not the session's claim — so the row is there, and the sweep above now REACHES it,
+    /// because `firstPeerCommitted` is one of its eleven letters. What this cell measures is the
+    /// narrower claim the sweep can no longer state on its own: over item 5's own three calls
+    /// (deliver, end, reset) nothing can reach `.claimed`, because entering `running` claimed
+    /// requires `requested` first, `requested` is reachable from `running` itself, and the unclaimed
+    /// arm resets the projection on the way. That is what made `firstPeerCommitted` the edge item 6
+    /// had to add rather than a convenience.
     @Test func aForegroundReturnLandsOnRequestedInTheTableAndIsResetByTheUnclaimedArm() {
         #expect(MeshContinuationCoordinator.transition(from: .running, on: .appForegrounded).next == .requested,
                 "item 4's row is real: the task is spent, the session's claim is not")
         let (driver, _) = driverOverAnIdleManager()
-        #expect(driver.taskDidStart() == .ownerless, "but the first delivery today is unclaimed")
+        #expect(driver.taskDidStart(sceneIsDark: true) == .ownerless,
+                "but a delivery with none of item 6's claim edges before it is unclaimed")
 
         driver.taskDidEnd(.appForegrounded)
 
         #expect(driver.state == .idle,
                 "so that `requested` landing is reset by the unclaimed arm before any caller sees it")
-        #expect(driver.taskDidStart() == .ownerless,
-                "and the next delivery is ownerless again — `.claimed` waits for item 6's firstPeerCommitted")
+        #expect(driver.taskDidStart(sceneIsDark: true) == .ownerless,
+                "and the next delivery is ownerless again — only `firstPeerCommitted` makes one `.claimed`")
     }
 }
 
@@ -590,8 +720,9 @@ struct MeshContinuationDisagreementTests {
         #expect(!recipient.routedAccessGate.isOpen,
                 "the pushed gate leg is false, exactly as `routedGateForeground(for: .background)` decides it")
 
-        // 2. The task arrives. The OTHER leg moves, through item 5's raise and nothing else.
-        #expect(driver.taskDidStart() == .ownerless, "the task is adopted")
+        // 2. The task arrives, into a scene that is ALREADY dark. The OTHER leg moves, through
+        //    item 5's raise and nothing else.
+        #expect(driver.taskDidStart(sceneIsDark: true) == .ownerless, "the task is adopted")
         #expect(recipient.sessionState == .continuingInBackground,
                 "and the mesh knows it is being continued rather than merely dark")
         #expect(!recipient.mayCommitRoutedHeartLedgerJudgement,
@@ -625,6 +756,46 @@ struct MeshContinuationDisagreementTests {
                 "and exactly one receipt of this device's own — the ack, once")
     }
 
+    /// **The F2 headline** (item 6's fix round): a task delivered while the person is LOOKING at
+    /// Fernlet judges hearts exactly as before, and only the scene going dark hands the session over.
+    ///
+    /// This is the cell the first draft reddens. A `BGContinuedProcessingTask` is delivered promptly
+    /// after the submission, normally with the app still on screen, so raising at the delivery put a
+    /// live FOREGROUND mesh into `continuingInBackground` and closed
+    /// `mayCommitRoutedHeartLedgerJudgement` while the person was using Fernlet — every routed heart
+    /// deferring silently until they left the app and came back, which is a P6-scale outage bought
+    /// for nothing. The delivery here is `.claimed` rather than ownerless, because that is the shape
+    /// the host actually produces: a first peer commits, a request goes in, the system answers.
+    @Test func aTaskDeliveredWhileTheAppIsOnScreenJudgesHeartsUntilTheSceneGoesDark() async throws {
+        let (rig, _) = try await foundedHeartPair("p8-continuation-lit-delivery")
+        defer { rig.teardown() }
+        let recipient = rig.nodes[1].manager
+        let driver = MeshContinuationDriver(meshNetworkManager: recipient)
+        driver.firstPeerDidCommit()
+
+        #expect(driver.taskDidStart(sceneIsDark: false) == .claimed,
+                "this device asked for the task, and the system answered while the app was on screen")
+
+        #expect(recipient.sessionState == .activeForeground,
+                "so the session is exactly where it was — the person is still here")
+        #expect(recipient.mayCommitRoutedHeartLedgerJudgement,
+                "and the heart stage stays OPEN: nothing defers while Fernlet is being used")
+
+        driver.sceneDidGoDark()
+
+        #expect(recipient.sessionState == .continuingInBackground,
+                "the dark scene is what hands the session over to the task")
+        #expect(!recipient.mayCommitRoutedHeartLedgerJudgement, "and closes the stage behind it")
+
+        driver.taskDidEnd(.appForegrounded)
+
+        #expect(recipient.sessionState == .activeForeground, "the return gives the session leg back")
+        #expect(recipient.mayCommitRoutedHeartLedgerJudgement, "and reopens the stage")
+        #expect(driver.consumePendingCompletion() == .succeeded,
+                "with exactly one completion owed for the task the person spent")
+        #expect(driver.consumePendingCompletion() == nil, "and takeable once")
+    }
+
     /// **The independence claim, as four corners.** Gate and session are separate facts: the raise
     /// moves no gate, the gate push moves no session state, and only both together open the stage.
     @Test func theTwoLegsMoveIndependentlyAndOnlyBothTogetherOpenTheStage() async throws {
@@ -634,7 +805,10 @@ struct MeshContinuationDisagreementTests {
         let driver = MeshContinuationDriver(meshNetworkManager: recipient)
         #expect(recipient.mayCommitRoutedHeartLedgerJudgement, "corner 1: both legs open ⇒ open")
 
-        driver.taskDidStart()
+        driver.taskDidStart(sceneIsDark: false)
+        #expect(recipient.mayCommitRoutedHeartLedgerJudgement,
+                "a task delivered to an app still ON SCREEN moves neither leg (item 6's fix round, F2)")
+        driver.sceneDidGoDark()
 
         #expect(recipient.routedAccessGate.isOpen, "the raise touched the gate not at all")
         #expect(!recipient.mayCommitRoutedHeartLedgerJudgement,
@@ -660,13 +834,13 @@ struct MeshContinuationDisagreementTests {
         defer { rig.teardown() }
         let recipient = rig.nodes[1].manager
         let driver = MeshContinuationDriver(meshNetworkManager: recipient)
-        driver.taskDidStart()
+        driver.taskDidStart(sceneIsDark: true)
         #expect(recipient.sessionState == .continuingInBackground, "the precondition: one raise landed")
         recipient.applySessionEvent(MeshSessionEvent.foregrounded)
         #expect(recipient.sessionState == .activeForeground,
                 "and the machine is put back by hand, so a re-raise would be visible")
 
-        #expect(driver.taskDidStart() == .absorbed, "the second delivery is absorbed")
+        #expect(driver.taskDidStart(sceneIsDark: true) == .absorbed, "the second delivery is absorbed")
 
         #expect(recipient.sessionState == .activeForeground,
                 "and raised nothing: the raise sits behind the ENTRY into `running`, not behind the event")
@@ -687,7 +861,7 @@ struct MeshContinuationDisagreementTests {
         defer { rig.teardown() }
         let recipient = rig.nodes[1].manager
         let driver = MeshContinuationDriver(meshNetworkManager: recipient)
-        driver.taskDidStart()
+        driver.taskDidStart(sceneIsDark: true)
         #expect(recipient.sessionState == .continuingInBackground,
                 "the precondition: a task in hand and a mesh being continued behind it")
 
@@ -707,7 +881,7 @@ struct MeshContinuationDisagreementTests {
 
     /// **An unwanted delivery is harmless on a LIVE mesh — once it is ended** (the fix round's F5).
     ///
-    /// `taskDidStart()` raises `begin` even when nobody asked for the task, which is the right call
+    /// `taskDidStart(sceneIsDark:)` raises `begin` even when nobody asked for the task, which is the right call
     /// (the alternative is an unpaired `end`), but it means an ownerless delivery backgrounds a live
     /// foreground mesh and defers its hearts for as long as the app holds it. The three ownerless
     /// cells in the suite above run on a session-less manager, where the raise is refused, so the
@@ -720,7 +894,8 @@ struct MeshContinuationDisagreementTests {
         let driver = MeshContinuationDriver(meshNetworkManager: recipient)
         #expect(driver.state == .idle, "the precondition: this driver asked for nothing at all")
 
-        #expect(driver.taskDidStart() == .ownerless, "so the delivery is adopted with no claim behind it")
+        #expect(driver.taskDidStart(sceneIsDark: true) == .ownerless,
+                "so the delivery is adopted with no claim behind it")
 
         #expect(recipient.sessionState == .continuingInBackground,
                 "and it moves a LIVE foreground mesh into the background for the turn it is held")
@@ -737,7 +912,7 @@ struct MeshContinuationDisagreementTests {
     }
 
     /// **What this file does not claim.** No scene, no `BGTaskScheduler`, no real
-    /// `BGContinuedProcessingTask` and no device run: `taskDidStart()` / `taskDidEnd(_:)` stand in
+    /// `BGContinuedProcessingTask` and no device run: `taskDidStart(sceneIsDark:)` / `taskDidEnd(_:)` stand in
     /// for deliveries item 6 has not wired yet, the run policy is never fed `.running` from
     /// anywhere (item 6's line), and the 6-hour ceiling, the 30-minute idle stop and the progress
     /// ratchet are neither exercised nor asserted away here. The physical proof is §15.3's soak.

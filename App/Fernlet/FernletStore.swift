@@ -1886,13 +1886,13 @@ final class FernletStore {
     /// the wipe wall to dispose of, and a fresh launch starts at `.idle` because a claim on a task
     /// that no longer exists is a lie.
     ///
-    /// **Item 6 sets it**, from the thin object that registers the handler, submits the request and
-    /// completes the task; item 7 ships only this projection and
-    /// ``MeshContinuationCardPresentation``, which reads it. There is deliberately NO setter method
-    /// here and no `reapplyProximityRunPolicy()` call: feeding `ProximityRunPolicy` its
-    /// `continuation:` fact is item 6's edge, and until then `ProximityRunSeamsTests`' count of the
-    /// store's own policy edges and `MeshRoutedLockedDeviceTests`' funnel wall stay exactly as P7
-    /// left them. Today's only writer is the DEBUG launch hook `FERNLET_MESH_CONTINUATION`.
+    /// **Item 6 sets it**, through ``setMeshContinuation(state:lastAudit:)``, from the thin object
+    /// that registers the handler, submits the request and completes the task
+    /// (``MeshContinuationTaskHost``); item 7 shipped this projection and
+    /// ``MeshContinuationCardPresentation``, which reads it. The property stays a plain settable
+    /// `var` rather than `private(set)` so item 7's DEBUG launch hook `FERNLET_MESH_CONTINUATION`
+    /// can seed a card at launch without running the policy; the setter is the production writer,
+    /// and it is the one that also feeds `ProximityRunPolicy`.
     var meshContinuationState: MeshContinuationState = .idle
 
     /// The frozen audit token that named the claim's last MOVE, or nil before any.
@@ -1904,6 +1904,36 @@ final class FernletStore {
     /// which is what keeps a refusal readable across the foreground return that a spent claim
     /// absorbs. Observed and memory-only for the same reasons as the state above.
     var meshContinuationLastAudit: MeshContinuationAudit?
+
+    /// The app's continued-processing task host (network migration P8 item 6): the claim, the
+    /// registered identifier and the delivered task.
+    ///
+    /// Lazy, in ``meshNetworkManager``'s own idiom — nothing forces it before the first mesh edge —
+    /// and `@ObservationIgnored` because no view reads it; what a view reads is the projection
+    /// above, which this feeds. It holds the store and the manager WEAKLY, stores no `Task` handle
+    /// and owns no timer (ML1/ML4), and speaks no radio verb: the only way it reaches a radio is
+    /// ``setMeshContinuation(state:lastAudit:)``.
+    @ObservationIgnored private(set) lazy var meshContinuationHost = MeshContinuationTaskHost(
+        store: self, meshNetworkManager: meshNetworkManager
+    )
+
+    /// Feeds the background-continuation claim into the run policy (network migration P8 item 6).
+    ///
+    /// The two nearby opt-in setters' shape exactly — assign, then re-run the policy — minus their
+    /// `snapshotSaveCoordinator.schedule()`: the claim is memory-only, has no persisted key, and a
+    /// launch that restored one would be asserting a task that no longer exists.
+    ///
+    /// This is the ONLY production writer of the two projection properties, and the store's sixth
+    /// own policy edge (`ProximityRunSeamsTests` counts them).
+    ///
+    /// - Parameters:
+    ///   - state: Where ``MeshContinuationDriver``'s claim stands.
+    ///   - lastAudit: The frozen token naming its last move, or nil.
+    func setMeshContinuation(state: MeshContinuationState, lastAudit: MeshContinuationAudit?) {
+        meshContinuationState = state
+        meshContinuationLastAudit = lastAudit
+        reapplyProximityRunPolicy()
+    }
 
     // MARK: - Proximity run policy (network migration P7)
 
@@ -1988,6 +2018,14 @@ final class FernletStore {
             appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
         )
         proximityEdgeFacts = facts
+        // P8 item 6: the scene's foreground fact, decided ONCE by
+        // `FernletApp.routedGateForeground(for:)` and read here through the policy rather than a
+        // second `ScenePhase` compare. A continued task is spent by the person coming back, and the
+        // host is the only thing that knows one is in hand. It is fed AFTER the facts are retained
+        // so its own `setMeshContinuation` re-run judges this edge, not the previous one; the run
+        // below then diffs an identical verdict and touches no radio — the same deliberate doubling
+        // `setAllowNearbyPresence` and `ContentView`'s observer of the same value already have.
+        meshContinuationHost.appForegroundDidChange(ProximityRunPolicy.isForeground(scenePhase))
         return runProximityPolicy(facts, now: now)
     }
 
@@ -2038,8 +2076,12 @@ final class FernletStore {
     ///
     /// The store owns the tab mirror (``selectedTab``), the age record, the wipe bracket, the two
     /// nearby opt-ins and the manager's two session predicates; the edge owns the other four facts.
-    /// `continuation` is `.notRequested` until P8 exists — the policy is fed, never driven, and
-    /// under that value no radio ever claims the background (`ProximityRunPolicyTests` pins it).
+    /// `continuation` is ``meshContinuationState``'s feed since P8 item 6 — the policy is FED, never
+    /// driven: nothing in this body registers, submits or completes a task, and nothing outside
+    /// ``MeshContinuationTaskHost`` writes the claim. The host is deliberately not called from
+    /// inside this body, because ``setMeshContinuation(state:lastAudit:)`` re-runs this funnel and a
+    /// re-entrant pass would leave the outer one diffing against a `previous` the inner one had
+    /// already replaced.
     private func runProximityPolicy(_ facts: ProximityEdgeFacts, now: Date) -> ProximityRunPolicy.Verdict {
         let input = ProximityRunPolicy.Input(
             scenePhase: facts.scenePhase,
@@ -2049,7 +2091,7 @@ final class FernletStore {
             protectedDataAvailable: facts.protectedDataAvailable,
             belowMinimumAge: ProximityRunPolicy.belowMinimumAge(ageAssurance.record),
             deleteAllInProgress: deleteAllInProgress,
-            continuation: .notRequested,
+            continuation: meshContinuationState.feed,
             session: ProximitySessionPresence.folding(
                 isInSession: meshNetworkManager.isInSession,
                 hasCommittedPeer: meshNetworkManager.hasCommittedPeer
@@ -5244,6 +5286,12 @@ final class FernletStore {
         // down, the search and both listeners stand down — here at leg 0, before any leg below
         // (PrivacyWipeCoverage row "Every proximity radio"). Lowering it re-runs the policy over
         // whatever the wipe left; the opt-ins reset with the settings. Memory-only.
+        // P8 item 6: the continuation half of leg 7b. The task in hand is completed and any
+        // pending request withdrawn BEFORE the bracket rises — `MeshContinuationDriver.reset()`
+        // deliberately does not clear a pending completion, because a wipe does not excuse the app
+        // from completing a task it is still holding — and the claim resets to silence, so the
+        // Friends card says nothing about a background session on an emptied device.
+        meshContinuationHost.proximityHardStopWillBegin()
         deleteAllInProgress = true
         reapplyProximityRunPolicy()
         defer {

@@ -391,7 +391,21 @@ nonisolated enum ProximityRunPolicy {
     /// - Parameter input: The input whose scene phase is read.
     /// - Returns: Whether the scene is not backgrounded.
     static func isForeground(_ input: Input) -> Bool {
-        FernletApp.routedGateForeground(for: input.scenePhase)
+        isForeground(input.scenePhase)
+    }
+
+    /// The same one fact, over a bare phase — for the store's scene edge, which must hand P8's
+    /// continuation host a foreground Bool without reading the phase a second time.
+    ///
+    /// `FernletApp.routedGateForeground(for:)` stays spoken exactly once in the whole app, right
+    /// here; ``isForeground(_:)-(Input)`` now goes through this overload rather than repeating it,
+    /// so `MeshRoutedLockedDeviceTests.foregroundMeansNotBackgroundedAndIsDecidedOnce`'s count of
+    /// one is unchanged.
+    ///
+    /// - Parameter phase: The scene phase.
+    /// - Returns: Whether the scene is not backgrounded.
+    static func isForeground(_ phase: ScenePhase) -> Bool {
+        FernletApp.routedGateForeground(for: phase)
     }
 
     /// Whether any hard stop is in force: a delete-all in flight, a duress session, or a

@@ -259,6 +259,12 @@ import Testing
 
     /// The projection is an OBSERVED stored property: `@ObservationIgnored` here would mean a
     /// refusal that never repaints the Friends tab, which is the whole point of the card.
+    ///
+    /// **Item 6 moved the second half of this cell.** Item 7 shipped the projection with no writer
+    /// at all, so "declared once and written by nothing" was the honest claim then. Item 6 gives it
+    /// exactly one production writer — `setMeshContinuation(state:lastAudit:)`, the store's sixth
+    /// own policy edge — and one reader, the run-policy funnel. Three occurrences, each named, is
+    /// the claim now; a fourth would mean a second writer.
     @Test func theStoreProjectionIsObservedAndSetsNoPolicy() throws {
         let store = try RepoRoot.source("App/Fernlet/FernletStore.swift")
         let lines = store.components(separatedBy: "\n")
@@ -273,8 +279,19 @@ import Testing
             #expect(previous != "@ObservationIgnored", "\(declaration) must repaint the Friends tab")
         }
         let code = MeshRoutedSourceScan.codeOnly(store)
-        #expect(code.components(separatedBy: "meshContinuationState").count - 1 == 1,
-                "the projection is declared once and written by nothing in the store — item 6 owns the setter that feeds the policy")
+        #expect(code.components(separatedBy: "meshContinuationState").count - 1 == 3,
+                """
+                declared once, assigned once (by P8 item 6's `setMeshContinuation(state:lastAudit:)`, \
+                the ONE production writer) and read once (the run-policy funnel's `continuation:` \
+                line). A fourth occurrence is a second writer, which is what this counts for.
+                """)
+        let setter = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "func setMeshContinuation(", in: code),
+            "item 6's feed setter is gone from the store")
+        #expect(setter.contains("reapplyProximityRunPolicy()"),
+                "the setter re-runs the policy — that is how a claim reaches a radio, and the only way")
+        #expect(!setter.contains("snapshotSaveCoordinator"),
+                "and persists nothing: a claim on a task that no longer exists must not survive a launch")
     }
 
     /// The DEBUG launch hook seeds the projection through the table's own inverse, so it can never

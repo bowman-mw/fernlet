@@ -13,8 +13,10 @@
 //
 // **What it deliberately is NOT.** It registers nothing, submits nothing, schedules nothing and
 // completes nothing: `BGTaskScheduler`, the `BGContinuedProcessingTaskRequest`, the expiration
-// handler, the progress ratchet and `setTaskCompleted(success:)` are item 6's, and item 6 adds them
-// to THIS type. It also speaks no radio verb, writes no routed access gate and calls no store
+// handler, the progress ratchet and `setTaskCompleted(success:)` are item 6's, and they live in
+// ``MeshContinuationTaskHost`` — a SIBLING that owns this driver rather than a second half bolted
+// onto it, so `MeshContinuationRaiseWallTests.theDriverIsSessionStateOnly`'s needle list keeps every
+// one of those names forbidden HERE, forever, instead of being shortened by three. It also speaks no radio verb, writes no routed access gate and calls no store
 // setter — `MeshContinuationRaiseWallTests.theDriverIsSessionStateOnly` scans this file for every
 // one of those needles, the manager is held behind a TWO-VERB seam
 // (`MeshContinuationRaising`) that makes the rest of it unspellable from here, and
@@ -30,9 +32,23 @@
 // what the system is owed in `pendingCompletion`; item 6 consumes it with
 // `consumePendingCompletion()` and calls `setTaskCompleted(success:)` with it. Exactly-once is item
 // 4's oracle — `completion != nil ⟺ (from == .running && next != .running)` — and this file adds no
-// second path to either raise: every `begin` sits behind an ENTRY into `running`, and every `end`
-// behind a completion the table produced. `anEndingWithNoTaskInHandRaisesNothing` is that claim as a
-// cell.
+// second path to either raise: every `begin` sits behind an ENTRY into (`running` ∧ a dark scene),
+// and every `end` behind a completion the table produced FOR a delivery that raised one.
+// `anEndingWithNoTaskInHandRaisesNothing` is that claim as a cell.
+//
+// **A `begin` needs a task in hand AND a dark scene** (item 6's fix round, F2 — and the premise the
+// first draft got wrong). A `BGContinuedProcessingTask` is delivered promptly after the submission,
+// normally while the app is still ON SCREEN — that is what "continued processing" means, and it is
+// the shape the feasibility probe itself observed. Raising at the delivery therefore put a LIVE
+// FOREGROUND mesh into `MeshSessionState.continuingInBackground` and closed
+// `mayCommitRoutedHeartLedgerJudgement` while the person was using Fernlet, every routed heart
+// deferring silently until they left the app and came back. So the raise is behind the entry into
+// (`running` ∧ dark): at the delivery only when the scene is ALREADY dark, and otherwise on the
+// host's own dark edge, ``sceneDidGoDark()`` — fed by `ProximityRunPolicy.isForeground(_:)`, the one
+// decided-once foreground fact, never a second `ScenePhase` read. `end` fires on the ending the
+// table completes, and only when a `begin` was raised for THAT delivery, so the pair stays balanced
+// and a task that came and went while the app was on screen raises neither. The exhaustive sweep
+// walks the scene as a letter of its own alphabet and counts both against that predicate.
 //
 // **The PROJECTION is a rule, not a raw token** (item 7's adversarial verify, obligation 1). The
 // driver carries `lastAudit` beside `state` because item 7's Friends card needs both — `completed`
@@ -128,9 +144,10 @@ nonisolated enum MeshContinuationAdoption: String, Equatable, Sendable, CaseIter
 
 /// The app's continuation driver — item 5's half: the claim, and the two session-state raises.
 ///
-/// Item 6 grows this type with the `BackgroundTasks` half (register, submit, progress, expiration,
-/// completion) and with the remaining claim edges (`meshStarted`, `firstPeerCommitted`,
-/// `taskRefused`); the two entry points here stay the only place either raise is spoken.
+/// Item 6 added the remaining claim edges (``meshDidStart()``, ``firstPeerDidCommit()``,
+/// ``taskWasRefused()``), the scene edge the `begin` raise is now gated on (``sceneDidGoDark()``),
+/// and put the `BackgroundTasks` half in ``MeshContinuationTaskHost``, which owns one of these;
+/// this file stays the only place either raise is spoken.
 ///
 /// ## Concurrency
 ///
@@ -161,6 +178,14 @@ final class MeshContinuationDriver {
     /// that ends it, to decide whether the ending is presentable at all.
     private var adoptedWithoutAClaim = false
 
+    /// Whether `begin` has been raised for the delivery in hand — the other half of the F2 rule.
+    ///
+    /// It is the whole of "exactly once" for a pair that is no longer one-per-entry-into-`running`:
+    /// set at the single raise site, cleared at the single end site, so `end` fires if and only if
+    /// this delivery's `begin` did. **Its invariant is `raisedBegan ⟹ state == .running`** — every
+    /// exit from `running` produces a completion, and that is the one place it is cleared.
+    private var raisedBegan = false
+
     /// The manager whose session state these raises move, held as the two-door seam it conforms to.
     ///
     /// The type is ``ProximityKit/MeshContinuationRaising`` rather than `MeshNetworkManager`
@@ -179,22 +204,46 @@ final class MeshContinuationDriver {
         self.meshNetworkManager = meshNetworkManager
     }
 
-    /// The system delivered a `BGContinuedProcessingTask`: adopt it, and — on the entry into
-    /// `running` — tell the mesh its scene is now dark.
+    /// The system delivered a `BGContinuedProcessingTask`: adopt it, and — only if the scene is
+    /// ALREADY dark — tell the mesh so.
     ///
-    /// The raise is behind the ENTRY, not behind the event: a second delivery while a task is in
-    /// hand is absorbed by item 4's table and re-raises nothing, because nothing moved.
+    /// The adoption is unconditional, because an unadopted handle is uncompletable. The RAISE is
+    /// not: a continued-processing task is normally delivered while the app is still on screen, and
+    /// a mesh told it is being continued in the background while the person is looking at it stops
+    /// judging hearts for no reason (the fix round's F2). A delivery that arrives lit is raised on
+    /// the next ``sceneDidGoDark()`` instead, and a task that ends before the scene ever darkens
+    /// raises neither half of the pair.
     ///
+    /// The raise is also behind the ENTRY, not behind the event: a second delivery while a task is
+    /// in hand is absorbed by item 4's table and re-raises nothing, because nothing moved — and it
+    /// supplies no scene fact either, since the handle it carries is not this driver's to keep.
+    ///
+    /// - Parameter sceneIsDark: Whether the scene is backgrounded at this delivery, as
+    ///   `ProximityRunPolicy.isForeground(_:)` last decided it. It is a PARAMETER rather than a read
+    ///   so this file keeps no second foreground fact of its own.
     /// - Returns: Whether the delivery was claimed, ownerless or absorbed. An ownerless one is
     ///   ``MeshContinuationEndReason/cancelled``'s job, on the caller's next turn.
     @discardableResult
-    func taskDidStart() -> MeshContinuationAdoption {
+    func taskDidStart(sceneIsDark: Bool) -> MeshContinuationAdoption {
         let previous = state
         let outcome = apply(.taskStarted)
         guard outcome.next == .running, previous != .running else { return .absorbed }
         adoptedWithoutAClaim = previous != .requested
-        raiseBackgroundContinuationBegan()
+        if sceneIsDark { raiseBeganIfOwed() }
         return adoptedWithoutAClaim ? .ownerless : .claimed
+    }
+
+    /// The scene went dark with a task in hand: NOW tell the mesh it is being continued.
+    ///
+    /// The second half of the F2 rule, and the reason the host may keep adopting a delivery the
+    /// moment it arrives. Level-triggered and idempotent — the host is fed the foreground fact on
+    /// every scene edge, including the ones that did not change it — because ``raisedBegan`` is what
+    /// makes a second call a no-op rather than a second raise. With no task in hand it does nothing
+    /// at all: a mesh that merely went dark with no continued task is suspended along with the
+    /// process, which is what `MeshSessionState.backgroundedSuspended` would mean and is nobody's to
+    /// raise here.
+    func sceneDidGoDark() {
+        raiseBeganIfOwed()
     }
 
     /// The task in hand is over: move the claim, and — on exactly the edges item 4 says complete a
@@ -206,11 +255,54 @@ final class MeshContinuationDriver {
     ///
     /// - Parameter reason: Why the task is ending.
     func taskDidEnd(_ reason: MeshContinuationEndReason) {
+        offer(reason.event)
+    }
+
+    /// This device is on a NEW mesh (item 6's registration edge).
+    ///
+    /// Item 4's row completes a task still running for the previous mesh (`failed`) — an
+    /// un-completed task belonging to a dead mesh is precisely the leak exactly-once exists to
+    /// prevent — and the raise that ending produces goes through the same one door as every other.
+    /// The caller pays the debt with ``consumePendingCompletion()`` before it registers the new
+    /// mesh's identifier.
+    func meshDidStart() {
+        offer(.meshStarted)
+    }
+
+    /// The first peer of this mesh has committed (item 6's submission edge).
+    ///
+    /// No row of item 4's table ends a delivered task on this event, so nothing is ever raised
+    /// here. Entry into ``MeshContinuationState/requested`` IS the submission instruction, and the
+    /// caller reads ``state`` after this returns rather than being told twice.
+    func firstPeerDidCommit() {
+        offer(.firstPeerCommitted)
+    }
+
+    /// The system refused the request this claim submitted (item 6's refusal edge).
+    ///
+    /// The claim lands on ``MeshContinuationState/refused``, which is the Friends card's "this
+    /// session stays on screen". Nothing was delivered, so nothing is completed and nothing is
+    /// raised.
+    func taskWasRefused() {
+        offer(.taskRefused)
+    }
+
+    /// Offers one event to item 4's table and serves whatever it produced.
+    ///
+    /// The single branch every edge shares: a completion the table did NOT produce is an ending of
+    /// nothing, and an ending of nothing must not tell a live foreground mesh it has just returned
+    /// from the background. When the table does produce one, the debt is recorded, the mesh is told
+    /// the scene is back **if it was ever told the scene went dark** (the fix round's F2 — a task
+    /// that came and went while the app was on screen owes no `end`, because it raised no `begin`),
+    /// and a task nobody had claimed leaves the projection silent.
+    ///
+    /// - Parameter event: What happened.
+    private func offer(_ event: MeshContinuationEvent) {
         let wasUnclaimed = adoptedWithoutAClaim
-        let outcome = apply(reason.event)
+        let outcome = apply(event)
         guard let completion = outcome.completion else { return }
         pendingCompletion = completion
-        raiseBackgroundContinuationEnded()
+        raiseEndedIfBegan()
         guard wasUnclaimed else { return }
         resetProjection()
     }
@@ -263,6 +355,10 @@ final class MeshContinuationDriver {
     /// task in hand) and by ``taskDidEnd(_:)``'s unclaimed arm (which has just ended one). It is
     /// private because that is the whole point: reaching it with `state == .running` is the hole
     /// ``reset()``'s first line closes, and no caller outside this file can.
+    ///
+    /// ``raisedBegan`` is deliberately NOT among the fields: both callers have just left `running`,
+    /// which is the one place it is cleared, so clearing it here would be a second path to the same
+    /// act — and one that could drop an `end` the mesh is owed if a third caller ever appeared.
     private func resetProjection() {
         state = MeshContinuationCoordinator.initialState
         lastAudit = nil
@@ -284,6 +380,28 @@ final class MeshContinuationDriver {
             context: ["event": event.rawValue, "state": outcome.next.rawValue]
         )
         return outcome
+    }
+
+    /// Raises `begin` if and only if a task is in hand and this delivery has not raised one yet.
+    ///
+    /// The ONE gate, shared by the two arms that can reach it — the delivery that arrives into a
+    /// dark scene, and the scene that darkens under a delivery already in hand — so the wall's
+    /// needle still reads exactly one call site for the public raise underneath.
+    private func raiseBeganIfOwed() {
+        guard state == .running, !raisedBegan else { return }
+        raisedBegan = true
+        raiseBackgroundContinuationBegan()
+    }
+
+    /// Raises `end` if and only if this delivery raised a `begin`, and forgets that it did.
+    ///
+    /// Called from ``offer(_:)`` on exactly the endings item 4's table completes a delivered task
+    /// on, which is the same thing as every exit from `running` — so the flag is cleared on every
+    /// exit and its `raisedBegan ⟹ state == .running` invariant holds.
+    private func raiseEndedIfBegan() {
+        guard raisedBegan else { return }
+        raisedBegan = false
+        raiseBackgroundContinuationEnded()
     }
 
     /// The ONE site that tells the mesh a continued task now carries it.

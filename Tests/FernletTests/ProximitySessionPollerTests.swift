@@ -4,6 +4,10 @@
 // Network migration P7 item 4: the app's half of the poller — the start/stop rule as a table, the
 // interval and its bound, and the wall that keeps the timer to one place: one caller of
 // `pollSession(now:)`, one stored handle, one sync inside the run-policy core, one liveness observer.
+//
+// P8 item 6's fix round (F3) adds one more claim about the same body: the tick is also what tells
+// the continuation host that a BACKGROUND session ended, because the view edges that normally do
+// cannot fire behind a dark scene.
 
 import Foundation
 import Testing
@@ -59,6 +63,35 @@ import ProximityKit
             homes.append(contentsOf: Array(repeating: source.name, count: count))
         }
         return homes
+    }
+
+    /// **The background session end** (P8 item 6's fix round, F3). A session that ends by its own
+    /// 6-hour ceiling or its 30-minute idle lapse — §15.3's two soak outcomes — ends with no view
+    /// edge at all: every mesh edge into the continuation host is a SwiftUI `.onChange` on the
+    /// stable root, and a backgrounded scene's body is not re-evaluated. So this tick, which is
+    /// already background-safe and already holds the host, must complete the task and withdraw the
+    /// pending request itself — BEFORE it stands its own timer down, since after that there is no
+    /// tick left to do it.
+    ///
+    /// Source-shaped on purpose: the tick's body is inside the one `Task` this file owns, and a
+    /// behavioural cell would have to wait a real 30 seconds for it. What the call DOES — complete
+    /// the held task `succeeded`, withdraw the request, land the claim on `completed` — is
+    /// `MeshContinuationTaskHostTests.theSessionEndingCompletesTheTaskSucceededAndWithdrawsTheRequest`,
+    /// and the view's own later edge is absorbed (`fromCompleted(.sessionEnded)`), so it stays a
+    /// no-op.
+    @Test func aPollThatReportsTheSessionGoneEndsTheContinuationBeforeStandingTheTimerDown() throws {
+        let poller = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/ProximitySessionPoller.swift"))
+        let body = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "private func startSessionPoller()", in: poller),
+            "the one timer is gone"
+        )
+        let ending = try #require(body.range(of: "meshContinuationHost.meshDidEnd()"),
+                                  "a session that ended in the background never reaches the continuation host")
+        let standDown = try #require(body.range(of: "stopSessionPoller()"),
+                                     "and the tick no longer stands its own timer down")
+        #expect(ending.lowerBound < standDown.lowerBound,
+                "the task is completed BEFORE the timer stops — after it, no tick is left to pay the debt")
     }
 
     /// **The wall.** One caller of the poll seam, one stored handle, one timer construction, one

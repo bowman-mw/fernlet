@@ -190,6 +190,21 @@ struct ContentView: View {
             .onChange(of: store.meshNetworkManager.isSessionLive) { _, _ in
                 applyProximityRunPolicyFromView()
             }
+            // P8 item 6: the mesh this device is on IS the background task's identity
+            // (`MBO.Fernlet.mesh-continuation.<meshID>`), so a new mesh registers a new handler and
+            // a mesh ending ends the task that was continuing it. Observed here rather than in the
+            // Friends surface because a mesh founds, changes and ends regardless of which tab is up.
+            // The host speaks no radio verb; it feeds the store, which re-runs the policy.
+            .onChange(of: store.meshNetworkManager.currentMesh?.meshID) { _, meshID in
+                handleMeshIdentityChange(meshID)
+            }
+            // The 0 → 1 edge is the submission instruction (plan §14: once the first peer commits).
+            // `hasCommittedPeer` is the "is there a peer this instant" predicate — never
+            // `isSessionLive`, which answers whether the session has ENDED, and never `isInSession`,
+            // which is the layout swap's.
+            .onChange(of: store.meshNetworkManager.hasCommittedPeer) { _, hasPeer in
+                store.meshContinuationHost.committedPeerDidChange(hasPeer: hasPeer)
+            }
             // One-time "first kept friend" presence offer (Phase 4a). Attached to the stable
             // root — not the Social-tab layout (which is destroyed in the same transaction as
             // session teardown, the Phase-2 lesson) — and driven by observable store state.
@@ -354,6 +369,24 @@ struct ContentView: View {
         }
         tabResetTokens[tab, default: 0] += 1
         isHomeTabBarCompact = false
+    }
+
+    /// The mesh this device is on changed (network migration P8 item 6).
+    ///
+    /// A method rather than a closure in `body` because `body` is held to 60 code lines like every
+    /// other, and because it is the same shape as this view's other edge handlers. It speaks no
+    /// radio verb: the host registers the new mesh's task identifier or ends the task the old one
+    /// was being continued for, and reaches the radios only by feeding the store.
+    ///
+    /// - Parameter meshID: The mesh's id, or nil when the mesh is over.
+    private func handleMeshIdentityChange(_ meshID: UUID?) {
+        guard let meshID else {
+            store.meshContinuationHost.meshDidEnd()
+            return
+        }
+        store.meshContinuationHost.meshDidStart(
+            meshID: meshID, hasCommittedPeer: store.meshNetworkManager.hasCommittedPeer
+        )
     }
 
     private func handleScenePhaseChange(_ phase: ScenePhase) {

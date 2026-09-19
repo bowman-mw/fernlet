@@ -141,6 +141,7 @@ the ones that do are named with the P8 item that unlocks them. Results go in
 | F9 | §15.3 progress soak, 3 h and 6 h, elapsed-based progress under normal phone use | P8 items 4 and 6 | D1 is the **foreground** six-hour soak and is the control. |
 | F10 | §15.4 Wi-Fi Aware evaluation, bounded to two days | owner's call | A recommendation, not a dependency. |
 | F11 | Lane D: the production mesh, phone ↔ Simulator, cable OUT | no P7 or P8 code | The cheapest first device run; specified in the runbook, never run. |
+| F12 | §15.3 submission churn: does a Control-Centre peek spend the background claim? | P8 item 6 | `appForegroundDidChange(_:)` is LEVEL-triggered — a Control-Centre pull, the app switcher and a notification-shade peek all raise `.active`, which completes the task in hand and re-submits, spending one of the 8 `maxSubmissionsPerSession`. During F9's soak, peek Control Centre and the app switcher once every ten minutes with the mesh backgrounded and a task running. **Expected:** the Console shows one `mesh.continuation.submitted` per peek; after the eighth, `mesh.continuation.submissionCapReached` and the Friends card turns to the refusal sentence for the rest of that mesh. **Record how many peeks a normal hour costs.** If the answer is "more than eight", the fix is a rising-edge latch (a foreground push that follows a background one) rather than a bigger cap. |
 
 ## Results
 
@@ -174,7 +175,7 @@ Fill one line per row per run. Device models and iOS versions once at the top of
 | E5 | not run on device (tier 1 only) | — | — |
 | E6 | not run on device (tier 1 only) | — | — |
 | E7 | | | |
-| F1–F11 | see the runbook's Lane B table | | |
+| F1–F12 | see the runbook's Lane B table | | |
 
 **A deviation from the Expected column is a finding, by row name**, into the P8 ledger; a row that
 passes for a reason other than the one stated (a Simulator-style accident, a tethered phone that never

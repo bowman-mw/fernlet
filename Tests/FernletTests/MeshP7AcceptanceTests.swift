@@ -403,8 +403,9 @@ struct MeshP7HonestyAcceptanceTests {
 
     /// No scene, no continuation task, no device lock and no UI run here; `.continuingInBackground`
     /// is reached by no path P7 owns — P8 item 5 gave the two scene events one shipping raiser
-    /// each, so this cell pins that pair rather than a zero; the app
-    /// feeds `.notRequested` and nothing else; the run vocabulary has four values; and the two
+    /// each, so this cell pins that pair rather than a zero; the app feeds the run policy no
+    /// continuation LITERAL at all since P8 item 6, which is the claim's own state reaching it
+    /// through one line of the funnel; the run vocabulary has four values; and the two
     /// determinism digests keep their one home. Written in a session with no toolchain: its first
     /// Mac run is its first execution.
     @Test func theBatteryNamesWhatItDoesNotClaim() throws {
@@ -412,9 +413,17 @@ struct MeshP7HonestyAcceptanceTests {
         #expect(ProximityContinuationState.allCases.count == 4, "not requested, running, refused, expired")
         let app = try MeshP7Acceptance.sources(under: "App")
         #expect(MeshP7Acceptance.homes(of: "continuation: .running", in: app).isEmpty,
-                "the app never feeds a running task — that is P8's claim")
-        #expect(MeshP7Acceptance.homes(of: "continuation: .notRequested", in: app) == ["FernletStore.swift"],
-                "it feeds .notRequested, once, in the run-policy core")
+                "the app never feeds a LITERAL running task — what reaches the policy is the claim's own state")
+        #expect(MeshP7Acceptance.homes(of: "continuation: .notRequested", in: app).isEmpty,
+                """
+                and as of P8 item 6 it feeds no literal at all. P7's sentence here — "it feeds \
+                .notRequested, once" — was true for exactly as long as the claim did not exist; the \
+                funnel's one line is now `continuation: meshContinuationState.feed`, which is what P7 \
+                built the input to receive.
+                """)
+        #expect(MeshP7Acceptance.homes(of: "continuation: meshContinuationState.feed", in: app)
+                == ["FernletStore.swift"],
+                "fed exactly once, in the run-policy core, from the store's own projection")
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         #expect(kit.count >= 100, "the ProximityKit scan lost its files")
         let raised = MeshP7Acceptance.homes(of: "applySessionEvent(.backgrounded", in: kit)

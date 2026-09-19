@@ -18,6 +18,12 @@
 // task is suspended by the OS along with its timer and resumes with it; a CPT-continued mesh (P8)
 // keeps the process live and the poll running, which is exactly what that phase needs; and a
 // session that ends by its own ceiling stops the timer without any edge at all.
+//
+// That last sentence is also why this tick, and not the view, is what tells P8's continuation host
+// a background session is over (item 6's fix round, F3): every mesh edge into the host is a SwiftUI
+// `.onChange` on the stable root, and a backgrounded scene's body is not re-evaluated, so a ceiling
+// or idle end reached behind a continued task would otherwise leave the app holding a task for a
+// dead session until the system's own expiry paid it `false`.
 
 import Foundation
 import ProximityKit
@@ -95,7 +101,19 @@ extension FernletStore {
                 }
                 guard !Task.isCancelled, let self else { return }
                 let report = await self.meshNetworkManager.pollSession(now: Date())
+                // P8 item 6: the continuation task's progress bar rides THIS tick and no other.
+                // The API kills a task whose progress stops advancing, and a second timer for one
+                // deadline is exactly what this file exists to prevent — the host reads the
+                // session's elapsed/budget/roster reading and writes one number.
+                self.meshContinuationHost.sessionPollerDidTick()
                 if !report.sessionLiveAfter {
+                    // P8 item 6, fix round F3: a session that ends by its own 6-hour ceiling or its
+                    // 30-minute idle lapse ends with NO view edge — a backgrounded scene's body is
+                    // not re-evaluated, so `ContentView`'s mesh observer may never run. This is the
+                    // one place that is already background-safe and already holds the host, so the
+                    // task is completed and the pending request withdrawn from HERE. The view's
+                    // later edge is absorbed (`fromCompleted(.sessionEnded)`), so it stays a no-op.
+                    self.meshContinuationHost.meshDidEnd()
                     self.stopSessionPoller()
                     return
                 }
