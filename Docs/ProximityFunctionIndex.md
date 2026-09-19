@@ -43,6 +43,7 @@ types (which still have no production callers).
 | Friend photos | `MeshNetworkManager.addPhoto(_:)`, `cachePhoto(_:)`, `deletePhoto(_:)`, `shareRoutedPhoto(itemID:addedAt:imageData:session:)` → `originateRoutedItem(body:typeToken:itemID:now:)` (P5 item 13 replaced `syncPhotoManifest(to:)`'s pull protocol with the routed store), `PrivateMediaStore`. 2026-08 consolidation: the three duplicated photo-save catch-ladders and alert blocks were consolidated into `FriendPhotoLibrarySaver.userFacingFailure(for:photoCount:)` + the `photoSaveFailureAlert(_:failure:)` view extension (ProximityKit); the media stores' hand-rolled AES-GCM seal/open now routes through the shared extension on `PrivateMediaKeyProviding` (MediaAtRestCrypto.swift); JSON sidecar state — including the photo-wall preferences store — was consolidated into `JSONSidecarFile` (ProximityKit/Support/JSONSidecarFile.swift). |
 | Recipe sharing | `ProximityRecipeShareManager.start()`, `sendRecipeShare(_:to:)`, `proximityCoordinator(_:didReceive:plaintext:from:)` |
 | Audit/diagnostics | `ConnectionInspector`, `ConnectionSessionLog`, `TrainerAuditEvent`, `ProximityRecipeShareDiagnostics` |
+| Lowercase hex for a handful of bytes | `String(format: "%02x", $0)` — the idiom in the five places that already do it (`MeshEpochRef.swift`, `HeartDropPeerBundleCache.swift`, and `IdentityService.swift` ×3). **Known, deliberate exception:** `PresenceEpochPosture.hexadecimal(_:)` re-implements it privately. Two reasons it stays forked: it encodes the advertised instance name on the main actor at every epoch and `String(format:)` boxes each byte as a `CVarArg` to do it; and the value is held to a whole-FILE grep wall in `PresenceEpochPostureTests` (no second 900, no clock, no device byte, `import Foundation` and nothing else), which only means anything while every byte of the name's construction is visible in that one file. Do not consolidate it away without moving that wall. |
 | A string that is both a token and a label | FORK IT — never localize in place. See "Tokens vs. display in ProximityKit" below. |
 
 ### Tokens vs. display in ProximityKit
@@ -1820,6 +1821,34 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 The standing `fernlet-near` radio and the two device-local ledgers that hang off it. Everything here
 is opt-in and device-local; none of it is ever in the synced snapshot.
 
+### `Presence/PresenceEpochPosture.swift`
+
+**P9 item 2 pass 1** (plan §17.1). The ephemeral posture the radio wears for one 900 s presence
+epoch, as a pure value: no radio, no task, no timer, no manager reference, no persistence — the
+clock reading and the entropy source are both injected. Over MC the posture came free from
+`MCPeerID` semantics; over QUIC it has to be reproduced explicitly, and it is the privacy claim of
+the whole presence feature.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `epoch` / `instanceName` / `tlsIdentity` | The three things a posture answers for one epoch: the presence epoch (`IdentityService.presenceEpoch(at:)` — the ONE presence clock, not a second counter), the service instance name to advertise, and the TLS identity to present. |
+| `minted(at:entropy:mintIdentity:)` / `minted(at:)` | Mints a posture for the epoch containing `now`. The production form uses the system CSPRNG and `EphemeralMeshTLSIdentity.mint(now:)` — the module's single certificate path, so no new cryptographic purpose and no second crypto path exist here. The certificate is minted at `IdentityService.presenceEpochStart(at: now)`, **never at `now`**: `mint(now:)` writes its argument into the certificate as `notBefore`/`notAfter` at 1 s resolution and the validator accepts any certificate, so an instant-anchored window would advertise the second this radio came up and single the device out for the rest of the epoch. |
+| `rotated(at:…)` | `self` while `now` is still inside `epoch`; an entirely fresh posture the moment it is not. There is no partial rotation and no carried field, which is what makes "nothing survives a boundary" total rather than approximate. |
+| `instanceName(entropy:)` | `instanceNamePrefix` + separator + `instanceNameEntropyByteCount` drawn bytes as lowercase hex, and nothing else — no counter, no epoch index, no timestamp, no device byte. The prefix is a frozen service token every device carries identically; the length is therefore a constant and encodes nothing. A short entropy draw is refused (`PresencePostureError.entropyUnavailable`), never padded. |
+| `systemEntropy(_:)` / `hexadecimal(_:)` | The production CSPRNG draw (bounded by `maxEntropyByteCount`, R2) and the fixed-width encoding. |
+
+**Wall-clock anchoring is deliberate.** The epoch is `floor(unixTime / 900)` rather than a
+per-launch phase, because (1) the pairwise tag epoch must be absolute for two phones to derive the
+same tag without exchanging a byte, and a differently-phased posture clock would be a *second*
+clock that lets the name lag the tags across a boundary; (2) a per-launch phase is itself a
+device-identifying value that survives every rotation; and (3) a globally synchronised rotation
+instant makes the anonymity set at each boundary every device in range.
+
+**Pass 2 (not done here)** binds the QUIC presence listener's service instance name and
+`sec_identity_t` to this value and retires the MC advertiser. Note what that fixes:
+`MeshMultipeerSession` mints its random `MCPeerID` once per `start()`, so today's long-lived
+presence radio rotates its tags under one unchanging name.
+
 ### `Presence/PresenceManager.swift`
 
 The presence radio: KEPT friends recognize each other nearby without connecting, and hearts are
@@ -1836,7 +1865,8 @@ drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch 
 | --- | --- |
 | `start()` / `stop()` | Lifecycle, owned by the app (opt-in setting + scene/tab/lock state) — not by this type. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
-| `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster. |
+| `presencePosture` / `rotateEpochIfNeeded()` | **P9 item 2 pass 1**: the one source of this radio's epoch index, advertised instance name and TLS identity (``PresenceEpochPosture``). Minted when the radio comes up, re-minted WHOLE at every 900 s boundary by the rotation tick the manager already runs — no new timer and no second clock, since every caller hands the rotation `nowProvider()` and the epoch is always `IdentityService.presenceEpoch(at:)` — and dropped by `stop()`, so a stood-down radio keeps no name and no certificate to come back up under. Fail-soft, NAMED (`presence.posture.mintFailed`) and BUDGETED: a mint that fails leaves NO posture rather than a stale one, tag derivation is untouched because the epoch still comes from the same clock, and the failed epoch is remembered so the six `refreshRoster()` call sites cannot turn one failure into a keygen and an audit row per refresh — one attempt and one row per epoch, then the boundary retries. **Pass 1 HOLDS the posture; nothing advertises it yet** — pass 2 binds the QUIC presence listener to it. |
+| `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster — **through** the posture, so a refresh that lands after a boundary rotates the name and the identity with the tags rather than advertising fresh tags under an old identifier. Pass 1 qualifier: that rotation is held, not advertised — pass 2 binds the QUIC presence listener, and until then the MC advertiser keeps one peer ID per `start()`. |
 | `isReachable(fingerprint:)` | Whether a friend is currently tag-matched nearby. |
 | `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the 8-peer `MCSession` cap. |
 | `heartAffordance(...)` (`nonisolated static`) | The friend row's decision about which heart affordance to show. Takes the away-delivery setting as an explicit parameter rather than reading it off the host, so the affordance and the enforcement cannot drift apart. |

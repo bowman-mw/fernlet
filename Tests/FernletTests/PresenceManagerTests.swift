@@ -430,6 +430,157 @@ struct PresenceManagerTests {
                 "A friend whose advertisement is 2+ epochs stale drops on rotation")
     }
 
+    // MARK: - Ephemeral posture (P9 item 2 pass 1, plan §17.1)
+
+    /// The manager holds ONE posture and reads its epoch off it: the posture rotates on the same
+    /// tick the tags do — no second clock, no second epoch — and a boundary replaces the name AND
+    /// the TLS identity together. `PresenceEpochPostureTests` owns the value's own rotation table;
+    /// this is the seam.
+    @Test func theEpochRotationTickRotatesTheWholePosture() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHost()
+        let friend = makeFriend(fingerprint: "f00df00df00df00d", keyAgreementPublicKey: kaPublic(), lastSeenAt: baseDate)
+        host.proximityTrustVault.apply(peers: [friend], audit: [])
+
+        var clock = baseDate
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { clock }
+        manager.activateForTesting()
+
+        guard let first = manager.presencePosture else {
+            Issue.record("the radio came up without a posture")
+            return
+        }
+        #expect(first.epoch == IdentityService.presenceEpoch(at: baseDate),
+                "the posture's epoch IS the presence epoch — one clock, not two")
+
+        // `baseDate` is NOT itself on a 900 s multiple, so the in-epoch and past-boundary instants
+        // are measured from the boundary, not from `baseDate` — offsetting by 899 s from an instant
+        // 700 s into an epoch crosses one.
+        let intoEpoch = baseDate.timeIntervalSince1970
+            .truncatingRemainder(dividingBy: IdentityService.presenceEpochSeconds)
+        let toBoundary = IdentityService.presenceEpochSeconds - intoEpoch
+
+        // Inside the epoch nothing moves, and a roster refresh must not rotate the posture either.
+        clock = baseDate.addingTimeInterval(toBoundary - 1)
+        manager.rotateEpochIfNeeded()
+        manager.refreshRoster()
+        #expect(IdentityService.presenceEpoch(at: clock) == first.epoch, "still the same epoch")
+        #expect(manager.presencePosture?.instanceName == first.instanceName)
+        #expect(manager.presencePosture?.tlsIdentity.certificateDER == first.tlsIdentity.certificateDER)
+
+        // Across the boundary both halves are replaced.
+        clock = baseDate.addingTimeInterval(toBoundary + 1)
+        manager.rotateEpochIfNeeded()
+        guard let second = manager.presencePosture else {
+            Issue.record("the rotation left the radio with no posture")
+            return
+        }
+        #expect(second.epoch == first.epoch + 1)
+        #expect(second.instanceName != first.instanceName, "the advertised name must rotate with the tags")
+        #expect(second.tlsIdentity.certificateDER != first.tlsIdentity.certificateDER,
+                "and so must the TLS identity — a stable certificate re-links across the boundary")
+    }
+
+    /// A roster refresh that lands after a boundary rotates the posture too. The tags it rebuilds
+    /// are the NEXT epoch's, so a name left behind would advertise fresh tags under an old
+    /// identifier — the exact linkability the rotation exists to remove.
+    @Test func aRosterRefreshAcrossABoundaryRotatesThePostureWithTheTags() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHost()
+        host.proximityTrustVault.apply(peers: [makeFriend(
+            fingerprint: "f00df00df00df00d", keyAgreementPublicKey: kaPublic(), lastSeenAt: baseDate)], audit: [])
+
+        var clock = baseDate
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { clock }
+        manager.activateForTesting()
+        let first = manager.presencePosture
+
+        clock = baseDate.addingTimeInterval(IdentityService.presenceEpochSeconds + 1)
+        manager.refreshRoster()
+
+        #expect(manager.presencePosture?.epoch == IdentityService.presenceEpoch(at: clock))
+        #expect(manager.presencePosture?.instanceName != first?.instanceName)
+        #expect(manager.presencePosture?.tlsIdentity.certificateDER != first?.tlsIdentity.certificateDER)
+    }
+
+    /// A stood-down radio keeps nothing to come back up under: the posture is dropped by `stop()`,
+    /// so a restart is unlinkable to the session that preceded it, and the next `start()` mints a
+    /// posture for the epoch it actually starts in.
+    @Test func standingTheRadioDownDropsThePostureEntirely() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHost()
+
+        var clock = baseDate
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { clock }
+        manager.activateForTesting()
+        let first = manager.presencePosture
+        #expect(first != nil)
+
+        manager.stop()
+        #expect(manager.presencePosture == nil, "a stood-down radio holds no name and no TLS identity")
+
+        clock = baseDate.addingTimeInterval(IdentityService.presenceEpochSeconds * 3)
+        manager.activateForTesting()
+        #expect(manager.presencePosture?.epoch == IdentityService.presenceEpoch(at: clock))
+        #expect(manager.presencePosture?.instanceName != first?.instanceName)
+    }
+
+    /// A failing mint costs ONE attempt and ONE audit row per epoch, not one per `refreshRoster()`.
+    ///
+    /// The mint is a synchronous P-256 keygen plus a certificate mint on the main actor, and six
+    /// places in `FernletStore` call `refreshRoster()`. Without the budget a single failure would
+    /// turn every one of them into another keygen and another `presence.posture.mintFailed` row
+    /// for the rest of the epoch; the boundary is the retry, because that is when the inputs could
+    /// plausibly have changed.
+    @Test func aFailingPostureMintIsAttemptedOncePerEpochAndAuditedOnce() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHost()
+
+        var failures = 0
+        let token = FernletAuditLog.addCaptureHandler { event, _ in
+            if event == "presence.posture.mintFailed" { failures += 1 }
+        }
+        defer { FernletAuditLog.removeCaptureHandler(token) }
+
+        var attempts = 0
+        var clock = baseDate
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { clock }
+        manager.postureMint = { _, _ in
+            attempts += 1
+            throw PresencePostureError.entropyUnavailable(byteCount: 0)
+        }
+
+        manager.activateForTesting()
+        #expect(manager.presencePosture == nil, "a failed mint leaves NO posture rather than a stale one")
+
+        // Four more passes through the seam inside the SAME epoch must not re-attempt anything.
+        manager.refreshRoster()
+        manager.refreshRoster()
+        manager.rotateEpochIfNeeded()
+        manager.refreshRoster()
+        #expect(attempts == 1, "one attempt per epoch — \(attempts) keygens for one failure")
+        #expect(failures == 1, "and one audit row per epoch, not one per refreshRoster()")
+
+        // The boundary is the retry, and a mint that succeeds there leaves a posture.
+        clock = baseDate.addingTimeInterval(IdentityService.presenceEpochSeconds)
+        manager.postureMint = { held, now in
+            attempts += 1
+            return try held?.rotated(at: now) ?? PresenceEpochPosture.minted(at: now)
+        }
+        manager.refreshRoster()
+        #expect(attempts == 2, "the next epoch retries exactly once")
+        #expect(manager.presencePosture?.epoch == IdentityService.presenceEpoch(at: clock))
+        #expect(failures == 1, "and a successful mint audits nothing")
+    }
+
     @Test func discoveryInfoCarriesNoIdentifiers() throws {
         let (identity, serviceID) = try makeIdentity()
         defer { KeychainItem.deleteAll(service: serviceID) }
