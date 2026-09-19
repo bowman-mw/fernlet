@@ -2000,6 +2000,14 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/FernletMessagesExtension/Localizable.xcstrings",
                      key: "messages.workout.sessionCount",
                      source: "the session count on a shared workout plan"),
+        // Network migration P8 item 4's continued-processing card. The key is a BARE LITERAL —
+        // `LocalizedStringResource("\(count) friends connected")` — so the key IS the English
+        // default and `xcstringstool sync` harvested it with a `%lld` in it and nothing else.
+        // The `one`/`other` block was hand-authored at the P8 close-out's catalog sync; this row
+        // is what keeps a later re-sync (or a hand edit of the key's entry) from dropping it.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld friends connected",
+                     source: "the mesh continuation card's friend count"),
     ]
 
     /// Every count-bearing key carries real plural variations.

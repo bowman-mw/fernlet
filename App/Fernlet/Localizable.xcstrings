@@ -506,6 +506,29 @@
         }
       }
     },
+    "%lld friends connected" : {
+      "comment" : "The mesh continuation card's subtitle, e.g. '3 friends connected'. Needs a plural variation per language; English also needs the one-friend form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "1 friend connected"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld friends connected"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld gifted" : {
 
     },
@@ -1237,6 +1260,9 @@
 
     },
     "Background continuation" : {
+
+    },
+    "Background time ran out" : {
 
     },
     "Backgrounds" : {
@@ -2453,6 +2479,9 @@
 
     },
     "Fernlet keeps the most recent %lld calls." : {
+
+    },
+    "Fernlet mesh" : {
 
     },
     "Fernlet nearby" : {
@@ -5248,6 +5277,9 @@
     "That promise is unchanged, and it is why three of the six Phase 3 gates cannot be answered here. Those are answered next door, in the Phase 3 gate readout, at a stated cost." : {
 
     },
+    "That session has since ended. Nothing that was already saved was lost." : {
+
+    },
     "That session is over, so it can't be reopened. Anything you kept is already saved." : {
 
     },
@@ -5309,6 +5341,9 @@
 
     },
     "The saved recipe, its notes and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this." : {
+
+    },
+    "The session is carrying on now that Fernlet is open again. Nothing that was already saved was lost." : {
 
     },
     "The shared photo wall — the pictures friends gave you and the ones you shared with them stay, on both sides. You remove photos one at a time from the photo itself; there's no bulk delete." : {
@@ -5432,6 +5467,9 @@
 
     },
     "This removes your photo of this recipe from your device. Fernlet can't undo this." : {
+
+    },
+    "This session stays on screen" : {
 
     },
     "This tunes suggestions without locking you into rules." : {
@@ -6619,6 +6657,12 @@
 
     },
     "iCloud copy" : {
+
+    },
+    "iOS didn't give Fernlet time in the background, so this session keeps going while Fernlet is open. Nothing you've kept is affected." : {
+
+    },
+    "iOS ended the background session" : {
 
     },
     "intent.water.logged" : {
