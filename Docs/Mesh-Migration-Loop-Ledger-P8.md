@@ -51,6 +51,11 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 | Three simulator eyeballs | NOT done here — folded into the owner's device re-run of the four founding fixes | — | Friends tab entry/exit was observed incidentally on two Simulators (entry starts the search; leaving the tab drops the link and a five-minute search with no commit ends the session); Control Centre and delete-all-in-session are unobserved |
 | Plan §13 → BUILT with measured numbers in §13.4 | DONE — heading, the history note, the measured block, and the §26 summary line | this commit | index-only blob from HEAD's plan (the working copy is held and still shows `M`) |
 
+## The one full-suite invocation (everything built)
+| Run | Result | Note |
+|---|---|---|
+| `FernletTests` whole, one invocation, iPhone 17, 2026-09-19 00:07, bundle at `c86e3a0` | **5 055 tests in 513 suites passed after 910 s, EXIT=0**, no `Restarting after unexpected exit`, 0 suites failed | vs P6's 4 866 / 486 and item 0's 4 939 / 499: +116 tests / +14 suites are P8's (items 3–7 and 10). The owner's rule held: this is the first and only full run since item 0's |
+
 ## Blocked on owner
 - Devices in hand from item 8 on; the runbook's Lane B rows are the evidence table. The owner's phone ↔ Simulator run is the first device observation and it produced findings (a)–(d) above; a re-run on the fixed build is owed.
 - `DayRecordRepository` (and 18 sibling sites): `assertionFailure` inside a `catch` on a Core Data / file I/O failure traps DEBUG builds on an environmental error (`Task 437: Fatal error: day record delete failed`); the store loads with `FileProtectionType.complete` and nothing defers day writes while the device is locked. Diagnosed 2026-09-18, NOT built; the owner chooses the scope (day repository only, or the 19-site family).
@@ -117,4 +122,4 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`. Tier per
 - Concurrent sessions share the tree; never stage the catalog working copy, `xcuserdata`, or the stray PDF.
 
 ## Next item
-the one full-suite invocation (everything is built; running in the background against the P6 baseline 4 866 / 486 and item 0's 4 939 / 499) and 2 (tier-2 timebox, after the run releases the Simulators); then 11; 8/9 are the owner's devices — item 0 is done bar the owner-side rows above (a device re-run of the four founding fixes with the three eyeballs; the two accessibility-ratchet baselines; the DayRecord assert-in-catch family, which will crash P8's lock/background device rows in DEBUG if left). Items 1–7 need only item 0.
+2 (tier-2 timebox, running now that the full suite released the Simulators) and the catalog sync of the eight owed keys (clean worktree, index-only commit); then 11 (draft in flight); 8/9 are the owner's devices — item 0 is done bar the owner-side rows above (a device re-run of the four founding fixes with the three eyeballs; the two accessibility-ratchet baselines; the DayRecord assert-in-catch family, which will crash P8's lock/background device rows in DEBUG if left). Items 1–7 need only item 0.
