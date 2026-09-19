@@ -1696,6 +1696,115 @@ ready-made spec; note in passing that the moderation **vote** never needed the t
 (`proposeSignedRemoval` gates on a mesh, a ledger roster and target ≠ self) while the moderation
 **report** still does — the two are routinely conflated.
 
+### Lane C — P8 item 2: the backgrounding half of the gate, the hold, the heart negative (run 2026-09-19)
+
+Two Simulators, **A** = `iPhone 17` (fp `3afcbe8b61420864`), **B** = `iPhone 17 Pro`
+(fp `fb795f343c2954da`), app installed from the P8 DerivedData build of `main` at `526d0e1` — no
+rebuild. Every launch carried `FERNLET_MESH_TRANSPORT=quic FERNLET_MESH_MATRIX=1
+FERNLET_MESH_CONSOLE_LOG=1`, a seeded two-member descriptor, `FLOWS=commit,capabilities`, `STAGGER=1`
+(3 s), a fresh log directory, and a per-sim audit stream started **before** the launch:
+
+```
+xcrun simctl spawn <udid> log stream --level info --predicate 'subsystem == "com.fernlet"'
+```
+
+No `xcodebuild` ran during the lane (`pgrep -x xcodebuild` empty throughout), and no ready or
+activation line named `en8`/`en9`/`anpi0`. Backgrounding has no `simctl` verb of its own; the lane's
+way is **`xcrun simctl launch <udid> com.apple.Preferences`**, which fronts Settings, and
+`xcrun simctl launch <udid> MBO.Fernlet` to come back. Both work, and this is the first Lane C run to
+use them.
+
+| # | Row | Verdict | Evidence |
+| --- | --- | --- | --- |
+| a | **The backgrounding half of the routed-access gate** — the pushed `appIsForeground` leg falls on the background edge and the routed re-entry stays down until the foreground push | **PASS** | One audit stream, three `gateChanged` lines and nothing else between them. Launch: `mesh.routedAccess.gateChanged duress=false foreground=true protectedData=true` at `00:11:21.956`, immediately followed by `mesh.routedAccess.reentry … legs=protectedData+foreground`. **Fall**, 15 s after Settings was fronted: `mesh.routedAccess.gateChanged duress=false foreground=false protectedData=true` at `00:15:03.937` — exactly one line, and **no `mesh.routedAccess.reentry` anywhere in the next 93 s**. **Rise**, 7 s after the foreground relaunch: `mesh.routedAccess.gateChanged … foreground=true …` at `00:16:36.962`, then `mesh.routedAccess.reentry acksFiled=0 committed=0 heartsPending=0 legs=foreground projected=0 restored=false sweptPeers=0` at `00:16:36.970`. The `legs=` value naming **`foreground` alone** on the rise, against `protectedData+foreground` at launch, is the re-entry saying which leg moved — the gate's two legs are independent, live, on a real scene edge. **This is the first observation of the foreground gate on any lane**; every earlier run satisfied it by accident, a `simctl launch`ed app never having left `.activeForeground` |
+| b | **The heart eligibility negative** — a heart to a member with no trust-vault row is a FINAL, audited refusal, custody kept | **NOT CROSSED** — blocked by finding **L-4** below (no committed pair, so no session, so no heart). **But the recipe changed**: see the correction under the table. No lane time was spent on the two sessions once L-4 was established | — |
+| c | **The `FERNLET_MESH_ARM_AFTER` rows** (the removal vote, the `.chatAgeGated` three-leg negative, the app-path founding over MC) | **NOT CROSSED — hook absent** | `grep -rn FERNLET_MESH_ARM_AFTER App FernletKit Tests` → no match at `526d0e1`. The whole `FERNLET_MESH_*` family at HEAD is `ALLOW_HEARTS`, `AUTO_KEEP_FRIENDS`, `CHAOS`, `CHAOS_BARRED`, `CONSOLE_LOG`, `CONTINUATION`, `FLOWS`, `FLOWS_AFTER`, `LEAVE_AFTER`, `MATRIX`, `MATRIX_LABEL`, `MATRIX_MEMBERS`, `MATRIX_MESH_ID`, `REMOVE_AFTER`, `ROLE`, `TRANSPORT`. Building the hook was explicitly out of this item's scope, so the three rows stay where P6 §12.3 finding 12 left them, behind L-3 |
+| d | **Item 3's QUIC hold row** — `holdCommittedLinks()` reached by the policy on a background edge, the committed tunnel beating ≥ 60 s, a third node neither browsed nor introduced, `resumeDiscovery()` on the return | **NOT CROSSED** — blocked by finding **L-4**. The hold is reached only with a committed peer, and no run produced one. The third Simulator was never booted, so nothing was spent on it | Neither `mesh.session.linksHeld` nor `mesh.session.linksResumed` appears in any stream — correctly, because `ProximityRunSeams` only emits the hold action for a session that has one |
+
+**Item 6's Simulator refusal was NOT observed, and its absence is correct.** The expected
+`mesh.continuation.refused` (`BGTaskSchedulerErrorDomain error 1`) never appeared, because the task
+is submitted on the **first peer commit** and no peer ever committed. What *was* observed on both
+nodes, on every run, is the half that precedes it: `mesh.continuation.registered event=meshStarted
+state=idle` followed by `mesh.continuation.registered
+id=MBO.Fernlet.mesh-continuation.88888888-8888-8888-8888-888888888881` — the concrete per-mesh id of
+plan §14, registered at mesh start, on a radio, for the first time. The refusal itself stays owed to
+a lane that reaches a commit.
+
+#### The correction row (b) earns even without running: a third Simulator cannot produce the eligibility negative
+
+P6 §12.3 finding 12(i) and the P7/P8 launchers all say this row "needs a third simulator that sat out
+session 1". Read at `526d0e1`, that recipe cannot reach the refusal it names, and a **two**-Simulator
+recipe can:
+
+* The **sender** stops first and mints nothing. `MeshFlowDriver.fireHeart`
+  (`App/Fernlet/Proximity/Feasibility/MeshFlowDriver.swift:431–445`) does
+  `guard let friend = store.trustedProximityPeers.first(…) else { echo("heart NOT sent: no
+  trust-vault row for …"); return }`. A third Simulator that sat out session 1 has no vault row on
+  **either** side, so the run ends at a stdout echo: no mint, no custody, no audit token, nothing the
+  row asks for.
+* The refusal the row wants is the **recipient's**: `eligibleHeartAuthor` →
+  `refusedHeart(key, reason: "notAFriend")` → `FernletAuditLog.log("mesh.routedHeart.refused",
+  context: ["reason": …])` plus `routedHeartRefusedKeys.insert(key)`, which is what makes it FINAL
+  (`MeshNetworkManager.swift:7880–7902`, short-circuited on later passes at `:7099`). Its own doc
+  comment says the shipped sender cannot reach the case, "so a non-eligible heart implies a modified
+  build".
+* So the fixture the row needs is an **asymmetric vault**: the sender holds a row for the recipient
+  and the recipient holds none for the sender. Two Simulators produce it by putting
+  `FERNLET_MESH_AUTO_KEEP_FRIENDS=1` on **the sender only** in session 1 — the keep is a local act
+  on each device, and nothing makes it mutual. Session 2 then mints normally and the recipient
+  refuses.
+
+**The ready-to-run recipe**, for whoever has a discovering lane: session 1 —
+`FLOWS=commit,capabilities`, `ALLOW_HEARTS=1` both, `AUTO_KEEP_FRIENDS=1` **on A only**,
+`LEAVE_AFTER=70` (A) / `40` (B), run length `3.5 × 70 + 60 ≈ 310 s`, both sides ending locally;
+expect `friends kept=1 vault=1` on A and `vault friends=0` on B, and that asymmetry *is* the fixture.
+Session 2 — a **different** mesh id (`terminated.v1` bars the first permanently),
+`FLOWS=commit,capabilities,heart` with `heart` on A only, `FLOWS_AFTER=25`, no `AUTO_KEEP_FRIENDS`,
+≈ 320 s; expect on B `mesh.routedDrain.admitted type=fernlet.mesh.routed-manifest.v1
+verdict=admitted` (custody taken) then **`mesh.routedHeart.refused reason=notAFriend`**, the ledger
+still at `heartsReceived=0`, and the refusal **not** repeated on later polls.
+
+#### L-4 — the sim↔sim QUIC lane discovers nothing at `526d0e1` on this Mac (2026-09-19)
+
+**Six runs, two of them after a full `simctl shutdown` + `boot` of both Simulators, produced not one
+peer discovery.** Every run: both banners read
+(`[mesh-matrix] run label=… transport=quic … role=founder|joiner`), both descriptors seeded
+(`descriptor seeded: mesh=… members=2`), both radios up
+(`[mesh-matrix] radios started; searching=true`) — and then
+`[mesh-flow] slots total=0 committed=0 states=[]` and
+`membership ledger=absent derived=0 barred=0` on both sides for the whole run, on every run.
+
+What makes it a lane fact rather than a quiet run: **zero `[mesh-quic]` lines on stdout and zero
+`proximity.transport.quic` lines in the audit stream**, at `--level debug`, on both nodes. No
+`accepted`, no `refused`, no `browsed peers=`, no `tunnelEnded`, no `dial refused`. A refusal would
+mean the door answered; there is no door. The empty browse set is consistent with
+`NetworkMeshSession.noteBrowseSet` (`:978–985`), which guards on `keys.count != lastBrowseSetCount`
+and so prints nothing at all for a browser that never finds anybody — silence here is exactly what
+"no peer was ever browsed" looks like, and it is indistinguishable in a transcript from a browser
+that never started.
+
+Ruled out: a busy toolchain (`pgrep -x xcodebuild` empty for every run); the stale-Simulator hazard
+(both were shut down and rebooted, and the two post-reboot runs behave identically); the
+`--console-pty` no-stdout gotcha (both banners were read on every counted run); a VPN
+(`scutil --nc list` empty, default route on `en0`); and mDNS being dead on the host
+(`dns-sd -B _services._dns-sd._udp local` answers, and lists `_fernlet-friend._tcp` — the **MC**
+service type, `MeshMultipeerSession.friendServiceType`, not the QUIC mesh's
+`_fernlet-mesh2._udp`, `NetworkMeshSession.swift:270`).
+
+**Not** ruled out, and the next two things to try: whether `_fernlet-mesh2._udp` is advertised at all
+during a run (every `dns-sd` capture in this session came back empty through block-buffered
+redirection — use a pty, or `dns-sd -B … | cat -u`), and whether the host's `en0` address being
+inside the CGNAT range `100.64.0.0/10` (`100.110.200.196/26` tonight) changes what two Simulators can
+route between, given the P2 note that they "meet over a routable host address with peer-to-peer
+disabled". A Mac on an ordinary RFC1918 LAN is the cheapest control.
+
+**Reproduction:** install the current `Debug-iphonesimulator/Fernlet.app` on `iPhone 17` and
+`iPhone 17 Pro`; harvest both `signingKey=`s with a bare
+`FERNLET_MESH_TRANSPORT=quic FERNLET_MESH_MATRIX=1` launch; relaunch both 3 s apart with a shared
+`MATRIX_MESH_ID`, `MATRIX_MEMBERS=<KA>,<KB>` and `FLOWS=commit`; watch for `[mesh-quic]` on stdout
+for 80 s. **Until L-4 is cleared, every tier-2 row that needs a committed pair is un-runnable** —
+which tonight is rows (b) and (d), and it is also the gate on P6's four long-standing un-run rows.
+
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
 
 **The shipping transport has never run on hardware.** Lane A puts the *spike* on a device; Lane C
@@ -1828,7 +1937,7 @@ the tunnel and keeps logging past task expiry, and building it is part of P8.
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |
 | Four-device topology | Simultaneous starts and topology changes leave at most one connection per peer pair, at `maxConnections = 4`. | Deferred to P8 — see plan §15.1 | — |
-| Background operation | An established connection survives backgrounding and lock; re-dial via cached endpoint works while backgrounded; a fresh background Bonjour browse is recorded either way (failure is the expected, documentable result). | Deferred to P8 — see plan §15.1 | — |
+| Background operation | An established connection survives backgrounding and lock; re-dial via cached endpoint works while backgrounded; a fresh background Bonjour browse is recorded either way (failure is the expected, documentable result). | **Still deferred to P8 / plan §15.1 — and the sim lane cannot stand in for it.** What the sim lane DID earn on 2026-09-19 (P8 item 2, row (a)) is the half above the transport: a real `.background` scene edge drops the pushed `appIsForeground` leg (`mesh.routedAccess.gateChanged … foreground=false`) and holds the routed re-entry down until the foreground push. Whether a **connection** survives that edge is untouched — the sim lane held no connection to survive it (finding L-4), and a Simulator answers `BGTaskSchedulerErrorDomain error 1` to the continuation that would keep the process alive on a device | 2026-09-19 (gate half only; transport half deferred) |
 | Low Power Mode | Behaviour on and off is recorded empirically. Apple documents neither direction. | Deferred to P8 — see plan §15.1 | — |
 | Progress soak | Three-hour and six-hour sessions survive while elapsed-based progress advances. Failure activates the degraded ladder in plan §14, it does not sink the plan. | Deferred to P8 — see plan §15.3 | — |
 | Resource budget | Battery, peak memory, throughput, and photo-size measurements meet an approved product budget. | Deferred to P8 — see plan §15.3 | — |
