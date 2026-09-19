@@ -272,13 +272,53 @@ jobs:
         # item 1 (2026-09-18) by gating `MeshRoutedDrainTests`: 316 + 43, measured on the same bundle
         # (`mesh-with` run, "359 test(s) ran, 0 failed"), and shown red once at 359 with the suite
         # removed before it was committed.
+        # P8 item 10 (2026-09-18) gates the rest of P8 — its own acceptance battery AND the eight
+        # `MeshContinuation*` suites items 4/5/6/7 shipped, which ran on NO CI line until now: none
+        # is a `MeshP<n>…AcceptanceTests`, so `everyMeshAcceptanceBatteryIsGated` never demanded
+        # them and nothing in the tree would have noticed their deletion. Fourteen suites join the
+        # line. MEASURED on a Mac, 2026-09-18, on one warm bundle, with this exact list run at the
+        # OLD floor 365: **469 ran, 0 failed** (the script's own bundle count), 186 s test time.
+        # Per suite, read off that run's own result bundle — measured, never inferred:
+        #   +  3  MeshP8CoordinatorTableAcceptanceTests — item 4's 48-row table re-walked against
+        #         the battery's OWN expectation, spelled event-outermost: a THIRD decomposition,
+        #         neither the shipped table's state-first helpers nor the unit suite's oracle. Plus
+        #         the exactly-once biconditional over the whole product, and the progress ratchet.
+        #   +  4  MeshP8HoldVerbAcceptanceTests — item 3's verb on the founding rig: the committed
+        #         link and its coordinator kept, `pauseDiscovery()` once and `stop()` never, all
+        #         three doors shut and the uncommitted slot dropped, the give-up clock stood down
+        #         and restarted by the resume, and the policy row executing with the refusal's
+        #         token at zero under `App/`.
+        #   +  3  MeshP8RaiseAndDisagreementAcceptanceTests — item 5's three raise-wall counts, the
+        #         four corners of the two legs on a real founding (through item 6's scene-dark
+        #         rule), and the mid-task reset that gives the session leg back.
+        #   +  3  MeshP8PresentationAcceptanceTests — item 7's 6 × 10 product (the 23 presenting
+        #         cells pinned by identity, 37 silent), `projectedAudit` keeping an ending across
+        #         the session end, and the slot decision's six rows.
+        #   +  5  MeshP8TaskWiringAcceptanceTests — item 6 through its own two fakes: register and
+        #         submit once, a `.fail` refusal reaching the card, a delivery completed exactly
+        #         once at expiry, the hard stop paying the debt, and the feed with the kept tunnel.
+        #   +  3  MeshP8HonestyAcceptanceTests — plan §15.1–§15.4 by name, the runbook's Lane B
+        #         rows, the Simulator's own `BGTaskScheduler` refusal, item 3's device-only QUIC
+        #         hold row, and the two determinism digests' single home.
+        #   + 13  MeshContinuationCoordinatorTests  + 6  MeshContinuationProgressTests   (item 4)
+        #   + 13  MeshContinuationCardPresentationTests                                   (item 7)
+        #   + 12  MeshContinuationDriverTests + 5 MeshContinuationRaiseWallTests
+        #     + 7  MeshContinuationDisagreementTests                                      (item 5)
+        #   + 21  MeshContinuationTaskHostTests + 6 MeshContinuationTaskHostWallTests     (item 6)
+        #   = 104 added; 365 + 104 = 469, which is also what the bundle counted. The floor is the
+        #     MEASURED number; the arithmetic agreeing with it is a check, never the source.
+        # RAISED 365 → 469, and shown red once at 469 with one suite removed from the line before
+        # it was committed. `MeshContinuationRaiseWallTests` and `MeshContinuationTaskHostWallTests`
+        # are ALSO pinned by name in CIGateSelectorBoundaryTests — both are walls with no compiler
+        # half, the `MeshRoutedDrainWallTests` argument. The five behaviour suites beside them are
+        # protected by THIS floor and not by a name, the `MeshRoutedLockedDeviceTests` precedent.
         # CIGateSelectorBoundaryTests is the static half of this guard — every suite named on any
         # run-gated-suites.sh line must be a declared suite, and every MeshP<n>*AcceptanceTests /
         # convergence battery declared in the tree must be named here — and it also runs on the first
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 365 \
+          Scripts/run-gated-suites.sh mesh-batteries 469 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -335,4 +375,18 @@ jobs:
             MeshP7RadioSeamsAcceptanceTests \
             MeshP7PollerAcceptanceTests \
             MeshP7ResumeAcceptanceTests \
-            MeshP7HonestyAcceptanceTests
+            MeshP7HonestyAcceptanceTests \
+            MeshP8CoordinatorTableAcceptanceTests \
+            MeshP8HoldVerbAcceptanceTests \
+            MeshP8RaiseAndDisagreementAcceptanceTests \
+            MeshP8PresentationAcceptanceTests \
+            MeshP8TaskWiringAcceptanceTests \
+            MeshP8HonestyAcceptanceTests \
+            MeshContinuationCoordinatorTests \
+            MeshContinuationProgressTests \
+            MeshContinuationCardPresentationTests \
+            MeshContinuationDriverTests \
+            MeshContinuationRaiseWallTests \
+            MeshContinuationDisagreementTests \
+            MeshContinuationTaskHostTests \
+            MeshContinuationTaskHostWallTests

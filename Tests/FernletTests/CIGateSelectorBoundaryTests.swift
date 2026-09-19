@@ -153,9 +153,10 @@ import Testing
         // MEASURED at the commit that moved it, never inherited: 28 at P6 item 7 (2 convergence
         // generators + the routed convergence battery + 4×P3 + 9×P4 + 12×P5), plus P6 item 9's
         // eight clause suites = 36, plus P7 item 7's six clause suites (run policy, gate writer,
-        // radio seams, poller, resume, honesty) = 42. A count of DECLARATIONS, which the session
-        // that added the six could take without a toolchain.
-        #expect(batteries.count >= 42, "the mesh batteries shrank: \(batteries.count) declared")
+        // radio seams, poller, resume, honesty) = 42, plus P8 item 10's six (the coordinator's
+        // table, the hold verb, the raises and the disagreement, the presentation table, the task
+        // wiring, honesty) = 48. A count of DECLARATIONS, taken by reading the tree.
+        #expect(batteries.count >= 48, "the mesh batteries shrank: \(batteries.count) declared")
         let ungated = batteries.subtracting(gated).sorted()
         #expect(ungated.isEmpty, """
             Mesh acceptance batteries declared in Tests/FernletTests but not named in \
@@ -183,23 +184,29 @@ import Testing
         // `MeshRoutedDrainWallTests` is a WALL with no compiler half — the retirement and parking
         // zero-lists item 4 and item 6 put there run nowhere else — so removing it from the line
         // must be a failure rather than a silence, exactly as the two above are.
-        // `MeshRoutedLockedDeviceTests` is gated beside it but is deliberately NOT on this pin: it
+        // `MeshContinuationRaiseWallTests` joins it at P8 item 10 on the same argument: the two
+        // session-state raises have exactly one home each in ProximityKit, the app speaks each
+        // exactly once and from one file, and the app offers `applySessionEvent(` zero times — three
+        // source counts that exist nowhere else and that no compiler checks.
+        // `MeshContinuationTaskHostWallTests` (item 6) is that case again: the `BackgroundTasks`
+        // names have one app home outside the DEBUG probe, the feed has one call site, the host
+        // speaks no radio verb and the funnel never calls it back — all uncompiled source counts.
+        // `MeshRoutedLockedDeviceTests` is gated beside them but is deliberately NOT on this pin: it
         // is 26 behaviour cells over five store states (measured at item 9's own gated run, and the
         // number the workflow's floor decomposition uses), not a zero-list, and
         // `MeshP5LockedDeviceAcceptanceTests` is already its acceptance clause. `MeshRoutedDrainTests`
         // (gated at P8 item 1, 2026-09-18) is the same case and is left off this pin for the same
-        // reason: 43 behaviour cells, walled by the step's measured floor of 359, not by a name here.
-        // OWED, and deliberately not pinned here yet: P8's six `MeshContinuation*` suites —
-        // `MeshContinuationCoordinatorTests` and `MeshContinuationProgressTests` (item 4),
-        // `MeshContinuationCardPresentationTests` (item 7), and `MeshContinuationDriverTests`,
-        // `MeshContinuationRaiseWallTests` and `MeshContinuationDisagreementTests` (item 5). None is
-        // a `MeshP<n>…AcceptanceTests`, so `everyMeshAcceptanceBatteryIsGated` does not demand them
-        // and no workflow line names one; `MeshContinuationRaiseWallTests` in particular is a wall
-        // with no compiler half, exactly the case the pin above exists for. Item 10 owns the
-        // workflow line — the floor is measured at the commit that adds it — and adds them to this
-        // pin in the same commit. A pin without the line would redden every run until then.
+        // reason: 43 behaviour cells, walled by the step's measured floor, not by a name here. So are
+        // P8's five behaviour suites, gated by item 10 in the same commit as the two walls above —
+        // `MeshContinuationCoordinatorTests`, `MeshContinuationProgressTests`,
+        // `MeshContinuationCardPresentationTests`, `MeshContinuationDriverTests` and
+        // `MeshContinuationDisagreementTests`: each is a table or a rig walk whose cells the floor
+        // counts, and each has an acceptance clause of its own in `MeshP8AcceptanceTests`.
         #expect(gated.contains("MeshRoutedDrainWallTests"),
                 "the routed path's retirement and parking zero-lists are gated")
+        #expect(gated.contains("MeshContinuationRaiseWallTests")
+                && gated.contains("MeshContinuationTaskHostWallTests"),
+                "P8's two source walls with no compiler half are gated")
         let script = try RepoRoot.source(Self.floorScript)
         #expect(script.contains("totalTestCount") && script.contains("-resultBundlePath"),
                 "the floor script no longer reads the result bundle's own count")
