@@ -1817,7 +1817,91 @@ pure-value cell `theMatrixHarnessSurvivesTheFirstRunPolicyVerdict` (no `.stopJoi
 verdict over the harness's facts) that would have reddened in `df0ce5b` itself, and a scan pinning
 every shipping `startJoin()` / `resumeSearchingForPartitionedMesh()` caller under `App/` to the
 seams file or the harness. The P7 fix commit's SHA is added to this section when it lands; until it
-is on `main` and a lane run discovers again, the rows above stay un-runnable.
+is on `main` and a lane run discovers again, the rows above stay un-runnable. **Confirmed on 2026-09-19** by the run below.
+
+### Lane C — P9 item 0: the confirmation run at HEAD, then three and four nodes (2026-09-19)
+
+**The P7 fix `80934b7` repairs the lane. The sim↔sim QUIC lane DISCOVERS at HEAD**, on the same Mac,
+the same CGNAT `en0` and the same Simulators that produced L-4's six dark runs — and it does not stop
+at a pair: three nodes and four nodes both form a **full** mesh on the first attempt.
+
+Build: `f3d6175` (`claude/loving-bell-296321`, `80934b7` two commits below), rebuilt for this lane
+(`xcodebuild build -scheme Fernlet`, `** BUILD SUCCEEDED **`, zero `error:`) and installed fresh on
+every node. No `xcodebuild` ran during any run (`pgrep -x xcodebuild` empty throughout), no test run
+touched the identities mid-lane, a fresh log directory per run, `STAGGER` 3 s, and a per-Simulator
+audit stream started **before** each launch (`log stream --level info --predicate 'subsystem ==
+"com.fernlet"'`). Every launch carried the same seven variables, differing only in label, mesh id and
+member list:
+
+```
+SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic  SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
+SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1   SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=p9item0-<run>-<n> \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=<uuid> \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<KA>[,<KB>…] \
+SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit,capabilities \
+xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
+```
+
+Nodes — **A** `iPhone 17` (`09F57BCA-…A88`, fp `8764ff61070db285`), **B** `iPhone 17 Pro`
+(`454FCC9C-…661B`, fp `fb795f343c2954da`), **C** `iPhone 17 Pro Max` (`9BA301C9-…B7`, fp
+`87684c8a76bb86c7`), **D** `iPhone 17e` (`9A1B8A32-…81D`, fp `45975569e20dfb12`, booted for run 3
+only). A's fingerprint is not P8's — that install had been erased since; B's is unchanged, which is the
+keychain-backed identity behaving as documented.
+
+| Run | Node | `[mesh-matrix]` banner | `[mesh-quic]` lines | tunnels | `slots total=/committed=` | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| **1 — pair**, mesh `99991111-…` | A | yes | 13 | 1 | `1/1 [connected]` | **PASS** |
+| | B | yes | 13 | 1 | `1/1 [connected]` | **PASS** |
+| **2 — three**, mesh `33333333-…` | A | yes | 28 | **2** | `2/2 [connected,connected]` | **PASS** |
+| | B | yes | 28 | **2** | `2/2` | **PASS** |
+| | C | yes | 26 | **2** | `2/2` | **PASS** |
+| **3 — four**, mesh `44444444-…` | A | yes | 45 | **3** | `3/3 [connected×3]` | **PASS** |
+| | B | yes | 45 | **3** | `3/3` | **PASS** |
+| | C | yes | 45 | **3** | `3/3` | **PASS** |
+| | D | yes | 44 | **3** | `3/3` | **PASS** |
+| **4 — pair repeat**, mesh `88882222-…` | A | yes | 9 | 1 | `1/1 [connected]` | **PASS** |
+| | B | yes | 9 | 1 | `1/1 [connected]` | **PASS** |
+
+The three decisive facts against L-4, on run 1: both banners read; `[mesh-quic]` is **not** silent —
+it opens with `browsed peers=1 [fernlet-mesh-122c8b6f8872._fernlet-mesh2._udp.local.]`, the QUIC
+service type L-4 could never find advertised; and the audit stream carries
+`proximity.transport.quic` records on both nodes. The convergence line:
+
+```
+[mesh-quic] accepted fb795f343c2954da sid=68406412-…: tunnel activated, tunnels=1
+[mesh-flow]  slots total=1 committed=1 states=[connected]
+```
+
+**`stopJoin` appears zero times in any audit stream of any of the four runs** — the L-4 signature
+(a `.stopJoin` verdict in the first ~100 ms after `startJoin`) is gone, which is the fix being
+observed rather than inferred.
+
+**The tunnel graphs are complete, not spanning.** Three nodes: A↔B, A↔C, B↔C — 3 = N(N−1)/2, every
+node holding two, matching fingerprints and `sid`s on both ends of each edge. Four nodes: A↔B, A↔C,
+A↔D, B↔C, B↔D, C↔D — 6 = N(N−1)/2, every node holding three. **No node held zero tunnels to any
+member, in either run**, so the P3 item-0 star does not reappear at N=4; the 0b link-gate fix
+(`mayLinkToDiscoveredPeers`) scales one node further than it had ever been asked to.
+
+Stability and timing: **zero `tunnelEnded`, zero `refused`, zero `dial refused`, zero
+`redundantTunnelClosed` on every node of every run.** Heartbeats flow both ways throughout (20 lines
+per node over ~150 s at three nodes, 36 over ~170 s at four). Time from the **last** node's launch to
+every tunnel live: **2.6 s** (run 1), **3.1 s** (run 2, all three live by `17:38:01.10`), **~3 s**
+(run 3), **2.0 s** (run 4). A four-node mesh converges as fast as a pair.
+
+Two notes for the next reader:
+
+* **Run 3, node C logged two consecutive `tunnel activated, tunnels=2` lines.** Not a duplicate: the
+  three peers are three distinct fingerprints with three distinct `sid`s, the final count is
+  `tunnels=3`, and `redundantTunnelClosed` never fires. The `tunnels=` value is sampled after
+  insertion into the link table, and two activations landed inside the same instant — a log-ordering
+  artefact of concurrent activation, visible only at N ≥ 4.
+* **`[mesh-flow] membership ledger=absent derived=0 barred=0` on every node of every run**, as the
+  2026-09-12 correction says it must for a *seeded* harness run. These four runs converge the
+  **descriptor** roster (`members=2/3/4` as seeded) and say nothing about the derived one.
+
+**What this unblocks:** L-4 is cleared, so every tier-2 row it blocked is runnable again — P8 item
+2's rows (b) and (d), P6's four un-run rows, and P9's acceptance lane. Nothing above was run on
+hardware; Lane D is still owed.
 
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
 
