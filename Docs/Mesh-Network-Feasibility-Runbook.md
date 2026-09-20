@@ -1986,7 +1986,7 @@ included — the withdrawn registration's empty TXT, plus the own ghost layer 1 
   Simulators within 0.3 s of each other, which points at the host suspending the two timers together
   rather than at app logic. The epoch NUMBER stayed correct (`floor(unix/900)` read at the wake) and
   both sides were late together so tags still matched, but for 51 s each device kept advertising the
-  previous epoch's name and certificate. `PresenceManager.delayToNextEpochBoundary()` arms one long
+  previous epoch's name and certificate. `PresenceManager.delayToNextEpochBoundary()` arms one long **Fixed at `b3f9de9` (P9-2-C):** the boundary is now a deadline awaited in ≤ 30 s steps (`stepToNextEpochBoundary()`, `maxEpochRotationStepSeconds`), re-checked against the wall clock on every wake, so lateness is bounded by one step's drift; a device measure of the drift is still owed.
   `Task.sleep` per epoch — the wall-clock-deadline family; a device run should re-measure it before
   the drift is written off as a Simulator artefact.
 
