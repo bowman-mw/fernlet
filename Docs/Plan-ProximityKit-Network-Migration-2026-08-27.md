@@ -3269,6 +3269,11 @@ recorded in §14.2, or written below with its cost.*
     2026-08-27): Progress photos (`Aug 28` clipped, not in baseline) and Recent bites (three baseline
     findings that no longer reproduce). Both reproduce identically on the P6 close-out build
     `82fc4d7`, so they predate P7. **Cost:** two UI cases red for a stale baseline, not a defect.
+    **CLOSED by P9 item 8 (2026-09-20, `c5ff754` + `a5f8bcf`):** both baselines were re-recorded on a
+    freshly erased Simulator pinned four ways, in dark **and** light, with both deltas reproducing
+    byte-for-byte in both appearances; the `Aug 28` month-boundary bomb is now matched as a volatile
+    date word, and six frozen `Home · Recent bites` lines that could never fail were deleted rather
+    than kept. The residuals are §17.1.3 finding 10 — chiefly that this wall runs on **no CI line**.
 14. **No endpoint memory for a FULL link drop behind a hold** (item 3). The radios are dark, so a
     peer that drops entirely waits for the foreground. **Cost:** a background reunion that the
     endpoint cache could have carried does not happen; §15.1's re-dial row is where that is measured.
@@ -3492,6 +3497,13 @@ measured none of them — §14 is BUILT at tier 1 and 1b, and tier 3 is the owne
 launcher's items 8 and 9, both `todo`). A Simulator answers no row here: `BGTaskScheduler` refuses
 with error 1, `simctl` has no lock verb, and `.continuingInBackground` cannot be entered without a
 task. The "what P8 hands it" column is what a tester now has that they did not have before.
+**Unchanged at the P9 close-out (2026-09-20): still NOT RUN.** P9 had exactly one phone connected
+and every row here needs two to four in the owner's hands, so item 0 stayed `blocked (owner)` for
+the whole phase and no row's status or date moved. P9 hands these rows nothing new — its radios are
+1:1 and foreground — but it removes one obstacle to running them: the environmental
+`assertionFailure`-in-`catch` family is gone (`dad86e9`), so a DEBUG build no longer crashes on
+exactly the lock and background rows §15 needs. The runbook's **Lane B** table is likewise
+unchanged; the Lane C rows P9 added are tier 2 and are listed in §17.1.4.
 
 | Gate | Status | What P8 hands it |
 |---|---|---|
@@ -3548,15 +3560,303 @@ No-Tracking-Wall, privacy copy, this plan's checkboxes.
 
 ## 17. Phase P9/P10 and paperwork
 
-**17.1 P9 — remaining radios and MC retirement:** recipe share → QUIC request/response streams
-(preserving pause/resume semantics); presence → QUIC with the **ephemeral posture reproduced** (fresh
-TLS identity + randomized instance name per 900 s presence epoch — no stable name, matching today's
-ephemeral MCPeerID intent); coach service constant per the Coach-app decision (§18). Then delete
-`MeshMultipeerSession` and `FileMCPeerIDStore` (with delete-all/wipe rows retired), drop the eight
-`_fernlet-*` MC Bonjour types from the plist, remove the MC import — done before the Xcode 27
-toolchain move. Note that `MultipeerPeer.underlying` is **already gone** (P1 replaced it with
-``PeerEndpointKey``), so P9's deletion list is two files plus the plist, not a signature sweep; and
-`TransportNeutralityBoundaryTests`' permit list is the exact inventory of what is left to delete.
+### 17.1 P9 — remaining radios and MC retirement — **BUILT** (2026-09-20, tier 1 + 1b + **tier 2**; the MC deletion **SPLIT**, its second half blocked on the owner)
+
+**BUILT on 2026-09-20 — with three honest exceptions, stated first.** (1) **MultipeerConnectivity
+was NOT deleted.** `MeshTransportFactory.shippingDefault` is `.multipeer`
+(`MeshTransportSelection.swift:267`) and its one construction site (`:297`) runs on every shipping
+launch, so deleting `MeshMultipeerSession.swift` is the friend mesh's **MC→QUIC cutover**, not
+cleanup — and QUIC has no first-meeting stranger-admission path (**§8.7 finding 3**, which the P9
+ledger's item 4 row and `df37afb`'s commit message mis-cite as "§11 finding 3"; the item-4 design
+note cites it correctly as plan §8). Item 4 was **split**: the dead strings left now, the deletion
+waits on the owner's decision D-4.1/D-4.3. (2) **§15 is still NOT RUN** — P9 had one phone and
+needed two to four in the owner's hands. (3) **No full-suite run happened this phase**, by the
+owner's standing instruction since P8 item 0; the last measured full suite remains P8's close-out
+(5 055 / 513).
+
+**Landed on `claude/loving-bell-296321`, fast-forwarded into `main` after each iteration, oldest
+first** (`bb454fe..`, item commits each followed by its own ledger commit).
+`Docs/Mesh-Migration-Loop-Ledger-P9.md` is the decision record; every SHA, residual and surprise
+below is a row in it. **Not pushed** at the time of writing.
+
+| SHA | Item | What it is |
+|---|---|---|
+| `dad86e9` | 1 | the `assertionFailure`-in-`catch` family — **40** traps enumerated (the plan's 19 counted one syntax), **27 environmental sites** routed through the new `PersistenceFailureAudit.record` (`FernletFoundation`), **12 programmer-error guards kept**; 27 cells one-to-one |
+| `2af5767` | 0 (device-free) | Lane C **discovers at HEAD**: a pair (2.6 s), three nodes (3 tunnels, full mesh, 3.1 s), four nodes (6 tunnels, ~3 s); `80934b7` confirmed, zero `stopJoin` — tier 2 may be believed |
+| `d7342f3` | 2 pass 1 | `PresenceEpochPosture` — wall-clock-anchored 900 s epochs, `fn-` + 8 CSPRNG bytes, the certificate minted at the **epoch start** (the verify caught the validity window encoding the mint second) |
+| `9f78111` | 2 pass 2 | `NetworkPresenceSession` on `_fernlet-near2._udp`, `PresenceManager` MC-free behind `PresenceRadioSession`, `ProximityQUICParameters` extracted, the TXT chunked `t`/`t1` (24 tags were 311 B > DNS-SD's 255) |
+| `09f09f6` | 2 tier 2 | the rotation row **CROSSED** on two Simulators (runbook § "Lane C — P9 item 2") |
+| `b3f9de9` | 2 fixes | P9-2-A the "opaque" peer key **was** the Bonjour service name → salted per-session digest labels; P9-2-C the boundary armed in ≤ 30 s steps |
+| `f86becf` | 2 doc fix | the runbook's P9-2-C sentence, which `b3f9de9`'s message had claimed and not landed (its anchor did not match) |
+| `507972e` | owner follow-up, **off-slot** | `NetworkMeshSession`'s listener/browser task bodies no longer report their own cancellation — a `CancellationError` was a "discovery failed" banner pinned over a healthy search; cell `NetworkMeshSessionTests.theListenerAndBrowserTasksDoNotReportTheirOwnCancellation` |
+| `79f6b15` | 3 pass 1 | `RecipeShareDiscoveryGate` / `RecipeShareTransfer` / `RecipeShareAdvertisedName` — the premise corrected: **one sealed frame**, so pause/resume is the RADIO's discovery pause |
+| `ba34491` | 3 pass 2 | `NetworkRecipeShareSession` on `_fernlet-recipe2._udp` (ALPN `fernlet-recipe-v1`), fresh name + TLS identity + `sid` per `start()` **and** per `resume()`, the per-transfer-stream acceptor, every `report` classified |
+| `8f1ab3d` | 3 lane | the `FERNLET_RECIPE_LANE` harness (DEBUG-only; release is a compiled-out no-op), kept for Lane D |
+| `036d0a3` | 3 tier 2 | the 9.3.2 lane **PASSED** R1–R9 (runbook § "Lane C — P9 item 3") |
+| `df37afb` | 4 design | `Docs/Mesh-P9-Item4-Design-2026-09-20.md` — the survey that found the launcher's premise wrong and the D-4.1/2/3 decision |
+| `db62de5` | 4-NOW | `_fernlet-near._{tcp,udp}` and `_fernlet-recipe._{tcp,udp}` out of `Info.plist`, `Docs/No-Tracking-Wall.md` §4c rewritten, the plist cell in `NoTrackingBoundaryTests` |
+| `01e92b9` | 5 | the 1:1 foreground anchors **retired**: `ActivityKitProximityForegroundAnchor` deleted, the noop default unconditional; the protocol, `ProximityConnectionActivityAttributes` and the orphan reaper **kept** |
+| `08b8d45` | 7 | the routed-inventory / `parkedReoffered` counts scoped by the rig — **eight** cells, not seven |
+| `b97e34e` | 6 | the fourteen P6-relevant suites gated (71 → 85 names); floor **measured** 470 → 718 |
+| `b63aeaf` | 4/5 fixes | the **live / held / retired** Bonjour partition (the live set omitted `_fernlet-friend._{tcp,udp}` — deleting them would have been green); the anchor needle walks `FernletKit/Sources/ProximityKit` instead of four hand-listed files |
+| `85b7c4b` | 6/7 fixes | `measuredSuiteNameCounts` (every gated step pins its suite-NAME count, parsed from the workflow); `run-gated-suites.sh` refuses a restarted run; ~20 more park/inventory counts scoped through one production door `MeshNetworkManager.heldMeshAuditContext(_:)`; floor re-measured **718 → 719** |
+| `c5ff754` | 8 | the two accessibility-ratchet baselines re-recorded on a freshly erased, pinned Simulator in dark **and** light; the `Aug 28` abbreviated-month bomb into `volatileDateWords` |
+| `4dbd8d3` | 9 | the P9 acceptance battery (`MeshP9AcceptanceTests.swift`, five clause suites / 20 cells) + its CI lines (85 → 97 names, floor 719 → 860, battery pin 48 → 53) |
+| `a5f8bcf` | 8 fixes | the six frozen `Home · Recent bites` lines that **could not fail** deleted, the under-reporting excuse closed at `absentFromScreen(_:)`, the four environment inputs pinned (`iPhone18,3`, content size `large`, `en_US`, 402×874), date words matched **whole-word** |
+| `4f52e0a` | 9 fixes | the 9.9 verify's 3 BLOCKER + 6 FIX: the ungated P9-touched suites gated or named as honesty rows, `shippingDefault`/`resolvedKind` asserted as **VALUES**, the audit-line needle walked over `everyRig`, the two `RecipeShareTransfer` mints funnelled through one helper; the three CI pins re-measured (`1048` / `118` / `53`) |
+| — | **4-LATER** | **BLOCKED (owner)** — the two Swift files, `_fernlet-friend._{tcp,udp}`, the coach pair, the wipe row (D-4.4), `permittedFiles`, the 32 test files. Decision D-4.1 (hold, recommended) / D-4.3 (cut over) |
+| — | **0 (device rows)** | **NOT RUN — the owner's phones.** §15's table, unchanged by this phase |
+
+**The specification as written at the P6/P7 boundary is kept below as history, verbatim:**
+
+> recipe share → QUIC request/response streams (preserving pause/resume semantics); presence → QUIC
+> with the **ephemeral posture reproduced** (fresh TLS identity + randomized instance name per 900 s
+> presence epoch — no stable name, matching today's ephemeral MCPeerID intent); coach service
+> constant per the Coach-app decision (§18). Then delete `MeshMultipeerSession` and
+> `FileMCPeerIDStore` (with delete-all/wipe rows retired), drop the eight `_fernlet-*` MC Bonjour
+> types from the plist, remove the MC import — done before the Xcode 27 toolchain move. Note that
+> `MultipeerPeer.underlying` is **already gone** (P1 replaced it with ``PeerEndpointKey``), so P9's
+> deletion list is two files plus the plist, not a signature sweep; and
+> `TransportNeutralityBoundaryTests`' permit list is the exact inventory of what is left to delete.
+
+Two of those sentences did not survive contact: the deletion list is a **cutover**, and the permit
+list is not the inventory — its scan roots never saw `Tests/`, where 32 files name MC.
+
+#### 17.1.1 What landed
+
+**Result:** both 1:1 radios now speak QUIC over the same `NetworkMeshSession` machinery the mesh
+uses, each with its own ephemeral posture; no radio wears a stable name for longer than its epoch or
+its tab visit; the four Bonjour types the old radios used are gone from the plist; the doomed 1:1
+Live Activity path is deleted; **twenty-six more suites and 391 more cells** run on CI (the
+mesh-batteries step went 71 suites at floor 469 to **97 at 860** by `4dbd8d3`, and further again
+with the 9.9 fix — **`118` at floor `1048`**); and the environmental `assertionFailure`
+family that would have crashed every DEBUG lock and background row is an audit token instead.
+**62 files changed, ~13 795 lines added, ~630 removed** (`git diff --stat bb454fe..a5f8bcf`; the
+9.9 fix and this close-out's documentation commits add to it), of which **eight new production
+files** — seven under `FernletKit/Sources` (`PersistenceFailureAudit`, `PresenceEpochPosture`,
+`PresenceAdvertisement`, `NetworkPresenceSession`, `RecipeShareTransfer`,
+`RecipeShareAdvertisement`, `NetworkRecipeShareSession`) plus the DEBUG-only
+`App/Fernlet/Proximity/Feasibility/RecipeShareLaneHarness.swift` — **seven new test files** and
+three new `Docs/` files.
+
+- **Presence (item 2).** `PresenceEpochPosture` is a pure value: epochs are `floor(unix/900)` — the
+  wall clock, never a per-launch phase, because a per-launch phase is a rotation-surviving
+  fingerprint — the instance name is `fn-` + 8 CSPRNG bytes, and the TLS identity is minted at
+  `IdentityService.presenceEpochStart(at:)` so that two mints in one epoch are **byte-identical**
+  (the rotation table could only see the fields that change; that cell is what caught the leak).
+  `NetworkPresenceSession` binds `_fernlet-near2._udp`; `PresenceManager` is MC-free behind
+  `PresenceRadioSession`; the boundary is awaited in ≤ 30 s steps
+  (`PresenceManager.maxEpochRotationStepSeconds = 30`), re-reading the wall clock on each wake.
+- **Recipe share (item 3).** One sealed frame, so "pause/resume" is the radio's **discovery** gate:
+  `RecipeShareDiscoveryGate` is that contract as a total table, `RecipeShareTransfer` carries the
+  exactly-once oracle and a per-send token, `RecipeShareAdvertisedName` bounds the advertised name to
+  64 UTF-8 bytes (omitting the key rather than publishing `""`). `NetworkRecipeShareSession` mints a
+  fresh name, TLS identity and `sid` per `start()` **and** per `resume()`, accepts per-transfer
+  streams on `MeshTransferStreamTable`'s route, and classifies every `report`: start failure stands
+  the radio down, a per-operation refusal logs, a cancellation is silent.
+- **The MC cleanup that was safe (item 4-NOW).** The four Bonjour types nothing advertises or
+  browses left the plist with a §4c row and a cell that parses `NSBonjourServices` and pins the
+  **live** set present as hard as the retired set absent.
+- **The anchors (item 5), the counts (item 7), the gates (item 6), the traps (item 1), the two
+  accessibility-ratchet baselines (item 8) and the phase's own acceptance battery (item 9)** — as
+  the SHA table reads.
+
+#### 17.1.2 Deviations from the specification, and why
+
+1. **The MC deletion is SPLIT and its second half is blocked.** §17.1 above said "then delete"; HEAD
+   ships MC as the mesh's default transport and QUIC refuses a stranger before any app frame, so the
+   deletion ships a build where two phones that have never met cannot found a mesh. D-4.2 (split) was
+   taken as the working default; D-4.1/D-4.3 is the owner's. **§17.1 must not be read as MC retired.**
+2. **Four of the eight plist strings, not eight.** `_fernlet-friend._{tcp,udp}` are **live** (the
+   shipping MC mesh); `_fernlet-coach._{tcp,udp}` are **held** — `MultipeerServiceType.trainer` is
+   reachable only through `begin(mode: .trainer)`, which no shipping call passes (§18 decision 4's
+   default, taken). Every declared type is now classified live / held / retired, and an unclassified
+   one is a red. `App/Fernlet/Info.plist` declares **seven** types today (`:18`–`:24`).
+3. **Item 0 did not run.** One device was connected; the rows need two to four and the owner's hands.
+   Its device-free half did run (the ledger, item 1, the Lane C confirmation).
+4. **No full-suite run.** The owner's standing instruction since P8 item 0. Every number in §17.1.4
+   is a gated subset measured at the commit that moved it.
+5. **The honesty suite is `MeshP9HonestyAcceptanceTests`**, not the P9 launcher's
+   `MeshP9CIHonestyTests`: that name matches neither half of `CIGateSelectorBoundaryTests.isMeshBattery`
+   and would have been a battery CI never asked for.
+6. **A production change was unavoidable in item 7.** Neither audit line carried a context key, so no
+   test could scope them; `MeshNetworkManager.heldMeshAuditContext(_:)` adds `held` at fourteen
+   emission sites by **extending** every existing `log(` call (the `log(`-count wall beside them is
+   unmoved at six in three bodies).
+7. **The recipe radio does not use `PresenceEpochPosture`.** Its 900 s epoch and epoch-start
+   certificate would be a silent mismatch on a per-tab-visit radio; the recipe posture is minted per
+   `start()`/`resume()` from the mesh's own `randomInstanceName()` + `EphemeralMeshTLSIdentity.mint()`.
+8. **Item 8 landed in two commits, and the second is the interesting one.** `c5ff754` re-recorded
+   both baselines on a freshly erased, pinned Simulator in dark **and** light; both deltas
+   reproduced **byte-for-byte in both appearances**, so nothing was frozen on one appearance alone
+   and there are **no appearance-dependent residuals**. Its adversarial verify then returned
+   1 BLOCKER + 3 FIX, all fixed in `a5f8bcf`: the six `Dynamic Type` lines the commit kept under
+   `Home · Recent bites` were excused by `unreportedCategories` on every run — **frozen lines that
+   could never red** — and are deleted; `absentFromScreen(_:)` now takes an entry back out of the
+   under-reporting excuse when the element it names is not on the audited screen at all (the
+   discriminator is presence, not category); the baseline-device guard pins four inputs
+   (`SIMULATOR_MODEL_IDENTIFIER` = `iPhone18,3`, content size `large`, `en_US`, 402×874 — an
+   iPhone 17 and a 17 Pro both report 402×874, so geometry alone was blind); and the claim that this
+   app renders no abbreviated weekday beside a numeral was false
+   (`CoachPlanReviewView.swift:317`/`:408`), so weekday abbreviations joined `volatileDateWords`
+   under **whole-word** matching on both halves of the wall — "Fri" inside "Friends" and "Sun"
+   inside "Sunscreen" are untouched, and **0 of the 82 frozen labels key differently**. Three
+   red-onces; residuals in §17.1.3 finding 10.
+9. **Item 9's battery shipped, and its verify moved three of its cells from source text to values.**
+   `4dbd8d3` landed the five clause suites and the CI lines; its adversarial verify returned
+   3 BLOCKER + 6 FIX, fixed in `4f52e0a` — a 31-cell P9 suite (`ProximityRecipeShareCapTests`)
+   on no CI line at all, a clause that pinned `shippingDefault`'s **source text** while the shipping
+   path (`resolvedKind(environment:)`) could be flipped underneath it, and an audit-line needle whose
+   own filter was the blacklist it claimed to be free of.
+
+#### 17.1.3 Findings for the owner — real, and deliberately NOT fixed here
+
+1. **P9-3-A — a configured Fernlet Lock parks the recipe-share and presence radios permanently.**
+   PRE-EXISTING, found by the 9.3.2 lane (a locked Simulator read `policy=stop` with zero radio
+   records across 200 s of usable foreground app). `ProximityRunPolicy.presenceState` (`:475`) /
+   `recipeShareState` (`:486`) both `guard … !input.appLockEngaged else { return .stop }`, and
+   `FernletLockState.locked` is the **resting** state of a configured lock; every `.unlocked(scope:)`
+   is a private surface where both radios stop anyway. **Nothing tells the user why.** This is a
+   product decision on P7's 23 040-row run-policy table, so changing a row is a P7 bug fix and
+   re-runs the whole product.
+2. **P9-2-B — a mutual friend whose only friend is you never becomes nearby, and nothing says so.**
+   Layer-3 self-exclusion drops an advertisement whose token set is a subset of our own, and a
+   sole-friend pair's sets are identical by construction. Documented as an accepted residual in the
+   source; the exclusion is invisible (`recordDiagnostic` is in-memory only). **Every presence lane
+   run must seed a third friend.**
+3. **P9-2-C — the boundary wake's drift is unmeasured on hardware.** Two Simulators woke +0.8 s at a
+   300 s arm and **+51 s** at a 767 s arm, together within 0.3 s — the host suspending both timers.
+   The ≤ 30 s step bounds it either way; a phone number decides whether the step may widen.
+4. **Five process-wide `>= 1` audit counts remain**: `routedQuiescent`, `blockedOrigin`,
+   `originUnresolvable`, `originRemoved` (their tokens carry no mesh identity) and
+   `keyAgreement.rejected` at the restore path; `droppedUncommittedSlot` is genuinely nil-reachable
+   by design (it refuses before the mesh guard). Named, not closed. Beside them, **~43 unscoped
+   `.count(of:)` reads survive across `Tests/FernletTests`** (44 by a `grep -v where:` at `a5f8bcf`),
+   several of them `== N` on a process-global capture — the shape P9 item 7 closed in two files.
+5. **Thirteen of the fourteen newly gated suites are floor-protected only**, and **11 sibling suites
+   (83 cells) in the same files stay off the line** (`MeshRoutedManifestGoldenTests` 16,
+   `MeshRoutedTypeRegistryConsumerTests` 10, `MeshRoutedCustodyHandoffWallTests` 9,
+   `MeshRoutedItemSealGoldenTests` 9, and seven smaller). `measuredSuiteNameCounts` reds when a
+   name **leaves** a step's line, so that hole is closed generically; the 83 cells are still ungated.
+6. **P9-touched suites that ran on no CI line at all.** The 9.9 verify found seven:
+   `ProximityRecipeShareCapTests` (31 cells — the recipe radio's own two-device cap and pause/resume
+   lifecycle, rewritten by `ba34491` and edited again by `b63aeaf`), `NetworkMeshTransportTests`
+   (119), `MeshTransportSelectionTests` (the only place `shippingDefault` and `resolvedKind` are
+   asserted as VALUES), `PresenceHeartsTests`, `PresenceTagTests`, `PeerTransportNeutralityTests`
+   and `ProximityRecipeShareDiagnosticsTests`. `4f52e0a` **gates or names each as an honesty
+   row**; whatever it did not gate is on the mesh step's comment and in the honesty suite, and P10
+   inherits the remainder (§27.1).
+7. **The live restart branch of `run-gated-suites.sh` is proved only at its `--check-log` seam** — no
+   run has actually restarted since the guard landed.
+8. **Unproven on a Simulator (Lane D rows):** the `.remove` → republish branch (it fired 0 times in
+   5 min 27 s), `openTransferCount` returning to 0, and a share in flight **during** a glare collapse.
+9. **P9-3-B/C/D (notes):** a glare loser re-mints a whole posture mid-collapse; `received` can
+   timestamp < 2 ms before `sent`; a paused radio keeps its own picker rows.
+10. **Item 8's residuals — the accessibility ratchet is stronger and still local-only.** (a) The
+    whole wall runs on **no CI line**: no workflow names `FernletUITests` or
+    `AuditRatchetBoundaryTests`. (b) The new `absentFromScreen(_:)` enforcement is validated on
+    **3 of the 14 screens** the map covers; 59 excusable entries remain across the other 11, and the
+    first full `ScreenAppearanceUITests` run after `a5f8bcf` is where that claim is tested. (c) The
+    device guard's **locale leg has no red-once** (the other three do). (d) `Home · Recent bites`
+    remains **viewport-unstable by construction** — scrolling to the bottom pins the edge, not the
+    contents, and the demo seed is dated off the wall clock; the durable fix (audit the strip's own
+    subtree, or pin the seed's reference date) is a design change. (e) Pre-existing stale counts in
+    `Docs/Accessibility-Nutrition-Labels.md:433` and `normalisedLabel`'s doc (the map is 37 keys /
+    167 identity lines).
+11. **The launcher was wrong about HEAD four times** — item 3 twice (the share is one sealed frame,
+    not a chunked transfer; the recipe radio used the **persistent device-name** `MCPeerID`), item 4
+    once ("MC now stops at two files" meant two files *contain* it, not that it is dead), item 5
+    three times (the `ProximityRecipeShareManager.swift:932` anchor it cited was a **test** seam;
+    nothing reddened on the deletion; the Power-of-10 allowlist entry narrated code that no longer
+    existed). **Read the file before believing any launcher row's description of it.**
+12. Carried unchanged: everything §26.4 lists that P9 did not touch.
+
+#### 17.1.4 Acceptance evidence
+
+**Measured 2026-09-19/20 on a Mac** (iPhone 17 / iPhone 17 Pro / iPhone 17 Pro Max / iPhone 17e
+Simulators, Xcode 26 / iOS 26.5 SDK; worktree `.claude/worktrees/wizardly-haslett-ddce10`, its own
+DerivedData). Every number is read off a result bundle or a script's own count.
+
+**The mesh-batteries floor, measured at each commit that moved it:**
+
+| When | Line | Ran | Wall time | Note |
+|---|---|---|---|---|
+| item 5 (`01e92b9`) | 71 suites | **470** | — | the wall suite gained the retirement cell: floor 469 → 470 |
+| item 6 (`b97e34e`) | **85 suites** (+ the fourteen) | **718** | 165 s | +247 cells for ~+10 % wall time. Floor 470 → 718 |
+| item 6 fix (`85b7c4b`) | 85 suites | **719** | 165.8 s | 9.7's proof cell. Floor 718 → **719** |
+| item 9 (`4dbd8d3`) | **97 suites** (+ the five clause suites and the seven ungated P9 ones) | **860** | 165.9 s | floor 719 → 860, measured on the exact 97-name line run at floor 1 |
+| item 9 fix (`4f52e0a`) | **`118` suites** | **`1048`** | — | the 9.9 verify's gating, re-measured at its own commit |
+
+`CIGateSelectorBoundaryTests`' battery pin: **48 → 53** at `4dbd8d3` (`:196`, a count of
+DECLARATIONS) and **`53`** after the 9.9 fix; `measuredSuiteNameCounts` (`:61`) pins every
+step's suite-NAME count (mesh-batteries **85 → 97 → `118`**), parsed from the workflow, so
+a name **leaving** a line reds in 0.14 s with no Simulator. Adding a name passes — raise the entry in
+the commit that adds names.
+
+**Per-item gates, by suite name through `Scripts/run-gated-suites.sh`:** item 1 — 392 / 26, three
+red-onces · item 2 — 293 / 21 (pass 1) then 509 / 41 (pass 2), five red-onces · item 3 — 1 210 / 117,
+wall PASSED · item 5 — mesh-batteries 470, red-once · item 6 — 718 then 719, three red-onces (a pin
+removed → RED; 84 names at floor 718 → `only 692 ran`) · item 7 — 257 / 12 and the subset 1 213 / 117,
+six cells red on three mutations · the 6/7 fix commit — the P9 gate subset **1 275 / 119** at
+`85b7c4b` · item 8 — the two probe classes green in dark AND light on the pinned device, the three
+unit walls 73 / 3, three red-onces (a frozen line that never reproduces, the device pin, the
+content-size pin) · item 9 — **1 233 / 122** at `4dbd8d3` (a different, larger list), ten red-onces ·
+the 9.9 fix — the P9 gate subset at `4f52e0a`: **`1 577 / 164`**. **Determinism digests
+`ca898bcc…6930` and `594b6f77…5765` never moved.** `Scripts/spm-wall-check.sh` PASSED after every
+item (run **last**: it leaves no `FernletTests.xctest` in DerivedData).
+
+**The scans:** `Scripts/power-of-10-scan.py` **0 violations** and `Scripts/doc-coverage-scan.py`
+**0 undocumented type declarations**, after every commit. (Item 1's 27 removals moved the assertion
+density 0.775 → 0.770 against the 0.68 floor — a future sweep of that shape moves it further.)
+
+**Ten adversarial verifies ran in P9, and every one found something real** — 9.1, 9.2 pass 1, 9.2
+pass 2, 9.3 pass 1, 9.3 pass 2, 9.4/9.5, 9.6/9.7, 9.8, 9.9 and this close-out's own (4 BLOCKER +
+13 FIX against the draft text). Seven of the ten returned a BLOCKER or a defect that would have
+shipped, among them a QUIC session that refused **every** inbound dial behind 25 green cells, a
+Bonjour wall that would have stayed green while friend-mesh discovery died, and six baseline lines
+that could never fail.
+
+**Tier 2 — P9's acceptance, both rows CROSSED:**
+
+- **9.2.2, a presence epoch rotating over QUIC (2026-09-19, `09f09f6`; runbook § "Lane C — P9 item
+  2").** At the 21:45:00 boundary B rotated **+0.788 s** and A **+0.808 s**, each minting a fresh
+  instance name and certificate; each re-sighted the other's new registration at 21:45:02.079,
+  **1.27 s** after its own rotation, with `tags=1`, and nothing of the old posture survived (names
+  and certificate digests share nothing past the constant `fn-` prefix; longest common substring
+  1–2 hex characters). Exactly one `presence.quic.rotated` per side; `stopped`,
+  `redundantTunnelClosed` and `dial refused` all zero. A heart crossed inside a rotated epoch
+  (`presence.quic.connected tunnels=1` on both — the transport half; the recipient emits no audit
+  token, so its ceremony was not independently confirmed). Three findings (P9-2-A/B/C), two fixed in
+  `b3f9de9`.
+- **9.3.2, a recipe share paused and resumed over QUIC (2026-09-20, `036d0a3`; runbook § "Lane C —
+  P9 item 3").** R1 an inbound dial **completed at all** — both sides `recipe.quic.connected
+  tunnels=1` **3.5 ms apart** (13:56:55.293816 / .297322), 3.68 s after A's launch, with **zero
+  `helloRefused` on every happy-path run**; R2 a third Fernlet lost both picker rows **1.3 ms** after
+  `paused` (2 → 0); R3 `resumed` **+44 ms** under a new name and certificate with no byte in common
+  past the `fernlet-mesh-` prefix, re-sighted in **1.17 s**; R4 a **490 732-byte** picture recipe over
+  a real transfer stream (`bytes=898715` sealed on both sides) byte-identical, a text recipe taking
+  no stream at all; R5 **true glare 17 µs apart** → one `redundantTunnelClosed` per device with
+  opposite `kept`, one tunnel each side and **both** recipes delivered; R6 a share at **200 s** idle
+  arrived on a pairing nothing had touched; R7 `uiToken=false` on every report line of every node;
+  R8 `registrationWithdrawn` fired **0** times in the whole lane, including a dedicated **5 min
+  27 s** idle advertise; R9 `stopped` silent — no error record, no banner — with a fresh name on
+  return.
+
+**Tier 1b:** item 8's two accessibility-ratchet baselines re-recorded on a freshly erased Simulator
+pinned four ways, in dark **and** light (`c5ff754`), then hardened at `a5f8bcf` — six frozen lines
+that could never fail deleted, the under-reporting excuse narrowed by an on-screen presence check,
+and the `Aug 28` abbreviated-month bomb defused with whole-word date matching. The wall itself is
+still on no CI line (§17.1.3 finding 10).
+
+**Tier 3: NOTHING RAN.** §15's table is unchanged by this phase and every row still reads NOT RUN.
+
+**The string catalog: P9 added NO display keys.** `git diff bb454fe..a5f8bcf -- '*.swift'` contains
+not one added `LocalizedStringKey`, `String(localized:`, `LocalizedStringResource`, `Text("…")`,
+`Label("…")`, `Button("…")`, `navigationTitle("…")`, `.accessibilityLabel("…")` or
+`.accessibilityHint("…")` line (the only unqualified matches are three prose lines in
+`Docs/Mesh-P9-Item4-Design-2026-09-20.md` and nine `normalisedLabel("…")` assertions in a UI-test
+file), and no `.xcstrings` is in the diff at all. `Scripts/sync-string-catalogs.sh --check` is
+therefore a no-op for this phase.
 
 **17.2 P10 — companion `BGAppRefreshTask`:** as v1 §8 — `MBO.Fernlet.companion-refresh`, `fetch`
 background mode, schedule at handle+background, handler limited to: acquire the existing store safely →
@@ -5060,6 +5360,15 @@ P10's refresh handler waits on a soak.
 *Every file line number in this section is current at `526d0e1` (the P8 close-out's parent state).
 Re-check before editing.*
 
+**Superseded in part at the P9 close-out (2026-09-20).** Three of this section's statements about
+HEAD are no longer true, and §27.1 is the current one: the plist carries **seven** Bonjour types
+at `:18`–`:24`, not eight at `:18`–`:25` (P9 item 4-NOW deleted `_fernlet-near._{tcp,udp}` and
+`_fernlet-recipe._{tcp,udp}` in `db62de5`); `BGTaskSchedulerPermittedIdentifiers` is at `:28`–`:31`
+and `UIBackgroundModes` — **only `remote-notification`, with no `fetch`** — at `:79`–`:82`; and the
+CI shape is **`118` suites at floor `1048`** with a battery pin of **`53`**,
+not 71 / 469 / 48. The MC deletion list itself is a **cutover**, not cleanup (§17.1). **Read §27.1
+for anything this section states about HEAD.**
+
 - **The MC deletion list is two files and eight plist strings, and a wall already spells it.**
   `TransportNeutralityBoundaryTests.permittedFiles` is the exact inventory of what is left to delete:
   `FernletKit/Sources/ProximityKit/Transport/MeshMultipeerSession.swift` and
@@ -5242,3 +5551,136 @@ Re-check before editing.*
   tier 3, and no amount of Simulator work moved a §15 row. **P9 is the opposite shape** — two radios
   over a transport two Simulators already run — so P9's acceptance belongs in tier 2, and a P9 that
   waits on devices is a P9 that has mis-tiered itself.
+
+---
+
+## 27. P10 handoff — written at the P9 boundary, 2026-09-20
+
+P0–P9 are **BUILT** (§5–§8, §10–§14, §17.1; P9 at tier 1, 1b and 2 on 2026-09-20, **with the MC
+deletion split and its second half blocked**). §26 remains the P9/P10 inheritance **except where
+§26.1 is dated superseded**; this section is what changed under it, and **§17.2 is P10's
+specification**. P10 is again not gated by §15 — but it is the first phase since P2 whose acceptance
+a Simulator may not be able to give either.
+
+### 27.1 What P10 inherits
+
+*Every anchor re-grepped at `a5f8bcf`. The 9.9 fix commit lands after this was written and touches
+the workflow, `CIGateSelectorBoundaryTests`, `MeshP9AcceptanceTests` and two ProximityKit files —
+re-check those before editing.*
+
+- **The refresh identifier is not declared anywhere.** `App/Fernlet/Info.plist:28–31` lists
+  `BGTaskSchedulerPermittedIdentifiers` = **only** `MBO.Fernlet.mesh-continuation.*`, and
+  `UIBackgroundModes` (`:79–82`) is **only** `remote-notification` — there is no `fetch` mode today.
+  P10 adds both, in the commit that registers the task.
+- **The scheduling seam already has a shape to copy.** `App/Fernlet/MeshContinuationScheduling.swift`
+  is the protocol + production-conformer pattern P8 built precisely because `BGTaskScheduler` refuses
+  on a Simulator (`:185` onward is the conformer; `:210` is the `register(forTaskWithIdentifier:)`
+  call). Copy the shape; do **not** widen the mesh's seam to carry a second task.
+- **The publish path exists and does not diff.** `FernletStore.publishWidgetSnapshot()`
+  (`App/Fernlet/FernletStore.swift:6055`) builds a `WidgetSnapshot` and hands it to
+  `WidgetSnapshotMirror.publish` (`App/Fernlet/WidgetBridge.swift:382`), which reloads the timelines
+  on **every** successful write. §17.2's "reload timelines only on change" is therefore new
+  behaviour — and `WidgetSnapshot` is `Equatable` **including `computedAt: Date`**
+  (`App/FernletWidgets/WidgetSharedModels.swift:77`, `:94`), so a naive `old != new` is always true.
+  The diff must be over the meaningful fields.
+- **`FernletStoreAccess` is one process-global cache** (`App/Fernlet/ExchangeIntentService.swift:18`,
+  `shared` at `:19`, `install(_:)` at `:24`), already shared by UI and App Intents; the move out is
+  hygiene. The dead path §17.2 names is `ExchangeIntentService.install(store:)` (`:82`) — **verified
+  callerless at HEAD** (the only `install(store:` call sites in the tree are
+  `RecipeShareLaneHarness`'s, from `App/Fernlet/FernletApp.swift:473`).
+- **The CI shape.** mesh-batteries is **`118` suites at floor `1048`**;
+  `CIGateSelectorBoundaryTests`' battery pin is **`53`** by declaration
+  (`batteries.count >= …`, `:196` at `a5f8bcf`); `measuredSuiteNameCounts` (`:61`) pins every step's
+  suite-NAME count. Read the pin the right way round: **it catches a name LEAVING a line**
+  (96 against a pin of 97 reds in 0.14 s with no Simulator); **adding a name passes silently**, so
+  raise the entry in the same commit that adds names or the pin quietly permits a later removal. The
+  red that does fire for a new battery is `everyMeshAcceptanceBatteryIsGated`. The determinism
+  digests do not move.
+- **A naming trap for P10's battery.** `isMeshBattery` (`:27`) matches `MeshP<digit>…AcceptanceTests`
+  and three named convergence suites, and nothing else (its own cell pins `MeshP12FooAcceptanceTests`
+  true and `MeshPhotoAcceptanceTests` false). A P10 battery called `CompanionRefreshAcceptanceTests`
+  would be demanded by **nothing** — the mistake P9 caught in its own drafts. Either name P10's
+  suites `MeshP10…AcceptanceTests` (the prefix is the wall's token, not a claim about the mesh) or
+  widen the predicate in the same commit.
+- **What P9 leaves for P10 to carry:** item 0's device rows; 9.4-LATER; P9-3-A; the device measure
+  for P9-2-C; the 11 sibling suites (83 cells); the five process-wide `>= 1` counts and the ~43
+  unscoped `.count(of:)` reads beside them; whichever of the seven ungated P9-touched suites the
+  9.9 fix left as honesty rows rather than gated (**`ProximityRecipeShareCapTests` — the recipe
+  radio's own 31-cell cap and pause/resume lifecycle suite — is the one to check first**); the
+  restart guard's live branch; item 8's residuals (the UI ratchet runs on no CI line;
+  `absentFromScreen(_:)` validated on 3 of 14 screens; the locale leg has no red-once); and the
+  Lane D rows the Simulator cannot reach (§17.1.3).
+
+### 27.2 The lanes, as they actually are
+
+- **Tier 1** is where P10 lives almost entirely: the handler is a pipeline over values, and the
+  exactly-once completion is the same oracle P8 proved with a table.
+- **Tier 1b** is the widget: the snapshot reaching the app-group container and the timeline reload.
+- **Tier 2 is thin and may be empty.** A refresh handler has no peer. The one lane question worth an
+  hour is whether a Simulator can launch a registered `BGAppRefreshTask` at all — **do not assume it
+  behaves like the continued-processing path**, which refuses with `BGTaskSchedulerErrorDomain` 1;
+  measure it and record the answer in the runbook either way.
+- **Tier 3 is owed twice over**: §15's four gates (P8's, still NOT RUN) and P10's own device row — a
+  real refresh launch granted by iOS on a phone, which nothing at tier 1 or 2 has ever seen.
+- Lane gotchas unchanged (§26.2), plus P9's: rebuild the app before any lane run — a build log's date
+  is not the tree's date; kill audit streams by saved PID, never `pkill -f "log stream"`.
+
+### 27.3 Decisions with defaults — take them deliberately, at the start
+
+| Decision | Default if the owner is silent | Why |
+|---|---|---|
+| **The first iteration** | The device gate if phones are in hand; otherwise record it blocked and start P10's hygiene item. | Unchanged from §26.3, and unpaid for two phases now. |
+| **9.4-LATER, the MC→QUIC cutover** | **D-4.1 — hold.** | QUIC has no first-meeting stranger admission (§8.7 finding 3) and §15 has no dates. A cutover ships broken founding on hardware. |
+| **Whether P10 may touch the mesh** | **No, and a wall says so** — §16.4's background-refresh import wall, in P10's first commit. | A refresh handler that can reach the mesh is a second owner of the radios. |
+| **P10's scheduling** | Schedule at handle + background, never on a timer; complete once through an idempotent shutdown. | §17.2, and P8's table is the proof that exactly-once needs a table, not a flag. |
+| **"Reload only on change"** | Diff the **meaningful** fields, never the whole `Equatable` (its `computedAt` always differs). | Otherwise the clause is unimplementable and quietly becomes "always reload". |
+| **P10's battery names** | `MeshP10<Clause>AcceptanceTests`, gated on the mesh step in the declaring commit. | The selector wall only demands that shape. |
+| **New persisted surface** | **None.** A "last refreshed at" key owes a `Docs/PrivacyWipeCoverage.md` row and delete-all wiring in the same commit. | P6–P9 added none between them. |
+| **P9-3-A (the lock parks the 1:1 radios)** | Leave the policy alone and surface **why** instead. | Changing a run-policy row is a P7 bug fix that re-runs the 23 040-row product. |
+
+### 27.4 Still owed by the owner, and not blocking P10's design
+
+Everything in §26.4 that P9 did not close, plus: the D-4.1/D-4.3 cutover decision and its
+sub-decision D-4.4 (the `MCPeerIDStore` wipe row becomes a legacy `FileManager` sweep, because
+`FernletPeerID.archive` survives on any pre-P9 install); the P9-3-A product call; the device measure
+for P9-2-C. **Closed by P9, do not re-audit:** the `assertionFailure`-in-`catch` family, the 1:1
+foreground anchors, the fourteen ungated suites, the six process-global drain counts (the five
+remaining are named in §17.1.3 finding 4), and the two accessibility-ratchet baselines (§14.3
+finding 13; its residuals are §17.1.3 finding 10).
+
+### 27.5 What P9 learned that re-tiers P10
+
+- **Grep `shippingDefault` before believing any "retire X" row.** P9's item 4 was specified as a
+  deletion by three documents and is a cutover; the cost of finding out late is a broken build on
+  hardware, which no Simulator would have shown.
+- **A fake that does not model the real session's ORDERING hides a total outage.** Twenty-five green
+  cells sat over a QUIC session that refused **every** inbound dial, because the fake booked no
+  pending inbound before the gate ran. A seam's fake must book-before-gate exactly as the real one
+  does, and a lane row ("an inbound dial completes at all") is the only cell that cannot lie.
+- **A retirement cell that pins what must be ABSENT is half a wall.** Pin the live set as hard as the
+  dead one; P9 nearly shipped a wall that would have stayed green while friend-mesh discovery died.
+  Every declared Bonjour type is now **live / held / retired**, and classifying a new one is an
+  obligation on the commit that adds it.
+- **A cell can pin SOURCE TEXT and still not pin the shipping path.** Clause (d) of the P9 battery
+  read `shippingDefault`'s literal and stayed green against a one-line change to
+  `resolvedKind(environment:)`. Assert the VALUE where `@testable` reaches it.
+- **A needle that filters before it walks is its own blacklist.** The audit-line cell filtered the
+  records to those already carrying the peer label, then proved none of them carried the peer's name.
+- **A grep wall that strips comments strips only WHOLE-LINE comments.** `MeshRoutedSourceScan.codeOnly`
+  drops lines starting with `//`; a trailing comment (or a string literal) still satisfies every
+  positive needle and false-reds a negative one. Write needles against code that must exist, not
+  against prose that may.
+- **A suite name must match the CI selector's predicate to be demanded**, and a suite that matches
+  nothing is protected by nothing — `ProximityRecipeShareCapTests` ran 31 cells on no line at all.
+- **Before deleting a type, list every reader, not every writer** — "retire the anchors", read
+  literally, deletes the orphan reaper, whose body *is* `Activity<…Attributes>.activities`.
+- **An audit line with no context key cannot be scoped by a test**; the fix is production, however
+  small, and it must extend the existing call rather than add one.
+- **Price a name pin before believing "gated".** A floor protects a line's total, not its membership.
+- **A floor written in a draft is stale the moment another item lands a cell in a gated suite.**
+  Measure the floor at the commit that moves it; never carry a number across commits.
+- **A frozen baseline line whose whole category is "unreported" can never fail.** An excuse that
+  subtracts unconditionally turns a ratchet into decoration; narrow it by what is actually on screen.
+- **A lane finding can be pre-existing and still a blocker** — record the class on every one.
+- **P9's acceptance was tier 2 and it paid.** P10's is tier 1 with a device row at the end: the
+  handler is provable in one process, and the **grant** is not provable anywhere but a phone.
