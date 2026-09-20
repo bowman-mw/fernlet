@@ -223,7 +223,7 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 
 | Path | Where | Service types |
 |---|---|---|
-| **MultipeerConnectivity** — the shipping radios still on it (friend mesh, coach; presence crossed to QUIC in P9 item 2 and recipe share in P9 item 3) | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-coach`, each `._tcp` and `._udp`; `_fernlet-near` and `_fernlet-recipe` are retired and deleted with the framework in P9 item 4 |
+| **MultipeerConnectivity** — the friend mesh is still on it; the coach channel is a declared service type with no live radio behind it (presence crossed to QUIC in P9 item 2 and recipe share in P9 item 3, and their `_fernlet-near` / `_fernlet-recipe` types left the plist with them) | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-coach`, each `._tcp` and `._udp` |
 | **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | `ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
 | **Network.framework / QUIC** — the friend mesh's second transport, being migrated onto per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | `ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
 | **Network.framework / QUIC** — the standing presence radio, migrated off MultipeerConnectivity per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §17.1 | `ProximityKit/Transport/NetworkPresenceSession.swift` | `_fernlet-near2._udp` |
@@ -239,7 +239,7 @@ that uses them; that asymmetry is closing as the migration lands, so the state i
 
 | Key | Value | What backs it today |
 |---|---|---|
-| `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the four shipping MC radios already do. Not new with the QUIC work. |
+| `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the friend mesh's MC radio and the three QUIC radios already do. Not new with the QUIC work. |
 | `NSBonjourServices` → `_fernlet-mesh2._udp`, `_fernlet-near2._udp`, `_fernlet-recipe2._udp` | Three added entries | All genuinely used: `NetworkMeshSession` advertises and browses the first in Release (the DEBUG probe uses the same one), `NetworkPresenceSession` the second and `NetworkRecipeShareSession` the third. A service type is a name, not a destination — declaring one grants no reach beyond the local link. |
 | `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) | Still inert: a permitted identifier grants nothing until a task is registered and submitted, which only the DEBUG probe does. Runtime registration uses the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. P8 needs it. |
 

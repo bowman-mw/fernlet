@@ -31,7 +31,7 @@ import Testing
 /// the tree, no outbound network destination outside the reviewed allowlist, and privacy manifests
 /// that keep declaring zero tracking.
 ///
-/// Ten enforcement tests plus six pure-matcher fixtures:
+/// Eleven enforcement tests plus six pure-matcher fixtures:
 /// - ``noAdvertisingOrTrackingSDKIsReferencedAnywhere()`` — banned frameworks/symbols in any Swift file.
 /// - ``thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage()`` — the SPM/pbxproj dependency sets.
 /// - ``hardcodedNetworkDestinationsAreExactlyTheAllowlist()`` — every hardcoded host in shipping code.
@@ -46,6 +46,8 @@ import Testing
 /// - ``noPersistentWebViewExistsAndInAppBrowsersArePinned()`` — the WebKit/Safari surface.
 /// - ``privacyManifestsDeclareNoTrackingOrAdvertising()`` — the three `PrivacyInfo.xcprivacy` files.
 /// - ``plistFamilyFilesDeclareNoTrackingPermissionOrForeignContainer()`` — Info.plist + entitlements.
+/// - ``theRetiredRadiosBonjourTypesAreGoneFromThePlist()`` — the §4c service-type table and the app's
+///   declared `NSBonjourServices` say the same thing about which radios exist.
 ///
 /// Scope and honest limits are documented in Docs/No-Tracking-Wall.md; the short version is that this
 /// stops accidental regression in THIS repo, not a determined fork.
@@ -909,6 +911,73 @@ struct NoTrackingBoundaryTests {
             sawContainerDeclaration,
             "No entitlements file declared an iCloud container — the container pin matched nothing and is passing vacuously."
         )
+    }
+
+    /// The Bonjour service types of radios that no longer exist are gone from the app's plist, and
+    /// the three live QUIC ones are still declared.
+    ///
+    /// `NSBonjourServices` is a **public claim about what this app does on the local network** — it
+    /// is what the OS shows behind the Local Network prompt and what §4c's table is written
+    /// against — so a type nothing advertises is an overclaim, not dead weight. P9 items 2 and 3
+    /// moved presence to `_fernlet-near2._udp` and recipe share to `_fernlet-recipe2._udp`; the
+    /// four MC types they left behind are retired here (P9 item 4's `[SPLIT: NOW]` half).
+    ///
+    /// Pinned in BOTH directions, because the failure mode that actually ships is a deleted line,
+    /// not a surviving one: a plist that lost every entry would satisfy the absence half alone, and
+    /// a missing service type kills discovery silently on device — no log, no observable state.
+    ///
+    /// `_fernlet-friend` and `_fernlet-coach` are deliberately in **neither** list. The friend mesh
+    /// still runs on MultipeerConnectivity (`MeshTransportFactory.shippingDefault`), and the coach
+    /// pair is plan §18 decision 4, still open. Retiring either is a cutover, not cleanup; whichever
+    /// commit takes it adds the strings to ``retiredBonjourServiceTypes`` in the same breath.
+    @Test func theRetiredRadiosBonjourTypesAreGoneFromThePlist() throws {
+        let declared = try Self.declaredBonjourServiceTypes()
+        guard !declared.isEmpty else {
+            Issue.record("App/Fernlet/Info.plist declared no NSBonjourServices at all — the scan is broken, not the plist clean.")
+            return
+        }
+
+        let stale = Self.retiredBonjourServiceTypes.intersection(declared).sorted()
+        #expect(
+            stale.isEmpty,
+            "Info.plist still declares \(stale) — service type(s) no radio has advertised or browsed since P9 items 2 and 3 crossed to QUIC. Removing one needs the matching §4c row in Docs/No-Tracking-Wall.md in the same commit."
+        )
+        let missing = Self.liveBonjourServiceTypes.subtracting(declared).sorted()
+        #expect(
+            missing.isEmpty,
+            "Info.plist no longer declares \(missing) — the QUIC radios' own types. Discovery dies silently on device with no log and no observable state; this is the bug a retirement must not cause."
+        )
+    }
+
+    /// The MC Bonjour service types retired with the radios that used them. Frozen automation
+    /// tokens, never display strings.
+    private static let retiredBonjourServiceTypes: Set<String> = [
+        "_fernlet-near._tcp",
+        "_fernlet-near._udp",
+        "_fernlet-recipe._tcp",
+        "_fernlet-recipe._udp"
+    ]
+
+    /// The QUIC service types that must stay declared — mesh, presence, recipe share.
+    private static let liveBonjourServiceTypes: Set<String> = [
+        "_fernlet-mesh2._udp",
+        "_fernlet-near2._udp",
+        "_fernlet-recipe2._udp"
+    ]
+
+    /// `NSBonjourServices` from the app target's Info.plist, parsed rather than grepped so the
+    /// assertion is about declared entries and not about substrings of neighbouring ones.
+    ///
+    /// Returns an empty set only when the key is absent or not a string array; the caller treats
+    /// that as a broken scan rather than a clean plist.
+    private static func declaredBonjourServiceTypes() throws -> Set<String> {
+        let data = try Data(contentsOf: RepoRoot.url("App/Fernlet/Info.plist"))
+        let parsed = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+        guard let plist = parsed as? [String: Any],
+              let services = plist["NSBonjourServices"] as? [String] else {
+            return []
+        }
+        return Set(services)
     }
 
     // MARK: - Fixtures (the matchers must actually catch a planted violation)
