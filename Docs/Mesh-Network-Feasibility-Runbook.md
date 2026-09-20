@@ -1995,6 +1995,113 @@ and never reflects presence, which shows up two taps in as the friend row's "Nea
 and the "Sent just now" cooldown banner does not clear itself — twelve minutes on it still read
 "Sent just now", clearing only when the row was collapsed and re-expanded.
 
+### Lane C — P9 item 3: a recipe share paused and resumed over QUIC (2026-09-20)
+
+**Every tier-2 row the pass-2 verify named is crossed, including the one item 2 could not reach.**
+An inbound dial completes; a picture recipe crosses on a real per-transfer stream with matching byte
+counts; the pairing goes quiet to a third Fernlet within **1.3 ms** and both sides come back under
+postures with no byte in common; a pairing idle for **200 s** still carries a share; and two devices
+that dialled each other **17 µs apart** produced a genuine glare that collapsed to one tunnel with
+opposite `kept` values and delivered **both** recipes.
+
+Build `ba34491` (item 3 pass 2) plus the DEBUG-only lane harness committed with this section,
+rebuilt for the lane (`xcodebuild build-for-testing`, `** TEST BUILD SUCCEEDED **`, zero `error:`,
+app dylib stamped 14:10 against a 14:05 source edit) and installed fresh on every node. No
+`xcodebuild` ran during any run, a fresh log directory per run, and a per-Simulator audit stream
+started **before** each launch and killed by its saved PID.
+
+Nodes — **A** `iPhone 17` (`09F57BCA-…A88`), **B** `iPhone 17 Pro` (`454FCC9C-…661B`),
+**C** `iPhone 17 Pro Max` (`9BA301C9-…B7`) — **dark, see finding P9-3-A** — and **D** `iPhone 17e`
+(`9A1B8A32-…81D`), booted to replace C as the third Fernlet. All four had been up ~37 h and were
+shut down and rebooted before the lane (the ~3 h rendering rule).
+
+#### The harness, and how to rerun
+
+`App/Fernlet/Proximity/Feasibility/RecipeShareLaneHarness.swift` — DEBUG-only, release is a
+compiled-out no-op. **It speaks no radio verb**: it writes the two store facts the run policy reads
+(`selectedTab = .food`, the nearby-recipe opt-in through its shipping setter) and lets
+`FernletStore`'s funnel start the listener through `executeProximityRunActions`, exactly as a tab
+change does. Its one manager door is `sendRecipeShare(_:to:)`, the share sheet's own. It reports the
+manager's observable surface at 1 Hz, and **prints the policy's verdict beside the radio's account of
+itself**, which is the only reason C's darkness was diagnosable at all.
+
+```
+SIMCTL_CHILD_FERNLET_RECIPE_LANE=dial|watch            # install + the part this node plays
+SIMCTL_CHILD_FERNLET_RECIPE_LANE_LABEL=<token>
+SIMCTL_CHILD_FERNLET_RECIPE_LANE_IMAGE_BYTES=350000    # synthesized picture, >= n bytes (cap 512 KiB)
+SIMCTL_CHILD_FERNLET_RECIPE_LANE_DIAL_AT=<unix secs>   # the glare instant; honoured to the ms
+SIMCTL_CHILD_FERNLET_RECIPE_LANE_SECOND_SHARE_AFTER=200
+SIMCTL_CHILD_FERNLET_RECIPE_LANE_LEAVE_AFTER=110       # poll at which it leaves the recipe tab
+SIMCTL_CHILD_FERNLET_RECIPE_LANE_RETURN_AFTER=140
+xcrun simctl spawn <udid> log stream --level info --predicate 'subsystem == "com.fernlet"' > <log> &
+xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding > <console> &
+```
+
+Scripts: `…/scratchpad/item3lane/{lane,run1,run2,run3,run4,run7}.sh` (`lane.sh` holds the UDIDs and
+the stream/launch/kill helpers).
+
+#### The rows
+
+| Row | What | Verdict | Evidence |
+| --- | --- | --- | --- |
+| **R1** | an inbound dial completes at all | **PASS** | run 2: A `recipe.quic.connected tunnels=1` **13:56:55.293816**, B **13:56:55.297322** — 3.68 s after A's launch. **Zero `helloRefused` on every happy-path run** (1, 2, 3, 7). Verified, not merely connected: the send is gated on `coordinator.state == .connected(peerIdentity)`, and B decrypted a **sealed** `.recipeShare` envelope (`Received recipe share from iPhone 17`), which only follows a completed identity introduction |
+| **R2** | the pause is real | **PASS** | run 2: D sighted B `13:56:51.023813` and A `13:56:54.038722` (`recipe=true`, `peers=2`). The pair `paused tunnels=1` at **13:56:55.303929** (both, same µs); **1.3 ms later** D logged `sighted … recipe=false` for BOTH (`.305278`, `.305582`) — the withdrawn registration's empty TXT, item 2's own pattern — and its picker fell to `peers=0` ("iPhone 17 is no longer nearby"). D held no row to dial |
+| **R3** | the resume is real | **PASS** | run 2: A left the tab (`stopped` **13:58:46.800983**); B `resumed` **13:58:46.844961** (+44 ms) as `fernlet-mesh-6d9e6a4663be` / cert `e2fbcc7d2d88d277` against the pre-pause `fernlet-mesh-bbea3dba96ee` / `9746c5d93c9d78ba` — **no byte in common past the `fernlet-mesh-` prefix**, either field. D re-sighted B **13:58:48.019821** (+1.17 s). A re-advertised **13:59:17.500169** (`fernlet-mesh-eee297b8a627` / `4377e2f9b8154314`) and D sighted it **13:59:18.590041** (+1.09 s). Run 1 is the same row on the other pair |
+| **R4** | a picture recipe on a transfer stream | **PASS** | run 2: `transferStream verb=sent bytes=898715` (A, `13:56:55.438556`) / `verb=received bytes=898715` (B, `.438300`) — **877 KiB, 13× the 64 KiB bulk floor**; B's console `received title=lane-recipe-1 imageBytes=490732`, byte-identical to A's `sending … imageBytes=490732`. Twice more in runs 1 (898242 / 490669) and 7 (898623 / 490833). **Negative half, run 3:** a text-only recipe produced **zero** `transferStream` lines on both sides and still arrived |
+| **R5** | glare | **PASS** | run 6: both sides `sending seq=1 at 1789928196.016031` (A) and `…196.016048` (B) — **17 µs apart**. Both outbound tunnels activated at `14:16:36.2278`; then **one `redundantTunnelClosed` per device with opposite `kept`** — B `kept=established` `.259324`, A `kept=incoming` `.261826` — each ending `tunnels=1`. The single `helloRefused` of the whole lane is B refusing the collapsed duplicate (`.259352`). **Both recipes crossed**: each device shows `Sent lane-recipe-1` and `pending=1` |
+| **R6** | a pairing survives ≥ 3 min idle | **PASS** | run 3: first share at `14:00:54`, then `sending seq=2 idleSeconds=200` → `Sent lane-recipe-2 to iPhone 17 Pro`, B `pending=2` with `lane-recipe-2`. A's audit stream after `paused` (`14:00:53.919389`) is **empty to the end of the run** (`14:05:16`): no `endTunnel`, no disconnect at ~90 s, no re-dial. The coordinator's 30 s `.sessionHeartbeat` alone holds QUIC's 90 s idle timer open |
+| **R7** | no instance-name token reaches the UI | **PASS** | every report line of every node of every run reads `uiToken=false` — the scan covers the picker's rows (`nearbyRecipients[].displayName`) and all 40 "Connection details" lines (`diagnosticEvents[].message`), and `senderToken=false` covers the review sheet's sender. Visual: B's review sheet reads "**lane-recipe-1 / Shared by iPhone 17**" (`item3lane/run7_ui/B-ui.png`) |
+| **R8** | does Bonjour `.remove` ever fire on a Simulator | **0 (observational)** | **zero `recipe.quic.registrationWithdrawn` in the whole lane**, including a dedicated **5 min 27 s** idle advertise (run 5, D alone: one `advertised` at `14:09:54.695712`, nothing else to `14:15:22`). FIX-3's republish branch is therefore still tier-1-only code |
+| **R9** | cancellation is silent | **PASS** | runs 1 and 2: leaving the tab gives `recipe.quic.stopped` (`13:58:46.800983`), `policy=stop`, diag "Recipe share discovery stopped." — and **no error-level record in the `com.fernlet` stream, zero `browserFailed`, no banner**. Re-entering re-advertises under a fresh name and certificate (`13:59:17.500169`) and re-discovers the peer |
+
+Token census over the whole lane: `sighted` 25, `advertised` 20, `paused` 13, `connected` 13,
+`transferStream` 6, `resumed` 3, `stopped` 2, `redundantTunnelClosed` 2, `helloRefused` 1 (the glare
+duplicate). **`dialRefused`, `browserFailed`, `registrationWithdrawn`, `transferStreamRefused` and
+`transferStreamFailed` are all zero.**
+
+#### Findings
+
+* **P9-3-A — BLOCKER — a configured app lock stops the recipe-share and presence radios forever.**
+  C never advertised in 200 s of foreground app on Home and Food: `policy=stop`, zero `recipe.quic.*`
+  records, while three Simulators beside it read `policy=foregroundOnly`. The difference is a Fernlet
+  Lock configured on that device. `ProximityRunPolicy.recipeShareState`
+  (`App/Fernlet/ProximityRunPolicy.swift:486-492`) and `presenceState` (`:475-482`) stop on
+  `appLockEngaged`, which is `true` for `FernletLockState.locked` (`:340-344`) — and `.locked` is the
+  **resting** state of a configured lock, not "the lock screen is up"
+  (`FernletKit/Sources/FernletLock/FernletLockService.swift:115-124`). The only other state is
+  `.unlocked(scope:)`, one surface at a time, and every scope (`:98-108`) is a private surface;
+  `privateHub` is the Personal tab, where both radios answer `.stop` anyway. So a user who sets a
+  lock loses recipe sharing and nearby presence outright, and nothing says why — the picker simply
+  never finds anybody. The mesh radios do not read the lock and are unaffected. **Pre-existing** (P7
+  item 1's table), not a pass-2 regression, and invisible to tier 1, which asserts exactly this
+  mapping. Owner decision: either the input becomes "the lock UI is presented", or the radios key off
+  something else.
+* **P9-3-B — NOTE — the glare loser re-mints its posture mid-collapse.** A emitted `resumed` + a
+  fresh `advertised` at `14:16:36.261535/.261551`, then `redundantTunnelClosed`, `connected` and
+  `paused` again by `.261918`: the collapse evicts the connection record, which is the gate's resume
+  event. Fail-safe and correct at rest, but a glare costs an extra TLS mint and a third instance name,
+  and a third Fernlet browsing in that 0.4 ms can sight a name belonging to neither posture.
+* **P9-3-C — NOTE — the `transferStream` receive line precedes the send line** by 0.2–1.7 ms in all
+  three crossings (`noteTransfer("sent", …)` runs after the write returns). Not a reordering bug; do
+  not compute a latency from the pair.
+* **P9-3-D — NOTE — a paused radio keeps its picker rows.** The sender's `nearbyRecipients` stayed at
+  2 through the pairing. The sheet disables the other rows (`engagedRecipientID`), so the product is
+  right — but `peers=2` during a pairing must not be read as "the pause failed"; the pause is proven
+  on the other side of the room.
+* **P9-3-E — NOTE (lane mechanics) — `store.selectedTab` is the policy's mirror, not the TabView's
+  selection.** The write moved the verdict (`.personal` → `stop` → `recipe.quic.stopped`) while the
+  visible tab stayed Home. Same for `MeshRejectionMatrixHarness`; a harness that needs the visible tab
+  must drive the UI.
+* **P9-3-F — NOTE (lane mechanics) — a 1 Hz report cannot see the diagnostics ring.** "Verified …",
+  "Secure recipe-share channel opened with …" and "Recipe sharing closed to others while paired with
+  …" all land inside one poll. Dump the whole 40-entry ring at the end of a run instead.
+
+Raw logs: `…/scratchpad/item3lane/` — `run1` (pair + picture + stop/return, C dark), `run2` (the
+acceptance run: pair + picture + D observing the pause and both resumes), `run3` (text-only + the
+200 s settled share), `run6_glare` (the 17 µs glare), `run5_idle` (the 5 min 27 s advertise),
+`run7_ui` (the review-sheet screenshots), `probeC` / `probeD` (the dark-device diagnosis); builds in
+`item3lane/logs/build{1,2,3}.log`; findings for the fix agent in `item3lane/findings.md`.
+
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
 
 **The shipping transport has never run on hardware.** Lane A puts the *spike* on a device; Lane C
