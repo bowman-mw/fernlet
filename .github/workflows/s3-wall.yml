@@ -304,11 +304,13 @@ jobs:
         #   + 13  MeshContinuationCardPresentationTests                                   (item 7)
         #   + 12  MeshContinuationDriverTests + 5 MeshContinuationRaiseWallTests
         #     + 7  MeshContinuationDisagreementTests                                      (item 5)
-        #   + 21  MeshContinuationTaskHostTests + 6 MeshContinuationTaskHostWallTests     (item 6)
-        #   = 104 added; 365 + 104 = 469, which is also what the bundle counted. The floor is the
+        #   + 21  MeshContinuationTaskHostTests + 7 MeshContinuationTaskHostWallTests     (item 6,
+        #         the wall suite +1 in P9 item 5: the 1:1 foreground anchors' retirement)
+        #   = 105 added; 365 + 105 = 470, which is also what the run counted. The floor is the
         #     MEASURED number; the arithmetic agreeing with it is a check, never the source.
         # RAISED 365 → 469, and shown red once at 469 with one suite removed from the line before
-        # it was committed. `MeshContinuationRaiseWallTests` and `MeshContinuationTaskHostWallTests`
+        # it was committed; 469 → 470 in P9 item 5, re-MEASURED over this exact list
+        # (`Test run with 470 tests in 71 suites passed`) rather than incremented. `MeshContinuationRaiseWallTests` and `MeshContinuationTaskHostWallTests`
         # are ALSO pinned by name in CIGateSelectorBoundaryTests — both are walls with no compiler
         # half, the `MeshRoutedDrainWallTests` argument. The five behaviour suites beside them are
         # protected by THIS floor and not by a name, the `MeshRoutedLockedDeviceTests` precedent.
@@ -318,7 +320,7 @@ jobs:
         # wall step, so editing this step cannot silence it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 469 \
+          Scripts/run-gated-suites.sh mesh-batteries 470 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

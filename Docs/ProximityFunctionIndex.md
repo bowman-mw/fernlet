@@ -1401,14 +1401,15 @@ drives it through; the production conformer is this file.
 
 ### `ProximityForegroundAnchor.swift`
 
+P9 item 5 retired the ActivityKit conformer; `NoopProximityForegroundAnchor` is the only anchor in
+shipping code and `ProximityCoordinator`'s unconditional default.
+
 | Function | What It Does |
 | --- | --- |
-| `NoopProximityForegroundAnchor.start(peerName:startedAt:)` | Marks foreground anchoring active without ActivityKit. |
+| `NoopProximityForegroundAnchor.start(peerName:startedAt:)` | Marks foreground anchoring active. Shows nothing — the app raises no proximity Live Activity. |
 | `NoopProximityForegroundAnchor.update(bytesSent:bytesReceived:)` | No-op byte update. |
 | `NoopProximityForegroundAnchor.stop()` | Marks foreground anchoring inactive. |
-| `ActivityKitProximityForegroundAnchor.start(peerName:startedAt:)` | Requests a Live Activity for an active proximity connection. |
-| `ActivityKitProximityForegroundAnchor.update(bytesSent:bytesReceived:)` | Updates Live Activity byte counters when they change. |
-| `ActivityKitProximityForegroundAnchor.stop()` | Ends the Live Activity immediately and clears local state. |
+| `ProximityLiveActivityReaper.endOrphans()` | Ends every proximity Live Activity a killed previous process stranded. Called once per launch from `FernletStoreLoader.startIfNeeded()`; the only remaining reader of the proximity attributes type. |
 
 ## Identity, Wire, Trust, And Audit
 

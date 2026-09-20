@@ -393,8 +393,9 @@ let package = Package(
                 //     callbacks transfer the non-Sendable `MCPeerID` (and the single-shot
                 //     `invitationHandler`) across the hop via a `nonisolated(unsafe)` local.
                 //   • ForegroundAnchor/ProximityForegroundAnchor.swift — the non-Sendable
-                //     ActivityKit `Activity` (a class) is passed to its `nonisolated async`
-                //     `update`/`end` via a `nonisolated(unsafe)` local.
+                //     ActivityKit `Activity` (a class) is passed to its `nonisolated async` `end`
+                //     via a `nonisolated(unsafe)` local. (P9 item 5 retired the requester, so the
+                //     orphan reaper is the one remaining site; the `update` half went with it.)
                 // All rewrites are behavior-preserving — the UWB/MC/ActivityKit objects keep their
                 // exact runtime semantics — so the target builds clean in Swift 6 mode. (An earlier
                 // estimate of "exactly two errors, both in NIRangingSession" was incomplete: the

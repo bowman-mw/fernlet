@@ -71,13 +71,15 @@
 //
 // **What the mesh's suppressed Live Activity does and does not buy** (the fix round's F1). Passing
 // `NoopProximityForegroundAnchor()` at the mesh's channel-ready door removes up to five doomed
-// `Activity.request` calls per session; it changes nothing a person can see, because
-// `ProximityConnectionActivityAttributes` is internal to ProximityKit and no widget in
-// `App/FernletWidgets` declares an `ActivityConfiguration` for it, so none of those activities could
-// ever have rendered. **The same is true of the 1:1 recipe-share and presence anchors, which are
-// still live** — they are unrenderable dead code in shipping today, and either shipping the widget
-// (public attributes plus a configuration) or retiring the anchor is a P9-sized decision this item
-// does not take.
+// `Activity.request` calls per session; it changes nothing a person can see, because the proximity
+// activity's attributes type is internal to ProximityKit and no widget in `App/FernletWidgets`
+// declares an `ActivityConfiguration` for it, so none of those activities could ever have rendered.
+//
+// **P9 item 5 took the decision this item deferred**: the 1:1 recipe-share and presence anchors were
+// retired rather than given a widget, by making the coordinator's default anchor the no-op on every
+// platform. No code path in the app requests a proximity Live Activity now; the once-per-launch
+// orphan reaper is all that remains, and the mesh's explicit injection at the channel-ready door is
+// kept as the legible, wall-asserted statement of the same fact.
 
 import FernletFoundation
 import Foundation

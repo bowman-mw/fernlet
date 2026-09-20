@@ -508,6 +508,10 @@ struct MeshContinuationTaskHostTests {
 /// **Item 6's wall.** The `BackgroundTasks` framework has one home, the host speaks no radio verb and
 /// no gate, the feed is its only route to a radio, the funnel never calls it back, the mesh raises no
 /// Live Activity, and the concrete identifier is inside the plist's wildcard.
+///
+/// P9 item 5 added cell (g): the mesh's door was only half the claim, and the other half — the
+/// coordinator's DEFAULT anchor, which the 1:1 paths take — is now the no-op too, so the app raises
+/// no proximity Live Activity anywhere.
 struct MeshContinuationTaskHostWallTests {
 
     /// The one app file allowed to name the framework, outside the DEBUG feasibility probe.
@@ -603,11 +607,15 @@ struct MeshContinuationTaskHostWallTests {
     /// what a real session raises — which is exactly the reading that made this look already done.
     ///
     /// **What it buys is honest and small** (the fix round's F1): the requests were never renderable
-    /// — `ProximityConnectionActivityAttributes` is internal to ProximityKit and no widget in
+    /// — the proximity attributes type is internal to ProximityKit and no widget in
     /// `App/FernletWidgets` declares an `ActivityConfiguration` for it — so a person sees no change
     /// on a phone. What goes away is up to five doomed `Activity.request` calls per session, each of
     /// which either threw or spent one of the per-app Live Activity slots a workout or cooking
     /// activity needs.
+    ///
+    /// Since P9 item 5 the coordinator's DEFAULT anchor is the no-op too (cell (g)), so this
+    /// argument is belt to that braces. It is deliberately kept: the mesh's door should say what it
+    /// raises without the reader having to know a default two files away.
     @Test func theMeshsSlotCoordinatorRaisesNoLiveActivity() throws {
         let manager = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"))
@@ -623,6 +631,64 @@ struct MeshContinuationTaskHostWallTests {
         let loader = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("App/Fernlet/FernletStoreLoader.swift"))
         #expect(loader.contains("endOrphans()"), "and the once-per-launch orphan reaper stays")
+    }
+
+    /// **(g)** P9 item 5: the 1:1 foreground anchors are RETIRED. Nothing in the app requests a
+    /// proximity Live Activity; the once-per-launch orphan reaper is the only code that still names
+    /// the attributes type.
+    ///
+    /// Cell (e) pinned the mesh's door. This pins the half P8 left open — the coordinator's
+    /// DEFAULT anchor, which three shipping construction sites take by omitting the argument
+    /// (`ProximityRecipeShareManager.handleChannelOpened`, `PresenceManager`'s heart door, and its
+    /// teardown seam). Until P9 that default was the ActivityKit conformer, whose every request was
+    /// doomed: the attributes type is internal to ProximityKit and
+    /// `App/FernletWidgets/FernletWidgetsBundle.swift` declares no `ActivityConfiguration` for it,
+    /// so each call either threw (audited) or spent a per-app Live Activity slot on something
+    /// nothing draws.
+    ///
+    /// Four independently reddenable needles: re-adding a request reddens (1); restoring the class
+    /// reddens (2); restoring the `#if canImport` default reddens (3); declaring a proximity
+    /// configuration in the widget bundle reddens (4) — which is the honest signal that "retire"
+    /// has been reversed and this cell must be rewritten rather than deleted.
+    @Test func theOneToOneForegroundAnchorsAreRetired() throws {
+        let anchorPath = "FernletKit/Sources/ProximityKit/ForegroundAnchor/ProximityForegroundAnchor.swift"
+        let anchor = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(anchorPath))
+        // (1) Nothing requests one any more; the reaper still ends what a prior process stranded.
+        #expect(!anchor.contains("Activity.request"),
+                "the retired 1:1 anchor was the only requester of a proximity Live Activity")
+        #expect(anchor.contains("Activity<ProximityConnectionActivityAttributes>.activities"),
+                "the orphan reaper stays — it is the one remaining reader of the attributes type")
+
+        // (2) Neither the retired conformer nor the attributes type is spelled anywhere else in
+        // shipping source, so no other file can construct or request one.
+        let coordinatorPath = "FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift"
+        let others = [
+            coordinatorPath,
+            "FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift",
+            "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
+            "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"
+        ]
+        for path in others {
+            let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(path))
+            #expect(!source.contains("ActivityKitProximityForegroundAnchor"),
+                    "\(path) still names the retired ActivityKit anchor")
+            #expect(!source.contains("ProximityConnectionActivityAttributes"),
+                    "\(path) still names the proximity activity attributes; only the reaper may")
+        }
+
+        // (3) The coordinator's default is the no-op unconditionally — no ActivityKit branch left.
+        let coordinator = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(coordinatorPath))
+        #expect(!coordinator.contains("ActivityKit"),
+                "the default anchor is unconditional; no `#if canImport` branch remains")
+        #expect(coordinator.contains("foregroundAnchor ?? NoopProximityForegroundAnchor()"),
+                "and the default it falls back to is the no-op")
+
+        // (4) The widget bundle still declares no proximity configuration — "ship the widget"
+        // cannot land half-done while this cell reads as passing.
+        let bundle = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/FernletWidgets/FernletWidgetsBundle.swift"))
+        #expect(!bundle.contains("Proximity"),
+                "a proximity Live Activity configuration appeared; retire is no longer the decision")
     }
 
     /// **(f)** The concrete identifier is inside the plist's permitted wildcard, and no background
