@@ -2,22 +2,27 @@
 // FernletTests
 //
 // Phase 3b (Proximity Mesh Redesign): recipe sharing is hard-capped at exactly 2 devices —
-// the radio "closes" (stops advertising + browsing, MCSession kept alive) once a connection
+// the radio "closes" (stops advertising + browsing, the live pairing kept up) once a connection
 // is established and reopens when the manager-level connection record is evicted. These tests
 // drive the manager's session callbacks and internal seams directly — NO real radios are ever
-// started (`markRunningForTesting` flips the run flag without `start()`, and the
-// MeshMultipeerSession under test is never `start()`ed, so pause/resume toggle its
-// `isDiscoveryPaused` flag without touching MCNearbyService* objects).
+// started (`markRunningForTesting` flips the run flag without `start()`, and the radio under the
+// manager is `FakeRecipeShareRadioSession`, the in-memory conformer of the seam P9 item 3 pass 2
+// added, so pause/resume toggle a flag and nothing goes on the air).
 //
-// The reopen contract under test: resume is keyed on manager-level record eviction, NOT on MC
-// disconnect events — a failed handshake never fires one, so keying on MC events would leave
-// the radio paused forever with no connection (the deadlock class the redesign closes). All
-// three removal paths are covered: onPeerDisconnected, the stale-coordinator sweep
+// **Rewritten at P9 item 3 pass 2 (`ba34491`)**: the recipe share moved onto Network.framework /
+// QUIC, so the `MeshMultipeerSession` these cells used to poke is gone from the manager entirely
+// and the header above no longer describes MultipeerConnectivity. The contract is unchanged, which
+// is the point of the swap. GATED on the mesh-batteries CI line at item 9's fix review (2026-09-20)
+// — 31 cells that had run on no CI line at all while clause (c) of P9's battery leaned on them.
+//
+// The reopen contract under test: resume is keyed on manager-level record eviction, NOT on a
+// transport disconnect event — a failed handshake never fires one, so keying on transport events
+// would leave the radio paused forever with no connection (the deadlock class the redesign
+// closes). All three removal paths are covered: onPeerDisconnected, the stale-coordinator sweep
 // (.ended/.failed), and the parked pre-verification sweep (.idle/.starting/.discovering).
 
 @testable import ProximityKit
 import Foundation
-import MultipeerConnectivity
 import Testing
 import FernletDomainModel
 import AIProviders

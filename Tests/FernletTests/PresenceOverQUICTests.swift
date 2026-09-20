@@ -731,9 +731,19 @@ struct PresenceOverQUICTests {
         radio.bookTunnelForTesting(key, role: .initiator)
         _ = radio.admitInboundForTesting(at: key)
 
+        // SCOPED to this cell's own radio (P9 item 9's fix review, FIX 5). `FernletAuditLog`'s
+        // capture registry is process-global, `.serialized` isolates within a suite and not across
+        // suites, and `MeshP9PresenceSwapAcceptanceTests` is a second producer of these exact two
+        // event names on the same CI line — so an unscoped `first { … }` could pick up that rig's
+        // sighting and compare its label against this rig's collapse. The label is this session's
+        // salted digest of the key and nobody else's, which makes it the right scope; the needle
+        // walk below stays deliberately unscoped, because "no presence line anywhere carries this
+        // peer's name" is a claim about every line, and this cell's peer name is unique to it.
         let records = capture.records(withEventPrefix: "presence.quic.")
-        #expect(records.contains { $0.event == "presence.quic.sighted" }, "the sighting must be audited at all")
-        #expect(records.contains { $0.event == "presence.quic.redundantTunnelClosed" },
+        let label = radio.peerLabel(for: key)
+        let mine = records.filter { $0.context["peer"] == label }
+        #expect(mine.contains { $0.event == "presence.quic.sighted" }, "the sighting must be audited at all")
+        #expect(mine.contains { $0.event == "presence.quic.redundantTunnelClosed" },
                 "and so must the glare collapse — the other line that names a peer")
 
         // Every fragment of the peer's identity, hunted across EVERY context value of EVERY line.
@@ -754,11 +764,10 @@ struct PresenceOverQUICTests {
 
         // The label is stable within the session — a sighting and a collapse are still readable as
         // one peer's story, which is the only reason a per-peer token is in these lines at all.
-        let sighted = try #require(records.first { $0.event == "presence.quic.sighted" })
-        let collapsed = try #require(records.first { $0.event == "presence.quic.redundantTunnelClosed" })
-        let label = try #require(sighted.context["peer"])
+        // Both lines were found under ONE label above, which is that claim; what is left to assert
+        // is that the label is a name at all and that neither line named the peer some other way.
         #expect(!label.isEmpty, "the peer is still named, just not by its name")
-        #expect(collapsed.context["peer"] == label, "one peer, one label, for the session's life")
+        #expect(mine.count >= 2, "one peer, one label, for the session's life")
 
         // And SALTED: a second session labels the same endpoint differently, so a reader holding
         // the peer's name (it is public on the air) cannot recompute the label and re-link it.

@@ -127,9 +127,17 @@ jobs:
         run: Scripts/spm-wall-selftest.sh
 
       - name: Grep-wall (S3BoundaryTests)
+        # `AuditRatchetBoundaryTests` joins the two at P9 item 9's fix review (2026-09-20). It is a
+        # pure SOURCE scan — every frozen `UXScreenProbe.auditBaselines` entry still names a probed
+        # screen, and the probe inventory cannot silently shrink — so it belongs with the walls
+        # rather than on the simulator-heavy mesh line, and it needs no floor of its own beyond the
+        # shared 1. Item 8 re-recorded those baselines and the suite ran on NO CI line at all; the
+        # ratchet's other half lives in Tests/FernletUITests, which this workflow never runs, and
+        # `MeshP9HonestyAcceptanceTests` says so out loud rather than leaving it to be inferred.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests
+          Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
+            AuditRatchetBoundaryTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
@@ -381,7 +389,9 @@ jobs:
         #   +  4  MeshP9HonestyAcceptanceTests - the two tier-2 lane rows, the three branches
         #         nothing has ever observed, item 0's device rows, P9-3-A and 9.4-LATER, each as an
         #         assertion over the doc that records it; the two determinism digests' single home;
-        #         and this battery's own gating.
+        #         and this battery's own gating. (+2 at the fix review: the total accounting over
+        #         the forty-nine P9-touched suites, and the two coverage holes of P9's own walls —
+        #         the ratchet half CI never runs and the forty-two unscoped audit counts.)
         #   +  9  PresenceEpochPostureTests   + 11  PresenceAdvertisementTests        (item 2 pass 1)
         #   + 24  PresenceManagerTests        + 20  PresenceOverQUICTests             (item 2)
         #   + 20  RecipeShareTransferTests    + 34  RecipeShareOverQUICTests          (item 3)
@@ -396,9 +406,53 @@ jobs:
         #     the result bundle over this exact list ("Test run with 860 tests in 97 suites passed",
         #     165.9 s, no `Restarting after unexpected exit` line), and it is shown red once with
         #     one suite removed from the line before it is committed.
+        # RAISED AGAIN at item 9's FIX REVIEW (2026-09-20). Item 9's own verify found the accounting
+        # above was a hand-list of seven: `ProximityRecipeShareCapTests` — 31 cells, rewritten by
+        # item 3 pass 2, holding the pause/resume behaviour clause (c) leans on — was on NO CI line
+        # and nothing in the tree demanded it. The list is now DERIVED in
+        # MeshP9HonestyAcceptanceTests.p9TouchedSuites (every suite declared in a file
+        # `git diff --name-only bb454fe..HEAD -- Tests/FernletTests` names), and every one of those
+        # forty-nine must be gated or carry a reason in that suite's `ungatedByDesign` map.
+        # Twenty-one names join the line here; three cell counts are added on their own argument:
+        #   + 31  ProximityRecipeShareCapTests - the 2-device cap and all three reopen paths. The
+        #         cells clause (c) cites by name (establishingConnectionPausesDiscovery,
+        #         peerDisconnectEvictionResumesDiscovery, aStartFailureStandsTheListenerDownByItsOwn
+        #         Account, sendRefusedVisiblyWhilePairedWithAnotherPeer) live HERE.
+        #   +  3  ProximityRecipeShareDiagnosticsTests - the recipe diagnostics ring.
+        #   + 12  MeshTransportSelectionTests - the radio the app's own initializer builds and the
+        #         pure selection function. Clause (d) asserts the two factory VALUES, but a DEBUG
+        #         test build cannot execute the Release arm of resolvedKind(environment:) at all;
+        #         this suite is the other half, and it is pinned by NAME in the selector wall.
+        #   + 13  PresenceHeartsTests    + 8  PresenceTagTests - the presence radio's payload: the
+        #         per-epoch pair tags and the heart ledger the swapped radio carries.
+        #   +119  the SIXTEEN suites of NetworkMeshTransportTests.swift (MeshLinkTableTests 19,
+        #         MeshTransferStreamTableTests 19, MeshChannelIntroductionTests 15,
+        #         MeshTunnelConvergenceTests 11, NetworkMeshSessionTests 10, MeshLinkAdvertisementTests 7,
+        #         MeshHeartbeatScheduleTests 5, MeshHeartbeatLivenessTests 5,
+        #         EphemeralMeshTLSIdentityTests 5, MeshInboundRankingTests 4, NetworkMeshWireTests 4,
+        #         MeshDialPreferenceTests 3, MeshTunnelEndReasonTests 3,
+        #         MeshChannelIntroductionTranscriptTests 3, MeshIntroductionRosterTests 3,
+        #         MeshIntroductionNonceCacheTests 3). P9 item 2/3 edited this file; the selector
+        #         names a STRUCT and there is no type called `NetworkMeshTransportTests` at all, so
+        #         a line naming the FILE would have matched nothing and passed having run zero
+        #         tests. Gated because the file is radio-free and deterministic: the sessions it
+        #         constructs are never started, NetworkPeerChannel's advertise/browse doors are
+        #         no-ops, and there is not one sleep or wall-clock wait in its 2565 lines.
+        # Eleven P9-touched suites are deliberately NOT gated and are named with their reasons in
+        # MeshP9HonestyAcceptanceTests.ungatedByDesign: MemoryLifecycleTests' seven timed weak-ref
+        # polls (a floor cannot price a deallocation observed by waiting), the three behaviour
+        # suites in MeshRoutedBackpressureTests.swift that item 7 only re-scoped, and
+        # PersistenceFailureAuditTests (item 1's wall, not a mesh suite).
+        # RAISED 860 -> 1048, MEASURED over this exact 118-name list on a Mac (2026-09-20), floor 1,
+        # read off the result bundle: "Test run with 1048 tests in 118 suites passed after 192.745
+        # seconds", 0 failed, no `Restarting after unexpected exit` line. 860 + 186 (the six terms
+        # above) + 2 (the battery's own two new honesty cells) = 1048 is the ARITHMETIC CHECK, never
+        # the source, and the floor is shown red once with a suite removed from the line before it
+        # is committed. The NAME count moves 97 -> 118 in CIGateSelectorBoundaryTests'
+        # `measuredSuiteNameCounts` in this same commit, and `s3-grep` 2 -> 3.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 860 \
+          Scripts/run-gated-suites.sh mesh-batteries 1048 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -495,4 +549,25 @@ jobs:
             PresenceOverQUICTests \
             RecipeShareTransferTests \
             RecipeShareOverQUICTests \
-            TransportNeutralityBoundaryTests
+            TransportNeutralityBoundaryTests \
+            ProximityRecipeShareCapTests \
+            ProximityRecipeShareDiagnosticsTests \
+            MeshTransportSelectionTests \
+            PresenceHeartsTests \
+            PresenceTagTests \
+            MeshLinkTableTests \
+            MeshDialPreferenceTests \
+            MeshHeartbeatScheduleTests \
+            MeshHeartbeatLivenessTests \
+            MeshTunnelEndReasonTests \
+            MeshLinkAdvertisementTests \
+            NetworkMeshWireTests \
+            EphemeralMeshTLSIdentityTests \
+            NetworkMeshSessionTests \
+            MeshChannelIntroductionTests \
+            MeshChannelIntroductionTranscriptTests \
+            MeshIntroductionRosterTests \
+            MeshIntroductionNonceCacheTests \
+            MeshInboundRankingTests \
+            MeshTunnelConvergenceTests \
+            MeshTransferStreamTableTests

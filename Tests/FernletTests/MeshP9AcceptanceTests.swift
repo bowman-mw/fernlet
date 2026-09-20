@@ -14,7 +14,11 @@
 // decision), the presence swap (item 2 pass 2), the recipe swap with pause/resume (item 3), the
 // MultipeerConnectivity retirement (item 4), and an honesty suite naming — by ledger row — what no
 // CI machine can run. `CIGateSelectorBoundaryTests` therefore moves its battery pin from 48 to 53,
-// and the same commit gates the seven P9 suites items 2, 3 and 4 left on no CI line at all.
+// and the same commit gates the suites items 2, 3 and 4 left on no CI line at all: the seven this
+// battery promotes, plus the twenty-one the fix review's own accounting found beside them. Which
+// suites those are is DERIVED (`MeshP9HonestyAcceptanceTests.p9TouchedSuites`) rather than
+// hand-listed — the first cut listed seven by hand and missed `ProximityRecipeShareCapTests`, 31
+// cells holding the very pause/resume behaviour clause (c) leans on.
 //
 // **Rule 7 — "a row that lands in two passes needs its gate to assert the later pass RAN."** Items
 // 2 and 3 are two-pass by shape (a value, then the radio wearing it), and pass 1 changed nothing on
@@ -426,12 +430,17 @@ struct MeshP9PresenceSwapAcceptanceTests {
         #expect(NetworkPresenceSession.serviceType != NetworkRecipeShareSession.serviceType)
         #expect(NetworkPresenceSession.alpn != NetworkMeshSession.alpn)
         #expect(NetworkPresenceSession.alpn != NetworkRecipeShareSession.alpn)
-        let plist = try RepoRoot.source(MeshP9Acceptance.plistPath)
-        #expect(plist.contains("<string>\(NetworkPresenceSession.serviceType)</string>"),
+        // PARSED, not grepped (item 9's fix review, NOTE 3): `declaredBonjourServiceTypes()` reads
+        // `NSBonjourServices` as a plist array, so a type declared under a different key, in a
+        // comment, or as a substring of a longer string is not mistaken for a declaration — and
+        // clause (d) below already partitions the same parsed set, so the two halves of this
+        // battery cannot disagree about what the app declares.
+        let declared = try NoTrackingBoundaryTests.declaredBonjourServiceTypes()
+        #expect(declared.contains(NetworkPresenceSession.serviceType),
                 "the QUIC presence type is declared — without it discovery dies silently on device")
         // R2: bounded by the retired presence pair.
         for retired in ["_fernlet-near._tcp", "_fernlet-near._udp"] {
-            #expect(!plist.contains("<string>\(retired)</string>"),
+            #expect(!declared.contains(retired),
                     "`\(retired)` is still declared — no radio has browsed it since pass 2 crossed")
         }
         let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceSessionPath))
@@ -449,14 +458,26 @@ struct MeshP9PresenceSwapAcceptanceTests {
     /// Decomposed the other way round from the unit cell, deliberately: that one hunts a blacklist
     /// of fragments, this one asserts the POSITIVE shape (exactly `peerLabelLength` hexadecimal
     /// characters, one label per peer for the session's life), so a future line naming the peer by
-    /// some spelling nobody blacklisted still reddens. And the read is scoped by this session's own
-    /// label — `FernletAuditLog`'s capture registry is process-global and suites run in parallel, so
-    /// an unscoped `== 1` here would be item 7's defect a ninth time.
+    /// some spelling nobody blacklisted still reddens.
+    ///
+    /// **Which read is scoped, and which is deliberately not** (item 9's fix review, BLOCKER 3).
+    /// The COUNT is scoped to this session's label, because `FernletAuditLog`'s capture registry is
+    /// process-global and suites run in parallel, so an unscoped `>= 2` would be item 7's defect a
+    /// ninth time. The NEEDLE WALK is not, and must not be: `context["peer"] == label` is itself a
+    /// blacklist, and the line this cell exists to catch — one naming the peer under some other key,
+    /// or by a spelling that never became a label at all — is exactly the line that filter drops.
+    /// The cell's peer name is unique to it, so no other suite's line can carry it and the walk
+    /// cannot red on somebody else's rig; the serviceType needle is a property
+    /// `PresenceOverQUICTests` asserts of its own lines too, so a hit there is a real defect either
+    /// way.
     @Test func everyPresenceAuditLineNamesItsPeerOnlyByASaltedPerSessionLabel() throws {
         let radio = NetworkPresenceSession()
         radio.runWithoutRadiosForTesting(posture: try PresenceEpochPosture.minted(at: MeshP9Acceptance.epochAnchor))
+        // Deliberately NOT the unit suite's `0123456789abcdef`: both suites are on the mesh line,
+        // both produce `presence.quic.*` lines through the process-global capture, and two rigs
+        // sharing one peer name is how an interleave turns a scoped read into a cross-suite red.
         let peerName = PresenceEpochPosture.instanceNamePrefix
-            + PresenceEpochPosture.instanceNameSeparator + "0123456789abcdef"
+            + PresenceEpochPosture.instanceNameSeparator + "fedcba9876543210"
         let key = MeshLinkKey("\(peerName).\(NetworkPresenceSession.serviceType).local.")
 
         let capture = MeshRoutedBackpressureAuditCapture()
@@ -472,11 +493,11 @@ struct MeshP9PresenceSwapAcceptanceTests {
         let everyRig = capture.records(withEventPrefix: "presence.quic.")
         let mine = everyRig.filter { $0.context["peer"] == label }
         #expect(mine.count >= 2, "the sighting and the glare collapse are this session's two peer lines")
-        #expect(everyRig.count >= mine.count, "the unscoped read is the one item 7 retired")
         #expect(label.count == NetworkPresenceSession.peerLabelLength, "the label has one fixed width")
         #expect(label.allSatisfy { $0.isHexDigit }, "and carries nothing but digest bytes")
-        // R2: bounded by this session's lines × their context keys.
-        for record in mine {
+        // R2: bounded by the captured presence lines × their context keys. Every presence line,
+        // not just the labelled ones — see the note above on which read is scoped and why.
+        for record in everyRig {
             for (contextKey, value) in record.context {
                 #expect(!value.contains(peerName), "\(record.event).\(contextKey) carries the peer's name")
                 #expect(!value.contains(NetworkPresenceSession.serviceType),
@@ -506,7 +527,10 @@ struct MeshP9PresenceSwapAcceptanceTests {
         #expect(manager.contains("presencePosture"), "wearing the posture pass 1 built")
 
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
-        #expect(kit.count >= 100, "the ProximityKit scan lost its files (143 at the time of writing)")
+        // Anti-vacuity floors, RE-MEASURED at item 9's fix review (NOTE 4) and set within ~20%
+        // of reality rather than at a round 100: 143 files here. A floor a deleted third of the
+        // package still clears is a floor that cannot fail.
+        #expect(kit.count >= 120, "the ProximityKit scan lost its files (143 when this was measured)")
         #expect(Set(MeshP7Acceptance.homes(of: "PresenceRadioSession", in: kit))
                 == ["PresenceManager.swift", "NetworkPresenceSession.swift"], """
                 the presence seam has exactly two homes in the package — the manager that drives it \
@@ -695,6 +719,26 @@ struct MeshP9RecipeSwapAcceptanceTests {
         #expect(rig.manager.transferForTesting?.wireByteCount == 900_000, "a resume restarted the share")
         #expect(rig.manager.transferForTesting?.radioIsQuiet == false, "and told it the door moved")
 
+        // And now the PAUSE, over that same in-flight record — the event this cell is named for,
+        // and the one the rig could not reach by calling `pauseDiscovery()` by hand (item 9's fix
+        // review, FIX 2: the cell used to drive only the eviction, and a `.discoveryPaused` that
+        // moved a `.sending` phase would have stayed green). The gate answers `.pause` only for
+        // `.connectionRegistered` on a radio already holding a record, and only the production
+        // add-path mints one: `makeRetainedConnectionCoordinatorForTesting` IS that path — it
+        // calls the private `registerConnection` — so `session.pauseDiscovery()` and
+        // `applyTransfer(.discoveryPaused)` run here exactly as a real pairing runs them.
+        let peer = PeerHandle(id: UUID(), displayHint: "fernlet-recipe-acceptance",
+                              discoveryInfo: nil, advertisedFingerprint: nil)
+        _ = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: peer, transport: MockMultipeerTransport(), ranging: MockRangingProvider())
+        #expect(rig.manager.connectionCountForTesting == 1, "the add-path held one connection")
+        #expect(rig.radio.isDiscoveryPaused, "a registered connection closes the door behind it")
+        #expect(rig.radio.pauseCount == 2, "the door shut twice: once by hand, once through the gate")
+        #expect(rig.manager.transferForTesting?.phase == .sending,
+                "the very event that closes the door moved the share it closed the door behind")
+        #expect(rig.manager.transferForTesting?.wireByteCount == 900_000, "a pause restarted the share")
+        #expect(rig.manager.transferForTesting?.radioIsQuiet == true, "and told it the door moved")
+
         // The exactly-once oracle, on the value: `completionCount` can only be 0 or 1, and is 1
         // exactly when the phase is `.sent`. `apply` is mutating, so each call is bound to a `let`
         // first — `#expect` cannot hold a mutating call.
@@ -752,11 +796,13 @@ struct MeshP9RecipeSwapAcceptanceTests {
         #expect(NetworkRecipeShareSession.serviceType != NetworkMeshSession.friendServiceType)
         #expect(NetworkRecipeShareSession.serviceType != NetworkPresenceSession.serviceType)
         #expect(NetworkRecipeShareSession.alpn != NetworkMeshSession.alpn)
-        let plist = try RepoRoot.source(MeshP9Acceptance.plistPath)
-        #expect(plist.contains("<string>\(NetworkRecipeShareSession.serviceType)</string>"))
+        // Parsed, not grepped — the same reader clause (b) and clause (d) use (NOTE 3).
+        let declared = try NoTrackingBoundaryTests.declaredBonjourServiceTypes()
+        #expect(declared.contains(NetworkRecipeShareSession.serviceType),
+                "the QUIC recipe type is declared — without it discovery dies silently on device")
         // R2: bounded by the retired recipe pair.
         for retired in ["_fernlet-recipe._tcp", "_fernlet-recipe._udp"] {
-            #expect(!plist.contains("<string>\(retired)</string>"),
+            #expect(!declared.contains(retired),
                     "`\(retired)` is still declared — no radio has advertised it since pass 2 crossed")
         }
         let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipeSessionPath))
@@ -791,8 +837,31 @@ struct MeshP9RecipeSwapAcceptanceTests {
         #expect(manager.contains("RecipeShareRadioSession"), "the manager drives the QUIC seam")
         #expect(manager.contains("NetworkRecipeShareSession"), "whose production conformer it builds")
 
+        // The BIRTH SEED has one mint site (item 9's fix review, FIX 3). `beginTransferForTesting`
+        // is what every cell of this battery and of `RecipeShareTransferTests` drives;
+        // `sendRecipeShare` is what ships, and nothing at tier 1 executes it — so while the seed
+        // was spelled twice, item 3 pass 1's own defect (`radioIsQuiet: false` on the shipping
+        // line) could be restored with the whole tree green. Containment, not proximity: the
+        // shipping door's brace-matched body must call the helper, and the record may be
+        // constructed in exactly one place.
+        let send = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "public func sendRecipeShare(", in: manager),
+            "the recipe share's shipping door is gone")
+        #expect(send.contains("mintTransfer(for: recipient.id)"), """
+            sendRecipeShare mints its exchange record somewhere other than the one seeded helper — \
+            which is how the shipping seed and the seed every test drives came apart before
+            """)
+        let mints = manager.components(separatedBy: "RecipeShareTransfer(recipientID:").count - 1
+        #expect(mints == 1, "the exchange record is constructed in \(mints) places; the helper is the one")
+
         let subtree = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit/RecipeSharing")
-        #expect(subtree.count >= 3, "the RecipeSharing subtree scan lost its files")
+        #expect(subtree.count == 3, """
+            the RecipeSharing subtree holds \(subtree.count) files, not the three it held when this \
+            was measured (the manager, the advertisement and the transfer record). A fourth is a \
+            file this cell's retired-radio walk has never been read against; a third gone is a \
+            scan that lost its root. EXACT on purpose — `>= 3` was satisfied by the tree it was \
+            written against and by every tree that could ever follow it
+            """)
         // R2: bounded by the retired-radio spellings × the subtree's files.
         for needle in ["MeshMultipeerSession", "MCPeerID", "MCSession", "MultipeerConnectivity",
                        "PeerChannelTransport", "displayHint"] {
@@ -830,6 +899,19 @@ struct MeshP9McRetirementAcceptanceTests {
     /// deletes the files *and* flips `shippingDefault` reddens here with the cutover checklist; a
     /// commit that deletes them without flipping it reddens on the same line, which is the
     /// dangerous half — that build ships a mesh whose factory cannot construct its default radio.
+    ///
+    /// **The two reasons are pinned as VALUES and as CODE, not as source prose** (item 9's fix
+    /// review, BLOCKER 2 and FIX 4). A cell that only greps `shippingDefault`'s declaration line
+    /// stays green while `resolvedKind`'s `#else` branch returns `.quic` — the friend mesh ships on
+    /// QUIC, the MC files are dead code, and every other assertion here still holds. So: the two
+    /// values are read (`@testable import ProximityKit` reaches the factory, which is what
+    /// `MeshTransportSelectionTests` — newly on the same CI line — asserts at unit level), and the
+    /// resolver's whole brace-matched body is pinned free of any radio literal, because a test
+    /// build takes the `#if DEBUG` arm and cannot execute the Release one at all. The second
+    /// reason — stranger admission has no QUIC path — is pinned at its refusal:
+    /// `MeshChannelIntroduction`'s roster switch maps `.stranger` to `.unknownIdentity`, which is
+    /// the line a first-meeting QUIC path would have to loosen.
+    @MainActor
     @Test func theTwoMultipeerFilesStillExistBecauseTheFriendMeshStillShipsOnThem() throws {
         // R2: bounded by the two permitted files.
         for path in MeshP9Acceptance.multipeerFiles {
@@ -843,16 +925,39 @@ struct MeshP9McRetirementAcceptanceTests {
                 and this cell rewritten to the zero-list it was always meant to become
                 """)
         }
-        let factory = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source(MeshP9Acceptance.transportSelectionPath))
-        #expect(factory.contains("static var shippingDefault: MeshTransportKind { .multipeer }"), """
+        // The VALUES, not their declaration text.
+        #expect(MeshTransportFactory.shippingDefault == .multipeer, """
             the mesh's shipping default is no longer MultipeerConnectivity — this is the cutover, \
             and the checklist above applies
+            """)
+        #expect(MeshTransportFactory.resolvedKind(environment: [:]) == .multipeer, """
+            a launch that selects nothing no longer lands on MultipeerConnectivity. Every shipping \
+            launch takes this answer; the checklist above applies
+            """)
+        let factory = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source(MeshP9Acceptance.transportSelectionPath))
+        let resolver = try #require(
+            MeshRoutedSourceScan.bracedBody(
+                after: "static func resolvedKind(environment: [String: String])", in: factory),
+            "the radio resolver is gone")
+        #expect(!resolver.contains(".quic"), """
+            a branch of resolvedKind(environment:) names a radio literally. Every branch must \
+            resolve through `shippingDefault` or through MeshTransportKind(rawValue:) — the \
+            Release branch is compiled out of this test build, so a `return .quic` there would \
+            ship the friend mesh on QUIC with every cell of this suite green
             """)
         #expect(factory.contains("case .multipeer: return MeshMultipeerSession()"), """
             and the factory's one construction site is gone. (The P9 ledger's item 4 row says \
             `MeshNetworkManager.init` constructs it; the construction lives HERE, in the factory \
             the manager asks — the manager only names it in two doc comments.)
+            """)
+        // The second reason, at the line that enforces it rather than in the note that states it.
+        let introduction = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/MeshChannelIntroduction.swift"))
+        #expect(introduction.contains("case .stranger: return .unknownIdentity"), """
+            the QUIC channel introduction no longer refuses a peer the roster calls a stranger. \
+            That refusal IS the "stranger admission has no QUIC path" half of the split: loosening \
+            it is the cutover's other prerequisite, and it must not land silently
             """)
     }
 
@@ -870,8 +975,9 @@ struct MeshP9McRetirementAcceptanceTests {
     @Test func theFrameworkImportHasExactlyTwoHomesAndTheyAreThoseTwo() throws {
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         let app = try MeshP7Acceptance.sources(under: "App/Fernlet")
-        #expect(kit.count >= 100, "the ProximityKit scan lost its files (143 at the time of writing)")
-        #expect(app.count >= 100, "the app-target scan lost its files")
+        // MEASURED floors (NOTE 4): 143 and 179 files. See clause (b) for why not 100.
+        #expect(kit.count >= 120, "the ProximityKit scan lost its files (143 when this was measured)")
+        #expect(app.count >= 140, "the app-target scan lost its files (179 when this was measured)")
         let homes = Set(MeshP7Acceptance.homes(of: "import MultipeerConnectivity", in: kit + app)).sorted()
         let expected = MeshP9Acceptance.multipeerFiles.map { path in
             String(path.split(separator: "/").last ?? "")
@@ -980,7 +1086,7 @@ struct MeshP9McRetirementAcceptanceTests {
 /// That is the P8 shape and the reason for it — an honesty suite that merely *said* "we did not run
 /// X" in a comment would go stale silently, and a phase would look more proven than it is.
 ///
-/// Four things P9 genuinely did not prove, in four different ways:
+/// Six things P9 genuinely did not prove, in six different ways:
 /// 1. **Two lane rows** (9.2.2, 9.3.2) are tier-2 sim↔sim observations. They PASSED, on Simulators,
 ///    by hand — CI has no second Simulator and no radio, so nothing here re-runs them.
 /// 2. **Item 0's device rows** need two to four phones in the owner's hands and are `blocked
@@ -989,8 +1095,90 @@ struct MeshP9McRetirementAcceptanceTests {
 ///    branch, `openTransferCount` returning to 0, and a share in flight DURING a glare collapse.
 /// 4. **Two owner decisions**: P9-3-A (a configured Fernlet Lock parks both 1:1 radios permanently —
 ///    pre-existing, and a run-policy row is a P7 bug fix, not a P9 edit) and 9.4-LATER's D-4.1/D-4.3.
+/// 5. **Eleven P9-touched suites CI does not run**, each with its reason in ``ungatedByDesign`` —
+///    seven timed weak-reference polls, three routed behaviour suites item 7 only re-scoped, and
+///    item 1's own wall. The accounting over them is total, so a twelfth cannot appear quietly.
+/// 6. **Two coverage holes of this phase's own walls**: item 8's ratchet is checked for staleness
+///    on CI and for accuracy nowhere (the UI target never runs there), and forty-two unscoped
+///    `count(of:)` audit reads survived item 7's sweep — a ratchet here, not a zero.
 @Suite(.serialized)
 struct MeshP9HonestyAcceptanceTests {
+
+    /// Every suite declared in a test file P9 edited, frozen as STRUCT names.
+    ///
+    /// DERIVED at item 9's fix review (2026-09-20), never remembered:
+    /// `git diff --name-only bb454fe..HEAD -- Tests/FernletTests` (bb454fe is P8's close) gives the
+    /// eighteen files the phase edited, and each file's top-level declarations holding at least one
+    /// `@Test` are these forty-nine. **Declarations, not files**: `-only-testing:` names a STRUCT,
+    /// and `NetworkMeshTransportTests.swift` alone declares sixteen suites and no type of that name
+    /// at all — a workflow line naming the file would match nothing and pass having run zero tests,
+    /// which is exactly what the first cut of this cell (a hand-list of seven) could not see.
+    ///
+    /// A literal rather than a walk: re-deriving it would need git at test time, and walking the
+    /// whole tree would stop it being about P9. So adding a suite to one of these files reds
+    /// nothing by itself — the next phase's battery derives its own list — but renaming, moving or
+    /// deleting one of these does, because every name here is asserted to be a declared type.
+    static let p9TouchedSuites: [String] = [
+        "AuditRatchetBoundaryTests", "CIGateSelectorBoundaryTests", "EphemeralMeshTLSIdentityTests",
+        "LocalOnlyPersistentHistoryPruneTests", "MeshChannelIntroductionTests",
+        "MeshChannelIntroductionTranscriptTests", "MeshContinuationTaskHostTests",
+        "MeshContinuationTaskHostWallTests", "MeshDialPreferenceTests",
+        "MeshEvictionReleasesTransportLinkTests", "MeshHeartbeatLivenessTests",
+        "MeshHeartbeatScheduleTests", "MeshInboundRankingTests", "MeshIntroductionNonceCacheTests",
+        "MeshIntroductionRosterTests", "MeshKeyAdvertisementDeliveryTests",
+        "MeshLinkAdvertisementTests", "MeshLinkTableTests",
+        "MeshP9EphemeralPostureAcceptanceTests", "MeshP9HonestyAcceptanceTests",
+        "MeshP9McRetirementAcceptanceTests", "MeshP9PresenceSwapAcceptanceTests",
+        "MeshP9RecipeSwapAcceptanceTests", "MeshRoutedBackpressureTests", "MeshRoutedDrainTests",
+        "MeshRoutedDrainWallTests", "MeshRoutedParkedDropDoorTests", "MeshRoutedPhotoDeliveryTests",
+        "MeshRoutedPhotoSenderTests", "MeshTransferStreamTableTests", "MeshTunnelConvergenceTests",
+        "MeshTunnelEndReasonTests", "NetworkMeshSessionTests", "NetworkMeshWireTests",
+        "NoTrackingBoundaryTests", "ObservationLoopLifecycleTests", "PersistenceFailureAuditTests",
+        "PhotoWallPreferencePruneTests", "PresenceAdvertisementTests", "PresenceEpochPostureTests",
+        "PresenceManagerTests", "PresenceOverQUICTests", "PresenceReleaseTests",
+        "ProximityManagerDeallocationTests", "ProximityRecipeShareCapTests",
+        "RecipeShareOverQUICTests", "RecipeShareTeardownTests", "RecipeShareTransferTests",
+        "RoutedDeliveryHoldCopyTests"
+    ]
+
+    /// The P9-touched suites this commit deliberately leaves on no CI line, each with its reason.
+    ///
+    /// The honesty half of ``everyP9TouchedSuiteIsEitherGatedOrNamedAsUnrun``: a P9-touched suite
+    /// in neither this map nor the workflow reds. A row is not an excuse — it is the statement that
+    /// CI does not run those cells and that their green is a local one. A row whose suite later
+    /// joins a workflow line reds too, so the list cannot go stale in either direction.
+    static let ungatedByDesign: [String: String] = [
+        "ObservationLoopLifecycleTests":
+            "MemoryLifecycleTests.swift: every cell polls a weak reference under a wall-clock "
+            + "deadline, the one shape a test-count floor cannot price — a loaded runner turns a "
+            + "deallocation that happened into one that has not happened yet.",
+        "ProximityManagerDeallocationTests":
+            "MemoryLifecycleTests.swift, same poll shape: deallocation is observed by waiting.",
+        "MeshEvictionReleasesTransportLinkTests":
+            "MemoryLifecycleTests.swift, same poll shape.",
+        "PresenceReleaseTests":
+            "MemoryLifecycleTests.swift: P9 item 2 pass 2 edited this row when the presence radio "
+            + "swapped, and it is the closest of the seven to a P9 claim — still a timed weak-ref "
+            + "poll, so it is named here rather than priced onto the mesh line.",
+        "RecipeShareTeardownTests":
+            "MemoryLifecycleTests.swift: item 3 pass 2's row, same timed weak-ref poll.",
+        "PhotoWallPreferencePruneTests":
+            "MemoryLifecycleTests.swift, same poll shape, and not a mesh row at all.",
+        "LocalOnlyPersistentHistoryPruneTests":
+            "MemoryLifecycleTests.swift, same poll shape, and not a mesh row at all.",
+        "MeshRoutedBackpressureTests":
+            "a P5/P6 routed behaviour suite. P9 touched the file only to scope its process-global "
+            + "audit counts (item 7), which is not a claim of this phase; it was ungated before P9 "
+            + "and pricing it onto the line is P10's, not a P9 edit.",
+        "MeshRoutedParkedDropDoorTests":
+            "declared in MeshRoutedBackpressureTests.swift, same argument.",
+        "RoutedDeliveryHoldCopyTests":
+            "declared in MeshRoutedBackpressureTests.swift, same argument.",
+        "PersistenceFailureAuditTests":
+            "P9 item 1's wall (27 assertionFailure-in-catch traps turned into audited returns). "
+            + "It is not a mesh suite, the mesh line is not its home, and it has never been on any "
+            + "CI line — the honest statement is that item 1 is proved locally and nowhere else."
+    ]
 
     /// **The two tier-2 lanes and the three unobserved branches, by their own records.**
     ///
@@ -1078,7 +1266,7 @@ struct MeshP9HonestyAcceptanceTests {
     /// which is where a moved digest actually reddens.
     @Test func neitherDeterminismDigestMovedNorLeftItsOneHome() throws {
         let tests = try MeshP7Acceptance.sources(under: "Tests/FernletTests")
-        #expect(tests.count >= 100, "the test-target scan lost its files")
+        #expect(tests.count >= 280, "the test-target scan lost its files (347 when this was measured)")
         #expect(MeshP7Acceptance.homes(of: "ca898" + "bcc", in: tests) == ["MeshP5AcceptanceTests.swift"],
                 "the schedule digest has exactly one home, and this file's split spelling is not a second")
         #expect(MeshP7Acceptance.homes(of: "594b6" + "f77", in: tests) == ["MeshP5AcceptanceTests.swift"],
@@ -1088,15 +1276,20 @@ struct MeshP9HonestyAcceptanceTests {
         #expect(!spellsADigest, "and P9's battery spells neither contiguously")
     }
 
-    /// **The battery is gated, and so are the seven P9 suites items 2, 3 and 4 left on no CI line.**
+    /// **The battery is gated, and so is every suite items 2, 3 and 4 left on no CI line.**
     ///
     /// The five clause suites are auto-demanded by `CIGateSelectorBoundaryTests` (they end
-    /// `AcceptanceTests`); the seven beside them are not, and were in exactly the position the
-    /// fourteen of item 6 were in — declared, green, and running nowhere. `TransportNeutralityBoundaryTests`
-    /// is the one of the seven that also earns a NAME pin in the selector wall, on the
-    /// `MeshRoutedDrainWallTests` argument: it is a source grep-wall with no compiler half, and
-    /// clause (d) leans on it for the app target, which clause (d)'s own substring walk deliberately
-    /// does not cover.
+    /// `AcceptanceTests`); nothing demands the rest, and they were in exactly the position the
+    /// fourteen of item 6 were in — declared, green, and running nowhere. Which suites those are is
+    /// no longer a hand-list here: ``everyP9TouchedSuiteIsEitherGatedOrNamedAsUnrun`` derives them.
+    ///
+    /// Two names are pinned individually, on the `MeshRoutedDrainWallTests` argument that a wall
+    /// with no compiler half must red when it leaves the line rather than go quiet:
+    /// `TransportNeutralityBoundaryTests` (also pinned in the selector wall — clause (d) defers to
+    /// it for the app target, where a substring walk cannot run) and `MeshTransportSelectionTests`,
+    /// whose `theAppsInitializerRunsOnTheMultipeerRadio` drives the app's own initializer. Clause
+    /// (d)'s value pins are taken in a DEBUG test build and therefore cannot execute the Release
+    /// arm of `resolvedKind(environment:)` at all; that suite is the other half of the same claim.
     @Test func everySuiteHereAndEveryP9SuiteIsOnTheMeshStep() throws {
         let workflow = try RepoRoot.source(MeshP9Acceptance.workflowPath)
         let clauses = ["MeshP9EphemeralPostureAcceptanceTests", "MeshP9PresenceSwapAcceptanceTests",
@@ -1109,19 +1302,121 @@ struct MeshP9HonestyAcceptanceTests {
         for clause in clauses {
             #expect(named.contains(clause), "P9 clause suite `\(clause)` is not on the mesh-batteries step")
         }
-        let p9Units = ["PresenceEpochPostureTests", "PresenceAdvertisementTests", "PresenceManagerTests",
-                       "PresenceOverQUICTests", "RecipeShareTransferTests", "RecipeShareOverQUICTests",
-                       "TransportNeutralityBoundaryTests"]
-        // R2: bounded by the seven suite names.
-        for suite in p9Units {
-            #expect(named.contains(suite), """
-                `\(suite)` ran on no CI line until this commit — none is a MeshP<n>…AcceptanceTests, \
-                so `everyMeshAcceptanceBatteryIsGated` never demanded it and the floor is what holds \
-                it there
+        // R2: bounded by the two individually-argued names.
+        for wall in ["TransportNeutralityBoundaryTests", "MeshTransportSelectionTests"] {
+            #expect(named.contains(wall), """
+                `\(wall)` left the mesh-batteries line. Clause (d) leans on it — the app-target
+                whole-identifier scan and the shipping radio the app's own initializer builds — and
+                neither claim is reachable from this battery's own DEBUG process.
                 """)
         }
         let listed = try #require(steps.first).suites
         #expect(listed.count == Set(listed).count,
                 "no suite is named twice — a duplicate selector runs its tests twice and inflates the floor")
+    }
+
+    /// **Every suite in a file P9 edited is either gated or named here as unrun.**
+    ///
+    /// Item 9's own verify found the shape this closes: the battery hand-listed seven suites, so
+    /// `ProximityRecipeShareCapTests` — 31 cells, rewritten by item 3 pass 2, holding the very
+    /// pause/resume behaviour clause (c) asserts — was on no CI line and nothing in the tree said
+    /// so. The accounting is now total over ``p9TouchedSuites``: gated, or named in
+    /// ``ungatedByDesign`` with a reason. Both directions are pinned, so the map cannot rot into a
+    /// list of suites that quietly got gated, or grow a row for a suite P9 never touched.
+    @Test func everyP9TouchedSuiteIsEitherGatedOrNamedAsUnrun() throws {
+        let workflow = try RepoRoot.source(MeshP9Acceptance.workflowPath)
+        let gated = Set(CIGateSelectorBoundaryTests.gatedSteps(in: workflow).flatMap(\.suites))
+        let declared = try CIGateSelectorBoundaryTests.declaredTopLevelTypes()
+        #expect(Self.p9TouchedSuites.count == Set(Self.p9TouchedSuites).count, "a name is listed twice")
+        var unaccounted: [String] = []
+        var vanished: [String] = []
+        // R2: bounded by the frozen list.
+        for suite in Self.p9TouchedSuites {
+            if !declared.contains(suite) { vanished.append(suite) }
+            if gated.contains(suite) || Self.ungatedByDesign[suite] != nil { continue }
+            unaccounted.append(suite)
+        }
+        #expect(vanished.isEmpty, """
+            \(vanished) is named here but declared in no file of Tests/FernletTests. A renamed or \
+            deleted suite must move this list in the same commit — otherwise a row that names \
+            nothing satisfies the accounting below forever
+            """)
+        #expect(unaccounted.isEmpty, """
+            \(unaccounted) ran on no CI line at any point in P9 and is named in neither the \
+            workflow nor MeshP9HonestyAcceptanceTests.ungatedByDesign. Gate it on a \
+            Scripts/run-gated-suites.sh line (raising that step's floor and its measured suite-name \
+            count in the same commit), or add a row saying why CI does not run it
+            """)
+        let alreadyGated = Self.ungatedByDesign.keys.filter(gated.contains).sorted()
+        #expect(alreadyGated.isEmpty, """
+            \(alreadyGated) is named as unrun and IS on a workflow line. A suite that gets gated \
+            leaves this map in the same commit — an honesty row for something CI runs is the \
+            opposite failure, and it teaches the next reader to distrust the rest
+            """)
+        let strangers = Self.ungatedByDesign.keys.filter { !Self.p9TouchedSuites.contains($0) }.sorted()
+        #expect(strangers.isEmpty, "\(strangers) is excused here but is not a P9-touched suite")
+    }
+
+    /// **The two things this phase's own walls do not cover, counted rather than implied.**
+    ///
+    /// (a) Item 8 re-recorded the runtime accessibility ratchet's baselines. Its STALENESS half,
+    /// `AuditRatchetBoundaryTests`, is a pure source scan and this commit puts it on the grep-wall
+    /// step — but the ratchet itself lives in `Tests/FernletUITests`, and the workflow runs no UI
+    /// target at all. So the baselines are checked for staleness on CI and checked for ACCURACY
+    /// nowhere: that is the "more proven than it is" shape, and it is stated here rather than left
+    /// to be inferred from a workflow nobody reads.
+    ///
+    /// (b) Item 7 scoped the routed-inventory family's process-global audit counts to their own
+    /// rigs. Forty-two `.count(of:)` reads with no `where:` survive it, across eleven files
+    /// (43 by raw grep; one of those is a comment line, and this cell reads comment-stripped
+    /// source). Each is a count over every rig alive in the process, and several compare `== N`.
+    /// They are a RATCHET here, not a zero: the number may fall, never rise.
+    @Test func theRatchetsUIHalfAndTheUnscopedAuditCountsAreNamedRatherThanImplied() throws {
+        let workflow = try RepoRoot.source(MeshP9Acceptance.workflowPath)
+        let gated = Set(CIGateSelectorBoundaryTests.gatedSteps(in: workflow).flatMap(\.suites))
+        #expect(gated.contains("AuditRatchetBoundaryTests"), """
+            the ratchet's staleness wall left the workflow. It is a pure source scan — every frozen
+            baseline still names a probed screen — and it is the only half of item 8's ratchet a CI
+            runner can execute at all
+            """)
+        // The workflow's COMMANDS, not its prose: the step that gates the ratchet's source half
+        // explains in a comment where the other half lives, and a claim about what CI runs must
+        // not be satisfied or broken by a sentence. Comment lines are dropped exactly as
+        // `gatedSteps` drops them.
+        let code = workflow.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
+            .joined(separator: "\n")
+        #expect(!code.contains("FernletUITests"), """
+            the workflow now names the UI target. If a runner really does run UXScreenProbe's
+            ratchet, this row is obsolete and the honesty statement above must be rewritten rather
+            than left standing — it would be claiming less than the tree proves
+            """)
+        // R2: bounded by the two probe files.
+        for path in ["Tests/FernletUITests/UXScreenProbe.swift",
+                     "Tests/FernletUITests/UXScreenProbeIdentityTests.swift"] {
+            #expect(FileManager.default.fileExists(atPath: RepoRoot.url(path).path), """
+                \(path) is gone. It is the half of item 8's ratchet nothing on CI runs, so its
+                deletion would be invisible everywhere else
+                """)
+        }
+        let tests = try MeshP7Acceptance.sources(under: "Tests/FernletTests")
+        #expect(tests.count >= 280, "the test-target scan lost its files (347 when this was measured)")
+        // Split so this cell's own literal is not one of the reads it counts.
+        let read = ".count(" + "of: "
+        var unscoped: [String: Int] = [:]
+        // R2: bounded by the test files × their lines.
+        for source in tests {
+            for line in source.code.components(separatedBy: "\n")
+            where line.contains(read) && !line.contains("where:") {
+                unscoped[source.name, default: 0] += 1
+            }
+        }
+        let total = unscoped.values.reduce(0, +)
+        #expect(total <= 42, """
+            \(total) unscoped audit-count reads, up from the 42 item 7 left behind \
+            (\(unscoped.keys.sorted())). Each answers for every rig alive in the process, and a \
+            new `== N` among them is item 7's defect again — scope it with `where:` on the rig's \
+            own context, the reader that exists for this
+            """)
     }
 }

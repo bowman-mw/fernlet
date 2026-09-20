@@ -56,16 +56,20 @@ import Testing
     /// by design) and a hand-list of 85 names should never be: `gatedSteps` already returns them.
     ///
     /// MEASURED from the workflow, parsed exactly as `gatedSteps` parses it, at P9 item 6's fix
-    /// review (2026-09-20). RAISE an entry in the same commit that adds names; LOWER one only
-    /// deliberately, with the retirement argued, which is the whole point of the pin.
+    /// review (2026-09-20) and RE-MEASURED at item 9's (same day): `s3-grep` gains the audit
+    /// ratchet's source half, and the mesh line gains the twenty-one names item 9's verify found
+    /// ungated — `ProximityRecipeShareCapTests` (the cells clause (c) leans on), the sixteen suites
+    /// of `NetworkMeshTransportTests.swift`, and four presence/recipe/selection unit suites. RAISE
+    /// an entry in the same commit that adds names; LOWER one only deliberately, with the
+    /// retirement argued, which is the whole point of the pin.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 2,
+        "s3-grep": 3,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
-        "mesh-batteries": 97
+        "mesh-batteries": 118
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
