@@ -467,6 +467,10 @@ struct FernletApp: App {
                     // does nothing — the mesh manager is not even built — and in release it is a
                     // compiled-out no-op.
                     .task { MeshRejectionMatrixHarness.install(manager: store.meshNetworkManager, store: store) }
+                    // P9 item 3's recipe-share lane (runbook Lane C). Absent FERNLET_RECIPE_LANE
+                    // this does nothing at all, and in release it is a compiled-out no-op. It
+                    // speaks no radio verb: it moves the store facts the run policy reads.
+                    .task { RecipeShareLaneHarness.install(store: store) }
                     // P5 item 10's launch push. `.onChange(of: scenePhase)` carries no `initial:`,
                     // and on a cold launch the loader reaches `.ready` AFTER the
                     // `.inactive → .active` edge — without this the gate would sit fail-closed for

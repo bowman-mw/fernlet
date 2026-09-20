@@ -544,7 +544,10 @@ enum MeshFlowDriver {
     /// would ride the control stream, proving nothing about the per-transfer path. Noise at 600 px
     /// does not compress, so the sealed envelope lands well above
     /// `MeshTransferStreamTable.bulkFloorBytes` — which is the whole point of the photo row.
-    private static func noiseJPEG(side: Int) -> Data? {
+    /// Internal rather than private since P9 item 3: `RecipeShareLaneHarness` needs the same
+    /// incompressible bytes for the picture half of its own transfer-stream row, and a second
+    /// generator would be a second thing to keep honest.
+    static func noiseJPEG(side: Int) -> Data? {
         let bytesPerPixel = 4
         let byteCount = side * side * bytesPerPixel
         var pixels = [UInt8](repeating: 0, count: byteCount)
