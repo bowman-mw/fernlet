@@ -670,8 +670,12 @@ struct MeshRoutedDrainTests {
                 "the stale digest re-stamped the quiescence instant it must not reach")
         #expect(rig.nodes[0].manager.routedDrainFramesSpentForTesting[peer] == spent,
                 "the answer re-offered a leg this peer had already been delivered")
-        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 1,
-                "the refusal was not named exactly once")
+        // Scoped to THIS rig's mesh (P9 item 7): the capture is process-global and sibling routed
+        // suites emit the same token in parallel, so an unscoped `== 1` is a process-wide claim.
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(refusals == 1, "the refusal was not named exactly once in this rig's mesh")
     }
 
     /// **P6 item 7 fix review, P2-2: a refused RECORD is still an ANSWER.**
@@ -715,8 +719,10 @@ struct MeshRoutedDrainTests {
             the stale digest was not answered at all: every delivery this device custodies for a \
             peer whose clock stepped backwards stalls for the length of the step
             """)
-        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 1,
-                "the refused record was not named exactly once")
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(refusals == 1, "the refused record was not named exactly once in this rig's mesh")
     }
 
     /// **P6 item 7 fix review, P2-2, end to end: an hour-long backwards step delivers anyway.**
@@ -749,7 +755,10 @@ struct MeshRoutedDrainTests {
         try await receiveInventory(rig, steppedBack, at: 0, from: 1, now: MeshRoutedDrainRig.now)
         try await rig.settle(until: { self.heldChunkCount(rig, 1, item.key) == item.chunks.count })
 
-        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 1,
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(refusals == 1,
                 "the stepped-back digest was not refused as a record, so the cell proves nothing")
         #expect(rig.nodes[0].manager.peerRoutedInventories[peer]?.inventorySentAt == recorded,
                 "and the refusal must still have kept the recorded stamp where it was")
@@ -789,8 +798,12 @@ struct MeshRoutedDrainTests {
         #expect(after.inventory?.entries.isEmpty == true,
                 "an equal stamp must be RECORDED — a refusal would have kept the earlier holdings")
         #expect(after.inventorySentAt == now)
-        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 0,
-                "an idempotent replay of one digest must not audit a refusal")
+        // An ABSENCE over a process-global signal is the D-6a.10 shape at its worst: unscoped, this
+        // cell fails on another rig's honest refusal and says nothing about this one.
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(refusals == 0, "an idempotent replay of one digest must not audit a refusal")
     }
 
     /// **The control: a NEWER stamp moves the record forward, and audits nothing.**
@@ -819,8 +832,10 @@ struct MeshRoutedDrainTests {
         #expect(after.inventorySentAt == late.sentAt, "a newer digest must move the stamp forward")
         #expect(after.inventory?.entries.isEmpty == false, "and must replace the recorded holdings")
         #expect(after.quiescentLocalAsOf == late.sentAt, "and must have been answered")
-        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 0,
-                "a digest that moved the record forward must not audit a refusal")
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(refusals == 0, "a digest that moved the record forward must not audit a refusal")
     }
 
     /// **The guard is per PEER, not a global high-water mark.**
@@ -850,8 +865,69 @@ struct MeshRoutedDrainTests {
         #expect(inventories[rig.nodes[1].fingerprint]?.inventorySentAt == late.sentAt)
         #expect(inventories[rig.nodes[2].fingerprint]?.inventorySentAt == early.sentAt,
                 "peer B's opening stamp was judged against peer A's record")
-        #expect(capture.count(of: "mesh.routedInventory.staleSentAt") == 0,
-                "a second peer's earlier stamp is not a regression of anything")
+        // All three nodes share one mesh id, so the predicate covers the whole rig and nothing else.
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(refusals == 0, "a second peer's earlier stamp is not a regression of anything")
+    }
+
+    /// **P9 item 7's proof: the six counts above are claims about THIS rig, not about the process.**
+    ///
+    /// `FernletAuditLog`'s capture registry is process-global (D-6a.10) and Swift Testing runs
+    /// suites in parallel, so a raw `count(of:)` answers for every rig alive in the process.
+    /// `MeshRoutedDrainConvergenceTests`, `MeshRoutedLockedDeviceTests` and
+    /// `MeshRoutedRefusalBudgetTests` all drive `receiveRoutedInventory`: the six sibling cells were
+    /// green because none of them happened to refuse a stamp inside the same window, which is luck,
+    /// not a property. `.serialized` does not help — it orders THIS suite, not the ones beside it.
+    ///
+    /// So the pollution is made deliberate, and **before** the act, in the two shapes a sibling
+    /// really produces: a refusal held by ANOTHER mesh, and a refusal carrying no `held` key at all
+    /// (what a device holding no mesh would write). The unscoped reader then counts **at least
+    /// three** where the six cells assert 1 — that number IS the pre-item-7 assertion, reddening in
+    /// place — while the scoped reader counts 1, because only this rig could have minted this mesh
+    /// id. The unscoped claim is `>=`, not `==`: an `==` here would be a seventh instance of the
+    /// very defect this cell exists to name.
+    ///
+    /// The cell is also the one the production change owes: delete the `held` key from
+    /// `routedInventoryStampIsStale` and `mine` falls to 0.
+    @Test func aSiblingRigsAuditLineIsNotCountedAgainstThisOne() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "stamp-scope-proof")
+        defer { rig.teardown() }
+        try MeshRoutedDrainItem.mint(rig, origin: 0).stage(into: rig, at: 0)
+        rig.link(0, 1)
+        let peer = rig.nodes[1].fingerprint
+        let fresh = MeshRoutedDrainRig.now
+        let newer = try inventoryDigest(rig, from: 1, index: MeshRoutedIndex(), sentAt: fresh)
+        let older = try inventoryDigest(
+            rig, from: 1, index: MeshRoutedIndex(), sentAt: fresh.addingTimeInterval(-3_600)
+        )
+        let capture = MeshRoutedDrainAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        // Another rig's refusal, and one from a device holding no mesh. Neither is this cell's.
+        FernletAuditLog.log(
+            "mesh.routedInventory.staleSentAt", context: ["held": UUID().uuidString]
+        )
+        FernletAuditLog.log("mesh.routedInventory.staleSentAt")
+
+        try await receiveInventory(rig, newer, at: 0, from: 1, now: fresh)
+        try await receiveInventory(rig, older, at: 0, from: 1, now: fresh)
+
+        #expect(rig.nodes[0].manager.peerRoutedInventories[peer]?.inventorySentAt == newer.sentAt,
+                "this rig's own refusal never happened, so neither count below proves anything")
+        let everyRig = capture.count(of: "mesh.routedInventory.staleSentAt")
+        let mine = capture.count(of: "mesh.routedInventory.staleSentAt") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(mine == 1, "the scoped reader counts only the refusal this rig's own mesh caused")
+        #expect(everyRig >= 3, """
+            the UNSCOPED reader is what the six sibling cells used before P9 item 7: it counts \
+            every rig's line, so their `== 1` was a claim on the whole process
+            """)
+        #expect(everyRig > mine,
+                "the pollution was never captured, so this cell proves nothing about either reader")
     }
 
     /// **D-6.5's other half.** The inventory and the answer bit are never charged: a peer whose
@@ -1988,12 +2064,30 @@ private final class MeshRoutedDrainAuditCapture {
         return storedLines.filter { $0.event == event }.compactMap { $0.context[key] }
     }
 
+    /// How many lines carried `event` AND satisfy `predicate` over their context — the way a cell
+    /// scopes a count to its own rig (a mesh id nobody else can mint), which is what turns an
+    /// `== N` over a process-wide signal into a per-cell claim (D-6a.10).
+    ///
+    /// P9 item 7: `FernletAuditLog`'s capture registry is process-global and Swift Testing runs
+    /// suites in parallel, so ``count(of:)`` answers for every rig alive in this process. Three
+    /// sibling suites drive `receiveRoutedInventory`, so a raw count over a token they can emit is
+    /// not a claim about this cell at all. The same reader as the founding counts, deliberately:
+    /// one shape for this hazard across the mesh suites, never a second mechanism.
+    func count(of event: String, where predicate: ([String: String]) -> Bool) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedLines.filter { $0.event == event && predicate($0.context) }.count
+    }
+
     /// How many lines were logged under `event`, whatever context each carried.
     ///
     /// The reader a "nothing was audited" assertion has to use (P6 item 7 fix review, P3-10).
     /// ``values(of:key:)`` is a `compactMap` over ONE context key, so a line logged without that key
     /// is invisible to it: an emptiness claim written on top of it keeps passing — silently, and for
     /// the wrong reason — the moment the shipping line drops a placeholder it never used.
+    ///
+    /// **Process-wide.** A per-cell `== N` belongs in ``count(of:where:)``; this one is for the
+    /// deliberately unscoped read (the proof cell's "what the old form saw").
     func count(of event: String) -> Int {
         lock.lock(); defer { lock.unlock() }
         return storedLines.filter { $0.event == event }.count

@@ -2088,7 +2088,13 @@ struct MeshKeyAdvertisementDeliveryTests {
 
         // A roster move re-offers every parked row through the one fold door; none can verify.
         try rig.fileDeparture(of: 2, into: 0)
-        #expect(capture.count(of: "mesh.keyAgreement.parkedReoffered") == 1, "the re-offer is named")
+        // Scoped to THIS rig's mesh (P9 item 7): the capture is process-global, and the sibling
+        // cell below read 4 instead of 3 under full-suite load at the P8 close-out — another rig's
+        // fold, counted here. The mesh id is the only thing in the line no sibling rig can mint.
+        let reoffers = capture.count(of: "mesh.keyAgreement.parkedReoffered") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(reoffers == 1, "the re-offer is named, once, in this rig's mesh")
         #expect(rig.advertisementCount(at: 0) == 3, "and still nothing entered the set")
 
         rig.nodes[0].manager.leaveMesh()
@@ -2256,8 +2262,13 @@ struct MeshKeyAdvertisementDeliveryTests {
 
         #expect(rig.parkedCount(at: 0) == 0, "the third failure drops it")
         #expect(capture.count(of: "mesh.keyAgreement.parkDropped") == 1, "and names the drop")
-        #expect(capture.count(of: "mesh.keyAgreement.parkedReoffered") == 3,
-                "every re-offer was through the one fold door")
+        // P9 item 7: this exact assertion read 4 under the P8 full-suite run and 3 alone — a
+        // sibling rig's fold, counted against this cell. Scoped to this rig's own mesh id it is a
+        // claim about the three re-offers driven above, and nothing else in the process.
+        let reoffers = capture.count(of: "mesh.keyAgreement.parkedReoffered") {
+            $0["held"] == rig.meshID.uuidString
+        }
+        #expect(reoffers == 3, "every re-offer was through the one fold door")
     }
 
     /// A row that has failed a roster move yields its slot, and the genuine row then folds.

@@ -102,10 +102,27 @@ final class MeshRoutedBackpressureAuditCapture {
         return storedLines.filter { $0.event == event }.map { $0.context[key] ?? "missing" }
     }
 
-    /// How many times `event` was logged.
+    /// How many times `event` was logged, whatever rig produced it.
+    ///
+    /// **Process-wide.** A per-cell `== N` belongs in ``count(of:where:)``; this one is for the
+    /// deliberately unscoped read.
     func count(of event: String) -> Int {
         lock.lock(); defer { lock.unlock() }
         return storedLines.filter { $0.event == event }.count
+    }
+
+    /// How many lines carried `event` AND satisfy `predicate` over their context — the way a cell
+    /// scopes a count to its own rig (a mesh id nobody else can mint), which is what turns an
+    /// `== N` over a process-wide signal into a per-cell claim (D-6a.10).
+    ///
+    /// P9 item 7: `FernletAuditLog`'s capture registry is process-global and Swift Testing runs
+    /// suites in parallel, so ``count(of:)`` answers for every rig alive in this process. The same
+    /// reader as the founding counts, deliberately — one shape for this hazard across the mesh
+    /// suites, never a second mechanism.
+    func count(of event: String, where predicate: ([String: String]) -> Bool) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedLines.filter { $0.event == event && predicate($0.context) }.count
     }
 
     /// Every captured line whose event name begins with `prefix`, in order, whole.
