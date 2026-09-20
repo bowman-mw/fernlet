@@ -104,6 +104,18 @@ an over-long value rather than truncating it, so the naive pass-2 binding ships 
 re-caps at 24 Characters (`moderatedPeerDisplayName`), so this narrows the wire to what is rendered.
 *Deliberate, stated behaviour narrowing in pass 1 — the one call site is `discoveryInfo()`.*
 
+**Correction (applied in the fix pass, from the verify round's FIX 2).** The narrowing is on TWO
+axes, not one: `sanitizedName` also caps at 24 Characters where MC advertised 32 raw ones, and
+strips zero-width/bidi scalars on the way. And the bound does have an input it cannot publish — a
+**single grapheme cluster wider than 64 bytes** (a base letter under ≥ 32 combining marks, which
+`sanitizedName` keeps: its invisible set is zero-width and bidi, not combining marks). Removing that
+one Character leaves `""`. An empty `name` is **not** an absent one: published as `""` it reaches
+`moderatedPeerDisplayName`, which answers the "A friend" placeholder, where HEAD rendered the user's
+own name. So pass 1 closes it on both halves — `discoveryInfo()` **omits** the `name` key when
+`publishable` is empty (matching `MeshLinkAdvertisement.publishedFields`, which drops empty values),
+and `RecipeShareAdvertisedName.received(_:hint:)` falls back to the peer hint on an absent *and* an
+empty name, because `??` is a nil-coalesce and would let `""` through.
+
 ## 3. The seam
 
 Pass 1 adds **no radio protocol**, matching item 2's own split (`PresenceRadioSession` landed in pass
