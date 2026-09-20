@@ -300,10 +300,31 @@ extension AuditRatchetBoundaryTests {
     /// Scoped to the text between the curly quotes, which is the only part built from rendered
     /// content — the category prefix, the `id=` and the element-type number around it are all
     /// structural and may legitimately contain digits.
+    ///
+    /// **Month ABBREVIATIONS are banned too, added 2026-09-20 after they got past this check.**
+    /// `Move · Progress photos` renders its date chip with `.month(.abbreviated).day()` over a
+    /// wall-clock-relative seed, so the audit reported `Text clipped — "Aug 28"`. `normalisedLabel`
+    /// collapsed only FULL month names, which left the frozen identity as `"Aug #"` — no digit and
+    /// no full month name, so this function passed it — and that identity rotates to `"Sep #"` the
+    /// first time the seed's relative date crosses a month boundary. A red on a calendar boundary,
+    /// invisible to both halves of the wall. `volatileDateWords` now collapses the abbreviations so
+    /// the identity is stable, and they are listed here so a raw paste of the abbreviated form is
+    /// rejected rather than frozen.
+    ///
+    /// This reads EVERY curly-quoted label in the file, comments included, which is deliberate — a
+    /// worked example in a comment is exactly where a stale literal gets copied from. The cost is
+    /// that prose about `"Aug #"` has to use straight quotes; `UXScreenProbe.swift` does.
+    ///
+    /// Checked before the abbreviations were added: none of the 94 distinct frozen labels contains
+    /// a month abbreviation, so this widening rejects nothing that is there today. Weekday
+    /// abbreviations are NOT added — `"Friends"`, `"Pick a friendlier name"` and `"Sunscreen"`
+    /// would all fail instantly.
     private func baselinePinsAVolatileLiteral(_ text: String) -> Bool {
         guard let start = text.range(of: "auditBaselineEntries") else { return false }
         let months = ["January", "February", "March", "April", "May", "June", "July",
-                      "August", "September", "October", "November", "December"]
+                      "August", "September", "October", "November", "December",
+                      "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sept", "Sep",
+                      "Oct", "Nov", "Dec"]
         let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         for line in text[start.upperBound...].components(separatedBy: .newlines) {
             guard line.contains("\u{201C}"), let label = quotedLabel(line) else { continue }

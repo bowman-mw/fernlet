@@ -643,10 +643,34 @@ struct UXScreenProbe {
     }
 
     /// Weekday and month names, whose presence next to a numeral makes a label a DATE.
+    ///
+    /// **The abbreviations come after the full names, and that order is load-bearing** (2026-09-20).
+    /// A `.month(.abbreviated)` style renders "Aug 28", which the full-name list alone left keyed as
+    /// "Aug #" — an identity that rotates to "Sep #" the first time a seed's relative date crosses a
+    /// month boundary, with no code change, and one the staleness wall could not see either (it
+    /// bans a digit or a full month name, and "Aug #" carries neither). Replacing the full names
+    /// FIRST is what keeps the two passes from interfering: the `<date-word>` placeholder contains
+    /// no month abbreviation, so a label the full-name pass has already collapsed cannot be
+    /// collapsed a second time. "May" needs no abbreviated form — it is its own.
+    ///
+    /// **Weekday abbreviations are deliberately absent.** They would be an immediate regression
+    /// rather than a hardening: "Friends", "Pick a friendlier name" and "Sunscreen" are all frozen
+    /// baseline labels carrying "Fri" or "Sun", and this app renders no abbreviated weekday beside a
+    /// numeral. The month abbreviations were cleared the same way before being added — none of the
+    /// 94 distinct frozen labels contains one, so no existing identity moves.
+    ///
+    /// "Sept" precedes "Sep" so the longer form wins wherever a locale renders it. That one entry is
+    /// defensive rather than measured: en_US on iOS 26 renders "Sep", which is what the re-record saw.
+    ///
+    /// The over-reach the full names already had is now slightly wider and still deterministic: a
+    /// label carrying a numeral and the substring "Dec" — "3 Decaf coffees" — normalises to
+    /// "# <date-word>af coffees". Pinned as a fixture in `UXScreenProbeIdentityTests` so it stays a
+    /// known shape rather than a surprise.
     static let volatileDateWords = [
         "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
         "January", "February", "March", "April", "May", "June", "July", "August",
-        "September", "October", "November", "December"
+        "September", "October", "November", "December",
+        "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sept", "Sep", "Oct", "Nov", "Dec"
     ]
 
     /// A label with wall-clock and seed-derived values replaced by placeholders, so an identity
@@ -809,6 +833,27 @@ extension UXScreenProbe {
         // `RecentBitesUITests` now scrolls to the true bottom, so the audited viewport is the same
         // every run. `ProgressPhotoUITests` uses the same stop-when-hittable shape and is a
         // candidate for the same treatment if it ever starts flapping.
+        //
+        // PERSONAL-CARE CLIPS NO LONGER REPRODUCE (2026-09-20): the three `Text clipped` lines for
+        // the personal-care cards — "Brush teeth AM", "Brush teeth PM" and "Skincare AM" — were
+        // deleted from THIS screen. They came back as disappearances on two independent runs of an
+        // erased iPhone-17 simulator (402x874, content size `large`), once in dark and once in
+        // light, with an identical three-line delta both times. Their six `Dynamic Type` siblings
+        // below are untouched and still reproduce, which is the tell that this is not the auditor
+        // going quiet: `Text clipped` is not an under-reporting category, and an auditor failure
+        // takes a whole screen to 0 raw issues rather than exactly three lines of one category.
+        //
+        // Two of the three are ALSO frozen on `Sheet · Hygiene`, which is a different screen with
+        // its own viewport and was not re-recorded here — delete from one entry, never by a
+        // file-wide search, or the sheet silently loses a wall it never asked to give up.
+        //
+        // NOT a fix, and nothing here claims it is. No commit has touched `HomeView.swift`,
+        // `RecentBites.swift`, `FernletStore+DemoSeed.swift` or `FernletKit/Sources/FernletUI/`
+        // since the 2026-08-27 round that recorded these lines, so no code changed the clipping.
+        // The seed is dated relative to the wall clock, so the feed's content height — and with it
+        // the true bottom this probe scrolls to — moves on its own. Deleted because the harness's
+        // rule is that a baseline entry matching nothing is a hole nobody is watching, not because
+        // the cards were made more readable.
         "Home · Recent bites": [
             "Dynamic Type font sizes are partially unsupported — “Brush teeth AM” (48)",
             "Dynamic Type font sizes are partially unsupported — “Brush teeth PM” (48)",
@@ -816,8 +861,6 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “Floss” (48)",
             "Dynamic Type font sizes are partially unsupported — “Shower” (48)",
             "Dynamic Type font sizes are partially unsupported — “Skincare AM” (48)",
-            "Text clipped — “Brush teeth AM” (48)",
-            "Text clipped — “Brush teeth PM” (48)",
             "Text clipped — “Chicken rice bowl” (48)",
             "Text clipped — “Food” (9)",
             "Text clipped — “Friends” (9)",
@@ -825,7 +868,6 @@ extension UXScreenProbe {
             "Text clipped — “Home” (9)",
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
-            "Text clipped — “Skincare AM” (48)",
         ],
         // QUICK-LOG SUBTITLES NO LONGER CLIP (2026-08-27): `Text clipped — “# entries”` and
         // `“# of #”` both stopped reproducing. Note the first one has a second possible reading and
@@ -865,7 +907,30 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
+        // DATE CHIP FROZEN AS ONE NORMALISED IDENTITY (2026-09-20): `ProgressPhotoTimeline.swift`
+        // renders each card's date chip with `.month(.abbreviated).day()`, and the demo seed dates
+        // those photos RELATIVE TO THE WALL CLOCK (`FernletStore+DemoSeed.swift`, weeksAgo 6/3/0).
+        // On the re-record run the chip clipped as TWO distinct identities, "Aug #" and "Sep #",
+        // because today's three seeded dates straddle a month boundary — one component, two
+        // baseline lines, and a different pair of lines next month.
+        //
+        // Freezing either literal would have rotted silently. `normalisedLabel` collapsed only FULL
+        // month names, so the abbreviation survived, and `baselinePinsAVolatileLiteral` could not
+        // see the rot either: it bans a digit or a full month name, and "Aug #" carries neither.
+        // The month ABBREVIATIONS are now in `volatileDateWords`, and the same list is in the
+        // wall's `months`, so all three chips key as the single line below and a raw paste of the
+        // abbreviated form now fails the wall. Recorded in dark and re-confirmed in light.
+        //
+        // (The abbreviations above are in straight quotes on purpose: `baselinePinsAVolatileLiteral`
+        // reads every curly-quoted label in this file, comments included, so a curly-quoted "Aug #"
+        // in a COMMENT would fail the wall exactly as a frozen one does.)
+        //
+        // Still open, deliberately not fixed here: this probe keeps the stop-when-hittable scroll
+        // that the comment above `Home · Recent bites` warned about. The date chip is a clock
+        // problem rather than a viewport one, so the viewport was left alone instead of being
+        // changed in the same commit as a re-record.
         "Move · Progress photos": [
+            "Text clipped — “<date-word> #” (48)",
             "Text clipped — “Feeling stronger” (48)",
             "Text clipped — “Food” (9)",
             "Text clipped — “Friends” (9)",

@@ -27,7 +27,8 @@ final class UXScreenProbeIdentityTests: XCTestCase {
     /// numeral requirement is what separates a rendered date from a sentence.
     @MainActor
     func testLabelsWithoutNumeralsAreUntouched() {
-        for label in ["Quick log", "I'm unwell today", "May we suggest a walk", "Personal care"] {
+        for label in ["Quick log", "I'm unwell today", "May we suggest a walk", "Personal care",
+                      "Augment your evening walk", "Friends", "Sunscreen"] {
             XCTAssertEqual(UXScreenProbe.normalisedLabel(label), label,
                            "a label with no numeral must survive normalisation unchanged")
         }
@@ -41,6 +42,54 @@ final class UXScreenProbeIdentityTests: XCTestCase {
         XCTAssertEqual(UXScreenProbe.normalisedLabel("August 2026"), "<date-word> #")
         XCTAssertEqual(UXScreenProbe.normalisedLabel("2 entries"), "# entries")
         XCTAssertEqual(UXScreenProbe.normalisedLabel("2 of 8"), "# of #")
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("Aug 28"), "<date-word> #",
+                       "the abbreviated date chip on Move · Progress photos")
+    }
+
+    /// **The abbreviated month chip**, added 2026-09-20 — the shape that got past both halves of the
+    /// wall until then.
+    ///
+    /// `ProgressPhotoTimeline` renders `.month(.abbreviated).day()` over a seed dated relative to
+    /// the wall clock, so on any given day the three cards can straddle a month boundary and the
+    /// whole set walks forward every month. With only the full month names collapsing, that was two
+    /// identities today ("Aug #" and "Sep #") and a different two next month — a red on a calendar
+    /// boundary that the staleness wall could not see either, because neither literal carries a
+    /// digit or a full month name. All of these must key as one line.
+    @MainActor
+    func testAbbreviatedMonthChipsCollapseToOneIdentity() {
+        let keys = Set(["Aug 9", "Aug 30", "Sep 20", "Jan 1", "Dec 31", "Sept 5"]
+            .map { UXScreenProbe.normalisedLabel($0) })
+        XCTAssertEqual(keys, ["<date-word> #"],
+                       "abbreviated month chips must collapse to ONE identity, not one per month: \(keys)")
+    }
+
+    /// The ordering invariant inside `volatileDateWords`: full names are replaced before
+    /// abbreviations, so a full name is never collapsed twice.
+    ///
+    /// If the abbreviations were ever moved ahead of the full names, "August 2026" would go through
+    /// "Aug" first and key as "<date-word>ust #" — distinct from the abbreviated chip and from
+    /// today's frozen `Home tab` entry, i.e. a silent re-key of an existing baseline line.
+    @MainActor
+    func testFullMonthNamesAreCollapsedBeforeTheirAbbreviations() {
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("August 2026"), "<date-word> #")
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("August 2026"),
+                       UXScreenProbe.normalisedLabel("Aug 2026"),
+                       "a full month name and its abbreviation must key the same")
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("SUNDAY, AUGUST 23"), "<date-word>, <date-word> #",
+                       "the date eyebrow must not pick up a second collapse from the abbreviations")
+    }
+
+    /// **Accepted over-reach, pinned so it stays a known shape.**
+    ///
+    /// Substring matching plus the numeral guard means an ordinary word that contains a month
+    /// abbreviation is rewritten when the label also carries a digit. It is deterministic and
+    /// harmless — an identity only has to be stable, not pretty — but it is worth being able to
+    /// recognise in a delta instead of treating it as corruption.
+    @MainActor
+    func testAbbreviationOverReachIsDeterministic() {
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("3 Decaf coffees"), "# <date-word>af coffees")
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("Decaf coffees"), "Decaf coffees",
+                       "without a numeral the label is still returned byte-for-byte")
     }
 
     /// Tomorrow, next month and a re-seeded demo must all produce the SAME key as today's.
