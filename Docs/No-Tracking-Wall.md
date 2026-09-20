@@ -234,6 +234,19 @@ All service types are declared in `App/Fernlet/Info.plist` under `NSBonjourServi
 from that list fails discovery silently on device, which is why the list is exhaustive rather than
 grown as needed.
 
+`NoTrackingBoundaryTests.theRetiredRadiosBonjourTypesAreGoneFromThePlist` pins that list three ways.
+(1) The four retired MC types (`_fernlet-near`, `_fernlet-recipe`, each `._tcp` and `._udp`) must
+stay **absent**. (2) The five a shipping radio actually uses must stay **present**: the three QUIC
+types *and* `_fernlet-friend._tcp` / `._udp`, because the friend mesh is still on
+MultipeerConnectivity (`MeshTransportFactory.shippingDefault == .multipeer`, so every launch
+advertises and browses `fernlet-friend`). The friend pair moves from the live set to the retired set
+in the same commit that flips `shippingDefault` — deleting it before that kills friend-mesh
+discovery on device with no log, no observable state and no other failing test. (3) Every other
+declared type must be **classified**: `_fernlet-coach._tcp` / `._udp` are *held* — declared, no
+radio behind them (plan §18 decision 4, still the owner's), pinned in neither direction — and a
+declared type in none of the three sets fails the test until it is classified here and given a row
+in the table above.
+
 **Three Info.plist keys, and what each one now backs.** Two of the three were added ahead of the code
 that uses them; that asymmetry is closing as the migration lands, so the state is stated plainly:
 

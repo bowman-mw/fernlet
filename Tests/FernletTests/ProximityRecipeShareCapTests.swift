@@ -178,7 +178,7 @@ struct ProximityRecipeShareCapTests {
         #expect(manager.isListening, "up by its own account")
 
         radio.onTransportError?(
-            "Browsing failed to start for service \"fernlet-recipe\": test"
+            "Browsing failed to start for service \"_fernlet-recipe2._udp\": test"
         )
 
         #expect(!manager.isListening, "a start failure with no connection held is a stop")

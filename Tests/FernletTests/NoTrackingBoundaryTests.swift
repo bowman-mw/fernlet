@@ -46,8 +46,10 @@ import Testing
 /// - ``noPersistentWebViewExistsAndInAppBrowsersArePinned()`` — the WebKit/Safari surface.
 /// - ``privacyManifestsDeclareNoTrackingOrAdvertising()`` — the three `PrivacyInfo.xcprivacy` files.
 /// - ``plistFamilyFilesDeclareNoTrackingPermissionOrForeignContainer()`` — Info.plist + entitlements.
-/// - ``theRetiredRadiosBonjourTypesAreGoneFromThePlist()`` — the §4c service-type table and the app's
-///   declared `NSBonjourServices` say the same thing about which radios exist.
+/// - ``theRetiredRadiosBonjourTypesAreGoneFromThePlist()`` — the app's declared `NSBonjourServices`:
+///   no retired radio's type is still declared, every live radio's type still is, and no declared
+///   type is unclassified. §4c's table is the prose half of the same claim and is NOT read here —
+///   keeping the two in step is a review rule, as it is for the rest of this wall.
 ///
 /// Scope and honest limits are documented in Docs/No-Tracking-Wall.md; the short version is that this
 /// stops accidental regression in THIS repo, not a determined fork.
@@ -926,10 +928,25 @@ struct NoTrackingBoundaryTests {
     /// not a surviving one: a plist that lost every entry would satisfy the absence half alone, and
     /// a missing service type kills discovery silently on device — no log, no observable state.
     ///
-    /// `_fernlet-friend` and `_fernlet-coach` are deliberately in **neither** list. The friend mesh
-    /// still runs on MultipeerConnectivity (`MeshTransportFactory.shippingDefault`), and the coach
-    /// pair is plan §18 decision 4, still open. Retiring either is a cutover, not cleanup; whichever
-    /// commit takes it adds the strings to ``retiredBonjourServiceTypes`` in the same breath.
+    /// `_fernlet-friend._tcp` / `._udp` are in the **live** set, not in neither (the fix round's F1).
+    /// They are the only Bonjour lines a SHIPPING radio depends on today: `MeshTransportFactory`
+    /// `.shippingDefault` is `.multipeer`, so every launch builds `MeshMultipeerSession`, which
+    /// advertises and browses `fernlet-friend`. The rule that keeps them honest: **the friend mesh
+    /// ships on MC until the owner's cutover decision (P9 item 4's `[SPLIT: LATER]` half,
+    /// `Docs/Mesh-P9-Item4-Design-2026-09-20.md`); the cutover moves these two from
+    /// ``liveBonjourServiceTypes`` to ``retiredBonjourServiceTypes`` in the same commit that flips
+    /// `shippingDefault`.** Deleting them before that flip is exactly the silent death this cell's
+    /// presence half exists to catch — no log, no observable state, no other test.
+    ///
+    /// `_fernlet-coach._tcp` / `._udp` are ``heldBonjourServiceTypes``: declared, recorded in §4c,
+    /// backed by no radio. Every shipping `ProximityCoordinator.begin` passes `mode: .friend`
+    /// (`MeshNetworkManager`, `ProximityRecipeShareManager`, `PresenceManager`), and
+    /// `serviceType(for: .trainer)` — the one reader of `MultipeerServiceType.trainer` — is reached
+    /// only from `TrainerProximityService`, which exists only under `Tests/`. So they are NOT live
+    /// (pinning them would assert an advertiser this app does not have) and NOT pinned present
+    /// (deleting an overclaim is legitimate cleanup, and plan §18 decision 4 is the owner's). The
+    /// held set's one job is the partition below: a declared type in none of the three sets is a
+    /// local-network radio nobody reviewed.
     @Test func theRetiredRadiosBonjourTypesAreGoneFromThePlist() throws {
         let declared = try Self.declaredBonjourServiceTypes()
         guard !declared.isEmpty else {
@@ -945,7 +962,15 @@ struct NoTrackingBoundaryTests {
         let missing = Self.liveBonjourServiceTypes.subtracting(declared).sorted()
         #expect(
             missing.isEmpty,
-            "Info.plist no longer declares \(missing) — the QUIC radios' own types. Discovery dies silently on device with no log and no observable state; this is the bug a retirement must not cause."
+            "Info.plist no longer declares \(missing) — the type(s) a shipping radio advertises or browses. Discovery dies silently on device with no log and no observable state; this is the bug a retirement must not cause."
+        )
+        let unclassified = declared
+            .subtracting(Self.liveBonjourServiceTypes)
+            .subtracting(Self.heldBonjourServiceTypes)
+            .sorted()
+        #expect(
+            unclassified.isEmpty,
+            "Info.plist declares \(unclassified), which none of the live/held/retired sets classifies — a local-network radio nobody reviewed, or a spelling that drifted. Classify it here and give it a §4c row in Docs/No-Tracking-Wall.md in the same commit."
         )
     }
 
@@ -958,11 +983,25 @@ struct NoTrackingBoundaryTests {
         "_fernlet-recipe._udp"
     ]
 
-    /// The QUIC service types that must stay declared — mesh, presence, recipe share.
+    /// The service types that must stay declared: the three QUIC radios (mesh, presence, recipe
+    /// share) and the friend mesh's MultipeerConnectivity pair, which is the one Bonjour
+    /// declaration a shipping radio depends on today. Frozen automation tokens, never display
+    /// strings. The cell's docstring carries the cutover rule that moves the friend pair out.
     private static let liveBonjourServiceTypes: Set<String> = [
+        "_fernlet-friend._tcp",
+        "_fernlet-friend._udp",
         "_fernlet-mesh2._udp",
         "_fernlet-near2._udp",
         "_fernlet-recipe2._udp"
+    ]
+
+    /// Declared, but backed by no radio in this app: the coach channel's pair (plan §18 decision 4,
+    /// the owner's, still open). Pinned in NEITHER direction — presence is not required, absence is
+    /// not a regression — but classified, so the partition check can tell a held type apart from a
+    /// new one nobody reviewed.
+    private static let heldBonjourServiceTypes: Set<String> = [
+        "_fernlet-coach._tcp",
+        "_fernlet-coach._udp"
     ]
 
     /// `NSBonjourServices` from the app target's Info.plist, parsed rather than grepped so the

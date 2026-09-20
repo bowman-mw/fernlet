@@ -523,6 +523,34 @@ struct MeshContinuationTaskHostWallTests {
     /// The host.
     private static let host = "MeshContinuationTaskHost.swift"
 
+    /// Cell (g)'s one permitted home for the proximity Live Activity spellings, by file name.
+    private static let anchorFile = "ProximityForegroundAnchor.swift"
+
+    /// Cell (g)'s walk root — the module that owns every proximity Live Activity spelling. Scoped
+    /// here rather than at the app, because `ProximityConnectionActivityAttributes` is internal to
+    /// this module and `Activity.request` has a legitimate app-target home (the workout/cooking
+    /// starter) that this retirement does not touch.
+    private static let proximityKitRoot = "FernletKit/Sources/ProximityKit"
+
+    /// Floor under that walk, so a broken root cannot pass by enumerating nothing. Measured 143 on
+    /// 2026-09-20; the floor is deliberately below it, since files come and go.
+    private static let minimumProximityKitFilesWalked = 120
+
+    /// Spellings P9 item 5 retired outright: no file in ProximityKit, the anchor file included, may
+    /// hold one.
+    private static let retiredAnchorSpellings = [
+        "ActivityKitProximityForegroundAnchor",
+        "Activity.request"
+    ]
+
+    /// Spellings the once-per-launch orphan reaper still needs, which therefore live in
+    /// ``anchorFile`` and nowhere else in the module.
+    private static let reaperOnlySpellings = [
+        "import ActivityKit",
+        "canImport(ActivityKit)",
+        "ProximityConnectionActivityAttributes"
+    ]
+
     /// Every `.swift` file under one repo-relative directory, comment-stripped.
     ///
     /// Reused from `MeshP7Acceptance`, as `MeshContinuationRaiseWallTests` already does — a sixth
@@ -634,8 +662,9 @@ struct MeshContinuationTaskHostWallTests {
     }
 
     /// **(g)** P9 item 5: the 1:1 foreground anchors are RETIRED. Nothing in the app requests a
-    /// proximity Live Activity; the once-per-launch orphan reaper is the only code that still names
-    /// the attributes type.
+    /// PROXIMITY Live Activity (the workout/cooking kinds are a different attributes type, raised by
+    /// `App/Fernlet/LiveActivityStarter.swift`, and are not in scope here); the once-per-launch
+    /// orphan reaper is the only code that still names the proximity attributes type.
     ///
     /// Cell (e) pinned the mesh's door. This pins the half P8 left open — the coordinator's
     /// DEFAULT anchor, which three shipping construction sites take by omitting the argument
@@ -646,34 +675,55 @@ struct MeshContinuationTaskHostWallTests {
     /// so each call either threw (audited) or spent a per-app Live Activity slot on something
     /// nothing draws.
     ///
-    /// Four independently reddenable needles: re-adding a request reddens (1); restoring the class
+    /// Four independently reddenable needles: re-adding a request to the anchor file — or moving the
+    /// reaper's enumeration out of the reaper's own brace-matched body — reddens (1); naming the
+    /// retired class, `Activity.request`, or the attributes type from ANY file under ProximityKit
     /// reddens (2); restoring the `#if canImport` default reddens (3); declaring a proximity
     /// configuration in the widget bundle reddens (4) — which is the honest signal that "retire"
     /// has been reversed and this cell must be rewritten rather than deleted.
+    ///
+    /// Needle (2) is a WALK of the module, not the four hand-listed files it replaced (the fix
+    /// round's F2): those four made the comment's claim — "anywhere else in shipping source" —
+    /// false for the case that actually ships, a NEW ProximityKit file that imports ActivityKit and
+    /// requests one while every needle stays green.
     @Test func theOneToOneForegroundAnchorsAreRetired() throws {
         let anchorPath = "FernletKit/Sources/ProximityKit/ForegroundAnchor/ProximityForegroundAnchor.swift"
         let anchor = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(anchorPath))
-        // (1) Nothing requests one any more; the reaper still ends what a prior process stranded.
+        // (1) Nothing requests one any more, and the one surviving read of the attributes type is
+        // INSIDE the reaper — brace-matched, so moving the enumeration into a requester elsewhere in
+        // this same file reddens instead of satisfying a file-wide `contains`.
         #expect(!anchor.contains("Activity.request"),
                 "the retired 1:1 anchor was the only requester of a proximity Live Activity")
-        #expect(anchor.contains("Activity<ProximityConnectionActivityAttributes>.activities"),
+        let reaper = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "public static func endOrphans() async {", in: anchor),
+            "the once-per-launch orphan reaper's body is gone")
+        #expect(reaper.contains("Activity<ProximityConnectionActivityAttributes>.activities"),
                 "the orphan reaper stays — it is the one remaining reader of the attributes type")
 
         // (2) Neither the retired conformer nor the attributes type is spelled anywhere else in
-        // shipping source, so no other file can construct or request one.
+        // ProximityKit — WALKED (the suite's own `codeSources`/`homes`, comment-stripped), not a
+        // hand-listed four. The walk is scoped to this module with evidence both ways: the
+        // attributes type is declared internal, so no other module — the app target included — can
+        // name it, and `Activity.request` has a legitimate home in the app target's workout/cooking
+        // starter, which a walk of `App/Fernlet` would redden on arrival.
         let coordinatorPath = "FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift"
-        let others = [
-            coordinatorPath,
-            "FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift",
-            "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
-            "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"
-        ]
-        for path in others {
-            let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(path))
-            #expect(!source.contains("ActivityKitProximityForegroundAnchor"),
-                    "\(path) still names the retired ActivityKit anchor")
-            #expect(!source.contains("ProximityConnectionActivityAttributes"),
-                    "\(path) still names the proximity activity attributes; only the reaper may")
+        let proximity = try Self.codeSources(under: Self.proximityKitRoot)
+        #expect(proximity.count >= Self.minimumProximityKitFilesWalked,
+                """
+                walked only \(proximity.count) ProximityKit files (floor \
+                \(Self.minimumProximityKitFilesWalked)) — the walk is broken, not the module clean
+                """)
+        #expect(proximity.filter { $0.name == Self.anchorFile }.count == 1,
+                "the walk must see exactly one \(Self.anchorFile) — a second would inherit the reaper's exemption by name")
+        for needle in Self.retiredAnchorSpellings {
+            let homes = Set(Self.homes(of: needle, in: proximity)).sorted()
+            #expect(homes.isEmpty,
+                    "`\(needle)` is back, in \(homes) — since P9 item 5 nothing in this app may request a proximity Live Activity")
+        }
+        for needle in Self.reaperOnlySpellings {
+            let homes = Set(Self.homes(of: needle, in: proximity))
+            #expect(homes == [Self.anchorFile],
+                    "`\(needle)` must be spelled in \(Self.anchorFile) and nowhere else in ProximityKit; found \(homes.sorted())")
         }
 
         // (3) The coordinator's default is the no-op unconditionally — no ActivityKit branch left.
