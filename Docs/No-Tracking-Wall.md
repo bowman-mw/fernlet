@@ -223,9 +223,10 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 
 | Path | Where | Service types |
 |---|---|---|
-| **MultipeerConnectivity** — the four shipping radios (friend mesh, presence, recipe share, coach) | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-near`, `_fernlet-recipe`, `_fernlet-coach`, each `._tcp` and `._udp` |
+| **MultipeerConnectivity** — the shipping radios still on it (friend mesh, recipe share, coach; presence crossed to QUIC in P9 item 2) | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-recipe`, `_fernlet-coach`, each `._tcp` and `._udp`; `_fernlet-near` is retired and deleted with the framework in P9 item 4 |
 | **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | `ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
 | **Network.framework / QUIC** — the friend mesh's second transport, being migrated onto per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | `ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
+| **Network.framework / QUIC** — the standing presence radio, migrated off MultipeerConnectivity per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §17.1 | `ProximityKit/Transport/NetworkPresenceSession.swift` | `_fernlet-near2._udp` |
 | **Network.framework / QUIC** — the DEBUG-only feasibility spike for the same migration | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
 
 All service types are declared in `App/Fernlet/Info.plist` under `NSBonjourServices`; a type missing
@@ -238,7 +239,7 @@ that uses them; that asymmetry is closing as the migration lands, so the state i
 | Key | Value | What backs it today |
 |---|---|---|
 | `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the four shipping MC radios already do. Not new with the QUIC work. |
-| `NSBonjourServices` → `_fernlet-mesh2._udp` | One added entry | Now genuinely used: `NetworkMeshSession` advertises and browses this type in Release (the DEBUG probe uses the same one). A service type is a name, not a destination — declaring it grants no reach beyond the local link. |
+| `NSBonjourServices` → `_fernlet-mesh2._udp`, `_fernlet-near2._udp` | Two added entries | Both genuinely used: `NetworkMeshSession` advertises and browses the first in Release (the DEBUG probe uses the same one), and `NetworkPresenceSession` the second. A service type is a name, not a destination — declaring one grants no reach beyond the local link. |
 | `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) | Still inert: a permitted identifier grants nothing until a task is registered and submitted, which only the DEBUG probe does. Runtime registration uses the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. P8 needs it. |
 
 None of the three carries data anywhere. They widen what the app is *permitted* to do on the local
@@ -258,20 +259,33 @@ and a test (`theTwoNetworkPermitSetsAreDisjoint`) asserting that no file and no 
 | Family | Markers | Permitted files | Capability granted |
 |---|---|---|---|
 | `httpClientMarkers` | `URLSession`, `URLRequest`, `NSURLConnection`, `NWConnection`, `NWBrowser`, `CFURLRequest`, `WKWebView` | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `EphemeralWebSession.swift` | Outbound HTTP to the internet, under §3's host allowlist and §2a's private-tab rule |
-| `localLinkMarkers` | `NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord` | `NetworkMeshSession.swift`, `NetworkMeshFeasibilityProbe.swift` | Bonjour advertise/browse and QUIC tunnels **on the local link only** |
+| `localLinkMarkers` | `NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord` | `NetworkMeshSession.swift`, `NetworkPresenceSession.swift`, `NetworkMeshFeasibilityProbe.swift` | Bonjour advertise/browse and QUIC tunnels **on the local link only** |
 
 The legacy `NWConnection` / `NWBrowser` spellings deliberately stay on the *first* list: nothing in
 this repo may use them, and moving them across would hand them the mesh transport's permission.
 `NWListener` and `NWParameters` match nothing today and are listed anyway, in the same spirit as the
 WebKit markers — the rule is written while the answer is "there are none".
 
-**Why the local-link permission is not an egress permission.** Neither permitted file contains a host
+**Why the local-link permission is not an egress permission.** No permitted file contains a host
 literal (so `hardcodedNetworkDestinationsAreExactlyTheAllowlist` sees nothing in them, and would fail
-if one appeared), neither constructs a `URLSession` (so the private-tab rule holds), and the QUIC
-parameters set `prohibitedInterfaceTypes = [.cellular]` on every listener, browser and connection —
-which turns the serverless claim from an aspiration into something the OS enforces. The transport's
-TLS identity is a self-signed P-256 key pair minted per session and never persisted, so it links no
-two sessions to one device, and its Bonjour instance name is random per session for the same reason.
+if one appeared), none constructs a `URLSession` (so the private-tab rule holds), and the QUIC
+parameters — one factory, `ProximityQUICParameters`, shared by both radios so neither can drift —
+set `prohibitedInterfaceTypes = [.cellular]` on every listener, browser and connection, which turns
+the serverless claim from an aspiration into something the OS enforces. Each transport's TLS
+identity is a self-signed P-256 key pair that is never persisted, so it links no two sessions to one
+device, and its Bonjour instance name is random for the same reason. The presence radio goes further
+because its whole feature is being recognized without being identified: its name and its certificate
+are a `PresenceEpochPosture` replaced **whole at every 900 s presence epoch**, so two sightings 901
+seconds apart share no byte *of what this layer publishes* — name, certificate and tags. Its TXT
+record carries nothing but the version token and the rotating pairwise-DH tags — no display name, no
+session id, no fingerprint.
+
+What the rotation does not and cannot break, stated plainly rather than left for a reader to find:
+an observer **on the same link** sees one IP address throughout, and a heart tunnel opened before a
+boundary stays open across it. Neither is a regression and neither is reachable by rotating a name —
+same-link address correlation is a layer below this one, and the tunnel's far end is a verified
+friend who already knows us. What the rotation removes is correlation by Bonjour name or by
+certificate, which is what survives a change of network and a change of day.
 
 ---
 

@@ -947,7 +947,7 @@ struct NetworkMeshSessionTests {
             id: UUID(), displayHint: "fernlet-mesh-abc", discoveryInfo: ["sid": "aaaa"],
             advertisedFingerprint: nil
         )
-        let channel = NetworkPeerChannel(peer: peer, session: session)
+        let channel = NetworkPeerChannel(peer: peer, host: session)
 
         var observed: [PeerTransportState] = []
         let subscription = channel.state.sink { observed.append($0) }
@@ -998,7 +998,7 @@ struct NetworkMeshSessionTests {
         let peer = PeerHandle(
             id: UUID(), displayHint: "fernlet-mesh-abc", discoveryInfo: nil, advertisedFingerprint: nil
         )
-        let channel = NetworkPeerChannel(peer: peer, session: session)
+        let channel = NetworkPeerChannel(peer: peer, host: session)
 
         var frames: [InboundPeerFrame] = []
         let subscription = channel.inbound.sink { frames.append($0) }

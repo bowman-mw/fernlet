@@ -1321,6 +1321,26 @@ write.
 | `load()` | Reads and unarchives a persisted `MCPeerID`. |
 | `save(_:)` | Archives and atomically writes an `MCPeerID`. |
 
+### `NetworkPresenceSession.swift`
+
+**P9 item 2 pass 2** (plan §17.1). The presence radio's QUIC surface on `_fernlet-near2._udp`: one
+listener registered under the current `PresenceEpochPosture`'s instance name and presenting its TLS
+identity, one browser, and up to four short-lived pairwise tunnels. It owns **no timer** — presence's
+one timer is the manager's epoch tick — and no roster, dial budget, heartbeat or transfer stream.
+
+| Function | What It Does |
+| --- | --- |
+| `start(posture:discoveryInfo:)` | Brings the listener up under a posture; throws so the owner can stand the radio down rather than look running while dark. |
+| `republish(posture:discoveryInfo:)` | Tears the listener down and re-registers it under the given posture — the only way to withdraw a Bonjour registration, and what makes an epoch boundary total. Audits `presence.quic.rotated` when the epoch moved. |
+| `stop()` | Cancels every task, drops every map AND the posture, audits `presence.quic.stopped`. |
+| `dial(_:helloTag:)` | Opens a tunnel to a browsed peer and writes the `PresenceDialHello` claiming `helloTag`. A peer with no cached endpoint is a **dial refusal** (logged, nothing more) and never a transport error — that hook stands the whole radio down, and a friend's own epoch boundary withdraws their registration routinely. |
+| `disconnectPeer(_:)` | Ends a peer's tunnel at the owner's request, without reporting it back to the owner. |
+| `send(_:to:mode:)` | One length-framed write on the peer's control stream; `mode` is accepted and ignored (no datagrams, no transfer streams). |
+| `serveInbound(stream:pendingKey:)` | Reads the dial hello and promotes the pending connection to a tunnel ONLY if `resolveDialer` answers with a browsed peer and `admitInbound(at:)` gives it the slot — every early return drops the connection whole, so no handle is ever minted for an unresolved dialer. |
+| `admitInbound(at:)` | Glare: a second connection under a held key is COLLAPSED, never refused, by `MeshTunnelConvergence` over the two advertised instance names. Refusing it is what left two friends who dialed each other at the same moment with no tunnel at all, on both sides. Audits `presence.quic.redundantTunnelClosed`. |
+| `observe(_:)` / `noteBrowsed(_:key:at:)` / `noteLost(_:)` | The browse set: self-filtered by the posture's own instance name, re-announced when a TXT record changes, audited as `presence.quic.sighted` — which names the peer by its OPAQUE session key and counts its tags, never carrying a peer's instance name or tag values. |
+| `advertisedInstanceNameForTesting` / `advertisedCertificateDigestForTesting` / `advertisedEpochForTesting` | The reads `NetworkMeshSession` never had — presence's claim is that these rotate together and leave nothing behind, and a rotation that never reached the listener is invisible to a source scan. |
+
 ### `PeerTransport.swift`
 
 | Function | What It Does |
@@ -1818,7 +1838,7 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 
 ## Presence And Nearby Friends
 
-The standing `fernlet-near` radio and the two device-local ledgers that hang off it. Everything here
+The standing `_fernlet-near2._udp` radio and the two device-local ledgers that hang off it. Everything here
 is opt-in and device-local; none of it is ever in the synced snapshot.
 
 ### `Presence/PresenceEpochPosture.swift`
@@ -1844,10 +1864,21 @@ clock that lets the name lag the tags across a boundary; (2) a per-launch phase 
 device-identifying value that survives every rotation; and (3) a globally synchronised rotation
 instant makes the anonymity set at each boundary every device in range.
 
-**Pass 2 (not done here)** binds the QUIC presence listener's service instance name and
-`sec_identity_t` to this value and retires the MC advertiser. Note what that fixes:
-`MeshMultipeerSession` mints its random `MCPeerID` once per `start()`, so today's long-lived
-presence radio rotates its tags under one unchanging name.
+**Pass 2 is done** (`NetworkPresenceSession`): the QUIC presence listener's service instance name
+and `sec_identity_t` ARE this value, re-registered whole at every boundary, and the
+MultipeerConnectivity advertiser is gone from the manager. Note what that fixed — it minted one
+random peer ID per `start()`, so a long-lived presence radio rotated its tags under one unchanging
+name.
+
+### `Presence/PresenceAdvertisement.swift`
+
+**P9 item 2 pass 2.** The TXT vocabulary as pure functions, and the dialer's opening frame.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `publishedFields(tags:)` | `v` plus the sorted tags, chunked across `t`/`t1` at 240 bytes each — 24 base64 tags are 311 bytes and DNS-SD caps one entry at 255, so an unchunked list would have been refused or truncated on the air. |
+| `tags(from:)` / `isPresenceAdvertisement(_:)` | The reader: version-gated, joined back across the chunks, bounded at `maxInboundTags` because the inbound direction is untrusted. |
+| `PresenceDialHello.encoded(tag:)` / `.decoded(_:)` | The one frame a dialer writes before anything else, naming the pairwise tag it advertises — how the responder resolves an inbound QUIC connection back to a browsed peer, which MultipeerConnectivity gave for free via `MCPeerID`. Total on the read side: every malformed case has one answer, refuse. |
 
 ### `Presence/PresenceManager.swift`
 
@@ -1856,8 +1887,9 @@ delivered over on-demand pairwise connections formed on that recognition.
 
 Privacy posture is the design centre, and it is worth reading before touching anything here. The
 advertisement carries ONLY rotating pairwise-DH tags (truncated HMACs of the 15-minute epoch under
-per-friend-pair static-static X25519 secrets — `IdentityService.presenceTag`), the `MCPeerID` is
-per-start random and never persisted, and all state (nearby set, connections, diagnostics) is
+per-friend-pair static-static X25519 secrets — `IdentityService.presenceTag`), the advertised
+instance name and TLS identity are a `PresenceEpochPosture` replaced whole at every boundary, and
+all state (nearby set, connections, diagnostics) is
 memory-only with no identities in any log line. Matching spans ±1 epoch; three self-exclusion layers
 drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch advertiser restart.
 

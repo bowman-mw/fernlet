@@ -281,16 +281,19 @@ struct NoTrackingBoundaryTests {
         "NWListener", "NWParameters", "NWParametersBuilder", "NWTXTRecord"
     ]
 
-    /// The two files in shipping code that may name a local-link Network.framework API.
+    /// The three files in shipping code that may name a local-link Network.framework API.
     ///
-    /// Both are link-local by construction and cannot reach a host at all: they advertise and browse
-    /// a Bonjour service type over QUIC with `prohibitedInterfaceTypes = [.cellular]`, and every byte
-    /// they carry is a signed/sealed Fernlet envelope between two phones in the same room. Neither
-    /// appears in ``permittedHTTPClientFiles``, and neither may — see
+    /// All three are link-local by construction and cannot reach a host at all: they advertise and
+    /// browse a Bonjour service type over QUIC with `prohibitedInterfaceTypes = [.cellular]`, and
+    /// every byte they carry is a signed/sealed Fernlet envelope between two phones in the same
+    /// room. None appears in ``permittedHTTPClientFiles``, and none may — see
     /// ``theTwoNetworkPermitSetsAreDisjoint()``.
     private static let permittedLocalLinkFiles: Set<String> = [
         // ProximityKit's QUIC mesh transport (plan §7): listener, browser, per-peer connections.
         "NetworkMeshSession.swift",
+        // ProximityKit's QUIC presence radio (plan §17.1): the same three, advertising under a
+        // PresenceEpochPosture that is replaced whole at every 900 s epoch boundary.
+        "NetworkPresenceSession.swift",
         // The DEBUG-only feasibility spike, compiled out of Release entirely.
         "NetworkMeshFeasibilityProbe.swift"
     ]
@@ -564,7 +567,8 @@ struct NoTrackingBoundaryTests {
         )
     }
 
-    /// Network.framework's local-link API lives in exactly the two mesh files, and nowhere else.
+    /// Network.framework's local-link API lives in exactly the three proximity radio files, and
+    /// nowhere else.
     ///
     /// The second marker family, and the reason it is a family of its own: TN3213 renamed the API
     /// this repo's peer-to-peer mesh is being migrated onto, so `NetworkConnection` /
@@ -578,7 +582,7 @@ struct NoTrackingBoundaryTests {
     /// a new local-network capability and a review moment; a MISSING one means the scan stopped
     /// working, not that the code got cleaner.
     ///
-    /// What this does not claim: that these two files cannot reach the internet *at all*. That is
+    /// What this does not claim: that these files cannot reach the internet *at all*. That is
     /// argued in Docs/No-Tracking-Wall.md §4c from what the code does — Bonjour advertise/browse over
     /// QUIC with `prohibitedInterfaceTypes = [.cellular]` and no host anywhere in the source — and
     /// enforced from the other side by ``hardcodedNetworkDestinationsAreExactlyTheAllowlist()``,
@@ -606,7 +610,7 @@ struct NoTrackingBoundaryTests {
         let unexpected = holders.subtracting(Self.permittedLocalLinkFiles).sorted()
         #expect(
             unexpected.isEmpty,
-            "\(unexpected) name(s) a local-link Network.framework API. That surface lives in exactly \(Self.permittedLocalLinkFiles.sorted()) — the mesh transport and the DEBUG probe. A new one needs an entry here AND a row in Docs/No-Tracking-Wall.md §4c, in the same commit."
+            "\(unexpected) name(s) a local-link Network.framework API. That surface lives in exactly \(Self.permittedLocalLinkFiles.sorted()) — the mesh transport, the presence radio and the DEBUG probe. A new one needs an entry here AND a row in Docs/No-Tracking-Wall.md §4c, in the same commit."
         )
         let missing = Self.permittedLocalLinkFiles.subtracting(holders).sorted()
         #expect(

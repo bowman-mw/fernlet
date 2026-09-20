@@ -581,6 +581,67 @@ struct PresenceManagerTests {
         #expect(failures == 1, "and a successful mint audits nothing")
     }
 
+    /// The once-per-epoch mint budget survives the stand-down it causes — and a `start()` inside a
+    /// failed epoch neither re-mints nor stands down again.
+    ///
+    /// The regression this closes lived entirely in the interaction of two correct-looking pieces.
+    /// A failed mint leaves no posture, so `start()` cannot bring a radio up; `stop()` then cleared
+    /// the budget along with the posture, on the grounds that a restart is a fresh attempt. But the
+    /// run policy re-applies on every scene, tab and lock event, and each one calls `start()` — so
+    /// a deterministically failing mint ran a fresh P-256 keygen and wrote a fresh audit row on
+    /// every one of them, which is precisely the budget's reason for existing. The budget is not
+    /// state about the radio; it is a note that this EPOCH's keygen failed.
+    @Test func aStartInsideAFailedMintEpochNeitherReMintsNorStandsDownAgain() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHost()
+
+        var failures = 0
+        let token = FernletAuditLog.addCaptureHandler { event, _ in
+            if event == "presence.posture.mintFailed" { failures += 1 }
+        }
+        defer { FernletAuditLog.removeCaptureHandler(token) }
+
+        var attempts = 0
+        var clock = baseDate
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { clock }
+        manager.postureMint = { _, _ in
+            attempts += 1
+            throw PresencePostureError.entropyUnavailable(byteCount: 0)
+        }
+
+        // The first start mints, fails, and does not come up. `makeSession` is never reached, so
+        // no radio is built — the production default would have started Bonjour.
+        manager.start()
+        #expect(!manager.isListening, "a radio with no name and no certificate must not read as up")
+        #expect(manager.presencePosture == nil)
+        #expect(attempts == 1)
+        #expect(failures == 1)
+
+        // The owner's stand-down, then the run policy re-applying, three times over — the shape of
+        // a user moving between tabs with presence enabled.
+        manager.stop()
+        manager.start()
+        manager.stop()
+        manager.start()
+        manager.start()
+        #expect(attempts == 1, "one keygen per epoch — \(attempts) for one failure")
+        #expect(failures == 1, "and one audit row per epoch, not one per policy run")
+        #expect(!manager.isListening)
+
+        // The boundary is the retry, and exactly one mint happens there.
+        clock = baseDate.addingTimeInterval(IdentityService.presenceEpochSeconds)
+        manager.postureMint = { held, now in
+            attempts += 1
+            return try held?.rotated(at: now) ?? PresenceEpochPosture.minted(at: now)
+        }
+        manager.activateForTesting()
+        #expect(attempts == 2, "the next epoch retries exactly once")
+        #expect(manager.presencePosture?.epoch == IdentityService.presenceEpoch(at: clock))
+        #expect(failures == 1, "and a successful mint audits nothing")
+    }
+
     @Test func discoveryInfoCarriesNoIdentifiers() throws {
         let (identity, serviceID) = try makeIdentity()
         defer { KeychainItem.deleteAll(service: serviceID) }
