@@ -194,7 +194,7 @@ jobs:
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests
 
-      - name: Mesh acceptance batteries (P3 / P4 / P5 / P6) + the CI selector wall
+      - name: Mesh acceptance batteries (P3 – P8) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
         # §11.4, §23.4) ran only by hand until 2026-09-06. Tier 1 throughout: FakePeerNetwork, an
         # injected clock, no radio, no wall-clock sleeps — ~2 minutes on a hosted runner.
@@ -240,11 +240,18 @@ jobs:
         #   with    `MeshRoutedDrainTests` (57 suites)          — 359 ran, 0 failed, 157 s  (+43, +4 s;
         #     the same 57-suite list measured 157 / 159 / 160 s across three runs, so +4 s is inside noise
         #     and +11 s for the fourteen is three to four times it)
-        #   plus the fourteen named below (71 suites)           — 606 ran, 0 failed, 168 s  (+247, +11 s)
-        # The fourteen are PRICED and still ungated — the owner's call; cost = 11 s for 247 cells:
-        #   item 1's three key-agreement suites (30): MeshKeyAgreementFoldTests 14,
-        #     MeshKeyAgreementVerificationTests 11, MeshKeyAgreementSchemaTests 5;
-        #   the 51 photo-delivery cells the key-advertisement clause promotes by citation:
+        #   plus the fourteen named below (that hypothetical list was 57 + 14 = 71 suites)
+        #                                                       — 606 ran, 0 failed, 168 s  (+247, +11 s)
+        #     NOTE the collision: that "71 suites" is NOT today's 71-suite line (57 + P8 item 10's
+        #     OWN, different fourteen), and neither "fourteen" is the other.
+        # GATED at P9 item 6 (2026-09-20), the fourteen the owner's call had deferred; 247 cells for
+        # a measured +11 s. Per suite, as re-counted at P9 item 6 — the selector names the STRUCT,
+        # never the file, and seven of the fourteen do not share their file's name:
+        #   item 1's three key-agreement suites (30), all in MeshKeyAgreementAdvertisementTests.swift:
+        #     MeshKeyAgreementFoldTests 14, MeshKeyAgreementVerificationTests 11,
+        #     MeshKeyAgreementSchemaTests 5;
+        #   the 51 photo-delivery cells the key-advertisement clause promotes by citation, all three
+        #     in MeshRoutedPhotoDeliveryTests.swift:
         #     MeshKeyAdvertisementDeliveryTests 26, MeshRoutedPhotoDeliveryTests 17,
         #     MeshRoutedPhotoSenderTests 8;
         #   eight of the larger remaining ungated routed suites (166) — NOT the eight largest: the
@@ -254,7 +261,16 @@ jobs:
         #     MeshRoutedCustodyEvidenceTests 17, MeshRoutedStoreIsolationTests 16.
         # P6 item 9's handoff said "~243 across fourteen suites" and its itemisation lived in a scratch
         # file that is gone; these fourteen MEASURE 247. The measured delta is what is recorded here,
-        # never the remembered estimate. Gating all fourteen would put the step at 606 cells / 168 s.
+        # never the remembered estimate.
+        # Two of the fourteen carry NO @Suite attribute — MeshRoutedItemSealTests and
+        # MeshRoutedStoreIsolationTests are plain structs found by their @Tests; the other twelve
+        # carry @Suite(.serialized) on the line ABOVE the struct. A grep for @Suite under-counts
+        # both ways, which is why this list is maintained against DECLARATIONS, not against a grep.
+        # Gating the fourteen does not gate their FILES: 11 sibling suites (83 cells) in the same
+        # files stay off the line — MeshRoutedManifestGoldenTests 16,
+        # MeshRoutedTypeRegistryConsumerTests 10, MeshRoutedCustodyHandoffWallTests 9,
+        # MeshRoutedItemSealGoldenTests 9, and seven smaller. Named here rather than silently
+        # widened into the item.
         # RE-MEASURED at P8 item 3 (2026-09-18): the same 57-suite line executed 365 (359 + the six
         # founding cells item 3 added to MeshPairwiseFoundingTests, now 35: the hold's doors, its clock,
         # its uncommitted slots, the committed heal). The floor is the measured 365.
@@ -318,9 +334,17 @@ jobs:
         # run-gated-suites.sh line must be a declared suite, and every MeshP<n>*AcceptanceTests /
         # convergence battery declared in the tree must be named here — and it also runs on the first
         # wall step, so editing this step cannot silence it.
+        # RAISED 470 → 718 at P9 item 6 (2026-09-20) by gating the fourteen above, MEASURED on
+        # a Mac on one warm bundle with this exact 85-suite list run at floor 1 (the script's own
+        # result-bundle count; 470 + 247 + item 7's one new drain cell = 718 is the arithmetic
+        # check, never the source), and shown red once with one suite removed from the line before
+        # it was committed. Of the fourteen only MeshRoutedStoreIsolationTests is ALSO pinned by
+        # name in CIGateSelectorBoundaryTests — it is a source grep-wall with no compiler half, the
+        # MeshRoutedDrainWallTests argument; the other thirteen are behaviour suites and THIS floor
+        # is what stops any of them being dropped from the line.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 470 \
+          Scripts/run-gated-suites.sh mesh-batteries 718 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -391,4 +415,18 @@ jobs:
             MeshContinuationRaiseWallTests \
             MeshContinuationDisagreementTests \
             MeshContinuationTaskHostTests \
-            MeshContinuationTaskHostWallTests
+            MeshContinuationTaskHostWallTests \
+            MeshKeyAgreementVerificationTests \
+            MeshKeyAgreementFoldTests \
+            MeshKeyAgreementSchemaTests \
+            MeshKeyAdvertisementDeliveryTests \
+            MeshRoutedPhotoSenderTests \
+            MeshRoutedPhotoDeliveryTests \
+            MeshRoutedManifestSigningTests \
+            MeshRoutedCustodyHandoffTests \
+            MeshRoutedCapacityTests \
+            MeshRoutedItemSealTests \
+            MeshRoutedTypeRegistryTests \
+            MeshRoutedInventoryBuilderTests \
+            MeshRoutedCustodyEvidenceTests \
+            MeshRoutedStoreIsolationTests

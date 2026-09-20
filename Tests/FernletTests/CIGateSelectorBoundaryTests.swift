@@ -202,11 +202,26 @@ import Testing
         // `MeshContinuationCardPresentationTests`, `MeshContinuationDriverTests` and
         // `MeshContinuationDisagreementTests`: each is a table or a rig walk whose cells the floor
         // counts, and each has an acceptance clause of its own in `MeshP8AcceptanceTests`.
+        // P9 item 6 gates FOURTEEN more on the same argument — the three `MeshKeyAgreement*` suites,
+        // the three photo / key-advertisement delivery suites and eight routed behaviour suites,
+        // 247 cells: behaviour, not zero-lists, so the step's re-measured floor is what holds them
+        // on the line. Two of them (`MeshRoutedItemSealTests`, `MeshRoutedStoreIsolationTests`)
+        // carry no `@Suite` attribute at all and seven do not share their file's name — this suite
+        // reads DECLARATIONS for exactly that reason, and a selector naming a FILE matches nothing.
         #expect(gated.contains("MeshRoutedDrainWallTests"),
                 "the routed path's retirement and parking zero-lists are gated")
         #expect(gated.contains("MeshContinuationRaiseWallTests")
                 && gated.contains("MeshContinuationTaskHostWallTests"),
                 "P8's two source walls with no compiler half are gated")
+        // The one wall among P9 item 6's fourteen: `MeshRoutedStoreIsolationTests` source-scans the
+        // test tree for a `MeshRoutedStore(` that names no scope of its own, pins the production
+        // scope unreachable from tests, and pins the one construction site of
+        // `MeshCustodyDurabilityWitness` — uncompiled source counts that run nowhere else, the
+        // `MeshRoutedDrainWallTests` argument. Without this line the thirteen behaviour suites
+        // beside it are held by the step's floor alone, which needs a simulator; this half is the
+        // one that reds with no simulator at all when a name leaves the workflow.
+        #expect(gated.contains("MeshRoutedStoreIsolationTests"),
+                "the routed store's scope-isolation grep-wall is gated")
         let script = try RepoRoot.source(Self.floorScript)
         #expect(script.contains("totalTestCount") && script.contains("-resultBundlePath"),
                 "the floor script no longer reads the result bundle's own count")
