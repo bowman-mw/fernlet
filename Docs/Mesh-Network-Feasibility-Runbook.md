@@ -1903,6 +1903,98 @@ Two notes for the next reader:
 2's rows (b) and (d), P6's four un-run rows, and P9's acceptance lane. Nothing above was run on
 hardware; Lane D is still owed.
 
+### Lane C — P9 item 2: a presence epoch rotating over QUIC (2026-09-19)
+
+**The tier-2 acceptance row is CROSSED.** At a 900 s wall-clock boundary each of two Simulators
+minted a fresh instance name and a fresh TLS identity, put the new one on the air, and re-sighted the
+other under its new name with the pairwise tag still matching. Nothing of the old posture survives
+the boundary: the names and the certificate digests share nothing but the constant `fn-` prefix.
+
+Build `9f78111` (item 2 pass 2; HEAD `6ae7cb2` is its ledger), rebuilt for this lane (`** BUILD
+SUCCEEDED **`, zero `error:`, app mtime 21:22:34 after the 21:19:31 build start) and installed fresh
+on both. Nodes — **A** `iPhone 17` (`09F57BCA-…A88`, fp `38ce0d54d729c8f5`), **B** `iPhone 17 Pro`
+(`454FCC9C-…661B`, fp `fb795f343c2954da`). B's fingerprint is item 0's, unchanged across an
+uninstall (keychain-backed); A's is new again — the same asymmetry item 0 recorded.
+
+**Friend seeding took three sessions.** Tags match only for KEPT friends, so the lane ran the P6
+item-10b pair recipe (`FERNLET_MESH_AUTO_KEEP_FRIENDS=1`, `FERNLET_MESH_LEAVE_AFTER=40/25`, mesh
+`99992222-…`): `[mesh-flow] friends kept=1 vault=1` on both in 80 s. **Not enough** — see finding
+**P9-2-B**. A three-node seed meant to give each side a *second* friend **failed** on the
+founder-collapse race (`[mesh-quic] refused unknownIdentity … rosterMembers=2`; C stuck at
+`awaitingIdentityIntroduction`), so the lane fell back to two PAIR sessions, A↔C (`99994444-…`) then
+B↔C (`99995555-…`), **C** = `iPhone 17 Pro Max` (`9BA301C9-…B7`, fp `87684c8a76bb86c7`), 45 s each.
+C is only a vault row; it never runs during a presence run.
+
+Presence has no launch-env hook: it was switched on by hand per node at Settings → Nearby friends →
+**Presence**, and the switch ignores a `tap` under the simulator tool — a 40 pt `swipe` across it
+works (the P8 lesson, re-confirmed). Launches are plain, with no `FERNLET_MESH_*` variable and a
+per-Simulator audit stream started **before** each launch, killed by saved PID:
+
+```
+xcrun simctl spawn <udid> log stream --level info --predicate 'subsystem == "com.fernlet"' > <log> &
+xcrun simctl launch <udid> MBO.Fernlet -completeOnboarding          # A then B, 3 s apart
+```
+
+#### Run 1 — the rotation (the acceptance row). Boundary **21:45:00**, launched 21:40, apps on Home.
+
+| Side | `advertised` epoch / name / cert | `rotated` epoch / name / cert | shared bytes | peer key before → after | `tags` | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| **A** | 21:40:03.924 · 1988742 · `fn-419a8f4d0ca9bbab` · `bebe4700683e032d` | 21:45:00.808 · **1988743** · `fn-a63b8386a493a355` · `54bdc74431c7d724` | none past `fn-`; 16/16 hex, longest common substring 1 char | `fn-5c2065d9222ba2c0` → `fn-a036a6b06ce02b3d` | 1 → 1 | **PASS** |
+| **B** | 21:40:09.870 · 1988742 · `fn-5c2065d9222ba2c0` · `0162854118df72d4` | 21:45:00.788 · **1988743** · `fn-a036a6b06ce02b3d` · `b28b3ac9f7e0c1b4` | none past `fn-`; 16/16 hex, longest common substring 2 chars | `fn-419a8f4d0ca9bbab` → `fn-a63b8386a493a355` | 1 → 1 | **PASS** |
+
+B rotated **+0.788 s** after the boundary, A **+0.808 s**; each re-sighted the other's NEW
+registration at **21:45:02.079**, **1.27 s** after its own rotation, `tags=1` again. Exactly one
+`presence.quic.rotated` per side. `stopped`, `redundantTunnelClosed` and `dial refused` are **zero**
+here and in every run below.
+
+```
+21:45:00.808  presence.quic.rotated certificate=54bdc74431c7d724 epoch=1988743 name=fn-a63b8386a493a355
+21:45:02.079  presence.quic.sighted peer=fn-a036a6b06ce02b3d._fernlet-near2._udp.local. tags=1
+```
+
+Not to be misread: at 21:45:00.81 each side logs `sighted … tags=0` for BOTH old names, its own
+included — the withdrawn registration's empty TXT, plus the own ghost layer 1 drops. No peer lost tags.
+
+#### Runs 2–4 — the heart, the glare attempt, a second rotation. Epochs 1988744 → 1988745, apps on Friends.
+
+| # | What | Verdict | Evidence |
+| --- | --- | --- | --- |
+| 2 | One heart, A → B, inside a rotated epoch | **PASS (transport half)** | `presence.quic.connected tunnels=1` on **both** at 22:05:23.94/.95; the friend row reads **"Nearby now"**, then **"Sent just now"** on A. The presence heart path emits no audit token at the recipient (only in-memory `recordDiagnostic`), so B's ceremony was not independently confirmed |
+| 3 | Glare — both hearts at once | **NOT A GLARE (inconclusive)** | the two taps landed **1.35 s** apart (`connected` at 22:17:44.95 and 22:17:46.30 on both), so each heart took its own tunnel, `tunnels=1` each time and **zero** `redundantTunnelClosed` — the correct answer for sequential dials. One heart did cross **each way**, and presence never stood down |
+| 4 | A second rotation, apps still up | **PASS, with a timing surprise** | 1988744 → **1988745**, one `rotated` per side; A `fn-690e71966399dcd2`→`fn-d80ff7dbf3ed6b84`, B `fn-f75171e671f6e4b8`→`fn-d2df908b1566576f`, certs wholly different, re-sighted `tags=2` at 22:15:53.01 — but it fired at **22:15:51.3**, **51 s late** (finding **P9-2-C**) |
+
+#### Three findings
+
+* **P9-2-A — `presence.quic.sighted` logs the peer's advertised instance name.** The line's own
+  comment says it names the peer "by its OPAQUE, session-scoped key … and never by the instance name
+  it advertises". On the Bonjour path the key is `MeshLinkKey(endpoint.id)` and `endpoint.id` **is**
+  the service name, so every sighting reads `peer=fn-<the peer's own advertised name>._fernlet-near2._udp.local.`.
+  The linkage window is bounded to one 900 s epoch by the rotation this row just proved, but the
+  privacy property `9f78111`'s fix (3) claims does not hold.
+  `FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift:691-715`.
+* **P9-2-B — a mutual friend whose ONLY friend is you never becomes nearby, and nothing says so.**
+  With A and B each other's sole friend the transport sighted the peer with `tags=1` on both sides
+  and no friend ever surfaced. Self-exclusion layer 3 drops any advertisement whose whole token set
+  is a subset of our own, and a sole-friend pair's sets are identical by construction — the source
+  documents this ("RESIDUAL (bounded, accepted, spec)"), so it is not a new defect. Two Simulators
+  are exactly that shape: **every future presence lane run must seed a third friend.** The exclusion
+  is invisible too — `recordDiagnostic` only appends to an in-memory array, so nothing records it,
+  and the lane inferred the negative from the source rather than from a "Not nearby" row.
+  `FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift:501-540`.
+* **P9-2-C — the boundary wake drifts with the length of the sleep.** Run 1's rotation, armed ~300 s
+  ahead, landed +0.8 s after the boundary; run 4's, armed ~767 s ahead, landed **+51 s** — on BOTH
+  Simulators within 0.3 s of each other, which points at the host suspending the two timers together
+  rather than at app logic. The epoch NUMBER stayed correct (`floor(unix/900)` read at the wake) and
+  both sides were late together so tags still matched, but for 51 s each device kept advertising the
+  previous epoch's name and certificate. `PresenceManager.delayToNextEpochBoundary()` arms one long
+  `Task.sleep` per epoch — the wall-clock-deadline family; a device run should re-measure it before
+  the drift is written off as a Simulator artefact.
+
+Two smaller notes: the Friends tab's "Looking for nearby friends…" card is the **mesh** session card
+and never reflects presence, which shows up two taps in as the friend row's "Nearby now" and heart;
+and the "Sent just now" cooldown banner does not clear itself — twelve minutes on it still read
+"Sent just now", clearing only when the row was collapsed and re-expanded.
+
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
 
 **The shipping transport has never run on hardware.** Lane A puts the *spike* on a device; Lane C
