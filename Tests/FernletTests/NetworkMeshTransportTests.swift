@@ -1139,6 +1139,37 @@ struct NetworkMeshSessionTests {
         )
     }
 
+    /// The listener and browser task bodies check for cancellation before they report.
+    ///
+    /// A source claim because it has to be: `NetworkListener.run` is a framework call a unit test
+    /// cannot make throw. The order is the whole of it — `updateDiscoveryInfo(_:)` cancels the
+    /// listener task on EVERY republish (a mesh-mode change, a merge, a member-count change) and
+    /// `pauseDiscovery()` cancels both at every hold, because re-creating the listener is the only
+    /// way to withdraw a Bonjour registration. The owner's only reader is `discoveryError`, the
+    /// Friends-screen banner: the republish path never clears it, and the hold and stop paths clear
+    /// it BEFORE the cancel lands, so a `CancellationError` reported as a failure is a "discovery
+    /// failed" banner pinned over a healthy search until the user leaves the tab. Mirrors
+    /// `PresenceOverQUICTests.theListenerAndBrowserTasksDoNotReportTheirOwnCancellation`.
+    @Test func theListenerAndBrowserTasksDoNotReportTheirOwnCancellation() throws {
+        let code = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
+        )
+        for signature in ["func startListener() throws", "func startBrowser()"] {
+            let body = try #require(
+                MeshRoutedSourceScan.bracedBody(after: signature, in: code),
+                "\(signature) is gone or its braces do not close"
+            )
+            let guardIndex = try #require(
+                body.range(of: "guard !Task.isCancelled else { return }")?.lowerBound,
+                "\(signature)'s task body reports without checking for its own cancellation first"
+            )
+            let reportIndex = try #require(
+                body.range(of: "report(")?.lowerBound, "\(signature) no longer reports at all"
+            )
+            #expect(guardIndex < reportIndex, "\(signature) guards AFTER it reports, which guards nothing")
+        }
+    }
+
     /// A session identity is minted once per endpoint and both halves are minted together, so a
     /// re-sighting resolves to the same `id` AND the same endpoint key — the property every slot,
     /// QR binding and device cap above the transport depends on.
