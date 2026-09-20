@@ -488,13 +488,14 @@ struct RecipeShareTeardownTests {
     /// ranging (observable here) and the Live Activity anchor. Before the fix the record was
     /// simply removed and the coordinator freed without ever running its teardown.
     @Test func peerDisconnectCancelsTheDroppedCoordinator() async {
-        let manager = ProximityRecipeShareManager(store: store)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: store, makeSession: { radio })
         let ranging = MockRangingProvider()
         let peer = makePeer()
         _ = manager.makeRetainedConnectionCoordinatorForTesting(peer: peer, transport: MockMultipeerTransport(), ranging: ranging)
         #expect(manager.connectionCountForTesting == 1)
 
-        manager.multipeerSessionForTesting.onPeerDisconnected?(peer, "Peer disconnected")
+        radio.onPeerDisconnected?(peer, "Peer disconnected")
 
         #expect(manager.connectionCountForTesting == 0)
         await waitUntil { ranging.stopCalled }

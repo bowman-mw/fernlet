@@ -326,17 +326,18 @@ struct RecipeShareTransferTests {
         // ML5 (invariant HP0): the host is hoisted into its own `let` so it outlives the
         // manager's `unowned` reference to it — an inline host dies at the end of the expression.
         let host = RecipeTransferTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
-        manager.multipeerSessionForTesting.pauseDiscovery()
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
+        radio.pauseDiscovery()
+        #expect(radio.isDiscoveryPaused)
 
         // Not running: the gate holds the radio closed rather than advertising from a dark manager.
         #expect(manager.applyDiscoveryGateForTesting(.connectionsEvicted) == .unchanged)
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(radio.isDiscoveryPaused)
 
         manager.markRunningForTesting()
         #expect(manager.applyDiscoveryGateForTesting(.connectionsEvicted) == .resume)
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused == false)
+        #expect(radio.isDiscoveryPaused == false)
     }
 
     /// The three events that must never move discovery, driven through the production helper.
@@ -344,12 +345,13 @@ struct RecipeShareTransferTests {
         // ML5 (invariant HP0): the host is hoisted into its own `let` so it outlives the
         // manager's `unowned` reference to it — an inline host dies at the end of the expression.
         let host = RecipeTransferTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
-        manager.multipeerSessionForTesting.pauseDiscovery()
+        radio.pauseDiscovery()
         for event: RecipeShareDiscoveryGate.Event in [.refreshRequested, .transportErrorWhileListening, .stopped] {
             #expect(manager.applyDiscoveryGateForTesting(event) == .unchanged, "\(event) moved discovery")
-            #expect(manager.multipeerSessionForTesting.isDiscoveryPaused, "\(event) reopened a paused radio")
+            #expect(radio.isDiscoveryPaused, "\(event) reopened a paused radio")
         }
     }
 
@@ -365,14 +367,15 @@ struct RecipeShareTransferTests {
         // ML5 (invariant HP0): the host is hoisted into its own `let` so it outlives the
         // manager's `unowned` reference to it — an inline host dies at the end of the expression.
         let host = RecipeTransferTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
 
         manager.beginTransferForTesting(recipientID: UUID())
         #expect(manager.transferForTesting?.radioIsQuiet == false, "an open radio minted a quiet record")
 
         // The radio is ALREADY standing down at this mint — no gate event will follow it.
-        manager.multipeerSessionForTesting.pauseDiscovery()
+        radio.pauseDiscovery()
         manager.beginTransferForTesting(recipientID: UUID())
         #expect(manager.transferForTesting?.radioIsQuiet == true, "the record was not seeded from the radio")
 

@@ -167,7 +167,13 @@ name (today `sid` is per app launch and links every Food-tab visit in that launc
 | `drafts/manager.patch.md` | `FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift` |
 | `drafts/docs.patch.md` | `Docs/FileIndex.md`, `Docs/ProximityFunctionIndex.md`, `…/Documentation.docc/ProximityKit.md` |
 
-## 7. What pass 2 binds
+## 7. What pass 2 binds — **LANDED** (pass 2, 2026-09-20)
+
+> Every binding below is in the tree. Two deviations, both stated in the pass-2 summary and in the
+> code: the `sid` is minted by the SESSION rather than the manager (it is re-minted with the
+> instance name and the TLS identity at every `start()` **and every resume**, so an owner-side copy
+> would go stale), and the seam carries a second inbound hook, `shouldAcceptDialer`, because the
+> owner's 2-device cap has to rule on a dialer that `resolveDialer` has already named.
 
 `NetworkRecipeShareSession.swift` on `_fernlet-recipe2._udp` (ALPN `fernlet-recipe-v1`), a
 `RecipeShareRadioSession` protocol + `makeSession` factory on the manager, the Info.plist

@@ -41,11 +41,24 @@ struct ProximityRecipeShareCapTests {
     /// `endpoint` defaults to a fresh key, so two calls are two devices. Passing the same key
     /// twice is the only way to express "one device, two discovery handles" — see
     /// `makeReturningDevice`.
+    /// A browsed recipe peer, named the way the QUIC radio names one: in the TXT record.
+    ///
+    /// `displayHint` is EMPTY because that is what `NetworkRecipeShareSession.handle(for:)` mints
+    /// — under MultipeerConnectivity the hint was `UIDevice.current.name` and every fixture here
+    /// leaned on it, which is how a manager reading the hint could print a random Bonjour instance
+    /// name into the picker and keep a green suite.
     private func makePeer(named name: String, endpoint: PeerEndpointKey = PeerEndpointKey()) -> PeerHandle {
         PeerHandle(
             id: UUID(),
-            displayHint: name,
-            discoveryInfo: nil,
+            displayHint: "",
+            discoveryInfo: RecipeShareAdvertisement.publishedFields(
+                from: [
+                    RecipeShareAdvertisement.versionKey: RecipeShareAdvertisement.version,
+                    RecipeShareAdvertisement.modeKey: RecipeShareAdvertisement.mode,
+                    RecipeShareAdvertisement.nameKey: name
+                ],
+                sessionID: UUID().uuidString
+            ),
             advertisedFingerprint: nil,
             endpoint: endpoint
         )
@@ -159,11 +172,12 @@ struct ProximityRecipeShareCapTests {
     /// manager mirrors it (`PresenceManagerTests`).
     @Test func aStartFailureStandsTheListenerDownByItsOwnAccount() {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         #expect(manager.isListening, "up by its own account")
 
-        manager.multipeerSessionForTesting.onTransportError?(
+        radio.onTransportError?(
             "Browsing failed to start for service \"fernlet-recipe\": test"
         )
 
@@ -176,7 +190,7 @@ struct ProximityRecipeShareCapTests {
         let host = RecipeCapTestHost()
         let manager = ProximityRecipeShareManager(store: host)
 
-        #expect(manager.shouldAcceptInvitationForTesting(makePeer(named: "Alex")))
+        #expect(manager.shouldAcceptDialerForTesting(makePeer(named: "Alex")))
     }
 
     @Test func invitationRefusedWhileConnectionHeldButSamePeerMayReinvite() {
@@ -185,22 +199,23 @@ struct ProximityRecipeShareCapTests {
         let paired = makePeer(named: "Alex")
         registerConnection(on: manager, peer: paired)
 
-        #expect(!manager.shouldAcceptInvitationForTesting(makePeer(named: "Blair")))
+        #expect(!manager.shouldAcceptDialerForTesting(makePeer(named: "Blair")))
         // Retry of a dropped attempt from the peer that already holds the pairing stays open.
-        #expect(manager.shouldAcceptInvitationForTesting(paired))
+        #expect(manager.shouldAcceptDialerForTesting(paired))
     }
 
     /// The connecting-window race: a second inviter must be refused while a FIRST peer is
     /// invited/accepted but not yet MC-connected (`connections` alone can't see that window).
     @Test func invitationRefusedDuringConnectingWindow() {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         let connecting = makePeer(named: "Alex")
-        manager.multipeerSessionForTesting.registerPendingConnectionForTesting(connecting)
+        radio.connectingPeers.append(connecting)
 
-        #expect(!manager.shouldAcceptInvitationForTesting(makePeer(named: "Blair")))
+        #expect(!manager.shouldAcceptDialerForTesting(makePeer(named: "Blair")))
         // The pending peer itself re-inviting is not "besides" its own window.
-        #expect(manager.shouldAcceptInvitationForTesting(connecting))
+        #expect(manager.shouldAcceptDialerForTesting(connecting))
     }
 
     // MARK: - Outbound cap
@@ -226,11 +241,12 @@ struct ProximityRecipeShareCapTests {
 
     @Test func sendRefusedWhileConnectingWindowBusyWithAnotherPeer() throws {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()  // keeps sendRecipeShare's start() from touching radios
         let target = makePeer(named: "Blair")
-        manager.multipeerSessionForTesting.onPeerDiscovered?(target)
-        manager.multipeerSessionForTesting.registerPendingConnectionForTesting(makePeer(named: "Alex"))
+        radio.onPeerDiscovered?(target)
+        radio.connectingPeers.append(makePeer(named: "Alex"))
         let recipient = try #require(manager.nearbyRecipients.first)
 
         manager.sendRecipeShare(makePayload(), to: recipient)
@@ -246,28 +262,30 @@ struct ProximityRecipeShareCapTests {
 
     @Test func establishingConnectionPausesDiscovery() {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
-        #expect(!manager.multipeerSessionForTesting.isDiscoveryPaused)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
+        #expect(!radio.isDiscoveryPaused)
 
         // Same add-path both roles share (handleChannelReady fires on inviter and invitee).
         registerConnection(on: manager, peer: makePeer(named: "Alex"))
 
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(radio.isDiscoveryPaused)
         #expect(manager.diagnosticEvents.contains { $0.message.contains("closed to others") })
     }
 
     @Test func peerDisconnectEvictionResumesDiscovery() {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         let peer = makePeer(named: "Alex")
         registerConnection(on: manager, peer: peer)
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(radio.isDiscoveryPaused)
 
-        manager.multipeerSessionForTesting.onPeerDisconnected?(peer, "Peer disconnected")
+        radio.onPeerDisconnected?(peer, "Peer disconnected")
 
         #expect(manager.connectionCountForTesting == 0)
-        #expect(!manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(!radio.isDiscoveryPaused)
         #expect(manager.diagnosticEvents.contains { $0.message.contains("reopened") })
     }
 
@@ -275,12 +293,13 @@ struct ProximityRecipeShareCapTests {
     /// one) must still reopen the radio via the stale-coordinator sweep.
     @Test func staleCoordinatorSweepResumesDiscovery() async {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         let peer = makePeer(named: "Alex")
         let transport = MockMultipeerTransport()
         let coordinator = registerConnection(on: manager, peer: peer, transport: transport)
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(radio.isDiscoveryPaused)
 
         await coordinator.begin(role: .browser, mode: .friend)
         transport.simulateDisconnection()
@@ -288,7 +307,7 @@ struct ProximityRecipeShareCapTests {
         manager.checkCoordinatorStatesForTesting()
 
         #expect(manager.connectionCountForTesting == 0)
-        #expect(!manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(!radio.isDiscoveryPaused)
         #expect(manager.diagnosticEvents.contains { $0.message.contains("reopened") })
     }
 
@@ -298,7 +317,8 @@ struct ProximityRecipeShareCapTests {
     /// the eviction must reopen the radio.
     @Test func parkedDiscoveringCoordinatorIsSweptAndResumesDiscovery() async {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         let peer = makePeer(named: "Alex")
         let coordinator = registerConnection(on: manager, peer: peer)
@@ -310,12 +330,12 @@ struct ProximityRecipeShareCapTests {
         manager.sweepParkedConnections(now: t0)
         // First sighting only marks the record — no eviction before the timeout.
         #expect(manager.connectionCountForTesting == 1)
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(radio.isDiscoveryPaused)
 
         manager.sweepParkedConnections(now: t0.addingTimeInterval(31))
 
         #expect(manager.connectionCountForTesting == 0)
-        #expect(!manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(!radio.isDiscoveryPaused)
         #expect(manager.diagnosticEvents.contains { $0.message.contains("stalled connection") })
         #expect(manager.diagnosticEvents.contains { $0.message.contains("reopened") })
     }
@@ -323,7 +343,8 @@ struct ProximityRecipeShareCapTests {
     /// A coordinator that progressed past verification must never be counted as parked.
     @Test func parkedSweepIgnoresProgressingCoordinators() async {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         let peer = makePeer(named: "Alex")
         let transport = MockMultipeerTransport()
@@ -338,14 +359,15 @@ struct ProximityRecipeShareCapTests {
         manager.sweepParkedConnections(now: t0.addingTimeInterval(600))
 
         #expect(manager.connectionCountForTesting == 1)
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(radio.isDiscoveryPaused)
     }
 
     // MARK: - Cap-aware refresh
 
     @Test func refreshDiscoveryIsNoOpWhilePaired() {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         registerConnection(on: manager, peer: makePeer(named: "Alex"))
 
@@ -353,7 +375,7 @@ struct ProximityRecipeShareCapTests {
 
         // The pairing (and the paused radio) survive; the refusal is user-visible.
         #expect(manager.connectionCountForTesting == 1)
-        #expect(manager.multipeerSessionForTesting.isDiscoveryPaused)
+        #expect(radio.isDiscoveryPaused)
         guard case .failed(let message) = manager.sendState else {
             Issue.record("Expected visible cap-aware refresh status, got \(manager.sendState)")
             return
@@ -365,11 +387,12 @@ struct ProximityRecipeShareCapTests {
 
     @Test func connectTimeoutSurfacesBusyPeerFailure() async throws {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         manager.connectTimeoutSeconds = 0.05
         let target = makePeer(named: "Blair")
-        manager.multipeerSessionForTesting.onPeerDiscovered?(target)
+        radio.onPeerDiscovered?(target)
         let recipient = try #require(manager.nearbyRecipients.first)
 
         manager.sendRecipeShare(makePayload(), to: recipient)
@@ -394,11 +417,12 @@ struct ProximityRecipeShareCapTests {
     /// best-effort kick a pairing that is still progressing.
     @Test func connectTimeoutIsCancelledOnceTheConnectionRecordExists() async throws {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         manager.connectTimeoutSeconds = 0.05
         let target = makePeer(named: "Blair")
-        manager.multipeerSessionForTesting.onPeerDiscovered?(target)
+        radio.onPeerDiscovered?(target)
         let recipient = try #require(manager.nearbyRecipients.first)
 
         manager.sendRecipeShare(makePayload(), to: recipient)
@@ -422,11 +446,12 @@ struct ProximityRecipeShareCapTests {
     /// listening stays dark until app relaunch.
     @Test func transportErrorWhileListeningStopsTheManagerSoTheNextGateEventRestartsIt() {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         #expect(manager.isRunningForTesting)
 
-        manager.multipeerSessionForTesting.onTransportError?("Could not start browsing for nearby Fernlets.")
+        radio.onTransportError?("Could not start browsing for nearby Fernlets.")
 
         #expect(!manager.isRunningForTesting, "stop() must run so the next gate event genuinely restarts discovery")
         #expect(manager.diagnosticEvents.contains { $0.message.contains("retry on the next app event") })
@@ -436,11 +461,12 @@ struct ProximityRecipeShareCapTests {
     /// attempts, and resume runs only with no connection held — but the guard is load-bearing).
     @Test func transportErrorNeverTearsDownALivePairing() {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         registerConnection(on: manager, peer: makePeer(named: "Alex"))
 
-        manager.multipeerSessionForTesting.onTransportError?("Advertiser failed.")
+        radio.onTransportError?("Advertiser failed.")
 
         #expect(manager.isRunningForTesting)
         #expect(manager.connectionCountForTesting == 1)
@@ -754,12 +780,13 @@ struct ProximityRecipeShareCapTests {
     /// invitation and channel-ready gates ask.
     @Test func sendToTheDeviceAlreadyPairedIsNotRefusedByTheOutboundCap() throws {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()  // keeps sendRecipeShare's start() from touching radios
         let alex = makeReturningDevice(named: "Alex")
         // Discovery holds the first handle (so the row is minted from it); the pairing came up
         // under the second.
-        manager.multipeerSessionForTesting.onPeerDiscovered?(alex.first)
+        radio.onPeerDiscovered?(alex.first)
         let recipient = try #require(manager.nearbyRecipients.first)
         registerConnection(on: manager, peer: alex.again)
 
@@ -787,11 +814,12 @@ struct ProximityRecipeShareCapTests {
     /// best-effort kicked the pairing that was in fact progressing.
     @Test func connectTimeoutStandsDownWhenTheDeviceAnsweredUnderAChurnedHandle() async throws {
         let host = RecipeCapTestHost()
-        let manager = ProximityRecipeShareManager(store: host)
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         manager.connectTimeoutSeconds = 0.05
         let alex = makeReturningDevice(named: "Alex")
-        manager.multipeerSessionForTesting.onPeerDiscovered?(alex.first)
+        radio.onPeerDiscovered?(alex.first)
         let recipient = try #require(manager.nearbyRecipients.first)
 
         manager.sendRecipeShare(makePayload(), to: recipient)

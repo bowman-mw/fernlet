@@ -25,6 +25,7 @@
 		<string>_fernlet-near._udp</string>
 		<string>_fernlet-mesh2._udp</string>
 		<string>_fernlet-near2._udp</string>
+		<string>_fernlet-recipe2._udp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Fernlet connects with nearby friends for mesh photos, temporary text, and heart gifts during a user-started session, which may continue in the background.</string>

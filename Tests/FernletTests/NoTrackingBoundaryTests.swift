@@ -281,9 +281,9 @@ struct NoTrackingBoundaryTests {
         "NWListener", "NWParameters", "NWParametersBuilder", "NWTXTRecord"
     ]
 
-    /// The three files in shipping code that may name a local-link Network.framework API.
+    /// The four files in shipping code that may name a local-link Network.framework API.
     ///
-    /// All three are link-local by construction and cannot reach a host at all: they advertise and
+    /// All four are link-local by construction and cannot reach a host at all: they advertise and
     /// browse a Bonjour service type over QUIC with `prohibitedInterfaceTypes = [.cellular]`, and
     /// every byte they carry is a signed/sealed Fernlet envelope between two phones in the same
     /// room. None appears in ``permittedHTTPClientFiles``, and none may — see
@@ -294,6 +294,10 @@ struct NoTrackingBoundaryTests {
         // ProximityKit's QUIC presence radio (plan §17.1): the same three, advertising under a
         // PresenceEpochPosture that is replaced whole at every 900 s epoch boundary.
         "NetworkPresenceSession.swift",
+        // ProximityKit's QUIC recipe-share radio (plan §17.1): the same three, advertising under a
+        // RecipeSharePosture minted per start and per resume, and standing the listener AND the
+        // browser down for as long as a pairing is held.
+        "NetworkRecipeShareSession.swift",
         // The DEBUG-only feasibility spike, compiled out of Release entirely.
         "NetworkMeshFeasibilityProbe.swift"
     ]

@@ -1341,6 +1341,36 @@ one timer is the manager's epoch tick — and no roster, dial budget, heartbeat 
 | `observe(_:)` / `noteBrowsed(_:key:at:)` / `noteLost(_:)` | The browse set: self-filtered by the posture's own instance name, re-announced when a TXT record changes, audited as `presence.quic.sighted` — which names the peer by a salted per-session digest label (`peerLabel(for:)` — the raw `MeshLinkKey` IS the Bonjour service name, so it is never logged) and counts its tags, never carrying a peer's instance name or tag values. |
 | `advertisedInstanceNameForTesting` / `advertisedCertificateDigestForTesting` / `advertisedEpochForTesting` | The reads `NetworkMeshSession` never had — presence's claim is that these rotate together and leave nothing behind, and a rotation that never reached the listener is invisible to a source scan. |
 
+### `NetworkRecipeShareSession.swift`
+
+**P9 item 3 pass 2** (plan §17.1). The recipe-share radio's QUIC surface on
+`_fernlet-recipe2._udp` (ALPN `fernlet-recipe-v1`): one listener registered under a
+`RecipeSharePosture` minted per `start()` and per resume, one browser, and the ONE pairwise tunnel
+the hard 2-device cap allows. It owns **no timer** and no roster, dial budget or heartbeat — but,
+unlike the presence radio, it does own a per-transfer stream, because a recipe carrying a picture
+clears `MeshTransferStreamTable.bulkFloorBytes`. `RecipeShareRadioSession` is the seam the manager
+drives it through; the production conformer is this file.
+
+| Function | What It Does |
+| --- | --- |
+| `start(advertisement:)` | Mints a fresh posture and brings the listener up, advertising the owner's `v`/`mode`/`name` beside the radio's own `sid`. Throws so the owner can stand the radio down rather than look running while dark. |
+| `stop()` | Cancels every task, drops every map, the posture **and the pause flag**, audits `recipe.quic.stopped`. The flag reset is load-bearing: `RecipeShareDiscoveryGate`'s three "unchanged" rows say discovery is resolved by the radio's own `stop()`/`start()`, which is only true if a pause cannot survive one. |
+| `pauseDiscovery()` | Stands the listener AND the browser down while keeping the pairing — the listener so a third Fernlet stops seeing this one, the browser so this one stops seeing a third. A share in flight is untouched: an outbound tunnel is its own connection and an inbound one is owned by its own task, neither by the listener. Audits `recipe.quic.paused`. |
+| `resumeDiscovery()` | Reopens under a WHOLLY new posture — new instance name, new certificate, new `sid`. Coming back under the old name would hand any scanner in the room "the device that went quiet at 19:04 is the device that came back at 19:11", which is the link the ephemeral posture exists to break. Mints BEFORE it clears the pause flag, so a failed mint cannot leave an unpaused radio answering with a withdrawn `sid`; the outgoing instance name is kept for one browse cycle so a cached echo of ourselves is still self-filtered. Audits `recipe.quic.resumed`. |
+| `dial(_:helloSID:)` | Opens a tunnel to a browsed peer and writes the `RecipeShareDialHello` claiming `helloSID`. A peer with no cached endpoint, a peer already held, and a peer whose identity aged out of the bounded map are all **dial refusals** (`recipe.quic.dialRefused`, the last one `peer=unlabelled` since there is no key to take a label from) and never transport errors — that hook stands the whole radio down. |
+| `endTunnel(_:)` | Ends a peer's tunnel at the owner's request, without reporting it back to the owner (the hook fires synchronously and would re-enter the owner's own eviction path). |
+| `hasConnectingPeers(besides:)` | The connecting-window half of the cap: a tunnel whose control stream has not arrived (our dial, in flight) or a connection mid-hello — every one of those EXCEPT the connection currently being adjudicated, which is the one the caller is ruling on. A pending inbound is booked before its hello can be read, so a check that counted it refused every inbound dial there is; one that counted no pending inbound at all would let a second dialer past the cap. |
+| `adjudicateInbound(_:pendingKey:)` | The synchronous half of inbound admission, run with this connection excluded from the connecting window: `resolveInbound` → identity key → pending entry → `admitInbound`. No suspension point between the exclusion and its `defer`, so one slot covers both connections `maxPendingInbound` allows. |
+| `reportBrowserFailure(_:)` | A browser failure is not a start failure: the browser is stood down and audited (`recipe.quic.browserFailed`), and the message reaches the owner, which stands the radio down only when nothing is held and nothing is mid-connect. Under MC this door opened at start and nowhere else; a QUIC browser fails mid-evening, and a stand-down cancels the user's in-flight dial. |
+| `republishListener()` | A withdrawn service registration re-mints and re-listens (`recipe.quic.registrationWithdrawn`, then `startListener`'s `recipe.quic.advertised`). This radio publishes once per `start()`/resume and owns no timer, so a silent `.remove` is P8 item 0's device finding (b): nothing on the air with `isListening` still true. A republish that cannot mint or listen reaches `report(_:)`, so it stands down honestly. |
+| `handle(for:)` | The session-stable handle. `displayHint` is deliberately EMPTY — the only tokens this radio holds for a peer are its random instance name and the endpoint key containing it, and both are what the salted peer labelling exists to keep out of what a user reads. The name comes from the TXT `name`, or from the owner's placeholder. |
+| `send(_:to:mode:)` | One sealed frame, routed by size alone: at or above `MeshTransferStreamTable.bulkFloorBytes` it takes a stream of its own and waits for the peer's ack byte; everything smaller rides the control stream in order. `mode` is accepted and ignored — no datagrams. |
+| `serveInbound(stream:pendingKey:connection:)` | Reads the dial hello and promotes the pending connection to a tunnel ONLY if it resolves and `admitInbound(at:)` gives it the slot; every early return drops the connection whole, which is also what refuses a second hello on one connection. |
+| `resolveInbound(_:)` | The refusal chain, in order: our OWN `sid` (an echo or a replay, never a peer), then the owner's `resolveDialer`, then the owner's `shouldAcceptDialer`. Both hooks fail closed. |
+| `admitInbound(at:)` | Glare: a second connection under a held key is COLLAPSED, never refused, by `MeshTunnelConvergence` over the two advertised instance names — refusing on both sides leaves two Fernlets that dialed each other with no tunnel at all. Audits `recipe.quic.redundantTunnelClosed`. |
+| `serveTransferStream(_:on:)` | Reads one whole transfer, hands it to the channel as ONE frame and acks it. A stream whose connection resolves to no tunnel is refused before a byte is read — a tunnel records its connection only at `activate`, so that is structural. Never disconnects: one malformed transfer must not end a pairing mid-share. |
+| `peerLabel(for:)` | The opaque, salted, session-scoped token every per-peer diagnostic names a peer by. A `MeshLinkKey` here IS the browsed endpoint id, which carries the peer's instance name verbatim, and an unsalted digest of a public name is recomputable by anyone who can hash. |
+
 ### `PeerTransport.swift`
 
 | Function | What It Does |
@@ -1681,6 +1711,18 @@ view-free so the session-end flows in `ConnectView` / `DisposableCameraView` sta
 | `FriendPhotoLibrarySaver.userFacingFailure(for:photoCount:)` | Maps a `save(_:)` error onto the shared `PhotoSaveFailure` alert content: the permission denial (the only one offering Open Settings), the singular/plural corruption wording for `NothingSavedError`, or `PhotoSaveFailure.generic`. |
 | `View.photoSaveFailureAlert(_:failure:)` | Presents that failure identically at every save surface (session-end review, disconnect review, album carousel): message body, conditional Open Settings button, OK; every button clears the binding. |
 
+### `RecipeSharing/RecipeShareAdvertisement.swift`
+
+**P9 item 3 pass 2.** The recipe radio's TXT vocabulary as pure functions, and the dialer's opening
+frame.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `publishedFields(from:sessionID:)` | Joins the owner's half of the record (`v`, `mode`, the byte-bounded `name`) to the RADIO's `sid` and bounds the result through `MeshLinkAdvertisement.publishedFields(from:)`. The split of ownership is the point: the `sid` is minted with the instance name and the TLS identity, so an owner-side copy would go stale at the first resume. |
+| `sessionID(from:)` / `isRecipeAdvertisement(_:)` | The reader: version- AND mode-gated, so a presence or mesh registration browsed by accident names no session id and can resolve no dialer. |
+| `entriesFitTheTXTLimit(_:)` | Whether every `key=value` fits DNS-SD's 255-byte entry ceiling. Presence learned this the expensive way (24 tags were 311 bytes); this record's worst case is ~150 and is asserted rather than assumed. |
+| `RecipeShareDialHello.encoded(sessionID:)` / `.decoded(_:)` | The one frame a dialer writes before anything else, naming the `sid` it already advertises — how the responder resolves an inbound QUIC connection back to a browsed peer, which the retired transport gave for free. `.sortedKeys` makes it canonical, so the golden vector is a vector and not a snapshot of one encoder's field order. Total on the read side: every malformed case has one answer, refuse. |
+
 ### `RecipeShareTransfer.swift`
 
 | Function | What It Does |
@@ -1697,19 +1739,21 @@ view-free so the session-end flows in `ConnectView` / `DisposableCameraView` sta
 | --- | --- |
 | `ProximityRecipeShareDiagnosticEvent.init(...)` | Creates a timestamped diagnostic event. |
 | `ProximityRecipeShareDiagnostics.appending(_:to:maxCount:)` | Appends and caps diagnostics to the newest events. |
-| `init(store:)` | Provisions identity and configures recipe-share session callbacks. |
+| `init(store:)` / `init(store:makeSession:)` | Provisions identity, builds the radio and configures its callbacks. `makeSession` is the **test seam** (pass 2): an optional closure resolved in the init body — a `@MainActor` type cannot be a default-argument value — so a unit test hands in an in-memory `RecipeShareRadioSession` and every gate, pause and discovery callback is reachable with no Bonjour. Shipping code calls `init(store:)`. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
-| `start()` | Starts recipe-share discovery/advertising and observation if not already running. |
+| `start()` | Starts recipe-share discovery/advertising and observation if not already running. The radio's `start(advertisement:)` THROWS (pass 2), and a failure goes straight through `handleTransportError(_:)`'s stand-down door so `isListening` tells the truth. |
 | `stop()` | Stops discovery/session, cancels tasks, clears recipients/connections/status. |
 | `refreshDiscovery()` | Restarts discovery while clearing peer and connection state. |
 | `sendRecipeShare(_:to:)` | Starts discovery, queues outgoing payload, reuses verified connection or invites recipient. |
 | `dismissRecipeShare(_:)` | Removes a pending inbound share. |
 | `dismissRecipeShare(id:)` | Removes a pending inbound share by ID. |
 | `proximityCoordinator(_:didReceive:plaintext:from:)` | Accepts valid `recipeShare` envelopes and inserts pending review items. |
-| `setupSession()` | Installs recipe-share discovery/lost/channel/disconnect/acceptance callbacks. |
-| `discoveryInfo()` | Builds recipe-share discovery metadata (`v`/`sid`/`name`/`mode`), with `name` bounded in BYTES by `RecipeShareAdvertisedName.publishable(_:)` so the pass-2 Bonjour publisher cannot drop it — and the `name` key OMITTED when nothing publishable remains, matching `MeshLinkAdvertisement.publishedFields` (an absent name falls back to the peer hint; an empty one would render as the placeholder). |
+| `setupSession()` | Installs the radio's discovery/lost/channel/disconnect/transport-error hooks plus the two pass-2 inbound hooks, `resolveDialer` and `shouldAcceptDialer`. |
+| `handleTransportError(_:)` | The radio's START-failure door: records the message and `stop()`s so the run-policy seam re-applies a running verdict at its next run (P8 item 0 (b)). **Only a start failure reaches it** — a per-dial miss, a refused hello and a failed transfer are logged inside the radio, because under QUIC this door is reachable from far more than `didNotStart*` and would stand the whole radio down on an ordinary evening. Guarded on an empty connection list so it can never tear down a live pairing. |
+| `peerAdvertising(sessionID:)` | The `resolveDialer` body: which browsed peer, if any, advertises that `sid`. QUIC has no invitation carrying a browsed peer, so an inbound dialer names itself and this is the resolution; a `sid` no discovered peer carries resolves to nobody and the radio refuses the connection before any channel or handle exists. |
+| `discoveryInfo()` | Builds the OWNER's half of the TXT record (`v`/`mode`/`name`), with `name` bounded in BYTES by `RecipeShareAdvertisedName.publishable(_:)` so the Bonjour publisher cannot drop it — and the `name` key OMITTED when nothing publishable remains, matching `MeshLinkAdvertisement.publishedFields` (an absent name falls back to the peer hint; an empty one would render as the placeholder). The `sid` is deliberately absent: it belongs to the radio, which mints it with its instance name and TLS identity at every `start()` and every resume, and joins it in `RecipeShareAdvertisement.publishedFields(from:sessionID:)`. |
 | `applyDiscoveryGate(_:)` | The ONE door to the radio's discovery: takes `RecipeShareDiscoveryGate`'s verdict for a manager event, applies it to the session, tells the live `RecipeShareTransfer` which way the door moved, and returns the verdict (the resume's diagnostic line is conditional on it; the pause's is not). `session.pauseDiscovery()` and `session.resumeDiscovery()` appear nowhere else — walled by `RecipeShareTransferTests`. |
-| `applyTransfer(_:)` | Drives the live `RecipeShareTransfer`. Answers true when there is no record: every send path mints one, so a missing record means a teardown already ran, and refusing there would turn that into a silently dropped share. The record is per **send**, not per payload — two overlapping shares to one already-paired peer share one record, so `sendPendingPayload` audits a refused completion instead of discarding it. |
+| `applyTransfer(_:token:)` | Drives the live `RecipeShareTransfer`. Answers true when there is no record: every send path mints one, so a missing record means a teardown already ran, and refusing there would turn that into a silently dropped share. `token` is the **per-send** attribution (pass 2): two overlapping shares to one already-paired peer carry the same `recipientID`, so a `sendBegan`/`sendCompleted`/`sendFailed` names the record that began it and a mismatch is refused and audited rather than credited to whichever record is live. Events that belong to whatever share is live — a verification, a teardown, a discovery pause — pass no token. |
 | `displayName` | Delegates to the shared `ProximityHost.resolvedProximityDisplayName` (`PeerDisplayNames.swift`), like the mesh and presence managers. |
 | `handlePeerDiscovered(_:)` | Filters self/blocked peers and updates sorted nearby recipients. |
 | `handlePeerLost(_:)` | Removes lost peer and records diagnostics. |
@@ -1718,7 +1762,7 @@ view-free so the session-end flows in `ConnectView` / `DisposableCameraView` sta
 | `checkCoordinatorStates()` | Captures verified fingerprints/KA keys, ensures recipients, sends pending payloads, and drops stale connections. |
 | `ensureRecipient(for:identity:)` | Adds/updates a recipient from verified identity. |
 | `sendPendingPayload(via:)` | Encodes, seals, sends queued recipe payload, updates send state, and records diagnostics. The send is gated on the exchange's once-only `sendBegan` (belt-and-braces beside `pendingOutgoing = nil`, and the half a pass-2 session cannot quietly lose); a refusal is surfaced as a visible failure, never swallowed. |
-| `peer(for:)` | Finds a peer from active connection, discovered cache, or session channels. |
+| `peer(for:)` | Finds a peer from the active connection, the discovered cache, or the radio's connected peers. |
 | `scheduleStatusClear()` | Resets send state to idle after a short delay. |
 | `recordDiagnostic(_:)` | Appends capped diagnostic event. |
 
