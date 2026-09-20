@@ -315,23 +315,59 @@ extension AuditRatchetBoundaryTests {
     /// worked example in a comment is exactly where a stale literal gets copied from. The cost is
     /// that prose about `"Aug #"` has to use straight quotes; `UXScreenProbe.swift` does.
     ///
-    /// Checked before the abbreviations were added: none of the 94 distinct frozen labels contains
-    /// a month abbreviation, so this widening rejects nothing that is there today. Weekday
-    /// abbreviations are NOT added — `"Friends"`, `"Pick a friendlier name"` and `"Sunscreen"`
-    /// would all fail instantly.
+    /// **Weekday ABBREVIATIONS were added 2026-09-20 too, together with WHOLE-WORD matching, and
+    /// the second is what made the first possible.** The earlier note here said weekday
+    /// abbreviations could never be added because `"Friends"`, `"Pick a friendlier name"` and
+    /// `"Sunscreen"` carry "Fri" and "Sun" — true of a substring match, and the reason the sibling
+    /// list in `UXScreenProbe.volatileDateWords` left them out. It also said this app renders no
+    /// abbreviated weekday beside a numeral, which was **false**: `CoachPlanReviewView.swift`
+    /// renders `weekday(.abbreviated).month(.abbreviated).day()` twice, i.e. "Sat, Sep 20" — a
+    /// literal that walks WEEKLY. No Coach screen is baselined yet, so nothing was broken; a
+    /// baseline recorded on one before this would have been.
+    ///
+    /// Matching is therefore whole-word on both sides of the wall: an occurrence counts only when
+    /// neither neighbour is a letter, so "Fri" inside "Friends" is not a date and "Sat," is. This
+    /// also retires the old false positive on ordinary copy ("Marching", "Decaf"). Counts, stated
+    /// exactly because the earlier note named the wrong set: the map holds **82** distinct labels
+    /// (37 keys, 167 identity lines), while this scan reads every curly-quoted string from the
+    /// first mention of the map to EOF — 91 distinct, comments included. **Zero** of either key
+    /// differently under whole-word matching than under the substring pass they were recorded
+    /// with, so this change rejects nothing that is there today and moves no identity.
     private func baselinePinsAVolatileLiteral(_ text: String) -> Bool {
         guard let start = text.range(of: "auditBaselineEntries") else { return false }
         let months = ["January", "February", "March", "April", "May", "June", "July",
                       "August", "September", "October", "November", "December",
                       "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sept", "Sep",
                       "Oct", "Nov", "Dec"]
-        let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+                        "Sunday", "Mon", "Tues", "Tue", "Wed", "Thurs", "Thur", "Thu",
+                        "Fri", "Sat", "Sun"]
         for line in text[start.upperBound...].components(separatedBy: .newlines) {
             guard line.contains("\u{201C}"), let label = quotedLabel(line) else { continue }
             if label.contains(where: { $0.isNumber }) { return true }
-            if (months + weekdays).contains(where: { label.range(of: $0, options: .caseInsensitive) != nil }) {
+            if (months + weekdays).contains(where: { containsWholeWord($0, in: label) }) {
                 return true
             }
+        }
+        return false
+    }
+
+    /// Whether `word` occurs in `text` as a whole word, case-insensitively — neither neighbour a
+    /// letter.
+    ///
+    /// The Swift-side twin of `UXScreenProbe.replacingWholeWord(_:in:)`'s boundary rule; the two
+    /// must agree, because this wall exists to reject exactly the literals that function would have
+    /// rewritten. Bounded by the scan advancing past each occurrence.
+    private func containsWholeWord(_ word: String, in text: String) -> Bool {
+        var searchStart = text.startIndex
+        for _ in 0..<32 {
+            guard let hit = text.range(of: word, options: .caseInsensitive,
+                                       range: searchStart..<text.endIndex) else { return false }
+            let beforeIsLetter = hit.lowerBound > text.startIndex
+                && text[text.index(before: hit.lowerBound)].isLetter
+            let afterIsLetter = hit.upperBound < text.endIndex && text[hit.upperBound].isLetter
+            if !beforeIsLetter && !afterIsLetter { return true }
+            searchStart = hit.upperBound
         }
         return false
     }

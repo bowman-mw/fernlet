@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 // MARK: - UX appearance test harness
@@ -286,6 +287,49 @@ struct UXScreenProbe {
     /// `.github/workflows/s3-wall.yml` all name that device).
     static let baselineWindowSize = CGSize(width: 402, height: 874)
 
+    /// The simulator model the map was recorded on, as `SIMULATOR_MODEL_IDENTIFIER` names it.
+    ///
+    /// **The window frame cannot do this job, measured 2026-09-20 rather than assumed.** `iPhone 17`
+    /// (`iPhone18,3`), `iPhone 17 Pro` (`iPhone18,1`) and `iPhone 16 Pro` all report 1206x2622 at
+    /// @3x = 402x874 points, so ``baselineWindowSize`` passes on all three — while this repo's own
+    /// `uitest-env-round-2026-08-27` lists the device as environment input number one, because
+    /// identical pixel geometry still yields different findings (different safe areas, different
+    /// system font metrics, a different tab-bar inset). The identifier is the only input that
+    /// separates them, and it is read from the test RUNNER's process environment, where the
+    /// simulator's launchd sets it. Unset means "not a simulator", which this map does not describe,
+    /// so that is a mismatch too rather than a silent pass.
+    static let baselineModelIdentifier = "iPhone18,3"
+
+    /// The content size category the map was recorded at.
+    ///
+    /// Not cosmetic: `Text clipped` is 76 of the frozen findings and clipping is a direct function
+    /// of the type size, so a run at `medium` retires half the map and a run at an accessibility
+    /// size invents a screenful. `simctl ui <udid> content_size` has been observed stuck at `medium`
+    /// on this repo's simulators (memory `crypto-census-phase0-2026-08-27`), which is exactly the
+    /// drift a read-back in the runbook can forget and this assertion cannot.
+    static let baselineContentSizeCategory: UIContentSizeCategory = .large
+
+    /// The language and region the map was recorded in, as `language_region`.
+    ///
+    /// Every label in the map is English and several are dates. en_GB renders the same chip as
+    /// "20 Sep" where en_US renders "Sep 20" — one normalises to a leading placeholder and the other
+    /// to a trailing one, i.e. two different identities from one unchanged screen. `Docs/
+    /// Localization-Plan-2026-07-19.md`'s es/fr/de work makes that a scheduled red rather than a
+    /// hypothetical one.
+    static let baselineLocale = "en_US"
+
+    /// This run's simulator model identifier, or `nil` when the variable is not set.
+    static var modelIdentifier: String? {
+        ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"]
+    }
+
+    /// This run's language and region, in ``baselineLocale``'s shape.
+    static var localeDescription: String {
+        let language = Locale.current.language.languageCode?.identifier ?? "??"
+        let region = Locale.current.region?.identifier ?? "??"
+        return "\(language)_\(region)"
+    }
+
     /// `FERNLET_UI_TEST_ALLOW_OFF_BASELINE_DEVICE=1` — run the ratchet anyway. The one legitimate
     /// use is re-recording the whole map against a deliberately chosen new device; it is an
     /// environment variable rather than a code edit so that re-record does not have to touch, and
@@ -309,36 +353,77 @@ struct UXScreenProbe {
     /// `FERNLET_UI_TEST_OPEN_SHEET`'s sheet on some screens, so `assertOnScreen` fails first and the
     /// audit then measures whatever was behind it — noise on top of noise.
     ///
-    /// Checking the window frame catches every one of those at once and costs one comparison. The
-    /// failure names the destination to use, because "wrong device" is not a thing the reported
+    /// The failure names the destination to use, because "wrong device" is not a thing the reported
     /// deltas would ever say out loud.
     ///
-    /// **What it deliberately does not check.** Appearance (light/dark) and content size are not
-    /// asserted: `.contrast` is subtracted from ``auditTypes`` so appearance barely moves these
-    /// findings, and XCUITest cannot read the content size category back. Those stay the runner's
-    /// responsibility — a shut-down simulator boots to the light/`large` defaults the baselines
-    /// were recorded at, which is why booting a fresh one is the reliable fix for a drifted device.
+    /// **The window frame alone does NOT catch all of that, corrected 2026-09-20.** It catches
+    /// rotation and any device with different point geometry, and nothing else: the iPhone 17, the
+    /// 17 Pro and the 16 Pro are all 402x874, so for three years' worth of the devices this repo
+    /// actually boots, the frame check is blind. ``baselineModelIdentifier`` is what closes that,
+    /// and ``baselineContentSizeCategory`` / ``baselineLocale`` close the two other inputs that were
+    /// previously left to the runner's memory. Four inputs, each measured to move findings, each
+    /// named in the failure — see ``baselineEnvironmentMismatches()``.
+    ///
+    /// **What it still does not check.** Appearance (light/dark). `.contrast` is subtracted from
+    /// ``auditTypes``, and the 2026-09-20 re-record confirmed the whole delta reproduces
+    /// byte-for-byte in dark and in light on two independent runs, so appearance is measured not to
+    /// matter to these findings rather than merely hoped not to.
     private func isOnBaselineEnvironment(file: StaticString, line: UInt) -> Bool {
-        let size = window.frame.size
-        guard size != Self.baselineWindowSize else { return true }
+        let mismatches = baselineEnvironmentMismatches()
+        guard !mismatches.isEmpty else { return true }
         guard !Self.allowsOffBaselineDevice else { return true }
         XCTFail("""
             [\(name)] OFF-BASELINE ENVIRONMENT — the accessibility ratchet did not run, because its \
-            result would have been meaningless. This run's window is \(size), but every identity in \
-            `UXScreenProbe.auditBaselines` was recorded at \(Self.baselineWindowSize) (iPhone 17, \
-            portrait). Clipping and hit-region findings are layout facts, so a different device or \
-            a rotated simulator changes most of them at once and the deltas read like a real \
-            regression when nothing regressed.
+            result would have been meaningless. Every identity in `UXScreenProbe.auditBaselines` was \
+            recorded on \(Self.baselineModelIdentifier) at \(Self.baselineWindowSize) (iPhone 17, \
+            portrait), content size \(Self.baselineContentSizeCategory.rawValue), \
+            \(Self.baselineLocale). This run differs:
+            \(mismatches.joined(separator: "\n"))
+
+            Clipping and hit-region findings are layout facts, so any of those changes most of them \
+            at once and the deltas read like a real regression when nothing regressed.
 
             Run this suite on the canonical destination:
                 -destination 'platform=iOS Simulator,name=iPhone 17'
-            and if that simulator has been rotated or left in dark mode, boot a fresh one (a \
-            shut-down simulator boots portrait/light/large) rather than trusting the drifted state.
+            on a freshly erased simulator with `xcrun simctl ui <udid> content_size large` set AND \
+            read back, rather than trusting drifted host state.
 
-            To re-record the map against a deliberately chosen new device, set \
+            To re-record the map against a deliberately chosen new environment, set \
             FERNLET_UI_TEST_ALLOW_OFF_BASELINE_DEVICE=1.
             """, file: file, line: line)
         return false
+    }
+
+    /// Every recorded environment input this run does not match, one sentence each; empty means the
+    /// run is on the environment ``auditBaselines`` describes.
+    ///
+    /// Bounded and allocation-free by construction: four inputs, no loop.
+    private func baselineEnvironmentMismatches() -> [String] {
+        var mismatches: [String] = []
+        let size = window.frame.size
+        if size != Self.baselineWindowSize {
+            mismatches.append("  window \(size) — recorded at \(Self.baselineWindowSize)")
+        }
+        let model = Self.modelIdentifier
+        if model != Self.baselineModelIdentifier {
+            mismatches.append("""
+                  simulator model \(model ?? "<unset — not a simulator>") — recorded on \
+                \(Self.baselineModelIdentifier). Point geometry does NOT separate these devices; \
+                this is the check that does.
+                """)
+        }
+        let category = UIApplication.shared.preferredContentSizeCategory
+        if category != Self.baselineContentSizeCategory {
+            mismatches.append("""
+                  content size \(category.rawValue) — recorded at \
+                \(Self.baselineContentSizeCategory.rawValue)
+                """)
+        }
+        let locale = Self.localeDescription
+        if locale != Self.baselineLocale {
+            mismatches.append("  locale \(locale) — recorded in \(Self.baselineLocale)")
+        }
+        return mismatches
     }
 
     /// On an off-baseline run the ratchet is skipped, so ``report(_:raw:file:line:)`` never attaches
@@ -388,9 +473,15 @@ struct UXScreenProbe {
     /// ``unreportedCategories(found:baseline:)``: one audit type genuinely under-reports, and its
     /// absences are attached to the run instead of failing it. Read that doc comment before
     /// widening the list — it names what the exception costs.
+    ///
+    /// **That exception is itself bounded by ``absentFromScreen(_:)``, added 2026-09-20**, so the
+    /// rule above holds for EVERY frozen line: an entry is excused only while the element it names
+    /// is still on the audited screen. An under-reporting auditor is the only thing the exception
+    /// was ever meant to cover, and a screen the element has left is not that.
     private func report(_ found: Set<String>, raw: [String], file: StaticString, line: UInt) {
         let baseline = Self.auditBaselines[name] ?? []
-        let unreported = Self.unreportedCategories(found: found, baseline: baseline)
+        let excusable = Self.unreportedCategories(found: found, baseline: baseline)
+        let unreported = excusable.subtracting(absentFromScreen(excusable))
         let appeared = found.subtracting(baseline).sorted()
         let disappeared = baseline.subtracting(found).subtracting(unreported).sorted()
         attachListing(found: found, raw: raw, appeared: appeared, disappeared: disappeared,
@@ -449,8 +540,84 @@ struct UXScreenProbe {
                 commit — a baseline entry that matches nothing is a hole nobody is watching, and it \
                 would silently absorb the next finding that happens to describe itself the same way.
                 \(disappeared.joined(separator: "\n"))
+
+                A line from an under-reporting category reaches this list only when the element it \
+                names is not on the audited screen at all (see `absentFromScreen(_:)`), which is \
+                the one case that is NOT the auditor going quiet. Check where this probe's scroll \
+                stops before reading it as a fix.
                 """, file: file, line: line)
         }
+    }
+
+    /// The entries the under-reporting exception would have excused, minus the ones it may not:
+    /// those whose element has left the audited screen entirely.
+    ///
+    /// **This is the hole this closes, and it was a live one until 2026-09-20.** `Home · Recent
+    /// bites` froze six `Dynamic Type` lines for the personal-care cards. The probe's scroll moved
+    /// (the demo seed is dated relative to the wall clock, so the feed's content height is), the
+    /// cards left the viewport, and the six could not fail: their category under-reports, so
+    /// ``unreportedCategories(found:baseline:)`` subtracted them from the disappearance list on
+    /// every run, in both appearances, for weeks. The three `Text clipped` lines for the SAME cards
+    /// failed loudly on the first run after the drift, which is what made the asymmetry visible —
+    /// an excused line is walled in neither direction, so nothing else ever would have.
+    ///
+    /// The discriminator is presence, not category: an under-reporting auditor drops a finding for
+    /// an element that IS on screen, so a frozen line whose element is nowhere on the audited screen
+    /// is stale baseline rather than a quiet auditor, and fails like any other disappearance.
+    ///
+    /// **Deliberately biased towards excusing.** Every uncertainty resolves to "still excused":
+    /// a normalised label (one carrying `#` or the date placeholder) cannot be matched back to
+    /// rendered text, an element-less identity names nothing to look for, matching is CONTAINS
+    /// rather than equality, and only the first ``maximumPresenceChecks`` entries are checked at
+    /// all. So this can only ever ADD a failure that names a specific absent element — it cannot
+    /// make a screen red by being imprecise.
+    private func absentFromScreen(_ excusable: Set<String>) -> Set<String> {
+        var absent: Set<String> = []
+        for identity in excusable.sorted().prefix(Self.maximumPresenceChecks) {
+            guard let label = Self.renderedLabel(of: identity), !isRenderedOnScreen(label) else {
+                continue
+            }
+            absent.insert(identity)
+        }
+        return absent
+    }
+
+    /// How many excused entries one screen's presence check will look up. Bounds the query cost on
+    /// the two screens that carry a large Dynamic Type baseline (`Private · Cycle (both halves)` is
+    /// 23 entries, `Home tab` 17); anything past it stays excused, which is the safe direction.
+    static let maximumPresenceChecks = 24
+
+    /// How many elements sharing one label the presence check will examine before concluding the
+    /// label is off-screen. A label repeated more than this many times is on screen by any
+    /// reasonable reading.
+    static let maximumPresenceMatches = 8
+
+    /// The rendered text a frozen identity names, or `nil` when the identity does not name one that
+    /// can be looked back up — no label at all, or a label normalisation has rewritten.
+    static func renderedLabel(of identity: String) -> String? {
+        guard let open = identity.range(of: "\u{201C}"),
+              let close = identity.range(of: "\u{201D}", range: open.upperBound..<identity.endIndex)
+        else { return nil }
+        let label = String(identity[open.upperBound..<close.lowerBound])
+        guard !label.isEmpty, !label.contains("#"), !label.contains("<date-word>") else { return nil }
+        return label
+    }
+
+    /// Whether any element carrying `label` overlaps the window — i.e. whether the audited screen
+    /// still renders the thing a frozen line describes.
+    ///
+    /// `exists` alone is not enough and that is the whole point: a card scrolled far above the
+    /// viewport is still in the element tree, with a frame the window does not intersect, and the
+    /// accessibility audit never saw it.
+    private func isRenderedOnScreen(_ label: String) -> Bool {
+        let matches = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", label))
+        let visible = window.frame
+        let count = min(matches.count, Self.maximumPresenceMatches)
+        for index in 0..<max(count, 0) where matches.element(boundBy: index).frame.intersects(visible) {
+            return true
+        }
+        return false
     }
 
     /// Attaches the run's findings so the backlog is readable without re-running the audit: the raw
@@ -473,7 +640,8 @@ struct UXScreenProbe {
             -- baseline entries that did not reproduce (FAILS) --
             \(disappeared.isEmpty ? "none" : disappeared.joined(separator: "\n"))
 
-            -- baseline entries whose whole audit category went unreported this run (not walled) --
+            -- baseline entries excused this run: category under-reports AND the element is still \
+            on screen (not walled) --
             \(unreported.isEmpty ? "none" : unreported.joined(separator: "\n"))
             """
         let attachment = XCTAttachment(string: body)
@@ -543,9 +711,15 @@ struct UXScreenProbe {
     ///
     /// The practical consequence: a genuine Dynamic Type fix will not make this suite red, so those
     /// entries can go stale without anyone being told. They are listed in every run's attachment
-    /// under "whose category under-reports", which is where the Larger Text burn-down should be read
+    /// under the excused heading, which is where the Larger Text burn-down should be read
     /// from — but it is a weaker guarantee than the rest of the wall has, and it is weaker because
-    /// the measurement is weaker, not because the criterion matters less. The
+    /// the measurement is weaker, not because the criterion matters less.
+    ///
+    /// **One bound was added to that on 2026-09-20**, after six entries sat here unwalled for weeks
+    /// while the elements they named were not on the screen at all: ``absentFromScreen(_:)`` takes
+    /// an entry back out of this set when the audited screen no longer renders its element. What
+    /// remains excused is what this exception was always for — an element that is on screen and
+    /// whose category the auditor dropped. The
     /// alternative considered and rejected was subtracting `.dynamicType` from ``auditTypes``
     /// altogether, the way `.contrast` is: that would make the wall silent about the exact criterion
     /// the undeclared Larger Text row is blocked on.
@@ -644,33 +818,46 @@ struct UXScreenProbe {
 
     /// Weekday and month names, whose presence next to a numeral makes a label a DATE.
     ///
-    /// **The abbreviations come after the full names, and that order is load-bearing** (2026-09-20).
-    /// A `.month(.abbreviated)` style renders "Aug 28", which the full-name list alone left keyed as
-    /// "Aug #" — an identity that rotates to "Sep #" the first time a seed's relative date crosses a
-    /// month boundary, with no code change, and one the staleness wall could not see either (it
-    /// bans a digit or a full month name, and "Aug #" carries neither). Replacing the full names
-    /// FIRST is what keeps the two passes from interfering: the `<date-word>` placeholder contains
-    /// no month abbreviation, so a label the full-name pass has already collapsed cannot be
+    /// **The abbreviations were added 2026-09-20.** A `.month(.abbreviated)` style renders "Aug 28",
+    /// which the full-name list alone left keyed as "Aug #" — an identity that rotates to "Sep #"
+    /// the first time a seed's relative date crosses a month boundary, with no code change, and one
+    /// the staleness wall could not see either (it bans a digit or a full month name, and "Aug #"
+    /// carries neither). The full names are still replaced first, and the `<date-word>` placeholder
+    /// contains no month abbreviation, so a label the full-name pass has collapsed cannot be
     /// collapsed a second time. "May" needs no abbreviated form — it is its own.
     ///
-    /// **Weekday abbreviations are deliberately absent.** They would be an immediate regression
-    /// rather than a hardening: "Friends", "Pick a friendlier name" and "Sunscreen" are all frozen
-    /// baseline labels carrying "Fri" or "Sun", and this app renders no abbreviated weekday beside a
-    /// numeral. The month abbreviations were cleared the same way before being added — none of the
-    /// 94 distinct frozen labels contains one, so no existing identity moves.
+    /// **Weekday abbreviations are here too, and the reason they could not be before is the reason
+    /// matching is now WHOLE-WORD** (corrected 2026-09-20). The earlier note claimed this app
+    /// "renders no abbreviated weekday beside a numeral"; that was false when it was written.
+    /// `CoachPlanReviewView.swift` renders `weekday(.abbreviated).month(.abbreviated).day()` twice,
+    /// which reads "Sat, Sep 20" — an abbreviated weekday next to a numeral, keying as a literal
+    /// that rotates WEEKLY. No Coach screen is baselined yet, so it was latent rather than broken,
+    /// and a baseline recorded on one without this would have been a seven-day time bomb.
     ///
-    /// "Sept" precedes "Sep" so the longer form wins wherever a locale renders it. That one entry is
-    /// defensive rather than measured: en_US on iOS 26 renders "Sep", which is what the re-record saw.
+    /// The objection that kept them out was real and is now answered by the matcher rather than by
+    /// the list: "Friends", "Pick a friendlier name" and "Sunscreen" are frozen labels carrying
+    /// "Fri" and "Sun" as SUBSTRINGS, and a substring pass would have rewritten every one of them
+    /// the moment the label also carried a numeral. ``replacingWholeWord(_:in:)`` only replaces an
+    /// occurrence whose neighbours are not letters, so "Fri" inside "Friends" is left alone while
+    /// "Sat," and "Sun 3" collapse. Checked mechanically over the file as committed: of the 91
+    /// distinct curly-quoted labels the staleness wall scans (82 of them inside the map), **zero**
+    /// key differently under whole-word + weekday abbreviations than under the substring pass they
+    /// were recorded with, so no frozen identity moves.
     ///
-    /// The over-reach the full names already had is now slightly wider and still deterministic: a
-    /// label carrying a numeral and the substring "Dec" — "3 Decaf coffees" — normalises to
-    /// "# <date-word>af coffees". Pinned as a fixture in `UXScreenProbeIdentityTests` so it stays a
-    /// known shape rather than a surprise.
+    /// Whole-word matching also retires an over-reach the substring pass had: "3 Decaf coffees" was
+    /// keyed "# <date-word>af coffees" and is now left as "# Decaf coffees". Both are stable; the
+    /// second is readable. `UXScreenProbeIdentityTests` pins the new shape.
+    ///
+    /// The full names still come first and "Sept" still precedes "Sep", but note that whole-word
+    /// matching is what makes double collapse impossible now, not the order: "Aug" cannot match
+    /// inside "August" whichever pass runs first. The order is kept as the cheaper guarantee, and
+    /// the fixtures pin the RESULT rather than the order.
     static let volatileDateWords = [
         "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
         "January", "February", "March", "April", "May", "June", "July", "August",
         "September", "October", "November", "December",
-        "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sept", "Sep", "Oct", "Nov", "Dec"
+        "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sept", "Sep", "Oct", "Nov", "Dec",
+        "Mon", "Tues", "Tue", "Wed", "Thurs", "Thur", "Thu", "Fri", "Sat", "Sun"
     ]
 
     /// A label with wall-clock and seed-derived values replaced by placeholders, so an identity
@@ -708,7 +895,7 @@ struct UXScreenProbe {
         guard label.contains(where: { $0.isNumber }) else { return label }
         var out = label
         for word in volatileDateWords {
-            out = out.replacingOccurrences(of: word, with: "<date-word>", options: [.caseInsensitive])
+            out = replacingWholeWord(word, in: out)
         }
         var collapsed = ""
         var inNumber = false
@@ -723,6 +910,41 @@ struct UXScreenProbe {
         }
         return collapsed
     }
+
+    /// `text` with every WHOLE-WORD, case-insensitive occurrence of `word` replaced by the
+    /// `<date-word>` placeholder.
+    ///
+    /// **Whole-word is what lets the abbreviations exist at all.** Neither neighbour may be a
+    /// letter, which is the entire difference between "Sun 3" (a date this app renders) and
+    /// "Sunscreen" (a label this map freezes). Digits and punctuation are deliberately NOT letters:
+    /// "Sat," and "Aug28" are both dates. The placeholder itself carries no date word, so a second
+    /// pass cannot collapse the output of a first.
+    ///
+    /// Bounded twice over: ``maximumWordReplacements`` occurrences per word, and the loop consumes
+    /// the text ahead of each hit so it cannot revisit one.
+    static func replacingWholeWord(_ word: String, in text: String) -> String {
+        var done = ""
+        var rest = Substring(text)
+        for _ in 0..<maximumWordReplacements {
+            guard let hit = rest.range(of: word, options: [.caseInsensitive]) else { break }
+            let beforeIsLetter = hit.lowerBound > rest.startIndex
+                ? rest[rest.index(before: hit.lowerBound)].isLetter
+                : (done.last?.isLetter ?? false)
+            let afterIsLetter = hit.upperBound < rest.endIndex && rest[hit.upperBound].isLetter
+            if beforeIsLetter || afterIsLetter {
+                done.append(contentsOf: rest[..<hit.upperBound])
+            } else {
+                done.append(contentsOf: rest[..<hit.lowerBound])
+                done += "<date-word>"
+            }
+            rest = rest[hit.upperBound...]
+        }
+        return done + rest
+    }
+
+    /// How many occurrences of one date word ``replacingWholeWord(_:in:)`` will replace in one
+    /// label. Far past anything this app renders; it exists so the scan is bounded, not to limit it.
+    static let maximumWordReplacements = 32
 
     /// An audit issue rendered so someone can act on it without re-running the audit: the element's
     /// label **exactly as rendered** — not normalised — plus its identifier, type and frame.
@@ -789,7 +1011,13 @@ extension UXScreenProbe {
     /// `ItemCreationFlowUITests`, `RecipeDetailUITests`, `SettingsAppearanceUITests`) started from
     /// an EMPTY baseline and have failed on their first finding ever since. Nothing regressed; they
     /// were never measured. `FernletUITests` is not run by any CI workflow — `.github/workflows/`
-    /// only invokes named `FernletTests` boundary suites — which is how that stayed unnoticed.
+    /// only invokes named `FernletTests` boundary suites — which is how that stayed unnoticed, and
+    /// it is still true: this whole wall, including the `FernletTests` half, is local-only.
+    ///
+    /// TWO ENTRIES ARE NEWER THAN THE REST (2026-09-20): `Home · Recent bites` and `Move · Progress
+    /// photos` were re-recorded on that date, on `Fernlet-A11y` (iPhone18,3) at content size
+    /// `large`, in dark and confirmed in light. Each carries its own dated note saying which run
+    /// produced it and what moved. Every other entry is still the 2026-08-23/08-27 record.
     ///
     /// Every entry here was copied from the "not in baseline" listing of a run on the pinned
     /// simulator and confirmed on a second, independent run. The high-signal findings the original
@@ -824,43 +1052,45 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
-        // Re-recorded 2026-08-27 against a DETERMINISTIC viewport. `capture()` audits the whole
-        // visible screen, and this probe's scroll used to stop the moment the strip became
-        // hittable — a different offset every time Home's content height changed, which another
-        // suite adding one meal is enough to do. The personal-care card entries below are not new
-        // defects; they are what the bottom of the feed has always contained, and they appeared and
-        // disappeared from this screen's deltas depending on where the scroll happened to stop.
-        // `RecentBitesUITests` now scrolls to the true bottom, so the audited viewport is the same
-        // every run. `ProgressPhotoUITests` uses the same stop-when-hittable shape and is a
-        // candidate for the same treatment if it ever starts flapping.
+        // Last re-recorded 2026-09-20. What is PINNED about this entry is the environment, which
+        // `isOnBaselineEnvironment(file:line:)` now asserts in four places: the device
+        // (iPhone18,3), the window (402x874 portrait), content size `large` and en_US. What is NOT
+        // pinned, and cannot be by scrolling, is WHICH CARDS THE VIEWPORT CONTAINS.
         //
-        // PERSONAL-CARE CLIPS NO LONGER REPRODUCE (2026-09-20): the three `Text clipped` lines for
-        // the personal-care cards — "Brush teeth AM", "Brush teeth PM" and "Skincare AM" — were
-        // deleted from THIS screen. They came back as disappearances on two independent runs of an
-        // erased iPhone-17 simulator (402x874, content size `large`), once in dark and once in
-        // light, with an identical three-line delta both times. Their six `Dynamic Type` siblings
-        // below are untouched and still reproduce, which is the tell that this is not the auditor
-        // going quiet: `Text clipped` is not an under-reporting category, and an auditor failure
-        // takes a whole screen to 0 raw issues rather than exactly three lines of one category.
+        // The 2026-08-27 note claimed it was ("scrolls to the true bottom, so the audited viewport
+        // is the same every run"). That is false and this round is the counter-example: with no
+        // commit touching `HomeView.swift`, `RecentBites.swift`, `FernletStore+DemoSeed.swift` or
+        // `FernletKit/Sources/FernletUI/` since, nine findings' worth of cards left the audited
+        // viewport. Scrolling to the bottom pins the bottom EDGE; what sits above it is a function
+        // of the feed's content height, and the demo seed is dated relative to the wall clock
+        // (`FernletStore+DemoSeed.swift`), so the feed grows and shrinks on its own. Read this
+        // entry as "the bottom screenful of Home, whatever that currently holds", and expect the
+        // top of it to churn. `ProgressPhotoUITests` uses a stop-when-hittable scroll, which is
+        // less stable again.
         //
-        // Two of the three are ALSO frozen on `Sheet · Hygiene`, which is a different screen with
-        // its own viewport and was not re-recorded here — delete from one entry, never by a
-        // file-wide search, or the sheet silently loses a wall it never asked to give up.
+        // PERSONAL-CARE CARDS LEFT THIS VIEWPORT (2026-09-20): nine lines went, not three. The
+        // three `Text clipped` lines for "Brush teeth AM", "Brush teeth PM" and "Skincare AM" came
+        // back as disappearances on two independent runs (dark and light), and their six
+        // `Dynamic Type` siblings were deleted in the same round for the same reason — the cards
+        // are not on the audited screen. Measured, not inferred: on all five recorded runs of this
+        // screen the audit reported 7 distinct findings from 7 raw issues, every one of them
+        // `Text clipped`, ZERO in the Dynamic Type category, and the attached screenshot shows a
+        // viewport of macro card / Trends / First aid / Milestones / Recent bites / tab bar with no
+        // personal-care card in it. The six were listed as "category went unreported" on every run
+        // and were therefore walled in NEITHER direction — the split of deleting three and keeping
+        // six was the thing that had to be fixed.
         //
-        // NOT a fix, and nothing here claims it is. No commit has touched `HomeView.swift`,
-        // `RecentBites.swift`, `FernletStore+DemoSeed.swift` or `FernletKit/Sources/FernletUI/`
-        // since the 2026-08-27 round that recorded these lines, so no code changed the clipping.
-        // The seed is dated relative to the wall clock, so the feed's content height — and with it
-        // the true bottom this probe scrolls to — moves on its own. Deleted because the harness's
-        // rule is that a baseline entry matching nothing is a hole nobody is watching, not because
-        // the cards were made more readable.
+        // Not an accessibility fix and nothing here claims it is: the cards still clip, one screen
+        // away. `Sheet · Hygiene` is where they are walled, it has its own viewport by
+        // construction, and two of these labels are frozen there — delete from one entry, never by
+        // a file-wide search, or that sheet silently loses a wall it never asked to give up.
+        //
+        // The hole those six sat in is now closed at the mechanism: `absentFromScreen(_:)` takes an
+        // under-reporting-category entry back OUT of the excused set when the element it names is
+        // not on the audited screen, so a line like these fails as a disappearance instead of
+        // sitting unwalled. That is what makes deleting them safe rather than merely tidy: if the
+        // cards return to this viewport, the six come back as unconditional appearances.
         "Home · Recent bites": [
-            "Dynamic Type font sizes are partially unsupported — “Brush teeth AM” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Brush teeth PM” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Deodorant” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Floss” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Shower” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Skincare AM” (48)",
             "Text clipped — “Chicken rice bowl” (48)",
             "Text clipped — “Food” (9)",
             "Text clipped — “Friends” (9)",

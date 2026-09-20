@@ -63,12 +63,15 @@ final class UXScreenProbeIdentityTests: XCTestCase {
                        "abbreviated month chips must collapse to ONE identity, not one per month: \(keys)")
     }
 
-    /// The ordering invariant inside `volatileDateWords`: full names are replaced before
-    /// abbreviations, so a full name is never collapsed twice.
+    /// A full name is never collapsed twice — pinned as a RESULT, because what guarantees it
+    /// changed on 2026-09-20.
     ///
-    /// If the abbreviations were ever moved ahead of the full names, "August 2026" would go through
-    /// "Aug" first and key as "<date-word>ust #" — distinct from the abbreviated chip and from
-    /// today's frozen `Home tab` entry, i.e. a silent re-key of an existing baseline line.
+    /// It used to be the order alone: with substring matching, abbreviations ahead of the full
+    /// names would have taken "August 2026" through "Aug" first and keyed it "<date-word>ust #" —
+    /// a silent re-key of a frozen `Home tab` line. Whole-word matching makes that impossible
+    /// whatever the order, since "Aug" does not occur as a word inside "August". The order is kept
+    /// as the cheaper of two guarantees; these assertions pin the output, which is the thing that
+    /// must not move either way.
     @MainActor
     func testFullMonthNamesAreCollapsedBeforeTheirAbbreviations() {
         XCTAssertEqual(UXScreenProbe.normalisedLabel("August 2026"), "<date-word> #")
@@ -79,17 +82,51 @@ final class UXScreenProbeIdentityTests: XCTestCase {
                        "the date eyebrow must not pick up a second collapse from the abbreviations")
     }
 
-    /// **Accepted over-reach, pinned so it stays a known shape.**
+    /// **The over-reach is gone, and this is the fixture that says so** (2026-09-20).
     ///
-    /// Substring matching plus the numeral guard means an ordinary word that contains a month
-    /// abbreviation is rewritten when the label also carries a digit. It is deterministic and
-    /// harmless — an identity only has to be stable, not pretty — but it is worth being able to
-    /// recognise in a delta instead of treating it as corruption.
+    /// Matching used to be substring, so an ordinary word CONTAINING a month abbreviation was
+    /// rewritten whenever the label also carried a digit: "3 Decaf coffees" keyed as
+    /// "# <date-word>af coffees". `replacingWholeWord(_:in:)` requires both neighbours to be
+    /// non-letters, so ordinary copy is left alone. Stability was never the problem with the old
+    /// shape — readability was, and the old form is what made it impossible to add the weekday
+    /// abbreviations the next test needs.
     @MainActor
-    func testAbbreviationOverReachIsDeterministic() {
-        XCTAssertEqual(UXScreenProbe.normalisedLabel("3 Decaf coffees"), "# <date-word>af coffees")
+    func testWholeWordMatchingLeavesOrdinaryCopyAlone() {
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("3 Decaf coffees"), "# Decaf coffees")
         XCTAssertEqual(UXScreenProbe.normalisedLabel("Decaf coffees"), "Decaf coffees",
                        "without a numeral the label is still returned byte-for-byte")
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("2 Marching bands"), "# Marching bands")
+        XCTAssertEqual(UXScreenProbe.normalisedLabel("Roast at 425 for 25 Augmented minutes"),
+                       "Roast at # for # Augmented minutes")
+    }
+
+    /// **The abbreviated WEEKDAY, added 2026-09-20 — the same hole one screen out.**
+    ///
+    /// `CoachPlanReviewView` renders `weekday(.abbreviated).month(.abbreviated).day()`, i.e.
+    /// "Sat, Sep 20". With only the month half collapsing, that keyed as a literal weekday plus a
+    /// placeholder and walked every seven days. No Coach screen is baselined yet, so this is a hole
+    /// closed before it was stepped in rather than a bug fixed.
+    ///
+    /// The second half is the reason this could not be done before whole-word matching: three
+    /// frozen baseline labels carry "Fri" or "Sun" inside an ordinary word, and a substring pass
+    /// would have re-keyed every one of them the moment the label also held a numeral.
+    @MainActor
+    func testAbbreviatedWeekdaysCollapseWithoutTouchingOrdinaryWords() {
+        let keys = Set(["Sat, Sep 20", "Sun, Oct 4", "Mon, Jan 1", "Tue, Dec 31"]
+            .map { UXScreenProbe.normalisedLabel($0) })
+        XCTAssertEqual(keys, ["<date-word>, <date-word> #"],
+                       "an abbreviated weekday beside a numeral must key as one line: \(keys)")
+
+        let ordinary = ["3 Friends": "# Friends",
+                        "Pick a friendlier name 2": "Pick a friendlier name #",
+                        "1 Sunscreen": "# Sunscreen",
+                        "4 Satsumas": "# Satsumas",
+                        "2 Wedding cakes": "# Wedding cakes",
+                        "6 Monitors": "# Monitors"]
+        for (label, expected) in ordinary {
+            XCTAssertEqual(UXScreenProbe.normalisedLabel(label), expected,
+                           "a weekday abbreviation inside an ordinary word must not collapse")
+        }
     }
 
     /// Tomorrow, next month and a re-seeded demo must all produce the SAME key as today's.
