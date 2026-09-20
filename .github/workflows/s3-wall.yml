@@ -194,7 +194,7 @@ jobs:
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests
 
-      - name: Mesh acceptance batteries (P3 – P8) + the routed suites + the CI selector wall
+      - name: Mesh acceptance batteries (P3 – P9) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
         # §11.4, §23.4) ran only by hand until 2026-09-06. Tier 1 throughout: FakePeerNetwork, an
         # injected clock, no radio, no wall-clock sleeps — ~2 minutes on a hosted runner.
@@ -349,9 +349,56 @@ jobs:
         # unchanged at 85 and is now pinned itself, in CIGateSelectorBoundaryTests'
         # `measuredSuiteNameCounts` — so a name leaving this line reds with no simulator, which is
         # the half the thirteen behaviour suites above did not have.
+        # RAISED 719 -> 860 at P9 item 9 (2026-09-20) by adding P9's own acceptance battery and
+        # the seven suites items 2, 3 and 4 left on no CI line at all. 85 -> 97 suite names,
+        # re-pinned in CIGateSelectorBoundaryTests' `measuredSuiteNameCounts` in this same commit,
+        # and the battery pin there moves 48 -> 53. Terms:
+        #   +  3  MeshP9EphemeralPostureAcceptanceTests - the posture both radios wear: four epoch
+        #         boundaries walked as VALUES (no name, no certificate, no epoch repeats), the
+        #         certificate anchored to the epoch START through the injected mint seam rather
+        #         than through the unit suite's DER arithmetic, the two posture types pinned apart
+        #         (900 s epoch vs. per-start()/resume()), and neither persisted.
+        #   +  4  MeshP9PresenceSwapAcceptanceTests - item 2 pass 2 end to end on the shipping
+        #         manager over the seam's conformer: a mid-epoch start wearing the posture's own
+        #         name AND certificate, a tick inside the epoch that republishes nothing, a
+        #         boundary that replaces all of it and withdraws the old name; the service type and
+        #         ALPN distinct and declared while the retired pair is gone; every presence audit
+        #         line naming its peer only by a salted, per-session, fixed-width label, read
+        #         SCOPED to this session (item 7's rule); and the MC path gone from the manager,
+        #         walked over the whole package rather than one file.
+        #   +  5  MeshP9RecipeSwapAcceptanceTests - item 3: the whole 5 x 12 discovery-gate product
+        #         against this battery's OWN event-outermost literal table (five of sixty readings
+        #         move discovery, and no more), a pause that leaves a share in flight alone with a
+        #         record minted UNDER the pause it mirrors, the exactly-once completion oracle, the
+        #         per-resume() fresh posture and the stop() that keeps no pause flag, the service
+        #         type and ALPN, and the containment pairing that keeps discovery behind one door.
+        #   +  4  MeshP9McRetirementAcceptanceTests - item 4 as an HONESTY row, not a zero-list:
+        #         both MC files still exist BECAUSE MeshTransportFactory.shippingDefault is
+        #         .multipeer and stranger admission has no QUIC path, the framework import has
+        #         exactly two homes, the four dead Bonjour strings are gone while the LIVE friend
+        #         pair is still declared, and the owner's D-4.1/D-4.3 record survives. Every cell
+        #         here is one the cutover commit must edit - that is the handoff.
+        #   +  4  MeshP9HonestyAcceptanceTests - the two tier-2 lane rows, the three branches
+        #         nothing has ever observed, item 0's device rows, P9-3-A and 9.4-LATER, each as an
+        #         assertion over the doc that records it; the two determinism digests' single home;
+        #         and this battery's own gating.
+        #   +  9  PresenceEpochPostureTests   + 11  PresenceAdvertisementTests        (item 2 pass 1)
+        #   + 24  PresenceManagerTests        + 20  PresenceOverQUICTests             (item 2)
+        #   + 20  RecipeShareTransferTests    + 34  RecipeShareOverQUICTests          (item 3)
+        #   +  3  TransportNeutralityBoundaryTests - the MultipeerConnectivity permit wall. It ran
+        #         on NO CI line at all, and it is the whole-identifier scan clause (d) defers to for
+        #         the app target (where "MCSession" is a legitimate inspector row label and
+        #         FileMCPeerIDStore is Fernlet's own name). ALSO pinned by NAME in
+        #         CIGateSelectorBoundaryTests: a source grep-wall with no compiler half, the
+        #         MeshRoutedDrainWallTests argument, and the one of the seven that earns it.
+        #   = 141 added (the twelve terms above: 20 clause cells + 121 promoted); 719 + 141 = 860
+        #     is the ARITHMETIC CHECK, never the source. The floor is the MEASURED number, read off
+        #     the result bundle over this exact list ("Test run with 860 tests in 97 suites passed",
+        #     165.9 s, no `Restarting after unexpected exit` line), and it is shown red once with
+        #     one suite removed from the line before it is committed.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 719 \
+          Scripts/run-gated-suites.sh mesh-batteries 860 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -436,4 +483,16 @@ jobs:
             MeshRoutedTypeRegistryTests \
             MeshRoutedInventoryBuilderTests \
             MeshRoutedCustodyEvidenceTests \
-            MeshRoutedStoreIsolationTests
+            MeshRoutedStoreIsolationTests \
+            MeshP9EphemeralPostureAcceptanceTests \
+            MeshP9PresenceSwapAcceptanceTests \
+            MeshP9RecipeSwapAcceptanceTests \
+            MeshP9McRetirementAcceptanceTests \
+            MeshP9HonestyAcceptanceTests \
+            PresenceEpochPostureTests \
+            PresenceAdvertisementTests \
+            PresenceManagerTests \
+            PresenceOverQUICTests \
+            RecipeShareTransferTests \
+            RecipeShareOverQUICTests \
+            TransportNeutralityBoundaryTests

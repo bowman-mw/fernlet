@@ -25,7 +25,10 @@ import FernletDomainModel
 import AIProviders
 @testable import Fernlet
 
-private final class RecipeTransferTestHost: ProximityHost {
+/// The proximity host the recipe-share rigs hang a manager off. Internal, not file-private: P9
+/// item 9's `MeshP9RecipeSwapAcceptanceTests` builds the same rig (host hoisted to a `let`, ML5 /
+/// invariant HP0), and a second copy would be a second thing to keep in step with `ProximityHost`.
+final class RecipeTransferTestHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()

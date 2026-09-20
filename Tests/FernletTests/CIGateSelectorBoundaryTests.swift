@@ -65,7 +65,7 @@ import Testing
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
-        "mesh-batteries": 85
+        "mesh-batteries": 97
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -190,8 +190,10 @@ import Testing
         // eight clause suites = 36, plus P7 item 7's six clause suites (run policy, gate writer,
         // radio seams, poller, resume, honesty) = 42, plus P8 item 10's six (the coordinator's
         // table, the hold verb, the raises and the disagreement, the presentation table, the task
-        // wiring, honesty) = 48. A count of DECLARATIONS, taken by reading the tree.
-        #expect(batteries.count >= 48, "the mesh batteries shrank: \(batteries.count) declared")
+        // wiring, honesty) = 48, plus P9 item 9's five clause suites (the ephemeral posture, the
+        // presence swap, the recipe swap, the MC retirement as an honesty row, honesty) = 53. A
+        // count of DECLARATIONS, taken by reading the tree.
+        #expect(batteries.count >= 53, "the mesh batteries shrank: \(batteries.count) declared")
         let ungated = batteries.subtracting(gated).sorted()
         #expect(ungated.isEmpty, """
             Mesh acceptance batteries declared in Tests/FernletTests but not named in \
@@ -257,6 +259,18 @@ import Testing
         // one that reds with no simulator at all when a name leaves the workflow.
         #expect(gated.contains("MeshRoutedStoreIsolationTests"),
                 "the routed store's scope-isolation grep-wall is gated")
+        // P9 item 9 adds the one of its seven newly-gated suites that earns a NAME pin on the
+        // existing argument: `TransportNeutralityBoundaryTests` is a source grep-wall with no
+        // compiler half — `import MultipeerConnectivity` confined to two files, every framework
+        // type matched as a WHOLE identifier, and a permit list whose entries must still EXIST —
+        // and it is what `MeshP9McRetirementAcceptanceTests` defers to for the app target, where a
+        // substring walk cannot run (the connection inspector renders the literal row label
+        // "MCSession", and `FileMCPeerIDStore` is Fernlet's own name). It is also the wall the
+        // MC->QUIC cutover empties, so it must be impossible to drop from the line silently first.
+        // The other six of the seven are behaviour suites held by the step's measured floor, the
+        // `MeshRoutedLockedDeviceTests` precedent.
+        #expect(gated.contains("TransportNeutralityBoundaryTests"),
+                "the MultipeerConnectivity permit wall is gated")
         let script = try RepoRoot.source(Self.floorScript)
         #expect(script.contains("totalTestCount") && script.contains("-resultBundlePath"),
                 "the floor script no longer reads the result bundle's own count")

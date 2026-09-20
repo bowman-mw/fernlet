@@ -20,8 +20,11 @@ import FernletFoundation
 import FernletDomainModel
 @testable import Fernlet
 
+/// The proximity host a presence rig hangs a manager off. Internal, not file-private: P9 item 9's
+/// `MeshP9PresenceSwapAcceptanceTests` builds the same rig, and a second copy of a host would be a
+/// second thing to keep in step with `ProximityHost`. Do not re-narrow it.
 @MainActor
-private final class MockPresenceQUICHost: ProximityHost {
+final class MockPresenceQUICHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
@@ -35,7 +38,10 @@ private final class MockPresenceQUICHost: ProximityHost {
 }
 
 /// One advertisement the radio was asked to put on the air.
-private struct AdvertiseCall {
+///
+/// Internal because it is ``FakePresenceRadioSession/advertised``'s element type: widening that
+/// class alone is a hard error. Second reader: `MeshP9PresenceSwapAcceptanceTests`.
+struct AdvertiseCall {
     let instanceName: String
     let certificateDER: Data
     let epoch: UInt64
@@ -44,8 +50,12 @@ private struct AdvertiseCall {
 
 /// The in-memory presence radio: records what it was asked to advertise, dial and disconnect, and
 /// vends real ``NetworkPeerChannel``s with itself as the host so a heart rig can round-trip bytes.
+///
+/// Internal, not file-private: P9 item 9's `MeshP9PresenceSwapAcceptanceTests` drives the shipping
+/// manager over this same conformer rather than forking a second one, which would be a second
+/// thing to keep in step with `PresenceRadioSession`.
 @MainActor
-private final class FakePresenceRadioSession: PresenceRadioSession, NetworkChannelHost {
+final class FakePresenceRadioSession: PresenceRadioSession, NetworkChannelHost {
     var onPeerDiscovered: ((PeerHandle) -> Void)?
     var onPeerLost: ((PeerHandle) -> Void)?
     var onPeerChannelReady: ((NetworkPeerChannel) -> Void)?

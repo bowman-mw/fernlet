@@ -1009,7 +1009,11 @@ struct NoTrackingBoundaryTests {
     ///
     /// Returns an empty set only when the key is absent or not a string array; the caller treats
     /// that as a broken scan rather than a clean plist.
-    private static func declaredBonjourServiceTypes() throws -> Set<String> {
+    ///
+    /// Internal, not private: P9 item 9's `MeshP9McRetirementAcceptanceTests` shares the READER and
+    /// keeps its own retired/live/held partition, which is the right seam to share — parsing is
+    /// mechanics, the partition is the claim.
+    static func declaredBonjourServiceTypes() throws -> Set<String> {
         let data = try Data(contentsOf: RepoRoot.url("App/Fernlet/Info.plist"))
         let parsed = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
         guard let plist = parsed as? [String: Any],
