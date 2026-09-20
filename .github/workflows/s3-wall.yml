@@ -342,9 +342,16 @@ jobs:
         # name in CIGateSelectorBoundaryTests — it is a source grep-wall with no compiler half, the
         # MeshRoutedDrainWallTests argument; the other thirteen are behaviour suites and THIS floor
         # is what stops any of them being dropped from the line.
+        # 718 → 719 at item 6's FIX REVIEW (2026-09-20), RE-MEASURED over this same 85-suite list
+        # ("Test run with 719 tests in 85 suites passed", 165.8 s): +1 for the sibling of item 7's
+        # proof cell, MeshKeyAdvertisementDeliveryTests.aSiblingRigsParkRefusalIsNotCountedAgainstThisOne,
+        # which is what the twenty newly scoped audit counts in that file owe. The NAME count is
+        # unchanged at 85 and is now pinned itself, in CIGateSelectorBoundaryTests'
+        # `measuredSuiteNameCounts` — so a name leaving this line reds with no simulator, which is
+        # the half the thirteen behaviour suites above did not have.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 718 \
+          Scripts/run-gated-suites.sh mesh-batteries 719 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

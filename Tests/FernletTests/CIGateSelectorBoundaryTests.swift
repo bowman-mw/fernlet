@@ -44,6 +44,30 @@ import Testing
         let suites: [String]
     }
 
+    /// The MEASURED suite-name count of every gated step — the half of the non-vacuity guard that
+    /// needs no simulator (P9 item 6's fix review, NOTE-3).
+    ///
+    /// `-only-testing:` names that go missing are invisible to everything else here: a name leaving
+    /// a workflow line still leaves every remaining name declared, and `everyMeshAcceptanceBatteryIsGated`
+    /// only asks after `MeshP<n>…AcceptanceTests` / convergence batteries. Thirteen of P9 item 6's
+    /// fourteen are behaviour suites under none of those shapes, so the step's TEST-count floor —
+    /// which needs a Mac, a simulator and ~3 minutes — was the only thing holding them on the line.
+    /// A count of names is the generic rule the tally comment cannot be (the parser drops `#` lines
+    /// by design) and a hand-list of 85 names should never be: `gatedSteps` already returns them.
+    ///
+    /// MEASURED from the workflow, parsed exactly as `gatedSteps` parses it, at P9 item 6's fix
+    /// review (2026-09-20). RAISE an entry in the same commit that adds names; LOWER one only
+    /// deliberately, with the retirement argued, which is the whole point of the pin.
+    private static let measuredSuiteNameCounts: [String: Int] = [
+        "s3-grep": 2,
+        "no-tracking": 1,
+        "power-of-10": 1,
+        "localization": 1,
+        "key-custody": 4,
+        "crypto-goldens": 3,
+        "mesh-batteries": 85
+    ]
+
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
     /// comment lines ignored — a commented-out step is not a step.
     static func gatedSteps(in workflow: String) -> [GatedStep] {
@@ -134,6 +158,17 @@ import Testing
         for step in steps {
             #expect(!step.suites.isEmpty, "step \(step.label) names no suite")
             #expect(step.floor >= 1, "step \(step.label) has a vacuous floor")
+            let measured = Self.measuredSuiteNameCounts[step.label]
+            #expect(measured != nil, """
+                step \(step.label) has no entry in `measuredSuiteNameCounts` — a new gated step \
+                must record its own measured suite-name count, or names can leave it unnoticed
+                """)
+            #expect(step.suites.count >= (measured ?? 1), """
+                step \(step.label) names \(step.suites.count) suites; \(measured ?? 1) were \
+                measured on the line. A name that leaves is a silent loss of coverage which only \
+                the step's TEST-count floor would catch, and that needs a simulator — lower this \
+                number in the same commit that retires the suite, or put the name back.
+                """)
             for suite in step.suites where !declared.contains(suite) {
                 undeclared.append("\(step.label): \(suite)")
             }
@@ -225,6 +260,12 @@ import Testing
         let script = try RepoRoot.source(Self.floorScript)
         #expect(script.contains("totalTestCount") && script.contains("-resultBundlePath"),
                 "the floor script no longer reads the result bundle's own count")
+        // NOTE-4 of P9 item 6's fix review: a restart re-runs suites, so `totalTestCount` counts
+        // some cells twice and every floor above it becomes unreadable — 13 of the mesh step's
+        // suites are held by that floor alone. The guard is a grep in a shell script with no
+        // compiler half, so it is pinned here, beside the bundle-count pin it protects.
+        #expect(script.contains("Restarting after unexpected exit, crash, or test timeout"),
+                "the floor script no longer refuses a run xcodebuild restarted")
     }
 
     /// The parser reads the workflow's real shape: a continuation-joined invocation with a label, a

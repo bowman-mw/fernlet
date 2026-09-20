@@ -157,6 +157,28 @@ enum MeshRoutedPhotoFixtures {
     }
 }
 
+/// The predicate every per-cell audit count in this file is scoped by: the line was written by a
+/// device holding **this** mesh.
+///
+/// `FernletAuditLog`'s capture registry is process-global (D-6a.10) and Swift Testing runs suites
+/// in parallel, so `capture.count(of: token) == N` is a claim about the PROCESS unless the count is
+/// filtered. P9 item 6 put twenty such counts in this file onto the gated CI line beside four
+/// suites that drive key advertisements through a real manager — `MeshPairwiseFoundingTests` parks
+/// rows demonstrably — and one of them (`parkedReoffered == 3`) had already read 4 under the P8
+/// full-suite run. The mesh id is the one value in an audit line a sibling rig cannot mint, so it
+/// is what turns those counts back into per-cell claims (P9 item 7's fix review, FIX-1).
+///
+/// The READER is unchanged: this is the argument to the existing
+/// ``MeshRoutedBackpressureAuditCapture/count(of:where:)``, never a second mechanism. What closed
+/// the gap on the production side is `MeshNetworkManager.heldMeshAuditContext(_:)`, which adds the
+/// one `held` key to every line these counts read.
+///
+/// - Parameter meshID: The mesh the cell's own device holds.
+/// - Returns: A predicate over one captured line's context.
+private func heldBy(_ meshID: UUID) -> ([String: String]) -> Bool {
+    { $0["held"] == meshID.uuidString }
+}
+
 // MARK: - The rig seam
 
 @MainActor
@@ -448,8 +470,10 @@ struct MeshRoutedPhotoSenderTests {
         let store = makeTestStore()
         defer { withExtendedLifetime(store) {} }
         let manager = MeshNetworkManager(store: store)
+        // Named rather than inlined so the skip's audit count below can be scoped to it (FIX-1).
+        let meshID = UUID()
         manager.currentMesh = MeshP3Acceptance.mesh(
-            for: manager, meshID: UUID(), createdAt: MeshP3Acceptance.base
+            for: manager, meshID: meshID, createdAt: MeshP3Acceptance.base
         )
 
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
@@ -462,7 +486,8 @@ struct MeshRoutedPhotoSenderTests {
         #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
         #expect(manager.photosKeptOnThisPhone == 1,
                 "but it is COUNTED: the photo is on this wall and no other, and never will be (P8 item 0 (c))")
-        #expect(capture.count(of: "mesh.routedShare.skipped") == 1, "and the skip is audited, once")
+        #expect(capture.count(of: "mesh.routedShare.skipped", where: heldBy(meshID)) == 1,
+                "and the skip is audited, once, by the device holding THIS mesh")
         #expect(manager.membershipVerifier == nil,
                 "and the leg under test is the LEDGERLESS one, not a roster of one")
         var absent = false
@@ -499,7 +524,7 @@ struct MeshRoutedPhotoSenderTests {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             manager.startNewMesh(name: "Solo Meadow")
         }
-        #expect(manager.currentMesh != nil, "a real founded mesh")
+        let meshID = try #require(manager.currentMesh?.meshID, "a real founded mesh")
         #expect(manager.membershipVerifier?.roster.memberCount == 1, """
             with a real ledger holding exactly this device's own admission — which is what makes \
             `destinationCount == 0` the leg under test rather than the missing verifier
@@ -514,7 +539,8 @@ struct MeshRoutedPhotoSenderTests {
         #expect(manager.meshError == nil, "a roster of one is not an error")
         #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
         #expect(manager.photosKeptOnThisPhone == 1, "but the capture that reached nobody is counted")
-        #expect(capture.count(of: "mesh.routedShare.skipped") == 1, "and audited, once")
+        #expect(capture.count(of: "mesh.routedShare.skipped", where: heldBy(meshID)) == 1,
+                "and audited, once, in this device's own mesh")
         var absent = false
         if case .absent = MeshRoutedStore(scope: store.meshRoutedStorage).load() { absent = true }
         #expect(absent, "nothing is staged for a destination set of zero")
@@ -874,6 +900,8 @@ struct MeshRoutedPhotoDeliveryTests {
     /// node 1 is a real destination and the open would simply have succeeded.
     @Test func aBlockedOriginsPhotoIsNotHandedToTheWall() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "photo-blocked")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         rig.seedAgreementKeys()
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
@@ -900,7 +928,7 @@ struct MeshRoutedPhotoDeliveryTests {
                 "custody is kept: a view filter over an unmutated union, never a drop")
         #expect(capture.count(of: "mesh.routedProjection.blockedOrigin") >= 1,
                 "the refusal is named")
-        #expect(capture.count(of: "mesh.routedProjection.openFailed") == 0,
+        #expect(capture.count(of: "mesh.routedProjection.openFailed", where: mine) == 0,
                 "and nothing was opened before it: the unopenable wrap was never reached")
     }
 
@@ -1068,6 +1096,8 @@ struct MeshRoutedPhotoDeliveryTests {
     /// contest — which is why the delivery door checks the equality the header's doc promises.
     @Test func aBodyWhoseIDIsNotTheItemIDIsRefused() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "photo-idmismatch")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         rig.seedAgreementKeys()
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
@@ -1081,7 +1111,7 @@ struct MeshRoutedPhotoDeliveryTests {
         try await rig.settle()
 
         #expect(rig.nodes[1].manager.meshPhotos.isEmpty, "a mismatched body id reaches no wall")
-        #expect(capture.count(of: "mesh.routedProjection.openFailed") >= 1,
+        #expect(capture.count(of: "mesh.routedProjection.openFailed", where: mine) >= 1,
                 "and the refusal is named on the projection's own audit line")
         #expect(rig.routedIndex(rig.nodes[1])?
             .record(for: MeshRoutedItemKey(item.manifest))?.isComplete == true,
@@ -1280,6 +1310,8 @@ struct MeshRoutedPhotoDeliveryTests {
     /// doing rather than the fixture's.
     @Test func aRoutedPhotoOnAnUncommittedSlotIsDropped() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "photo-precommit")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         rig.seedAgreementKeys()
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
@@ -1298,7 +1330,7 @@ struct MeshRoutedPhotoDeliveryTests {
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: key) == nil,
                 "an uncommitted slot writes no routed record")
         #expect(rig.nodes[1].manager.meshPhotos.isEmpty, "and reaches no wall")
-        #expect(capture.count(of: "mesh.routedDrain.droppedUncommittedSlot") == 1,
+        #expect(capture.count(of: "mesh.routedDrain.droppedUncommittedSlot", where: mine) == 1,
                 "the drop is named once, at the routed door")
 
         try rig.handOver(item, sender: 0, receiver: 1)
@@ -1484,6 +1516,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// re-provisioned key, relayed on a real frame.
     @Test func aConflictedDestinationRefusesTheMintByName() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-conflict")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -1509,7 +1543,7 @@ struct MeshKeyAdvertisementDeliveryTests {
 
         #expect(rig.nodes[0].manager.keyAdvertisements.isConflicted(rig.nodes[1].fingerprint),
                 "a second verified key marks the member unaddressable")
-        #expect(capture.count(of: "mesh.keyAgreement.conflicted") == 1, "named once")
+        #expect(capture.count(of: "mesh.keyAgreement.conflicted", where: mine) == 1, "named once")
 
         rig.capturePhoto(at: 0)
 
@@ -1743,6 +1777,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// on a deleted guard (six).
     @Test func theSelfMintRepairIsSpentThreeTimesAndThenNamed() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-repair-cap")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -1757,7 +1793,7 @@ struct MeshKeyAdvertisementDeliveryTests {
             }
         }
 
-        #expect(capture.count(of: "mesh.keyAgreement.selfMintUnavailable") == 3,
+        #expect(capture.count(of: "mesh.keyAgreement.selfMintUnavailable", where: mine) == 3,
                 "three attempts are named, one per attempt, and the cap stops the other three doors")
         #expect(rig.advertisementCount(at: 0) == 0,
                 "and a mint the store refused is rolled back out of memory")
@@ -1774,6 +1810,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// family closes.
     @Test func aRecoveredStoreStillMintsTheSelfRowAfterEveryMemberWasTold() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-repair-recovers")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -1794,7 +1832,7 @@ struct MeshKeyAdvertisementDeliveryTests {
         await DeviceBindingID.$testOverride.withValue(.unavailable) {
             await rig.nodes[0].manager.sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
         }
-        #expect(capture.count(of: "mesh.keyAgreement.selfMintUnavailable") == 1,
+        #expect(capture.count(of: "mesh.keyAgreement.selfMintUnavailable", where: mine) == 1,
                 "one attempt was spent and named")
         #expect(rig.advertisementCount(at: 0) == 1, "and the refused mint was rolled back")
 
@@ -1872,6 +1910,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// or a relaunch silently forgets a key the mint has already wrapped content to.
     @Test func aFoldTheStoreRefusedIsRolledBackAndNamed() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-notdurable")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -1895,7 +1935,8 @@ struct MeshKeyAdvertisementDeliveryTests {
         #expect(rig.advertisementCount(at: 0) == 2, "the set is rolled back to what is on disk")
         #expect(rig.nodes[0].manager.keyAdvertisements
                 .advertisement(for: rig.nodes[2].fingerprint) == nil, "and it is that row")
-        #expect(capture.count(of: "mesh.keyAgreement.notDurable") == 1, "named, never silent")
+        #expect(capture.count(of: "mesh.keyAgreement.notDurable", where: mine) == 1,
+                "named, never silent")
     }
 
     /// A fold the store refused costs the sender's VERSION nothing, so nobody is re-told a set they
@@ -1956,6 +1997,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// re-derived (32 → 48).
     @Test func oneSendersAdvertisementFramesAreCappedPerSession() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-sender-budget")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -1970,7 +2013,7 @@ struct MeshKeyAdvertisementDeliveryTests {
         try await rig.heal(0, 1)
         let held = try #require(rig.nodes[0].manager.keyAdvertisements
             .advertisement(for: rig.nodes[1].fingerprint))
-        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent") == 0,
+        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent", where: mine) == 0,
                 "the honest exchange must not have spent the bound")
 
         let payload = MeshKeyAgreementPayload(
@@ -1982,7 +2025,7 @@ struct MeshKeyAdvertisementDeliveryTests {
             try rig.deliverMembershipFrame(payload, type: .meshKeyAgreement, sender: 1, receiver: 0)
         }
 
-        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent") >= 1,
+        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent", where: mine) >= 1,
                 "past the per-sender bound a frame is refused by name, never quietly accepted")
         #expect(rig.advertisementCount(at: 0) == 2, "and the set never grew")
     }
@@ -2000,6 +2043,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// cell was green whichever way the cap moved (third review P3 6).
     @Test func aNonMemberSenderCannotSpendAnAdvertisementBudget() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-nonmember")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -2021,7 +2066,7 @@ struct MeshKeyAdvertisementDeliveryTests {
             .contains { $0.fingerprint == rig.nodes[2].fingerprint }
         #expect(stillCommitted, "and the slot is still committed, which is the whole hazard")
 
-        let spentBefore = capture.count(of: "mesh.keyAgreement.senderBudgetSpent")
+        let spentBefore = capture.count(of: "mesh.keyAgreement.senderBudgetSpent", where: mine)
         let payload = MeshKeyAgreementPayload(
             meshID: rig.meshID, advertisements: [row],
             senderFingerprint: rig.nodes[2].fingerprint
@@ -2031,7 +2076,7 @@ struct MeshKeyAdvertisementDeliveryTests {
             try rig.deliverMembershipFrame(payload, type: .meshKeyAgreement, sender: 2, receiver: 0)
         }
 
-        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent") == spentBefore,
+        #expect(capture.count(of: "mesh.keyAgreement.senderBudgetSpent", where: mine) == spentBefore,
                 "a non-member's frames are refused before the map, so they charge nothing")
     }
 
@@ -2048,6 +2093,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// `aParkedRowIsDroppedAfterThreeFailedWidenings`'.
     @Test func aParkedRowFromANeverAdmittedSignerIsRefusedAtTheBoundAndAtSessionEnd() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-drop")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -2082,7 +2129,8 @@ struct MeshKeyAdvertisementDeliveryTests {
             ),
             type: .meshKeyAgreement, sender: 1, receiver: 0
         )
-        #expect(capture.count(of: "mesh.keyAgreement.parkFull") == 1, "the bound is named, not silent")
+        #expect(capture.count(of: "mesh.keyAgreement.parkFull", where: mine) == 1,
+                "the bound is named, not silent")
         #expect(rig.nodes[0].manager.parkedKeyAdvertisementCountForTesting
                 == MeshKeyAgreementAdvertisementSet.capacity, "and nothing was displaced")
 
@@ -2091,9 +2139,7 @@ struct MeshKeyAdvertisementDeliveryTests {
         // Scoped to THIS rig's mesh (P9 item 7): the capture is process-global, and the sibling
         // cell below read 4 instead of 3 under full-suite load at the P8 close-out — another rig's
         // fold, counted here. The mesh id is the only thing in the line no sibling rig can mint.
-        let reoffers = capture.count(of: "mesh.keyAgreement.parkedReoffered") {
-            $0["held"] == rig.meshID.uuidString
-        }
+        let reoffers = capture.count(of: "mesh.keyAgreement.parkedReoffered", where: mine)
         #expect(reoffers == 1, "the re-offer is named, once, in this rig's mesh")
         #expect(rig.advertisementCount(at: 0) == 3, "and still nothing entered the set")
 
@@ -2178,6 +2224,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// genuine relay was refused with nothing in the transcript to say so.
     @Test func oneSendersParkShareCannotStarveAnother() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-share")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -2204,7 +2252,8 @@ struct MeshKeyAdvertisementDeliveryTests {
             ),
             type: .meshKeyAgreement, sender: 1, receiver: 0
         )
-        #expect(capture.count(of: "mesh.keyAgreement.parkFull") == 1, "the bound is named, not silent")
+        #expect(capture.count(of: "mesh.keyAgreement.parkFull", where: mine) == 1,
+                "the bound is named, not silent")
         #expect(rig.parkedCount(at: 0) == MeshKeyAdvertisementParkBounds.rowsPerSender,
                 "and nothing was displaced")
 
@@ -2236,6 +2285,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// the loop from the bound would make this cell unable to fail on a mutation of that bound.
     @Test func aParkedRowIsDroppedAfterThreeFailedWidenings() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-park-drop-after-n")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -2256,18 +2307,18 @@ struct MeshKeyAdvertisementDeliveryTests {
         for _ in 0..<2 { rig.reofferParked(at: 0) }
         #expect(rig.parkedCount(at: 0) == 1,
                 "a widening arrives in stages, so an early failure is not a drop")
-        #expect(capture.count(of: "mesh.keyAgreement.parkDropped") == 0, "nothing dropped yet")
+        #expect(capture.count(of: "mesh.keyAgreement.parkDropped", where: mine) == 0,
+                "nothing dropped yet")
 
         rig.reofferParked(at: 0)
 
         #expect(rig.parkedCount(at: 0) == 0, "the third failure drops it")
-        #expect(capture.count(of: "mesh.keyAgreement.parkDropped") == 1, "and names the drop")
+        #expect(capture.count(of: "mesh.keyAgreement.parkDropped", where: mine) == 1,
+                "and names the drop")
         // P9 item 7: this exact assertion read 4 under the P8 full-suite run and 3 alone — a
         // sibling rig's fold, counted against this cell. Scoped to this rig's own mesh id it is a
         // claim about the three re-offers driven above, and nothing else in the process.
-        let reoffers = capture.count(of: "mesh.keyAgreement.parkedReoffered") {
-            $0["held"] == rig.meshID.uuidString
-        }
+        let reoffers = capture.count(of: "mesh.keyAgreement.parkedReoffered", where: mine)
         #expect(reoffers == 3, "every re-offer was through the one fold door")
     }
 
@@ -2281,6 +2332,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// and a verified row always beats an unverified parked one.
     @Test func aRowThatFailedAWideningYieldsItsSlotAndTheGenuineRowThenFolds() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-displace")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -2310,7 +2363,7 @@ struct MeshKeyAdvertisementDeliveryTests {
         #expect(rig.nodes[0].manager.parkedKeyAdvertisementForTesting(
             from: rig.nodes[1].fingerprint, for: rig.nodes[2].fingerprint
         ) == junk, "earliest arrival keeps the slot while it has failed nothing")
-        #expect(capture.count(of: "mesh.keyAgreement.parkCollision") == 1,
+        #expect(capture.count(of: "mesh.keyAgreement.parkCollision", where: mine) == 1,
                 "and the collision the refusal used to hide is named")
 
         // One widening the junk cannot survive proving, then the genuine row again.
@@ -2322,7 +2375,8 @@ struct MeshKeyAdvertisementDeliveryTests {
         #expect(rig.nodes[0].manager.parkedKeyAdvertisementForTesting(
             from: rig.nodes[1].fingerprint, for: rig.nodes[2].fingerprint
         ) == genuine, "a row that failed a roster move yields to one that has not")
-        #expect(capture.count(of: "mesh.keyAgreement.parkCollision") == 2, "named both times")
+        #expect(capture.count(of: "mesh.keyAgreement.parkCollision", where: mine) == 2,
+                "named both times")
 
         // The real widening: node 2's admission reaches node 0.
         try rig.reseedLedger(at: 0, admitting: [0, 1, 2])
@@ -2343,6 +2397,8 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// (peer, version) and no door fires on a fold.
     @Test func aReOfferTheStoreRefusedRollsBackTheParkWithTheSet() async throws {
         let rig = try MeshRoutedDrainRig.build(3, label: "advert-park-rollback")
+        // Every `== N` audit count below is scoped to THIS rig (FIX-1); see `heldBy`.
+        let mine = heldBy(rig.meshID)
         defer { rig.teardown() }
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -2364,12 +2420,74 @@ struct MeshKeyAdvertisementDeliveryTests {
         #expect(rig.advertisementCount(at: 0) == 0, "the set is rolled back to what is on disk")
         #expect(rig.parkedCount(at: 0) == 1,
                 "and the park with it: a row in neither container is a row nothing re-sends")
-        #expect(capture.count(of: "mesh.keyAgreement.notDurable") == 1, "the set's rollback is named")
-        #expect(capture.count(of: "mesh.keyAgreement.parkRolledBack") == 1, "and the park's")
+        #expect(capture.count(of: "mesh.keyAgreement.notDurable", where: mine) == 1,
+                "the set's rollback is named")
+        #expect(capture.count(of: "mesh.keyAgreement.parkRolledBack", where: mine) == 1,
+                "and the park's")
 
         rig.reofferParked(at: 0)
 
         #expect(rig.advertisementCount(at: 0) == 1, "and once the store takes it, the row lands")
         #expect(rig.parkedCount(at: 0) == 0, "leaving the park empty")
+    }
+
+    /// **The sibling of P9 item 7's proof cell, for the twenty counts its fix review closed**
+    /// (`MeshRoutedDrainTests.aSiblingRigsAuditLineIsNotCountedAgainstThisOne`, same shape).
+    ///
+    /// Item 7 scoped the two `parkedReoffered` counts in this suite and left the other twenty
+    /// unscoped because the lines they read carried no context key at all; item 6 then put those
+    /// twenty on the gated CI line beside `MeshPairwiseFoundingTests`, which parks rows. The fix
+    /// gave every one of those doors `heldMeshAuditContext(_:)`. This cell is what that production
+    /// change owes: delete the key from `parkKeyAdvertisements` and `mine` below falls to 0.
+    ///
+    /// `mesh.keyAgreement.parkFull` stands for the family — it is one of the tokens item 6 put on
+    /// the line, and the two cells above assert `== 1` on it. The pollution is deliberate and
+    /// **before** the act, in the two shapes a sibling really produces: a refusal held by ANOTHER
+    /// mesh, and one carrying no `held` key at all (what a device holding no mesh would write). The
+    /// unscoped reader then counts at least three where those cells assert 1 — that number IS the
+    /// pre-fix assertion, reddening in place — while the scoped reader counts exactly the one
+    /// refusal this rig caused.
+    ///
+    /// The unscoped claim is `>=`, not `==`, for item 7's reason: an `==` over a process-global
+    /// count here would be a twenty-first instance of the defect the cell exists to name.
+    @Test func aSiblingRigsParkRefusalIsNotCountedAgainstThisOne() async throws {
+        let rig = try MeshRoutedDrainRig.build(2, label: "advert-park-scope-proof")
+        defer { rig.teardown() }
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        let mine = heldBy(rig.meshID)
+        rig.armKeyAdvertisements()
+        try await rig.heal(0, 1)
+
+        // Another rig's refusal, and one from a device holding no mesh. Neither is this cell's.
+        FernletAuditLog.log("mesh.keyAgreement.parkFull", context: ["held": UUID().uuidString])
+        FernletAuditLog.log("mesh.keyAgreement.parkFull")
+
+        // Node 1 spends its whole share, then offers one row past it.
+        // R2: bounded by the share's own constant.
+        let strangers = (0..<MeshKeyAdvertisementParkBounds.rowsPerSender).map {
+            MeshKeyAgreementFixtures.unverifiedRow($0 + 700, meshID: rig.meshID)
+        }
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame(strangers, from: 1),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+        try rig.deliverMembershipFrame(
+            rig.advertisementFrame(
+                [MeshKeyAgreementFixtures.unverifiedRow(999, meshID: rig.meshID)], from: 1
+            ),
+            type: .meshKeyAgreement, sender: 1, receiver: 0
+        )
+
+        let everyRig = capture.count(of: "mesh.keyAgreement.parkFull")
+        let scoped = capture.count(of: "mesh.keyAgreement.parkFull", where: mine)
+        #expect(scoped == 1, "the scoped reader counts only the refusal this rig's own share caused")
+        #expect(everyRig >= 3, """
+            the UNSCOPED reader is what the twenty counts in this file used before the fix: it \
+            counts every rig's line, so their `== N` was a claim on the whole process
+            """)
+        #expect(everyRig > scoped,
+                "the pollution was never captured, so this cell proves nothing about either reader")
     }
 }
