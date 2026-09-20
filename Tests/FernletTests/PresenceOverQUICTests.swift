@@ -682,4 +682,79 @@ struct PresenceOverQUICTests {
         let plist = try RepoRoot.source("App/Fernlet/Info.plist")
         #expect(plist.contains("<string>\(NetworkPresenceSession.serviceType)</string>"))
     }
+
+    // MARK: - Peer labels (P9 item 2, tier-2 finding A)
+
+    /// **No `presence.quic.*` audit line carries any part of the peer's advertised name.**
+    ///
+    /// The defect the tier-2 run caught: these lines named the peer by `MeshLinkKey.rawValue`,
+    /// under a comment promising an "OPAQUE, session-scoped key". The key is opaque-looking and is
+    /// not — under this radio it is the browsed Bonjour endpoint's id, which *is* the peer's
+    /// advertised instance name plus the service type, so every observed line read
+    /// `peer=fn-<the peer's own name>._fernlet-near2._udp.local.` The peer's per-epoch name is the
+    /// one value the whole posture rotation exists to keep uncorrelatable.
+    ///
+    /// Both per-peer audit tokens are driven here (a sighting and a glare collapse), the name is
+    /// hunted for in EVERY context value rather than in the key the fix happens to use, and the
+    /// label is shown to be salted per session — an unsalted digest of the name is recomputable by
+    /// anyone who can hash, which would be no fix at all.
+    @Test func noPresenceAuditLineCarriesThePeersAdvertisedName() throws {
+        let radio = NetworkPresenceSession()
+        let posture = try PresenceEpochPosture.minted(at: baseDate)
+        radio.runWithoutRadiosForTesting(posture: posture)
+
+        // A real browsed endpoint id, built exactly as Bonjour builds one.
+        let hex = "0123456789abcdef"
+        let peerName = "\(PresenceEpochPosture.instanceNamePrefix)-\(hex)"
+        let endpointID = "\(peerName).\(NetworkPresenceSession.serviceType).local."
+        let key = MeshLinkKey(endpointID)
+
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        radio.noteBrowsedForTesting(
+            key,
+            instanceName: peerName,
+            advertisement: PresenceAdvertisement.publishedFields(tags: ["dGFnLWE", "dGFnLWI"])
+        )
+        radio.bookTunnelForTesting(key, role: .initiator)
+        _ = radio.admitInboundForTesting(at: key)
+
+        let records = capture.records(withEventPrefix: "presence.quic.")
+        #expect(records.contains { $0.event == "presence.quic.sighted" }, "the sighting must be audited at all")
+        #expect(records.contains { $0.event == "presence.quic.redundantTunnelClosed" },
+                "and so must the glare collapse — the other line that names a peer")
+
+        // Every fragment of the peer's identity, hunted across EVERY context value of EVERY line.
+        let forbidden = [
+            endpointID, peerName, hex,
+            "\(PresenceEpochPosture.instanceNamePrefix)-", NetworkPresenceSession.serviceType
+        ]
+        for record in records {
+            for (contextKey, value) in record.context {
+                for needle in forbidden {
+                    #expect(
+                        !value.contains(needle),
+                        "\(record.event) context `\(contextKey)` carries `\(needle)`"
+                    )
+                }
+            }
+        }
+
+        // The label is stable within the session — a sighting and a collapse are still readable as
+        // one peer's story, which is the only reason a per-peer token is in these lines at all.
+        let sighted = try #require(records.first { $0.event == "presence.quic.sighted" })
+        let collapsed = try #require(records.first { $0.event == "presence.quic.redundantTunnelClosed" })
+        let label = try #require(sighted.context["peer"])
+        #expect(!label.isEmpty, "the peer is still named, just not by its name")
+        #expect(collapsed.context["peer"] == label, "one peer, one label, for the session's life")
+
+        // And SALTED: a second session labels the same endpoint differently, so a reader holding
+        // the peer's name (it is public on the air) cannot recompute the label and re-link it.
+        #expect(
+            NetworkPresenceSession().peerLabel(for: key) != label,
+            "a plain hash of the name would be linkable by anyone who can hash"
+        )
+    }
 }

@@ -722,4 +722,78 @@ struct PresenceManagerTests {
         #expect(store.presenceEnablePromptRequested == false,
                 "No enable prompt when the user already turned presence on")
     }
+
+    // MARK: - The boundary wake (P9 item 2, tier-2 finding C)
+
+    /// **A boundary 767 s away is awaited in N bounded steps, and the rotation fires on the first
+    /// wake at or after it.**
+    ///
+    /// The defect the tier-2 run caught: the loop armed ONE `Task.sleep` for the whole remaining
+    /// epoch, and a duration is not a deadline. The `presence.quic.rotated` line landed +0.8 s
+    /// after a boundary when the arm was ~300 s and **+51 s** late when it was ~767 s — on both
+    /// Simulators, within 0.3 s of each other, so for 51 s each device kept advertising the
+    /// previous epoch's instance name and certificate.
+    ///
+    /// The cell drives the real loop over the injected clock and the injected sleep, so what it
+    /// pins is the loop's own arithmetic: no step longer than the cap, the boundary reached in
+    /// many steps rather than one, and — the part a step cap alone would not give — the epoch worn
+    /// at every single wake being exactly the epoch the wall clock says, before and after.
+    @Test func theEpochBoundaryIsAwaitedInBoundedStepsAndRotatesOnTheFirstWakeAtOrAfterIt() async throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceHost()
+
+        // The measured arm: 767 s short of a boundary.
+        let boundary = IdentityService.presenceEpochStart(at: baseDate)
+            .addingTimeInterval(IdentityService.presenceEpochSeconds)
+        var clock = boundary.addingTimeInterval(-767)
+
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { clock }
+        defer { manager.stop() }
+        manager.activateForTesting()
+        let first = try #require(manager.presencePosture)
+
+        // The clamp itself: 767 s of remaining epoch is armed as ONE step, never whole.
+        #expect(manager.stepToNextEpochBoundary() == PresenceManager.maxEpochRotationStepSeconds,
+                "a remainder above the cap must be clamped to the cap")
+
+        // Each entry is one wake: the clock the loop had just read, and the epoch it was wearing
+        // at that moment — i.e. the verdict of the wake before it.
+        var wakes: [(now: Date, epoch: UInt64)] = []
+        var steps: [TimeInterval] = []
+        let wakeBudget = 40
+        manager.rotationSleep = { [weak manager] seconds in
+            wakes.append((clock, manager?.presencePosture?.epoch ?? 0))
+            steps.append(seconds)
+            clock = clock.addingTimeInterval(seconds)
+            // The loop is endless by design; end it once the boundary is well behind us so the
+            // cell terminates. Cancellation IS the loop's exit (R7).
+            if steps.count >= wakeBudget { throw CancellationError() }
+        }
+        manager.startEpochRotationForTesting()
+        for _ in 0..<(wakeBudget * 4) where steps.count < wakeBudget {
+            await Task.yield()
+        }
+
+        #expect(steps.count == wakeBudget, "the loop must keep stepping, not stop at the boundary")
+        #expect(steps.allSatisfy { $0 <= PresenceManager.maxEpochRotationStepSeconds },
+                "no wake may be armed for longer than one bounded step — steps: \(steps.prefix(4))")
+        // 767 s in 30 s steps is 26 wakes. One long sleep would have crossed it in exactly one.
+        #expect(wakes.filter { $0.now < boundary }.count >= 26,
+                "767 s must be awaited in N bounded steps, not in a single arm")
+        #expect(wakes.contains { $0.now >= boundary }, "the cell must actually cross the boundary")
+
+        // The whole claim: at EVERY wake the epoch worn is the epoch the wall clock says. A wake
+        // before the boundary still wears the old posture; the first wake at or after it wears the
+        // new one. This is what a 51 s-late rotation violates.
+        for wake in wakes {
+            let expected = wake.now < boundary ? first.epoch : first.epoch + 1
+            let offset = wake.now.timeIntervalSince(boundary)
+            #expect(wake.epoch == expected,
+                    "\(offset) s from the boundary: wore epoch \(wake.epoch), expected \(expected)")
+        }
+        #expect(manager.presencePosture?.instanceName != first.instanceName,
+                "and the name really did rotate")
+    }
 }

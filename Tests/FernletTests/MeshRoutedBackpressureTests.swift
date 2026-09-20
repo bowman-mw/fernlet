@@ -107,6 +107,16 @@ final class MeshRoutedBackpressureAuditCapture {
         lock.lock(); defer { lock.unlock() }
         return storedLines.filter { $0.event == event }.count
     }
+
+    /// Every captured line whose event name begins with `prefix`, in order, whole.
+    ///
+    /// The read a cell needs when its claim is about ALL of a subsystem's lines rather than one
+    /// named event — "no line anywhere in this family carries value X" cannot be asked of
+    /// ``values(of:key:)``, which needs both the event and the key named up front.
+    func records(withEventPrefix prefix: String) -> [(event: String, context: [String: String])] {
+        lock.lock(); defer { lock.unlock() }
+        return storedLines.filter { $0.event.hasPrefix(prefix) }
+    }
 }
 
 // MARK: - The visible refusal
