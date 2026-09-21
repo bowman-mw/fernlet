@@ -624,9 +624,22 @@ jobs:
         # build-for-testing, read off the result bundle: "Test run with 1221 tests in 141 suites
         # passed after 171.894 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit`
         # line. 1220 + 1 = 1221 is the ARITHMETIC CHECK, never the number.
+        # RAISED 1221 -> 1222 (2026-09-21, the cutover verify's finding 1 - peer-derived values at
+        # privacy: .public on the now-shipping QUIC mesh radio). ONE suite already on this line
+        # gained ONE cell and no suite joined or left, so the NAME count stays 141 and
+        # CIGateSelectorBoundaryTests' `measuredSuiteNameCounts` is untouched: NetworkMeshSessionTests
+        # +1 (noPublicDiagnosticOnTheShippingRadioCarriesAPeerDerivedValue - the source wall over
+        # every `privacy: .public` interpolation in NetworkMeshSession.swift, after the radio gained
+        # the two sibling radios' salted session-scoped peerLabel(for:) and the tunnelEnded line's
+        # STABLE identity fingerprint moved to privacy: .private). Nothing was retired; findings 2-5
+        # and 7-9 of the same verify are doc, comment and label edits that move no count. MEASURED
+        # over this exact 141-name list on a Mac after a build-for-testing, read off the result
+        # bundle: "Test run with 1222 tests in 141 suites passed after 174.749 seconds", 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. 1221 + 1 = 1222 is the ARITHMETIC
+        # CHECK, never the number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1221 \
+          Scripts/run-gated-suites.sh mesh-batteries 1222 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
