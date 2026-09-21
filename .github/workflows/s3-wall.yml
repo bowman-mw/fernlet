@@ -103,22 +103,27 @@ jobs:
             exit 1
           fi
 
-      # iPhone 17 is what the docs and the pre-push hook use, so prefer it — but fall back to the
-      # newest available iPhone rather than failing over a device-name change in the image.
+      # iPhone 17 is the ONE device every test line runs on — the scripts' defaults
+      # (Scripts/run-gated-suites.sh, Scripts/spm-wall-check.sh and, through the latter, the
+      # pre-push hook) all name it — and it is a hard requirement, not a preference. Until
+      # 2026-09-21 this step fell back to the newest available iPhone with a `::warning::`, which
+      # is precisely the silent device change the appearance baselines cannot survive:
+      # `UXScreenProbe.auditBaselines` (Tests/FernletUITests) is pinned four ways to an iPhone 17
+      # in portrait, and on any other device — the 17 Pro has identical point geometry — the
+      # ratchet fails in both directions at once and reads like a regression that never happened.
+      # This workflow does not run that suite yet, and the unpinned device was the unnamed
+      # prerequisite under all three of the UI residuals that would put it here (plan §17.2.3
+      # finding 6, §28.3). So: if the image drops the device, fail in seconds, naming the fix.
+      # `CIGateSelectorBoundaryTests.theSimulatorDestinationIsPinnedWithNoFallback` reads this step
+      # and the two scripts' defaults, so the three cannot drift apart or grow a fallback quietly.
       - name: Resolve a simulator destination
         run: |
           set -euo pipefail
           name="iPhone 17"
           if ! xcrun simctl list devices available | grep -qE "^ *${name} \("; then
-            fallback="$(xcrun simctl list devices available \
-              | sed -n 's/^ *\(iPhone [^(]*\) (.*/\1/p' | sed 's/ *$//' | sort -V | tail -1)"
-            if [ -z "$fallback" ]; then
-              echo "::error::No iPhone simulator available on this runner."
-              xcrun simctl list devices available || true
-              exit 1
-            fi
-            echo "::warning::${name} not available; falling back to ${fallback}."
-            name="$fallback"
+            echo "::error::The '${name}' simulator is not available on this runner, and every test line is pinned to it (the appearance baselines are recorded on it and fail on any other device — plan §28.3). Use a runner image that ships it, or a self-hosted runner. Do not substitute another device here."
+            xcrun simctl list devices available || true
+            exit 1
           fi
           echo "Using simulator: $name"
           echo "FERNLET_DESTINATION=platform=iOS Simulator,name=$name" >> "$GITHUB_ENV"

@@ -322,6 +322,77 @@ import Testing
                 "the floor script no longer refuses a run xcodebuild restarted")
     }
 
+    /// The one device every test line runs on is named once, is the same device the scripts default
+    /// to, and has NO fallback (plan §17.2.3 finding 6; §28.3's "three UI residuals" row).
+    ///
+    /// Until 2026-09-21 the workflow's "Resolve a simulator destination" step preferred `iPhone 17`
+    /// and otherwise took the newest available iPhone with a `::warning::` — a silent device change
+    /// on the line whose appearance baselines (`UXScreenProbe.auditBaselines`) are pinned four ways
+    /// to an iPhone 17 in portrait and fail in both directions on any other device, the 17 Pro
+    /// included (identical point geometry, different safe areas and font metrics). Pinning the
+    /// device is the prerequisite under every UI residual that would put that suite on CI, which is
+    /// why this cell exists before the suite does. Three facts, each read from source rather than
+    /// asserted about a constant: the step names the device as ONE literal and exports it as the
+    /// destination; the step's live code carries no fallback (no `::warning::`, no `fallback`, and it
+    /// exits non-zero); and the two scripts' `FERNLET_DESTINATION` defaults and the UI probe's own
+    /// failure text name the same destination string, so local, CI and the baselines cannot drift.
+    @Test func theSimulatorDestinationIsPinnedWithNoFallback() throws {
+        let workflow = try RepoRoot.source(Self.workflowPath)
+        let step = Self.stepBody(named: "Resolve a simulator destination", in: workflow)
+        #expect(!step.isEmpty, "the workflow lost its destination step — every test line reads FERNLET_DESTINATION from it")
+        #expect(step.contains("name=\"\(Self.pinnedSimulatorName)\""),
+                "the destination step must name the pinned device as one literal: \(Self.pinnedSimulatorName)")
+        #expect(step.contains("FERNLET_DESTINATION=platform=iOS Simulator,name=$name"),
+                "the step must export the pinned name as the destination every test line reads")
+        #expect(!step.contains("::warning::") && !step.lowercased().contains("fallback"), """
+            the destination step grew a fallback again. A run on any other device reads as a \
+            screenful of appearance regressions when nothing regressed — fail, name the fix, never \
+            fall back (plan §28.3).
+            """)
+        #expect(step.contains("exit 1"), "a missing device must fail the job, in seconds, not warn")
+        let canonical = "platform=iOS Simulator,name=\(Self.pinnedSimulatorName)"
+        // R2: bounded by the list.
+        for path in Self.destinationDefaultHolders {
+            let source = try RepoRoot.source(path)
+            #expect(source.contains(canonical), """
+                \(path) no longer names the canonical destination `\(canonical)` — local runs, CI \
+                and the appearance baselines must agree on one device, or a green here and a red \
+                there are the same code on different phones
+                """)
+        }
+    }
+
+    /// The device every test line is pinned to. One literal, compared against the workflow's and
+    /// the scripts' text — never against a constant of theirs, which could not fail.
+    private static let pinnedSimulatorName = "iPhone 17"
+
+    /// Where the canonical destination string must also appear: the two scripts whose
+    /// `FERNLET_DESTINATION` default is what a local run uses, and the UI probe whose baseline
+    /// failure names the destination to re-run on.
+    private static let destinationDefaultHolders = [
+        "Scripts/run-gated-suites.sh",
+        "Scripts/spm-wall-check.sh",
+        "Tests/FernletUITests/UXScreenProbe.swift"
+    ]
+
+    /// The non-comment lines of one named workflow step: from its `- name:` line to the next one.
+    static func stepBody(named name: String, in workflow: String) -> String {
+        var inStep = false
+        var body: [String] = []
+        // R2: bounded by the workflow's line count.
+        for rawLine in workflow.components(separatedBy: "\n") {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("- name:") {
+                if inStep { break }
+                inStep = line == "- name: \(name)"
+                continue
+            }
+            guard inStep, !line.hasPrefix("#") else { continue }
+            body.append(line)
+        }
+        return body.joined(separator: "\n")
+    }
+
     /// The parser reads the workflow's real shape: a continuation-joined invocation with a label, a
     /// floor and several suites, and ignores everything else.
     @Test func theParserReadsContinuationJoinedInvocations() {
@@ -352,5 +423,19 @@ import Testing
         #expect(Self.topLevelTypeName("final class MeshRoutedBackpressureAuditCapture {") == "MeshRoutedBackpressureAuditCapture")
         #expect(Self.topLevelTypeName("    struct Nested {") == nil, "a nested type is not a selector")
         #expect(Self.topLevelTypeName("// struct InAComment") == nil)
+        let steps2 = """
+              - name: Other step
+                run: echo other
+              # - name: Resolve a simulator destination
+              - name: Resolve a simulator destination
+                run: |
+                  # a comment inside the step is not code
+                  name="iPhone 17"
+              - name: After
+                run: echo after
+            """
+        #expect(Self.stepBody(named: "Resolve a simulator destination", in: steps2) == "run: |\nname=\"iPhone 17\"",
+                "a step body is its own non-comment lines, and a commented-out `- name:` does not open one")
+        #expect(Self.stepBody(named: "Missing", in: steps2).isEmpty)
     }
 }
