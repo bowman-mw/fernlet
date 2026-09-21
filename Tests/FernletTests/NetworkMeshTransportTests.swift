@@ -1361,6 +1361,56 @@ struct NetworkMeshSessionTests {
         map.removeAll()
         #expect(map.trackedCount == 0)
     }
+
+    /// **The browse transcript logs its COUNT publicly and its peer NAMES privately.**
+    ///
+    /// Plan §8.7 finding 1's "one item owed before QUIC ships", taken in the cutover that made this
+    /// radio the shipping one (2026-09-21). Until then `noteBrowseSet` built one string and logged
+    /// it whole at `privacy: .public`, so every nearby device's Bonjour instance name went into the
+    /// system log — and into a sysdiagnose, off the device, naming who else was in the room.
+    ///
+    /// **Hygiene, not a leak fix.** A mesh instance name is `MeshLinkAdvertisement`'s random
+    /// per-session token: it identifies no device across sessions and says nothing a scanner on the
+    /// same link could not read for itself. What the downgrade buys is that the transcript stops
+    /// being where a stable-looking identifier would accumulate if that ever changed.
+    ///
+    /// Source, not behaviour, and deliberately so: `os.Logger`'s redaction happens inside the
+    /// unified logging system and a unit test cannot observe which interpolation was public. What
+    /// IS observable is the shape of the call, and the shape is the whole decision — one
+    /// interpolation each, count public, names private, and the string never re-assembled and
+    /// logged whole. The DEBUG console echo is checked in the OTHER direction: it must still carry
+    /// the names, because it is the transcript the runbook's Simulator lanes grep and a lane that
+    /// could not see them could not tell the three-node star from the mesh.
+    @Test func theBrowseTranscriptLogsItsCountPubliclyAndItsPeerNamesPrivately() throws {
+        let quic = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
+        )
+        let body = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "func noteBrowseSet(_ keys: Set<MeshLinkKey>)", in: quic),
+            "noteBrowseSet is gone — the browse transcript this cell walls has no home"
+        )
+        #expect(body.contains("privacy: .private)]\")"), """
+            the browsed-peers line no longer redacts its peer names. Nearby devices' Bonjour \
+            instance names must interpolate at `privacy: .private`; plan §8.7 finding 1 is the \
+            item this closed, and re-opening it puts a transcript of who was nearby into every \
+            sysdiagnose
+            """)
+        #expect(body.contains("browsed peers=\\(keys.count, privacy: .public)"), """
+            and the COUNT is no longer public. The count identifies nobody and is the whole reason \
+            a reader opens this transcript — redacting it to `<private>` would cost the diagnostic \
+            and buy nothing
+            """)
+        #expect(!body.contains("\\(line, privacy: .public)"), """
+            the line is re-assembled and logged whole again, which is exactly the shape the \
+            downgrade removed — one public interpolation carrying both halves
+            """)
+        #expect(body.contains("MeshTransportConsoleLog.echo(\"browsed peers=\\(keys.count) [\\(names)]\")"), """
+            the DEBUG console echo lost the peer names. That echo is a no-op outside DEBUG and is \
+            the transcript the runbook's Simulator lanes grep: a lane that cannot see the names \
+            cannot tell a three-node star from a three-node mesh, which is the defect this line \
+            was added for
+            """)
+    }
 }
 
 // MARK: - MeshIntroductionHarness

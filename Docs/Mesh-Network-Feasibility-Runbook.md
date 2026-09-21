@@ -1419,10 +1419,18 @@ Tests: `theReproposeBudgetIsSpentAndNeverRefilled`, `theReproposeBudgetIsPerEndp
 One posture worth stating: a `currentMesh` with an **empty** member list and no ledger refuses
 everybody, this device included. That is fail-closed and deliberate.
 
-**Logging note.** `browsed peers=` prints nearby Bonjour instance names at `.notice` with
-`privacy: .public`, matching the precedent set by `accepted`/`datagramCapacity`. It is acceptable
-only because the QUIC radio is DEBUG-only today. **Downgrade it (and its neighbours) before QUIC
-ships.**
+**Logging note — TAKEN 2026-09-21, in the MC→QUIC cutover.** `browsed peers=` used to print nearby
+Bonjour instance names at `.notice` with `privacy: .public`, matching the precedent set by
+`accepted`/`datagramCapacity`, and that was acceptable only while the QUIC radio was DEBUG-only.
+The cutover made it the shipping radio, so the owed downgrade landed with it (plan §8.7 finding 1):
+**`noteBrowseSet` now interpolates the COUNT at `privacy: .public` and the NAMES at
+`privacy: .private`.** Hygiene, not a leak fix — a mesh instance name is `MeshLinkAdvertisement`'s
+random per-session token, not a device name — but a system-log line naming who else was in the room
+does not belong in a sysdiagnose. **The lane transcripts are unaffected:** the DEBUG
+`MeshTransportConsoleLog.echo` beside it still carries the whole line, names included, which is what
+every `--console-pty` recipe in this runbook greps. The *neighbours* named in the old sentence
+(`accepted`, `datagramCapacity`) are **still `.public` and still owed** — they carry link keys and
+capacities, not instance names, and pricing them is a separate item.
 
 #### The 3/3 proof (runs 2026-09-02, item 0b)
 
