@@ -2253,6 +2253,124 @@ that can answer it. Every row below is the owner's devices, P8 launcher item 9, 
 | Wi-Fi Aware evaluation | A bounded two-day answer on hardware floor, whether `NetworkConnection` rides over it, and battery profile. Outcome is a recommendation, not a dependency. | **NOT RUN — owner's call (P8 item 9).** Unchanged by P8; a recommendation, not a dependency. Plan §15.4, device row F10 | 2026-09-19 |
 | QUIC hold on real radios | `holdCommittedLinks()` on a physical radio: browsing and admission stop, every committed link, its coordinator and the group-key state survive, and the transport's TXT republish is minted on resume rather than through the pause. | **NOT RUN — owner's devices (P8 item 9).** The sim↔sim half was P8 item 2's row (d) and **did not cross** — no committed pair was ever formed on this Mac (finding L-4 above; plan §14.3 finding 19). Evidence to look for: one `mesh.session.linksHeld` / `mesh.session.linksResumed` pair per background hold and foreground return | 2026-09-19 |
 
+### Lane E — the companion refresh (run 2026-09-21, P10 item 8): **registered, and refused at every step after that**
+
+**Purpose.** §27.2 left one question open and explicitly refused to answer it by analogy: a Simulator
+refuses a `BGContinuedProcessingTaskRequest` outright (`BGTaskSchedulerErrorDomain` 1, Lane B's
+*Continued task* row), but whether it also refuses an **app refresh** — a different task class, with
+`fetch` in `UIBackgroundModes` and the identifier permitted in `Info.plist` — was **not** to be
+assumed. `SystemCompanionRefreshScheduler` is the one part of the companion-refresh stack no unit
+test touches, and this lane is the measurement against it. The answer is recorded here whichever way
+it fell, together with the rows only a phone can give.
+
+**Verdict: a Simulator registers the identifier and gets no further.** Registration is accepted.
+Submission is refused with the *same* `BGTaskSchedulerErrorDomain` code 1 as the continuation, so
+nothing is ever pending; and because nothing is pending, the debugger SPIs that would otherwise
+force a delivery and an expiration are refused too, by the framework, for that exact reason. The
+whole chain after `register` is a tier-3 row. P8's finding does extend to `BGAppRefreshTask` — but it
+is now measured, not assumed.
+
+**Environment.** Xcode 26.5 (build 17F42); runtime iOS 26.5 (23F77); one iPhone 17 Simulator,
+`09F57BCA-DF29-4E43-9E06-E363AE688A88`, **shut down, erased and freshly booted at 02:53** so the run
+starts from a first install (the standing "a Simulator that has been up for hours stops behaving"
+precaution — this one had been up ~12 h). App built from the worktree at commit **`288f501`**,
+`xcodebuild build -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'`,
+`** BUILD SUCCEEDED **` / `EXIT=0`; the installed `Fernlet.app` and its binary both carry mtime
+`2026-09-21T02:53:29`, which is the build's own end timestamp — i.e. the bundle under test is this
+build and not a stale one.
+
+**Reading the audit stream.** As everywhere else in this runbook:
+
+```sh
+xcrun simctl spawn <udid> log stream --level debug --predicate 'subsystem == "com.fernlet"' > "$LOG" 2>&1 &
+echo $! > stream.pid      # kill by PID at the end; never `pkill -f "log stream"`
+```
+
+Two notes worth carrying. **(a)** `FernletAuditLog` logs its context dictionary with
+`privacy: .private`, and on the **Simulator** those values come through in the clear — every
+`error=…` and `trigger=…` quoted below is real text off the stream, not a reconstruction. On a
+**device** they redact to `<private>` unless a debugger is attached or the private-data profile is
+installed; see the finding at the end of this section, because it lands on the one device row where
+no debugger *can* be attached. **(b)** The framework's own chatter is a second, independent witness
+and is worth capturing beside the audit stream:
+`log show --predicate 'subsystem == "com.apple.BackgroundTasks"' --style compact`.
+
+#### The rows
+
+| Row | Expected | Observed | Evidence |
+| --- | --- | --- | --- |
+| **1. Registration** | `BGTaskScheduler.register` accepts `MBO.Fernlet.companion-refresh`; `companionRefresh.registered`, no `registrationRefused` | **Accepted.** Twice, in two separate launches. This is a *positive* event, so the verdict does not rest on the absence of a refusal line | `02:54:35.706514 … [com.fernlet:audit] companionRefresh.registered` (pid 4988), and again `03:01:12.774632 … companionRefresh.registered` (pid 6001). No `companionRefresh.registrationRefused` anywhere in the stream |
+| **2. The background-edge submission** | Either `companionRefresh.submitted trigger=background`, or `submitRefused` naming the domain and code | **Refused, every time — `BGTaskSchedulerErrorDomain` code 1.** Three background edges across two processes, three refusals, no acceptance | `02:54:54.744491 … companionRefresh.submitRefused error=Error Domain=BGTaskSchedulerErrorDomain Code=1 "(null)" trigger=background`; the same line again at `02:55:18.139437` (pid 4988) and `03:02:46.826043` (pid 6001) |
+| **2b. The request the app actually built** | The refused request carries the identifier and a floor of now + 15 min | **Correct, and this part the Simulator *can* prove.** The framework logs the request it was handed before refusing it | `02:54:54.739 … [com.apple.BackgroundTasks:Framework] submitTaskRequest: <BGAppRefreshTaskRequest: MBO.Fernlet.companion-refresh, earliestBeginDate: 2026-09-21 07:09:54 +0000>` — submitted at 06:54:54 UTC, floor 07:09:54 UTC, exactly `earliestBeginInterval = 15 * 60` |
+| **2c. The pending-request guard** | On a second background edge, `edgeFoundARequestAlreadyPending` | **Unreachable here, and correctly so.** A refusal leaves `pendingRequest` nil by design, so the second and third edges re-asked and were refused again rather than short-circuiting. The guard is tier-1 territory on this lane | The second edge at `02:55:18.139437` is another `submitRefused`, not `edgeFoundARequestAlreadyPending`; that event name appears **zero** times in the stream |
+| **3. A forced delivery (`_simulateLaunchForTaskWithIdentifier:`)** | The launch handler fires: `taskWasDelivered` → tail submission `trigger=handle` → `runFinished outcome=…` → exactly one completion | **Refused by the framework, for the reason row 2 created.** The SPI is reached and runs — this is not an attachment failure — and then declines because there is no scheduled request to launch. **No `companionRefresh.*` line follows it at all** | `03:01:32.580 … [BackgroundTasks:Framework] Simulating launch for task with identifier MBO.Fernlet.companion-refresh` → `03:01:32.580 … Getting pending task requests` → `03:01:32.585 E … No task request with identifier MBO.Fernlet.companion-refresh has been scheduled`. The audit stream for pid 6001 holds exactly one companion line in that window: the `registered` at `03:01:12` |
+| **3b. A forced expiration (`_simulateExpirationForTaskWithIdentifier:`)** | `taskDidExpire` cancels the run and completes the task `false` | **Refused, consistently with 3** — there is no simulated task to expire | `03:02:32.632 … Simulating expiration for task with identifier MBO.Fernlet.companion-refresh` → `03:02:32.633 E … Task with identifier MBO.Fernlet.companion-refresh is not currently being simulated` |
+| **4. iOS delivering it on its own** | A backgrounded app is woken within a few minutes of an accepted submission | **Unreachable by construction, not merely unmeasured.** A delivery needs a pending request; row 2 shows no request is ever accepted, so there is nothing for the scheduler to hold, let alone deliver. Confirmed negatively by a soak anyway, so the row is measured and not merely argued | Soak `03:02:45`–`03:12:32` (≈ 10 min), app backgrounded behind Safari with the stream live. The last companion line of the entire run is the `submitRefused` at `03:02:46.826043`; nothing followed it. The app was **still alive** at the end (`ps -o etime -p 6001` → `11:32`), so this is a process that was there to be woken and was not — not one iOS had reclaimed |
+
+#### Driving the SPIs: two ways to waste twenty minutes
+
+`lldb` **does** attach to a Simulator process from the command line — `xcrun lldb --batch -o "process
+attach --pid <pid>" -o "expr …" -o detach` — and the refusals above are what it returned, not what it
+failed to return. Two conditions are load-bearing, and missing either looks exactly like "the SPI
+does not work":
+
+1. **The expression must run all threads** (`expr -l objc -O -a true -u false -t 15000000 -- …`).
+   With the default single-thread evaluation the call never returns: the framework hands off to
+   another queue that is stopped, and the batch hangs until it is killed.
+2. **The app must be in the foreground.** A backgrounded app is suspended by iOS with `SIGSTOP`, and
+   that signal lands *inside* the expression:
+   `error: Expression execution was interrupted: signal SIGSTOP.` Front the app with
+   `xcrun simctl launch <udid> MBO.Fernlet` first. This is its own small trap — the state you most
+   want to test the refresh in is the one state you cannot hold the debugger in.
+
+Backgrounding for row 2 is just `xcrun simctl launch <udid> com.apple.mobilesafari`; the `.background`
+scene edge fires and `FernletApp.handleScenePhaseChange` calls
+`CompanionRefreshCoordinator.shared.appDidEnterBackground()` outside the `case .ready` guard, which is
+why the edge fires even on a launch whose store never became ready.
+
+#### Rows a Simulator cannot give
+
+These are the companion refresh's device rows, and they are carried by name into the P10 close-out.
+Every one of them is downstream of row 2's refusal — the Simulator does not merely fail to observe
+them, it cannot reach the state in which they exist.
+
+1. **A cold background launch by iOS.** The system starting the app *because* a refresh came due,
+   with no foreground launch before it. There is no process to attach to, so there is also no way to
+   force it; and it is the launch in which `FernletStoreAccess` builds a store with no HealthKit
+   service, which is the whole reason item 4's pipeline is shaped the way it is.
+2. **A refresh granted and launched by iOS on its own schedule.** Everything after
+   `taskWasDelivered` — the tail's `submitNext(trigger: "handle")` before the work, the pipeline
+   outcome (`reloaded` / `unchanged` / `scoringContextUnavailable` / `widgetActionsPending` /
+   `publishedDespitePendingActions` / `writeFailed`), the WidgetKit timeline reload, and
+   exactly-once completion. `companionRefresh.runFinished` has never been emitted on any machine.
+3. **The real conformer's expiration handler under a genuine time budget.** Whether
+   `SystemCompanionRefreshTaskHandle`'s `expirationHandler` hop reaches `taskDidExpire()` in time to
+   cancel an in-flight run, when the budget is the system's and not a test's. Tier 1 proves the
+   coordinator's half; the conformer's half is unexercised by any test.
+4. **The 15-minute floor honoured.** Row 2b proves the app *asks* for now + 15 min. Whether iOS
+   respects that floor, and what it actually grants in practice, is a phone measurement.
+5. **Background App Refresh disabled in Settings.** The Simulator has no such switch to flip, and
+   this is the setting that produces the refusal a real user can cause — the one
+   `companionRefresh.submitRefused` exists to make attributable.
+6. **Low Power Mode.** Same shape as Lane B's row: Apple documents neither direction, so the
+   empirical answer is the deliverable.
+
+Two smaller rows fall with them, worth naming so nobody looks for them on a Simulator:
+`companionRefresh.edgeFoundARequestAlreadyPending` (needs an accepted submission to guard against)
+and `companionRefresh.deliveryAbsorbed` (needs two deliveries, and there are none).
+
+#### Finding — the device row with no debugger is the row whose evidence redacts
+
+`FernletAuditLog.log` emits its context with `privacy: .private`. On the Simulator that is moot, and
+every value in this section came through in the clear. On a **device** it is not: without a debugger
+attached or the private-data profile installed, `companionRefresh.submitRefused` reads
+`submitRefused <private>` in a sysdiagnose — the event name survives, the `error=` and `trigger=`
+values do not. That collides with row 1 of the list above: a cold background launch by iOS is
+precisely the case where no debugger can be attached, so it is precisely the case where the audit
+line cannot say *which* refusal happened or *which* trigger asked. Nothing is fixed here — item 8
+changes no production code — but whoever runs the device rows should install the private-data
+profile on the phone first, or accept that the cold-launch row comes back with redacted context.
+
 ### Security, both lanes
 
 | Check | Required result | Result | Date |
