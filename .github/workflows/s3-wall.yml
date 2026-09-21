@@ -134,10 +134,18 @@ jobs:
         # shared 1. Item 8 re-recorded those baselines and the suite ran on NO CI line at all; the
         # ratchet's other half lives in Tests/FernletUITests, which this workflow never runs, and
         # `MeshP9HonestyAcceptanceTests` says so out loud rather than leaving it to be inferred.
+        #
+        # `BackgroundRefreshBoundaryTests` joins them at P10 item 2 (plan §16.4): the
+        # background-refresh import wall. Another pure SOURCE scan with no compiler half — it walks
+        # `App/Fernlet/CompanionRefresh/` and holds every file there to a module allowlist and a
+        # call-spelling zero-list, so the companion `BGAppRefreshTask` cannot reach the mesh,
+        # HealthKit, a CloudKit force-sync, Foundation Models, or store creation. It belongs on this
+        # line for the same reason the other two do: nothing else runs it, and §16.4 requires it to
+        # be a gate from the commit that creates the directory, not from the commit that fills it.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
-            AuditRatchetBoundaryTests
+            AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an

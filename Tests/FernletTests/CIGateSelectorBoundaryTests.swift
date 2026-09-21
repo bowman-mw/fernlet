@@ -62,8 +62,12 @@ import Testing
     /// of `NetworkMeshTransportTests.swift`, and four presence/recipe/selection unit suites. RAISE
     /// an entry in the same commit that adds names; LOWER one only deliberately, with the
     /// retirement argued, which is the whole point of the pin.
+    ///
+    /// RE-MEASURED again at P10 item 2 (2026-09-20): `s3-grep` 3 → 4, for
+    /// `BackgroundRefreshBoundaryTests` — plan §16.4's background-refresh import wall, which has no
+    /// compiler half and runs on no other line.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 3,
+        "s3-grep": 4,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,
