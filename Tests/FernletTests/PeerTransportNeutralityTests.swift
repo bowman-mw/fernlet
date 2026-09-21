@@ -109,7 +109,7 @@ struct PeerHandleIdentityTests {
 /// real MC delegate callbacks, which are the only production writers of that map.
 ///
 /// The suite is `.serialized` and every test builds its own transport with an EPHEMERAL peer ID, so
-/// none of them touches the archived `FileMCPeerIDStore` the other radios depend on.
+/// none of them touches the archived `FileMCPeerIDStore` the mesh's DEBUG bisect launch depends on.
 @MainActor
 @Suite(.serialized)
 struct MeshMultipeerSessionIdentityTests {

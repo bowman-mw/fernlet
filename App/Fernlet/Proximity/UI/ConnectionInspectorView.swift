@@ -51,7 +51,7 @@ struct ConnectionInspectorView: View {
 /// Shared by the live inspector (``ConnectionInspectorView``, where the log updates under it)
 /// and the history browser (``ConnectionInspectorHistoryView``, where the log is a finished
 /// snapshot). Event and envelope lists render only the newest 50/30 entries; when no ranging
-/// samples exist it explains why per ranging mode (RSSI on MultipeerConnectivity has no meters).
+/// samples exist it explains why per ranging mode (RSSI on QUIC has no meters).
 struct ConnectionInspectorLogDetailView: View {
     let log: ConnectionSessionLog
 

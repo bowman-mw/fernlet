@@ -27,8 +27,10 @@ struct TransportNeutralityBoundaryTests {
     ///
     /// `MeshMultipeerSession.swift` owns the framework: the MCSession, the delegates, the one
     /// `MCSessionSendDataMode` mapping, and the private `MCPeerID ↔ PeerEndpointKey` map.
-    /// `MCPeerIDStore.swift` persists the MC peer identity itself and is named in the privacy-wipe
-    /// ledger, so it retires with MC in P9 rather than being neutralized now.
+    /// `MCPeerIDStore.swift` persists the MC peer identity itself and is held for the DEBUG bisect
+    /// path; it retires with `MeshMultipeerSession.swift` in the deletion round rather than being
+    /// neutralized now. (Its privacy-wipe ledger row went with `wipeIdentityForDeleteAll`'s MC
+    /// archive leg in the cutover's pure retire, so the ledger is no longer what holds it here.)
     private static let permittedFiles = [
         "FernletKit/Sources/ProximityKit/Transport/MeshMultipeerSession.swift",
         "FernletKit/Sources/ProximityKit/Transport/MCPeerIDStore.swift"
