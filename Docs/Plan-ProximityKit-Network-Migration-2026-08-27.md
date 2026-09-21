@@ -3542,26 +3542,27 @@ Every row here is **downstream of a refusal a Simulator makes**: `BGTaskSchedule
 `BGTaskSchedulerErrorDomain` code 1 for a `BGAppRefreshTaskRequest` exactly as it does for the
 continuation, so nothing is ever pending, no delivery can be forced, and the debugger SPIs decline
 for that reason. Registration is the one step a Simulator proves (runbook § *Lane E*,
-`Docs/Mesh-Network-Feasibility-Runbook.md:2256`, run 2026-09-21). The Simulator does not merely fail
+`Docs/Mesh-Network-Feasibility-Runbook.md:2375`, run 2026-09-21). The Simulator does not merely fail
 to observe these rows — **it cannot reach the state in which they exist.**
 `companionRefresh.runFinished` has never been emitted on any machine.
 
 D1–D6 are the runbook's six numbered "rows a Simulator cannot give", in its order; D7 and D8 are the
 two smaller ones it names beside them.
 
-**Prerequisite for all eight: the private-data logging profile**, or the context redacts unless a
-debugger is attached.
+**Prerequisite — for D1 only, as the 2026-09-21 attempt found: the private-data logging profile**, or that row's
+context redacts; every devicectl-launched row reads in the clear with `OS_ACTIVITY_DT_MODE=YES` in the launch
+environment.
 
 | Row | What a phone must show | Status |
 |---|---|---|
-| **P10-D1** cold background launch | iOS starting the app **because** a refresh came due, with no foreground launch before it. This is the launch in which `FernletStoreAccess` builds the process's first store with no HealthKit service — the whole reason item 4's pipeline is shaped as it is. No process to attach to, so no way to force it, and **the one row where no debugger can be attached** — hence the profile | **NOT RUN — owner's device, 2026-09-21** |
-| **P10-D2** a grant on iOS's own schedule | Everything after `taskWasDelivered`: the tail's `submitNext(trigger: "handle")` **before** the work, the pipeline outcome (`reloaded` / `unchanged` / `scoringContextUnavailable` / `widgetActionsPending` / `publishedDespitePendingActions` / `writeFailed`), the WidgetKit timeline reload, and exactly-once completion | **NOT RUN — owner's device, 2026-09-21** |
-| **P10-D3** the real conformer's expiration handler | Whether `SystemCompanionRefreshTaskHandle`'s `expirationHandler` hop reaches `taskDidExpire()` in time to cancel an in-flight run when the budget is the **system's** and not a test's. Tier 1 proves the coordinator's half; the conformer's half is exercised by no test anywhere | **NOT RUN — owner's device, 2026-09-21** |
-| **P10-D4** the 15-minute floor honoured | Lane E proves the app *asks* for `now + 15 min` and that `earliestBeginInterval` is carried to the second. Whether iOS respects that floor, and what it grants in practice, is a phone measurement | **NOT RUN — owner's device, 2026-09-21** |
-| **P10-D5** Background App Refresh off in Settings | The Simulator has no such switch. This is the setting that produces the refusal a real user can cause — the one `companionRefresh.submitRefused` exists to make attributable, and the one whose `error=` the profile has to un-redact | **NOT RUN — owner's device, 2026-09-21** |
-| **P10-D6** Low Power Mode | Same shape as §15.1's Low Power row: Apple documents neither direction, so the empirical answer **is** the deliverable | **NOT RUN — owner's device, 2026-09-21** |
-| **P10-D7** `companionRefresh.edgeFoundARequestAlreadyPending` | Needs an **accepted** submission to guard against: a refusal leaves `pendingRequest` nil by design, so on a Simulator every edge re-asks and is refused again. The event name appeared **zero** times in the whole Lane E stream | **NOT RUN — owner's device, 2026-09-21** |
-| **P10-D8** `companionRefresh.deliveryAbsorbed` | Needs **two** deliveries, and there are none. Ordinary since item 4 (a run suspends, so a second delivery landing on a held task is a window iOS can really hit) and proved at tier 1 over both the in-flight and the re-entrant arm | **NOT RUN — owner's device, 2026-09-21** |
+| **P10-D1** cold background launch | iOS starting the app **because** a refresh came due, with no foreground launch before it. This is the launch in which `FernletStoreAccess` builds the process's first store with no HealthKit service — the whole reason item 4's pipeline is shaped as it is. No process to attach to, so no way to force it, and **the one row where no debugger can be attached** — hence the profile | **ATTEMPTED 2026-09-21 — NOT REACHED**: no grant came in 1 h 55 min, so no cold launch was asked for; the setup is written and the row's outcome value will read `<private>` regardless (iOS 26.6.1 refused the logging profile, unsigned and signed alike). Runbook *Lane E* § *Device run, 2026-09-21* |
+| **P10-D2** a grant on iOS's own schedule | Everything after `taskWasDelivered`: the tail's `submitNext(trigger: "handle")` **before** the work, the pipeline outcome (`reloaded` / `unchanged` / `scoringContextUnavailable` / `widgetActionsPending` / `publishedDespitePendingActions` / `writeFailed`), the WidgetKit timeline reload, and exactly-once completion | **ATTEMPTED 2026-09-21 — NOT REACHED**: three accepted requests (floors 17:18:40Z, 18:14:28Z, 18:58:05Z), screen locked and unlocked, charger off then on, Low Power Mode off/on/off — no delivery in 1 h 55 min, and the scheduler logged nothing naming the activity. The overnight window is next; the witness chain is described in the runbook |
+| **P10-D3** the real conformer's expiration handler | Whether `SystemCompanionRefreshTaskHandle`'s `expirationHandler` hop reaches `taskDidExpire()` in time to cancel an in-flight run when the budget is the **system's** and not a test's. Tier 1 proves the coordinator's half; the conformer's half is exercised by no test anywhere | **NOT REACHED 2026-09-21** — needs D2 |
+| **P10-D4** the 15-minute floor honoured | Lane E proves the app *asks* for `now + 15 min` and that `earliestBeginInterval` is carried to the second. Whether iOS respects that floor, and what it grants in practice, is a phone measurement | **HALF, 2026-09-21**: on a device the request carries `earliestBeginDate = submit + 15:00` to the second (`submitTaskRequest: … earliestBeginDate: 2026-09-21 17:18:40 +0000` for a 17:03:40Z submit). Whether iOS respects the floor from above is D2's delivery time — not reached |
+| **P10-D5** Background App Refresh off in Settings | The Simulator has no such switch. This is the setting that produces the refusal a real user can cause — the one `companionRefresh.submitRefused` exists to make attributable, and the one whose `error=` the profile has to un-redact | **BLOCKED 2026-09-21 — the phone's own policy, not a code finding**: the per-app switch is disabled with Low Power Mode off while submissions are accepted (a Screen Time *Background App Activities* restriction is the ordinary cause). The refusal was not observed |
+| **P10-D6** Low Power Mode | Same shape as §15.1's Low Power row: Apple documents neither direction, so the empirical answer **is** the deliverable | **HALF, 2026-09-21 — and the empirical half is a surprise: a submission is ACCEPTED under Low Power Mode** (17:59:28Z and 18:43:05Z, both with it on per the owner — no log line carries the power state — charging). Whether Low Power Mode withholds the delivery is D2's question with one more variable |
+| **P10-D7** `companionRefresh.edgeFoundARequestAlreadyPending` | Needs an **accepted** submission to guard against: a refusal leaves `pendingRequest` nil by design, so on a Simulator every edge re-asks and is refused again. The event name appeared **zero** times in the whole Lane E stream | **EARNED 2026-09-21** — five times (17:11:20Z, 17:12:43Z, 17:33:38Z, 18:04:56Z, 18:05:02Z), every one after an accepted submission (the first accepted submission on any machine: `submitted trigger=background` 17:03:40.158Z); no re-ask, no floor slide |
+| **P10-D8** `companionRefresh.deliveryAbsorbed` | Needs **two** deliveries, and there are none. Ordinary since item 4 (a run suspends, so a second delivery landing on a held task is a window iOS can really hit) and proved at tier 1 over both the in-flight and the re-entrant arm | **NOT REACHED 2026-09-21** — needs two deliveries |
 
 **Cheapest first run:** D1 and D2 come together — background the app, leave the phone alone, and read
 `log stream --predicate 'subsystem == "com.fernlet"'` plus
@@ -3571,6 +3572,10 @@ grant happens at all.
 
 **Results land in the runbook's Lane E table with dates**, beside the Simulator rows they are the
 other half of.
+
+**First device entry, 2026-09-21 (§28.7):** D7 earned, D4 and D6 half, D5 blocked by the phone's own policy,
+D1–D3 and D8 not reached for want of a grant in 1 h 55 min. The record is the runbook's *Lane E* § *Device run,
+2026-09-21*.
 
 ---
 
@@ -6214,3 +6219,38 @@ a date; device row **F11** is filled. What it settles for this plan:
 
 **What this does not move.** §15.1–§15.4 and §15.5 remain NOT RUN: Lane D is one phone in the
 foreground on Wi-Fi. The next entry is §15.1's background + lock rows, two phones.
+
+### 28.7 The device round's second entry — §15.5's rows, first attempt 2026-09-21
+
+**Run** on the same phone, same day, `main` = `0a85e06` rebuilt, cable out until ≈17:58Z and in (charging) after.
+What it settles, and what it re-tiers:
+
+- **The system accepts the companion request on a device** — `submitted trigger=background` at 17:03:40.158Z, the
+  first acceptance on any machine, with the framework's own `earliestBeginDate` exactly submit + 15:00. **D7 is earned**
+  (five edges, no re-ask, no slide). **D6's ask half is a surprise:** Low Power Mode does **not** refuse the submission
+  (accepted twice with it on — the owner's report of the mode; no log line carries it). **D4's request half** is proved to the second.
+- **No grant came in 1 h 55 min** across three requests, screen locked and unlocked, charger off and on, Low Power Mode in
+  every state, and in the 45 minutes of trace that were read the scheduler wrote nothing naming the activity at the
+  levels Instruments records. **D1, D2, D3 and
+  D8 are not reached, not failed** — the measurement is now an overnight window, and the recipe (a devicectl console
+  launch plus sequential 15-minute `xctrace` chunks) is in the runbook. This is not stop condition 2 yet; it becomes it
+  if the overnight window is also empty.
+- **The private-data logging profile is refused by iOS 26.6.1** — unsigned, in Apple's documented shape, and CMS-signed
+  with an Apple Development identity — with *the profile has an invalid signature*. §17.2.3 finding 2 stands, and its fix
+  is now an owner decision (a trusted-CA certificate, or a trust-store change on the phone). **`OS_ACTIVITY_DT_MODE=YES` in
+  a devicectl launch puts the audit contexts in the clear in logd as well as in the console mirror** — Instruments' export
+  shows the app's values while `backboardd` beside it is redacted — so every devicectl-launched row is readable without
+  the profile; only D1's outcome value is not.
+- **The witness that works without root or a launcher is Instruments**: `xctrace record --template Logging
+  --all-processes` over Wi-Fi, exported and grepped. `devicectl … sysdiagnose` fails wired and wireless
+  (`DiagnoseError error 0`), `log collect --device` wants root. Two Instruments traps cost fourteen unwitnessed minutes:
+  a `SIGINT` to a background recording leaves an unreadable bundle, and a second session while one finalises fails on
+  `kperf`. Record in sequential chunks; never stop one early.
+- **D5 is blocked by the phone, not the code**: the per-app Background App Refresh switch is disabled with Low Power Mode
+  off. **Anything flipped under Settings → Fernlet SIGKILLs the app** (a permission change) — and that page is where the
+  switch lives, so the row will cost a relaunch when it runs.
+- **The lldb shortcut declines on a device too**, silently, with a request pending — the opposite precondition from the
+  Simulator. Attach works (commands fed on stdin, never `--batch`); the SPI does nothing.
+
+**What this does not move.** §15.1–§15.4 remain NOT RUN (two phones). §15.5's grant-dependent rows stay open on the
+overnight window; the next session resumes from the runbook's *How to resume* paragraph, not from this section.
