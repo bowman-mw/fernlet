@@ -350,6 +350,84 @@ struct MeshIntroductionAuthorityRosterTests {
         manager.leaveMesh()
     }
 
+    // MARK: The join-door predicate (D-4.3 Option 1)
+
+    /// `mayAdmitStrangerProvisionally` is the posture half of the MC invitation gate, and nothing
+    /// else: the one flag `holdCommittedLinks()` lowers, AND "no mesh, or an open one".
+    ///
+    /// Four rows, each the state a phone is actually in:
+    /// - **no mesh, doors open** — two people meeting for the first time, the case the QUIC radio
+    ///   could not serve at all before this;
+    /// - **an open mesh** — a session whose owner is inviting;
+    /// - **a closed mesh** — refused at the transport, which is deliberately stronger than the MC
+    ///   radio, where the tunnel exists until `maySeatVerifiedPeer` evicts it a moment later;
+    /// - **under a hold** — a backgrounded session admits nobody new on either radio.
+    @Test func theJoinDoorPredicateIsTheInvitationGatesPostureHalf() throws {
+        let (identity, service) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: service) }
+        let manager = MeshNetworkManager(
+            store: store, transport: FakeMeshTransportSession(), identity: identity
+        )
+
+        #expect(manager.mayAdmitStrangerProvisionally,
+                "no mesh and the doors open is a first meeting — the case that had no path at all")
+        #expect(manager.roster.admitsStrangersProvisionally,
+                "and the answer rides out on the roster the transport re-asks for every introduction")
+
+        manager.currentMesh = makeMesh(manager, meshID: UUID(), members: [member(identity)])
+        manager.setSessionOpen(true)
+        #expect(manager.mayAdmitStrangerProvisionally, "an open mesh is one whose owner is inviting")
+        #expect(manager.roster.admitsStrangersProvisionally)
+
+        manager.setSessionOpen(false)
+        #expect(!manager.mayAdmitStrangerProvisionally,
+                "a CLOSED mesh refuses a stranger at the transport, not one stage later at the seat")
+        #expect(!manager.roster.admitsStrangersProvisionally)
+
+        manager.setSessionOpen(true)
+        #expect(manager.mayAdmitStrangerProvisionally, "test premise: reopening restores it")
+        manager.holdCommittedLinks()
+        #expect(!manager.mayAdmitStrangerProvisionally,
+                "a held session admits nobody new — the ONE flag holdCommittedLinks() lowers")
+        #expect(!manager.roster.admitsStrangersProvisionally)
+        manager.leaveMesh()
+    }
+
+    /// The flag reaches BOTH spellings of the roster — the derived one and the pre-records legacy
+    /// fallback — because a founder that has not armed a ledger is exactly a device meeting somebody
+    /// for the first time, and that is the case the whole decision is about.
+    @Test func theJoinDoorAnswerRidesBothRosterSources() throws {
+        let fixture = try MeshLedgerChainFixture()
+        defer { fixture.tearDown() }
+        let manager = MeshNetworkManager(
+            store: store, transport: FakeMeshTransportSession(), identity: fixture.founder
+        )
+
+        // Legacy source: a gossiped descriptor, no ledger.
+        manager.currentMesh = makeMesh(
+            manager, meshID: fixture.meshID, members: [member(fixture.founder)]
+        )
+        manager.setSessionOpen(true)
+        #expect(manager.membershipVerifier == nil, "test premise: the legacy fallback is the source")
+        #expect(manager.roster.admitsStrangersProvisionally)
+        manager.setSessionOpen(false)
+        #expect(!manager.roster.admitsStrangersProvisionally)
+
+        // Derived source: the signed records.
+        manager.seedMembershipLedgerForTesting(
+            meshID: fixture.meshID,
+            founderSigningPublicKey: fixture.founder.localSigningPublicKey,
+            ledger: try fixture.fullLedger()
+        )
+        #expect(manager.membershipVerifier != nil, "test premise: the derived roster is the source")
+        #expect(!manager.roster.admitsStrangersProvisionally, "a closed mesh is closed either way")
+        #expect(manager.roster.verdict(for: fixture.founder.localSigningPublicKey) == .member,
+                "and the records still decide who is in")
+        manager.setSessionOpen(true)
+        #expect(manager.roster.admitsStrangersProvisionally)
+        manager.leaveMesh()
+    }
+
     /// Matrix row 3 as the shipping answer: a peer holding a verified removal record is refused at
     /// the signed introduction with the named reason, from the manager's own roster and with no
     /// chaos hook in the process.

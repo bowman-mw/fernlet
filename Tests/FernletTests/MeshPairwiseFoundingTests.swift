@@ -191,6 +191,77 @@ struct MeshFoundingRig {
         )
     }
 
+    /// Hands ONE frame to `receiver`'s manager through the production door — the same door
+    /// ``pump(_:)`` uses — over the coordinator belonging to `sender` and with that sender's
+    /// handshake-verified identity.
+    ///
+    /// `pump` only moves what the fabric happened to carry; a cell that is about one payload type
+    /// arriving on a slot in a known commit state needs to put that exact frame in itself.
+    func deliver(_ payload: some Encodable, type: PayloadType, from sender: Int, to receiver: Int) throws {
+        let node = nodes[receiver]
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: identities[sender], senderDisplayName: nodes[sender].label,
+            recipientFingerprint: node.fingerprint,
+            payloadType: type, payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "cell"),
+            payload: try JSONEncoder().encode(payload),
+            createdAt: Date()
+        )
+        let coordinator = try #require(node.coordinators[nodes[sender].handle.endpoint])
+        let plaintext = try envelope.verify(
+            identityService: node.manager.identityForTesting, replayCache: node.replayCache
+        )
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            node.manager.proximityCoordinator(
+                coordinator, didReceive: envelope, plaintext: plaintext, from: peerIdentity(of: sender)
+            )
+        }
+    }
+
+    /// One frame of each of the five group-crypto payload types, in the order
+    /// `dispatchGroupKeyPayload` lists them.
+    ///
+    /// All five together because the gate is the family's, not any one type's: a cell that sent one
+    /// would pin one arm of a switch and leave four ungated.
+    func deliverGroupKeyFamily(from sender: Int, to receiver: Int) throws {
+        let coordinator = nodes[sender].fingerprint
+        try deliver(
+            MeshEncryptedMetadataPayload(
+                ciphertext: Data(repeating: 1, count: 32), nonce: Data(repeating: 2, count: 12),
+                keyEpoch: 1
+            ),
+            type: .meshEncryptedMetadata, from: sender, to: receiver
+        )
+        try deliver(
+            MeshCoordinatorBeaconPayload(
+                coordinatorFingerprint: coordinator, currentEpoch: 1,
+                nextRotationAt: Date().addingTimeInterval(900), sentAt: Date()
+            ),
+            type: .meshCoordinatorBeacon, from: sender, to: receiver
+        )
+        try deliver(MeshRotationSyncPayload(closingEpoch: 1),
+                    type: .meshRotationSync, from: sender, to: receiver)
+        try deliver(
+            MeshKeyRotationPayload(
+                newEpoch: 2, perMember: [:], rotationInitiatedAt: Date(),
+                coordinatorFingerprint: coordinator, cause: .timer
+            ),
+            type: .meshKeyRotation, from: sender, to: receiver
+        )
+        try deliver(MeshKeyAckPayload(epoch: 1, memberFingerprint: coordinator),
+                    type: .meshKeyAck, from: sender, to: receiver)
+    }
+
+    /// A vouch list `sender` would broadcast, naming one other node as trusted.
+    func vouchList(from sender: Int, trusting trusted: Int) -> MeshFriendVouchListPayload {
+        MeshFriendVouchListPayload(
+            voucherFingerprint: nodes[sender].fingerprint,
+            voucherDisplayName: nodes[sender].label,
+            trustedFingerprints: [nodes[trusted].fingerprint],
+            expiresAt: Date().addingTimeInterval(3600)
+        )
+    }
+
     /// The derived roster at one node, re-derived exactly as shipping code does.
     func roster(_ index: Int) -> [String] {
         nodes[index].manager.membershipVerifier?.roster.memberFingerprints ?? []
@@ -1957,5 +2028,163 @@ struct MeshPairwiseFoundingTests {
             signature: Data()
         )
         return (envelope, plaintext)
+    }
+
+    // MARK: - D-4.3: provisional admission, its frame gate, and its eviction cause
+
+    /// The manager half of the provisional path, on the rig that seeds nothing.
+    ///
+    /// **The end-to-end is not fakeable here and this cell does not pretend to be it.**
+    /// `FakeMeshTransportSession` hands the manager channels; it runs no signed channel
+    /// introduction, so `MeshChannelIntroductionExchange` never executes on this rig and a cell that
+    /// "founded a mesh through the provisional path" over it would be asserting the rig's own
+    /// seating, not the admission. The transport half is pinned where the exchange actually runs
+    /// (`MeshChannelIntroductionTests.aStrangerIntroducesWhileTheDoorsAreOpenAndStillProvesItsKey`
+    /// and the two first-meeting mesh-id rows); this is the other half — that the managers a real
+    /// first meeting starts with DO open the door, that founding still works with it open, and that
+    /// the resulting CLOSED mesh refuses a stranger at the seat, which is the stage a provisional
+    /// peer is judged at.
+    @Test func twoUnseededManagersOpenTheDoorFoundAMeshAndThenCloseItAgainstAStranger() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "provisional-founding")
+        defer { rig.teardown() }
+        let stranger = try MeshPartitionFixtures.identity("provisional-founding-stranger")
+
+        for index in rig.nodes.indices {
+            #expect(rig.nodes[index].manager.roster.admitsStrangersProvisionally, """
+                a phone that has met nobody has the doors open, which is the whole of what the \
+                QUIC radio needs to let a first meeting happen at all
+                """)
+            #expect(rig.nodes[index].manager.roster.memberCount == 0,
+                    "and it is NOT that the stranger is on a roster: there is no roster")
+        }
+
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle()
+        let meshID = try #require(rig.nodes[0].manager.currentMesh?.meshID)
+        #expect(rig.nodes[1].manager.currentMesh?.meshID == meshID, "one mesh, both sides")
+        #expect(rig.roster(0).count == 2, "and a derived roster of two")
+
+        for index in rig.nodes.indices {
+            let manager = rig.nodes[index].manager
+            manager.setSessionOpen(false)
+            #expect(!manager.roster.admitsStrangersProvisionally,
+                    "a closed mesh shuts the transport door too")
+            #expect(!manager.maySeatVerifiedPeer(signingPublicKey: stranger.localSigningPublicKey),
+                    "and the seat gate — THE stage for a provisional peer — refuses the stranger")
+            #expect(manager.maySeatVerifiedPeer(
+                signingPublicKey: rig.identities[1 - index].localSigningPublicKey
+            ), "while its own co-member keeps its seat")
+        }
+    }
+
+    /// Option 1b's frame-gating half: the group-key family and the vouch list are member business,
+    /// and an UNCOMMITTED slot no longer reaches either.
+    ///
+    /// Both were reachable pre-commit while every sibling family — descriptor, membership events,
+    /// removal, quorum, routed, registry — required a fingerprint. Provisional admission is what
+    /// makes that worth closing rather than noting: the peer holding the uncommitted slot may now be
+    /// somebody nobody has vouched for.
+    ///
+    /// Every audit count is scoped to THIS rig's mesh id (`heldBy`), because the capture registry is
+    /// process-global.
+    @Test func anUncommittedSlotReachesNeitherGroupKeyFramesNorTheVouchList() async throws {
+        let rig = try MeshFoundingRig.build(3, label: "b1-frame-gate")
+        defer { rig.teardown() }
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        rig.commit(1, 0)
+        try await rig.settle()
+        let meshID = try #require(rig.nodes[0].manager.currentMesh?.meshID)
+        let mine = heldBy(meshID)
+        let capture = MeshFoundingAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        // Node 2 is linked to node 0 and has NOT committed: exactly a provisional peer.
+        rig.link(0, 2)
+        rig.nodes[0].manager.isVouchListBroadcastEnabled = true
+        try rig.deliverGroupKeyFamily(from: 2, to: 0)
+        try rig.deliver(rig.vouchList(from: 2, trusting: 1), type: .meshFriendVouchList, from: 2, to: 0)
+
+        #expect(capture.count(of: "mesh.groupKey.droppedUncommittedSlot", where: mine) == 5,
+                "all five group-crypto types are dropped at the door, and each is named")
+        #expect(capture.count(of: "mesh.vouchList.droppedUncommittedSlot", where: mine) == 1)
+        #expect(rig.nodes[0].manager.vouchLabel(for: rig.nodes[1].fingerprint) == nil,
+                "and nothing from an uncommitted slot composed a friend-of label")
+
+        // The same frames on the SAME slot, once it commits, are not dropped — the gate is the
+        // slot's commit state and nothing else about the frames.
+        rig.commit(0, 2)
+        try rig.deliverGroupKeyFamily(from: 2, to: 0)
+        try rig.deliver(rig.vouchList(from: 2, trusting: 1), type: .meshFriendVouchList, from: 2, to: 0)
+
+        #expect(capture.count(of: "mesh.groupKey.droppedUncommittedSlot", where: mine) == 5,
+                "no sixth drop: the committed slot's frames reached their handlers")
+        #expect(capture.count(of: "mesh.vouchList.droppedUncommittedSlot", where: mine) == 1)
+        #expect(rig.nodes[0].manager.vouchLabel(for: rig.nodes[1].fingerprint) != nil, """
+            and the committed vouch list DID land — the positive control that separates \
+            "the gate let it through" from "the frame never worked"
+            """)
+    }
+
+    /// Which terminal coordinator state spends the QUIC radio's never-refilled re-propose budget.
+    ///
+    /// The pre-commit **timeout** is the one end that refused nothing, and provisional admission
+    /// makes it common: a stranger is seated and then evicted by the 25 s / 60 s deadline. Six of
+    /// those used to strand a real friend for the session, because
+    /// `MeshLinkTable.maxReproposalsPerEndpoint` is never refilled. Every other end keeps charging —
+    /// re-offering an endpoint whose link keeps failing is the loop the budget exists to bound.
+    ///
+    /// A table over the state, not a driven timeout: forcing a real `.ended(reason: .timeout)`
+    /// needs a live coordinator and a twenty-five-second wait, and the sweep's single call site is
+    /// structural (`checkCoordinatorStates`'s stale loop), exactly as the sibling seat-refusal
+    /// decision is pinned.
+    @Test func onlyAPreCommitTimeoutIsExemptFromTheReproposeBudget() {
+        #expect(MeshNetworkManager.evictionCause(for: .ended(reason: .timeout)) == .preCommitTimeout)
+        for reason: ProximityCoordinator.EndReason in [
+            .userCancelled, .peerCancelled, .verificationFailed, .transportLost, .completedSuccessfully
+        ] {
+            #expect(MeshNetworkManager.evictionCause(for: .ended(reason: reason)) == .ownerDecision,
+                    "\(reason) is not the dwell deadline expiring, so it still charges")
+        }
+        #expect(MeshNetworkManager.evictionCause(for: .failed(reason: "transport")) == .ownerDecision)
+        #expect(MeshNetworkManager.evictionCause(for: .idle) == .ownerDecision,
+                "a non-terminal state never reaches the sweep, and defaults to the CHARGING answer")
+    }
+
+    /// The owner's other evictions keep charging, and they say so through the funnel the radio
+    /// reads: a hold drops its uncommitted slots as `ownerDecision`, which is the arm the budget
+    /// exists for.
+    @Test func aHoldsEvictionsNameTheOwnersDecision() async throws {
+        // The store is held in a local: the manager keeps it `unowned`, so an inline
+        // `makeTestStore()` is deallocated before the first read and traps the whole process.
+        let store = makeTestStore()
+        let identity = try MeshPartitionFixtures.identity("evict-cause-hold")
+        let transport = FakeMeshTransportSession()
+        let manager = MeshNetworkManager(
+            store: store, transport: transport, identity: identity
+        )
+        let coordinator = MeshP3Acceptance.coordinator()
+        let peer = PeerHandle(
+            id: UUID(), displayHint: "Pending", discoveryInfo: nil,
+            advertisedFingerprint: nil, endpoint: PeerEndpointKey()
+        )
+        manager.addSlotForTesting(coordinator: coordinator, peer: peer, fingerprint: nil)
+
+        manager.holdCommittedLinks()
+        // `disconnectSlot` frees the link from a host-pinned Task, so the cell lets it run.
+        // R2: bounded by the rig's own settle budget.
+        for _ in 0..<MeshDepartureRig.settleRounds where transport.disconnectedPeers.isEmpty {
+            for _ in 0..<MeshDepartureRig.yieldsPerRound { await Task.yield() }
+        }
+
+        #expect(transport.disconnectedPeers.count == 1, "the hold freed the uncommitted slot's link")
+        #expect(transport.disconnectCauses == [.ownerDecision], """
+            and named it the owner's decision, so the radio charges its re-propose budget — a hold \
+            is exactly the refusal the budget exists to stop being re-offered through
+            """)
+        manager.leaveMesh()
     }
 }

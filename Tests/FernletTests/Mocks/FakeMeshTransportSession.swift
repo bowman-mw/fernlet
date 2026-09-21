@@ -42,6 +42,8 @@ final class FakeMeshTransportSession: MeshTransportSession {
     private(set) var resumeDiscoveryCount = 0
     private(set) var invitedPeers: [PeerHandle] = []
     private(set) var disconnectedPeers: [PeerHandle] = []
+    /// One entry per ``disconnectedPeers`` entry, in the same order: why the owner freed it.
+    private(set) var disconnectCauses: [MeshSlotEvictionCause] = []
 
     // MARK: - MeshTransportSession
 
@@ -78,7 +80,15 @@ final class FakeMeshTransportSession: MeshTransportSession {
     }
 
     func disconnectPeer(_ peer: PeerHandle) {
+        disconnectPeer(peer, cause: .ownerDecision)
+    }
+
+    /// Records the CAUSE alongside the peer, so a cell can prove which arm of the owner's eviction
+    /// funnel it drove — the distinction the QUIC radio's re-propose budget turns on
+    /// (``MeshSlotEvictionCause``). The default protocol implementation would swallow it.
+    func disconnectPeer(_ peer: PeerHandle, cause: MeshSlotEvictionCause) {
         disconnectedPeers.append(peer)
+        disconnectCauses.append(cause)
     }
 
     // MARK: - Driving the owner
