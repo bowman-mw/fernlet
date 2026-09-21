@@ -24,6 +24,12 @@
 // break exactly-once are an expiration arriving after a completion, the same twice, and a second
 // delivery landing on a held task, and a spot cell over one of them says nothing about the others.
 //
+// **The two fixes the verify asked for, in one line each.** The frozen identifier is compared
+// against the LITERAL rather than against `CompanionRefresh.taskIdentifier`, because the constant on
+// both sides of an `==` is a cell that cannot fail; and the clock-and-persistence prohibition lives
+// on `BackgroundRefreshBoundaryTests` rather than in a path list here, because that wall walks the
+// directory and this suite's list only ever covered three named files.
+//
 // The suite is `.serialized` because it installs `FernletAuditLog` capture handlers; the handler
 // registry is token-keyed and accumulates across parallel suites, so every reader below FILTERS on
 // the `companionRefresh.` prefix rather than assuming it is the only sink installed.
@@ -90,6 +96,25 @@ final class ReentrantFakeCompanionRefreshTaskHandle: CompanionRefreshTaskHandle 
     }
 }
 
+/// A clock a test can move between edges.
+///
+/// The frozen clock most cells use cannot see the defect the pending-slot rule fixes: three
+/// submissions built from the SAME instant are indistinguishable from one, so "the floor slid"
+/// only becomes a readable claim once `now()` advances between the asks.
+@MainActor
+final class MovableCompanionRefreshClock {
+
+    /// The moment `now()` answers with, until a test moves it.
+    var now: Date
+
+    /// Starts the clock.
+    ///
+    /// - Parameter start: The first moment.
+    init(_ start: Date) {
+        self.now = start
+    }
+}
+
 /// A refusal a fake scheduler can be told to answer a submission with.
 struct FakeCompanionRefreshRefusal: Error, Equatable {}
 
@@ -151,12 +176,69 @@ struct CompanionRefreshSchedulingTests {
     /// A frozen moment, so the schedule policy is assertable to the second rather than to a window.
     private static let fixedNow = Date(timeIntervalSince1970: 1_750_000_000)
 
+    /// Every protocol `App/Fernlet/MeshContinuationScheduling.swift` declares, with its body frozen
+    /// as of P10 item 3 — normalised by ``normalisedBody(_:)``.
+    ///
+    /// The mesh's seam is the one this one was copied from rather than carved out of, and the whole
+    /// decision rests on it not quietly growing a member for the refresh task.
+    private static let frozenMeshProtocols: [(signature: String, body: String)] = [
+        ("protocol ContinuationTaskHandle",
+         "{ func reportContinuationProgress(_ progress: MeshContinuationProgress) func updateContinuationCopy(title: String, subtitle: String) func setContinuationExpirationHandler(_ handler: @escaping @MainActor @Sendable () -> Void) func completeContinuationTask(success: Bool) }"),
+        ("protocol BackgroundContinuationScheduling",
+         "{ func register( identifier: String, launchHandler: @escaping @MainActor (any ContinuationTaskHandle) -> Void ) -> Bool func submit(_ request: ContinuationTaskRequest) throws func cancel(identifier: String) }")
+    ]
+
+    /// A brace-matched body reduced to one line: trailing `//` comments cut, blank lines dropped,
+    /// each remaining line trimmed and joined by single spaces.
+    ///
+    /// So the frozen strings above are about the DECLARATIONS rather than about how they happen to
+    /// be wrapped or where a reviewer put a comment. Whole-line comments are already gone by the
+    /// time this runs — its input is `MeshRoutedSourceScan.codeOnly(_:)` output.
+    ///
+    /// - Parameter body: The brace-matched body.
+    /// - Returns: The normalised one-liner.
+    private static func normalisedBody(_ body: String) -> String {
+        var parts: [String] = []
+        // R2: bounded by the body's line count.
+        for line in body.split(separator: "\n", omittingEmptySubsequences: false) {
+            let code = line.range(of: "//").map { String(line[line.startIndex..<$0.lowerBound]) }
+                ?? String(line)
+            let trimmed = code.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty { parts.append(trimmed) }
+        }
+        return parts.joined(separator: " ")
+    }
+
     /// A coordinator over a fake scheduler and a frozen clock.
     ///
     /// - Returns: The coordinator and its fake.
     private func coordinator() -> (CompanionRefreshCoordinator, FakeCompanionRefreshScheduler) {
         let scheduler = FakeCompanionRefreshScheduler()
         let subject = CompanionRefreshCoordinator(scheduler: scheduler, now: { Self.fixedNow })
+        return (subject, scheduler)
+    }
+
+    /// A coordinator over a fake scheduler and a clock the test can move.
+    ///
+    /// - Parameter clock: The clock to read.
+    /// - Returns: The coordinator and its fake.
+    private func coordinator(
+        clock: MovableCompanionRefreshClock
+    ) -> (CompanionRefreshCoordinator, FakeCompanionRefreshScheduler) {
+        let scheduler = FakeCompanionRefreshScheduler()
+        let subject = CompanionRefreshCoordinator(scheduler: scheduler, now: { clock.now })
+        return (subject, scheduler)
+    }
+
+    /// A registered coordinator over a clock the test can move.
+    ///
+    /// - Parameter clock: The clock to read.
+    /// - Returns: The coordinator and its fake.
+    private func registeredCoordinator(
+        clock: MovableCompanionRefreshClock
+    ) -> (CompanionRefreshCoordinator, FakeCompanionRefreshScheduler) {
+        let (subject, scheduler) = coordinator(clock: clock)
+        subject.registerAtLaunch()
         return (subject, scheduler)
     }
 
@@ -205,8 +287,13 @@ struct CompanionRefreshSchedulingTests {
         subject.registerAtLaunch()
         subject.registerAtLaunch()
 
-        #expect(scheduler.registered == [CompanionRefresh.taskIdentifier],
-                "one registration, and the identifier the plist permits — not a second, not a variant")
+        #expect(scheduler.registered == ["MBO.Fernlet.companion-refresh"], """
+            one registration, and the identifier the plist permits — not a second, not a variant. \
+            The expected value is the LITERAL rather than `CompanionRefresh.taskIdentifier`: with \
+            the constant on both sides this cell compares a value to itself and stays green while \
+            the constant drifts away from the plist, which is the one drift iOS answers by simply \
+            never delivering the task.
+            """)
         #expect(subject.isRegistered, "the system accepted it")
         #expect(subject.didAttemptRegistration, "and the once-per-process latch is down")
         #expect(scheduler.submitted.isEmpty,
@@ -258,6 +345,86 @@ struct CompanionRefreshSchedulingTests {
                 "the policy is fifteen minutes; moving it is a decision with a measurement behind it, not an edit")
     }
 
+    /// **Trigger (b) asks only when nothing is pending.** Three background edges, no delivery
+    /// between them, one request — at the FIRST edge's floor.
+    ///
+    /// `BGTaskScheduler` replaces a pending request for an identifier rather than queueing another,
+    /// so an unconditional ask on every edge does not schedule anything: it moves the existing
+    /// request's floor forward, from the new now, every time the person switches away. Someone who
+    /// opens Fernlet more often than every fifteen minutes is then never delivered a refresh, and
+    /// since the only other trigger fires AFTER a delivery, the chain never starts. The clock moves
+    /// between the edges here because a frozen one cannot tell one ask from three.
+    @Test func theBackgroundEdgeAsksOnlyWhenNothingIsPending() {
+        let clock = MovableCompanionRefreshClock(Self.fixedNow)
+        let (subject, scheduler) = registeredCoordinator(clock: clock)
+
+        subject.appDidEnterBackground()
+        clock.now = Self.fixedNow.addingTimeInterval(60)
+        subject.appDidEnterBackground()
+        clock.now = Self.fixedNow.addingTimeInterval(120)
+        let events = auditedEvents { subject.appDidEnterBackground() }
+
+        #expect(scheduler.submitted == [CompanionRefreshRequest(
+            identifier: "MBO.Fernlet.companion-refresh",
+            earliestBeginDate: Self.fixedNow
+                .addingTimeInterval(CompanionRefreshCoordinator.earliestBeginInterval)
+        )], """
+            one request, and it still carries the FIRST edge's floor. Two more entries — or one \
+            entry dated from the third edge — is the floor sliding a quarter of an hour further \
+            out with every switch.
+            """)
+        #expect(events == ["companionRefresh.edgeFoundARequestAlreadyPending"],
+                "and an edge that asked for nothing says why, rather than looking like an edge that never fired")
+        #expect(subject.edgeSubmissions == 1, "one ask charged to the edge's budget, not three")
+        #expect(subject.pendingRequest == scheduler.submitted.first,
+                "and the slot holds exactly what the system was given — in memory, nowhere else")
+    }
+
+    /// The tail's own request silences the next background edge: one chain, not two asks.
+    @Test func theTailsRequestSilencesTheNextBackgroundEdge() {
+        let clock = MovableCompanionRefreshClock(Self.fixedNow)
+        let (subject, scheduler) = registeredCoordinator(clock: clock)
+
+        subject.appDidEnterBackground()
+        clock.now = Self.fixedNow.addingTimeInterval(60)
+        scheduler.deliver(FakeCompanionRefreshTaskHandle())
+        clock.now = Self.fixedNow.addingTimeInterval(120)
+        let events = auditedEvents { subject.appDidEnterBackground() }
+
+        #expect(scheduler.submitted.count == 2, "the edge's ask and the tail's — and not a third")
+        #expect(scheduler.submitted.last?.earliestBeginDate == Self.fixedNow
+            .addingTimeInterval(60 + CompanionRefreshCoordinator.earliestBeginInterval),
+            "the pending request is the TAIL's, dated from the delivery, and the later edge left it alone")
+        #expect(events == ["companionRefresh.edgeFoundARequestAlreadyPending"],
+                "the edge found the tail's request already pending and said so")
+        #expect(subject.edgeSubmissions == 1, "only the first edge ever spent the edge budget")
+    }
+
+    /// A refused tail leaves nothing pending, so the next background edge asks again.
+    ///
+    /// The other half of the rule, and the half that keeps it from being a silencer: the slot means
+    /// "the system accepted one", so a refusal must leave it empty. If a refused ask latched the
+    /// slot shut, one bad submission would end the chain for the whole launch.
+    @Test func aRefusedTailLeavesNothingPendingAndTheNextEdgeAsksAgain() {
+        let clock = MovableCompanionRefreshClock(Self.fixedNow)
+        let (subject, scheduler) = registeredCoordinator(clock: clock)
+
+        subject.appDidEnterBackground()
+        scheduler.submitRefusal = FakeCompanionRefreshRefusal()
+        clock.now = Self.fixedNow.addingTimeInterval(60)
+        scheduler.deliver(FakeCompanionRefreshTaskHandle())
+        scheduler.submitRefusal = nil
+        clock.now = Self.fixedNow.addingTimeInterval(120)
+        subject.appDidEnterBackground()
+
+        #expect(scheduler.submitted.count == 2, "the first edge's ask, and the one after the refused tail")
+        #expect(scheduler.submitted.last?.earliestBeginDate == Self.fixedNow
+            .addingTimeInterval(120 + CompanionRefreshCoordinator.earliestBeginInterval),
+            "dated from the edge that asked, because the refused tail left nothing standing")
+        #expect(subject.edgeSubmissions == 2, "both edges spent the budget; neither was silenced")
+        #expect(subject.pendingRequest == scheduler.submitted.last, "and the slot holds the accepted one")
+    }
+
     /// Trigger (a): every handler run re-submits, so the chain continues.
     ///
     /// The ordering is the claim: the next request is asked for while the task is still running, so a
@@ -302,18 +469,58 @@ struct CompanionRefreshSchedulingTests {
                 "the attempt still counts against the R2 bound — a refused ask is an ask")
     }
 
-    /// The submission bound is real, and reaching it is audited rather than silent (R2).
-    @Test func theSubmissionBoundHoldsAndSaysSoWhenItIsReached() {
+    /// The EDGE bound is real, and reaching it is audited rather than silent (R2).
+    ///
+    /// Driven through refusals, because with the pending-slot rule that is the only way an edge
+    /// storm exists at all: an accepted ask latches the slot until a delivery, so sixty-four
+    /// ACCEPTED edge submissions in one launch cannot happen. A refused ask leaves nothing pending
+    /// and the next edge asks again — which is exactly the pathological shape this cap is for, and
+    /// no longer the ordinary one it used to bound.
+    @Test func theEdgeSubmissionBoundHoldsAndSaysSoWhenItIsReached() {
         let (subject, scheduler) = registeredCoordinator()
-        let cap = CompanionRefreshCoordinator.maxSubmissionsPerLaunch
+        scheduler.submitRefusal = FakeCompanionRefreshRefusal()
+        let cap = CompanionRefreshCoordinator.maxEdgeSubmissionsPerLaunch
 
         // R2: bounded by the cap.
         for _ in 0..<cap { subject.appDidEnterBackground() }
         let events = auditedEvents { subject.appDidEnterBackground() }
 
-        #expect(scheduler.submitted.count == cap, "the bound is the bound")
-        #expect(events == ["companionRefresh.submissionCapReached"],
+        #expect(subject.edgeSubmissions == cap, "the bound is the bound")
+        #expect(subject.submissions == cap, "and every one of them was a real ask through the seam")
+        #expect(scheduler.submitted.isEmpty, "all refused, which is why the edge kept asking")
+        #expect(events == ["companionRefresh.edgeSubmissionCapReached"],
                 "and a launch that hit it has something to say")
+    }
+
+    /// **The handler's tail is exempt from the edge cap**, so a spent edge budget does not kill the
+    /// chain.
+    ///
+    /// The cap it used to share was a lifetime budget over BOTH triggers, and that is fatal rather
+    /// than merely wrong: iOS keeps a suspended process alive for days, so the sixty-fifth ask ends
+    /// the chain permanently with one audit line and no way back. Every tail submission stands
+    /// behind a delivery the system chose to make, so it is already metered by iOS — and this drives
+    /// one more delivery than the cap to prove the budget is not consulted.
+    @Test func theHandlerTailKeepsTheChainAliveAfterTheEdgeBudgetIsSpent() {
+        let (subject, scheduler) = registeredCoordinator()
+        let cap = CompanionRefreshCoordinator.maxEdgeSubmissionsPerLaunch
+        scheduler.submitRefusal = FakeCompanionRefreshRefusal()
+        // R2: bounded by the cap.
+        for _ in 0..<cap { subject.appDidEnterBackground() }
+        scheduler.submitRefusal = nil
+
+        subject.appDidEnterBackground()
+        #expect(scheduler.submitted.isEmpty, "the edge trigger is off for this process now")
+
+        // R2: bounded by the cap.
+        for delivery in 0..<(cap + 1) {
+            scheduler.deliver(FakeCompanionRefreshTaskHandle())
+            #expect(scheduler.submitted.count == delivery + 1, """
+                delivery \(delivery + 1) of \(cap + 1) re-submitted from the tail. A tail that \
+                counted against the edge budget would have stopped at the first one and the chain \
+                would be over for the life of the process.
+                """)
+        }
+        #expect(subject.edgeSubmissions == cap, "and not one tail submission was charged to the edge")
     }
 
     // MARK: - Exactly once
@@ -325,6 +532,11 @@ struct CompanionRefreshSchedulingTests {
     /// run (the common one — the grant is spent while the app is tearing down); and that twice. Every
     /// row asserts the WHOLE completion list rather than its count, so a row that completed `false`
     /// where it owed `true` is a red rather than a pass.
+    ///
+    /// The sixth order — an expiration landing while the task is still HELD, before the tail — needs
+    /// a differently typed handle to drive, so it is
+    /// ``anExpirationBeforeTheTailCompletesOnceAndTheChainStillContinues()`` rather than a row here.
+    /// All five below meet a coordinator that is already holding nothing.
     @Test func theDeliveredTaskIsCompletedExactlyOnceOverTheWholeTable() {
         let rows: [(
             name: String,
@@ -351,6 +563,36 @@ struct CompanionRefreshSchedulingTests {
                     "\(row.name): completed once, successfully — a second entry is the leak, a missing one is the debt")
             #expect(subject.isHoldingTask == false, "\(row.name): and nothing is still owed")
         }
+    }
+
+    /// **An expiration that lands BEFORE the tail** completes once, and the chain still continues.
+    ///
+    /// The sixth order, and the one the table above cannot carry: its five rows all expire after the
+    /// handler has returned, so every one of them meets a coordinator holding nothing. This is the
+    /// row where the grant runs out while the task is still in hand — the shape item 4's pipeline
+    /// makes ordinary — and it is driven through the re-entrant fake for the same reason the
+    /// absorbed-delivery cell is, which is why it is a cell of its own rather than a sixth row over
+    /// a differently typed handle.
+    ///
+    /// Two claims. The expiry completes the task `false` and the tail must NOT complete it again.
+    /// And the tail still ASKS: a run that expired is exactly a run whose successor matters, so the
+    /// re-submission is unconditional on the outcome.
+    @Test func anExpirationBeforeTheTailCompletesOnceAndTheChainStillContinues() {
+        let (subject, scheduler) = registeredCoordinator()
+        let holder = ReentrantFakeCompanionRefreshTaskHandle()
+        holder.whileHeld = { subject.taskDidExpire() }
+
+        let events = auditedEvents { subject.taskWasDelivered(holder) }
+
+        #expect(holder.completions == [false], """
+            completed once, by the expiry, and unsuccessfully — a second entry is the leak the \
+            exactly-once invariant exists to prevent, and it is the tail that would add it.
+            """)
+        #expect(subject.isHoldingTask == false, "and nothing is still owed")
+        #expect(scheduler.submitted.count == 1,
+                "the tail re-submits whatever the run's outcome was — a run that expired is a run whose successor matters")
+        #expect(events == ["companionRefresh.submitted", "companionRefresh.completedWithNoTaskInHand"],
+                "and the tail's own completion, finding the handle already gone, says so rather than completing twice")
     }
 
     /// The expiration handler is installed at adoption, so a task the app cannot finish still ends.
@@ -406,24 +648,43 @@ struct CompanionRefreshSchedulingTests {
     ///
     /// This is the mechanical half of "do not widen the mesh's seam to carry a second task". A widened
     /// protocol would compile, every mesh test would stay green, and the fake over it would quietly
-    /// stop modelling either task — which is the whole reason the decision row exists. Counted from
-    /// the brace-matched protocol BODIES, so a member added anywhere in either one reds.
+    /// stop modelling either task — which is the whole reason the decision row exists.
+    ///
+    /// **Frozen BODIES rather than a count of `func `.** The first shape of this cell counted the
+    /// word `func` in each brace-matched body, which sees exactly one kind of growth: a
+    /// `var companionRefreshIsPending: Bool { get }` added to `ContinuationTaskHandle` is a new
+    /// requirement every conformer must answer, and that cell stayed green over it — no rebuild
+    /// needed to find out, since a count of one word cannot notice another. A frozen body reds on
+    /// ANY change to either protocol, and prints the two strings so the reader can see which. The
+    /// protocol COUNT is pinned beside them for the same reason the bodies are: a third protocol in
+    /// that file would otherwise be an unwatched seam.
+    ///
+    /// Re-freezing is a decision, not an edit: the string below is what the mesh's seam looked like
+    /// when the refresh got its own, and a deliberate change to the mesh updates it in the commit
+    /// that makes the change, with the argument in the message.
     @Test func theMeshSeamGainedNoMemberForTheRefreshTask() throws {
         let mesh = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("App/Fernlet/MeshContinuationScheduling.swift"))
-        let handle = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "protocol ContinuationTaskHandle", in: mesh),
-            "the mesh's handle protocol is gone")
-        let scheduling = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "protocol BackgroundContinuationScheduling", in: mesh),
-            "the mesh's scheduling protocol is gone")
 
-        // MEASURED at P10 item 3 from the P8 shapes: four handle verbs (progress, copy, expiration
-        // handler, complete) and three scheduling verbs (register, submit, cancel).
-        #expect(handle.components(separatedBy: "func ").count - 1 == 4,
-                "`ContinuationTaskHandle` grew or lost a member; the companion refresh must not be why")
-        #expect(scheduling.components(separatedBy: "func ").count - 1 == 3,
-                "`BackgroundContinuationScheduling` grew or lost a member; the companion refresh must not be why")
+        #expect(mesh.components(separatedBy: "protocol ").count - 1 == Self.frozenMeshProtocols.count,
+                """
+                the mesh's seam declares a number of protocols this pin does not name. Freeze the \
+                new one here in the same commit, or it is a seam nothing watches.
+                """)
+
+        // R2: bounded by the frozen list.
+        for frozen in Self.frozenMeshProtocols {
+            let body = try #require(MeshRoutedSourceScan.bracedBody(after: frozen.signature, in: mesh),
+                                    "`\(frozen.signature)` is gone from the mesh's seam")
+            #expect(Self.normalisedBody(body) == frozen.body, """
+                `\(frozen.signature)`'s body is not the one frozen at P10 item 3.
+                frozen: \(frozen.body)
+                found:  \(Self.normalisedBody(body))
+                A member added here — a `func`, a `var`, a `subscript`, anything — is the mesh's \
+                seam being widened, and the companion refresh must not be why.
+                """)
+        }
+
         #expect(!mesh.contains("CompanionRefresh"),
                 "and the mesh's seam names the companion refresh nowhere at all")
     }
@@ -450,31 +711,42 @@ struct CompanionRefreshSchedulingTests {
         }
     }
 
-    /// **Nothing spins, and nothing persists.** No refresh file holds a clock or a store, so
-    /// "schedule at handle + background, never on a timer" and "no new persisted surface" are
-    /// properties of the code rather than of this commit's good intentions.
+    /// **Nothing spins, and nothing persists — and the WALL is where that is enforced.**
     ///
-    /// The app owns exactly one timer and `ProximitySessionPollerTests` pins ITS construction site by
-    /// spelling — which forbids a second one nowhere. This is the cell that forbids it here. `Task {`
-    /// is deliberately NOT on the list: the seam's one use of it is the actor hop the system's
-    /// off-actor callbacks require, which is a jump, not a loop.
-    @Test func theRefreshDirectoryHoldsNoClockAndNoPersistedSurface() throws {
+    /// This cell used to carry its own ten-needle list, which is how the prohibition was true of
+    /// three named files and of nothing else: item 4's handler lands in the same directory and was
+    /// outside it, because a hand-listed path list is a wall over those paths. The needles now live
+    /// in `BackgroundRefreshBoundaryTests.forbiddenSpellings` as their own family, beside the mesh /
+    /// HealthKit / CloudKit ones, where the scan walks the DIRECTORY and covers a file the moment it
+    /// exists.
+    ///
+    /// One home, so the two suites cannot drift: what is pinned here is that the family EXISTS by
+    /// name and still has its measured size, and that the wall's own walk really does reach this
+    /// seam's files — a family over a directory nothing scans would be as vacuous as the list it
+    /// replaced. `Task {` is deliberately not a needle in it: the seam's one use is the actor hop
+    /// the system's off-actor callbacks require, which is a jump, not a loop. Neither is `Date()` —
+    /// reading the clock is not scheduling on one, and ``CompanionRefreshCoordinator`` has to read
+    /// it to state a floor at all.
+    @Test func theClockAndPersistenceWallCoversThisSeamsOwnFiles() throws {
+        let scanned = try BackgroundRefreshBoundaryTests.swiftFiles().map(\.path)
         // R2: bounded by the three-file list.
         for path in ["App/Fernlet/CompanionRefresh/CompanionRefreshIdentifier.swift",
                      "App/Fernlet/CompanionRefresh/CompanionRefreshScheduling.swift",
                      "App/Fernlet/CompanionRefresh/CompanionRefreshCoordinator.swift"] {
-            let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(path))
-            #expect(!code.isEmpty, "\(path) is gone")
-            // R2: bounded by the literal list. `DispatchSource` and `RunLoop` are here because
-            // "no timer" is a claim about CLOCKS, not about one spelling of one: a
-            // `DispatchSourceTimer` contains neither `Timer` as a whole word nor `DispatchQueue`,
-            // and a `RunLoop`-scheduled block is a third way to the same place.
-            for needle in ["Timer", "DispatchQueue", "DispatchSource", "RunLoop", "Task.sleep",
-                           "Task.detached", "scheduledTimer",
-                           "UserDefaults", "FileManager", "Keychain"] {
-                #expect(!code.contains(needle), "\(path) must not contain `\(needle)`")
-            }
+            #expect(scanned.contains(path), """
+                \(path) is outside `BackgroundRefreshBoundaryTests`' walk, so every needle it \
+                holds passes vacuously over this seam.
+                """)
         }
+
+        let family = BackgroundRefreshBoundaryTests.forbiddenSpellings
+            .filter { $0.why.hasPrefix(BackgroundRefreshBoundaryTests.clockAndPersistenceReasonPrefix) }
+        #expect(family.count == BackgroundRefreshBoundaryTests.measuredClockAndPersistenceCount, """
+            the clock-and-persistence family holds \(family.count) needle(s), measured \
+            \(BackgroundRefreshBoundaryTests.measuredClockAndPersistenceCount). This seam's "no \
+            clock, no persisted surface" claim is that family; retiring a row from it is a \
+            decision with an argument, not an edit.
+            """)
     }
 
     // MARK: - The plist
@@ -491,8 +763,10 @@ struct CompanionRefreshSchedulingTests {
         let plist = try #require(parsed as? [String: Any], "the app Info.plist was not a dictionary")
 
         let identifiers = plist["BGTaskSchedulerPermittedIdentifiers"] as? [String] ?? []
-        #expect(identifiers.contains(CompanionRefresh.taskIdentifier),
+        #expect(identifiers.contains("MBO.Fernlet.companion-refresh"),
                 "iOS matches this literally; without the entry the task registers and is never delivered")
+        #expect(CompanionRefresh.taskIdentifier == "MBO.Fernlet.companion-refresh",
+                "and the constant the app registers is that same literal — the two are pinned apart on purpose")
         #expect(identifiers.contains("MBO.Fernlet.mesh-continuation.*"),
                 "and the mesh's wildcard is still there — this commit adds, it does not replace")
 

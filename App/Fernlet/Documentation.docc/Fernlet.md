@@ -189,6 +189,16 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``PetInteractionGovernor``
 - ``MilestonesView``
 
+### Companion Background Refresh
+
+- ``CompanionRefresh``
+- ``CompanionRefreshRequest``
+- ``CompanionRefreshTaskHandle``
+- ``CompanionRefreshScheduling``
+- ``SystemCompanionRefreshTaskHandle``
+- ``SystemCompanionRefreshScheduler``
+- ``CompanionRefreshCoordinator``
+
 ### Cycle, Journal & Private Data
 
 - ``PrivateHubView``

@@ -28,10 +28,28 @@
 //  would be a second one — while buying nothing, because the system, not the app, decides when an
 //  opportunistic refresh runs.
 //
+//  **The background edge asks only when nothing is pending.** `BGTaskScheduler` REPLACES a pending
+//  request for an identifier rather than queueing another beside it, so an unconditional submission
+//  on every `.background` edge does not schedule a refresh — it pushes the existing request's floor
+//  fifteen minutes further out, from the NEW now. A person who opens Fernlet more often than every
+//  quarter hour would therefore never be delivered one, and because the only other trigger fires
+//  after a delivery, the chain would never start at all. So this object remembers the request it
+//  believes the system is holding: the edge asks only when that slot is empty, a delivery empties it
+//  (the system has handed over what it was holding), and a refused submission leaves it empty
+//  because nothing was accepted. The handler's tail is unconditional — it runs after a delivery, so
+//  the slot is empty by the time it asks.
+//
 //  **No persisted surface.** No `UserDefaults` key, no "last refreshed at", nothing on disk: the
-//  counters below live and die with the process, and the only durable state in the whole mechanism is
-//  the pending request the system holds. That is the ledger's default (plan §27.3) and it is what
-//  keeps this commit out of the wipe wall (plan §17.3) entirely.
+//  counters and the pending slot below live and die with the process, and the only durable state in
+//  the whole mechanism is the request the system itself holds. That is the ledger's default (plan
+//  §27.3) and it is what keeps this commit out of the wipe wall (plan §17.3) entirely.
+//
+//  The accepted consequence of an in-memory slot is ONE slide per process launch: a fresh process
+//  does not know what its predecessor submitted, so its first `.background` edge replaces that
+//  request with `now + 15 min`. One slide per launch is not the defect above, which was one per
+//  switch; and buying the difference would cost either a persisted surface or a second door into the
+//  scheduler (`getPendingTaskRequests` is `async`, and every fake would have to model it), neither
+//  of which is worth a quarter of an hour once per launch.
 //
 //  **Nothing here names `BackgroundTasks`.** This object speaks ``CompanionRefreshScheduling`` and
 //  ``CompanionRefreshTaskHandle``; the framework has exactly one home in this directory, the seam
@@ -82,14 +100,20 @@ final class CompanionRefreshCoordinator {
     /// in one place, with the measurement written down.
     static let earliestBeginInterval: TimeInterval = 15 * 60
 
-    /// How many requests one launch may submit (Power of 10, R2).
+    /// How many requests the BACKGROUND EDGE may ask for in one launch (Power of 10, R2).
     ///
-    /// Trigger (b) fires on every `.background` edge, so a person switching in and out of Fernlet all
-    /// afternoon submits once per switch. Each submission replaces the pending request rather than
-    /// adding one, so this is a bound on churn and not on anything the system holds — which is why it
-    /// is generous. Reaching it is audited rather than silent: a launch that has been backgrounded
-    /// sixty-four times has something to say.
-    static let maxSubmissionsPerLaunch = 64
+    /// **The handler's tail is exempt, deliberately.** Every tail submission stands behind a delivery
+    /// the SYSTEM chose to make, so iOS is already metering it; counting the tail against a budget
+    /// that never resets is how the chain dies for good, because iOS keeps a suspended process alive
+    /// for days and the sixty-fifth ask would end it with one audit line and no way back.
+    ///
+    /// With the pending-slot rule in this file's header, an ordinary launch spends ONE edge
+    /// submission however many times the person switches away, so this bounds nothing about normal
+    /// use: it bounds a pathological edge STORM, which is what a run of refused submissions looks
+    /// like — a refusal leaves nothing pending, so the next edge asks again. Reaching it is audited
+    /// rather than silent, and what it means is that the EDGE trigger is off for the rest of this
+    /// process while the tail keeps the chain alive.
+    static let maxEdgeSubmissionsPerLaunch = 64
 
     /// The `BackgroundTasks` seam.
     private let scheduler: any CompanionRefreshScheduling
@@ -111,9 +135,22 @@ final class CompanionRefreshCoordinator {
     /// Whether the system accepted the registration. Nothing may be submitted while this is `false`.
     private(set) var isRegistered = false
 
-    /// How many requests this launch has submitted, refused ones included — it is the R2 counter, so
-    /// it counts attempts.
+    /// How many requests this launch has submitted through BOTH triggers, refused ones included —
+    /// it counts attempts, not acceptances.
     private(set) var submissions = 0
+
+    /// How many of those came from the background edge — the only trigger
+    /// ``maxEdgeSubmissionsPerLaunch`` bounds, and so the R2 counter.
+    private(set) var edgeSubmissions = 0
+
+    /// The request this process believes the system is holding, or nil.
+    ///
+    /// **In memory and nowhere else** — never a `UserDefaults` key, never a file, never a keychain
+    /// row — so a wipe has nothing of this to erase and the wipe wall is owed no disposition row.
+    /// Set when a submission is accepted, cleared when a task is delivered, and left clear when a
+    /// submission is refused, because nothing was accepted. Only the background edge reads it; the
+    /// tail does not need to, since it runs after a delivery has already emptied it.
+    private(set) var pendingRequest: CompanionRefreshRequest?
 
     /// Whether the app owes the system a `setTaskCompleted(success:)` right now.
     var isHoldingTask: Bool { heldTask != nil }
@@ -159,7 +196,22 @@ final class CompanionRefreshCoordinator {
     }
 
     /// The scene entered `.background` — submission trigger (b).
+    ///
+    /// Asks only when the system is not already holding a request of ours. A submission REPLACES a
+    /// pending one rather than adding to it, so an unconditional ask here would slide the floor
+    /// forward every time the person switched away and the chain would never start; see this file's
+    /// header. The cap below is this trigger's alone.
     func appDidEnterBackground() {
+        guard pendingRequest == nil else {
+            FernletAuditLog.log("companionRefresh.edgeFoundARequestAlreadyPending")
+            return
+        }
+        guard edgeSubmissions < Self.maxEdgeSubmissionsPerLaunch else {
+            FernletAuditLog.log("companionRefresh.edgeSubmissionCapReached",
+                                context: ["edgeSubmissions": String(edgeSubmissions)])
+            return
+        }
+        edgeSubmissions += 1
         submitNext(trigger: "background")
     }
 
@@ -176,6 +228,9 @@ final class CompanionRefreshCoordinator {
     ///
     /// - Parameter delivered: The task the system just handed over.
     func taskWasDelivered(_ delivered: any CompanionRefreshTaskHandle) {
+        // The system has handed over what it was holding, so the slot is empty whatever happens next
+        // — including for a delivery this coordinator cannot adopt.
+        pendingRequest = nil
         guard heldTask == nil else {
             FernletAuditLog.log("companionRefresh.deliveryAbsorbed")
             delivered.completeCompanionRefreshTask(success: false)
@@ -204,6 +259,10 @@ final class CompanionRefreshCoordinator {
 
     /// Asks the system for the next refresh, or reports the refusal.
     ///
+    /// Unconditional: whether an ask is DUE is each trigger's own question — the edge answers it
+    /// with ``pendingRequest`` and ``maxEdgeSubmissionsPerLaunch``, and the tail's answer is always
+    /// yes, because a tail runs after a delivery.
+    ///
     /// - Parameter trigger: Which of the two triggers this is, for the audit trail.
     private func submitNext(trigger: String) {
         guard isRegistered else {
@@ -212,17 +271,19 @@ final class CompanionRefreshCoordinator {
             FernletAuditLog.log("companionRefresh.submitWithoutARegistration", context: ["trigger": trigger])
             return
         }
-        guard submissions < Self.maxSubmissionsPerLaunch else {
-            FernletAuditLog.log("companionRefresh.submissionCapReached",
-                                context: ["submissions": String(submissions), "trigger": trigger])
-            return
-        }
         submissions += 1
+        let request = CompanionRefreshRequest(
+            identifier: CompanionRefresh.taskIdentifier,
+            earliestBeginDate: now().addingTimeInterval(Self.earliestBeginInterval)
+        )
+        // Nothing is pending until the system has accepted something. Cleared FIRST so the `catch`
+        // below cannot leave a slot standing for a request that was refused — which would silence
+        // the background edge for the rest of the launch, the failure this guard exists to prevent
+        // in the other direction.
+        pendingRequest = nil
         do {
-            try scheduler.submit(CompanionRefreshRequest(
-                identifier: CompanionRefresh.taskIdentifier,
-                earliestBeginDate: now().addingTimeInterval(Self.earliestBeginInterval)
-            ))
+            try scheduler.submit(request)
+            pendingRequest = request
             FernletAuditLog.log("companionRefresh.submitted", context: ["trigger": trigger])
         } catch {
             // R7: never a `try?`. A refused submission is the ONLY observable a stopped chain ever

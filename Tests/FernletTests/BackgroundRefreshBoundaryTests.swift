@@ -57,7 +57,7 @@ import Testing
 /// imports nothing; `store.meshNetworkManager` hands the caller the radio itself and imports
 /// nothing; `store.refreshWorkoutsFromHealth()` reaches the HealthKit path and imports nothing;
 /// `FernletStore.load(…)` builds a second store and imports nothing. An import-only wall is green
-/// over all four. ``theRefreshDirectoryNamesNoMeshHealthCloudOrModelSpelling()`` is the wall that
+/// over all four. ``theRefreshDirectoryNamesNoForbiddenSpelling()`` is the wall that
 /// holds them, and the module allowlist is the cheap outer fence that catches the naive version
 /// first and names it clearly.
 ///
@@ -135,7 +135,8 @@ import Testing
 /// | ``theRefreshDirectoryExistsAndHoldsAtLeastOneSwiftFile()`` | `git mv App/Fernlet/CompanionRefresh App/Fernlet/CompanionRefreshX` — the enumerator finds nothing and the floor reds. Restore with the inverse `git mv`. |
 /// | ``theRefreshDirectoryImportsOnlyTheHandlersOwnVocabulary()`` | Add `import ProximityKit` as the first line of `App/Fernlet/CompanionRefresh/CompanionRefreshIdentifier.swift`. |
 /// | ``everyFernletKitModuleIsClassifiedForTheRefreshHandler()`` | Delete the `"ProximityKit"` entry from ``forbiddenModuleReasons``; the Package.swift walk finds a module with no disposition. |
-/// | ``theRefreshDirectoryNamesNoMeshHealthCloudOrModelSpelling()`` | One plant per family, each chosen to compile: `import ProximityKit` + `static let probe: MeshNetworkManager? = nil`; the same shape for `HKHealthStore`, `CKContainer` and `LanguageModelSession`; and — the important one, because it adds NO import and so reds this cell alone — `@MainActor func redOnceProbe() async throws { _ = try await FernletStore.load() }` below the enum. Per-NEEDLE independence is discharged without 68 rebuilds by ``everyForbiddenSpellingIsMatchableAndTheListIsWhole()``, which plants each needle into a synthetic source in-process and fails if any one of them cannot be matched. |
+/// | ``theRefreshDirectoryNamesNoForbiddenSpelling()`` | One plant per family, each chosen to compile: `import ProximityKit` + `static let probe: MeshNetworkManager? = nil`; the same shape for `HKHealthStore`, `CKContainer` and `LanguageModelSession`; `@MainActor func redOnceProbe() async throws { _ = try await FernletStore.load() }` below the enum — the important one, because it adds NO import and so reds this cell alone; and, for the clock-and-persistence family, `Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in }` inside `CompanionRefreshCoordinator`. Per-NEEDLE independence is discharged without 83 rebuilds by ``everyForbiddenSpellingIsMatchableAndTheListIsWhole()``, which plants each needle into a synthetic source in-process and fails if any one of them cannot be matched. |
+/// | ``theClockAndPersistenceFamilyIsWholeAndReadingTheClockIsNot()`` | Delete any clock-or-persistence row, or re-word its reason past ``clockAndPersistenceReasonPrefix``; the family pin reds. Buildless. |
 /// | ``theTaskIdentifierAppearsExactlyOnceAsCode()`` | Comment out the `taskIdentifier` line in the scaffold file (the count drops to zero), then paste a second copy into a new file under the directory (the count rises to two). Both directions must red. |
 /// | ``everyForbiddenSpellingIsMatchableAndTheListIsWhole()`` | Delete any one entry from ``forbiddenSpellings``; the measured count pin reds. |
 /// | ``theModuleAllowlistIsARealFilterAndNotARubberStamp()`` | Add `"ProximityKit"` to ``permittedModuleReasons``. |
@@ -284,6 +285,16 @@ struct BackgroundRefreshBoundaryTests {
     /// "Servic" + "ing", so neither string contains the other. They are two separate symbols, both
     /// needles because both are separately reachable.
     ///
+    /// The clock family adds one more containment, and one near-miss worth writing down.
+    /// `DispatchSource` is inside `DispatchSourceTimer` and both are needles, so a
+    /// `DispatchSourceTimer` line must report the longer one and only it. `Timer` is inside
+    /// `DispatchSourceTimer` too and must report NOTHING there — its left flank is a letter — which
+    /// is precisely why the longer spelling needs a row of its own rather than being assumed
+    /// covered. `KeychainItem` is a row and a bare `Keychain` is deliberately not: at identifier
+    /// boundaries the bare word matches almost nothing the app can write (`refreshStateFromKeychain`
+    /// and `lockKeychainService` are both refused on a flank), so the doors are named instead — the
+    /// accessor and the four `SecItem…(` calls under it.
+    ///
     /// The radio-verb rows are the same ten spellings `ProximityRunSeamsTests`' retirement wall
     /// counts, reused deliberately: if the app renames a verb, both walls must be edited together
     /// and neither can drift into naming a verb that no longer exists.
@@ -370,8 +381,42 @@ struct BackgroundRefreshBoundaryTests {
         Spelling(token: "FernletStore(", why: "constructing a second store over the same repositories"),
         Spelling(token: "FernletStore.load(", why: "the creation path — acquire through `FernletStoreAccess.shared.load()` instead"),
         Spelling(token: "FernletStoreLoader", why: "the scene bootstrap; the handler is not a scene", isAppDeclaration: true),
-        Spelling(token: "FernletStoreAccess(", why: "a SECOND acquisition cache — `.shared` is the point of the type")
+        Spelling(token: "FernletStoreAccess(", why: "a SECOND acquisition cache — `.shared` is the point of the type"),
+        // Clocks and persistence (plan §26.3/§27.3: schedule at handle + background, never on a
+        // timer; and no new persisted surface). Every reason carries
+        // ``clockAndPersistenceReasonPrefix`` so the family is derivable rather than listed twice.
+        Spelling(token: "Timer", why: "clock or persistence: the class the app owns exactly ONE of (`ProximitySessionPoller`'s), and a refresh that polled for its own next submission would be the second"),
+        Spelling(token: "DispatchSourceTimer", why: "clock or persistence: a timer that contains neither `Timer` nor `DispatchQueue` at an identifier boundary, which is why it is its own row"),
+        Spelling(token: "DispatchSource", why: "clock or persistence: `DispatchSource.makeTimerSource()` is the door that builds one"),
+        Spelling(token: "DispatchQueue", why: "clock or persistence: `asyncAfter` is a clock wearing a queue's clothes"),
+        Spelling(token: "RunLoop", why: "clock or persistence: a `RunLoop`-scheduled block is the third way to the same place"),
+        Spelling(token: "sleep(", why: "clock or persistence: one needle for `Task.sleep(`, `Thread.sleep(`, `usleep(` and the C call — a loop that waits is a clock"),
+        Spelling(token: "Task.detached", why: "clock or persistence: an unstructured task outliving the handler is work the completion can no longer account for"),
+        Spelling(token: "UserDefaults", why: "clock or persistence: the tree's usual persisted surface, and the one the wipe wall demands a disposition row for"),
+        Spelling(token: "FileManager", why: "clock or persistence: anything written to disk from the handler is a surface a wipe has to find"),
+        Spelling(token: "NSUbiquitousKeyValueStore", why: "clock or persistence: the same, in iCloud, where a wipe cannot reach it at all"),
+        Spelling(token: "KeychainItem", why: "clock or persistence: `FernletFoundation`'s keychain accessor — reachable with a PERMITTED import, which is exactly why the import wall cannot be its gate"),
+        Spelling(token: "SecItemAdd(", why: "clock or persistence: the raw keychain write, under the accessor"),
+        Spelling(token: "SecItemCopyMatching(", why: "clock or persistence: the raw keychain read"),
+        Spelling(token: "SecItemUpdate(", why: "clock or persistence: the raw keychain rewrite"),
+        Spelling(token: "SecItemDelete(", why: "clock or persistence: the raw keychain delete — removing a row is still touching the surface")
     ]
+
+    /// The prefix every clock-or-persistence reason carries.
+    ///
+    /// The family is derived from it rather than listed a second time, for
+    /// ``theRadioVerbNeedlesAreStillSpokenByTheSeamsWall()``'s reason: two lists of the same tokens
+    /// drift, and `CompanionRefreshSchedulingTests` reads this prefix to pin that the family still
+    /// exists at all.
+    static let clockAndPersistenceReasonPrefix = "clock or persistence: "
+
+    /// MEASURED count of the clock-and-persistence family at the P10 item 3 fix.
+    ///
+    /// The family arrived late: item 3's scheduling suite carried these spellings as a literal list
+    /// over three hand-named PATHS, which is a wall over three files — item 4's handler lands in the
+    /// same directory and was outside it. Moving them here makes them a property of the DIRECTORY,
+    /// the way every other needle already is.
+    static let measuredClockAndPersistenceCount = 15
 
     /// MEASURED count of ``forbiddenSpellings`` at P10 item 2. Removing a needle is a deliberate
     /// retirement with an argument, never a side effect of an edit; raise this in the same commit
@@ -379,8 +424,9 @@ struct BackgroundRefreshBoundaryTests {
     ///
     /// 41 at the first shape, 68 after the verify survey: the first list named the PRIVATE funnels
     /// and none of the `internal` doors beside them, so the 27 rows added are the spellings a second
-    /// file in the app target could actually speak.
-    static let measuredSpellingCount = 68
+    /// file in the app target could actually speak. 83 after item 3's verify, which added the
+    /// 15-row clock-and-persistence family — see ``measuredClockAndPersistenceCount``.
+    static let measuredSpellingCount = 83
 
     /// MEASURED count of the ``forbiddenSpellings`` rows that name a declaration under
     /// `App/Fernlet/`, pinned for the same reason the verb count is: the drift cell derives its set
@@ -498,7 +544,7 @@ struct BackgroundRefreshBoundaryTests {
     ///
     /// This is the half that actually holds, because the app target is one module: the tokens below
     /// are reachable from a file with no import line at all.
-    @Test func theRefreshDirectoryNamesNoMeshHealthCloudOrModelSpelling() throws {
+    @Test func theRefreshDirectoryNamesNoForbiddenSpelling() throws {
         let files = try Self.swiftFiles()
         #expect(files.count >= Self.minimumFilesScanned, "the walk lost the refresh directory (\(files.count) files)")
 
@@ -556,7 +602,7 @@ struct BackgroundRefreshBoundaryTests {
 
     /// Every needle is individually matchable, and the list is whole.
     ///
-    /// This is what makes each negative needle independently reddenable without 68 rebuilds: a
+    /// This is what makes each negative needle independently reddenable without 83 rebuilds: a
     /// needle whose spelling the matcher cannot see is a cell that can never fail, and this plants
     /// each one into a synthetic source and demands a hit. The count pin is the other half — a
     /// needle silently removed from the list is a prohibition silently retired.
@@ -678,6 +724,35 @@ struct BackgroundRefreshBoundaryTests {
         )
     }
 
+    /// The clock-and-persistence family is whole, and reading a clock is still allowed.
+    ///
+    /// Derived from ``clockAndPersistenceReasonPrefix`` rather than listed again, so the family and
+    /// its needles cannot be edited apart. The second half is the part a reader needs: `Date()` and
+    /// a `now()` closure are NOT clock scheduling, and
+    /// ``CompanionRefreshCoordinator/earliestBeginInterval`` has to be added to a `Date` to state a
+    /// floor at all — a wall that forbade reading the clock would forbid the policy.
+    @Test func theClockAndPersistenceFamilyIsWholeAndReadingTheClockIsNot() {
+        let family = Self.forbiddenSpellings.filter { $0.why.hasPrefix(Self.clockAndPersistenceReasonPrefix) }
+        #expect(
+            family.count == Self.measuredClockAndPersistenceCount,
+            """
+            \(family.count) needle(s) carry a clock-or-persistence reason, measured \
+            \(Self.measuredClockAndPersistenceCount). The family is derived from that prefix, so a \
+            re-worded reason would shrink it without failing anything — hence the pin.
+            """
+        )
+        #expect(family.allSatisfy { !$0.isAppDeclaration },
+                "every row here names an Apple or package type; none is an `App/Fernlet/` declaration")
+
+        // R2: bounded by the literal list.
+        for permitted in ["Date", "Date(", "now(", "addingTimeInterval", "timeIntervalSince1970"] {
+            #expect(!Self.forbiddenSpellings.contains { $0.token == permitted },
+                    "`\(permitted)` reads a clock rather than scheduling on one, and the policy needs it")
+        }
+        #expect(Self.violations(in: "let floor = now().addingTimeInterval(15 * 60)\n", path: "P.swift").isEmpty,
+                "the seam's own earliest-begin arithmetic is not a violation")
+    }
+
     /// The matcher's boundaries: the pairs that must not fire on each other, and the prose that is
     /// not code.
     @Test func theMatcherSeparatesLookalikeIdentifiersAndIgnoresProse() {
@@ -725,6 +800,25 @@ struct BackgroundRefreshBoundaryTests {
         let byUUID = Self.violations(in: "store.removeWorkoutByHealthKitUUID(uuid)\n", path: "P.swift")
         #expect(byUUID.count == 1, "expected one report, got: \(byUUID)")
         #expect(byUUID.first?.contains(": removeWorkoutByHealthKitUUID ") == true)
+
+        // The clock family's own containment: `DispatchSource` inside `DispatchSourceTimer`, with
+        // `Timer` inside it too and refused on its left flank. One line, one report, the longest.
+        let sourceTimer = Self.violations(in: "var tick: DispatchSourceTimer?\n", path: "P.swift")
+        #expect(sourceTimer.count == 1, "expected one report, got: \(sourceTimer)")
+        #expect(sourceTimer.first?.contains(": DispatchSourceTimer ") == true)
+
+        // And the shorter one still fires on its own door.
+        let source = Self.violations(in: "let t = DispatchSource.makeTimerSource()\n", path: "P.swift")
+        #expect(source.count == 1, "expected one report, got: \(source)")
+        #expect(source.first?.contains(": DispatchSource ") == true)
+
+        // One `sleep(` needle covers every spelling of waiting, so none of them double-reports.
+        let napping = Self.violations(in: "try await Task.sleep(nanoseconds: 1)\n", path: "P.swift")
+        #expect(napping.count == 1, "expected one report, got: \(napping)")
+        #expect(napping.first?.contains(": sleep( ") == true)
+
+        // A benign identifier that merely ends in a family needle is not a violation.
+        #expect(Self.violations(in: "let key = refreshStateFromKeychainCache\n", path: "P.swift").isEmpty)
 
         // The sanctioned acquisition path is NOT a violation — a wall that forbade it would forbid
         // the only thing §17.2 allows.
