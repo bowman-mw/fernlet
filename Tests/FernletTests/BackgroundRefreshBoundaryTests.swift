@@ -113,13 +113,16 @@ import Testing
 /// ## PERMITTED to the handler (item 4 reads this list)
 ///
 /// `FernletStoreAccess.shared` and its `load(…)` — the one sanctioned acquisition, which already
-/// refuses while protected data is unavailable; `todayKey`, the day roll's key; `companionState` and
+/// refuses while protected data is unavailable, and which BUILDS the process's first store on a
+/// cold wake (§17.2 forbids the handler a store of its own, and any store while protected data is
+/// unavailable; it does not forbid the process having one); `todayKey`, the day roll's key;
+/// `companionState` and
 /// `companionThought`, the companion recompute's reads; `publishWidgetSnapshot()` and
 /// `widgetSnapshotMirror`, the publish step; and `WidgetBridge` / `WidgetSnapshot` /
 /// `WidgetSnapshotMirror` themselves. None of them is a needle, and none may become one without item
 /// 4 losing a step.
 ///
-/// Item 4 adds the five spellings it actually calls, each with the step it serves:
+/// Item 4 adds the eight spellings it actually calls, each with the step it serves:
 ///
 /// - `refreshCurrentDayIfNeeded(now:)` — the DAY ROLL. The same internal call the foreground scene
 ///   makes at `.active`. Traced: it flushes the outgoing day under its old key, re-keys the diary,
@@ -129,6 +132,20 @@ import Testing
 /// - `hasUndrainedWidgetActions` — the WIDGET-QUEUE CHECK, a non-destructive read behind one store
 ///   property so the handler never names the queue type. It claims nothing, so asking cannot lose a
 ///   row (decision D-10.4.2).
+/// - `publishedWidgetSnapshotIsForCurrentDay` — the DAY HALF of that check (decision D-10.4.8): a
+///   coordinated read of the app-group snapshot file plus a day-key comparison against the store's
+///   own clock. It installs no mirror and writes nothing.
+/// - `hasCompleteScoringContext` — the SCORING-CONTEXT CHECK (decision D-10.4.6). PERMITTED rather
+///   than a needle, and the argument is worth stating: it reads two settings flags and asks whether
+///   two bridges are non-nil. It hands out neither bridge, so nothing downstream of it can be run
+///   through this door; it reads no cycle entry, no stress baseline and no health context; and it
+///   decrypts nothing, so the sealed-period gate never comes near it. That gate stays entirely on
+///   `PeriodContextBridge`'s side of the seam, where it keys off the DERIVED visibility value and
+///   fails closed — and a cold background process has no unlocked hub to open it with in any case.
+///   What the handler learns is a single bit: whether the score it is about to publish is the app's
+///   own number. A needle here would forbid the handler from knowing when to STOP.
+/// - `publishedWidgetSnapshot()` — the same coordinated read, returning the value, so the diff can
+///   see the day roll's own publish rather than be silently overwritten by it.
 /// - `currentWidgetSnapshot()` — the DIFF's left-hand side, lifted out of `publishWidgetSnapshot()`
 ///   unchanged. Pure: the live day, the settings, the derived signals.
 /// - `ensureWidgetSnapshotMirror()` — the PUBLISH step's precondition. A cold background wake has no
@@ -369,8 +386,7 @@ struct BackgroundRefreshBoundaryTests {
         Spelling(token: "HealthKitServicing", why: "the gateway's seam — `load()` defaults it to nil"),
         Spelling(token: "HealthSyncCoordinator", why: "the store's health sync coordinator — and the only way to reach its own methods, since the store's handle on it is private", isAppDeclaration: true),
         Spelling(token: "healthSyncCoordinator", why: "belt: that coordinator's property, `private` on the store today", isAppDeclaration: true),
-        Spelling(token: "attachedHealthKitService", why: "hands out the gateway itself — P10 item 4 added it to the store, and a getter that RETURNS the prohibited thing is reachable with no import and no type name at the call site", isAppDeclaration: true),
-        Spelling(token: "attachHealthKitServiceIfMissing", why: "the late-attach door beside it; the handler acquires through `FernletStoreAccess`, which does the attaching, and has no business doing it itself", isAppDeclaration: true),
+        Spelling(token: "attachHealthKitServiceIfMissing", why: "the late-attach door; the handler acquires through `FernletStoreAccess`, which does the attaching, and has no business doing it itself", isAppDeclaration: true),
         // The internal store members that DRIVE the health coordinator.
         Spelling(token: "refreshWorkoutsFromHealth", why: "pulls workouts out of HealthKit — the door the import wall is green over", isAppDeclaration: true),
         Spelling(token: "backfillWorkoutsFromHealthIfNeeded", why: "the same pull, on the launch backfill path", isAppDeclaration: true),
@@ -445,17 +461,35 @@ struct BackgroundRefreshBoundaryTests {
     /// and none of the `internal` doors beside them, so the 27 rows added are the spellings a second
     /// file in the app target could actually speak. 83 after item 3's verify, which added the
     /// 15-row clock-and-persistence family — see ``measuredClockAndPersistenceCount``. 85 at item 4,
-    /// which re-ran the survey this list's own doc comment asks for and found TWO rows it owed: the
-    /// handler's acquire fix added `attachedHealthKitService` and `attachHealthKitServiceIfMissing`
-    /// to `FernletStore`, and the first of them hands out the gateway to any file that can name the
-    /// store — with no import and without naming `HealthKitServicing` at the call site, which is
-    /// precisely the shape the import wall is green over.
-    static let measuredSpellingCount = 85
+    /// which re-ran the survey this list's own doc comment asks for and found TWO rows it owed:
+    /// the handler's acquire fix added `attachedHealthKitService` and
+    /// `attachHealthKitServiceIfMissing` to `FernletStore`.
+    ///
+    /// **84 at item 4's verify fixes, and the retirement is the interesting half.**
+    /// `attachedHealthKitService` was a getter with zero production callers — four assertions in
+    /// `CompanionRefreshPipelineTests` and nothing else — so the app target carried a door that
+    /// hands out the HealthKit gateway to any file that can name the store purely to let a test
+    /// read back what an attach did. The door is gone (on the store and on
+    /// `HealthSyncCoordinator`), those cells assert through `attachHealthKitServiceIfMissing(_:)`'s
+    /// return value instead, and this needle retires with the declaration it named — which is what
+    /// ``everyAppDeclaredNeedleIsStillDeclaredUnderTheAppTarget()`` would otherwise red over.
+    ///
+    /// The same verify added three READ-ONLY store doors the handler now calls —
+    /// `hasCompleteScoringContext`, `publishedWidgetSnapshot()` and
+    /// `publishedWidgetSnapshotIsForCurrentDay` — and none of them is a needle: re-running the
+    /// survey's own grep over each (identifier and body) turns up none of `Proximity`, `Mesh`,
+    /// `Health`, `HK`, `CloudKit`, `sync`, `FoundationModels`, `LanguageModel`, `Presence`,
+    /// `RecipeShare` or `Continuation`, and none of them RUNS, HANDS OUT or FEEDS prohibited
+    /// machinery. They are on the PERMITTED list above with the step each serves.
+    static let measuredSpellingCount = 84
 
     /// MEASURED count of the ``forbiddenSpellings`` rows that name a declaration under
     /// `App/Fernlet/`, pinned for the same reason the verb count is: the drift cell derives its set
     /// from a flag, and a flag dropped in an edit would shrink it without failing anything.
-    static let measuredAppDeclarationCount = 38
+    ///
+    /// 38 at item 4; 37 at its verify fixes, which retired `attachedHealthKitService` along with
+    /// the declaration itself — see ``measuredSpellingCount``.
+    static let measuredAppDeclarationCount = 37
 
     /// The app-target root the declaration-drift cell walks.
     static let appTargetRoot = "App/Fernlet"
@@ -516,10 +550,14 @@ struct BackgroundRefreshBoundaryTests {
             offenders.isEmpty,
             """
             \(offenders.count) disallowed import(s) under \(Self.refreshRoot). The companion \
-            refresh handler is a ≤ 30 s opportunistic task limited to: acquire the existing store → \
+            refresh handler is a ≤ 30 s opportunistic task limited to: acquire the process's store \
+            through `FernletStoreAccess` → check the widget queue → check the scoring context → \
             roll day → recompute the companion → diff the snapshot → publish via WidgetBridge → \
             reload timelines only on change → complete once (plan §17.2). It may never reach the \
-            mesh, HealthKit, CloudKit, Foundation Models, or build a store. Permitted: \
+            mesh, HealthKit, CloudKit or Foundation Models, and may never build a store ITSELF: the \
+            acquisition builds the process's first one on a cold wake (Core Data stack + bundled \
+            catalog, inside the grant) and refuses outright while protected data is unavailable, \
+            which is the only creation §17.2 allows. Permitted: \
             \(Self.permittedModules.sorted().joined(separator: ", ")).
             \(offenders.sorted().joined(separator: "\n"))
             """

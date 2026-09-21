@@ -65,9 +65,6 @@ final class HealthSyncCoordinator {
         )
     }
 
-    /// The gateway this coordinator is using, or `nil` when it has none and has not built its own.
-    var attachedHealthKitService: (any HealthKitServicing)? { providedHealthKitService }
-
     /// Attaches a gateway to a coordinator that was built without one.
     ///
     /// See `FernletStore.attachHealthKitServiceIfMissing(_:)` for the process-wide store cache this

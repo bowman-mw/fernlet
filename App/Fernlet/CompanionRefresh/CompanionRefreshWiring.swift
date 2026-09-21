@@ -8,7 +8,7 @@
 //
 //  Deliberately tiny, and deliberately separate from the pipeline. Everything interesting about the
 //  handler — the order, the diff, the cancellation, the completion table — is exercised in tier 1
-//  against fakes; what is left here is five bindings, each a single expression, and each one a name
+//  against fakes; what is left here is eight bindings, each a single expression, and each one a name
 //  from `BackgroundRefreshBoundaryTests`' PERMITTED list. A reviewer can read this file's body in
 //  one screen and decide whether the handler reaches anything it must not, which is a property a
 //  wall can support but not supply.
@@ -17,13 +17,27 @@
 //  - `FernletStoreAccess.shared.load()` — §17.2's one sanctioned acquisition. It throws
 //    `ExchangeIntentServiceError.deviceLocked` BEFORE opening anything when protected data is
 //    unavailable, and returns the CACHED store when the process already has one, so the handler
-//    never creates a second store over the same repositories. Its `healthKitService` parameter
-//    defaults to `nil` and is left at that default: a store built on a cold background wake gets no
-//    Health gateway at all, which is why this file names no HealthKit spelling anywhere. The scene
-//    attaches its own gateway to such a store when it arrives — that repair lives in
-//    `FernletStoreAccess`, on purpose, because the handler may not speak the word.
+//    never creates a second store over the same repositories. On a COLD wake there is no cached
+//    store and this call BUILDS the process's first one — the Core Data stack plus
+//    `loadBundledFoodItemsForLaunch()`, inside the grant. That is not the creation §17.2 forbids
+//    (a second store, or any store while protected data is unavailable); it is the only way a
+//    background-launched process can have a store at all, and it is the reason the budget for a
+//    cold refresh is measured from the acquisition rather than from the roll. Its
+//    `healthKitService` parameter defaults to `nil` and is left at that default: a store built on a
+//    cold background wake gets no Health gateway at all, which is why this file names no HealthKit
+//    spelling anywhere. The scene attaches its own gateway to such a store when it arrives — that
+//    repair lives in `FernletStoreAccess`, on purpose, because the handler may not speak the word.
 //  - `hasUndrainedWidgetActions` — the widget action queue's non-destructive read, behind one store
 //    property so the handler never touches the queue type itself. Reading it CLAIMS nothing.
+//  - `publishedWidgetSnapshotIsForCurrentDay` — the day half of that skip (decision D-10.4.8). A
+//    coordinated READ of the app-group file plus a day-key comparison against the store's own
+//    clock; it installs nothing and writes nothing.
+//  - `hasCompleteScoringContext` — the scoring-context check (decision D-10.4.6). Two settings
+//    flags and two nil checks. It hands out neither bridge, reads no cycle or stress data, and
+//    decrypts nothing: the sealed-period gate stays entirely on the bridge's side of this seam,
+//    where a cold wake has no key to open it with anyway.
+//  - `publishedWidgetSnapshot()` — the same coordinated read, returning the value, so the diff can
+//    see the day roll's OWN publish rather than be overwritten by it.
 //  - `refreshCurrentDayIfNeeded()` — the app's day roll, the same internal call the foreground
 //    scene makes at `.active`.
 //  - `companionState` — a COMPUTED property: reading it IS the recompute, and it is a pure function
@@ -50,7 +64,19 @@
 //  roll keeps it that way, so every timeline reload a cold refresh causes is decided by the diff
 //  below and by nothing else. On a WARM process the mirror already exists and a day roll does
 //  publish through the store's own path — which is correct rather than a leak: a roll always
-//  changes `dateKey`, so that reload is one the diff would have made anyway.
+//  changes `dateKey`, so that reload is one the diff would have made anyway, and the pipeline reads
+//  the snapshot file either side of the roll so the trace can NAME that reload instead of losing it.
+//
+//  **What ensuring it costs, written down rather than left to be discovered (decision D-10.4.7:
+//  ACCEPTED).** The mirror outlives the refresh. In a process that was woken purely for background
+//  work and never shows a scene, any LATER save in that same process — a Siri "+1 water" intent, a
+//  shortcut — now reaches `publishWidgetSnapshot()` and reloads the widget timelines
+//  unconditionally, because `publish(_:)` does not diff. Before item 4 that was impossible: no
+//  scene meant no mirror meant a silent no-op. This is not a new rule, though: it is exactly what
+//  the FOREGROUND does on every save, and the gap it closes — a background water intent that
+//  changed the count and left the widget showing the old one until something else poked WidgetKit —
+//  was a real one. The cost is bounded by how many saves a background process makes after a
+//  refresh, which is ordinarily none.
 //
 
 // `FernletDomainModel` is imported for ONE member: `CompanionState.rawValue`, the spelling the
@@ -86,12 +112,13 @@ enum CompanionRefreshWiring {
         CompanionRefreshPipeline(acquire: { steps(for: try await FernletStoreAccess.shared.load()) })
     }
 
-    /// The five bindings, over a store the caller already holds.
+    /// The eight bindings, over a store the caller already holds.
     ///
     /// Split from ``productionPipeline()`` so the BINDINGS themselves are reachable from a test
-    /// over an ordinary test store — `CompanionRefreshPipelineTests` runs exactly these five
-    /// expressions against a real `FernletStore` and asserts the trace, the publication and the
-    /// undrained-queue skip. Without the split the only way to reach them would be through the
+    /// over an ordinary test store — `CompanionRefreshPipelineTests` runs exactly these eight
+    /// expressions against a real `FernletStore` and asserts the trace, the publication, the
+    /// undrained-queue skip and both refusals. Without the split the only way to reach them would be
+    /// through the
     /// process-global acquisition cache, and they would be the one part of item 4 that nothing
     /// exercised. What stays untested here is `FernletStoreAccess.shared.load()` itself, which is
     /// its own file's subject.
@@ -101,6 +128,9 @@ enum CompanionRefreshWiring {
     static func steps(for store: FernletStore) -> CompanionRefreshSteps {
         CompanionRefreshSteps(
             hasUndrainedWidgetActions: { store.hasUndrainedWidgetActions },
+            publishedSnapshotIsForCurrentDay: { store.publishedWidgetSnapshotIsForCurrentDay },
+            scoringContextIsComplete: { store.hasCompleteScoringContext },
+            publishedSnapshot: { store.publishedWidgetSnapshot() },
             rollDay: { store.refreshCurrentDayIfNeeded() },
             recompute: { store.companionState.rawValue },
             makeSnapshot: { store.currentWidgetSnapshot() },

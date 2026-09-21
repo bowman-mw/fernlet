@@ -1351,6 +1351,40 @@ final class FernletStore {
         return StressEngine.scoringModifier(for: stressScoringContext.currentStressAssessment?.state)
     }
 
+    /// Whether every scoring adjustment the person has turned ON has its bridge attached — and
+    /// therefore whether ``score`` is the app's own number or a lower-fidelity stand-in for it.
+    ///
+    /// **Why anything asks.** ``periodAdjustment(for:)`` and ``stressModifier(for:)`` both return
+    /// the IDENTITY when their bridge is nil, and both bridges are attached in exactly one place:
+    /// `ContentView`'s store-ready wiring (`attachPeriodScoringContext` / `attachStressScoringContext`).
+    /// A process woken COLD by `BGAppRefreshTask` runs no scene, so on such a wake both are nil and
+    /// ``score`` is the app's number minus whatever those two would have moved it by. Publishing
+    /// that to the widget is not a stale snapshot but a WRONG one — the widget would carry a
+    /// companion the app itself disagrees with until the next foreground publish flipped it back.
+    /// Decision D-10.4.6: the refresh handler never publishes a lower-fidelity score.
+    ///
+    /// **Why a refusal rather than a late attach.** Neither bridge can be built outside a scene.
+    /// `PeriodContextBridge`'s source is a `PeriodTrackerStore` the view holds as `@State` and
+    /// wires to the lock service it reads from `@Environment` — the sealed-period gate's live
+    /// content key, which a background process has no unlocked hub to supply, so a bridge built
+    /// without it would be a gate with nothing behind it. The stress context is a `StressService`
+    /// the scene attaches together with a HealthKit fetch closure, and §17.2 forbids the refresh a
+    /// HealthKit read outright. So the honest background answer is to publish nothing and leave the
+    /// widget on its last good snapshot until a foreground run can do better.
+    ///
+    /// **Both off is not a gap**, and is the common case: both opt-ins are off by default, the
+    /// adjustments are then the identity for the FOREGROUND too, and a bridgeless recompute IS the
+    /// app's own number.
+    ///
+    /// It deliberately does not try to prove the narrower thing — that a HIDDEN period feature
+    /// would have yielded the identity anyway through the bridge's own fail-closed visibility gate.
+    /// That rule belongs to the bridge; a second copy of it here is a copy that drifts.
+    var hasCompleteScoringContext: Bool {
+        if settings.periodAwareScoringEnabled, periodScoringContext == nil { return false }
+        if settings.stressAwarenessEnabled, stressScoringContext == nil { return false }
+        return true
+    }
+
     /// Non-sensitive per-day wellbeing component scores (sleep/mood/exercise/nutrition) fed into the period
     /// bridge so its trend engine can correlate them against cycle phase. Sourced from already-computed
     /// `dailyScores`; nothing sensitive flows out.
@@ -3181,16 +3215,6 @@ final class FernletStore {
 
     func stopHealthKitWorkoutObservation() {
         healthSyncCoordinator.stopWorkoutObservation()
-    }
-
-    /// The HealthKit gateway this store's sync coordinator is actually using, or `nil` when the
-    /// store was built without one and nothing has attached one since.
-    ///
-    /// Read from the COORDINATOR rather than from the store's own `healthKitService`, which is only
-    /// the seed it was constructed with: after a late attach the two disagree, and the coordinator
-    /// is the one that decides which gateway the workout sync gets.
-    var attachedHealthKitService: (any HealthKitServicing)? {
-        healthSyncCoordinator.attachedHealthKitService
     }
 
     /// Attaches a HealthKit gateway to a store that was built without one.
@@ -6126,6 +6150,37 @@ final class FernletStore {
             dateKey: todayKey,
             computedAt: Date()
         )
+    }
+
+    /// The snapshot the widget is rendering right now, read back off the app-group file — or `nil`
+    /// when nothing has ever been published (or the file was wiped).
+    ///
+    /// **It must not install the mirror, which is why it is not `ensureWidgetSnapshotMirror().currentSnapshot()`.**
+    /// On a cold background wake there is no mirror, and that is load-bearing:
+    /// ``refreshCurrentDayIfNeeded(now:)`` publishes through ``publishWidgetSnapshot()``, which
+    /// no-ops without one, so every timeline reload such a wake causes is decided by the refresh
+    /// handler's diff and by nothing else. Installing the mirror early — to read one value — would
+    /// hand the day roll an unconditional reload the diff never sees. So a mirror that already
+    /// exists answers, and otherwise a transient file store READS the same path and is thrown away.
+    ///
+    /// - Returns: The published snapshot, or `nil`.
+    func publishedWidgetSnapshot() -> WidgetSnapshot? {
+        if let widgetSnapshotMirror { return widgetSnapshotMirror.currentSnapshot() }
+        return WidgetSnapshotFileStore(directory: appGroupDirectory).read()
+    }
+
+    /// Whether the published snapshot is for the CURRENT wall-clock day.
+    ///
+    /// The wall clock rather than ``todayKey``, deliberately: a process resident since yesterday
+    /// still carries yesterday's `todayKey` until the roll runs, and comparing the file against
+    /// that would answer "same day" at the one moment the question matters. This is the same clock
+    /// ``refreshCurrentDayIfNeeded(now:)`` defaults to, kept in one place so two callers cannot
+    /// disagree about what day it is.
+    ///
+    /// `false` when nothing has been published at all — there is then no day to be current, and the
+    /// caller that asks (decision D-10.4.8's queue skip) wants a publish in exactly that case.
+    var publishedWidgetSnapshotIsForCurrentDay: Bool {
+        publishedWidgetSnapshot()?.dateKey == FernletDate.dayKey(for: Date())
     }
 
     /// Whether the widget's pending-action queue still holds rows nothing has drained.
