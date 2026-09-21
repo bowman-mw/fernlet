@@ -161,7 +161,7 @@ enum MeshMatrixDebugOptions {
     /// Frozen diagnostic English naming what the launch environment asked for, for the transcript.
     static var summary: String {
         let environment = ProcessInfo.processInfo.environment
-        return "label=\(label) transport=\(environment["FERNLET_MESH_TRANSPORT"] ?? "default") "
+        return "label=\(label) transport=\(environment["FERNLET_MESH_TRANSPORT"] ?? "default(quic)") "
             + "chaos=\(environment["FERNLET_MESH_CHAOS"] ?? "off") "
             + "chaosBarred=\(environment["FERNLET_MESH_CHAOS_BARRED"] == nil ? "none" : "set") "
             + "flows=\(flows.isEmpty ? "none" : flows.map(\.rawValue).joined(separator: "+")) "
