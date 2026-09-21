@@ -109,8 +109,9 @@ jobs:
       # 2026-09-21 this step fell back to the newest available iPhone with a `::warning::`, which
       # is precisely the silent device change the appearance baselines cannot survive:
       # `UXScreenProbe.auditBaselines` (Tests/FernletUITests) is pinned four ways to an iPhone 17
-      # in portrait, and on any other device — the 17 Pro has identical point geometry — the
-      # ratchet fails in both directions at once and reads like a regression that never happened.
+      # in portrait; on any other device — the 17 Pro has identical point geometry — the probe's
+      # environment guard refuses to run the ratchet at all, and without that guard the deltas read
+      # like a regression that never happened (the misdiagnosis its doc records).
       # This workflow does not run that suite yet, and the unpinned device was the unnamed
       # prerequisite under all three of the UI residuals that would put it here (plan §17.2.3
       # finding 6, §28.3). So: if the image drops the device, fail in seconds, naming the fix.
@@ -582,9 +583,15 @@ jobs:
         # everyHeartFailureCauseHasItsOwnSentence carried a latent `LocalizedStringKey ==` defect - not a
         # value comparison for an interpolated key - that codegen exposed when item 9 added five files to
         # the test module; the cell compares `String(describing:)` now and this line is green at 1198/140.
+        # RAISED 1198 -> 1199 (2026-09-21, the cutover round's item 2a verify fixes): CIGateSelectorBoundaryTests,
+        # which is on this line, gained one cell (the Simulator-device pin). MEASURED over this exact
+        # 140-name list on a Mac after a build-for-testing, read off the result bundle: "Test run with
+        # 1199 tests in 140 suites passed", no restart. 1198 + 1 = 1199 is the ARITHMETIC CHECK, never
+        # the number. (The decomposition's "+ 4 CIGateSelectorBoundaryTests' own" term is P6's count and
+        # is now 6; the RAISED lines carry the running total, the decomposition is not re-summed.)
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1198 \
+          Scripts/run-gated-suites.sh mesh-batteries 1199 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

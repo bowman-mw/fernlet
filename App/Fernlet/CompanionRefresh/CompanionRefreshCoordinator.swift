@@ -252,6 +252,13 @@ final class CompanionRefreshCoordinator {
         // that were never made, and its sixty-fifth switch-away was audited as the cap rather
         // than as the refusal sixty-four lines up (plan §17.2.3 finding 3). A refused SUBMISSION
         // still counts — it reached the seam and was answered — which is the storm the cap is for.
+        // Two consequences, both deliberate: an unregistered launch says `submitWithoutARegistration`
+        // on EVERY edge rather than on sixty-four of them (person-bounded, and the uncapped
+        // `edgeFoundARequestAlreadyPending` above set that precedent); and because the cap guard
+        // reads the counter BEFORE the ask, a scheduler that delivered synchronously from inside
+        // `submit` and re-entered this method could overshoot the cap by its recursion depth — none
+        // does (the system seam is a straight `BGTaskScheduler.submit`; the fake records or throws),
+        // and a delivering fake would have to keep it that way.
         guard submitNext(trigger: "background") else { return }
         edgeSubmissions += 1
     }

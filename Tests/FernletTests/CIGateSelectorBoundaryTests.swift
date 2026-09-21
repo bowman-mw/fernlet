@@ -328,27 +328,42 @@ import Testing
     /// Until 2026-09-21 the workflow's "Resolve a simulator destination" step preferred `iPhone 17`
     /// and otherwise took the newest available iPhone with a `::warning::` — a silent device change
     /// on the line whose appearance baselines (`UXScreenProbe.auditBaselines`) are pinned four ways
-    /// to an iPhone 17 in portrait and fail in both directions on any other device, the 17 Pro
-    /// included (identical point geometry, different safe areas and font metrics). Pinning the
-    /// device is the prerequisite under every UI residual that would put that suite on CI, which is
-    /// why this cell exists before the suite does. Three facts, each read from source rather than
-    /// asserted about a constant: the step names the device as ONE literal and exports it as the
-    /// destination; the step's live code carries no fallback (no `::warning::`, no `fallback`, and it
-    /// exits non-zero); and the two scripts' `FERNLET_DESTINATION` defaults and the UI probe's own
-    /// failure text name the same destination string, so local, CI and the baselines cannot drift.
+    /// to an iPhone 17 in portrait: on any other device — the 17 Pro included, identical point
+    /// geometry, different safe areas and font metrics — the probe's environment guard refuses to
+    /// run the ratchet at all, and without that guard the deltas read as a regression that never
+    /// happened (the 2026-08-27 misdiagnosis its doc records). Pinning the device is the
+    /// prerequisite under every UI residual that would put that suite on CI, which is why this cell
+    /// exists before the suite does. Four facts, each read from source rather than asserted about a
+    /// constant: the step is declared ONCE (the parser reads the first of a name, so a duplicate
+    /// could re-export the destination unseen); its live code assigns `name` exactly once, to the
+    /// literal, and exports it as the destination — a second assignment IS a fallback, whatever it
+    /// is called, so no word is matched and the error message's wording is free; it warns nowhere
+    /// and exits non-zero; and the two scripts' `FERNLET_DESTINATION` defaults and the UI probe's
+    /// source name the same destination string, so local, CI and the baselines cannot drift.
     @Test func theSimulatorDestinationIsPinnedWithNoFallback() throws {
         let workflow = try RepoRoot.source(Self.workflowPath)
-        let step = Self.stepBody(named: "Resolve a simulator destination", in: workflow)
+        let declarations = workflow.components(separatedBy: "\n")
+            .filter { $0.trimmingCharacters(in: .whitespaces) == "- name: \(Self.destinationStepName)" }
+        #expect(declarations.count == 1, """
+            \(declarations.count) step(s) are declared as "- name: \(Self.destinationStepName)". \
+            `stepBody` reads the FIRST, so a second step of that name could re-export \
+            FERNLET_DESTINATION unseen — one step. (A step whose first key is `id:`/`uses:`, or a \
+            quoted name, reads as missing here: write it with `- name:` first, unquoted.)
+            """)
+        let step = Self.stepBody(named: Self.destinationStepName, in: workflow)
         #expect(!step.isEmpty, "the workflow lost its destination step — every test line reads FERNLET_DESTINATION from it")
-        #expect(step.contains("name=\"\(Self.pinnedSimulatorName)\""),
-                "the destination step must name the pinned device as one literal: \(Self.pinnedSimulatorName)")
+        let nameAssignments = step.components(separatedBy: "\n").filter { $0.hasPrefix("name=") }
+        #expect(nameAssignments == ["name=\"\(Self.pinnedSimulatorName)\""], """
+            the destination step assigns `name` \(nameAssignments.count) time(s): \(nameAssignments). \
+            It must be assigned exactly once, to the literal "\(Self.pinnedSimulatorName)" — a second \
+            assignment is a fallback whatever it is called, and a run on any other device is refused \
+            by the appearance baselines' environment guard. Fail, name the fix, never fall back \
+            (plan §28.3).
+            """)
         #expect(step.contains("FERNLET_DESTINATION=platform=iOS Simulator,name=$name"),
                 "the step must export the pinned name as the destination every test line reads")
-        #expect(!step.contains("::warning::") && !step.lowercased().contains("fallback"), """
-            the destination step grew a fallback again. A run on any other device reads as a \
-            screenful of appearance regressions when nothing regressed — fail, name the fix, never \
-            fall back (plan §28.3).
-            """)
+        #expect(!step.contains("::warning::"),
+                "the destination step must not warn its way past a missing device — it fails, or it exports the pin")
         #expect(step.contains("exit 1"), "a missing device must fail the job, in seconds, not warn")
         let canonical = "platform=iOS Simulator,name=\(Self.pinnedSimulatorName)"
         // R2: bounded by the list.
@@ -366,9 +381,13 @@ import Testing
     /// the scripts' text — never against a constant of theirs, which could not fail.
     private static let pinnedSimulatorName = "iPhone 17"
 
+    /// The workflow step that exports `FERNLET_DESTINATION`, by its `- name:`.
+    private static let destinationStepName = "Resolve a simulator destination"
+
     /// Where the canonical destination string must also appear: the two scripts whose
-    /// `FERNLET_DESTINATION` default is what a local run uses, and the UI probe whose baseline
-    /// failure names the destination to re-run on.
+    /// `FERNLET_DESTINATION` default is what a local run uses, and the UI probe whose baselines
+    /// were recorded on it (its source names the destination twice — the doc and the guard's
+    /// failure text; this pins that the file names it, not which copy).
     private static let destinationDefaultHolders = [
         "Scripts/run-gated-suites.sh",
         "Scripts/spm-wall-check.sh",
