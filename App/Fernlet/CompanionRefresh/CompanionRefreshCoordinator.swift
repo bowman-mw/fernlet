@@ -122,6 +122,13 @@ final class CompanionRefreshCoordinator {
     /// like — a refusal leaves nothing pending, so the next edge asks again. Reaching it is audited
     /// rather than silent, and what it means is that the EDGE trigger is off for the rest of this
     /// process while the tail keeps the chain alive.
+    ///
+    /// **A refused REGISTRATION is not that storm.** An unregistered coordinator's edge never reaches
+    /// the seam — ``submitNext(trigger:)`` returns before it asks — so it is charged nothing, and
+    /// the audit trail keeps naming the real cause (`registrationRefused`, then
+    /// `submitWithoutARegistration` on every edge) instead of, sixty-four edges later,
+    /// `edgeSubmissionCapReached` for a budget spent on asks that never happened
+    /// (plan §17.2.3 finding 3; fixed 2026-09-21).
     static let maxEdgeSubmissionsPerLaunch = 64
 
     /// The `BackgroundTasks` seam.
@@ -154,6 +161,9 @@ final class CompanionRefreshCoordinator {
 
     /// How many of those came from the background edge — the only trigger
     /// ``maxEdgeSubmissionsPerLaunch`` bounds, and so the R2 counter.
+    ///
+    /// Never more than ``submissions``: it counts the edge's asks that REACHED the seam, refused
+    /// ones included, and an edge on an unregistered coordinator is not an ask at all.
     private(set) var edgeSubmissions = 0
 
     /// The request this process believes the system is holding, or nil.
@@ -237,8 +247,13 @@ final class CompanionRefreshCoordinator {
                                 context: ["edgeSubmissions": String(edgeSubmissions)])
             return
         }
+        // Charged AFTER the ask, and only for one that reached the seam. The counter used to move
+        // first, so a launch whose registration was refused spent its whole edge budget on asks
+        // that were never made, and its sixty-fifth switch-away was audited as the cap rather
+        // than as the refusal sixty-four lines up (plan §17.2.3 finding 3). A refused SUBMISSION
+        // still counts — it reached the seam and was answered — which is the storm the cap is for.
+        guard submitNext(trigger: "background") else { return }
         edgeSubmissions += 1
-        submitNext(trigger: "background")
     }
 
     // MARK: - The system's own edges
@@ -349,12 +364,16 @@ final class CompanionRefreshCoordinator {
     /// yes, because a tail runs after a delivery.
     ///
     /// - Parameter trigger: Which of the two triggers this is, for the audit trail.
-    private func submitNext(trigger: String) {
+    /// - Returns: Whether the ask reached the seam at all — `false` only on an unregistered
+    ///   coordinator, where nothing was asked. A refused submission is an ask that was answered and
+    ///   returns `true`; it is the edge's budget that reads this, and the tail has no budget to keep.
+    @discardableResult
+    private func submitNext(trigger: String) -> Bool {
         guard isRegistered else {
             // Not merely early: an unregistered identifier cannot be submitted at all, and a chain
             // that never started is invisible from the outside without this line.
             FernletAuditLog.log("companionRefresh.submitWithoutARegistration", context: ["trigger": trigger])
-            return
+            return false
         }
         submissions += 1
         let request = CompanionRefreshRequest(
@@ -379,6 +398,7 @@ final class CompanionRefreshCoordinator {
                 "error": String(describing: error)
             ])
         }
+        return true
     }
 
     /// **The idempotent shutdown** — the only site that completes a task.

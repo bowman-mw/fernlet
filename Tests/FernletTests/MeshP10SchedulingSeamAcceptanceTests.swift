@@ -197,6 +197,11 @@ struct MeshP10SchedulingSeamAcceptanceTests {
             later at a refusal the audit trail would have to explain
             """)
         #expect(refused.pendingRequest == nil, "nothing is pending, because nothing was accepted")
+        #expect(refused.edgeSubmissions == 0, """
+            …and the edge budget was not spent on an ask that never reached the seam — charged \
+            after the ask since 2026-09-21 (plan §17.2.3 finding 3), so a refused launch's audit \
+            trail keeps naming the refusal instead of, sixty-four edges later, the cap
+            """)
     }
 
     /// **The background edge asks only when the system is holding nothing of ours** — so the floor

@@ -370,6 +370,33 @@ struct CompanionRefreshSchedulingTests {
                 "both halves say so out loud: the refusal, and every submission it then blocks")
     }
 
+    /// A launch whose registration was refused spends NO edge budget, however often it is
+    /// backgrounded — and its audit trail keeps naming the real cause past the cap.
+    ///
+    /// The edge counter is charged for asks that reach the seam; an unregistered coordinator's edge
+    /// never does. Until 2026-09-21 it was charged first and refused second, so sixty-four
+    /// switch-aways later the audit read `edgeSubmissionCapReached` for a launch that was never
+    /// registered, with the refusal sixty-four lines up and off the screen (plan §17.2.3 finding 3).
+    /// Driven one past the cap on purpose: the cell is about the sixty-fifth line, not the count.
+    @Test func aRefusedRegistrationSpendsNoEdgeBudget() {
+        let (subject, scheduler) = coordinator()
+        scheduler.registrationAccepted = false
+        subject.registerAtLaunch()
+        let cap = CompanionRefreshCoordinator.maxEdgeSubmissionsPerLaunch
+
+        // R2: bounded by the cap.
+        for _ in 0..<cap { subject.appDidEnterBackground() }
+        let events = auditedEvents { subject.appDidEnterBackground() }
+
+        #expect(subject.edgeSubmissions == 0, "no ask reached the seam, so nothing was charged to the edge")
+        #expect(subject.submissions == 0, "and the seam-level counter agrees — the two never disagree")
+        #expect(scheduler.submitted.isEmpty, "an unregistered identifier can never be submitted")
+        #expect(events == ["companionRefresh.submitWithoutARegistration"], """
+            the edge past the cap still names the real cause — not `edgeSubmissionCapReached`, which \
+            would be a budget spent on asks that never happened
+            """)
+    }
+
     // MARK: - The schedule policy
 
     /// Trigger (b): the background edge submits ONE request, at the policy's earliest begin date.
