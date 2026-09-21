@@ -19,7 +19,8 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`.
 | 2b | `@Suite(.serialized)` on `AppIntentsTests` | — | done | `737399c` | plan §17.2.3 finding 5 |
 | 2c | A refused registration no longer spends the edge budget (`CompanionRefreshCoordinator.appDidEnterBackground` charges AFTER `submitNext` reports the ask reached the seam) + the cell | — | done | `b4cd1ac` | plan §17.2.3 finding 3 |
 | 1.1 | Stranger-admission DESIGN for the owner (`Docs/Mesh-Stranger-Admission-Design-2026-09-21.md`), D-4.3 asked with D-4.4 | 2 | done (asked) | record commit | written, blind-verified (20 findings, all taken — see below), D-4.3 REDEFINED and asked; STOPPED for the owner's answer |
-| 1.2 | The admission path + the six anchored patches from `Docs/Mesh-P9-Item4-Design-2026-09-20.md` (flip, gate; MC deletion in the following round) | owner's D-4.3 | blocked (owner) | | |
+| 1.2 | The admission path (Option 1 + 1b's gating half) with its tests | D-4.3 taken | in-flight | | Opus implementer in this worktree → blind verify → fix |
+| 1.3 | The flip: `shippingDefault` → `.quic`, `MeshP9McRetirementAcceptanceTests` values, `MeshNetworkManager.swift` edits 1–7 (Edit 4 pure-retire, D-4.4), docs/plan rows, pins raised, mesh line re-measured | 1.2 | todo | | MC files, plist strings, permit list, test sweep = the deletion round |
 
 ## Blocked on owner
 - **D-4.3** (with **D-4.4**): the cutover, on the stranger-admission design's recommendation.
@@ -30,6 +31,9 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`.
 |---|---|---|
 | Where the edge budget is charged | AFTER the ask, only for one that reached the seam (a refused submission still counts; an unregistered edge does not) — the header's rationale ("bounds a pathological edge storm of refused submissions") stays true, and `edgeSubmissions <= submissions` becomes an invariant | 2026-09-21 |
 | The CI device | pinned by name, hard failure, no fallback; the cell also pins the two scripts' defaults and the UI probe's text to the same destination string | 2026-09-21 |
+| **D-4.3** (the owner, asked via the design's §5) | **TAKEN — Option 1**: cut the friend mesh over to QUIC with provisional stranger admission while the join doors are open, membership at the existing three doors, plan §7.2's "non-roster member" bullet amended, §15 still undated; plus Option 1b's frame-gating half (group-key family + vouch list gated on commit). 1b's name deferral and Option 2 NOT taken. | 2026-09-21 |
+| **D-4.4** (the owner, asked with D-4.3) | **PURE RETIRE** — the owner chose against the design's recommendation (the legacy `FileManager` sweep): the archive leg of `wipeIdentityForDeleteAll` and the `PrivacyWipeCoverage.md` row retire with a prose note; a pre-P9 install's `FernletPeerID.archive` is left behind by delete-all. Cost recorded: the only install (the owner's phone) has run pre-P9 builds and holds the file until a reinstall. | 2026-09-21 |
+| The series' split (this round vs the deletion round) | **Flip, gate, then delete** (the launcher's rule): this round = the admission path + `shippingDefault` `.multipeer` → `.quic` + `MeshP9McRetirementAcceptanceTests` values + the `MeshNetworkManager.swift`/docs/plan edits + D-4.4's pure retire; the **deletion round** = the two MC files, the `_fernlet-friend` plist strings (a DEBUG `FERNLET_MESH_TRANSPORT=multipeer` bisect path stays alive until then), the permit list, the 34 test files' sweep. | 2026-09-21 |
 
 ## Verify findings
 (one adversarial verify per item — implement → a verifier blind to the first's reasoning → fix; every verify in P8–P10 found something real, and so did these)
