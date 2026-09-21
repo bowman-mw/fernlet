@@ -3504,6 +3504,15 @@ the whole phase and no row's status or date moved. P9 hands these rows nothing n
 `assertionFailure`-in-`catch` family is gone (`dad86e9`), so a DEBUG build no longer crashes on
 exactly the lock and background rows §15 needs. The runbook's **Lane B** table is likewise
 unchanged; the Lane C rows P9 added are tier 2 and are listed in §17.1.4.
+**Unchanged at the P10 close-out (2026-09-21): still NOT RUN, for a third phase.** No device was
+in hand at any point in P10, so item 0 stayed blocked on the owner and no row's status or date moved.
+P10 hands these rows nothing — its task is an app refresh, not a radio — but it **adds eight rows
+of its own**: the six the runbook's Lane E names as rows only a phone can give, plus the two
+smaller ones that fall with them (§15.5), measured negative on a Simulator first so that nobody
+re-runs the cheap half. One prerequisite is new and applies to **every** row below as well as to
+§15.5: **install the private-data logging profile on the phone first**, or accept that every
+`FernletAuditLog` context reads `<private>` unless a debugger is attached (§17.2.3 finding 2). It
+matters most on the one row where no debugger *can* be attached.
 
 | Gate | Status | What P8 hands it |
 |---|---|---|
@@ -3526,6 +3535,42 @@ and each has a fake standing in for it at tier 1 today:
 | The Control-Centre peek re-submission (F12) | one `mesh.continuation.submitted` per peek, `mesh.continuation.submissionCapReached` after the eighth, and the Friends card turning to the refusal sentence for the rest of that mesh. If a normal hour costs more than eight peeks, the fix is a rising-edge latch, not a bigger cap. |
 
 Results land in the runbook's gate table with dates; the probe's new counters (P0.6) supply the numbers.
+
+**15.5 P10's device rows — the companion `BGAppRefreshTask`:**
+
+Every row here is **downstream of a refusal a Simulator makes**: `BGTaskScheduler.submit` returns
+`BGTaskSchedulerErrorDomain` code 1 for a `BGAppRefreshTaskRequest` exactly as it does for the
+continuation, so nothing is ever pending, no delivery can be forced, and the debugger SPIs decline
+for that reason. Registration is the one step a Simulator proves (runbook § *Lane E*,
+`Docs/Mesh-Network-Feasibility-Runbook.md:2256`, run 2026-09-21). The Simulator does not merely fail
+to observe these rows — **it cannot reach the state in which they exist.**
+`companionRefresh.runFinished` has never been emitted on any machine.
+
+D1–D6 are the runbook's six numbered "rows a Simulator cannot give", in its order; D7 and D8 are the
+two smaller ones it names beside them.
+
+**Prerequisite for all eight: the private-data logging profile**, or the context redacts unless a
+debugger is attached.
+
+| Row | What a phone must show | Status |
+|---|---|---|
+| **P10-D1** cold background launch | iOS starting the app **because** a refresh came due, with no foreground launch before it. This is the launch in which `FernletStoreAccess` builds the process's first store with no HealthKit service — the whole reason item 4's pipeline is shaped as it is. No process to attach to, so no way to force it, and **the one row where no debugger can be attached** — hence the profile | **NOT RUN — owner's device, 2026-09-21** |
+| **P10-D2** a grant on iOS's own schedule | Everything after `taskWasDelivered`: the tail's `submitNext(trigger: "handle")` **before** the work, the pipeline outcome (`reloaded` / `unchanged` / `scoringContextUnavailable` / `widgetActionsPending` / `publishedDespitePendingActions` / `writeFailed`), the WidgetKit timeline reload, and exactly-once completion | **NOT RUN — owner's device, 2026-09-21** |
+| **P10-D3** the real conformer's expiration handler | Whether `SystemCompanionRefreshTaskHandle`'s `expirationHandler` hop reaches `taskDidExpire()` in time to cancel an in-flight run when the budget is the **system's** and not a test's. Tier 1 proves the coordinator's half; the conformer's half is exercised by no test anywhere | **NOT RUN — owner's device, 2026-09-21** |
+| **P10-D4** the 15-minute floor honoured | Lane E proves the app *asks* for `now + 15 min` and that `earliestBeginInterval` is carried to the second. Whether iOS respects that floor, and what it grants in practice, is a phone measurement | **NOT RUN — owner's device, 2026-09-21** |
+| **P10-D5** Background App Refresh off in Settings | The Simulator has no such switch. This is the setting that produces the refusal a real user can cause — the one `companionRefresh.submitRefused` exists to make attributable, and the one whose `error=` the profile has to un-redact | **NOT RUN — owner's device, 2026-09-21** |
+| **P10-D6** Low Power Mode | Same shape as §15.1's Low Power row: Apple documents neither direction, so the empirical answer **is** the deliverable | **NOT RUN — owner's device, 2026-09-21** |
+| **P10-D7** `companionRefresh.edgeFoundARequestAlreadyPending` | Needs an **accepted** submission to guard against: a refusal leaves `pendingRequest` nil by design, so on a Simulator every edge re-asks and is refused again. The event name appeared **zero** times in the whole Lane E stream | **NOT RUN — owner's device, 2026-09-21** |
+| **P10-D8** `companionRefresh.deliveryAbsorbed` | Needs **two** deliveries, and there are none. Ordinary since item 4 (a run suspends, so a second delivery landing on a held task is a window iOS can really hit) and proved at tier 1 over both the in-flight and the re-entrant arm | **NOT RUN — owner's device, 2026-09-21** |
+
+**Cheapest first run:** D1 and D2 come together — background the app, leave the phone alone, and read
+`log stream --predicate 'subsystem == "com.fernlet"'` plus
+`'subsystem == "com.apple.BackgroundTasks"'` as the second, independent witness. D5 and D6 are two
+Settings toggles against the same instrumented build. D3, D4, D7 and D8 all fall out of D2 once a
+grant happens at all.
+
+**Results land in the runbook's Lane E table with dates**, beside the Simulator rows they are the
+other half of.
 
 ---
 
@@ -3858,15 +3903,309 @@ not one added `LocalizedStringKey`, `String(localized:`, `LocalizedStringResourc
 file), and no `.xcstrings` is in the diff at all. `Scripts/sync-string-catalogs.sh --check` is
 therefore a no-op for this phase.
 
-**17.2 P10 — companion `BGAppRefreshTask`:** as v1 §8 — `MBO.Fernlet.companion-refresh`, `fetch`
-background mode, schedule at handle+background, handler limited to: acquire the existing store safely →
-roll day → recompute deterministic companion → diff snapshot → publish via WidgetBridge → reload
-timelines only on change → complete once. Never: mesh, HealthKit, CloudKit force-sync, Foundation
-Models, store creation while protected data unavailable. One correction to v1: `FernletStoreAccess` is
-already a single process-global cache shared by UI and App Intents — the move out of
-`ExchangeIntentService.swift` into a small lifecycle service is hygiene that lets the refresh handler
-share it, not a fix for a competing-stores bug. (Also delete the dead `install(store:)` path found in
-the audit.)
+### 17.2 P10 — companion `BGAppRefreshTask` — **BUILT** (2026-09-21, tier 1 + 1b; **tier 2 measured NEGATIVE**; the grant is a device row)
+
+**BUILT on 2026-09-21 — with three honest exceptions, stated first.** (1) **A Simulator refuses
+every submission.** Item 8 measured it rather than assuming it: registration is accepted, and
+`submit` returns `BGTaskSchedulerErrorDomain` code 1 for a `BGAppRefreshTaskRequest` exactly as for
+the continuation — so nothing is pending, the debugger SPIs are refused for that reason, and
+**`companionRefresh.runFinished` has never been emitted on any machine** (runbook § *Lane E*).
+Everything after `register` is tier 3. (2) **§15 is still NOT RUN** — a third phase with no phones;
+P10 **adds** eight rows of its own: the runbook's six only a phone can give, plus the two smaller
+ones that fall with them (§15.5). (3) **No full-suite run happened**, by the owner's standing
+instruction since P8 item 0; the last measured full suite remains P8's 5 055 / 513.
+
+**Landed on `claude/practical-dijkstra-4b75c1` (worktree
+`.claude/worktrees/admiring-moser-43ae1d`), fast-forwarded into `main` after each iteration, oldest
+first** (`b9c02f7..`). `Docs/Mesh-Migration-Loop-Ledger-P10.md` is the decision record — every SHA,
+decision (D-10.4.1…8), residual and surprise below is a row in it. **Not pushed** (34 ahead of
+origin at `da3bac1`, before the close-out's own two commits).
+
+| SHAs | Item | What it is |
+|---|---|---|
+| `437eaf3` + `f940026` | 1 | `FernletStoreAccess` moved byte-for-byte out of `ExchangeIntentService.swift` into its own file; `ExchangeIntentService.install(store:)` deleted, and at the verify the inner `FernletStoreAccess.install(_:)` too — born callerless, so `load()` is now the **sole writer** of `store`, with its four-clause contract documented |
+| `5688903` + `9e934ba` | 2 | §16.4's import wall, landed **before any refresh code**: `BackgroundRefreshBoundaryTests` walks `App/Fernlet/CompanionRefresh/` with an import zero-list, a module allowlist, call-spelling needles, one positive needle (`CompanionRefreshIdentifier.swift`, created here) and a comment/literal stripper. The verify found the 41 needles pinned the **`private` funnels** a second file cannot name (27 `internal` doors added, 41 → 68) and a stripper that blanked `\( … )` with the literal around it |
+| `6698ac0` + `b3bf24a` | 3 | identifier + `fetch` in `Info.plist` (read back through `PropertyListSerialization`); the refresh's **own** scheduling seam; register at launch, submit on the background edge and the handler tail, complete exactly once. The verify found `submit` **REPLACES** a pending request — the unconditional edge ask was sliding the floor 15 min further out on every switch-away — plus a lifetime cap and four pins that could not fail |
+| `b0983b5` + `ec1bcda` | 4 | `CompanionRefreshPipeline` (values, step trace, named outcomes) + `CompanionRefreshWiring`'s production bindings; `contentEquals` beside the `Equatable` that always differs; the HealthKit late-attach seam; the exactly-once table 5 → 8 rows. The verify made a cold wake **refuse** to publish a lower-fidelity score (D-10.4.6 FALLBACK), made the day roll's own reload visible to the diff, and yielded the queue-skip to a new day (D-10.4.8) |
+| `bfb1fe4` + `288f501` | 5 | 17 sibling suites join the mesh-batteries line (118 → **135** names, floor 1048 → **1172**, measured twice); **nine** audit doors take the `held` key (7 + 2) and **25** reads are scoped or re-spelled by it (13 + 9, then 3); ratchet 42 → 20 → **17**; `Scripts/run-gated-suites-selftest.sh` proves the restart guard's **live** branch |
+| `6cae3e8` | 8 | **Lane E**: registration ACCEPTED ×2, three background edges → three `submitRefused` code 1, both SPIs refused, a 10-min soak woke nothing; `earliestBeginInterval` carried exactly; eight rows named (six phone-only, plus two smaller) |
+| `790c92f` + `da3bac1` | 9 | the P10 acceptance battery — five `MeshP10<Clause>AcceptanceTests` clause suites, **26 cells** (scheduling seam 5, handler pipeline 6, diff rule 5, import wall 5, honesty 5) — gated on mesh-batteries in the same commit at a **measured** floor of 1198 over 140 names. The verify diagnosed the line's one red as a latent test defect and fixed it, pinned the refresh handler's permitted-module set at `== 6` by name, and made the diff-rule suite clean up after itself; the line is **green at 1198** |
+| — | 0 / 6 / 7 | **NOT RUN / blocked on the owner** — the device gate (§15, §15.5), 9.4-LATER (D-4.1 hold / D-4.3 cut over), P9-3-A |
+
+**The specification as written at the P9 boundary is kept below as history, verbatim:**
+
+> as v1 §8 — `MBO.Fernlet.companion-refresh`, `fetch` background mode, schedule at handle+background,
+> handler limited to: acquire the existing store safely → roll day → recompute deterministic
+> companion → diff snapshot → publish via WidgetBridge → reload timelines only on change → complete
+> once. Never: mesh, HealthKit, CloudKit force-sync, Foundation Models, store creation while
+> protected data unavailable. One correction to v1: `FernletStoreAccess` is already a single
+> process-global cache shared by UI and App Intents — the move out of `ExchangeIntentService.swift`
+> into a small lifecycle service is hygiene that lets the refresh handler share it, not a fix for a
+> competing-stores bug. (Also delete the dead `install(store:)` path found in the audit.)
+
+One sentence did not survive contact: **"acquire the existing store safely" is not "never build
+one"** — a cold background launch has no cached store (§17.2.2 item 2).
+
+#### 17.2.1 What landed
+
+**Result:** the refresh exists end to end in one process, behind a grep wall that made §17.2's
+prohibitions mechanical before any handler code existed, on a mesh-batteries line **150 cells wider**
+(124 at `bfb1fe4`, measured at **+1.25 s**; 26 more at item 9). `git diff --stat b9c02f7..HEAD`: **40
+files changed, 7 181 insertions(+), 182 deletions(−)**, of which **six new production files** — five
+under `App/Fernlet/CompanionRefresh/`, plus `App/Fernlet/FernletStoreAccess.swift`.
+
+- **Hygiene (item 1).** `App/Fernlet/FernletStoreAccess.swift:32` — `shared` (`:35`), cached `store`
+  (`:39`), coalescing `loadingStore` (`:43`), `load(healthKitService:statusUpdate:)` (`:65`),
+  `requireProtectedData()` (`:123`) — moved verbatim, same `@MainActor` isolation, same clearing of
+  `loadingStore` on **both** the success and the throwing path. `MemoryLifecycleBoundaryTests`' ML1
+  row moved with it and is proved **used**, not merely present.
+- **The wall (item 2, raised by every later item).** `Tests/FernletTests/BackgroundRefreshBoundaryTests.swift`
+  walks the DIRECTORY, so items 3 and 4 were inside it the moment their files landed
+  (`minimumFilesScanned = 5`, `:193`). At HEAD: **84** needles (`:484`; `grep -c 'Spelling(token:'`
+  agrees), **37** naming an app declaration and each re-proved still declared under `App/Fernlet/`
+  (`:492`), **15** clock-and-persistence rows (`:454` — `Timer`, `UserDefaults`, `FileManager`,
+  `DispatchSource`, `RunLoop`, `Task.detached`, `SecItem…`, the sleeps), **10** radio verbs (`:517`)
+  held to a CODE line of `ProximityRunSeamsTests.swift`, since a copied list fails silently. `Date()`
+  / `now()` are deliberately **not** needles. Plant B is why the import half alone is no wall: the app
+  target is one module, so a file with zero import lines reaches `FernletStore.load()`.
+- **Identifier and seam (items 2–3).** The identifier's file landed with the wall at `5688903` as its
+  one positive needle; the plist rows are item 3's — `Info.plist:31` (identifier, into
+  `BGTaskSchedulerPermittedIdentifiers`) and `:83` (`fetch`, into `UIBackgroundModes`), both **added**,
+  neither replacing. `CompanionRefresh.taskIdentifier` (`…/CompanionRefreshIdentifier.swift:55`) is the
+  one code site. `CompanionRefreshScheduling.swift`: `CompanionRefreshRequest` `:55`,
+  `CompanionRefreshTaskHandle` `:83`, `CompanionRefreshScheduling` `:112`,
+  `SystemCompanionRefreshTaskHandle` `:150`, `SystemCompanionRefreshScheduler` `:187`; the mesh's two
+  protocol bodies are frozen as normalised strings and diffed, so neither grows a refresh member.
+  `CompanionRefreshCoordinator` (`…/CompanionRefreshCoordinator.swift:92`, `.shared` `:95`):
+  `registerAtLaunch()` `:205` from `FernletApp.swift:93`; `appDidEnterBackground()` `:230` from
+  `FernletApp.swift:353`, outside the `case .ready` guard; `taskWasDelivered(_:)` `:258` — **submit the
+  successor, then run, then complete**; `taskDidExpire()` `:285` — **cancel first, complete second**.
+  The in-memory `pendingRequest` (`:166`) stops an edge replacing its own request;
+  `maxEdgeSubmissionsPerLaunch = 64` (`:125`) is charged to `edgeSubmissions` (`:157`) **by the edge
+  alone**, so the tail survives a refusal storm. No `try?` anywhere: every refusal is a
+  `companionRefresh.*` line, and no screen exists for a dead refresh chain.
+- **The handler, the diff and the acquire seam (item 4).** `CompanionRefreshPipeline.swift`:
+  `CompanionRefreshStep` `:70` — **seven** steps, `acquire`, `inspectWidgetQueue`,
+  `inspectScoringContext`, `rollDay`, `recompute`, `publish`, `reload`; `CompanionRefreshOutcome`
+  `:108` — **eight** outcomes, `reloaded`, `unchanged`, `writeFailed`, `widgetActionsPending`,
+  `publishedDespitePendingActions`, `scoringContextUnavailable`, `acquisitionFailed`, `cancelled`,
+  mapped at `:175`–`:177` to what the system is told; `CompanionRefreshRun` `:193`;
+  `CompanionRefreshSteps` `:226`, the **eight** bindings, which
+  `CompanionRefreshWiring.steps(for:)` (`…/CompanionRefreshWiring.swift:129`) binds to the live store
+  in eight one-expression closures — `hasUndrainedWidgetActions`,
+  `publishedWidgetSnapshotIsForCurrentDay`, `hasCompleteScoringContext`, `publishedWidgetSnapshot()`,
+  `refreshCurrentDayIfNeeded()`, `companionState.rawValue`, `currentWidgetSnapshot()`,
+  `ensureWidgetSnapshotMirror().publishIfContentChanged(_:)` — behind a ninth, `productionPipeline()`'s
+  `acquire: { steps(for: try await FernletStoreAccess.shared.load()) }` (`:111`–`:112`); all are on the
+  wall's PERMITTED list. `WidgetSnapshot.contentEquals(_:)` (`App/Fernlet/WidgetBridge.swift:114`)
+  compares **six** fields — `companionStateRaw`, `score`, `bottleCount`, `hydrationTarget`,
+  `macroSummary`, `dateKey` — omitting the seventh, `computedAt`, stamped at every construction and
+  **rendered by nothing** (asserted by counting it as code under `App/FernletWidgets`); the synthesised
+  `==` includes it, which is why a diff built on `==` would reload the widget every fifteen minutes
+  forever behind a green suite. `publishIfContentChanged` (`:483`) is the handler's door, `publish(_:)`
+  (`:455`) the foreground's. `App/FernletWidgets/WidgetSharedModels.swift` is **not** a member of the
+  Fernlet target — patch the app's copy in `WidgetBridge.swift`. **D-10.4.1:**
+  `FernletStoreAccess.attaching(_:to:)` (`:110`) routes every cached and coalesced return through
+  `FernletStore.attachHealthKitServiceIfMissing(_:)` (`FernletStore.swift:3243`) →
+  `HealthSyncCoordinator.attachHealthKitServiceIfMissing(_:)` (`:78`), audits
+  `storeAccess.healthKitServiceLateAttached` (`FernletStoreAccess.swift:116`) and **refuses** once the
+  workout sync has been built, which holds its gateway for good — it lives there, not in the handler,
+  because the handler may not speak a HealthKit spelling at all (§16.4). Three new store doors serve
+  item 4's fixes, PERMITTED rather than needles with the survey's argument on the wall's list:
+  `hasCompleteScoringContext` (`FernletStore.swift:1382`), `publishedWidgetSnapshot()` (`:6167`),
+  `publishedWidgetSnapshotIsForCurrentDay` (`:6182`).
+- **CI and the residuals (items 5 and 9).** Item 5 put the mesh-batteries step at **135** names / floor
+  **1172**, measured at `bfb1fe4`; item 9 raised it to **140** / **1198**, measured again. At HEAD the
+  step is `.github/workflows/s3-wall.yml:584` and `CIGateSelectorBoundaryTests.measuredSuiteNameCounts`
+  (`:99`) pins s3-grep **7** and mesh-batteries **140**; the battery pin is **58** (`:236`).
+  `MeshP9HonestyAcceptanceTests.ungatedByDesign` (`MeshP9AcceptanceTests.swift:1152`) fell from eleven
+  rows to **eight**. **Nine** audit doors in `FernletKit/…/Mesh/MeshNetworkManager.swift` took the
+  `held` key by **extending** their existing call (seven at `bfb1fe4`, two at `288f501`), and **25**
+  reads were scoped or re-spelled with the `where:` label (13 + 9, then 3). `heldMeshAuditContext(`
+  stands on **23 lines** at HEAD — **21 call sites**, up from 12, plus the declaration (`:4158`) and one
+  doc reference (`:4167`) — while `FernletAuditLog.log(` is unchanged at **259**, so the `log(`-count
+  wall never moved. The unscoped-read ratchet is **17** (`MeshP9AcceptanceTests.swift:1437`), down from
+  42. `Scripts/run-gated-suites-selftest.sh` asserts four exit codes (live and seam,
+  negative/positive) with no Simulator, build or Xcode, on the enforcement self-test step
+  (`s3-wall.yml:144`), with CODEOWNERS (`.github/CODEOWNERS:41`), FileIndex (`Docs/FileIndex.md:1044`)
+  and `Docs/Verifiability.md` **§2** rows. Item 8 is runbook § *Lane E*
+  (`Docs/Mesh-Network-Feasibility-Runbook.md:2256`).
+
+#### 17.2.2 Deviations from the specification, and why
+
+1.  **The scoring bridges are NOT attached in the background — the handler refuses instead.**
+   D-10.4.6 preferred attaching the period/stress bridges the foreground attaches; ruled out on
+   condition (i), structurally. `PeriodContextBridge`'s source is the `PeriodTrackerStore`
+   `ContentView` holds as `@State` (`ContentView.swift:48`, `:121`), and before the bridge exists
+   (`:472`) the scene wires it to an `@Environment(FernletLockService.self)` value (`:53`) — a
+   background process has no unlocked hub; the stress context is a `StressService` the scene
+   attaches **with a HealthKit fetch closure** (`:488`–`:491`), which §17.2 forbids outright. So
+   `hasCompleteScoringContext` reports whether every **enabled** adjustment has its bridge: a cold
+   wake with either opt-in on ends at `.scoringContextUnavailable` on the last foreground snapshot;
+   with both off, the identity **is** the app's number.
+2.  **The acquisition MAY build the process's first store.** `b0983b5`'s message says three times
+   that it never does; `ec1bcda` F2 is its correction, in the source, the wall's failure message
+   and the wiring's doc. A cold launch has no cached store, so `load()` builds one (Core Data +
+   `loadBundledFoodItemsForLaunch()`) **inside the grant** — never a second, never while protected
+   data is unavailable, which `requireProtectedData()` refuses first. The `FernletStore(` /
+   `FernletStore.load(` / `FernletStoreLoader` needles stay: the handler may not build one, the
+   acquisition seam may.
+3.  **The widget-queue skip yields to a new day (D-10.4.8).** It holds only while the published
+   snapshot's `dateKey` is the current wall-clock day; past midnight the run publishes with
+   `.publishedDespitePendingActions` — a widget one tap behind beats one `WidgetDayGate` blanks.
+4.  **The mirror can be installed by a background-only process (D-10.4.7), ACCEPTED.** It outlives
+   the refresh, so a later save in a process that never came to the foreground (a Siri water
+   intent) reloads the widget unconditionally — the foreground's behaviour, and arguably the
+   pre-existing gap. In the wiring's header; no code change.
+5.  **The foreground after-hook still reloads unconditionally — D-10.4.5 DEFERRED.**
+   `WidgetSnapshotMirror.publish(_:)` is untouched and every caller there is a persisted change, so
+   it is correct as scoped; but the mirror makes the diff free for both paths now, and narrowing it
+   is a one-line decision to take on purpose rather than by drift. Carried to §28.3, which is its
+   one tracked home — item 9 parked it on `Docs/FileIndex.md` because nothing in the plan carried
+   it, and the close-out's honesty cell reads it here instead.
+6.  **Item 8's residuals: NOTHING TAKEN, each priced.** The accessibility ratchet's accuracy half,
+   `absentFromScreen(_:)` on 11 of 14 screens and the device guard's locale leg all wait on the one
+   unnamed prerequisite in finding 6; `Home · Recent bites` is viewport-unstable by construction —
+   a product fix, not a CI question.
+7.  **Two launcher rows were stale and are not carried.** (a) "No workflow names
+   `AuditRatchetBoundaryTests`" — it has been on `s3-grep` since P9 item 9's fix review
+   (`s3-wall.yml:140`) and the honesty battery asserts it; only the ACCURACY half survives. (b) The
+   item-5 row overstated the ungated set: **six of the seven** P9-touched suites it listed were
+   already on the mesh line, and the seventh (`PeerTransportNeutralityTests`) never was an honesty
+   row — no type of that name exists; that FILE declares three others, gated at item 5's tier 3.
+   **Re-parse the workflow before believing any residual list.**
+
+#### 17.2.3 Findings for the owner — real, and deliberately NOT fixed here
+
+1. **Six adversarial verifies ran — one per implementing item — and every one found something real**:
+   **6 + 2 + 7 + 7 + 3 = 25** across items 1–5 (the per-item counts are the ledger's own rows; item 1's
+   sixth became a note to items 2 and 4 rather than a fix in `f940026`), plus **five at item 9**, of
+   which three are fixed in `da3bac1` and two — the honesty suite's needles and D-10.4.5's circular
+   home — were deliberately left to this close-out, which takes them. All resolved. **Three would have
+   shipped a dead or degraded feature:** the edge ask that slid the floor fifteen minutes further out
+   on every switch-away (and the only other trigger fires *after* a delivery, so the chain would never
+   have started); a never-reset lifetime budget whose sixty-fifth ask ended the chain permanently; a
+   cold wake publishing a score computed without the bridges the app's own number uses. The rest, as
+   the fix commits classify them: **four pins that could not fail** (`b3bf24a` F3/F4 — an app constant
+   on both sides of an `==`; a `func`-count blind to a `var` requirement); **two walls green over
+   exactly what they named** (`9e934ba` — 41 needles on `private` funnels a second file cannot speak,
+   and a stripper that blanked `\( … )` with the literal around it); a prohibition kept as a literal
+   list over three hand-named paths instead of on the directory wall (`b3bf24a` F5); an exactly-once
+   table whose five rows all expired *after* the handler returned (`b3bf24a` F6 — why it is eight
+   now); the day roll's own reload invisible to the diff and the queue-skip blanking the widget past
+   midnight (`ec1bcda` F3/F7); a ratchet bullet whose stated reason was false (`288f501` F1); and the
+   balance doc, DocC, FileIndex and Verifiability rows. *(Counted from the ledger's verify rows and
+   the six fix-commit bodies; the launcher's "17/17" is P8+P9's tally.)*
+2. **The audit context is `privacy: .private`, and it redacts on exactly the row no debugger can
+   reach.** `FernletAuditLog.log` (`FernletKit/Sources/FernletFoundation/FernletAuditLog.swift:77`)
+   emits `"\(event, privacy: .auto)\(ctx, privacy: .private)"`. Moot on a Simulator — every Lane E
+   value came through in the clear — but on a device `companionRefresh.submitRefused` reads
+   `submitRefused <private>` in a sysdiagnose: the event survives, `error=` and `trigger=` do not.
+   **Cost:** §15.5's D1, the cold background launch, is precisely where no debugger can be attached.
+   **Fix without a code change:** install the private-data logging profile first.
+3. **A launch whose registration was refused still spends its edge budget.** `appDidEnterBackground()`
+   increments `edgeSubmissions` at `CompanionRefreshCoordinator.swift:240` **before**
+   `submitNext(trigger:)`, which returns at `:353` on `guard isRegistered` with
+   `companionRefresh.submitWithoutARegistration`. After 64 background edges the audit reads
+   `edgeSubmissionCapReached`, not the real cause. Diagnostic only; one line to fix.
+4. **One unscoped `== 1` audit read remains** — `routedShare.recipientIsSelf`, named in the ratchet
+   cell itself (`MeshP9AcceptanceTests.swift:1437`, the 6 + 2 + 3 + 6 arithmetic): of the 17, **6** are
+   Milestone false positives (a different function; the needle is a spelling), **2** are deliberate
+   proof reads, **3** sit at emitters that cannot carry the key (the descriptor door's
+   uncommitted-slot drop, the projection after a `leaveMesh()`, the launch-restore key-advertisement
+   refusal — each reachable with no mesh held, so scoping them would be a behaviour change), and **6**
+   at emitters that could and were not changed, five of them the weaker `> 0` / `== 0` form.
+5. **`AppIntentsTests` flakes under load — pre-existing, one line.**
+   `Tests/FernletTests/AppIntentsTests.swift:20` is a `final class` with eleven tests and **no**
+   `@Suite(.serialized)`; every per-test instance drains the shared `UserDefaults.standard` token in
+   `init()`/`deinit`. Observed once at item 4, green on re-run and in isolation.
+6. **CI's Simulator device is unpinned** (`.github/workflows/s3-wall.yml:106`–`:120`): the step prefers
+   `iPhone 17` and otherwise takes the newest available iPhone with a `::warning::`, while the
+   appearance baselines are pinned to iPhone 17 portrait. **The unnamed prerequisite under all three
+   UI residuals**, and the reason none was taken at item 5.
+7. **D-10.4.4 — ambient CloudKit mirroring, ACCEPTED.** `refreshCurrentDayIfNeeded(now:)`'s flush and
+   the coin/milestone ledger reconciles write through Core Data, whose production container mirrors to
+   the user's private CloudKit database **on its own schedule**. §17.2 forbids a **force**-sync, not
+   persistence the store already owns. A row for §17.3's privacy-copy check.
+8. **Unreachable on a Simulator by construction:** `companionRefresh.edgeFoundARequestAlreadyPending`
+   (needs an accepted submission to guard against) and `companionRefresh.deliveryAbsorbed` (needs two
+   deliveries). Both tier-1 proved, tier-3 unwitnessed.
+9. **CLOSED, and recorded because it was first filed as something it was not.** The mesh line's one
+   red at item 9 — `MeshRoutedHeartCeremonyTests.everyHeartFailureCauseHasItsOwnSentence` on the
+   `.heartsOff` row — looked environmental (it reproduced alone on a clean build, and no non-`Docs/`
+   file had moved since item 5's green run at `288f501`). It was a **latent test defect**:
+   `MeshRoutedHeartTests.swift:816` compared two `LocalizedStringKey`s with `==`, which is **not** a
+   value comparison for an interpolated key — two keys with the same bytes, the same `hasFormatting`,
+   the same argument and byte-identical descriptions compare UNEQUAL on exactly one row, and WHICH row
+   flips moves with codegen of unrelated source elsewhere in the module. Item 9's five new files
+   perturbed it; the cell was green at `288f501` by accident. **Fixed in `da3bac1`** by comparing
+   `String(describing:)` on both sides — which still asserts the KEY a translator receives, arguments
+   included, rather than a rendered string — and the workflow comment that had written the red down as
+   environmental is corrected in the same commit. `Tests/FernletTests` was swept for the same shape and
+   there is no second site.
+10. Carried unchanged: everything §26.4 and §27.4 list that P10 did not touch, and §17.1.3's open
+    findings — P9-3-A, P9-2-B, P9-2-C, the Lane D rows and item 8's accessibility residuals.
+
+#### 17.2.4 Acceptance evidence
+
+**Measured 2026-09-20/21 on a Mac** (iPhone 17 Simulator, Xcode 26.5 build 17F42 / iOS 26.5 runtime
+23F77; worktree `.claude/worktrees/admiring-moser-43ae1d`, its own DerivedData). Every number is read
+off a result bundle or a script's own count, and **no run recorded `Restarting after unexpected exit,
+crash, or test timeout`**.
+
+**Tier 1, per item, through `Scripts/run-gated-suites.sh`, quoted from the commit bodies:** item 1 —
+mesh-batteries **1048 / 118**, source-walls 141 / 7, app-walls 99 / 5, s3-grep 13 / 3 (a verbatim
+move; no red-once owed) · item 2 — s3-grep **23 / 4**, app-target walls **151 / 9**, **11 plants over
+9 rebuilds**, then **25 / 4** · item 3 — s3-grep **40 / 5**, app-target walls **151 / 9**, the
+continuation family **93 / 9**, **12 plants over 3 rebuilds**, then **46 / 5** and **99 / 7** (6
+plants: green → 82 issues → green) · item 4 — s3-grep **71 / 7**, a wall sweep of **328 / 22**, 4
+plant builds, then **79 / 7** and **203 / 9**, whose four behavioural cells were written first and run
+RED against `b0983b5` · item 5 — mesh-batteries **"Test run with 1172 tests in 135 suites passed after
+193.995 seconds"**, 0 failed, 0 skipped, source walls **213 / 14**, **8 plants** including the floor
+bitten at 1173 (`only 1172 test(s) ran`); at the fix **"1172 tests in 135 suites passed after 176.882
+seconds"** and **149 / 7**, ratchet red at 20 **and** at pin+1 (18) · item 9 — **"Test run with 1198
+tests in 140 suites"** at the OLD floor 1172, 0 skipped, no restart line; re-run AT 1198 clean; shown
+red once at 1199 (`only 1198 test(s) ran but the floor is 1199`); **12 red-once plants**, six planted
+together and read out of ONE log, three of them in shipping code · item 9's fix `da3bac1` — the whole
+mesh-batteries line over the workflow's 140 names, at its floor and **green**: **"Test run with 1198
+tests in 140 suites passed after 165.182 seconds"**, 0 failed, 0 skipped, no restart line, exit 0,
+with a seventh module planted in the wall's permitted set to redden both halves of the new pin first.
+
+**The mesh-batteries floor, at the commit that moved it:** 1048 / 118 at entry → **1172 / 135** at
+`bfb1fe4`, measured twice (at floor 1, then at 1173 to show the bite) → **1198 / 140** at `790c92f`,
+measured at the old floor and re-run at the new one. 1172 + 26 = 1198 is the arithmetic CHECK, never
+the source. `CIGateSelectorBoundaryTests`' battery pin (a count of DECLARATIONS) went **53 → 58**
+(`:236`); `measuredSuiteNameCounts` (`:99`) pins s3-grep **7** — unchanged all phase — and
+mesh-batteries **135 → 140**, 0 duplicates. **Neither determinism digest moved**:
+`MeshP5AcceptanceTests.swift` is byte-identical and still their one home. `Scripts/power-of-10-scan.py`
+**0 violations** (529 files, assertion density 0.774 against the 0.68 floor) and
+`Scripts/doc-coverage-scan.py` **0 undocumented type declarations**, after every commit;
+`spm-wall-check.sh` and `spm-wall-selftest.sh` PASSED both ways; `run-gated-suites-selftest.sh` **4/4**.
+
+**Tier 1b — the widget.** `WidgetSnapshotContentEqualityTests` pins the seven stored fields through
+`Mirror`, proves `contentEquals` and `==` differ **in both directions**, and counts `computedAt` as
+code under `App/FernletWidgets`. `CompanionRefreshPipelineTests` runs
+`CompanionRefreshWiring.steps(for:)`'s eight production bindings against a real `FernletStore` —
+trace, publication, undrained-queue skip, both refusals.
+
+**Tier 2 — MEASURED, and the answer is negative** (runbook § *Lane E*, 2026-09-21, 22 min of a 90-min
+box; Simulator erased and freshly booted at 02:53; app built at `288f501`): registration **ACCEPTED**
+twice across two processes (pids 4988 and 6001, 02:54:35.706514 and 03:01:12.774632; no
+`registrationRefused` anywhere); the background edge **REFUSED 3/3** — `companionRefresh.submitRefused
+error=Error Domain=BGTaskSchedulerErrorDomain Code=1 "(null)" trigger=background`; the request carried
+exactly `<BGAppRefreshTaskRequest: MBO.Fernlet.companion-refresh, earliestBeginDate: 2026-09-21
+07:09:54 +0000>` against a 06:54:54 submission — `earliestBeginInterval` = 15 min to the second; both
+debugger SPIs **REFUSED** because nothing was pending; a **≈10-min soak** (03:02:45–03:12:32) woke
+nothing, the process still alive (`etime 11:32`). **P8's finding extends to `BGAppRefreshTask`.**
+
+**Tier 3 — NOTHING RAN.** §15's four gates are unchanged and still NOT RUN for a third phase; P10's
+own eight rows are §15.5, every one downstream of the Simulator's refusal and all behind one
+prerequisite: **the private-data logging profile** (finding 2).
+
+**The string catalog: P10 added NO display keys.** `git diff b9c02f7..HEAD -- '*.swift'` contains no
+added `LocalizedStringKey`, `String(localized:`, `LocalizedStringResource`, `Text("…")`, `Label("…")`,
+`Button("…")`, `navigationTitle("…")`, `.accessibilityLabel("…")` or `.accessibilityHint("…")` line,
+and no `.xcstrings` is in the diff. `Scripts/sync-string-catalogs.sh --check` is a no-op this phase.
 
 **17.3 Documented policy reversal (owner-approved) — same-commit paperwork:**
 - Rewrite the "deliberately NOT Codable" / "memory-only, never persisted" doc guards on
@@ -5684,3 +6023,159 @@ finding 13; its residuals are §17.1.3 finding 10).
 - **A lane finding can be pre-existing and still a blocker** — record the class on every one.
 - **P9's acceptance was tier 2 and it paid.** P10's is tier 1 with a device row at the end: the
   handler is provable in one process, and the **grant** is not provable anywhere but a phone.
+
+---
+
+## 28. The device-round handoff — written at the P10 boundary, 2026-09-21
+
+P0–P10 are **BUILT** (§5–§8, §10–§14, §17.1, §17.2; P10 at tier 1 and 1b on 2026-09-21, **tier 2
+measured negative, the grant an unpaid device row**). §26 and §27 remain the inheritance except where
+superseded here.
+
+**There is no §17.4, and this is not a handoff to an eleventh phase.** The plan's phases are spent.
+What remains is the owner's: **the device round** (§15's four gates, P9's two rows, P10's eight),
+**the stranger-admission design** that unblocks the MC→QUIC cutover, and **the product calls**
+(P9-3-A, the degraded ladder, §26.4's list). The launcher written beside this section,
+`Docs/Next-Round-Prompt-Device-Round-2026-09-21.md`, is a one-page entry for whichever the owner
+unblocks first — not a phase.
+
+### 28.1 What the next session inherits
+
+*Every anchor re-grepped at `da3bac1` (P10 item 9's verify fixes). The close-out's own commits touch
+`Docs/` — the plan, the ledger, `Docs/FileIndex.md` and the new launcher — plus one needle in the
+honesty suite; no production anchor below moves.*
+
+- **A companion refresh that exists end to end and has never been granted.**
+  `App/Fernlet/CompanionRefresh/` holds five files: `CompanionRefreshIdentifier.swift` (`taskIdentifier`
+  `:55`), `CompanionRefreshScheduling.swift` (protocols `:83` / `:112`, request value `:55`, conformers
+  `:150` / `:187`), `CompanionRefreshCoordinator.swift` (`:92`, `.shared` `:95`),
+  `CompanionRefreshPipeline.swift` (seven steps `:70`, eight outcomes `:108`, eight bindings `:226`) and
+  `CompanionRefreshWiring.swift` (`productionPipeline()` `:111`, `steps(for:)` `:129`). Entry points:
+  `FernletApp.swift:93` and `:353`.
+- **A directory wall that fires on arrival.** `Tests/FernletTests/BackgroundRefreshBoundaryTests.swift`
+  walks `App/Fernlet/CompanionRefresh/` rather than a file list (`minimumFilesScanned = 5`, `:193`),
+  with **84** needles (`:484`), **37** app declarations re-proved still declared (`:492`), **15**
+  clock-and-persistence rows (`:454`) and **10** radio verbs (`:517`). A new file there is inside the
+  wall the moment it lands; a needle retires only with an argument and a lowered pin in the same
+  commit. The two `Info.plist` rows (identifier `:31`, `fetch` `:83`) are read back through
+  `PropertyListSerialization`, not grepped: a malformed array is a silent non-delivery.
+- **The diff the widget depends on.** `WidgetSnapshot.contentEquals(_:)`
+  (`App/Fernlet/WidgetBridge.swift:114`) over six fields; `computedAt` is the seventh and is metadata.
+  `publishIfContentChanged` (`:483`) is the handler's; `publish(_:)` (`:455`) is the foreground's and
+  still reloads on every successful write (D-10.4.5, §28.3 — where the decision lives, and what a
+  gated cell reads off this plan).
+  `App/FernletWidgets/WidgetSharedModels.swift` is **not** a member of the Fernlet target — patch the
+  app's copy or the change is dead code.
+- **The CI shape.** mesh-batteries names **140** suites at floor **1198**
+  (`.github/workflows/s3-wall.yml:584`), pinned by `CIGateSelectorBoundaryTests.measuredSuiteNameCounts`
+  (`:99`: s3-grep 7, mesh-batteries 140); the battery pin is **58** by declaration (`:236`). The name
+  pin is `>=`: it catches a name **leaving** a line in 0.14 s with no Simulator and lets an addition
+  pass silently — raise it in the commit that adds names. Determinism digests do not move.
+  `Scripts/run-gated-suites-selftest.sh` (4 assertions, no Simulator) is on the enforcement self-test
+  step (`:144`).
+- **What the mesh still ships on.** `MeshTransportFactory.shippingDefault` is `.multipeer`
+  (`FernletKit/Sources/ProximityKit/Transport/MeshTransportSelection.swift:267`). **MC is not
+  retired**; deleting it is the cutover, and the ready patches are
+  `Docs/Mesh-P9-Item4-Design-2026-09-20.md`'s **seven appendices**, every hunk `[SPLIT: LATER]`:
+  `Appendix A`, the rule-7 cell (`:155`), then six anchored patches (`Info.plist` `:316`,
+  `MeshNetworkManager.swift` `:406`, `MeshTransportSelection.swift` `:632`,
+  `TransportNeutralityBoundaryTests.swift` `:812`, docs `:936`, tests `:1115`).
+- **The residuals P10 leaves:** the one unscoped `== 1` read (`routedShare.recipientIsSelf`) and the
+  other 16 in the ratchet (`MeshP9AcceptanceTests.swift:1437`); the eight rows of `ungatedByDesign`
+  (`:1152`); `AppIntentsTests` un-`.serialized` (`Tests/FernletTests/AppIntentsTests.swift:20`); CI's
+  Simulator device unpinned (`s3-wall.yml:106`–`:120`) and the three UI residuals under it; a refused
+  registration still charging `edgeSubmissions` (`CompanionRefreshCoordinator.swift:240`). **No red is on
+  the board**: the one the mesh line carried at item 9 was a latent test defect, fixed in `da3bac1`
+  (§17.2.3 finding 9), and the line is green at 1198.
+
+### 28.2 The lanes, as they actually are
+
+- **Tier 1 is everything that can be proved**, and nothing is left there for the refresh: the handler
+  is a pipeline over values, the completion an eight-row table, the walls greps.
+- **Tier 2 is measured, and the measurement is NEGATIVE.** A Simulator accepts the registration and
+  refuses every submission (`BGTaskSchedulerErrorDomain` 1), so no delivery can be forced and the
+  debugger SPIs decline. **Do not re-run Lane E.** The two conditions that make the SPIs look broken
+  when they are not — `expr -a true`, and the app must be in the **foreground** or iOS `SIGSTOP`s it
+  mid-expression — are in the runbook so nobody re-derives them.
+- **Tier 3 is now THREE phases of unpaid gate, and it is the whole remaining risk:** (1) **§15.1–§15.4**
+  (P8's), NOT RUN since 2026-09-19 — radio matrix, partition walks, the 3 h / 6 h soak that **decides
+  the degraded ladder**, Wi-Fi Aware; two devices minimum, four for topology. (2) **P9's two rows** —
+  the P9-2-C boundary-wake drift measure (two Simulators woke +0.8 s at a 300 s arm and **+51 s** at
+  767 s, together within 0.3 s: the host suspending both timers) and **Lane D** (phone ↔ Simulator,
+  cable out, F11), the cheapest first run. (3) **P10's eight** (§15.5), behind one prerequisite: **the
+  private-data logging profile**. Lane gotchas unchanged (§26.2, §27.2), plus: a Simulator up for
+  hours stops behaving — erase and reboot; rebuild before any lane run; kill streams by saved PID.
+
+### 28.3 Decisions with defaults — take them deliberately, at the start
+
+| Decision | Default if the owner is silent | Why |
+|---|---|---|
+| **The device round** | Run it. | Three phases overdue and the only unpaid risk left; a Simulator answers no row. Lane D first (one phone), then §15.1, then the soak. |
+| **9.4-LATER, the MC→QUIC cutover** | **D-4.1 — hold**, unchanged for a second phase. | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
+| **D-4.4** (the `MCPeerIDStore` wipe row → a legacy `FileManager` sweep) | Decide **with** D-4.1/D-4.3, never after. | `FernletPeerID.archive` survives on any pre-P9 install, so the cutover commit owes the sweep in the same breath. |
+| **P9-3-A** (a configured lock parks the 1:1 radios) | Leave the policy alone; surface **why** instead. | Changing a run-policy row is a P7 bug fix that re-runs the 23 040-row product. Unchanged from §27.3. |
+| **D-10.4.5** — the foreground after-hook still reloads unconditionally; only the handler's `publishIfContentChanged` diffs | **DEFERRED** here, and it is the owner's one-line call. Silent default: **narrow it**, one line plus a cell. | §17.2 scopes the diff to the refresh handler, so `WidgetSnapshotMirror.publish(_:)` is correct as scoped and every caller there is a persisted change; but the mirror makes the diff free for both paths now, and the difference will outlive the reason for it. |
+| **The three UI residuals** | Pin CI's Simulator device **first**; the three fall out of it. | `s3-wall.yml:106`–`:120` falls back to the newest available iPhone with a `::warning::` while the baselines are pinned four ways to an iPhone 17. |
+| **New persisted surface** | **None.** | P6–P10 added none between them; the refresh's `pendingRequest` slot is deliberately in memory and nowhere else. A "last refreshed at" key would owe a `Docs/PrivacyWipeCoverage.md` row and delete-all wiring in the same commit. |
+
+### 28.4 Still owed by the owner
+
+Everything **§26.4** lists that P9 and P10 did not close, and everything **§27.4** carries, plus
+P10's three:
+
+- **The private-data logging profile on the phone**, before any §15.5 row. Without it
+  `companionRefresh.submitRefused` reads `submitRefused <private>` in a sysdiagnose — the event name
+  survives, `error=` and `trigger=` do not — and it hurts most on the row where no debugger can be
+  attached (§17.2.3 finding 2).
+- **Pin CI's Simulator device** (`.github/workflows/s3-wall.yml:106`–`:120`): the unnamed prerequisite
+  under all three accessibility residuals, and the reason none was taken at P10 item 5.
+- **`@Suite(.serialized)` on `AppIntentsTests`** (`Tests/FernletTests/AppIntentsTests.swift:20`) — one
+  line; eleven non-serialized tests drain one shared `UserDefaults.standard` token.
+
+**Closed by P10, do not re-audit:** §17.2 in full, the background-refresh import wall, the exactly-once
+table, the `contentEquals` classification, the seventeen newly gated sibling suites, the restart guard's
+live branch, the P10 acceptance battery, and Lane E's Simulator verdict — "closed" meaning the record is
+complete and tier 1 agrees with it, **not** that a device does.
+
+### 28.5 What P10 learned that re-tiers what follows
+
+- **A submission API that REPLACES rather than queues turns "ask often" into "never".**
+  `BGTaskScheduler.submit` replaces a pending same-identifier request, so an unconditional ask on
+  every background edge pushed the floor fifteen minutes further out from the new now on every
+  switch-away — and the only other trigger fires *after* a delivery, so the chain would never have
+  started. **Read a framework's replace/queue semantics before choosing a trigger edge.**
+- **A guard's NAME is not its branch.** `mesh.promotion.refusedExistingMesh` was excused as
+  unscopeable because "its guard IS `currentMesh == nil`" — the `log(` is in the **`else`**. Read the
+  branch, never the predicate's name, before writing down why something cannot be scoped.
+- **A grep wall must pin the spellings another file CAN speak.** Forty-one needles named the `private`
+  funnels and none of their `internal` doors, so the wall was green over every call a second file in
+  the same module could make. Check each needle's access level; a `private` row is belt.
+- **A deterministic recompute can be deterministic and still not be the app's number.** The companion
+  score reads two bridges only a view attaches — one out of a `@State` store wired to an
+  `@Environment` lock service, which a background process cannot supply. **Trace every input back to
+  who attaches it**, and when the background cannot have one, refuse rather than publish the identity.
+- **`-only-testing:FernletTests/<FileName>` runs ZERO tests and reports GREEN** — the selector takes
+  the **struct**. **A cell that compares an app constant to itself cannot fail**, and a `func`-count
+  over a protocol body cannot see a `var` requirement: pin literals, and freeze a body as a normalised
+  string when what you mean is "this did not grow".
+- **Measure a platform refusal; never reason about it by analogy.** §27.2 refused to assume a Simulator
+  treats `BGAppRefreshTask` like `BGContinuedProcessingTask`. It does — but the 22 minutes also bought
+  the request-shape row, the `earliestBeginInterval` confirmation, the two lldb conditions and the
+  `privacy: .private` finding. **A negative lane is worth its hour if recorded with its evidence** —
+  and **an audit line's privacy level decides whether the device row is readable at all.**
+- **A launcher's residual list rots between phases.** P10's said no workflow named
+  `AuditRatchetBoundaryTests` (P9's own fix had gated it) and overstated the ungated set by six of
+  seven. **Re-parse the workflow, and read the file, before believing any launcher row.**
+- **A `LocalizedStringKey` `==` is not a value comparison, so a cell built on one is green by luck.**
+  Two interpolated keys with the same bytes, the same `hasFormatting`, the same argument and identical
+  descriptions compared UNEQUAL on one row, and WHICH row flipped moved with codegen of unrelated
+  source in the same module. It cost a whole diagnosis, filed first as an environment. Compare
+  `String(describing:)`, which still carries the key AND the arguments — and **suspect the assertion
+  before the machine when a red follows an unrelated file landing.**
+- **An acceptance battery must read only TRACKED records** — and a record it invents for itself is
+  not a record. Item 9 parked D-10.4.5 on `Docs/FileIndex.md` because nothing tracked carried it; the
+  close-out gave the decision a real home in §28.3 and repointed the cell, because a battery asserting
+  that a decision is written down in the file its own row was added to proves nothing. For the same
+  reason the suite does not open `Docs/Mesh-Migration-Loop-Ledger-P10.md`: uncommitted until the
+  close-out, so a cell reading it would pass in the worktree that wrote it and throw in every clean
+  checkout.
