@@ -556,9 +556,32 @@ jobs:
         # That is an order of magnitude under the two deltas this step already records (+247 cells
         # cost +11 s at P8 item 1, +329 cost +27 s at P9 items 6 and 9): those runs re-measured a
         # cold bundle, and these 124 cells are pure in-process table and golden work.
+        # P10 item 9 adds the phase's ACCEPTANCE BATTERY: five serialized clause suites - the
+        # scheduling seam, the handler pipeline, the diff rule, the import wall, and an honesty
+        # suite naming what only a phone can show (and what item 8's Lane E measured on a
+        # Simulator: registration accepted, everything after it refused with BGTaskScheduler
+        # ErrorDomain code 1). They are named MeshP10<Clause>AcceptanceTests because
+        # CIGateSelectorBoundaryTests.isMeshBattery matches only that shape: a battery called
+        # CompanionRefreshAcceptanceTests would be demanded by nothing and would sit ungated
+        # exactly as P3/P4/P5's did for three phases. The four refresh UNIT suites stay on the
+        # s3-grep step (items 2, 3 and 4 put them there; this battery's clause (4) pins all four
+        # by name) - this line gains the five batteries and nothing else. The NAME count moves
+        # 135 -> 140 in CIGateSelectorBoundaryTests' measuredSuiteNameCounts and the battery pin
+        # 53 -> 58 in the same commit; both are MEASURED at this commit, never arithmetic.
+        # RAISED 1172 -> 1198, MEASURED over this exact 140-name list on a Mac (2026-09-21) after a
+        # CLEAN build-for-testing, read off the result bundle: "Test run with 1198 tests in 140
+        # suites", 0 skipped, no `Restarting after unexpected exit` line. The line was then re-run
+        # AT 1198 and shown red once at 1199. 1172 + 26 = 1198 is the ARITHMETIC CHECK, never the
+        # source. The battery's 26 cells are 5 + 6 + 5 + 5 + 5 across the five clause files.
+        # KNOWN RED, NOT THIS BATTERY'S: MeshRoutedHeartCeremonyTests'
+        # everyHeartFailureCauseHasItsOwnSentence fails on the .heartsOff row, a LocalizedStringKey
+        # == whose two sides print identically. It reproduces ALONE on a clean build, and the only
+        # tracked change between item 5's green 1172-run at 288f501 and this commit is a Docs/
+        # markdown file - so it is environmental (item 8 erased and re-booted the iPhone 17
+        # simulator between the two runs) and is the close-out's to triage, not this line's.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1172 \
+          Scripts/run-gated-suites.sh mesh-batteries 1198 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -693,4 +716,9 @@ jobs:
             RoutedDeliveryHoldCopyTests \
             PeerHandleIdentityTests \
             MeshMultipeerSessionIdentityTests \
-            FakePeerTransportTests
+            FakePeerTransportTests \
+            MeshP10SchedulingSeamAcceptanceTests \
+            MeshP10HandlerPipelineAcceptanceTests \
+            MeshP10DiffRuleAcceptanceTests \
+            MeshP10ImportWallAcceptanceTests \
+            MeshP10HonestyAcceptanceTests

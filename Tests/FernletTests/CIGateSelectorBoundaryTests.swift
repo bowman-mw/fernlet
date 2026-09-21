@@ -88,6 +88,14 @@ import Testing
     /// `everyMeshAcceptanceBatteryIsGated` demanded none of them: this count and that step's
     /// MEASURED floor are the only two things that stop a name leaving the line again. The pin is
     /// `>=`, so ADDING a name passes silently — raising it here is what makes it bite.
+    ///
+    /// RE-MEASURED again at P10 item 9 (2026-09-21): `mesh-batteries` 135 → 140, for the phase's
+    /// five acceptance clause suites (the scheduling seam, the handler pipeline, the diff rule,
+    /// the import wall, honesty). Unlike the seventeen above, these five ARE demanded —
+    /// ``everyMeshAcceptanceBatteryIsGated`` fails any declared `MeshP<n>…AcceptanceTests` the
+    /// workflow does not name — so this entry is not what holds THEM on the line; it is what
+    /// notices one of the other 135 names leaving beside them. Counted off the line, not added to
+    /// the previous number.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 7,
         "no-tracking": 1,
@@ -95,7 +103,7 @@ import Testing
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
-        "mesh-batteries": 135
+        "mesh-batteries": 140
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -221,9 +229,11 @@ import Testing
         // radio seams, poller, resume, honesty) = 42, plus P8 item 10's six (the coordinator's
         // table, the hold verb, the raises and the disagreement, the presentation table, the task
         // wiring, honesty) = 48, plus P9 item 9's five clause suites (the ephemeral posture, the
-        // presence swap, the recipe swap, the MC retirement as an honesty row, honesty) = 53. A
-        // count of DECLARATIONS, taken by reading the tree.
-        #expect(batteries.count >= 53, "the mesh batteries shrank: \(batteries.count) declared")
+        // presence swap, the recipe swap, the MC retirement as an honesty row, honesty) = 53,
+        // plus P10 item 9's five clause suites (the scheduling seam, the handler pipeline, the
+        // diff rule, the import wall, honesty) = 58. A count of DECLARATIONS, taken by reading
+        // the tree — 58 is what the filter returned at this commit, not 53 + 5.
+        #expect(batteries.count >= 58, "the mesh batteries shrank: \(batteries.count) declared")
         let ungated = batteries.subtracting(gated).sorted()
         #expect(ungated.isEmpty, """
             Mesh acceptance batteries declared in Tests/FernletTests but not named in \
