@@ -49,16 +49,75 @@ import Testing
 /// handed. For everything that lives in a PACKAGE module, the import allowlist is a real wall.
 ///
 /// **The app target is porous, and that is why the call-spelling list exists.** The refresh handler
-/// lives in the app target, which is one Swift module, so every app-resident declaration is
-/// nameable from the refresh directory with no import line whatsoever: `FernletStore`,
-/// `FernletStoreAccess`, `WidgetSnapshotMirror`, `FernletStoreLoader`, `MeshContinuationTaskHost`,
-/// and every `FernletStore` extension declared under `App/Fernlet/` — which is where the radio
-/// funnel lives. `store.reapplyProximityRunPolicy()` re-runs the radios and imports nothing;
-/// `store.healthSyncCoordinator` reaches the HealthKit path and imports nothing;
+/// lives in the app target, which is one Swift module, so every app-resident declaration that is
+/// `internal` or wider is nameable from the refresh directory with no import line whatsoever:
+/// `FernletStore`, `FernletStoreAccess`, `WidgetSnapshotMirror`, `FernletStoreLoader`,
+/// `MeshContinuationTaskHost`, and every `FernletStore` extension declared under `App/Fernlet/` —
+/// which is where the radio funnel lives. `store.applyProximityRunPolicy(…)` re-runs the radios and
+/// imports nothing; `store.meshNetworkManager` hands the caller the radio itself and imports
+/// nothing; `store.refreshWorkoutsFromHealth()` reaches the HealthKit path and imports nothing;
 /// `FernletStore.load(…)` builds a second store and imports nothing. An import-only wall is green
-/// over all three. ``theRefreshDirectoryNamesNoMeshHealthCloudOrModelSpelling()`` is the wall that
+/// over all four. ``theRefreshDirectoryNamesNoMeshHealthCloudOrModelSpelling()`` is the wall that
 /// holds them, and the module allowlist is the cheap outer fence that catches the naive version
 /// first and names it clearly.
+///
+/// **ACCESS LEVEL is the second gate, and the list has to respect it.** What a `private` member is
+/// NOT is speakable from a second file. This wall's first shape named the PRIVATE funnels —
+/// `runProximityPolicy`, `applyProximityRunPolicyFromView`, `healthSyncCoordinator` — while their
+/// `internal` callers were absent, so a probe file that spoke only the reachable spellings
+/// (`store.applyProximityRunPolicy(…)`, `store.refreshWorkoutsFromHealth()`,
+/// `store.meshContinuationHost.…`) built and passed the wall green. The private funnels are kept
+/// below as BELT — an access level is one keyword away from changing, and
+/// ``everyAppDeclaredNeedleIsStillDeclaredUnderTheAppTarget()`` keeps a kept needle from going
+/// stale — and the internal doors beside them are the BRACES.
+///
+/// ## What was surveyed, and the rule the list follows
+///
+/// The handler can obtain exactly three app-target things: the `FernletStore` it acquires through
+/// `FernletStoreAccess.shared.load()`, `FernletStoreAccess.shared` itself, and the widget-bridge
+/// types it publishes through. Everything else it might reach has to NAME its type at this site
+/// first, and the prohibited TYPES are needles — so the survey is bounded to the `internal`-or-wider
+/// members of those three: `App/Fernlet/FernletStore.swift` and every `FernletStore` extension under
+/// `App/Fernlet/` (`ProximityRunSeams.swift`, `ProximitySessionPoller.swift`,
+/// `ProximityHostAdapter.swift`, `FernletStore+DemoSeed.swift`), plus `FernletStoreAccess.swift` and
+/// `WidgetBridge.swift`, read for declarations whose identifier or body names `Proximity`,
+/// `Mesh`/`mesh`, `Health`/`health`, `HK`, `CloudKit`/`CK`/`iCloud`, `sync`, `FoundationModels`,
+/// `LanguageModel`, `Presence`/`presence`, `RecipeShare`/`recipeShare` or `Continuation`. Re-run
+/// that grep when item 3 or item 4 lands, and again whenever a member is added to the store.
+///
+/// A hit becomes a needle when using it RUNS, HANDS OUT or FEEDS the prohibited machinery. A hit
+/// that only reads or writes an INERT record does not, and the excluded set is written down here
+/// rather than left unmentioned, so the cut is visible and can be re-argued: `meshSessionStorage`,
+/// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximitySupportRoot`,
+/// `proximitySupportDirectory`, `proximityDisplayName`, `presenceEnablePromptRequested`,
+/// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,
+/// `setShowProximityDebugTools`; the trust and moderation roster (`trustedProximityPeers`,
+/// `trustedProximityPeer`, `trustProximityPeer`, `keepProximityFriends`,
+/// `revokeTrustedProximityPeer`, `blockProximityPeer`, `unblockProximityPeer`,
+/// `reportProximityPeer`, `isTrustedProximityPeer`, `isRevokedProximitySigningKey`,
+/// `isBlockedProximitySigningKey`, `isBlockedFingerprint`, `isProximitySellerBanned`,
+/// `isClothingItemLocallyReported`, `reconcileModerationBans`, `recomputeCloseFriendsIfNeeded`,
+/// `recordTrainerAudit`, `trainerAuditEvents`, `fundMediaAtRestWitness`); the recipe-share text
+/// helpers (`savedRecipeShareText`, `recipeShareText`, `proximityRecipeSharePayload`,
+/// `importProximityRecipeShare`); the read-only health projections (`allowedHealthCapabilities`,
+/// `visibleHealthCapabilities`, `dailyHealthScore`, `workoutExists`); and
+/// `syncCustomExerciseCatalog`, which registers a catalog and syncs nothing. A review that
+/// disagrees adds the row and raises ``measuredSpellingCount`` in the same commit.
+///
+/// Methods reached only THROUGH another app type are covered by that type's needle rather than one
+/// of their own: `HealthSyncCoordinator.removeWorkoutFromHealth(fernletWorkoutID:)` is internal, but
+/// the store's handle on it is `private`, so a second file has to spell `HealthSyncCoordinator` to
+/// get one — and that is a needle. Enumerating those types' members would be a copy of their APIs
+/// held together by nothing.
+///
+/// ## PERMITTED to the handler (item 4 reads this list)
+///
+/// `FernletStoreAccess.shared` and its `load(…)` — the one sanctioned acquisition, which already
+/// refuses while protected data is unavailable; `todayKey`, the day roll's key; `companionState` and
+/// `companionThought`, the companion recompute's reads; `publishWidgetSnapshot()` and
+/// `widgetSnapshotMirror`, the publish step; and `WidgetBridge` / `WidgetSnapshot` /
+/// `WidgetSnapshotMirror` themselves. None of them is a needle, and none may become one without item
+/// 4 losing a step. Item 4 adds the day-roll spelling it actually calls to this paragraph.
 ///
 /// ## What this suite does NOT claim
 ///
@@ -76,11 +135,13 @@ import Testing
 /// | ``theRefreshDirectoryExistsAndHoldsAtLeastOneSwiftFile()`` | `git mv App/Fernlet/CompanionRefresh App/Fernlet/CompanionRefreshX` — the enumerator finds nothing and the floor reds. Restore with the inverse `git mv`. |
 /// | ``theRefreshDirectoryImportsOnlyTheHandlersOwnVocabulary()`` | Add `import ProximityKit` as the first line of `App/Fernlet/CompanionRefresh/CompanionRefreshIdentifier.swift`. |
 /// | ``everyFernletKitModuleIsClassifiedForTheRefreshHandler()`` | Delete the `"ProximityKit"` entry from ``forbiddenModuleReasons``; the Package.swift walk finds a module with no disposition. |
-/// | ``theRefreshDirectoryNamesNoMeshHealthCloudOrModelSpelling()`` | One plant per family, each chosen to compile: `import ProximityKit` + `static let probe: MeshNetworkManager? = nil`; the same shape for `HKHealthStore`, `CKContainer` and `LanguageModelSession`; and — the important one, because it adds NO import and so reds this cell alone — `@MainActor func redOnceProbe() async throws { _ = try await FernletStore.load() }` below the enum. Per-NEEDLE independence is discharged without 41 rebuilds by ``everyForbiddenSpellingIsMatchableAndTheListIsWhole()``, which plants each needle into a synthetic source in-process and fails if any one of them cannot be matched. |
+/// | ``theRefreshDirectoryNamesNoMeshHealthCloudOrModelSpelling()`` | One plant per family, each chosen to compile: `import ProximityKit` + `static let probe: MeshNetworkManager? = nil`; the same shape for `HKHealthStore`, `CKContainer` and `LanguageModelSession`; and — the important one, because it adds NO import and so reds this cell alone — `@MainActor func redOnceProbe() async throws { _ = try await FernletStore.load() }` below the enum. Per-NEEDLE independence is discharged without 68 rebuilds by ``everyForbiddenSpellingIsMatchableAndTheListIsWhole()``, which plants each needle into a synthetic source in-process and fails if any one of them cannot be matched. |
 /// | ``theTaskIdentifierAppearsExactlyOnceAsCode()`` | Comment out the `taskIdentifier` line in the scaffold file (the count drops to zero), then paste a second copy into a new file under the directory (the count rises to two). Both directions must red. |
 /// | ``everyForbiddenSpellingIsMatchableAndTheListIsWhole()`` | Delete any one entry from ``forbiddenSpellings``; the measured count pin reds. |
 /// | ``theModuleAllowlistIsARealFilterAndNotARubberStamp()`` | Add `"ProximityKit"` to ``permittedModuleReasons``. |
 /// | ``theStripperSeesCodeAndNotProseOrLiterals()`` | Change ``stripped(_:removingStringLiterals:)`` to return its input unchanged. |
+/// | ``theStripperIsATableOfInputsAndExpectedOutputs()`` | Blank string interpolations along with the literal around them (the shape this suite shipped first); row 2 reds with its input, expected and actual. Buildless — the whole table is a pure function over strings. |
+/// | ``everyAppDeclaredNeedleIsStillDeclaredUnderTheAppTarget()`` | Misspell an app-declared needle (`meshNetworkManagerX`); the declaration set does not hold it. Point ``appTargetRoot`` at an empty directory and the floor reds instead, which is the other half. |
 /// | ``theRadioVerbNeedlesAreStillSpokenByTheSeamsWall()`` | Misspell one radio-verb token in ``forbiddenSpellings`` (`.startJoinX(`); the seams wall no longer speaks it. That plant leaves ``everyForbiddenSpellingIsMatchableAndTheListIsWhole()`` green, which is the point — the matcher can see the misspelling; the app cannot. |
 struct BackgroundRefreshBoundaryTests {
 
@@ -177,6 +238,19 @@ struct BackgroundRefreshBoundaryTests {
         let token: String
         /// One line on what naming it would mean.
         let why: String
+        /// True when `token` is itself a declaration under `App/Fernlet/` — a `FernletStore` member
+        /// or an app-resident type — so ``everyAppDeclaredNeedleIsStillDeclaredUnderTheAppTarget()``
+        /// can prove the needle still names something that exists. False for package and Apple types
+        /// (the import wall is their gate, and this suite does not walk their sources) and for the
+        /// verb tokens, which carry a `.` or a `(` and are checked against `ProximityRunSeamsTests`
+        /// instead.
+        let isAppDeclaration: Bool
+
+        init(token: String, why: String, isAppDeclaration: Bool = false) {
+            self.token = token
+            self.why = why
+            self.isAppDeclaration = isAppDeclaration
+        }
     }
 
     /// Every spelling that must not appear under the refresh directory.
@@ -185,33 +259,70 @@ struct BackgroundRefreshBoundaryTests {
     /// it: matched over source with comments and string literals removed, so the wall states
     /// something about code rather than about the paragraph explaining why the code does not do the
     /// thing. Identifier-shaped tokens match at identifier boundaries
-    /// (`S3BoundaryTests.containsAtIdentifierBoundary`) so `PersistenceController` never fires
-    /// inside `PrivatePersistenceController` — the one REAL lookalike pair in this list, and listed
-    /// twice because both are separately forbidden — and so no needle fires on a longer, unrelated
-    /// name a later file might legitimately carry (`HealthKitServiceStub`, `PresenceManagerSpy`).
-    /// `HealthKitService` and `HealthKitServicing` are NOT such a pair, despite looking like one:
-    /// "Servicing" is "Servic" + "ing", so neither string contains the other. They are two separate
-    /// symbols, both needles because both are separately reachable. Tokens carrying a `(` or a leading `.` are matched as plain
+    /// (`S3BoundaryTests.containsAtIdentifierBoundary`) so a needle never fires on a longer,
+    /// unrelated name a later file might legitimately carry (`HealthKitServiceStub`,
+    /// `PresenceManagerSpy`). Tokens carrying a `(` or a leading `.` are matched as plain
     /// substrings, because identifier-boundary matching would refuse `FernletStore(healthKit…` on
     /// its right-hand flank and answer a violation with a green.
+    ///
+    /// **The containment sets the boundary rule earns.** Every needle below was grepped across
+    /// `App/Fernlet/` for identifiers that merely contain it; these are all of them, and
+    /// ``theMatcherSeparatesLookalikeIdentifiersAndIgnoresProse()`` asserts each reports itself and
+    /// only itself:
+    ///
+    /// - `PersistenceController` inside `PrivatePersistenceController` — both separately forbidden,
+    ///   so both are listed.
+    /// - `applyProximityRunPolicy` inside BOTH `reapplyProximityRunPolicy` and
+    ///   `applyProximityRunPolicyFromView` — a triple, and all three are needles: the funnel's
+    ///   internal scene/view edges, its internal store edge, and the view's private helper.
+    /// - `removeWorkout` inside `removeWorkoutByHealthKitUUID` (a needle) and inside
+    ///   `removeWorkoutFromHealth` (a `HealthSyncCoordinator` method, reached only by naming that
+    ///   type, which is its own needle).
+    ///
+    /// `HealthKitService` and `HealthKitServicing` look like a pair and are not one: "Servicing" is
+    /// "Servic" + "ing", so neither string contains the other. They are two separate symbols, both
+    /// needles because both are separately reachable.
     ///
     /// The radio-verb rows are the same ten spellings `ProximityRunSeamsTests`' retirement wall
     /// counts, reused deliberately: if the app renames a verb, both walls must be edited together
     /// and neither can drift into naming a verb that no longer exists.
     static let forbiddenSpellings: [Spelling] = [
-        // The mesh (§17.2: never the mesh).
+        // The mesh, as TYPES (§17.2: never the mesh). Package and Apple names: the import wall is
+        // their first gate and these are the belt behind it.
         Spelling(token: "ProximityKit", why: "the mesh module, qualified or imported"),
         Spelling(token: "MeshNetworkManager", why: "the mesh manager itself"),
         Spelling(token: "ProximityCoordinator", why: "the proximity fan-out"),
         Spelling(token: "PresenceManager", why: "the presence listener"),
         Spelling(token: "ProximityRecipeShareManager", why: "the recipe-share listener"),
-        Spelling(token: "executeProximityRunActions", why: "the radio executor — the one place a verb is spoken"),
-        Spelling(token: "runProximityPolicy", why: "the run funnel"),
-        Spelling(token: "reapplyProximityRunPolicy", why: "the store's own funnel edge — reachable with NO import, which is why it is here"),
-        Spelling(token: "applyProximityRunPolicyFromView", why: "the view's funnel helper"),
-        Spelling(token: "MeshContinuationDriver", why: "the continuation claim; a refresh task is not a continuation task"),
-        Spelling(token: "MeshContinuationTaskHost", why: "the continuation's scheduler half"),
+        Spelling(token: "MeshContinuationDriver", why: "the continuation claim; a refresh task is not a continuation task", isAppDeclaration: true),
+        Spelling(token: "MeshContinuationTaskHost", why: "the continuation's scheduler half", isAppDeclaration: true),
         Spelling(token: "BGContinuedProcessingTask", why: "the mesh's task class — the refresh uses `BGAppRefreshTask`"),
+        // The run funnel. The BRACES are the three `internal` edges a second file can speak; the
+        // two BELT rows below them are `private` today (`FernletStore.runProximityPolicy`,
+        // `ContentView.applyProximityRunPolicyFromView`) and unreachable from the refresh
+        // directory — kept because an access level is one keyword away from changing.
+        Spelling(token: "applyProximityRunPolicy", why: "the funnel's SCENE and VIEW edges — two internal `@discardableResult` overloads straight into the private core", isAppDeclaration: true),
+        Spelling(token: "reapplyProximityRunPolicy", why: "the funnel's STORE edge — internal, reachable with NO import, which is why it is here", isAppDeclaration: true),
+        Spelling(token: "executeProximityRunActions", why: "the radio executor — the one place a verb is spoken", isAppDeclaration: true),
+        Spelling(token: "runProximityPolicy", why: "belt: the private core the three edges funnel into", isAppDeclaration: true),
+        Spelling(token: "applyProximityRunPolicyFromView", why: "belt: the view's private funnel helper", isAppDeclaration: true),
+        // The live machinery a `private(set)` hands out whole. The property is internal to READ, so
+        // `store.meshNetworkManager.…` needs no import and no funnel.
+        Spelling(token: "meshNetworkManager", why: "hands out the radio manager itself", isAppDeclaration: true),
+        Spelling(token: "presenceManager", why: "hands out the presence listener", isAppDeclaration: true),
+        Spelling(token: "recipeShareManager", why: "hands out the recipe-share listener", isAppDeclaration: true),
+        Spelling(token: "meshContinuationHost", why: "hands out the `BGContinuedProcessingTask` host — a refresh task is not a continuation task", isAppDeclaration: true),
+        Spelling(token: "heartDropService", why: "hands out the heart dead-drop service — proximity delivery and its CloudKit leg", isAppDeclaration: true),
+        // The internal writers that FEED or RE-RUN the funnel.
+        Spelling(token: "setMeshContinuation", why: "writes the continuation claim AND re-runs the funnel", isAppDeclaration: true),
+        Spelling(token: "meshContinuationState", why: "the claim the policy reads back as an input on its next pass", isAppDeclaration: true),
+        Spelling(token: "meshContinuationLastAudit", why: "the claim's audit half, settable beside it", isAppDeclaration: true),
+        Spelling(token: "setAllowNearbyPresence", why: "the presence opt-in — its setter re-runs the funnel, which starts or stops the listener", isAppDeclaration: true),
+        Spelling(token: "setAllowNearbyRecipeShares", why: "the recipe-share opt-in — same setter shape, same funnel re-run", isAppDeclaration: true),
+        Spelling(token: "setAllowNearbyClothingShares", why: "the clothing-share opt-in — reaches the mesh manager directly", isAppDeclaration: true),
+        Spelling(token: "syncSessionPoller", why: "starts or stops the mesh session poll timer off `meshNetworkManager.isSessionLive`", isAppDeclaration: true),
+        Spelling(token: "deleteAllData", why: "the wipe bracket — it drives the manager, the continuation host and the funnel in one call", isAppDeclaration: true),
+        Spelling(token: "resetAll", why: "the reset bracket, which reaches the mesh manager the same way", isAppDeclaration: true),
         // The ten radio verbs, as `ProximityRunSeamsTests` spells them.
         Spelling(token: ".startJoin(", why: "radio verb"),
         Spelling(token: ".stopJoin(", why: "radio verb"),
@@ -223,12 +334,24 @@ struct BackgroundRefreshBoundaryTests {
         Spelling(token: "presenceManager.stop(", why: "listener verb"),
         Spelling(token: "recipeShareManager.start(", why: "listener verb"),
         Spelling(token: "recipeShareManager.stop(", why: "listener verb"),
-        // HealthKit (§17.2: never HealthKit).
+        // HealthKit as TYPES (§17.2: never HealthKit).
         Spelling(token: "HKHealthStore", why: "the Health store"),
         Spelling(token: "HealthKitService", why: "the gateway"),
         Spelling(token: "HealthKitServicing", why: "the gateway's seam — `load()` defaults it to nil"),
-        Spelling(token: "HealthSyncCoordinator", why: "the store's health sync coordinator"),
-        Spelling(token: "healthSyncCoordinator", why: "that coordinator's property, reachable with no import"),
+        Spelling(token: "HealthSyncCoordinator", why: "the store's health sync coordinator — and the only way to reach its own methods, since the store's handle on it is private", isAppDeclaration: true),
+        Spelling(token: "healthSyncCoordinator", why: "belt: that coordinator's property, `private` on the store today", isAppDeclaration: true),
+        // The internal store members that DRIVE the health coordinator.
+        Spelling(token: "refreshWorkoutsFromHealth", why: "pulls workouts out of HealthKit — the door the import wall is green over", isAppDeclaration: true),
+        Spelling(token: "backfillWorkoutsFromHealthIfNeeded", why: "the same pull, on the launch backfill path", isAppDeclaration: true),
+        Spelling(token: "stopHealthKitWorkoutObservation", why: "tears down the HealthKit observer query", isAppDeclaration: true),
+        Spelling(token: "updateHealthContext", why: "writes the day's HealthKit-derived context", isAppDeclaration: true),
+        Spelling(token: "scrubHiddenHealthContext", why: "rewrites the day's health context behind the sealed-dimension gate", isAppDeclaration: true),
+        Spelling(token: "setWorkoutHealthKitUUID", why: "binds a workout to its HealthKit sample", isAppDeclaration: true),
+        Spelling(token: "removeWorkoutByHealthKitUUID", why: "the HealthKit-side removal path", isAppDeclaration: true),
+        Spelling(token: "healthKitSampleDeleteHook", why: "the authored-sample delete hook — assigning or calling it is a Health write", isAppDeclaration: true),
+        Spelling(token: "addWorkout", why: "the workout write path, which drives `HealthSyncCoordinator` — a background write into Health", isAppDeclaration: true),
+        Spelling(token: "updateWorkout", why: "the same write path on an edit, coordinator and all", isAppDeclaration: true),
+        Spelling(token: "removeWorkout", why: "the same write path on a delete, which asks the coordinator to remove the sample", isAppDeclaration: true),
         // CloudKit (§17.2: never a force-sync).
         Spelling(token: "CKContainer", why: "the CloudKit container"),
         Spelling(token: "CKDatabase", why: "a CloudKit database"),
@@ -236,6 +359,7 @@ struct BackgroundRefreshBoundaryTests {
         Spelling(token: "PersistenceController", why: "the CloudKit-backed Core Data stack, including `reload(with:)`"),
         Spelling(token: "PrivatePersistenceController", why: "the sealed Core Data stack"),
         Spelling(token: "CoreDataFernletRepository", why: "the synced repository"),
+        Spelling(token: "cloudCopyDeleteHook", why: "the hook that deletes the day-blob copy in the user's private CloudKit zone without a live session", isAppDeclaration: true),
         // Foundation Models (§17.2: never Foundation Models).
         Spelling(token: "LanguageModelSession", why: "an on-device model session"),
         Spelling(token: "SystemLanguageModel", why: "the on-device model"),
@@ -244,14 +368,35 @@ struct BackgroundRefreshBoundaryTests {
         // Store creation (§17.2: never create a store; acquire the existing one).
         Spelling(token: "FernletStore(", why: "constructing a second store over the same repositories"),
         Spelling(token: "FernletStore.load(", why: "the creation path — acquire through `FernletStoreAccess.shared.load()` instead"),
-        Spelling(token: "FernletStoreLoader", why: "the scene bootstrap; the handler is not a scene"),
+        Spelling(token: "FernletStoreLoader", why: "the scene bootstrap; the handler is not a scene", isAppDeclaration: true),
         Spelling(token: "FernletStoreAccess(", why: "a SECOND acquisition cache — `.shared` is the point of the type")
     ]
 
     /// MEASURED count of ``forbiddenSpellings`` at P10 item 2. Removing a needle is a deliberate
     /// retirement with an argument, never a side effect of an edit; raise this in the same commit
     /// that adds one.
-    static let measuredSpellingCount = 41
+    ///
+    /// 41 at the first shape, 68 after the verify survey: the first list named the PRIVATE funnels
+    /// and none of the `internal` doors beside them, so the 27 rows added are the spellings a second
+    /// file in the app target could actually speak.
+    static let measuredSpellingCount = 68
+
+    /// MEASURED count of the ``forbiddenSpellings`` rows that name a declaration under
+    /// `App/Fernlet/`, pinned for the same reason the verb count is: the drift cell derives its set
+    /// from a flag, and a flag dropped in an edit would shrink it without failing anything.
+    static let measuredAppDeclarationCount = 36
+
+    /// The app-target root the declaration-drift cell walks.
+    static let appTargetRoot = "App/Fernlet"
+
+    /// Floor for that walk — the target held 181 Swift files at P10 item 2, and a walk that stops
+    /// resolving would report zero and pass every needle vacuously.
+    static let minimumAppFilesScanned = 150
+
+    /// How deep ``stripped(_:removingStringLiterals:)`` follows nested string interpolation before
+    /// it gives up and blanks the rest of the literal. Four would do for anything in this tree; the
+    /// cap exists because an unbounded nesting counter is an unbounded loop by another name.
+    static let maximumInterpolationDepth = 8
 
     /// The retirement wall the ten radio-verb needles are COPIED from, because there is no shared
     /// constant to read: `ProximityRunSeamsTests` spells its six manager verbs as literals at its
@@ -410,7 +555,7 @@ struct BackgroundRefreshBoundaryTests {
 
     /// Every needle is individually matchable, and the list is whole.
     ///
-    /// This is what makes each negative needle independently reddenable without 41 rebuilds: a
+    /// This is what makes each negative needle independently reddenable without 68 rebuilds: a
     /// needle whose spelling the matcher cannot see is a cell that can never fail, and this plants
     /// each one into a synthetic source and demands a hit. The count pin is the other half — a
     /// needle silently removed from the list is a prohibition silently retired.
@@ -479,6 +624,59 @@ struct BackgroundRefreshBoundaryTests {
         )
     }
 
+    /// Every needle that names an app-target declaration still names one.
+    ///
+    /// ``theRadioVerbNeedlesAreStillSpokenByTheSeamsWall()`` generalised: the ten verbs are not the
+    /// only rows copied out of the app, and a `FernletStore` member renamed in a sweep leaves this
+    /// wall holding a spelling nothing can contain — a cell that can never fail, green forever. The
+    /// 36 rows flagged ``Spelling/isAppDeclaration`` are checked against the declarations
+    /// `App/Fernlet/` actually makes, as CODE, so a stale mention in a doc comment does not satisfy
+    /// it. Package and Apple types are deliberately out of scope: this suite does not walk their
+    /// sources, and the import wall is their gate.
+    @Test func everyAppDeclaredNeedleIsStillDeclaredUnderTheAppTarget() throws {
+        let rows = Self.forbiddenSpellings.filter(\.isAppDeclaration)
+        #expect(
+            rows.count == Self.measuredAppDeclarationCount,
+            """
+            \(rows.count) needle(s) are flagged as app declarations, measured \
+            \(Self.measuredAppDeclarationCount). This cell derives its set from that flag, so a flag \
+            dropped in an edit would shrink it without failing anything — hence the pin.
+            """
+        )
+
+        let sources = try Self.appTargetCode()
+        #expect(
+            sources.count >= Self.minimumAppFilesScanned,
+            """
+            Walked \(sources.count) Swift file(s) under \(Self.appTargetRoot) (floor \
+            \(Self.minimumAppFilesScanned)) — the walk lost the app target and every needle below \
+            would pass vacuously.
+            """
+        )
+
+        let declared = Self.declaredIdentifiers(in: sources)
+        #expect(
+            !declared.contains("noSuchDeclarationExistsInTheAppTarget"),
+            "the declaration set matched a name nothing declares — it is not a filter"
+        )
+
+        var missing: [String] = []
+        // R2: bounded by the app-declared needle list.
+        for row in rows where !declared.contains(row.token) {
+            missing.append(row.token)
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) needle(s) name a declaration \(Self.appTargetRoot) no longer makes: \
+            \(missing.sorted().joined(separator: ", ")). The member was renamed or deleted and this \
+            wall was left holding a spelling nothing can contain. Rename the needle in the same \
+            commit — or, if the door itself is gone, retire the row and LOWER \
+            `measuredSpellingCount` with the argument written down.
+            """
+        )
+    }
+
     /// The matcher's boundaries: the pairs that must not fire on each other, and the prose that is
     /// not code.
     @Test func theMatcherSeparatesLookalikeIdentifiersAndIgnoresProse() {
@@ -497,11 +695,35 @@ struct BackgroundRefreshBoundaryTests {
         #expect(servicing.count == 1, "expected one report, got: \(servicing)")
         #expect(servicing.first?.contains("HealthKitServicing") == true)
 
-        // The one real lookalike pair in the list: `PersistenceController` must not fire inside
+        // The real lookalike pairs in the list. First: `PersistenceController` must not fire inside
         // `PrivatePersistenceController`, which carries its own reason.
         let sealed = Self.violations(in: "let c = PrivatePersistenceController.shared\n", path: "P.swift")
         #expect(sealed.count == 1, "expected one report, got: \(sealed)")
         #expect(sealed.first?.contains("PrivatePersistenceController") == true)
+
+        // The funnel TRIPLE, which is the shape this wall got wrong once: `applyProximityRunPolicy`
+        // is contained by both of the others, and all three are separately forbidden. Each line must
+        // report exactly one needle, and the right one — a plain-substring matcher answers the first
+        // two with two reports each, and a matcher that over-corrects answers them with none.
+        let sceneEdge = Self.violations(
+            in: "_ = store.applyProximityRunPolicy(appLockEngaged: false, duressSessionActive: false)\n",
+            path: "P.swift"
+        )
+        #expect(sceneEdge.count == 1, "expected one report, got: \(sceneEdge)")
+        #expect(sceneEdge.first?.contains(": applyProximityRunPolicy ") == true)
+
+        let storeEdge = Self.violations(in: "_ = store.reapplyProximityRunPolicy()\n", path: "P.swift")
+        #expect(storeEdge.count == 1, "expected one report, got: \(storeEdge)")
+        #expect(storeEdge.first?.contains(": reapplyProximityRunPolicy ") == true)
+
+        let viewHelper = Self.violations(in: "applyProximityRunPolicyFromView()\n", path: "P.swift")
+        #expect(viewHelper.count == 1, "expected one report, got: \(viewHelper)")
+        #expect(viewHelper.first?.contains(": applyProximityRunPolicyFromView ") == true)
+
+        // And the second pair: `removeWorkout` inside `removeWorkoutByHealthKitUUID`.
+        let byUUID = Self.violations(in: "store.removeWorkoutByHealthKitUUID(uuid)\n", path: "P.swift")
+        #expect(byUUID.count == 1, "expected one report, got: \(byUUID)")
+        #expect(byUUID.first?.contains(": removeWorkoutByHealthKitUUID ") == true)
 
         // The sanctioned acquisition path is NOT a violation — a wall that forbade it would forbid
         // the only thing §17.2 allows.
@@ -515,6 +737,16 @@ struct BackgroundRefreshBoundaryTests {
 
         // And a real use behind a trailing comment still reds.
         #expect(!Self.violations(in: "let m = MeshNetworkManager.self  // needed, honest\n", path: "P.swift").isEmpty)
+
+        // A call inside a string INTERPOLATION is a call. The literal's prose is not code, but
+        // `\(…)` is, and blanking it with the rest of the literal is how this wall was first green
+        // over the very line its own doc names as the example.
+        let interpolated = Self.violations(
+            in: "let log = \"policy: \\(store.reapplyProximityRunPolicy())\"\n",
+            path: "P.swift"
+        )
+        #expect(interpolated.count == 1, "expected one report, got: \(interpolated)")
+        #expect(interpolated.first?.contains(": reapplyProximityRunPolicy ") == true)
     }
 
     /// The allowlist is a filter, not a rubber stamp.
@@ -555,6 +787,75 @@ struct BackgroundRefreshBoundaryTests {
         // Literals are kept when the caller asks for them — the positive-needle view.
         #expect(Self.stripped("let id = \"MBO.Fernlet.companion-refresh\"", removingStringLiterals: false)
             .contains("MBO.Fernlet.companion-refresh"))
+        // In that view the function is the identity over a line with no comment, interpolation and
+        // all — which is what `theTaskIdentifierAppearsExactlyOnceAsCode()` counts against.
+        let kept = "let id = \"x\\(y)z\""
+        #expect(Self.stripped(kept, removingStringLiterals: false) == kept)
+    }
+
+    /// The stripper as a table of inputs and expected outputs.
+    ///
+    /// Tier 1 and buildless — it is a pure function over strings — and it exists so the stripper is
+    /// independently reddenable without planting a file under the refresh directory and rebuilding
+    /// the app. The second row is the one that was wrong: the first shape of
+    /// ``stripped(_:removingStringLiterals:)`` blanked `\(…)` along with the literal around it, so
+    /// `let log = "policy: \(store.reapplyProximityRunPolicy())"` — this suite's own headline
+    /// example of a call that runs the radios — was invisible to every needle.
+    ///
+    /// The last two rows are documented FALSE POSITIVES kept on purpose: a `#if DEBUG` line and the
+    /// code under it are read as code, so a needle inside a debug-only branch still reds. That is
+    /// the safe direction; the unsafe one is what this table is here to prevent.
+    @Test func theStripperIsATableOfInputsAndExpectedOutputs() {
+        let rows: [(input: String, expected: String, note: String)] = [
+            (
+                "let s = \"CKContainer\"",
+                "let s = \"\"",
+                "a plain literal keeps its quotes and loses its body"
+            ),
+            (
+                "let log = \"policy: \\(store.reapplyProximityRunPolicy())\"",
+                "let log = \"(store.reapplyProximityRunPolicy())\"",
+                "an interpolation is a call site: the expression survives, the prose around it does not"
+            ),
+            (
+                "let t = \"a\\(f(g(\"z\")))b\"",
+                "let t = \"(f(g(\"\")))\"",
+                "nested parens close in the right place, and a literal inside the span is blanked in turn"
+            ),
+            (
+                "let u = \"https://x\" ; let m = MeshNetworkManager.self",
+                "let u = \"\" ; let m = MeshNetworkManager.self",
+                "a `//` inside a literal is not a comment, so the code after the literal survives"
+            ),
+            (
+                "let x = 1 // MeshNetworkManager",
+                "let x = 1 ",
+                "a trailing comment goes, and the space before it stays"
+            ),
+            (
+                "    /// HKHealthStore",
+                "    ",
+                "a whole-line doc comment leaves only its indent, which `codeLines` then drops"
+            ),
+            (
+                "#if DEBUG",
+                "#if DEBUG",
+                "a compiler directive is code — a needle in a debug-only branch still reds"
+            )
+        ]
+        // R2: bounded by the table.
+        for row in rows {
+            let actual = Self.stripped(row.input, removingStringLiterals: true)
+            #expect(
+                actual == row.expected,
+                """
+                \(row.note).
+                input:    \(row.input)
+                expected: \(row.expected)
+                actual:   \(actual)
+                """
+            )
+        }
     }
 
     // MARK: - Machinery
@@ -581,6 +882,67 @@ struct BackgroundRefreshBoundaryTests {
             files.append((url.path.replacingOccurrences(of: prefix, with: ""), try String(contentsOf: url, encoding: .utf8)))
         }
         return files
+    }
+
+    /// Every Swift file under ``appTargetRoot``, comment- and literal-stripped, one entry per file.
+    ///
+    /// The whole target rather than a hand-picked list of files, for the same reason the refresh
+    /// scan walks a directory: a member moves between files far more often than it is renamed, and a
+    /// list that has to be extended by hand is a list that goes stale.
+    static func appTargetCode() throws -> [String] {
+        let rootURL = RepoRoot.url(appTargetRoot)
+        guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        var urls: [URL] = []
+        // R2: bounded by the target's entry count.
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            urls.append(url)
+        }
+        var sources: [String] = []
+        // R2: bounded by the file list.
+        for url in urls {
+            let source = try String(contentsOf: url, encoding: .utf8)
+            sources.append(codeLines(source, removingStringLiterals: true).map(\.1).joined(separator: "\n"))
+        }
+        return sources
+    }
+
+    /// The keywords a declaration's name can follow.
+    static let declarationKeywords: Set<String> = [
+        "func", "var", "let", "class", "struct", "enum", "actor", "protocol", "typealias", "case"
+    ]
+
+    /// Every identifier `sources` declares, collected once so the drift cell is a set lookup rather
+    /// than a scan per needle.
+    ///
+    /// Deliberately over-collects — a local `let` and an enum `case` land in the same set as a
+    /// `FernletStore` member — because this is a tripwire for a RENAME, and the answer it must never
+    /// give is a false "still there" for a name the app has genuinely lost. Over-collection can
+    /// produce one, so a needle whose token is also an ordinary local name is weaker here than the
+    /// others; none of the 36 is.
+    static func declaredIdentifiers(in sources: [String]) -> Set<String> {
+        var names: Set<String> = []
+        // R2: bounded by the file list.
+        for source in sources {
+            // R2: bounded by the file's line count.
+            for line in source.components(separatedBy: "\n") {
+                names.formUnion(declarations(in: line))
+            }
+        }
+        return names
+    }
+
+    /// The identifiers one line declares: the word following each declaration keyword.
+    static func declarations(in line: String) -> [String] {
+        var names: [String] = []
+        var previous = ""
+        // R2: bounded by the line's word count.
+        for word in line.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }) {
+            if declarationKeywords.contains(previous) { names.append(String(word)) }
+            previous = String(word)
+        }
+        return names
     }
 
     /// Every forbidden spelling in `source`, as `path:line: token — why`.
@@ -629,14 +991,28 @@ struct BackgroundRefreshBoundaryTests {
     }
 
     /// One line with its trailing `//` comment removed, and — when asked — the contents of every
-    /// string literal removed too.
+    /// string literal removed too, EXCEPT the code inside its interpolations.
     ///
     /// The comment cut is literal-aware: a `//` inside `"https://…"` is not a comment, and cutting
     /// there would hide the code after it from every needle.
+    ///
+    /// **Interpolation bodies are code and are kept.** `\(…)` is a call site wearing a literal's
+    /// clothes: `let log = "policy: \(store.reapplyProximityRunPolicy())"` runs the funnel exactly
+    /// as the bare call does. The first shape of this function blanked the interpolation with the
+    /// rest of the literal, so that line — this suite's own headline example — passed the wall
+    /// green. Each `\(` opens a code span that closes on its matching `)`, paren-counted so
+    /// `\(f(g(x)))` closes in the right place and a `"` inside the span opens a literal of its own.
+    /// The prose around the span is still blanked, so only the expression survives; nesting past
+    /// ``maximumInterpolationDepth`` falls back to blanking, which can only hide code and so is the
+    /// one thing a reader has to know this returns a green for.
+    ///
+    /// A multi-line `"""` literal is still read as code, interpolations and all — the safe
+    /// direction, and unchanged by this.
     static func stripped(_ line: String, removingStringLiterals: Bool) -> String {
         var output = ""
         var inString = false
         var escaped = false
+        var interpolation: [Int] = []
         let characters = Array(line)
         var index = 0
         // R2: bounded by the line's character count; every branch advances `index` or breaks.
@@ -645,6 +1021,14 @@ struct BackgroundRefreshBoundaryTests {
             if inString {
                 if escaped {
                     escaped = false
+                } else if character == "\\" && index + 1 < characters.count
+                            && characters[index + 1] == "(" && interpolation.count < maximumInterpolationDepth {
+                    if !removingStringLiterals { output.append("\\") }
+                    output.append("(")
+                    interpolation.append(1)
+                    inString = false
+                    index += 2
+                    continue
                 } else if character == "\\" {
                     escaped = true
                 } else if character == "\"" {
@@ -663,7 +1047,26 @@ struct BackgroundRefreshBoundaryTests {
                 index += 1
                 continue
             }
-            if character == "/" && index + 1 < characters.count && characters[index + 1] == "/" {
+            if let depth = interpolation.last {
+                if character == "(" {
+                    interpolation[interpolation.count - 1] = depth + 1
+                } else if character == ")" {
+                    if depth == 1 {
+                        interpolation.removeLast()
+                        inString = true
+                    } else {
+                        interpolation[interpolation.count - 1] = depth - 1
+                    }
+                    output.append(")")
+                    index += 1
+                    continue
+                }
+            }
+            // A `//` inside an interpolation would be a comment inside an expression; treating it
+            // as one here would cut the expression short and hide the rest, so only a `//` in
+            // ordinary code ends the line.
+            if interpolation.isEmpty && character == "/" && index + 1 < characters.count
+                && characters[index + 1] == "/" {
                 break
             }
             output.append(character)
