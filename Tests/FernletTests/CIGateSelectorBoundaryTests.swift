@@ -96,6 +96,13 @@ import Testing
     /// workflow does not name — so this entry is not what holds THEM on the line; it is what
     /// notices one of the other 135 names leaving beside them. Counted off the line, not added to
     /// the previous number.
+    ///
+    /// RE-MEASURED again at the cutover round's item 1.2 (2026-09-21): `mesh-batteries` 140 → 141,
+    /// for `MeshIntroductionAuthorityRosterTests` — the suite that pins
+    /// `MeshNetworkManager.mayAdmitStrangerProvisionally`, the join-door predicate D-4.3's
+    /// provisional admission turns on. It is not a `MeshP<n>…AcceptanceTests`, so
+    /// ``everyMeshAcceptanceBatteryIsGated`` demands it nowhere and this entry is again the only
+    /// thing that would notice it leaving. Counted off the line, not added to the previous number.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 7,
         "no-tracking": 1,
@@ -103,7 +110,7 @@ import Testing
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
-        "mesh-batteries": 140
+        "mesh-batteries": 141
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and

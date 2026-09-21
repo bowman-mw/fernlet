@@ -589,9 +589,21 @@ jobs:
         # 1199 tests in 140 suites passed", no restart. 1198 + 1 = 1199 is the ARITHMETIC CHECK, never
         # the number. (The decomposition's "+ 4 CIGateSelectorBoundaryTests' own" term is P6's count and
         # is now 6; the RAISED lines carry the running total, the decomposition is not re-summed.)
+        # RAISED 1199 -> 1217 (2026-09-21, the cutover round's item 1.2 — D-4.3's provisional stranger
+        # admission). Four suites already on this line gained cells and a fifth joined it:
+        # MeshChannelIntroductionTests +7 (doors shut/open, barred beats provisional, and the four
+        # mesh-id rows the target-mesh rule owes), MeshIntroductionRosterTests +1 (the posture flag
+        # defaults shut and moves no verdict), MeshLinkTableTests +1 (a pre-commit timeout refunds its
+        # re-proposal, an owner refusal does not), MeshPairwiseFoundingTests +4 (the unseeded manager
+        # half, Option 1b's frame gate, the eviction-cause table, the hold's cause), and
+        # MeshIntroductionAuthorityRosterTests joins the line with 5 (3 existing + 2 for the join-door
+        # predicate) — so the NAME count moves 140 -> 141 in CIGateSelectorBoundaryTests in this same
+        # commit. MEASURED over this exact 141-name list on a Mac after a build-for-testing, read off
+        # the result bundle: "Test run with 1217 tests in 141 suites", no restart. 1199 + 18 = 1217 is
+        # the ARITHMETIC CHECK, never the number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1199 \
+          Scripts/run-gated-suites.sh mesh-batteries 1217 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -706,6 +718,7 @@ jobs:
             MeshChannelIntroductionTests \
             MeshChannelIntroductionTranscriptTests \
             MeshIntroductionRosterTests \
+            MeshIntroductionAuthorityRosterTests \
             MeshIntroductionNonceCacheTests \
             MeshInboundRankingTests \
             MeshTunnelConvergenceTests \
