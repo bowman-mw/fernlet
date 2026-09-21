@@ -1291,6 +1291,23 @@ founder/joiner shape is therefore a **prerequisite** for loop item 9, not a deta
 > an unseeded app-path founding is reachable there and nowhere else on this lane. That is why P6 item
 > 10's TEXT-4 shape is specified over MC, and why the app-path founding over QUIC stays **unobserved**
 > and is handed to the owner list rather than claimed.
+>
+> **Corrected 2026-09-21 (D-4.3).** The circularity the section above describes — "a stranger
+> cannot ask, because an empty derived roster refuses its tunnel before any app frame" — **no longer
+> holds at HEAD**. The owner took D-4.3 Option 1: `MeshChannelIntroductionExchange.receive` admits a
+> peer the roster calls `stranger` *provisionally* while the owner's join doors are open
+> (`MeshIntroductionRoster.admitsStrangersProvisionally`, answered by
+> `MeshNetworkManager.mayAdmitStrangerProvisionally` = `isAdmittingNewPeers && isSessionOpen`), and
+> the roster verdict is read **before** the meshID equality check so a mesh-less joiner's
+> `unboundMeshID` no longer reads as `.foreignMesh`. So an unseeded QUIC run now has a path to a
+> first meeting and to a records ledger without `armFounderLedgerForHarness()` at all.
+>
+> **Nothing below is therefore a statement about a run.** That path has **never been observed on any
+> radio** — not on this lane, not on any other. The unseeded Lane C row is the stranger-admission
+> design's owed test (vi); it is still owed and still unrun, and the capability stays **unobserved**
+> and on the owner list exactly as the 2026-09-12 correction left the MC half. What is pinned today
+> is tier 1 only: the transport arm in `MeshChannelIntroductionTests`, the join-door predicate in
+> `MeshIntroductionAuthorityRosterTests`, and the manager half in `MeshPairwiseFoundingTests`.
 
 
 #### Fixed (0b) — the root cause was the owner's link gate, not the transport
@@ -1323,6 +1340,15 @@ introduction, joining still needs an admission the user grants, and `setSessionO
 evicts uncommitted slots. Regression: `Tests/FernletTests/MeshClosedMeshStarTopologyTests.swift`
 (five tests; three of them fail on the pre-fix tree).
 
+> **Corrected 2026-09-21 (D-4.3).** "The QUIC introduction is members-only" is no longer true, here
+> or anywhere below in this section. Since Option 1 landed, a peer the roster calls `stranger` holds
+> a QUIC *tunnel* provisionally while the owner's join doors are open — so the sentence now reads:
+> the roster decides who becomes a **member**, and it refuses `barred` keys at the transport
+> unconditionally. The 0b argument itself is unaffected and the fix stands: what made the three-gate
+> relaxation safe was never the transport alone but the seat check
+> (`MeshNetworkManager.maySeatVerifiedPeer(signingPublicKey:)`) the finding below added for MC — and
+> that check is now THE stage a provisional peer is judged at on **both** radios.
+
 Two diagnostics landed with it, both `notice` + console mirror, for the same reason item 0's
 `noteInboundRefusal` did — discovery and the dial decision were the two stages with no transcript at
 all:
@@ -1345,10 +1371,17 @@ retry budget, and cannot fight the duplicate collapse.
 #### What the security review of the 0b change changed (2026-09-02)
 
 The fix above relaxes three **link** gates, and that is only safe where the transport itself is
-members-only. It is on QUIC. **It is not on MC — which is the shipping default**
+members-only. It was on QUIC. **It is not on MC — which is the shipping default**
 (`MeshTransportFactory.shippingDefault`): an MC invitation carries no identity, and the identity
 introduction one layer up is gated on revoked/blocked keys, not on the roster. Four findings, all
 fixed in the same change:
+
+> **Corrected 2026-09-21 (D-4.3).** "It is on QUIC" was true when this was written and is not true
+> at HEAD: since Option 1, neither radio is members-only at the transport while the owner's join
+> doors are open. The four findings below are unchanged and none of them weakens — finding 1 in
+> particular gets *stronger*, because the seat check it added is no longer a second lock behind a
+> transport that had already refused the peer; on either radio it is the first stage that knows who
+> the peer is and may refuse them.
 
 1. **HIGH — a closed mesh must still refuse a verified stranger.** Without a second gate, a stranger
    seated on a closed MC mesh would be sent this device's signed identity introduction and then, on
@@ -1471,6 +1504,21 @@ has no other way to ask. `startNewMesh(name:)` mints a random mesh id, which see
 match. That circularity is why item 0 could not reach the derived roster, and it is a real property
 of the shipping transport, not of the harness: **first-meeting stranger admission has no path on
 this radio.**
+
+> **Corrected 2026-09-21 (D-4.3).** The last sentence is the one the owner's decision retired.
+> First-meeting stranger admission **has** a path on this radio as of Option 1: a `stranger` is
+> admitted provisionally while the join doors are open, and the roster verdict is read before the
+> meshID check so a mesh-less joiner's `unboundMeshID` is no longer `.foreignMesh`. The two seams
+> below are therefore no longer *necessary* to open a first tunnel — they are a **convenience**,
+> and they are why the run recorded in this section is reproducible: a seeded pair has
+> byte-identical TXT records and a mesh id known before launch, which is what makes two runs
+> comparable.
+>
+> **The unseeded row is owed, not done.** Nobody has run two Simulators with no
+> `FERNLET_MESH_MATRIX_MEMBERS` seed over QUIC and watched them found a mesh through the
+> provisional path. That is the stranger-admission design's owed test (vi); the capability has
+> **never been observed on any radio**, and this section's results remain results about the
+> **seeded** shape. Everything measured below stands exactly as recorded.
 
 The seams below are the smallest thing that opens it, and each one stands in for exactly one step:
 

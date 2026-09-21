@@ -184,11 +184,17 @@ struct MeshClosedMeshStarTopologyTests {
 
     // MARK: - The MC half: a closed mesh must still refuse a verified STRANGER
 
-    /// **The 0b review's finding 1.** Relaxing the three link gates is safe on the QUIC radio
-    /// because its signed channel introduction is members-only before any app frame. **MC has no
+    /// **The 0b review's finding 1.** Relaxing the three link gates was safe on the QUIC radio
+    /// because its signed channel introduction was members-only before any app frame. **MC has no
     /// such stage** — and MC is the shipping default. So the membership decision has to be taken
     /// where MC *does* know the identity: the moment the slot's coordinator verifies it, before
     /// `onSlotConnected` sends the mesh descriptor, the photo manifest or the vouch list.
+    ///
+    /// **Since D-4.3 (2026-09-21) neither radio is members-only at the transport**, and this cell
+    /// matters more for it, not less: a stranger is admitted to a QUIC *tunnel* while the owner's
+    /// join doors are open, so this seat check is now THE stage a provisional peer is judged at on
+    /// both radios rather than a second lock behind one that had already refused it. The assertion
+    /// is unchanged, because the rule it pins never depended on which radio brought the peer.
     ///
     /// This pins the decision itself; the ordering is structural — `checkCoordinatorStates`
     /// `continue`s past `onSlotConnected` for a refused slot and leaves its `fingerprint` nil, so

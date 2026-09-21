@@ -2044,6 +2044,13 @@ struct MeshPairwiseFoundingTests {
     /// first meeting starts with DO open the door, that founding still works with it open, and that
     /// the resulting CLOSED mesh refuses a stranger at the seat, which is the stage a provisional
     /// peer is judged at.
+    ///
+    /// **What neither half is: the capability observed on a radio.** The unseeded Lane C row — two
+    /// Simulators with no `FERNLET_MESH_MATRIX_MEMBERS` seed meeting over QUIC and founding a mesh
+    /// through the provisional path — is the stranger-admission design's owed test (vi), and it is
+    /// **still owed and still unrun**. First-meeting founding over QUIC has a code path as of
+    /// D-4.3; it has never been observed on any radio, in any lane, and nothing in this file or in
+    /// `Docs/Mesh-Network-Feasibility-Runbook.md`'s Lane C section should be read as saying it has.
     @Test func twoUnseededManagersOpenTheDoorFoundAMeshAndThenCloseItAgainstAStranger() async throws {
         let rig = try MeshFoundingRig.build(2, label: "provisional-founding")
         defer { rig.teardown() }
@@ -2132,15 +2139,19 @@ struct MeshPairwiseFoundingTests {
     /// Which terminal coordinator state spends the QUIC radio's never-refilled re-propose budget.
     ///
     /// The pre-commit **timeout** is the one end that refused nothing, and provisional admission
-    /// makes it common: a stranger is seated and then evicted by the 25 s / 60 s deadline. Six of
-    /// those used to strand a real friend for the session, because
-    /// `MeshLinkTable.maxReproposalsPerEndpoint` is never refilled. Every other end keeps charging —
-    /// re-offering an endpoint whose link keeps failing is the loop the budget exists to bound.
+    /// makes it common: a stranger is seated and then evicted by the **five-minute** proximity gate
+    /// `ProximityCoordinator.transitionToProximityGate` arms once the identity introduction
+    /// verifies (`ProximityCoordinator.swift:1320`) — not the 25 s / 60 s connection-phase timer
+    /// `handleChannelReady` sets, which that gate cancels and replaces. Six of those used to strand
+    /// a real friend for the session, because `MeshLinkTable.maxReproposalsPerEndpoint` is never
+    /// refilled. Every other end keeps charging — re-offering an endpoint whose link keeps failing
+    /// is the loop the budget exists to bound.
     ///
     /// A table over the state, not a driven timeout: forcing a real `.ended(reason: .timeout)`
-    /// needs a live coordinator and a twenty-five-second wait, and the sweep's single call site is
+    /// needs a live coordinator and a five-minute wait, and the sweep's single call site is
     /// structural (`checkCoordinatorStates`'s stale loop), exactly as the sibling seat-refusal
-    /// decision is pinned.
+    /// decision is pinned. What the radio then DOES with the cause is driven end to end in
+    /// `NetworkMeshSessionTests.aPreCommitTimeoutEvictionConsumesExactlyOneReproposeBooking`.
     @Test func onlyAPreCommitTimeoutIsExemptFromTheReproposeBudget() {
         #expect(MeshNetworkManager.evictionCause(for: .ended(reason: .timeout)) == .preCommitTimeout)
         for reason: ProximityCoordinator.EndReason in [

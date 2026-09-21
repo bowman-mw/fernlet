@@ -70,10 +70,12 @@ enum MeshFlowVerb: String, CaseIterable, Sendable {
 /// persisted, never on a wire. ``none`` is the state every Lane C run before item 9 was in — a
 /// seeded descriptor and no ledger at all — and it is what an absent or unrecognized variable means.
 ///
-/// The roles are asymmetric on purpose. The QUIC transport is members-only by construction, so the
-/// seeded descriptor is the only thing that can open the first tunnel; the ``founder`` collapses
-/// that descriptor to itself and arms the real ledger once the tunnel is up, and the ``joiner``
-/// then travels the shipping admission path to get onto it.
+/// The roles are asymmetric on purpose. When they were written the QUIC transport was members-only
+/// by construction, so the seeded descriptor was the only thing that could open the first tunnel;
+/// since D-4.3 (2026-09-21) a stranger is admitted provisionally while the join doors are open, so
+/// an *unseeded* pair has a path too — one no radio has yet run. Either way the ``founder``
+/// collapses the seeded descriptor to itself and arms the real ledger once the tunnel is up, and
+/// the ``joiner`` then travels the shipping admission path to get onto it.
 enum MeshMatrixRole: String, CaseIterable, Sendable {
 
     /// No membership role: seed, connect, drive flows. The pre-item-9 behaviour.

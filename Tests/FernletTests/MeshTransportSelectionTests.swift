@@ -101,7 +101,13 @@ struct MeshTransportSelectionTests {
         #expect(manager.meshID.uuidString == "00000000-0000-0000-0000-000000000000",
                 "with no mesh, both sides must agree on the unbound id rather than invent one")
         #expect(manager.epochRef.isEmpty, "with no group key there is no epoch to name")
-        #expect(manager.roster.memberCount == 0, "and an empty roster refuses every stranger")
+        #expect(manager.roster.memberCount == 0, """
+            and nobody is a MEMBER: with no mesh there is no roster. Whether a stranger is REFUSED \
+            is a separate answer since D-4.3 — this manager's join doors are open, so the same \
+            roster carries admitsStrangersProvisionally and a stranger gets a provisional tunnel. \
+            The member count is what this row is about; the door is pinned in \
+            MeshIntroductionAuthorityRosterTests
+            """)
     }
 
     /// The authority signs under the channel-introduction domain, and nothing else.
