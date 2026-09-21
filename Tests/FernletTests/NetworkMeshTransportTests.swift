@@ -398,38 +398,101 @@ struct MeshLinkTableTests {
     ///
     /// The budget exists for *connect → the owner refuses the seat → disconnect → idle → re-offer*,
     /// and provisional admission makes the other shape common: a stranger is seated and then evicted
-    /// by the 25 s / 60 s dwell deadline with nobody having refused anything. Six of those used to
-    /// strand a genuine friend for the rest of the session.
+    /// by the five-minute proximity gate (`ProximityCoordinator.swift:1320`) with nobody having
+    /// refused anything. Six of those used to strand a genuine friend for the rest of the session.
     ///
-    /// It is NOT the refill the cap's own doc rules out. That one was "a successful connect gives
-    /// the budget back" — which an owner refusal also earns, so the refusal loop would run forever.
-    /// Six refusals still end the sweep here, with timeouts interleaved.
+    /// It is NOT the refill the cap's own doc rules out, and what makes that true is that the refund
+    /// consumes the **booking** rather than the counter. The interleave below is therefore on ONE
+    /// endpoint, which is the only place the two rules can actually meet: a refusal ends the tunnel
+    /// (`noteClosed`), which consumes that offer's booking, so the timeout reported for the same
+    /// endpoint afterwards has nothing to hand back and the sixth refusal still stops the sweep.
     @Test func aTimeoutRefundsItsReproposalAndARefusalDoesNot() {
         var table = MeshLinkTable()
+        let clock = VirtualClock()
 
-        _ = table.admitRepropose(Self.alpha)
+        // One offer, taken up, ending in a pre-commit timeout: the booking comes back.
+        // Every mutating call is hoisted out of `#expect`: the macro captures its expression in a
+        // closure, where `table` is immutable.
+        let firstOffer = table.admitRepropose(Self.alpha)
+        #expect(firstOffer)
         #expect(table.reproposalCount(of: Self.alpha) == 1)
+        let firstDial = table.admitDial(to: Self.alpha, now: clock.now)
+        #expect(firstDial == .admit)
+        table.noteReady(Self.alpha, now: clock.now)
         table.refundRepropose(Self.alpha)
         #expect(table.reproposalCount(of: Self.alpha) == 0, "a timeout eviction spends nothing")
 
-        // Refunds cannot mint offers: an INBOUND tunnel books nothing, so a peer that dialed this
-        // device and timed out has nothing to give back.
+        // The SAME timeout reported twice refunds once: what the refund consumes is the booking.
         table.refundRepropose(Self.alpha)
-        table.refundRepropose(Self.beta)
-        #expect(table.reproposalCount(of: Self.alpha) == 0, "the count floors at zero")
-        #expect(table.reproposalCount(of: Self.beta) == 0)
+        #expect(table.reproposalCount(of: Self.alpha) == 0, "a second report of one timeout is free")
+        #expect(table.reproposalRefundCount(of: Self.alpha) == 1, "and only one refund was spent")
 
-        // Six REFUSALS still end the sweep, however many timeouts are interleaved.
-        for _ in 1...MeshLinkTable.maxReproposalsPerEndpoint {
-            let refusalOffer = table.admitRepropose(Self.alpha)
-            #expect(refusalOffer)
-            _ = table.admitRepropose(Self.beta)
-            table.refundRepropose(Self.beta)
+        // Refunds cannot mint offers: an INBOUND tunnel books nothing, so a peer that dialed this
+        // device and timed out has nothing to give back — not even on an endpoint an earlier offer
+        // paid for and an owner refusal spent.
+        let betaOffer = table.admitRepropose(Self.beta)
+        #expect(betaOffer)
+        table.noteClosed(Self.beta)
+        let betaInbound = table.admitInbound(from: Self.beta, preference: .peerDials, now: clock.now)
+        #expect(betaInbound == .admit)
+        table.refundRepropose(Self.beta)
+        #expect(table.reproposalCount(of: Self.beta) == 1,
+                "an inbound tunnel books nothing, so its timeout refunds nothing")
+        #expect(table.reproposalRefundCount(of: Self.beta) == 0)
+
+        // Six REFUSALS still end the sweep on ONE endpoint, with timeouts interleaved on that very
+        // endpoint — the case the two-endpoint version of this could never reach.
+        var interleaved = MeshLinkTable()
+        for attempt in 1...MeshLinkTable.maxReproposalsPerEndpoint {
+            let offer = interleaved.admitRepropose(Self.alpha)
+            #expect(offer, "refusal offer \(attempt) is inside the budget")
+            let dial = interleaved.admitDial(to: Self.alpha, now: clock.now)
+            #expect(dial == .admit)
+            interleaved.noteReady(Self.alpha, now: clock.now)
+            interleaved.noteClosed(Self.alpha)   // the owner refused the seat; the tunnel ended
+            interleaved.refundRepropose(Self.alpha)  // a timeout reported for the same endpoint
         }
-        let overBudget = table.admitRepropose(Self.alpha)
-        #expect(!overBudget, "six refusals spend the budget")
-        let stillOffered = table.admitRepropose(Self.beta)
-        #expect(stillOffered, "six timeouts spend none of it")
+        let seventh = interleaved.admitRepropose(Self.alpha)
+        #expect(!seventh,
+                "six refusals spend the budget, however many timeouts are interleaved on them")
+        #expect(interleaved.reproposalCount(of: Self.alpha) == MeshLinkTable.maxReproposalsPerEndpoint)
+        #expect(interleaved.reproposalRefundCount(of: Self.alpha) == 0,
+                "and not one of those timeouts found a booking to refund")
+    }
+
+    /// The refund is bounded, so an endpoint whose EVERY tunnel times out cannot be re-offered for
+    /// the life of the session.
+    ///
+    /// The shape the cap closes: a provisional stranger is seated, nobody dwells, the five-minute
+    /// proximity gate ends the slot as `.ended(reason: .timeout)`, the eviction refunds, and the
+    /// 5 s sweep offers the same endpoint again — for ever, with the six-offer cap never reached.
+    /// Five minutes rate-limits that to about one offer per five minutes per endpoint; it does not
+    /// bound it, so the refunds themselves are capped instead, never reset, in
+    /// ``MeshLinkTable/maxReproposalsPerEndpoint``'s own spirit.
+    @Test func timeoutRefundsAreCappedSoAnAllTimeoutEndpointStops() {
+        var table = MeshLinkTable()
+        let clock = VirtualClock()
+        let bound = MeshLinkTable.maxReproposalsPerEndpoint + MeshLinkTable.maxTimeoutRefundsPerEndpoint
+
+        var offers = 0
+        // R2: a fixed bound, comfortably past the total this endpoint can ever be offered.
+        for _ in 0..<(bound + 3) {
+            guard table.admitRepropose(Self.alpha) else { continue }
+            offers += 1
+            let dial = table.admitDial(to: Self.alpha, now: clock.now)
+            #expect(dial == .admit)
+            table.noteReady(Self.alpha, now: clock.now)
+            table.refundRepropose(Self.alpha)   // every one of this endpoint's tunnels times out
+            table.noteClosed(Self.alpha)
+        }
+
+        #expect(offers == bound, """
+            an all-timeout endpoint gets its six offers plus two refunded ones and then stops; \
+            an unlimited refund would have taken every one of the \(bound + 3) rounds
+            """)
+        #expect(table.reproposalRefundCount(of: Self.alpha) == MeshLinkTable.maxTimeoutRefundsPerEndpoint)
+        #expect(table.reproposalCount(of: Self.alpha) == MeshLinkTable.maxReproposalsPerEndpoint,
+                "and the offer budget ends the session fully spent")
     }
 
     /// Budgets are per endpoint, and die with the endpoint — so the map cannot grow without bound.
@@ -1050,6 +1113,54 @@ struct NetworkMeshSessionTests {
         #expect(frames.first?.peer == peer)
         #expect(frames.first?.bytesReceived == 12)
         #expect(frames.first?.receivedAt == now)
+    }
+
+    /// **The `.preCommitTimeout` arm, driven.** The refund rule itself is pinned on the table; this
+    /// is the cell that proves the radio reaches it — that
+    /// ``NetworkMeshSession/disconnectPeer(_:cause:)`` resolves the owner's handle back to the
+    /// endpoint key and consumes *that endpoint's* booking — and that the arm is a pair: the
+    /// cause-blind entry point charges, exactly as an owner refusal must.
+    ///
+    /// Two offers are booked, so the second timeout has something it *could* take. With one,
+    /// "the refund did nothing" and "there was nothing left to take" read identically.
+    @Test func aPreCommitTimeoutEvictionConsumesExactlyOneReproposeBooking() {
+        let session = NetworkMeshSession()
+        let key = MeshLinkKey("timed-out-endpoint")
+        let verified = MeshVerifiedPeer(
+            signingPublicKey: Data(repeating: 0x11, count: 32),
+            fingerprint: "abcd-efgh-ijkl",
+            sessionID: "aaaa"
+        )
+        #expect(session.bookReproposalForTesting(key), "test premise: the first offer books")
+        #expect(session.bookReproposalForTesting(key), "test premise: and so does the second")
+        #expect(session.linkTableForTesting.reproposalCount(of: key) == 2, "test premise: two offers")
+
+        session.bookTunnelForTesting(key, role: .initiator, verified: verified)
+        guard let peer = session.connectedPeers.first else {
+            Issue.record("a booked tunnel must carry a peer handle")
+            return
+        }
+
+        session.disconnectPeer(peer, cause: .preCommitTimeout)
+        #expect(session.linkTableForTesting.reproposalCount(of: key) == 1,
+                "the eviction handed back the booking that paid for this tunnel")
+        #expect(session.linkTableForTesting.reproposalRefundCount(of: key) == 1)
+
+        session.disconnectPeer(peer, cause: .preCommitTimeout)
+        #expect(session.linkTableForTesting.reproposalCount(of: key) == 1, """
+            and a second report of the one timeout took nothing more: what the arm consumes is the \
+            booking, not the counter
+            """)
+        #expect(session.linkTableForTesting.reproposalRefundCount(of: key) == 1)
+
+        // The other half of the pair: an owner decision CHARGES, which is the loop the budget is
+        // for. Same endpoint, same handle, a fresh offer and a fresh tunnel.
+        #expect(session.bookReproposalForTesting(key), "test premise: a third offer is in budget")
+        session.bookTunnelForTesting(key, role: .initiator, verified: verified)
+        session.disconnectPeer(peer)
+        #expect(session.linkTableForTesting.reproposalCount(of: key) == 2,
+                "an owner's eviction spends its offer — six of those still end the sweep")
+        #expect(session.linkTableForTesting.reproposalRefundCount(of: key) == 1)
     }
 
     /// Teardown leaves no peer identities behind. The map exists only to keep one device the same
