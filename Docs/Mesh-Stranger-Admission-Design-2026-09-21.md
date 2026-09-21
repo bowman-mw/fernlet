@@ -10,6 +10,28 @@
 > not a patch**"). It ends with the one decision the owner takes — **D-4.3 as redefined here, with
 > D-4.4** — and stops.
 
+## Corrections after implementation (2026-09-21, same day) — read these over §2 where they differ
+
+The owner took D-4.3 (Option 1 + 1b's gating half) and D-4.4 (**pure retire**, against §4's recommendation). The admission path
+was then built and blind-verified (ledger items 1.2; commits `5c8d5ac`…`4667d83`). Five statements in §2 turned out wrong or
+imprecise at HEAD and are corrected here rather than rewritten in place, so the document stays the record of what was decided:
+1. **The pre-commit window is FIVE MINUTES, not 25 s / 60 s.** `timeoutSeconds: isProximityJoin ? 25 : 60` is cancelled the
+   moment the identity introduction verifies and `transitionToProximityGate` arms a 5-minute timer
+   (`ProximityCoordinator.swift:1317-1320`) — exactly a provisional stranger's state. A bystander holds a seat for up to
+   5 min per minted identity, × 5 slots. §2's "two bounds" paragraph inherits this.
+2. **The target-mesh rule landed as ONE arm, not three:** `receive` reads the roster verdict before comparing meshIDs and
+   tolerates a mismatch only for a provisional stranger; the transcript names the RESPONDER's id on both sides
+   (`agreedMeshID`). No dial-policy change, no exchange restructure, no golden moved (unequal ids were unreachable before).
+3. **The predicate is `isAdmittingNewPeers && isSessionOpen`** — stricter than §2's "the posture half of the invitation gate"
+   (that gate is `isAdmittingNewPeers || hasCommittedSlot` and never reads `isSessionOpen`); a closed session with no mesh
+   shuts the door too.
+4. **A5 grew a seam:** `MeshSlotEvictionCause` + `MeshTransportSession.disconnectPeer(_:cause:)` (default cause-blind; the
+   QUIC radio refunds a pre-commit timeout's re-propose BOOKING, never a refusal's, capped at 2 refunds per endpoint per
+   session, never reset).
+5. §2's "adding a `MeshTransportHandlers` member would be a transport-seam change `TransportNeutralityBoundaryTests`
+   polices" is false — that wall is an MC-import grep. The reason not to add one stands (nothing would read it).
+**Still owed and unrun:** the unseeded Lane C pair run (test (vi)); the capability has never been observed on any radio.
+
 ## 0. The one-paragraph version
 
 The friend mesh ships on MultipeerConnectivity (`MeshTransportFactory.shippingDefault = .multipeer`,
