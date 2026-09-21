@@ -4108,11 +4108,15 @@ under `App/Fernlet/CompanionRefresh/`, plus `App/Fernlet/FernletStoreAccess.swif
    `submitRefused <private>` in a sysdiagnose: the event survives, `error=` and `trigger=` do not.
    **Cost:** §15.5's D1, the cold background launch, is precisely where no debugger can be attached.
    **Fix without a code change:** install the private-data logging profile first.
-3. **A launch whose registration was refused still spends its edge budget.** `appDidEnterBackground()`
-   increments `edgeSubmissions` at `CompanionRefreshCoordinator.swift:240` **before**
-   `submitNext(trigger:)`, which returns at `:353` on `guard isRegistered` with
-   `companionRefresh.submitWithoutARegistration`. After 64 background edges the audit reads
-   `edgeSubmissionCapReached`, not the real cause. Diagnostic only; one line to fix.
+3. **~~A launch whose registration was refused still spends its edge budget~~ — FIXED in `b4cd1ac`
+   (the cutover round's item 2c, 2026-09-21; verify fixes `18dd46a`).** `appDidEnterBackground()`
+   incremented `edgeSubmissions` **before** `submitNext(trigger:)`, which returns on `guard isRegistered`
+   with `companionRefresh.submitWithoutARegistration`, so after 64 background edges the audit read
+   `edgeSubmissionCapReached`, not the real cause. Now `submitNext` reports whether the ask reached the
+   seam and the edge is charged only then — a refused SUBMISSION still counts (the storm the cap is for),
+   an unregistered edge does not — which makes `edgeSubmissions <= submissions` an invariant. Pinned by
+   `CompanionRefreshSchedulingTests.aRefusedRegistrationSpendsNoEdgeBudget` (driven one past the cap) and a
+   value read in the P10 scheduling-seam battery's refused arm; both shown red against the old order.
 4. **One unscoped `== 1` audit read remains** — `routedShare.recipientIsSelf`, named in the ratchet
    cell itself (`MeshP9AcceptanceTests.swift:1437`, the 6 + 2 + 3 + 6 arithmetic): of the 17, **6** are
    Milestone false positives (a different function; the needle is a spelling), **2** are deliberate
@@ -4120,14 +4124,20 @@ under `App/Fernlet/CompanionRefresh/`, plus `App/Fernlet/FernletStoreAccess.swif
    uncommitted-slot drop, the projection after a `leaveMesh()`, the launch-restore key-advertisement
    refusal — each reachable with no mesh held, so scoping them would be a behaviour change), and **6**
    at emitters that could and were not changed, five of them the weaker `> 0` / `== 0` form.
-5. **`AppIntentsTests` flakes under load — pre-existing, one line.**
-   `Tests/FernletTests/AppIntentsTests.swift:20` is a `final class` with eleven tests and **no**
+5. **~~`AppIntentsTests` flakes under load~~ — FIXED in `737399c` (item 2b, 2026-09-21).**
+   `Tests/FernletTests/AppIntentsTests.swift` was a `final class` with eleven tests and **no**
    `@Suite(.serialized)`; every per-test instance drains the shared `UserDefaults.standard` token in
-   `init()`/`deinit`. Observed once at item 4, green on re-run and in isolation.
-6. **CI's Simulator device is unpinned** (`.github/workflows/s3-wall.yml:106`–`:120`): the step prefers
-   `iPhone 17` and otherwise takes the newest available iPhone with a `::warning::`, while the
-   appearance baselines are pinned to iPhone 17 portrait. **The unnamed prerequisite under all three
-   UI residuals**, and the reason none was taken at item 5.
+   `init()`/`deinit`, which is hermetic against the cell before, not the cell beside. Observed once at
+   item 4, green on re-run and in isolation. Now `.serialized`; the suite passes by name.
+6. **~~CI's Simulator device is unpinned~~ — FIXED in `97d1bd9` (item 2a, 2026-09-21; verify fixes
+   `18dd46a`).** The "Resolve a simulator destination" step (now `.github/workflows/s3-wall.yml:119`–`:131`)
+   preferred `iPhone 17` and otherwise took the newest available iPhone with a `::warning::`, while the
+   appearance baselines are pinned four ways to iPhone 17 portrait. It is a hard failure now, no fallback;
+   `CIGateSelectorBoundaryTests.theSimulatorDestinationIsPinnedWithNoFallback` reads the step (declared
+   once; `name` assigned exactly once, to the literal; exported; no `::warning::`; exits non-zero) and
+   pins the same canonical destination string in the two scripts' defaults and the UI probe's source.
+   The mesh-batteries floor moved 1198 → 1199 for the cell. **This was the unnamed prerequisite under
+   all three UI residuals**; they are now takeable.
 7. **D-10.4.4 — ambient CloudKit mirroring, ACCEPTED.** `refreshCurrentDayIfNeeded(now:)`'s flush and
    the coin/milestone ledger reconciles write through Core Data, whose production container mirrors to
    the user's private CloudKit database **on its own schedule**. §17.2 forbids a **force**-sync, not
@@ -6116,11 +6126,11 @@ honesty suite; no production anchor below moves.*
 | Decision | Default if the owner is silent | Why |
 |---|---|---|
 | **The device round** | Run it. | Three phases overdue and the only unpaid risk left; a Simulator answers no row. Lane D first (one phone), then §15.1, then the soak. |
-| **9.4-LATER, the MC→QUIC cutover** | **D-4.1 — hold**, unchanged for a second phase. | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
+| **9.4-LATER, the MC→QUIC cutover** | **D-4.1 — hold**, unchanged for a second phase. **The design is written (2026-09-21, §28.8) and D-4.3 is ASKED, redefined as "cut over WITH provisional stranger admission"; the answer is the owner's.** | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
 | **D-4.4** (the `MCPeerIDStore` wipe row → a legacy `FileManager` sweep) | Decide **with** D-4.1/D-4.3, never after. | `FernletPeerID.archive` survives on any pre-P9 install, so the cutover commit owes the sweep in the same breath. |
 | **P9-3-A** (a configured lock parks the 1:1 radios) | Leave the policy alone; surface **why** instead. | Changing a run-policy row is a P7 bug fix that re-runs the 23 040-row product. Unchanged from §27.3. |
 | **D-10.4.5** — the foreground after-hook still reloads unconditionally; only the handler's `publishIfContentChanged` diffs | **DEFERRED** here, and it is the owner's one-line call. Silent default: **narrow it**, one line plus a cell. | §17.2 scopes the diff to the refresh handler, so `WidgetSnapshotMirror.publish(_:)` is correct as scoped and every caller there is a persisted change; but the mirror makes the diff free for both paths now, and the difference will outlive the reason for it. |
-| **The three UI residuals** | Pin CI's Simulator device **first**; the three fall out of it. | `s3-wall.yml:106`–`:120` falls back to the newest available iPhone with a `::warning::` while the baselines are pinned four ways to an iPhone 17. |
+| **The three UI residuals** | Pin CI's Simulator device **first**; the three fall out of it. **PINNED 2026-09-21 (`97d1bd9` + verify fixes `18dd46a`); the three are now takeable.** | `s3-wall.yml` fell back to the newest available iPhone with a `::warning::` while the baselines are pinned four ways to an iPhone 17; it is a hard failure now, read by `CIGateSelectorBoundaryTests`. |
 | **New persisted surface** | **None.** | P6–P10 added none between them; the refresh's `pendingRequest` slot is deliberately in memory and nowhere else. A "last refreshed at" key would owe a `Docs/PrivacyWipeCoverage.md` row and delete-all wiring in the same commit. |
 
 ### 28.4 Still owed by the owner
@@ -6254,3 +6264,36 @@ What it settles, and what it re-tiers:
 
 **What this does not move.** §15.1–§15.4 remain NOT RUN (two phones). §15.5's grant-dependent rows stay open on the
 overnight window; the next session resumes from the runbook's *How to resume* paragraph, not from this section.
+
+### 28.8 The cutover round's first session — P10's one-liners taken, the stranger-admission design written, D-4.3 asked (2026-09-21)
+
+**Run** from the launcher's entry condition **B**, in a worktree on `b4cd1ac`'s ancestors, the same day as §28.6/§28.7,
+without touching the phone (§15.5's overnight window kept running on it). The record is
+`Docs/Mesh-Migration-Loop-Ledger-Cutover-2026-09-21.md`. What it settles:
+
+- **The three one-liners are taken** (§28.1's residual list, §28.4): CI's Simulator device is **pinned** — a hard failure with
+  no fallback, read by `CIGateSelectorBoundaryTests.theSimulatorDestinationIsPinnedWithNoFallback` (`97d1bd9`);
+  `AppIntentsTests` is `.serialized` (`737399c`); a refused registration spends **no** edge budget, and
+  `edgeSubmissions <= submissions` is an invariant (`b4cd1ac`). §17.2.3 findings 3, 5 and 6 are marked fixed. The blind
+  verify found 7 + 3 (a duplicate-step hole in the new cell; a fuzzy word match; two comments describing the pre-guard
+  failure mode as current; the mesh floor one behind) — fixed in `18dd46a`, the mesh-batteries line **MEASURED 1199 / 140**,
+  floor raised. The three UI residuals are now takeable.
+- **The stranger-admission design exists** — `Docs/Mesh-Stranger-Admission-Design-2026-09-21.md` — and it found three
+  things the P9 survey did not name: the meshID check precedes the roster check and the exchange **cannot adopt** one (the
+  responder's hello is frozen before it hears the dialer's), so joining an established open mesh needs a target-mesh rule
+  that is medium-sized work, not a property; the founding pair's double mint is a `.foreignMesh` **deadlock** on QUIC if
+  the tunnel drops before the descriptors converge (MC has no meshID check, so this is a regression the cutover must
+  close); and `browsed peers=` at `.public` (§8.7 finding 1's owed item) is in no patch. Its blind verify found 20 (five
+  HIGH — a mechanism hop that does not exist, the identity-introduction disclosure omitted, the rule not expressible, the
+  deadlock, §7.2 misquoted), all taken; the direction survived.
+- **D-4.3 is REDEFINED and ASKED.** The survey's D-4.3 was "cut over anyway, accepting broken founding — not recommended".
+  The design's D-4.3 is "cut over **with** Option 1 — a stranger admitted *provisionally* while the join doors are open,
+  MC's own posture with the key proven and TLS, the local display name disclosed before commit exactly as on MC,
+  membership at the existing three doors, plan **§7.2's 'non-roster member' bullet amended** (tunnel, not roster), §15
+  still undated — taking 1b's frame-gating half and D-4.4 as the legacy `FileManager` sweep". D-4.1 (hold for §15 dates
+  and/or Option 2's two-scan ceremony) and D-4.2 (the split as it stands) remain. **The session stops here for the
+  owner's answer** (the launcher's stop condition 1). On D-4.3: the admission path with its tests and the target-mesh
+  rule, then the six anchored patches with the pins raised, gate, the Lane C unseeded run — MC deletion the round after.
+- **A rule this round adds to §28.5's list:** *a design's "mechanism" sentence must name the subscriber, not the hook.*
+  The draft routed a new flag through `onPeerVerified`, which is declared and fired and read by nothing; only the blind
+  verify's grep caught it. Grep the READER of every seam a design leans on before writing the size.
