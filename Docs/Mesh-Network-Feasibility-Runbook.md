@@ -20,6 +20,8 @@ is the authority for what this gate feeds. Two of its decisions govern this docu
 So "do not begin the transport-abstraction phase until the gate has an approved result" — the
 original framing — is superseded. What still holds: **do not ship background continuation** until
 the §15 rows below carry real results.
+**Lane D ran on 2026-09-21** — the production transport, phone ↔ Simulator, infrastructure Wi-Fi with the
+cable out; every row of its table carries a result and a date (see *Lane D* below). §15 remains unrun.
 
 ## What the probe validates
 
@@ -2102,7 +2104,7 @@ acceptance run: pair + picture + D observing the pause and both resumes), `run3`
 `run7_ui` (the review-sheet screenshots), `probeC` / `probeD` (the dark-device diagnosis); builds in
 `item3lane/logs/build{1,2,3}.log`; findings for the fix agent in `item3lane/findings.md`.
 
-### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, not yet run)
+### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, **run 2026-09-21**)
 
 **The shipping transport has never run on hardware.** Lane A puts the *spike* on a device; Lane C
 puts the *production* transport between two Simulators. Nothing has yet put `NetworkMeshSession` on
@@ -2200,14 +2202,14 @@ two are new questions only this lane can answer.
 
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |
-| Wi-Fi path | The ready/activation lines name a routable or `%en0`-scoped address, and `en9` does not exist. This is the row the 2026-09-01 run could not earn | — | — |
-| Local Network permission | The phone prompts once, and the mesh comes up after it is granted | — | — |
-| Accepted baseline on hardware | `accepted <fingerprint> sid=…: tunnel activated, tunnels=1` on both sides | — | — |
-| Tunnel stability | One activation per side and **zero** `tunnelEnded` lines across ≥ 4 minutes, with `idleTimeoutMs=90000 beatSeconds=30` on the `datagramCapacity` line | — | — |
-| Heartbeat + datagram flow | `heartbeat sending over datagram` and `heartbeat received over datagram` on both sides at 30 s spacing — the item-15 result, on a physical radio | — | — |
-| App flows | Slot commit, capabilities, chat both ways, a photo on a per-transfer stream, shop catalogue — the item-10 table, on a physical radio | — | — |
-| **Reconnect after a real idle timeout** | Kill one side (stop the Xcode run, or `xcrun simctl terminate <sim-udid> MBO.Fernlet`), wait > 90 s, restart it: the survivor's listener accepts the re-dial and a tunnel re-forms | — | — |
-| **No NECP flow leak** | The survivor's console shows **no** `NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` and no `Failed to create connection from listener` after the peer's tunnel ends | — | — |
+| Wi-Fi path | The ready/activation lines name a routable or `%en0`-scoped address, and `en9` does not exist. This is the row the 2026-09-01 run could not earn | **PASS** — both ends `interface: en0[802.11], uses wifi`, peer addresses `%en0`-scoped link-local; `en9` absent at every preflight; `awdl0` never appears (runs 2–4) | 2026-09-21 |
+| Local Network permission | The phone prompts once, and the mesh comes up after it is granted | **PASS, the granted half** — no prompt appeared (the earlier device runs' grant stood, as the 2026-09-02 note predicted) and the mesh came up 6–8 s after launch; "prompts once" is not re-observable on this phone | 2026-09-21 |
+| Accepted baseline on hardware | `accepted <fingerprint> sid=…: tunnel activated, tunnels=1` on both sides | **PASS** — `accepted <fp> sid=…: tunnel activated, tunnels=1` on both sides, every run, 6–8 s after the phone's launch, fingerprints and `sid`s matching end to end | 2026-09-21 |
+| Tunnel stability | One activation per side and **zero** `tunnelEnded` lines across ≥ 4 minutes, with `idleTimeoutMs=90000 beatSeconds=30` on the `datagramCapacity` line | **PASS** — run 3: one activation per side and **0** `tunnelEnded` across **5 min 8 s**, `idleTimeoutMs=90000 beatSeconds=30` on both `datagramCapacity` lines (run 2: 0 across 3 min 29 s) | 2026-09-21 |
+| Heartbeat + datagram flow | `heartbeat sending over datagram` and `heartbeat received over datagram` on both sides at 30 s spacing — the item-15 result, on a physical radio | **PASS** — `heartbeat sending/received over datagram` on both sides at 30 s spacing (9/9 each side in run 3, 6/6 in run 2), zero fallbacks — with `datagramCapacity usable=0` on the line above them | 2026-09-21 |
+| App flows | Slot commit, capabilities, chat both ways, a photo on a per-transfer stream, shop catalogue — the item-10 table, on a physical radio | **PASS, in the P6 shape (run 4)** — slot commit, capabilities and the shop catalogue both ways in every run; text and photo need `FERNLET_MESH_ROLE=founder|joiner` + `FLOWS_AFTER` (the routed mint wants a derived roster — see *Run 4* below): with them `chat received=1 sent=1` on both sides and the photo on per-transfer streams both ways, manifests, chunks, custody and recipient receipts drain-admitted. Under the table's seven variables alone (runs 2–3): `noDestinations` on both, by design, no `transfer` line | 2026-09-21 |
+| **Reconnect after a real idle timeout** | Kill one side (stop the Xcode run, or `xcrun simctl terminate <sim-udid> MBO.Fernlet`), wait > 90 s, restart it: the survivor's listener accepts the re-dial and a tunnel re-forms | **PASS, twice** — terminate: the survivor saw `controlStreamEnded` in 1 s and re-accepted 5 s after the relaunch; freeze (`SIGSTOP`): `localEviction` at +89 s, re-accepted 2 s after the relaunch. The transport's own `idleTimeout` cause is unreachable — the app's three-missed-beats eviction wins at 90 s | 2026-09-21 |
+| **No NECP flow leak** | The survivor's console shows **no** `NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` and no `Failed to create connection from listener` after the peer's tunnel ends | **FAIL on the letter, PASS on the consequence** — the exact Lane A signature (`NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` → `Failed to create connection from listener`) on the survivor at every re-dial, 2 of 2, but only on the FIRST inbound flow; the next flow 70 ms later formed the tunnel, with zero app-level retries. Present, non-fatal, no production fix | 2026-09-21 |
 
 The last two rows are the point of the lane. They are the residual from Lane A's `Fail`: the probe
 could not answer them because it ends its whole run — listener included — on the first tunnel error,
@@ -2218,6 +2220,123 @@ path, and the fix candidates are, smallest first: re-listen on a fresh port afte
 (`updateDiscoveryInfo` already has the stop-and-recreate shape), or drop `peerToPeerIncluded` from
 the listener parameters and keep it only on the dialing side. Do not plan on "cancel the stale
 connection" — `NetworkConnection` has no `cancel()` in the iOS 26 API.
+
+#### First run, 2026-09-21 — the production transport on a physical radio
+
+**Environment.** `main` = `08898be` (the P10 close-out), rebuilt for this lane in a fresh worktree DerivedData
+(`xcodebuild build -scheme Fernlet -configuration Debug`, once for `platform=iOS,id=<udid>` with automatic
+signing and once for the `iPhone 17` Simulator; `** BUILD SUCCEEDED **`, zero `error:`, both), installed fresh
+on both nodes. Phone: the owner's **iPhone 17 Pro Max** (`iPhone18,2`, iOS **26.6.1**, fp `5c73ce4c29dc84be`).
+Simulator: **iPhone 17** (`09F57BCA-…A88`, iOS 26.5, fp `f94dc321944600d7`). Mac: Xcode **26.5**, Wi-Fi on
+`en0` (a CGNAT `100.110.200.0/26`, IPv6 global + link-local). No `xcodebuild` ran during any run. A host
+`log stream` for the Simulator's `Fernlet` process (`com.fernlet` + `com.apple.network`) ran as the second
+witness on every run; on the phone the second witness is `OS_ACTIVITY_DT_MODE=YES` in the launch environment,
+which mirrors the process's own `os_log` — audit contexts included, **in the clear** — into the
+`devicectl … --console` transcript.
+
+**How the phone was driven — the runbook's Xcode-scheme step, without Xcode.**
+
+```
+xcrun devicectl device process launch --device <coredevice-uuid> --terminate-existing --activate --console \
+  --environment-variables '{"OS_ACTIVITY_DT_MODE":"YES","FERNLET_MESH_TRANSPORT":"quic",…}' \
+  MBO.Fernlet -- -completeOnboarding
+```
+
+Three things about that line cost a launch each to learn. (1) **The `--` is load-bearing:** without it
+`devicectl` parses `-completeOnboarding` as its own short flags and dies on `Missing value for '-l <path>'`
+before the app starts. (2) **Killing the `--console` process kills the app** — so the phone can only ever be
+the *survivor* of a reconnect row, and the Simulator is the side that dies and re-dials. (3) **The wireless
+step is not a checkbox any more:** with the cable out the phone read `unavailable` for two minutes and
+advertised no `_apple-mobdev2._tcp` / `_remoted._tcp` on the LAN; plugging back in and unplugging again
+brought it up as `transportType: localNetwork` within seconds, and every run below was launched over that.
+Check it before the run: `xcrun devicectl device info details --device <id> | grep transportType` must say
+`localNetwork`, and `ifconfig | grep -c en9` must print `0`.
+
+**A Simulator that shuts itself down.** `09F57BCA` was `Booted` at session start, dropped to `Shutdown`
+during the first `simctl install` (`Mach error -308 (ipc/mig) server died`), was rebooted, and was `Shutdown`
+again ten minutes later with nothing touching it — the first paired launch went out phone-only against it.
+Every run below starts with `simctl list devices | grep <udid> | grep Booted` in the preflight, and
+`launch-sim.sh` terminates and relaunches; treat a long-booted Simulator as suspect (§28.2 already says so).
+
+**The runs.** All seeded from the same two keys, each under a fresh mesh id and label; Simulator launched
+first, phone 3 s later; witness started before either.
+
+| Run | Label · variables beyond the seven | Window | Tunnels | `tunnelEnded` in window | Heartbeats (sent/recv, datagram) | Reconnect variant |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2 | `laneD-wifi` · none (the table's seven exactly) | 16:22:15Z → sim killed 16:25:50Z, **3 min 29 s** live | 1 each side, up 6 s after the phone's launch | **0** / **0** | 6/6 · 6/6 | `simctl terminate` the Simulator, 100 s, relaunch |
+| 3 | `laneD-wifi-after25` · `FERNLET_MESH_FLOWS_AFTER=25` | 16:28:24Z → 16:33:32Z, **5 min 8 s** live | 1 each side, up 8 s after launch | **0** / **0** | 9/9 · 9/9 | `SIGSTOP` the Simulator's process, 110 s, resume + relaunch |
+| 4 | `laneD-wifi-founder` · `FLOWS_AFTER=60`, `FERNLET_MESH_ROLE=founder` (Simulator) / `joiner` (phone) | see below | | | | none — the routed-flow run |
+
+**What crossed, on the physical radio.** Both sides `browsed peers=1` for the other's
+`_fernlet-mesh2._udp` name; `accepted <fp> sid=…: tunnel activated, tunnels=1` on both, fingerprints and
+`sid`s matching end to end; `datagramCapacity usable=0 requested=1024 required=22 idleTimeoutMs=90000
+beatSeconds=30` on both — and, `usable=0` notwithstanding, **every heartbeat went over the datagram
+channel both ways at 30 s spacing** with zero `heartbeat datagram refused` fallbacks (item 15's result, on
+hardware; the accessor is the one P2 already found misleading). `capabilities peer=[…]` both ways (the
+phone advertises `friendState`, `hearts`, `heartsAway` that the fresh Simulator does not); `shop
+peerCatalogs=1` both ways. Zero `dial refused`, zero `inbound tunnel refused`, zero `redundantTunnelClosed`.
+**The mesh came up without a Local Network prompt** — the grant from the earlier device runs was still in
+force, exactly as the 2026-09-02 note predicted — so the "prompts once" half of that row is not re-observed
+here; the "comes up after it is granted" half is, in 6–8 s.
+
+**The Wi-Fi path, proven from both ends.** Host witness for the Simulator's process: every QUIC flow reads
+`interface: en0[802.11], uses wifi`, peer `fe80::4f5:3025:4e7c:e39%en0` (the phone's link-local, scoped to
+the Mac's Wi-Fi); the phone's own `nw_flow_notify` lines read `fe80::1014:f09:7235:7f56%en0.55009 …
+interface: en0[802.11]` (the Mac's link-local, scoped to the phone's Wi-Fi). `awdl0` appears **zero** times
+on either side — this was infrastructure Wi-Fi, not peer-to-peer — and `ifconfig | grep -c en9` printed `0`
+at every preflight. The cable contributed nothing.
+
+**The reconnect rows — both variants, same answer, same surprise.**
+
+- *Terminate* (run 2): the phone saw the Simulator go within a second — `tunnelEnded controlStreamEnded
+  f94dc321944600d7 live=true tunnels=0` — kept its listener, and when the Simulator relaunched 100 s later it
+  re-accepted (`tunnel activated, tunnels=1`, phone `activated` 1 → 2) **5 s** after the relaunch.
+- *Freeze* (run 3, `SIGSTOP` so nothing closes cleanly): the phone ended the tunnel itself at **+89 s** —
+  `tunnelEnded localEviction … This peer's slot was evicted locally` — i.e. the app-layer heartbeat eviction
+  (three missed 30 s beats) fires at the same instant as the transport's 90 s idle timeout and wins the race,
+  so the transport's own `idleTimeout` cause was **not** observed and cannot be on a live-but-silent peer.
+  Relaunch at +113 s; re-accepted **2 s** later, phone `activated` 1 → 2.
+- **The NECP `EEXIST` from Lane A is real on the shipping transport, and it is absorbed.** Both times, the
+  first inbound flow of the re-dial was refused at the phone's listener with the exact 2026-09-01 signature —
+  `nw_path_evaluator_create_flow_inner NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` →
+  `nw_endpoint_flow_failed_with_error` → `nw_connection_create_from_protocol_on_nw_queue [C8] Failed to
+  create connection from listener` — and the **next** inbound flow, 70 ms later (`[C9]`), was the one the
+  tunnel formed on. The Simulator's transcript shows **zero** `introductionFailed`, zero `gave up`, zero
+  `dial refused`: the retry happened below the app (the QUIC client's handshake retransmit reached the
+  listener as a fresh flow), so no retry budget was spent. Lane A's probe died on this because it ends its
+  listener on the first error; `NetworkMeshSession.endTunnel` keeps listening, and that is the whole
+  difference. **No production fix is needed for the cascade; the row is recorded as "present, non-fatal,
+  one refused flow per re-dial".**
+
+**The app-flow rows, and the variable the 2026-09-01 table is missing.** Under the seven variables exactly
+(run 2) *and* with `FLOWS_AFTER=25` (run 3), `chat outcome=noDestinations` on both sides and
+`mesh.routedShare.skipped … reason=noDestinations type=friendPhoto` for the photo — no `transfer` line ever.
+This is not a radio result: since P6 both text and photos are **routed** items, the routed mint needs a
+**derived roster** (`membershipVerifier?.roster`), and a seeded pair with `FERNLET_MESH_ROLE` unset never
+builds one (`membership ledger=absent derived=0` all run, as the P9 item-0 note says a seeded run must).
+P6's text run earned `staged` with `ROLE=founder|joiner` **plus** `FLOWS_AFTER`; the Lane D table predates
+both. Run 4 is that shape.
+
+**Run 4 — the routed flows, in the P6 shape.** `FERNLET_MESH_ROLE=founder` on the Simulator, `joiner` on
+the phone, `FLOWS_AFTER=60` on both (≈ 60 s here: both nodes polled at ≈ 1 Hz, the Simulator being shown by
+Simulator.app rather than headless — P6's 0.3 Hz was the headless rate). Tunnel at +6 s. The phone
+`requesting admission asked=true` → `membershipRecord fernlet.mesh.member-admission.v1 accepted` →
+`membership ledger=present derived=2 barred=0 status=active`; the founder `mesh.membershipLedger.reGossiped
+frames=2` at +11 s. At the 60-poll mark (+65 s) both sides `chat outcome=staged` and
+`mesh.routedShare.pushed frames=2` (text) then `frames=3` (photo); `chat received=1 sent=1` on both;
+`photos received=1` on the Simulator, 21 → 22 on the phone. Per-transfer streams, byte-exact on the far
+side: Simulator → phone `transfer sent bytes=474433 stream=1` and `bytes=160623 stream=5`; phone → Simulator
+`bytes=474566 stream=4` and `bytes=160715 stream=8`. The Simulator's audit stream drain-admitted
+`routed-manifest.v1` ×2, `routed-chunk.v1` ×3, `custody-receipt.v1` ×2, `recipient-receipt.v1` ×2, then
+`routedStore.swept` ×2. Transport over the same 5 min 7 s: **0** `tunnelEnded`, 9/9 heartbeats over datagrams
+each side, zero NECP lines (no re-dial in this run). P6's text rows 2–5 and 7, on a physical radio, plus the
+photo the item-10 table asked for.
+
+**Not run here, still owed.** Anything backgrounded or locked (§15.1 — this was one phone, foreground, on
+infrastructure Wi-Fi), AWDL (`awdl0` never carried a flow — the phone and Mac shared a LAN, so
+infrastructure won the path race every time; a peer-to-peer-only row needs the Mac off the phone's network),
+the Simulator-survivor direction of the reconnect rows (killing the phone's `--console` kills the app, so
+the phone was always the survivor), and a real `idleTimeout` cause, which the app's eviction pre-empts.
 
 ### Lane B — physical multi-device and background (deferred to P8; see plan §15)
 

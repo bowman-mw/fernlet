@@ -175,6 +175,7 @@ Fill one line per row per run. Device models and iOS versions once at the top of
 | E5 | not run on device (tier 1 only) | — | — |
 | E6 | not run on device (tier 1 only) | — | — |
 | E7 | | | |
+| F11 | **pass** — the production QUIC mesh formed phone ↔ Simulator over infrastructure Wi-Fi with the cable out (`en9` absent, flows on `en0[802.11]`), one tunnel per side, 0 `tunnelEnded` across 5 min 8 s, heartbeats over datagrams both ways, re-dial accepted after both a terminate and a freeze; the NECP `EEXIST` refusal is present on the first inbound flow of every re-dial and non-fatal. Full record: runbook *Lane D* | 2026-09-21 | iPhone 17 Pro Max (iOS 26.6.1) ↔ iPhone 17 Simulator (iOS 26.5), Xcode 26.5 |
 | F1–F12 | see the runbook's Lane B table | | |
 
 **A deviation from the Expected column is a finding, by row name**, into the P8 ledger; a row that

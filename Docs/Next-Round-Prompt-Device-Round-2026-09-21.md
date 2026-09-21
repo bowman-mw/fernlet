@@ -19,7 +19,8 @@ Cheapest first. **Install the private-data logging profile before anything else*
 read (§17.2.3 finding 2).
 
 1. **Lane D** — the production transport, phone ↔ Simulator, cable out (device row F11). One phone;
-   the cheapest first run, unrun since P9.
+   the cheapest first run — **RUN 2026-09-21** (runbook *Lane D*: every row dated; the NECP `EEXIST` is
+   present and non-fatal; routed text/photo need `FERNLET_MESH_ROLE=founder|joiner` + `FLOWS_AFTER`).
 2. **§15.5, P10's eight rows** — one phone. D1 and D2 come together (background the app and leave the
    phone alone); D5 and D6 are two Settings toggles; D3, D4, D7 and D8 fall out of D2 once a grant
    happens at all.
