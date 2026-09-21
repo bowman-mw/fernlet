@@ -601,9 +601,18 @@ jobs:
         # commit. MEASURED over this exact 141-name list on a Mac after a build-for-testing, read off
         # the result bundle: "Test run with 1217 tests in 141 suites", no restart. 1199 + 18 = 1217 is
         # the ARITHMETIC CHECK, never the number.
+        # RAISED 1217 -> 1220 (2026-09-21, the blind verify's fixes on item 1.2). Three suites
+        # already on this line gained one cell each and no suite joined, so the NAME count stays
+        # 141 and CIGateSelectorBoundaryTests is untouched: MeshLinkTableTests +1 (an all-timeout
+        # endpoint's refunds are capped, so the sweep stops re-offering it), NetworkMeshSessionTests
+        # +1 (the .preCommitTimeout arm of disconnectPeer(_:cause:) driven end to end — finding 5's
+        # missing driver), MeshIntroductionAuthorityRosterTests +1 (a CLOSED session with no mesh
+        # shuts the join door — finding 3's regression). MEASURED over this exact 141-name list on a
+        # Mac after a build-for-testing, read off the result bundle: "Test run with 1220 tests in
+        # 141 suites", no restart. 1217 + 3 = 1220 is the ARITHMETIC CHECK, never the number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1217 \
+          Scripts/run-gated-suites.sh mesh-batteries 1220 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
