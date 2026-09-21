@@ -3,8 +3,11 @@
 //  Fernlet
 //
 //  The one process-global store-acquisition cache, lifted out of `ExchangeIntentService.swift`
-//  by P10 item 1. Nothing about it changed in the move: same `shared` singleton, same
-//  single-in-flight `loadingStore`, same protected-data guard.
+//  by P10 item 1: same `shared` singleton, same single-in-flight `loadingStore`, same
+//  protected-data guard. That item's fix round then retired the one member that had come across
+//  with no caller — it was born callerless and its only reachable path was itself dead — so
+//  `load()` is the sole writer of `store`, and no future caller may hand this cache a
+//  `FernletStore` it did not build.
 //
 //  WHY IT LIVES ALONE. It was already shared by two callers that are not each other's dependency —
 //  the scene loader (`FernletStoreLoader` -> `ExchangeIntentService.loadStoreForUI`) and the
@@ -26,24 +29,34 @@ import UIKit
 /// the same repositories.
 @MainActor
 final class FernletStoreAccess: @unchecked Sendable {
+    /// The process-wide cache every caller shares. A second instance would defeat the coalescing,
+    /// so there is deliberately no other way to get one.
     static let shared = FernletStoreAccess()
 
+    /// The store once a `load()` has built one, and the only thing this type caches. `load()` is
+    /// its sole writer: nothing can seed it with an instance built elsewhere.
     private var store: FernletStore?
+
+    /// The single in-flight `load()`, held only while that load is running so later callers await
+    /// it instead of starting a second one. `nil` whenever no load is in flight.
     private var loadingStore: Task<FernletStore, Error>?
 
-    /// Seeds the cache with a store the caller already built, so a later `load()` returns that
-    /// instance instead of building a second one over the same repositories.
+    /// Returns the one `FernletStore`, building it on the first call and handing back that same
+    /// instance on every call after it.
     ///
-    /// **No caller at HEAD, deliberately kept.** Its one reachable path was
-    /// `ExchangeIntentService.install(store:)`, which was itself callerless and which P10 item 1
-    /// deleted; the UI path fills the cache through `load()` instead, which caches what it builds.
-    /// That item moved this type between files and changed nothing about it, so retiring a member
-    /// of its surface was out of scope — and the decision is a real one, not a formality: whoever
-    /// deletes it is deciding that no future caller may hand this cache a store it did not build.
-    func install(_ store: FernletStore) {
-        self.store = store
-    }
-
+    /// Four clauses, in the order the body applies them:
+    /// - It throws `ExchangeIntentServiceError.deviceLocked` before touching anything else when
+    ///   protected data is unavailable, so a background intent that woke before first unlock fails
+    ///   fast instead of opening files it cannot read.
+    /// - It returns the cached store when one already exists, without rebuilding.
+    /// - Concurrent callers coalesce onto the one in-flight load and await its result, so a cold
+    ///   background launch and the scene loader cannot build competing stores over the same
+    ///   repositories.
+    /// - `loadingStore` is cleared on BOTH the success and the throwing path, so a failed load
+    ///   leaves no handle behind and the next caller starts a fresh one.
+    ///
+    /// The last two clauses are the ML1 invariant `MemoryLifecycleBoundaryTests` allowlists this
+    /// file under; keep the two wordings saying the same thing.
     func load(
         healthKitService: (any HealthKitServicing)? = nil,
         statusUpdate: @escaping @MainActor (String) -> Void = { _ in }
@@ -72,6 +85,9 @@ final class FernletStoreAccess: @unchecked Sendable {
         }
     }
 
+    /// The gate `load()` runs first: throws `ExchangeIntentServiceError.deviceLocked` while
+    /// protected data is sealed — a background wake before first unlock, or a locked device — which
+    /// is a "try again once unlocked" condition, not a broken store.
     private func requireProtectedData() throws {
         guard UIApplication.shared.isProtectedDataAvailable else {
             throw ExchangeIntentServiceError.deviceLocked

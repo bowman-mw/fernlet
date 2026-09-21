@@ -6,7 +6,6 @@ import FernletFoundation
 import FoodCatalog
 import Foundation
 import HealthKitGateway
-import SwiftUI
 
 /// Main-process dependency for App Intents that exchange recipe and workout-plan files.
 ///
