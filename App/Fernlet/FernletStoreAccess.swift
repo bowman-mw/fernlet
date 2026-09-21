@@ -18,6 +18,7 @@
 //  `FernletStore`s over one set of repositories is exactly what the coalescing prevents.
 //
 
+import FernletFoundation
 import Foundation
 import HealthKitGateway
 import UIKit
@@ -57,13 +58,17 @@ final class FernletStoreAccess: @unchecked Sendable {
     ///
     /// The last two clauses are the ML1 invariant `MemoryLifecycleBoundaryTests` allowlists this
     /// file under; keep the two wordings saying the same thing.
+    ///
+    /// A fifth clause since P10 item 4, on the two paths that hand back a store this call did not
+    /// build: a caller that brought a `healthKitService` gets it LATE-ATTACHED to that store — see
+    /// ``attaching(_:to:)``.
     func load(
         healthKitService: (any HealthKitServicing)? = nil,
         statusUpdate: @escaping @MainActor (String) -> Void = { _ in }
     ) async throws -> FernletStore {
         try requireProtectedData()
-        if let store { return store }
-        if let loadingStore { return try await loadingStore.value }
+        if let store { return attaching(healthKitService, to: store) }
+        if let loadingStore { return attaching(healthKitService, to: try await loadingStore.value) }
         let task = Task { @MainActor [weak self] () throws -> FernletStore in
             guard let self else { throw ExchangeIntentServiceError.storeUnavailable }
             let store = try await FernletStore.load(
@@ -83,6 +88,33 @@ final class FernletStoreAccess: @unchecked Sendable {
             loadingStore = nil
             throw error
         }
+    }
+
+    /// Hands back `store`, having attached `service` to it when it was built without one.
+    ///
+    /// **The defect this closes (P10 item 4, decision D-10.4.1).** This cache is process-wide and
+    /// `load()` returns whatever it already holds, ignoring the arguments of every call after the
+    /// first. The scene loader passes the app's one long-lived `HealthKitService`; every background
+    /// caller passes `nil`. So a background wake that builds the store first left the foreground
+    /// using a store with no gateway attached for the rest of the process — true of the App Intents
+    /// since they were written, and moved from "rare Shortcut" to "every fifteen minutes" by the
+    /// companion refresh, which is what made it worth fixing rather than noting.
+    ///
+    /// It is a no-op in the ordinary case: the foreground usually wins the race, and
+    /// `FernletStore.attachHealthKitServiceIfMissing(_:)` refuses a store that already has one.
+    ///
+    /// - Parameters:
+    ///   - service: The gateway this caller brought, or nil for a background caller that has none.
+    ///   - store: The cached store.
+    /// - Returns: `store`.
+    private func attaching(_ service: (any HealthKitServicing)?, to store: FernletStore) -> FernletStore {
+        guard let service else { return store }
+        guard store.attachHealthKitServiceIfMissing(service) else { return store }
+        // R7: never silent. A late attach means a background wake built this process's store, which
+        // is the condition worth being able to read off a device console — not an error, but not a
+        // thing to discover by inference either.
+        FernletAuditLog.log("storeAccess.healthKitServiceLateAttached")
+        return store
     }
 
     /// The gate `load()` runs first: throws `ExchangeIntentServiceError.deviceLocked` while

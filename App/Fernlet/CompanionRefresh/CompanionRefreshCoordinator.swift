@@ -6,13 +6,22 @@
 //  `BGAppRefreshTask` — one registration, the two submission triggers, and **exactly-once**
 //  completion of whatever the system delivers.
 //
-//  **Item 3's handler is deliberately a placeholder.** §17.2's seven steps — acquire the existing
+//  **This object HOSTS the handler; it is not the handler.** §17.2's steps — acquire the existing
 //  store → roll the day → recompute the companion → diff the snapshot → publish through the widget
-//  bridge → reload timelines only on change → complete once — are ITEM 4's. What lands here is the
-//  last step and nothing else: the delivered task is adopted, the chain's next request is submitted,
-//  and the task is completed once. That ordering is chosen so item 4 is an insertion between two
-//  lines that already exist rather than a rewrite of this file, and so the exactly-once contract and
-//  §16.4's import wall are both already true of the directory before any work runs inside it.
+//  bridge → reload timelines only on change → complete once — are ``CompanionRefreshPipeline``'s,
+//  which speaks values and knows nothing of background tasks. What lives here is the adoption, the
+//  chain's next request, the run, and the one completion. Item 3 shipped the frame with the run
+//  missing; item 4 filled it in, which is why that arrival was an insertion between two lines that
+//  already existed rather than a rewrite.
+//
+//  **What suspending changed about exactly-once.** Item 3's handler completed synchronously, so a
+//  delivered task was never held across a return and the expiration handler could only ever land
+//  after the work was over. The pipeline SUSPENDS (its acquisition is `async`), so for the first
+//  time a grant can run out mid-run. Two guards answer that, and both are needed: ``taskDidExpire()``
+//  cancels the run BEFORE it completes the task, and a run that finishes anyway may complete only
+//  the handle it was started for, and only while that handle is still held. The second is the
+//  load-bearing one — a cancellation the pipeline never observed still cannot complete a task the
+//  expiration door already ended.
 //
 //  **The schedule policy: at handle + background, never on a timer** (plan §26.3 and §27.3, taken as
 //  written). There are exactly two submission triggers and they are both EDGES somebody else already
@@ -121,6 +130,10 @@ final class CompanionRefreshCoordinator {
     /// Reads the current moment. Injected so the schedule policy is assertable to the second.
     private let now: @MainActor () -> Date
 
+    /// §17.2's steps, as values. Injected so a scheduling test can drive the frame with
+    /// ``CompanionRefreshPipeline/noOp`` instead of reaching a real store.
+    private let pipeline: CompanionRefreshPipeline
+
     /// The delivered task, until it is completed. Dropped in the same turn it is completed, which is
     /// what makes ``completeHeldTask(success:)`` idempotent.
     private var heldTask: (any CompanionRefreshTaskHandle)?
@@ -152,6 +165,16 @@ final class CompanionRefreshCoordinator {
     /// tail does not need to, since it runs after a delivery has already emptied it.
     private(set) var pendingRequest: CompanionRefreshRequest?
 
+    /// The in-flight pipeline run, or nil.
+    ///
+    /// Stored for exactly one reason: ``taskDidExpire()`` has to CANCEL it. Nothing reads it back
+    /// as state, and it is deliberately not cleared when a run finishes — clearing it from inside
+    /// the run would race a successor's handle, and cancelling an already-finished task is a no-op.
+    ///
+    /// `MemoryLifecycleBoundaryTests` allowlists this file under ML1 with the invariant that makes
+    /// the missing `deinit` safe: the owner is the process-lifetime ``shared``.
+    private(set) var pipelineRun: Task<Void, Never>?
+
     /// Whether the app owes the system a `setTaskCompleted(success:)` right now.
     var isHoldingTask: Bool { heldTask != nil }
 
@@ -161,12 +184,15 @@ final class CompanionRefreshCoordinator {
     ///   - scheduler: The `BackgroundTasks` seam; nil takes the production one. A default ARGUMENT
     ///     cannot be a `@MainActor` value, so the default is resolved here.
     ///   - now: The clock; nil takes the wall clock, for the same reason.
+    ///   - pipeline: §17.2's steps; nil takes the production wiring, for the same reason again.
     init(
         scheduler: (any CompanionRefreshScheduling)? = nil,
-        now: (@MainActor () -> Date)? = nil
+        now: (@MainActor () -> Date)? = nil,
+        pipeline: CompanionRefreshPipeline? = nil
     ) {
         self.scheduler = scheduler ?? SystemCompanionRefreshScheduler()
         self.now = now ?? { Date() }
+        self.pipeline = pipeline ?? CompanionRefreshWiring.productionPipeline()
     }
 
     // MARK: - The app's own edges
@@ -221,10 +247,12 @@ final class CompanionRefreshCoordinator {
     ///
     /// Two answers, and both complete a handle exactly once:
     /// - **adopted** — hold it, install the expiration handler, submit the chain's next request, and
-    ///   complete. Item 4's seven steps go between the submission and the completion.
+    ///   start the pipeline, which completes the task when it ends.
     /// - **absorbed** — a task is already in hand, so this handle is not this coordinator's to keep.
     ///   Complete it `false` and drop it, rather than overwriting a handle the system is still owed a
-    ///   completion for.
+    ///   completion for. This arm became ORDINARY at item 4: a run is in flight across a suspension,
+    ///   so a second delivery landing on a held task is a window the system can really hit, where at
+    ///   item 3 it was only reachable re-entrantly.
     ///
     /// - Parameter delivered: The task the system just handed over.
     func taskWasDelivered(_ delivered: any CompanionRefreshTaskHandle) {
@@ -241,18 +269,75 @@ final class CompanionRefreshCoordinator {
         // The chain continues FIRST, while the task is still running — the system's own guidance, and
         // the only ordering under which a handler that later fails still leaves a successor behind.
         submitNext(trigger: "handle")
-        // ITEM 4 INSERTS ITS PIPELINE HERE. Item 3 does nothing between adoption and completion, so
-        // §16.4's import wall has nothing to say about this file and the exactly-once contract below
-        // is already the only behaviour there is to get wrong.
-        completeHeldTask(success: true)
+        runPipeline(for: delivered)
     }
 
     /// The system's expiration handler fired: the time it granted is spent.
     ///
-    /// Idempotent by construction — if the handler already completed, ``completeHeldTask(success:)``
+    /// **Cancel first, complete second.** The run is stopped before the task is ended so a pipeline
+    /// suspended in its acquisition cannot come back and do work for a task that no longer exists.
+    /// Cancelling is not by itself enough — a run already past its last cancellation check would
+    /// still return normally — which is why ``finishRun(_:for:)`` refuses a handle this coordinator
+    /// is no longer holding.
+    ///
+    /// Idempotent by construction — if the run already completed, ``completeHeldTask(success:)``
     /// finds no handle and says so instead of completing a second time.
     func taskDidExpire() {
+        pipelineRun?.cancel()
         completeHeldTask(success: false)
+    }
+
+    // MARK: - The handler
+
+    /// Starts §17.2's steps for the task just adopted.
+    ///
+    /// Refuses outright when nothing is held, which is not a hypothetical: an expiration handler
+    /// that fires DURING adoption (the system may install-and-fire in one breath, and the re-entrant
+    /// fake drives exactly that) completes and drops the task before this line is reached, and
+    /// starting a pipeline then would acquire a store and publish a snapshot on behalf of a task
+    /// that is already over.
+    ///
+    /// - Parameter delivered: The task the run may complete — and the only one it may.
+    private func runPipeline(for delivered: any CompanionRefreshTaskHandle) {
+        guard heldTask != nil else {
+            FernletAuditLog.log("companionRefresh.runSkippedWithNoTaskInHand")
+            return
+        }
+        let pipeline = self.pipeline
+        // `Task { @MainActor … }`, never `Task.detached`: this inherits the coordinator's actor, so
+        // the store the pipeline acquires is touched from the one place it may be. The handle is
+        // stored so the expiration door can cancel it.
+        pipelineRun = Task { @MainActor [weak self] in
+            let run = await pipeline.run()
+            self?.finishRun(run, for: delivered)
+        }
+    }
+
+    /// Reports one finished run and completes the task it was started for.
+    ///
+    /// **The exactly-once guard lives here.** A run may complete only the handle it was started for,
+    /// and only while that handle is still the held one. Everything that could otherwise complete a
+    /// task twice fails this test: a run the expiration door cancelled (the handle was dropped by
+    /// that door), a run whose cancellation the pipeline never observed, and a run that outlived its
+    /// own task and returned while a SUCCESSOR was in hand.
+    ///
+    /// - Parameters:
+    ///   - run: What the pipeline produced.
+    ///   - handle: The task this run was started for.
+    private func finishRun(_ run: CompanionRefreshRun, for handle: any CompanionRefreshTaskHandle) {
+        guard let heldTask, heldTask === handle else {
+            // R7: never silent. This is the ordinary end of an expired run, and it is also what a
+            // genuine double-completion bug would look like on its way to being prevented.
+            FernletAuditLog.log("companionRefresh.runEndedAfterItsTaskDid",
+                                context: ["outcome": run.outcome.rawValue])
+            return
+        }
+        FernletAuditLog.log("companionRefresh.runFinished", context: [
+            "outcome": run.outcome.rawValue,
+            "steps": run.steps.map(\.rawValue).joined(separator: ","),
+            "dayAdvanced": String(run.dayAdvanced)
+        ])
+        completeHeldTask(success: run.outcome.completesSuccessfully)
     }
 
     // MARK: - The private half

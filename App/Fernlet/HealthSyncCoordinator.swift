@@ -27,15 +27,61 @@ protocol HealthSyncContext: WorkoutSyncContext {
 @MainActor
 final class HealthSyncCoordinator {
     private unowned let host: any HealthSyncContext
-    private let providedHealthKitService: (any HealthKitServicing)?
-    private lazy var workoutHealthKitSync = WorkoutHealthKitSync(
-        context: host,
-        service: providedHealthKitService ?? HealthKitService()
-    )
+
+    /// The gateway this coordinator was given, or `nil` when its host was built headless.
+    ///
+    /// A `var` since P10 item 4 so ``attachHealthKitServiceIfMissing(_:)`` can fill it in — see
+    /// that method for the cold-background-wake hazard it closes.
+    private var providedHealthKitService: (any HealthKitServicing)?
+
+    /// Whether ``workoutHealthKitSync``'s `lazy` initializer has run.
+    ///
+    /// Set by ``makeWorkoutHealthKitSync()``, which is the initializer, so it cannot drift from it.
+    /// It is what makes a late attach REFUSABLE: once the sync exists it holds its gateway for
+    /// good, and attaching after that would change this coordinator's answer while the live sync
+    /// kept the old one.
+    private var didBuildWorkoutHealthKitSync = false
+
+    private lazy var workoutHealthKitSync = makeWorkoutHealthKitSync()
 
     init(host: any HealthSyncContext, healthKitService: (any HealthKitServicing)?) {
         self.host = host
         self.providedHealthKitService = healthKitService
+    }
+
+    /// Builds the workout sync over the injected gateway, or over one of its own.
+    ///
+    /// The body of ``workoutHealthKitSync``'s `lazy` initializer, spelled as a method only so it
+    /// can record that it ran. The `?? HealthKitService()` fallback is the one
+    /// `HealthKitLifecycleBoundaryTests` inventories for this file, and it is still not built when
+    /// a service was injected.
+    ///
+    /// - Returns: The sync pipeline.
+    private func makeWorkoutHealthKitSync() -> WorkoutHealthKitSync {
+        didBuildWorkoutHealthKitSync = true
+        return WorkoutHealthKitSync(
+            context: host,
+            service: providedHealthKitService ?? HealthKitService()
+        )
+    }
+
+    /// The gateway this coordinator is using, or `nil` when it has none and has not built its own.
+    var attachedHealthKitService: (any HealthKitServicing)? { providedHealthKitService }
+
+    /// Attaches a gateway to a coordinator that was built without one.
+    ///
+    /// See `FernletStore.attachHealthKitServiceIfMissing(_:)` for the process-wide store cache this
+    /// exists for. Refuses in two cases, both of which would otherwise be silent half-attaches: a
+    /// gateway is already held, or the workout sync has already been built without one (it holds
+    /// its own gateway from then on, observation query included).
+    ///
+    /// - Parameter service: The gateway to attach.
+    /// - Returns: Whether it was attached.
+    @discardableResult
+    func attachHealthKitServiceIfMissing(_ service: any HealthKitServicing) -> Bool {
+        guard providedHealthKitService == nil, !didBuildWorkoutHealthKitSync else { return false }
+        providedHealthKitService = service
+        return true
     }
 
     /// Merges a fresh `HealthDailyContext` into today's record and persists only when health values

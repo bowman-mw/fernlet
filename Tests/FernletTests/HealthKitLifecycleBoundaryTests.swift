@@ -88,7 +88,10 @@ struct HealthKitLifecycleBoundaryTests {
             note: """
                 `providedHealthKitService ?? HealthKitService()`, behind a `lazy var` so the \
                 fallback is not even built when a service was injected. Every production host \
-                injects.
+                injects — and since P10 item 4 a host that did NOT (a store built by a cold \
+                background wake) can be given one later, which is why the lazy initializer records \
+                that it ran: an attach arriving after the fallback was built is refused rather \
+                than leaving the sync on one gateway while the store claims another.
                 """
         ),
         ConstructionSite(

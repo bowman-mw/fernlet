@@ -48,6 +48,79 @@ struct WidgetSnapshot: Codable, Equatable {
     var computedAt: Date
 }
 
+// MARK: - Content vs. metadata
+
+/// What ``WidgetSnapshotMirror/publishIfContentChanged(_:)`` did.
+///
+/// Three answers, because the caller has three different things to say to whoever asked: the widget
+/// was re-rendered, the widget was already right, or the app-group file could not be written at
+/// all. P10 item 4's background refresh maps these straight onto what the system is told at
+/// `setTaskCompleted(success:)`.
+///
+/// ## Concurrency
+///
+/// `nonisolated`; a plain enum.
+nonisolated enum WidgetSnapshotPublication: Equatable, Sendable {
+
+    /// The content differed, the file was written, and the widget timelines were reloaded.
+    case reloaded
+
+    /// The content was identical. The file was still written (for the fresh `computedAt`), and the
+    /// timelines were deliberately NOT reloaded.
+    case unchanged
+
+    /// The app-group write failed, so nothing was reloaded — the widget keeps its last good
+    /// snapshot, which is the correct degradation and never a data loss.
+    case writeFailed
+}
+
+extension WidgetSnapshot {
+
+    /// Whether two snapshots would make the widget render the same thing.
+    ///
+    /// **Why this is not `==`.** The synthesised `Equatable` includes `computedAt`, which
+    /// `FernletStore.currentWidgetSnapshot()` stamps `Date()` at every construction — so two
+    /// snapshots built a millisecond apart from an unchanged day are never `==`, and a publish path
+    /// that used `==` to decide whether to reload the timelines would reload on every single
+    /// publish. That is what the app does today on the foreground path (correct there: every caller
+    /// is a persisted save), and exactly what plan §17.2 forbids the background refresh from doing —
+    /// a `BGAppRefreshTask` that reloads the widget every fifteen minutes for no visible change
+    /// spends the app's refresh budget on nothing.
+    ///
+    /// **The classification.** Every stored property of ``WidgetSnapshot`` is one or the other:
+    ///
+    /// | Field | Class | Why |
+    /// | --- | --- | --- |
+    /// | `companionStateRaw` | content | the companion the widget draws; `WidgetDayGate` blanks it on a stale day |
+    /// | `score` | content | the score treatment reads it |
+    /// | `bottleCount` | content | the water count the widget renders and its App Intent bumps |
+    /// | `hydrationTarget` | content | the denominator of that count |
+    /// | `macroSummary` | content | compared WHOLE; no family renders it today, but it is data the snapshot promises and a change in it is a real change |
+    /// | `dateKey` | content | what `WidgetDayGate.snapshotReflectsDay` checks — the most important change there is |
+    /// | `computedAt` | **metadata** | stamped at construction, rendered by nothing |
+    ///
+    /// `WidgetSnapshotContentEqualityTests` pins that table — the field COUNT through `Mirror`, the
+    /// per-field flips, and the one cell that proves `contentEquals` and `==` are different
+    /// notions. A field added to the struct without a classification reds the count pin.
+    ///
+    /// **Floating point.** `score` is compared with `==` deliberately: both sides come from the
+    /// same pure computation over the same day, so an unchanged day yields a bit-identical
+    /// `Double`. The one value that would compare unequal to itself is `NaN`, which would make
+    /// every refresh reload; `FernletScoring.compute` has no path to one, and a `NaN` reaching here
+    /// is a scoring defect to fix there rather than to paper over here.
+    ///
+    /// - Parameter other: The snapshot to compare against — by convention the PREVIOUS one.
+    /// - Returns: Whether the two would render identically.
+    func contentEquals(_ other: WidgetSnapshot) -> Bool {
+        companionStateRaw == other.companionStateRaw
+            && score == other.score
+            && bottleCount == other.bottleCount
+            && hydrationTarget == other.hydrationTarget
+            && macroSummary == other.macroSummary
+            && dateKey == other.dateKey
+    }
+}
+
 /// One inbound action row appended by the widget's App Intent (or the Siri water intent).
 ///
 /// `dateKey` pins the action to the day it was tapped so a drain after midnight applies it to the
@@ -382,6 +455,42 @@ final class WidgetSnapshotMirror {
     func publish(_ snapshot: WidgetSnapshot) {
         guard fileStore.write(snapshot) else { return }
         reloadTimelines()
+    }
+
+    /// Writes the snapshot, but reloads the widget timelines ONLY when the content changed.
+    ///
+    /// Plan §17.2's "reload timelines only on change", as one call. An ALTERNATIVE to
+    /// ``publish(_:)`` rather than a replacement for it: the foreground path publishes on a
+    /// persisted save, which is already a change by construction, and narrowing it would be a
+    /// behaviour change to every widget update in the app. This is for the background refresh,
+    /// which runs on the system's schedule rather than on a person's edit and therefore finds
+    /// nothing to do most of the time.
+    ///
+    /// **It writes even when nothing changed**, deliberately. Two reasons, and the second is the
+    /// load-bearing one:
+    /// - the stamp: the file gains a fresh `computedAt`, so anything later reading it can tell a
+    ///   current snapshot from one the app stopped publishing hours ago;
+    /// - the widget's own optimistic water bump writes a provisional `bottleCount` INTO this file
+    ///   before the app has drained the action it queued. The refresh handler refuses to publish at
+    ///   all while such an action is undrained (see `CompanionRefreshWiring`), so by the time this
+    ///   runs the app's own count is the authoritative one and writing it is correct.
+    ///
+    /// The write is invisible without a reload — nothing renders `computedAt` — which is precisely
+    /// what "no change" should look like.
+    ///
+    /// - Parameter snapshot: The snapshot to publish.
+    /// - Returns: What happened, for the caller to report.
+    func publishIfContentChanged(_ snapshot: WidgetSnapshot) -> WidgetSnapshotPublication {
+        let previous = fileStore.read()
+        guard fileStore.write(snapshot) else { return .writeFailed }
+        guard let previous, previous.contentEquals(snapshot) else {
+            // No previous snapshot is a CHANGE: the widget has nothing, or had it deleted, and a
+            // first publish that did not reload would leave the placeholder up until something else
+            // poked WidgetKit.
+            reloadTimelines()
+            return .reloaded
+        }
+        return .unchanged
     }
 
     /// Removes the mirrored snapshot and reloads the timelines so the widget re-renders from nothing.

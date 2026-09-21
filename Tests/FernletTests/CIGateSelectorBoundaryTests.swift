@@ -71,8 +71,14 @@ import Testing
     /// `CompanionRefreshSchedulingTests` — the refresh scheduling seam's tier-1 suite, which is not
     /// a `MeshP<n>…AcceptanceTests` and is therefore demanded by `everyMeshAcceptanceBatteryIsGated`
     /// nowhere. The step's floor stays the shared `1`; only the NAME count moves here.
+    ///
+    /// RE-MEASURED again at P10 item 4 (2026-09-21): `s3-grep` 5 → 7, for
+    /// `CompanionRefreshPipelineTests` (the handler itself — the step order, the completion table
+    /// and the acquire path's repair) and `WidgetSnapshotContentEqualityTests` (the content/metadata
+    /// split "reload only on change" rests on). Neither is a mesh battery either, so this pin is
+    /// again the only thing that would notice a name LEAVING that line — adding one is silent.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 5,
+        "s3-grep": 7,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,

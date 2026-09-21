@@ -3183,6 +3183,43 @@ final class FernletStore {
         healthSyncCoordinator.stopWorkoutObservation()
     }
 
+    /// The HealthKit gateway this store's sync coordinator is actually using, or `nil` when the
+    /// store was built without one and nothing has attached one since.
+    ///
+    /// Read from the COORDINATOR rather than from the store's own `healthKitService`, which is only
+    /// the seed it was constructed with: after a late attach the two disagree, and the coordinator
+    /// is the one that decides which gateway the workout sync gets.
+    var attachedHealthKitService: (any HealthKitServicing)? {
+        healthSyncCoordinator.attachedHealthKitService
+    }
+
+    /// Attaches a HealthKit gateway to a store that was built without one.
+    ///
+    /// **The cold-background-wake hazard this closes (P10 item 4, decision D-10.4.1).**
+    /// `FernletStoreAccess` caches one store for the whole process and `load()` returns it whatever
+    /// arguments the caller passes. The SCENE loader passes the app's real, long-lived
+    /// `HealthKitService`; every background caller — the App Intents, and now the companion refresh
+    /// on a fifteen-minute cadence — passes `nil`. So whichever of them builds the store first wins
+    /// for the life of the process, and a background wake that wins leaves the foreground on a
+    /// store whose workout sync silently falls back to a gateway of its own rather than the app's.
+    /// The fix belongs here rather than in the handler: the handler must not name a HealthKit
+    /// spelling at all (§16.4's wall), and a fix in `FernletStoreAccess` covers the App Intents
+    /// that have had this defect since long before the refresh amplified it.
+    ///
+    /// **Why it can REFUSE.** Attaching is only honest before the workout sync has been built: once
+    /// built, that sync holds its gateway for good and may already have started an observation
+    /// query on it, so swapping the store's answer while the live sync keeps the old one would be a
+    /// half-attach that nothing could see. A refusal is returned rather than swallowed so the
+    /// caller can say so.
+    ///
+    /// - Parameter service: The gateway to attach.
+    /// - Returns: Whether it was attached. `false` means the store already had one, or had already
+    ///   built its workout sync without one.
+    @discardableResult
+    func attachHealthKitServiceIfMissing(_ service: any HealthKitServicing) -> Bool {
+        healthSyncCoordinator.attachHealthKitServiceIfMissing(service)
+    }
+
     /// Adds a journal entry to today. Sugar over ``addJournal(text:tag:date:)`` — see it for the
     /// bookkeeping, which is identical because today IS just the `date == todayKey` case.
     func addJournal(text: String, tag: FeelingTag) {
@@ -5955,9 +5992,7 @@ final class FernletStore {
     /// Called once from ContentView at store-ready: wires the mirror, drains any actions the
     /// widget queued while the app was closed, and publishes the initial snapshot.
     func activateWidgetBridge() {
-        if widgetSnapshotMirror == nil {
-            widgetSnapshotMirror = WidgetSnapshotMirror(directory: appGroupDirectory)
-        }
+        ensureWidgetSnapshotMirror()
         // Reconcile the cooking walker the instant an in-process App Intent (Live Activity "Next" / Siri)
         // writes the advanced run, instead of only on the next scenePhase `.active`. Registered once.
         if cookingIntentObserver == nil {
@@ -6050,12 +6085,35 @@ final class FernletStore {
         publishWidgetSnapshot()
     }
 
-    /// Writes the benign snapshot to the app-group container + reloads widget timelines. No-op
-    /// until `activateWidgetBridge()` has wired the mirror. PRIVACY: score/water/macros only.
-    func publishWidgetSnapshot() {
-        guard let widgetSnapshotMirror else { return }
+    /// Wires the widget mirror if it is not wired yet, and hands it back.
+    ///
+    /// Extracted from `activateWidgetBridge()` by P10 item 4 so the companion background refresh
+    /// has a way to reach the mirror on a COLD background wake, where no scene ever ran and
+    /// `activateWidgetBridge()` therefore never did. Nothing else changes: the mirror is still
+    /// built exactly once, over `appGroupDirectory`, and `publishWidgetSnapshot()` still no-ops
+    /// without one — a unit test that injects no mirror stays silent, which
+    /// `WidgetBridgeTests.storeWithoutMirrorStaysSilent()` pins.
+    ///
+    /// - Returns: The store's one mirror.
+    @discardableResult
+    func ensureWidgetSnapshotMirror() -> WidgetSnapshotMirror {
+        if let widgetSnapshotMirror { return widgetSnapshotMirror }
+        let mirror = WidgetSnapshotMirror(directory: appGroupDirectory)
+        widgetSnapshotMirror = mirror
+        return mirror
+    }
+
+    /// The benign snapshot the widget would render right now. PRIVACY: score/water/macros only.
+    ///
+    /// Lifted out of `publishWidgetSnapshot()` unchanged — same fields, same order, same `Date()`
+    /// stamp — so the background refresh can DIFF a snapshot before deciding whether publishing it
+    /// is worth a timeline reload. Building one is pure: it reads the live day, the settings and
+    /// the derived signals, and touches no gateway, no network and no disk.
+    ///
+    /// - Returns: The snapshot.
+    func currentWidgetSnapshot() -> WidgetSnapshot {
         let macros = macroTotals
-        widgetSnapshotMirror.publish(WidgetSnapshot(
+        return WidgetSnapshot(
             companionStateRaw: companionState.rawValue,
             score: score,
             bottleCount: day.bottleCount,
@@ -6067,7 +6125,32 @@ final class FernletStore {
             ),
             dateKey: todayKey,
             computedAt: Date()
-        ))
+        )
+    }
+
+    /// Whether the widget's pending-action queue still holds rows nothing has drained.
+    ///
+    /// Read (never claimed) — `records()` is the queue's non-destructive door, so asking does not
+    /// consume a row. P10 item 4's background refresh asks before it publishes anything: a queued
+    /// "+1 water" has already been applied OPTIMISTICALLY to the mirrored snapshot file by the
+    /// widget's own App Intent, and republishing the app's lower count before
+    /// `processPendingWidgetActions()` has folded the row in would make the widget's water count go
+    /// backwards in front of the person. §17.2 limits the handler to its seven steps, so it may not
+    /// drain the queue itself; it skips the publish instead and leaves the optimistic state
+    /// standing until the next foreground.
+    var hasUndrainedWidgetActions: Bool {
+        !pendingWidgetActionQueue.records().isEmpty
+    }
+
+    /// Writes the benign snapshot to the app-group container + reloads widget timelines. No-op
+    /// until `activateWidgetBridge()` has wired the mirror. PRIVACY: score/water/macros only.
+    ///
+    /// Unconditional, and deliberately still so: every caller of this is a persisted save, a day
+    /// roll or a queue drain, each of which is a change by construction. The diffing alternative is
+    /// `WidgetSnapshotMirror.publishIfContentChanged(_:)`, which only the background refresh uses.
+    func publishWidgetSnapshot() {
+        guard let widgetSnapshotMirror else { return }
+        widgetSnapshotMirror.publish(currentWidgetSnapshot())
     }
 
     /// Publishes bounded packet metadata for the Messages extension. A failed App Group write is

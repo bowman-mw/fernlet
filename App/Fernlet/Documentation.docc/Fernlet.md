@@ -198,6 +198,13 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``SystemCompanionRefreshTaskHandle``
 - ``SystemCompanionRefreshScheduler``
 - ``CompanionRefreshCoordinator``
+- ``CompanionRefreshStep``
+- ``CompanionRefreshOutcome``
+- ``CompanionRefreshRun``
+- ``CompanionRefreshSteps``
+- ``CompanionRefreshPipeline``
+- ``CompanionRefreshWiring``
+- ``WidgetSnapshotPublication``
 
 ### Cycle, Journal & Private Data
 

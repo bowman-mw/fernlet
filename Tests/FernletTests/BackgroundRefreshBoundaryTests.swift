@@ -117,7 +117,24 @@ import Testing
 /// `companionThought`, the companion recompute's reads; `publishWidgetSnapshot()` and
 /// `widgetSnapshotMirror`, the publish step; and `WidgetBridge` / `WidgetSnapshot` /
 /// `WidgetSnapshotMirror` themselves. None of them is a needle, and none may become one without item
-/// 4 losing a step. Item 4 adds the day-roll spelling it actually calls to this paragraph.
+/// 4 losing a step.
+///
+/// Item 4 adds the five spellings it actually calls, each with the step it serves:
+///
+/// - `refreshCurrentDayIfNeeded(now:)` — the DAY ROLL. The same internal call the foreground scene
+///   makes at `.active`. Traced: it flushes the outgoing day under its old key, re-keys the diary,
+///   rebuilds the derived signals, reconciles the coin and milestone ledgers, and publishes through
+///   the store's own mirror. Reads and writes the app's OWN repositories and nothing else — no
+///   HealthKit call, no radio, no forced CloudKit sync.
+/// - `hasUndrainedWidgetActions` — the WIDGET-QUEUE CHECK, a non-destructive read behind one store
+///   property so the handler never names the queue type. It claims nothing, so asking cannot lose a
+///   row (decision D-10.4.2).
+/// - `currentWidgetSnapshot()` — the DIFF's left-hand side, lifted out of `publishWidgetSnapshot()`
+///   unchanged. Pure: the live day, the settings, the derived signals.
+/// - `ensureWidgetSnapshotMirror()` — the PUBLISH step's precondition. A cold background wake has no
+///   scene, so `activateWidgetBridge()` never ran and there is no mirror to publish through.
+/// - `publishIfContentChanged(_:)` — the PUBLISH step and the reload decision, on
+///   `WidgetSnapshotMirror`, which owns both the file and the `reloadTimelines` closure.
 ///
 /// ## What this suite does NOT claim
 ///
@@ -152,11 +169,11 @@ struct BackgroundRefreshBoundaryTests {
     /// code and is held to everything below.
     static let refreshRoot = "App/Fernlet/CompanionRefresh"
 
-    /// Floor for the walk, MEASURED: item 2's identifier, and item 3's scheduling seam and
-    /// coordinator. Item 4 adds more and may raise it again. A root that stops resolving reports
-    /// zero and would otherwise pass vacuously, which is the failure mode `RepoRoot`'s own doc
-    /// comment exists to describe — so the floor tracks the real count rather than staying at one.
-    static let minimumFilesScanned = 3
+    /// Floor for the walk, MEASURED: item 2's identifier, item 3's scheduling seam and coordinator,
+    /// and item 4's pipeline and wiring. A root that stops resolving reports zero and would
+    /// otherwise pass vacuously, which is the failure mode `RepoRoot`'s own doc comment exists to
+    /// describe — so the floor tracks the real count rather than staying at one.
+    static let minimumFilesScanned = 5
 
     /// The companion refresh's frozen task identifier, repeated here on purpose.
     ///
@@ -352,6 +369,8 @@ struct BackgroundRefreshBoundaryTests {
         Spelling(token: "HealthKitServicing", why: "the gateway's seam — `load()` defaults it to nil"),
         Spelling(token: "HealthSyncCoordinator", why: "the store's health sync coordinator — and the only way to reach its own methods, since the store's handle on it is private", isAppDeclaration: true),
         Spelling(token: "healthSyncCoordinator", why: "belt: that coordinator's property, `private` on the store today", isAppDeclaration: true),
+        Spelling(token: "attachedHealthKitService", why: "hands out the gateway itself — P10 item 4 added it to the store, and a getter that RETURNS the prohibited thing is reachable with no import and no type name at the call site", isAppDeclaration: true),
+        Spelling(token: "attachHealthKitServiceIfMissing", why: "the late-attach door beside it; the handler acquires through `FernletStoreAccess`, which does the attaching, and has no business doing it itself", isAppDeclaration: true),
         // The internal store members that DRIVE the health coordinator.
         Spelling(token: "refreshWorkoutsFromHealth", why: "pulls workouts out of HealthKit — the door the import wall is green over", isAppDeclaration: true),
         Spelling(token: "backfillWorkoutsFromHealthIfNeeded", why: "the same pull, on the launch backfill path", isAppDeclaration: true),
@@ -425,13 +444,18 @@ struct BackgroundRefreshBoundaryTests {
     /// 41 at the first shape, 68 after the verify survey: the first list named the PRIVATE funnels
     /// and none of the `internal` doors beside them, so the 27 rows added are the spellings a second
     /// file in the app target could actually speak. 83 after item 3's verify, which added the
-    /// 15-row clock-and-persistence family — see ``measuredClockAndPersistenceCount``.
-    static let measuredSpellingCount = 83
+    /// 15-row clock-and-persistence family — see ``measuredClockAndPersistenceCount``. 85 at item 4,
+    /// which re-ran the survey this list's own doc comment asks for and found TWO rows it owed: the
+    /// handler's acquire fix added `attachedHealthKitService` and `attachHealthKitServiceIfMissing`
+    /// to `FernletStore`, and the first of them hands out the gateway to any file that can name the
+    /// store — with no import and without naming `HealthKitServicing` at the call site, which is
+    /// precisely the shape the import wall is green over.
+    static let measuredSpellingCount = 85
 
     /// MEASURED count of the ``forbiddenSpellings`` rows that name a declaration under
     /// `App/Fernlet/`, pinned for the same reason the verb count is: the drift cell derives its set
     /// from a flag, and a flag dropped in an edit would shrink it without failing anything.
-    static let measuredAppDeclarationCount = 36
+    static let measuredAppDeclarationCount = 38
 
     /// The app-target root the declaration-drift cell walks.
     static let appTargetRoot = "App/Fernlet"
@@ -676,7 +700,7 @@ struct BackgroundRefreshBoundaryTests {
     /// ``theRadioVerbNeedlesAreStillSpokenByTheSeamsWall()`` generalised: the ten verbs are not the
     /// only rows copied out of the app, and a `FernletStore` member renamed in a sweep leaves this
     /// wall holding a spelling nothing can contain — a cell that can never fail, green forever. The
-    /// 36 rows flagged ``Spelling/isAppDeclaration`` are checked against the declarations
+    /// 38 rows flagged ``Spelling/isAppDeclaration`` are checked against the declarations
     /// `App/Fernlet/` actually makes, as CODE, so a stale mention in a doc comment does not satisfy
     /// it. Package and Apple types are deliberately out of scope: this suite does not walk their
     /// sources, and the import wall is their gate.

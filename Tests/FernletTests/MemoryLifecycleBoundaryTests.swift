@@ -104,6 +104,9 @@ struct MemoryLifecycleBoundaryTests {
             rule: "ML1", path: "App/Fernlet/FernletStoreAccess.swift",
             invariant: "`FernletStoreAccess` is a process-lifetime `shared` singleton, so it has no deinit to cancel from; `loadingStore` is a single in-flight store load that the caller awaits and that clears itself on BOTH the success and the throwing path, so no handle is retained past the call that made it."),
         Exemption(
+            rule: "ML1", path: "App/Fernlet/CompanionRefresh/CompanionRefreshCoordinator.swift",
+            invariant: "`CompanionRefreshCoordinator` is a process-lifetime `shared` singleton (the same shape as FernletStoreAccess), so it has no deinit to cancel from; `pipelineRun` is a single in-flight refresh run that captures [weak self], is cancelled by the expiration door before that door completes the task, is replaced by the next delivery, and may complete only the handle it was started for and only while that handle is still held — so a run that outlives its task ends without doing anything."),
+        Exemption(
             rule: "ML2", path: "App/Fernlet/FernletStore.swift",
             invariant: "The cooking-intent observer is installed once on the process-lifetime store and must outlive every scene; there is no earlier moment at which removing it would be correct."),
     ]

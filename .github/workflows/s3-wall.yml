@@ -157,7 +157,8 @@ jobs:
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
             AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests \
-            CompanionRefreshSchedulingTests
+            CompanionRefreshSchedulingTests CompanionRefreshPipelineTests \
+            WidgetSnapshotContentEqualityTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
