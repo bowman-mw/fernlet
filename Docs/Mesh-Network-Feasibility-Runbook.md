@@ -846,7 +846,18 @@ cannot be built on TXT presence alone, and the old sim→sim refusal was never q
 Lane A2 proved the *spike* handshakes between two Simulators. Lane C is the same two Simulators
 running the **shipping** transport — `NetworkMeshSession` selected by `FERNLET_MESH_TRANSPORT=quic`,
 with `MeshNetworkManager` as its `MeshIntroductionAuthority` — and it answers a different question:
-not "does a tunnel come up", but **"is the tunnel selective"**. Every named rejection in
+not "does a tunnel come up", but **"is the tunnel selective"**.
+
+> **Dated correction, 2026-09-21 (the MC→QUIC cutover).** `NetworkMeshSession` is now the DEFAULT:
+> `MeshTransportFactory.shippingDefault` is `.quic`, so every launch runs this radio whether or not
+> anything selects it. `SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic` in the recipes below (and at
+> ~`:1027`, ~`:1189`, ~`:1194`, ~`:1499`) is therefore a **no-op**, and it is **kept on purpose,
+> not left by accident**: the variable still exists and `=multipeer` still selects the retired
+> radio, so the same copy-paste drives a pre-cutover build and a post-cutover one, which is what
+> makes a bisect across this boundary work. Do not delete it from the recipes until the deletion
+> round retires the seam with `MeshMultipeerSession.swift`.
+
+Every named rejection in
 `MeshIntroductionRejection` that P2 can reach was produced deliberately and read out of a console
 transcript, alongside an accepted baseline. A matrix of refusals with no accept proves only that the
 radio is broken; a baseline with no refusals proves only that it is open.
@@ -1382,6 +1393,12 @@ fixed in the same change:
 > particular gets *stronger*, because the seat check it added is no longer a second lock behind a
 > transport that had already refused the peer; on either radio it is the first stage that knows who
 > the peer is and may refuse them.
+>
+> **Corrected again the same day (the flip).** "MC — which is the shipping default" is now false in
+> its own terms: `MeshTransportFactory.shippingDefault` is `.quic`. MC is a DEBUG-only bisect path
+> until the deletion round. The paragraph's *argument* is untouched, and is the reason this
+> correction is an addendum rather than a rewrite — it is the record of why the three link gates
+> were relaxed and what had to be added beside them, and both radios are now reachable builds.
 
 1. **HIGH — a closed mesh must still refuse a verified stranger.** Without a second gate, a stranger
    seated on a closed MC mesh would be sent this device's signed identity introduction and then, on

@@ -223,9 +223,9 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 
 | Path | Where | Service types |
 |---|---|---|
-| **MultipeerConnectivity** — the friend mesh is still on it; the coach channel is a declared service type with no live radio behind it (presence crossed to QUIC in P9 item 2 and recipe share in P9 item 3, and their `_fernlet-near` / `_fernlet-recipe` types left the plist with them) | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-coach`, each `._tcp` and `._udp` |
+| **MultipeerConnectivity** — **no shipping radio is on it since the MC→QUIC cutover (2026-09-21)**: the friend mesh crossed to QUIC (`NetworkMeshSession`, below), presence crossed in P9 item 2 and recipe share in P9 item 3. What remains is a DEBUG-only bisect path — a build launched with `FERNLET_MESH_TRANSPORT=multipeer` still runs `MeshMultipeerSession` on `_fernlet-friend` — held deliberately, with the radio's two files and these plist strings, so a regression can be bisected across the cutover boundary. The coach channel is a declared service type with no radio behind it at all (plan §18 decision 4, the owner's). Both pairs, the files and the permit list go together in the **deletion round** | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-coach`, each `._tcp` and `._udp` |
 | **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | `ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
-| **Network.framework / QUIC** — the friend mesh's second transport, being migrated onto per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | `ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
+| **Network.framework / QUIC** — **the friend mesh's transport**, since the cutover of 2026-09-21 flipped `MeshTransportFactory.shippingDefault` to `.quic`; migrated per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | `ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
 | **Network.framework / QUIC** — the standing presence radio, migrated off MultipeerConnectivity per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §17.1 | `ProximityKit/Transport/NetworkPresenceSession.swift` | `_fernlet-near2._udp` |
 | **Network.framework / QUIC** — the recipe-share radio, migrated off MultipeerConnectivity per the same plan §17.1; one pairing at a time, and the listener AND browser stand down for as long as it is held | `ProximityKit/Transport/NetworkRecipeShareSession.swift` | `_fernlet-recipe2._udp` |
 | **Network.framework / QUIC** — the DEBUG-only feasibility spike for the same migration | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
@@ -236,12 +236,14 @@ grown as needed.
 
 `NoTrackingBoundaryTests.theRetiredRadiosBonjourTypesAreGoneFromThePlist` pins that list three ways.
 (1) The four retired MC types (`_fernlet-near`, `_fernlet-recipe`, each `._tcp` and `._udp`) must
-stay **absent**. (2) The five a shipping radio actually uses must stay **present**: the three QUIC
-types *and* `_fernlet-friend._tcp` / `._udp`, because the friend mesh is still on
-MultipeerConnectivity (`MeshTransportFactory.shippingDefault == .multipeer`, so every launch
-advertises and browses `fernlet-friend`). The friend pair moves from the live set to the retired set
-in the same commit that flips `shippingDefault` — deleting it before that kills friend-mesh
-discovery on device with no log, no observable state and no other failing test. (3) Every other
+stay **absent**. (2) The five a reachable radio uses must stay **present**: the three QUIC types
+*and* `_fernlet-friend._tcp` / `._udp`. **The reason for that last pair moved at the cutover and the
+classification did not.** `MeshTransportFactory.shippingDefault` is `.quic` now, so no *shipping*
+launch advertises or browses `fernlet-friend` — but a DEBUG `FERNLET_MESH_TRANSPORT=multipeer`
+bisect launch still does, and the pair is held on purpose for exactly that. It moves from the live
+set to the retired set in the **deletion round**, in the same commit that removes
+`MeshMultipeerSession.swift` and the plist entries — deleting it before that kills friend-mesh
+discovery on a bisect build with no log, no observable state and no other failing test. (3) Every other
 declared type must be **classified**: `_fernlet-coach._tcp` / `._udp` are *held* — declared, no
 radio behind them (plan §18 decision 4, still the owner's), pinned in neither direction — and a
 declared type in none of the three sets fails the test until it is classified here and given a row

@@ -130,13 +130,22 @@ struct ConnectionInspectorLogDetailView: View {
         .inspectorPanel()
     }
 
+    /// Why the meter has no distance yet, in one sentence per ranging mode.
+    ///
+    /// **Two pre-existing residuals live on this property and the row below it, and neither is this
+    /// commit's to close.** (1) These are bare `String` display values, not catalog keys — an
+    /// existing localization-wall gap, not one the cutover opened. Widening them into a
+    /// `LocalizedStringKey` fork is a localization-round item. (2) The `.rssi` copy named
+    /// MultipeerConnectivity and, since the MC→QUIC cutover (2026-09-21), was simply WRONG about
+    /// which radio the user is on — so the copy is corrected here while the localization gap is
+    /// left where it was.
     private var rangingStatusText: String? {
         guard log.ranging.samples.isEmpty else { return nil }
         switch log.ranging.mode {
         case .uwb:
             return "Waiting for Nearby Interaction distance samples."
         case .rssi:
-            return "RSSI fallback active. MultipeerConnectivity does not expose RSSI, so meter estimates are unavailable on this transport."
+            return "RSSI fallback active. The QUIC radio does not expose signal strength, so meter estimates are unavailable on this transport."
         case .none:
             return "Ranging has not started for this session."
         }
@@ -145,6 +154,14 @@ struct ConnectionInspectorLogDetailView: View {
     private var transportSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Transport")
+            // The label and the field are BOTH left spelled "MCSession" after the cutover, and this
+            // is the check that decided it: `ConnectionSessionLog.TransportInfo.mcSessionState` is a
+            // persisted, `Codable` token — `ProximityRecordDecodeCompatTests` decodes the literal
+            // JSON key `"mcSessionState"` from two stored fixtures, and `FernletSnapshotRoundTripTests`
+            // round-trips it. Renaming the field is a data-compat change, not cleanup. The label is
+            // renameable on its own, and is deliberately kept in step with the field it displays so
+            // a reader of the inspector and a reader of the record are not looking at two names for
+            // one value. Both move together in the deletion round, behind a decode-compat shim.
             inspectorRow("MCSession", log.transport.mcSessionState)
             inspectorRow("Bytes sent", "\(log.transport.bytesSent)")
             inspectorRow("Bytes received", "\(log.transport.bytesReceived)")
