@@ -16,7 +16,15 @@ import Testing
 /// A `final class` (not a struct) so `deinit` can act as teardown: the token is backed by the host's real
 /// `UserDefaults.standard`, so a token left behind by a failing test would otherwise leak into a later
 /// test or run. `init`/`deinit` drain it before and after every test to keep the suite hermetic.
-@MainActor
+///
+/// **`.serialized`, 2026-09-21 (plan §17.2.3 finding 5, §28.4).** Draining in `init`/`deinit` makes
+/// each cell hermetic against the cell BEFORE it, not against the cell BESIDE it: Swift Testing runs
+/// a suite's cells in parallel by default, and the token lives in the host's one process-global
+/// `UserDefaults.standard`, so two cells in flight at once share it — one's `request` is the other's
+/// `consume`. The suite flaked exactly that way under load at P10 item 4, green alone and on re-run.
+/// Serial is the only hermetic shape for a shared process-global; the cost is eleven cells one at a
+/// time, and the bound stays the same on every other line, because nothing else reads the token.
+@Suite(.serialized) @MainActor
 final class AppIntentsTests {
     init() { _ = PendingIntentSheet.consume() }
     deinit { _ = PendingIntentSheet.consume() }  // nonisolated static func — safe from deinit
