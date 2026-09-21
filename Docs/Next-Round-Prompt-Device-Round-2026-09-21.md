@@ -49,7 +49,7 @@ The survey, the decision and the **ready patches** are
 [Docs/Mesh-P9-Item4-Design-2026-09-20.md](Mesh-P9-Item4-Design-2026-09-20.md) — seven appendices,
 `Appendix A` the rule-7 cell (`:155`) and six anchored patches from `:316`, every hunk `[SPLIT:
 LATER]`. Nothing in it is stale; it has been waiting on a person, not on code.
-**The prerequisite is a design, not a patch.** `MeshTransportFactory.shippingDefault` is `.multipeer`
+**DESIGN WRITTEN 2026-09-21** — `Docs/Mesh-Stranger-Admission-Design-2026-09-21.md` (plan §28.8): D-4.3 redefined as "cut over WITH provisional stranger admission" and ASKED; the three one-liners of §28.1/§28.4 are taken (`97d1bd9`, `737399c`, `b4cd1ac`). **The prerequisite is a design, not a patch.** `MeshTransportFactory.shippingDefault` is `.multipeer`
 (`FernletKit/Sources/ProximityKit/Transport/MeshTransportSelection.swift:267`) and QUIC refuses a
 stranger before any app frame (§8.7 finding 3), so cutting over without a first-meeting
 stranger-admission path **ships a build where two phones that have never met cannot found a mesh**.
