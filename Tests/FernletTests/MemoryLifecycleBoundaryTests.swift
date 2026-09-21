@@ -101,7 +101,7 @@ struct MemoryLifecycleBoundaryTests {
             rule: "ML1", path: "FernletKit/Sources/ProximityKit/HeartSharing/HeartDropService.swift",
             invariant: "Owned by the store for the process lifetime; `syncTask` captures [weak self] and runs a bounded number of coalesced sync passes, then finishes."),
         Exemption(
-            rule: "ML1", path: "App/Fernlet/ExchangeIntentService.swift",
+            rule: "ML1", path: "App/Fernlet/FernletStoreAccess.swift",
             invariant: "`FernletStoreAccess` is a process-lifetime `shared` singleton, so it has no deinit to cancel from; `loadingStore` is a single in-flight store load that the caller awaits and that clears itself on BOTH the success and the throwing path, so no handle is retained past the call that made it."),
         Exemption(
             rule: "ML2", path: "App/Fernlet/FernletStore.swift",

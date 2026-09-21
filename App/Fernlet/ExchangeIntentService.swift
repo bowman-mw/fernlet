@@ -7,63 +7,13 @@ import FoodCatalog
 import Foundation
 import HealthKitGateway
 import SwiftUI
-import UIKit
-
-/// The only store acquisition path used by both the UI loader and background exchange intents.
-///
-/// Main-actor isolation serializes exchange mutations with normal UI mutations. It also coalesces a
-/// cold background launch and the scene loader, so they cannot build competing `FernletStore`s over
-/// the same repositories.
-@MainActor
-final class FernletStoreAccess: @unchecked Sendable {
-    static let shared = FernletStoreAccess()
-
-    private var store: FernletStore?
-    private var loadingStore: Task<FernletStore, Error>?
-
-    func install(_ store: FernletStore) {
-        self.store = store
-    }
-
-    func load(
-        healthKitService: (any HealthKitServicing)? = nil,
-        statusUpdate: @escaping @MainActor (String) -> Void = { _ in }
-    ) async throws -> FernletStore {
-        try requireProtectedData()
-        if let store { return store }
-        if let loadingStore { return try await loadingStore.value }
-        let task = Task { @MainActor [weak self] () throws -> FernletStore in
-            guard let self else { throw ExchangeIntentServiceError.storeUnavailable }
-            let store = try await FernletStore.load(
-                healthKitService: healthKitService,
-                statusUpdate: statusUpdate
-            )
-            await store.loadBundledFoodItemsForLaunch()
-            self.store = store
-            return store
-        }
-        loadingStore = task
-        do {
-            let loaded = try await task.value
-            loadingStore = nil
-            return loaded
-        } catch {
-            loadingStore = nil
-            throw error
-        }
-    }
-
-    private func requireProtectedData() throws {
-        guard UIApplication.shared.isProtectedDataAvailable else {
-            throw ExchangeIntentServiceError.deviceLocked
-        }
-    }
-}
 
 /// Main-process dependency for App Intents that exchange recipe and workout-plan files.
 ///
-/// This never creates repositories directly. A warm app installs its existing store; a background
-/// launch coalesces through `FernletStoreAccess` and uses the normal selected repository stack.
+/// This never creates repositories directly and owns no store of its own. Every entry point — the
+/// scene loader through `loadStoreForUI`, and each background intent — coalesces through the shared
+/// ``FernletStoreAccess``, which builds the store once over the normal selected repository stack
+/// and hands the same instance to whoever asks next.
 @MainActor
 final class ExchangeIntentService: @unchecked Sendable {
     static let shared = ExchangeIntentService()
@@ -77,10 +27,6 @@ final class ExchangeIntentService: @unchecked Sendable {
         AppDependencyManager.shared.add(dependency: {
             await MainActor.run { ExchangeIntentService.shared }
         })
-    }
-
-    func install(store: FernletStore) {
-        storeAccess.install(store)
     }
 
     func loadStoreForUI(
