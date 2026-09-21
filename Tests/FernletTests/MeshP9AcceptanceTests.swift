@@ -875,64 +875,73 @@ struct MeshP9RecipeSwapAcceptanceTests {
 
 /// **Item 4, and the one clause of this battery that asserts a NON-zero.**
 ///
-/// The launcher's row asked for "the MC retirement as a zero-list". At the commit this battery
-/// lands, it is not zero and cannot be. `MeshTransportFactory.shippingDefault` is `.multipeer`, so
-/// every shipping launch builds a `MeshMultipeerSession`; first-meeting stranger admission has **no
-/// QUIC path** (plan §11 finding 3), so deleting the file ships a build in which two phones that
-/// have never met cannot found a mesh. Item 4 was therefore SPLIT: the four dead
-/// `_fernlet-near` / `_fernlet-recipe` Bonjour strings retired now (`[SPLIT: NOW]`, `db62de5`); the
-/// two files, the friend pair, the `MCPeerIDStore` wipe row and the permit list wait on the owner's
-/// cutover decision D-4.1 / D-4.3 (`[SPLIT: LATER]`).
+/// The launcher's row asked for "the MC retirement as a zero-list". It is still not zero, but the
+/// REASON changed on 2026-09-21 and so did half these cells. When this battery landed,
+/// `MeshTransportFactory.shippingDefault` was `.multipeer` and first-meeting stranger admission had
+/// no QUIC path, so both facts were pinned as the argument for keeping the files. The owner then
+/// took **D-4.3 (Option 1)** — provisional stranger admission while the join doors are open — and
+/// the **flip** landed: `shippingDefault` is `.quic`, the app's initializer builds a
+/// `NetworkMeshSession`, and no shipping launch constructs the MC radio at all.
 ///
-/// **So this suite asserts the CURRENT truth, in both directions, and that is the point.** A zero
-/// that is not zero cannot be written; a zero "for later" would be a wall that lies, which is worse
-/// than none — 9.4-NOW's own verify caught exactly that shape (a cell pinning four strings absent
-/// and forgetting the two a shipping radio still needs). Every cell below is therefore a cell the
-/// **cutover commit MUST edit**: it fails loudly on the day the friend mesh moves, with a message
-/// naming what else has to move with it. That is a handoff, not an obstruction.
+/// **What is left non-zero is a DELIBERATE HOLD, not a blocker.** The owner's third decision — "the
+/// series' split: flip, gate, then delete" — keeps `MeshMultipeerSession.swift`, `MCPeerIDStore.swift`,
+/// the `_fernlet-friend` plist pair and `TransportNeutralityBoundaryTests.permittedFiles` alive
+/// through the flip so a DEBUG build can be launched back onto MC (`FERNLET_MESH_TRANSPORT=multipeer`)
+/// to bisect a regression across the cutover boundary. They go in the **deletion round**, which is
+/// the commit that turns this suite into the zero-list it was always meant to become.
+///
+/// **So this suite still asserts the CURRENT truth, in both directions, and that is still the
+/// point.** A zero that is not zero cannot be written; a zero "for later" would be a wall that
+/// lies, which is worse than none — 9.4-NOW's own verify caught exactly that shape (a cell pinning
+/// four strings absent and forgetting the two a shipping radio still needs). Each cell below now
+/// says which of the two remaining commits moves it: the FLIP moved the values, the DELETION moves
+/// the files, the plist pair and the permit list.
 @Suite(.serialized)
 struct MeshP9McRetirementAcceptanceTests {
 
-    /// **Both MultipeerConnectivity files still exist, and the REASON is asserted beside them.**
+    /// **The friend mesh ships on QUIC, and both MultipeerConnectivity files are still here.**
     ///
-    /// Not a file count: the pin is on the two facts that make the deletion unsafe. A commit that
-    /// deletes the files *and* flips `shippingDefault` reddens here with the cutover checklist; a
-    /// commit that deletes them without flipping it reddens on the same line, which is the
-    /// dangerous half — that build ships a mesh whose factory cannot construct its default radio.
+    /// The cell the cutover was always going to rewrite, rewritten. Before the flip the two facts
+    /// pinned here were the ARGUMENT for keeping the files; since the flip they are the argument
+    /// for keeping them a little longer, and the direction of every value assertion has turned
+    /// over. `shippingDefault` is `.quic`, an empty environment resolves to `.quic`, and the
+    /// resolver's body names no radio literally — the same invariant read the other way round,
+    /// because a test build takes the `#if DEBUG` arm and cannot execute the Release one at all, so
+    /// a `return .multipeer` planted in the `#else` would put a shipping build back on the retired
+    /// radio with every other cell of this suite green.
     ///
-    /// **The two reasons are pinned as VALUES and as CODE, not as source prose** (item 9's fix
-    /// review, BLOCKER 2 and FIX 4). A cell that only greps `shippingDefault`'s declaration line
-    /// stays green while `resolvedKind`'s `#else` branch returns `.quic` — the friend mesh ships on
-    /// QUIC, the MC files are dead code, and every other assertion here still holds. So: the two
-    /// values are read (`@testable import ProximityKit` reaches the factory, which is what
-    /// `MeshTransportSelectionTests` — newly on the same CI line — asserts at unit level), and the
-    /// resolver's whole brace-matched body is pinned free of any radio literal, because a test
-    /// build takes the `#if DEBUG` arm and cannot execute the Release one at all. The second
-    /// reason — stranger admission has no QUIC path — is pinned at its refusal:
-    /// `MeshChannelIntroduction`'s roster switch maps `.stranger` to `.unknownIdentity`, which is
-    /// the line a first-meeting QUIC path would have to loosen.
+    /// **The file-existence half and the factory's `.multipeer` arm move in the DELETION round, not
+    /// here.** They are kept by the owner's "flip, gate, then delete" decision so a DEBUG build can
+    /// be launched back onto MC to bisect across the cutover boundary. A commit that deletes the
+    /// files reddens on the first line with the deletion checklist — which is the handoff this cell
+    /// exists to hand.
+    ///
+    /// The old second reason — "stranger admission has no QUIC path" — is discharged: D-4.3 landed
+    /// it, and the needle below is its successor, the refusal made CONDITIONAL rather than removed.
     @MainActor
-    @Test func theTwoMultipeerFilesStillExistBecauseTheFriendMeshStillShipsOnThem() throws {
+    @Test func theShippingDefaultIsQUICAndTheMultipeerFilesAreHeldForTheDeletionRound() throws {
         // R2: bounded by the two permitted files.
         for path in MeshP9Acceptance.multipeerFiles {
             #expect(FileManager.default.fileExists(atPath: RepoRoot.url(path).path), """
-                \(path) is gone. If this is the MC→QUIC cutover (decision D-4.1 / D-4.3, \
-                Docs/Mesh-P9-Item4-Design-2026-09-20.md), the same commit owes: \
-                MeshTransportFactory.shippingDefault flipped off .multipeer, a QUIC path for \
-                first-meeting stranger admission, _fernlet-friend._{tcp,udp} moved from the live \
-                Bonjour set to the retired one, the MCPeerIDStore wipe row turned into a legacy \
-                FileManager sweep (D-4.4), TransportNeutralityBoundaryTests.permittedFiles emptied, \
-                and this cell rewritten to the zero-list it was always meant to become
+                \(path) is gone. This is the DELETION round (the owner's "flip, gate, then delete"; \
+                the flip landed 2026-09-21), and the same commit owes: _fernlet-friend._{tcp,udp} \
+                moved from the live Bonjour set to the retired one in BOTH this battery and \
+                NoTrackingBoundaryTests, TransportNeutralityBoundaryTests.permittedFiles emptied, \
+                MeshTransportKind's .multipeer case and the factory arm below removed with it, the \
+                DEBUG FERNLET_MESH_TRANSPORT=multipeer bisect path retired from the runbook \
+                recipes, and this cell rewritten to the zero-list it was always meant to become
                 """)
         }
-        // The VALUES, not their declaration text.
-        #expect(MeshTransportFactory.shippingDefault == .multipeer, """
-            the mesh's shipping default is no longer MultipeerConnectivity — this is the cutover, \
-            and the checklist above applies
+        // The VALUES, not their declaration text. FLIPPED 2026-09-21 by the cutover: these two read
+        // `.multipeer` from the day this battery landed until the day the owner took D-4.3.
+        #expect(MeshTransportFactory.shippingDefault == .quic, """
+            the mesh's shipping default is no longer QUIC. Since the cutover (2026-09-21) that is a \
+            REVERSION, not a cutover: the retired radio is reachable only as a DEBUG bisect path, \
+            and a commit that makes it the default again owes an argument the flip's commit does not
             """)
-        #expect(MeshTransportFactory.resolvedKind(environment: [:]) == .multipeer, """
-            a launch that selects nothing no longer lands on MultipeerConnectivity. Every shipping \
-            launch takes this answer; the checklist above applies
+        #expect(MeshTransportFactory.resolvedKind(environment: [:]) == .quic, """
+            a launch that selects nothing no longer lands on QUIC. Every shipping launch takes this \
+            answer; see the line above
             """)
         let factory = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source(MeshP9Acceptance.transportSelectionPath))
@@ -940,16 +949,18 @@ struct MeshP9McRetirementAcceptanceTests {
             MeshRoutedSourceScan.bracedBody(
                 after: "static func resolvedKind(environment: [String: String])", in: factory),
             "the radio resolver is gone")
-        #expect(!resolver.contains(".quic"), """
+        #expect(!resolver.contains(".multipeer") && !resolver.contains(".quic"), """
             a branch of resolvedKind(environment:) names a radio literally. Every branch must \
             resolve through `shippingDefault` or through MeshTransportKind(rawValue:) — the \
-            Release branch is compiled out of this test build, so a `return .quic` there would \
-            ship the friend mesh on QUIC with every cell of this suite green
+            Release branch is compiled out of this test build, so a `return .multipeer` there would \
+            put the friend mesh back on the retired radio with every cell of this suite green. \
+            (Before the cutover this needle read the other way; the invariant never did.)
             """)
         #expect(factory.contains("case .multipeer: return MeshMultipeerSession()"), """
-            and the factory's one construction site is gone. (The P9 ledger's item 4 row says \
-            `MeshNetworkManager.init` constructs it; the construction lives HERE, in the factory \
-            the manager asks — the manager only names it in two doc comments.)
+            and the factory's MC construction site is gone. It is NOT on a shipping path any more — \
+            `shippingDefault` is `.quic` — but it is the one thing that still builds the retired \
+            radio for a DEBUG `FERNLET_MESH_TRANSPORT=multipeer` bisect launch, and it retires in \
+            the DELETION round with the file, not in the flip
             """)
         // The second reason, at the line that enforces it rather than in the note that states it.
         //
@@ -983,8 +994,12 @@ struct MeshP9McRetirementAcceptanceTests {
     /// `TransportNeutralityBoundaryTests` makes the same claim through a permit list it scans
     /// against; this is a second decomposition of it — the *claim* is re-spelled as a literal home
     /// list here, the *walker* is `MeshP7Acceptance.sources(under:)` and is never forked. Both halves
-    /// are needed: the wall's list is the thing 9.4-LATER empties, and a battery that called into it
-    /// would go green the moment the list did.
+    /// are needed: the wall's list is the thing the DELETION round empties, and a battery that
+    /// called into it would go green the moment the list did.
+    ///
+    /// **This cell is untouched by the FLIP and flips with the DELETION.** The two homes are still
+    /// two after the cutover: `shippingDefault` moved, the files did not. When they go, this
+    /// expectation becomes `homes.isEmpty` in the same commit as `permittedFiles == []`.
     ///
     /// Note the walk is over comment-STRIPPED sources. Prose about MultipeerConnectivity is fine and
     /// deliberately so — "what the retired MC advertiser could not do" is the sentence that explains
@@ -1027,8 +1042,14 @@ struct MeshP9McRetirementAcceptanceTests {
     /// not a surviving one: a missing service type kills discovery silently on device — no log, no
     /// observable state, no other test — and 9.4-NOW's first cut pinned the four dead strings absent
     /// while forgetting the two the shipping mesh still uses. `_fernlet-friend._{tcp,udp}` are LIVE,
-    /// not "neither": `shippingDefault` is `.multipeer`, and `MeshMultipeerSession` advertises and
-    /// browses them on every launch.
+    /// not "neither" — but the REASON moved at the cutover (2026-09-21) and this is that argument.
+    /// `shippingDefault` is `.quic` now, so no SHIPPING launch advertises or browses
+    /// `_fernlet-friend`; a DEBUG `FERNLET_MESH_TRANSPORT=multipeer` bisect launch still does, and
+    /// deleting a declared type that a reachable radio still browses is the silent on-device death
+    /// this cell's presence half exists to catch. So the pair stays in ``MeshP9Acceptance/liveBonjour``,
+    /// pinned PRESENT, until the DELETION round moves it to `.retiredBonjour` in the same commit
+    /// that removes the radio — a deliberate act, never a side effect. `NoTrackingBoundaryTests`
+    /// carries the same pair, the same way, and moves in the same commit.
     ///
     /// The three sets are this battery's OWN literals (`MeshP9Acceptance.retiredBonjour` /
     /// `.liveBonjour` / `.heldBonjour`); only the plist READER is shared with
@@ -1046,10 +1067,11 @@ struct MeshP9McRetirementAcceptanceTests {
             """)
         let missing = MeshP9Acceptance.liveBonjour.subtracting(declared).sorted()
         #expect(missing.isEmpty, """
-            \(missing) is no longer declared — a type a SHIPPING radio advertises or browses. \
-            Discovery dies silently on device. If this is the MC→QUIC cutover, move \
-            _fernlet-friend._{tcp,udp} from MeshP9Acceptance.liveBonjour to .retiredBonjour in the \
-            same commit that flips MeshTransportFactory.shippingDefault, and nowhere else
+            \(missing) is no longer declared — a type a reachable radio advertises or browses. \
+            Discovery dies silently on device. The flip did NOT move _fernlet-friend._{tcp,udp}: \
+            move them from MeshP9Acceptance.liveBonjour to .retiredBonjour in the DELETION round, \
+            in the same commit that removes MeshMultipeerSession.swift and the plist entries, and \
+            nowhere else
             """)
         let unclassified = declared
             .subtracting(MeshP9Acceptance.liveBonjour)
@@ -1064,12 +1086,21 @@ struct MeshP9McRetirementAcceptanceTests {
                 "the plist declares exactly the live five and the held two: \(declared.sorted())")
     }
 
-    /// **The cutover is the owner's decision, and the record of it is still in the tree.**
+    /// **The cutover was the owner's decision, and the record of it — question AND answer — is
+    /// still in the tree.**
     ///
     /// The three cells above assert a state; this one asserts that the *reason* for the state
     /// survives. A design note deleted or a ledger row quietly flipped to `done` would leave the
-    /// pins above looking like ordinary walls rather than a split nobody has resolved, and §17.1
+    /// pins above looking like ordinary walls rather than a decision somebody took, and §17.1
     /// would read as fully BUILT when it is not.
+    ///
+    /// **Widened at the flip (2026-09-21), not narrowed.** The survey's four labels still have to
+    /// survive — they are the question — and the cutover ledger's three ANSWERS now have to survive
+    /// beside them: D-4.3 taken as Option 1, D-4.4 taken as the pure retire (against the survey's
+    /// own recommendation, which is exactly the kind of thing that gets quietly re-written back),
+    /// and the series' split that says the two MC files outlive this commit. No cell was added:
+    /// widening the one that already reads the record is cheaper than a second reader of the same
+    /// two files, and it keeps the count on the mesh line where it was.
     @Test func theCutoverIsAnOwnerDecisionAndTheRecordOfItSurvives() throws {
         let design = try RepoRoot.source("Docs/Mesh-P9-Item4-Design-2026-09-20.md")
         // R2: bounded by the four decision labels.
@@ -1083,6 +1114,23 @@ struct MeshP9McRetirementAcceptanceTests {
         let ledger = try RepoRoot.source("Docs/Mesh-Migration-Loop-Ledger-P9.md")
         #expect(ledger.contains("9.4-LATER"), "the ledger no longer carries the deferred half")
         #expect(ledger.contains("blocked (owner)"), "nor that it is the owner's to unblock")
+        // The ANSWERS, in the round that took them. Added at the flip.
+        let cutover = try RepoRoot.source("Docs/Mesh-Migration-Loop-Ledger-Cutover-2026-09-21.md")
+        #expect(cutover.contains("TAKEN — Option 1"), """
+            the cutover ledger no longer records D-4.3 as taken. The flip above is only legitimate \
+            because the owner answered; an unrecorded answer makes every value pin in this suite \
+            look like somebody's preference
+            """)
+        #expect(cutover.contains("PURE RETIRE"), """
+            nor D-4.4. The owner chose the pure retire AGAINST the survey's recommendation — the \
+            wipe leg is gone and a pre-flip install's FernletPeerID.archive is left behind by \
+            delete-all — and that is the decision most likely to be silently un-made by a later \
+            reader who only finds the survey
+            """)
+        #expect(cutover.contains("Flip, gate, then delete"), """
+            nor the series' split, which is why the two MC files above are still here after the \
+            flip. Without it this suite reads as a cutover somebody half-finished
+            """)
         let plan = try RepoRoot.source("Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md")
         #expect(plan.contains("§17.1") || plan.contains("17.1"), "plan §17.1 is P9's specification")
     }
@@ -1298,7 +1346,7 @@ struct MeshP9HonestyAcceptanceTests {
     /// with no compiler half must red when it leaves the line rather than go quiet:
     /// `TransportNeutralityBoundaryTests` (also pinned in the selector wall — clause (d) defers to
     /// it for the app target, where a substring walk cannot run) and `MeshTransportSelectionTests`,
-    /// whose `theAppsInitializerRunsOnTheMultipeerRadio` drives the app's own initializer. Clause
+    /// whose `theAppsInitializerRunsOnTheQUICRadio` drives the app's own initializer. Clause
     /// (d)'s value pins are taken in a DEBUG test build and therefore cannot execute the Release
     /// arm of `resolvedKind(environment:)` at all; that suite is the other half of the same claim.
     @Test func everySuiteHereAndEveryP9SuiteIsOnTheMeshStep() throws {
