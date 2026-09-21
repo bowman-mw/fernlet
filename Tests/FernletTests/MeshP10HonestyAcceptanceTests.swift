@@ -34,8 +34,10 @@
 // early in each phase. `Docs/Mesh-Migration-Loop-Ledger-P10.md` is not committed until this phase's
 // close-out, so a cell that read it would pass in the worktree that wrote it and throw in every
 // clean checkout and on CI — an acceptance battery that can only pass where it was authored. Every
-// row below reads a TRACKED record instead: the plan, the runbook, the workflow, the tree itself,
-// and — for P10's own deferred decision, which the plan does not carry — `Docs/FileIndex.md`.
+// row below reads a TRACKED record instead: the plan, the runbook, the workflow and the tree itself.
+// P10's own deferred decision was homed on `Docs/FileIndex.md` when this suite was written, because
+// nothing in the plan carried it; the close-out gave it a real home — §28.3's decision table — and
+// this suite reads the plan for it, so the assertion is no longer circular with the file catalogue.
 //
 // Neither determinism digest moves and neither is spelled here contiguously: each keeps its ONE
 // home in `MeshP5AcceptanceTests`, and the gate that runs this battery re-runs the determinism
@@ -212,11 +214,10 @@ struct MeshP10HonestyAcceptanceTests {
     /// migration admits it has not proved. The plan carries the rest of the inherited debts too:
     /// item 0 blocked for want of phones, the MC→QUIC cutover held at D-4.1, and the lock finding.
     ///
-    /// P10's own deferred decision is the one that has no home in the plan, because it was taken
-    /// inside this phase. It is pinned on `Docs/FileIndex.md`, which is tracked and which this
-    /// commit writes it into — for the reason this file's header gives: the phase ledger that would
-    /// otherwise carry it is not committed until the close-out, and a cell that read it would pass
-    /// only in the worktree that wrote it.
+    /// P10's own deferred decision had no home in the plan when this suite was written, because it
+    /// was taken inside the phase; it was pinned on `Docs/FileIndex.md` in the meantime. The
+    /// close-out wrote it into §28.3's decision table, so it is read off the PLAN here, beside the
+    /// debts P10 inherited. The phase ledger is still not read — see this file's header.
     @Test func theDeviceGateAndTheOwnerCallsAreStillRecordedAsOwed() throws {
         let plan = try RepoRoot.source(MeshP10Acceptance.planPath)
         // R2: bounded by the four stated sections.
@@ -237,11 +238,10 @@ struct MeshP10HonestyAcceptanceTests {
             not fixable here — the policy row belongs to P7's 23 040-row product
             """)
 
-        let index = try RepoRoot.source(MeshP10Acceptance.fileIndexPath)
-        #expect(index.contains("D-10.4.5"), """
-            P10's own deferred decision left the tracked record: the foreground `publish(_:)` still \
-            reloads unconditionally. Clause (3) pins that as the CURRENT truth, which is only \
-            honest for as long as the decision is written down somewhere as open
+        #expect(plan.contains("D-10.4.5"), """
+            P10's own deferred decision left the plan: the foreground `publish(_:)` still reloads \
+            unconditionally. Clause (3) pins that as the CURRENT truth, which is only honest for \
+            as long as the decision is written down somewhere as open
             """)
     }
 }

@@ -75,9 +75,6 @@ enum MeshP10Acceptance {
     /// The lane runbook — where item 8 recorded what a Simulator can and cannot show of a refresh.
     static let runbookPath = "Docs/Mesh-Network-Feasibility-Runbook.md"
 
-    /// The tracked file catalogue — the committed home of P10's own deferred decision.
-    static let fileIndexPath = "Docs/FileIndex.md"
-
     /// The frozen task identifier, spelled as a LITERAL.
     ///
     /// Repeated rather than read off `CompanionRefresh.taskIdentifier`: a cell that compares the
