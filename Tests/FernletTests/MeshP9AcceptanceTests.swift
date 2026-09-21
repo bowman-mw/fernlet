@@ -952,13 +952,30 @@ struct MeshP9McRetirementAcceptanceTests {
             the manager asks — the manager only names it in two doc comments.)
             """)
         // The second reason, at the line that enforces it rather than in the note that states it.
+        //
+        // **The needle MOVED on 2026-09-21, deliberately, and this is the argument.** It used to be
+        // the unconditional `case .stranger: return .unknownIdentity` — the "stranger admission has
+        // no QUIC path" half of the split, kept so loosening it could not land silently. The owner
+        // took D-4.3 (Option 1) on the stranger-admission design's recommendation, so it has now
+        // landed, and it did not land silently: it landed here. What replaces it is the same
+        // refusal with the ONE condition the decision added — a stranger is refused unless the
+        // owner's join doors are open — so the needle still fails if the arm is deleted, if it
+        // stops naming a refusal, or if the refusal stops being the default. What it no longer
+        // claims is that the QUIC radio is members-only before any app frame, because it is not:
+        // see `MeshIntroductionRoster.admitsStrangersProvisionally` and the amendment to plan
+        // §7.2's "non-roster member" bullet recorded on `MeshIntroductionAuthority`'s scope
+        // paragraph.
         let introduction = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/MeshChannelIntroduction.swift"))
-        #expect(introduction.contains("case .stranger: return .unknownIdentity"), """
-            the QUIC channel introduction no longer refuses a peer the roster calls a stranger. \
-            That refusal IS the "stranger admission has no QUIC path" half of the split: loosening \
-            it is the cutover's other prerequisite, and it must not land silently
-            """)
+        #expect(
+            introduction.contains("guard roster.admitsStrangersProvisionally else { return .unknownIdentity }"),
+            """
+            the QUIC channel introduction no longer refuses a peer the roster calls a stranger \
+            BY DEFAULT. Since D-4.3 the refusal is conditional on the owner's join doors being \
+            open, and `unknownIdentity` must stay the answer when they are shut — widening it \
+            further is a second decision, and it must not land silently either
+            """
+        )
     }
 
     /// **The framework import has exactly two homes, and they are those two files.**

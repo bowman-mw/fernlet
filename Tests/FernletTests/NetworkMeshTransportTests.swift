@@ -393,6 +393,45 @@ struct MeshLinkTableTests {
         #expect(table.reproposalCount(of: Self.alpha) == MeshLinkTable.maxReproposalsPerEndpoint)
     }
 
+    /// A pre-commit TIMEOUT gives its booking back; an owner refusal does not (D-4.3 Option 1's
+    /// "two bounds to name").
+    ///
+    /// The budget exists for *connect → the owner refuses the seat → disconnect → idle → re-offer*,
+    /// and provisional admission makes the other shape common: a stranger is seated and then evicted
+    /// by the 25 s / 60 s dwell deadline with nobody having refused anything. Six of those used to
+    /// strand a genuine friend for the rest of the session.
+    ///
+    /// It is NOT the refill the cap's own doc rules out. That one was "a successful connect gives
+    /// the budget back" — which an owner refusal also earns, so the refusal loop would run forever.
+    /// Six refusals still end the sweep here, with timeouts interleaved.
+    @Test func aTimeoutRefundsItsReproposalAndARefusalDoesNot() {
+        var table = MeshLinkTable()
+
+        _ = table.admitRepropose(Self.alpha)
+        #expect(table.reproposalCount(of: Self.alpha) == 1)
+        table.refundRepropose(Self.alpha)
+        #expect(table.reproposalCount(of: Self.alpha) == 0, "a timeout eviction spends nothing")
+
+        // Refunds cannot mint offers: an INBOUND tunnel books nothing, so a peer that dialed this
+        // device and timed out has nothing to give back.
+        table.refundRepropose(Self.alpha)
+        table.refundRepropose(Self.beta)
+        #expect(table.reproposalCount(of: Self.alpha) == 0, "the count floors at zero")
+        #expect(table.reproposalCount(of: Self.beta) == 0)
+
+        // Six REFUSALS still end the sweep, however many timeouts are interleaved.
+        for _ in 1...MeshLinkTable.maxReproposalsPerEndpoint {
+            let refusalOffer = table.admitRepropose(Self.alpha)
+            #expect(refusalOffer)
+            _ = table.admitRepropose(Self.beta)
+            table.refundRepropose(Self.beta)
+        }
+        let overBudget = table.admitRepropose(Self.alpha)
+        #expect(!overBudget, "six refusals spend the budget")
+        let stillOffered = table.admitRepropose(Self.beta)
+        #expect(stillOffered, "six timeouts spend none of it")
+    }
+
     /// Budgets are per endpoint, and die with the endpoint — so the map cannot grow without bound.
     @Test func theReproposeBudgetIsPerEndpointAndDiesWithIt() {
         var table = MeshLinkTable()
@@ -1267,8 +1306,15 @@ enum MeshIntroductionHarness {
         ))
     }
 
-    static func roster(_ endpoints: Endpoint..., barred: [Data] = []) -> MeshIntroductionRoster {
-        MeshIntroductionRoster(members: endpoints.map(\.publicKey), barred: barred)
+    static func roster(
+        _ endpoints: Endpoint...,
+        barred: [Data] = [],
+        doorsOpen: Bool = false
+    ) -> MeshIntroductionRoster {
+        MeshIntroductionRoster(
+            members: endpoints.map(\.publicKey), barred: barred,
+            admitsStrangersProvisionally: doorsOpen
+        )
     }
 
     /// Signs a transcript the way `IdentityService.sign` does — through the purpose's framing check.
@@ -1308,10 +1354,17 @@ enum MeshIntroductionHarness {
     ///
     /// Each side gets its own nonce cache, matching production: the caches are per session, not per
     /// mesh, so a replay is only a replay to the side that already saw it.
+    /// - Parameters:
+    ///   - roster: What the RESPONDER judges the initiator's hello against.
+    ///   - initiatorRoster: What the INITIATOR judges the responder's hello against, when the two
+    ///     ends do not hold the same view. Nil means "the same roster", which is every symmetric
+    ///     row; D-4.3's first-meeting rows are asymmetric by nature — a mesh-less joiner's roster is
+    ///     empty while the founder's names itself — so they pass both.
     static func run(
         initiator: Endpoint,
         responder: Endpoint,
         roster: MeshIntroductionRoster,
+        initiatorRoster: MeshIntroductionRoster? = nil,
         initiatorBinding: Data = binding,
         responderBinding: Data = binding
     ) throws -> Run {
@@ -1325,7 +1378,7 @@ enum MeshIntroductionHarness {
             initiator.hello, roster: roster, nonces: &responderNonces
         )
         state.initiatorHelloRejection = state.initiator.receive(
-            responder.hello, roster: roster, nonces: &initiatorNonces
+            responder.hello, roster: initiatorRoster ?? roster, nonces: &initiatorNonces
         )
         guard state.responderHelloRejection == nil, state.initiatorHelloRejection == nil else { return state }
         state.initiatorTranscript = state.initiator.bind(channelBindingHash: initiatorBinding)
@@ -1752,6 +1805,192 @@ struct MeshChannelIntroductionTests {
         #expect(bound == nil)
         #expect(exchange.derivedTranscript == nil)
     }
+
+    // MARK: Provisional stranger admission (D-4.3 Option 1)
+
+    /// Doors shut is the unchanged answer: a key nobody here knows is `unknownIdentity`, and the
+    /// exchange keeps nothing — no transcript to sign, no identity to hand onward.
+    ///
+    /// `MeshIntroductionRoster.empty` and every roster built without the flag answer this way, which
+    /// is the fail-closed direction the whole seam runs in: a transport that has not been told the
+    /// join doors are open must refuse.
+    @Test func aStrangerIsRefusedWhileTheJoinDoorsAreShut() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        let stranger = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "stranger")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        let rejection = exchange.receive(
+            stranger.hello, roster: MeshIntroductionHarness.roster(local), nonces: &nonces
+        )
+        let bound = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+
+        #expect(rejection == .unknownIdentity)
+        #expect(bound == nil, "a refused hello is not recorded, so there is nothing to sign")
+        #expect(exchange.derivedTranscript == nil)
+        #expect(!MeshIntroductionRoster.empty.admitsStrangersProvisionally,
+                "the empty roster keeps the doors shut, or a transport with no owner admits everyone")
+        #expect(!MeshIntroductionHarness.roster(local).admitsStrangersProvisionally,
+                "and so does every roster built without the flag")
+    }
+
+    /// Doors open: the same stranger's exchange PROCEEDS — and still has to prove it holds the key
+    /// it presented. Provisional is a tunnel, not a pass.
+    @Test func aStrangerIntroducesWhileTheDoorsAreOpenAndStillProvesItsKey() throws {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        let stranger = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "stranger")
+        let open = MeshIntroductionHarness.roster(local, doorsOpen: true)
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        let admitted = exchange.receive(stranger.hello, roster: open, nonces: &nonces)
+        #expect(admitted == nil)
+        let bound = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        let transcript = try #require(bound)
+
+        // Somebody else's signature over the right bytes is still nobody.
+        let impostor = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "impostor")
+        let forged = try MeshIntroductionHarness.introduction(
+            over: transcript, binding: MeshIntroductionHarness.binding, by: impostor.signingKey
+        )
+        #expect(exchange.review(forged) == .rejected(.signatureInvalid),
+                "review still verifies against the hello's key — the open doors moved no signature check")
+        #expect(exchange.review(forged).verifiedPeer == nil,
+                "and a rejected review hands nothing onward")
+
+        let honest = try MeshIntroductionHarness.introduction(
+            over: transcript, binding: MeshIntroductionHarness.binding, by: stranger.signingKey
+        )
+        let outcome = exchange.review(honest)
+        #expect(outcome.verifiedPeer?.signingPublicKey == stranger.publicKey)
+        #expect(outcome.verifiedPeer?.sessionID == "stranger")
+    }
+
+    /// `barred` is tested first and the open doors cannot reach it. A departed, removed, revoked or
+    /// blocked key is refused by name with the doors wide open — which is what the rotation that
+    /// follows a removal assumes.
+    @Test func barredBeatsProvisionalAdmission() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        let removed = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "removed")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        let rejection = exchange.receive(
+            removed.hello,
+            roster: MeshIntroductionHarness.roster(local, barred: [removed.publicKey], doorsOpen: true),
+            nonces: &nonces
+        )
+
+        let bound = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        #expect(rejection == .barredMember)
+        #expect(bound == nil, "and it kept nothing, exactly as a shut-doors refusal does")
+
+        // A barred key naming ANOTHER mesh is refused too — the mesh-id tolerance is for strangers
+        // alone, so this one never reaches the barred arm and dies one guard earlier. Both answers
+        // are refusals; which one it is, is the diagnostic.
+        var foreign = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        let elsewhere = MeshIntroductionHarness.endpoint(meshID: UUID(), sessionID: "elsewhere")
+        let foreignRejection = foreign.receive(
+            elsewhere.hello,
+            roster: MeshIntroductionHarness.roster(local, barred: [elsewhere.publicKey], doorsOpen: true),
+            nonces: &nonces
+        )
+        #expect(foreignRejection == .foreignMesh)
+        #expect(foreign.derivedTranscript == nil)
+    }
+
+    /// The first meeting the equality rule used to make impossible: a device with **no mesh** —
+    /// which can only send the all-zero `unboundMeshID` — dials an established OPEN mesh.
+    ///
+    /// Both ends see a stranger and both have their doors open, so both tolerate the mismatch, and
+    /// the transcript takes the RESPONDER's id on both sides. Without that last rule each end would
+    /// sign different bytes and the meeting would fail as `signatureInvalid` instead.
+    @Test func aMeshlessDialerIntroducesToAnOpenMesh() throws {
+        let hostMesh = UUID()
+        let unbound = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        let joiner = MeshIntroductionHarness.endpoint(meshID: unbound, epochRef: "", sessionID: "joiner")
+        let host = MeshIntroductionHarness.endpoint(meshID: hostMesh, sessionID: "host")
+
+        let run = try MeshIntroductionHarness.run(
+            initiator: joiner, responder: host,
+            roster: MeshIntroductionHarness.roster(host, doorsOpen: true),
+            initiatorRoster: MeshIntroductionHarness.roster(doorsOpen: true)
+        )
+
+        #expect(run.initiatorHelloRejection == nil, "the joiner admits the host it dialed")
+        #expect(run.responderHelloRejection == nil, "and the host admits the stranger asking in")
+        #expect(run.initiatorTranscript == run.responderTranscript, "both ends must sign identical bytes")
+        #expect(run.initiator.derivedTranscript?.meshID == hostMesh,
+                "the transcript names the mesh being asked INTO, on both sides")
+        #expect(run.responder.derivedTranscript?.meshID == hostMesh)
+        #expect(run.responderOutcome?.verifiedPeer?.signingPublicKey == joiner.publicKey)
+        #expect(run.initiatorOutcome?.verifiedPeer?.signingPublicKey == host.publicKey)
+    }
+
+    /// The double mint, which on this radio was a DEADLOCK rather than a nuisance: both halves of a
+    /// founding pair mint their own `meshID` at their own first commit, and with no MC radio left to
+    /// repair it, an unconditional equality check refused every re-dial for the rest of the session.
+    ///
+    /// Each side's one-member roster makes the other a stranger, so the tolerance covers it with no
+    /// newborn-specific arm at all.
+    @Test func twoNewbornFoundersEachHoldingTheirOwnMeshIDStillIntroduce() throws {
+        let alice = MeshIntroductionHarness.endpoint(meshID: UUID(), sessionID: "alice")
+        let bob = MeshIntroductionHarness.endpoint(meshID: UUID(), sessionID: "bob")
+
+        let run = try MeshIntroductionHarness.run(
+            initiator: alice, responder: bob,
+            roster: MeshIntroductionHarness.roster(bob, doorsOpen: true),
+            initiatorRoster: MeshIntroductionHarness.roster(alice, doorsOpen: true)
+        )
+
+        #expect(run.initiatorHelloRejection == nil)
+        #expect(run.responderHelloRejection == nil)
+        #expect(run.initiatorTranscript == run.responderTranscript)
+        #expect(run.initiator.derivedTranscript?.meshID == bob.hello.meshID,
+                "the responder's id, deterministically, so the two derivations agree")
+        #expect(run.responderOutcome?.verifiedPeer?.signingPublicKey == alice.publicKey)
+        #expect(run.initiatorOutcome?.verifiedPeer?.signingPublicKey == bob.publicKey)
+
+        // With the doors SHUT the same pair is refused at the roster, not at the mesh id: the
+        // tolerance and the admission are one decision, so neither survives the other.
+        let shut = try MeshIntroductionHarness.run(
+            initiator: alice, responder: bob,
+            roster: MeshIntroductionHarness.roster(bob),
+            initiatorRoster: MeshIntroductionHarness.roster(alice)
+        )
+        #expect(shut.responderHelloRejection == .foreignMesh)
+    }
+
+    /// A key this roster NAMES, arriving under another mesh's id, is still `foreignMesh`. The
+    /// tolerance is for a peer asking its way in, never for a member claiming to be somewhere else —
+    /// that is a branch this tunnel must not join, and plan §7.2's bullet is untouched for it.
+    @Test func twoMembersOfDifferentMeshesAreStillForeignMesh() throws {
+        let alice = MeshIntroductionHarness.endpoint(meshID: UUID(), sessionID: "alice")
+        let bob = MeshIntroductionHarness.endpoint(meshID: UUID(), sessionID: "bob")
+        let bothNamed = MeshIntroductionHarness.roster(alice, bob, doorsOpen: true)
+
+        let run = try MeshIntroductionHarness.run(initiator: alice, responder: bob, roster: bothNamed)
+
+        #expect(run.responderHelloRejection == .foreignMesh)
+        #expect(run.initiatorHelloRejection == .foreignMesh)
+        #expect(run.responder.derivedTranscript == nil, "and neither side kept anything")
+        #expect(run.initiator.derivedTranscript == nil)
+    }
+
+    /// The transcript's mesh-id rule, stated on its own: the responder's, always, whichever way the
+    /// two hellos disagree — and identical to the old answer whenever they agree, which is why no
+    /// existing golden moves.
+    @Test func theTranscriptTakesTheRespondersMeshID() {
+        let dialed = UUID()
+        let dialer = UUID()
+        #expect(MeshChannelIntroductionExchange.agreedMeshID(dialer, dialed) == dialed)
+        #expect(MeshChannelIntroductionExchange.agreedMeshID(dialed, dialed) == dialed,
+                "equal ids are the only case that could exist before D-4.3, and it is unchanged")
+        #expect(MeshChannelIntroductionExchange.agreedMeshID(dialed, dialer) == dialer)
+    }
 }
 
 // MARK: - MeshChannelIntroductionTranscriptTests
@@ -1856,6 +2095,25 @@ struct MeshIntroductionRosterTests {
         let roster = MeshIntroductionRoster(members: members, barred: barred)
         #expect(roster.memberCount == MeshIntroductionRoster.maxMembers)
         #expect(roster.barredCount == MeshIntroductionRoster.maxBarred)
+    }
+
+    /// The posture bit defaults shut and changes no verdict (D-4.3 Option 1). It says whether a
+    /// `stranger` may hold a tunnel, never who is a stranger — so a member stays a member, a barred
+    /// key stays barred, and a caller that never heard of the flag keeps the old behaviour exactly.
+    @Test func theProvisionalFlagDefaultsShutAndMovesNoVerdict() {
+        let shut = MeshIntroductionRoster(members: [Self.key(1)], barred: [Self.key(2)])
+        #expect(!shut.admitsStrangersProvisionally)
+        #expect(!MeshIntroductionRoster.empty.admitsStrangersProvisionally)
+
+        let open = MeshIntroductionRoster(
+            members: [Self.key(1)], barred: [Self.key(2)], admitsStrangersProvisionally: true
+        )
+        #expect(open.admitsStrangersProvisionally)
+        for byte: UInt8 in [1, 2, 3] {
+            #expect(open.verdict(for: Self.key(byte)) == shut.verdict(for: Self.key(byte)),
+                    "the flag is posture, not membership: key \(byte) verdicts the same either way")
+        }
+        #expect(open.verdict(for: Self.key(3)) == .stranger, "and a stranger is still named one")
     }
 }
 
