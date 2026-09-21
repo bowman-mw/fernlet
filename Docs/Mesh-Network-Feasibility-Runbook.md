@@ -2490,6 +2490,120 @@ line cannot say *which* refusal happened or *which* trigger asked. Nothing is fi
 changes no production code — but whoever runs the device rows should install the private-data
 profile on the phone first, or accept that the cold-launch row comes back with redacted context.
 
+#### Device run, 2026-09-21 — P10's eight rows (plan §15.5) on the owner's phone
+
+**Environment.** `main` = `0a85e06` (Lane D's plan addendum), rebuilt for this run (`xcodebuild build -scheme Fernlet
+-configuration Debug -destination platform=iOS,id=<udid>`, automatic signing, 16:58:56Z → 17:01:15Z, `** BUILD
+SUCCEEDED **`, zero `error:`), installed fresh (STATE.md's 17:02:30Z; devicectl keeps no install log). Phone: the owner's **iPhone 17 Pro Max**, iOS **26.6.1**,
+CoreDevice `11FF8B2D…`, `transportType: localNetwork` with the **cable out until ≈17:58Z** (`en9 present = 0` at the
+17:02:53Z preflight) and **in, `transportType: wired`, at the 17:59:25Z and 18:43:03Z preflights**. Mac: Xcode 26.5. Same session as Lane D, same recipe: one `xcodebuild` at a
+time, the app driven with `xcrun devicectl device process launch … --console --environment-variables
+'{"OS_ACTIVITY_DT_MODE":"YES"}' MBO.Fernlet -- -completeOnboarding`, the console transcript kept as the app-side witness.
+Charging: **off the charger until ≈17:58** (cable out, the owner's report), **charging from ≈17:58** (cable in, `transportType: wired`); every row below says which.
+
+**The private-data logging profile — built three times, refused three times.** There is no `.mobileconfig` in the
+repo, so one was written for the run: one `com.apple.system.logging` payload, served over the LAN with the
+`application/x-apple-aspen-config` MIME type and opened in the phone's Safari through `devicectl … launch --payload-url
+<url> com.apple.mobilesafari` (the phone fetched each version; the Allow → Settings → Install taps are the owner's).
+**iOS 26.6.1 refuses an unsigned profile** — not with the old red "Not Signed" warning, but with *Profile error: the
+profile "Fernlet Private Data Logging" has an invalid signature* (v1, the flat `Enable-Private-Data` at the payload's
+top level; v2, Apple's documented shape with a `System` dict and per-subsystem `Subsystems`, 17:33Z). v3 (17:45Z) is v2
+CMS-signed with the Mac's `Apple Development` identity (`security cms -S -N "<identity>" -i v2 -o v3`; it decodes back
+to the plist), which chains to Apple Root CA on the phone. The check for "installed" is not a guess: a 20 s `xctrace`
+window carries `<private>` tokens from system processes (`backboardd`, `CoreBrightness`, …) while the profile is off —
+**759** lines carry it at 17:13:24Z; the "on" half of the check was never reached, because **the signed v3 was refused
+with the same words.** What that
+costs, and only that: every row where devicectl launched the app reads in the clear anyway (the `OS_ACTIVITY_DT_MODE`
+fact below), and D1's cold launch is witnessed by `xctrace` from its public event names plus `chronod`'s own reload
+line — its `outcome=` value is the one thing this run cannot read. The two ways left are the owner's to take, not a
+session's: a certificate from an authority the phone already trusts, or a self-signed authority installed and trusted
+on the phone (a trust-store change). Stop condition 3, applied to one value.
+
+**How the phone's log was read — three doors tried, one open.**
+
+1. `xcrun devicectl device sysdiagnose` **fails, wired or wireless**: `CoreDeviceCLISupport.DiagnoseError error 0`,
+   three tries over Wi-Fi (destination directory pre-created, `--verbose` adds nothing past "Acquired usage
+   assertion") and one more at 18:00:44Z with the cable in and `transportType: wired` — the same error, so it is not
+   the transport.
+2. `/usr/bin/log collect --device-udid <udid>` → `Must be root to collect logs from attached device`. (And `log` is a
+   zsh **builtin** — the `/usr/bin/` prefix is load-bearing in a script.)
+3. **`xcrun xctrace record --device <udid> --template Logging --all-processes --time-limit <n>` works** over Wi-Fi,
+   without root and without a launcher, and is what makes a cold-launch row observable at all. Export with
+   `xcrun xctrace export --input <trace> --xpath '/trace-toc/run[@number="1"]/data/table[@schema="os-log"]'`; grep the
+   XML. Cost: ≈ 13 MB of trace per minute on disk, ≈ 30 MB of XML per minute exported. It **honours redaction** —
+   system processes' `%{private}` arguments read `<private>` in the export — so it doubles as the profile check.
+
+Two facts about the two witnesses, both measured here. **`OS_ACTIVITY_DT_MODE=YES` in the launch environment puts the
+app's audit contexts in the clear in logd too**, not only in the console mirror: the export of a window spanning the
+first submission shows `companionRefresh.submitted trigger=background` with its value while `backboardd` beside it is
+redacted. DT_MODE therefore substitutes for the profile on every devicectl-launched row, and on none of the rows where
+iOS launches the app itself (D1). And **the console mirror does not carry the BackgroundTasks framework's
+`submitTaskRequest:` line** — it carries `[BGSTFramework] updateTaskRequest …` for Core Data's own CloudKit export task
+and nothing for ours — so the framework-side witness for every row below is the `xctrace` export.
+
+**The debugger shortcut, on a device.** `xcrun lldb` reaches the phone (`device select <coredevice-id>`, then `device
+process attach --pid <pid>`), but the attach is **asynchronous** and `--batch` runs the next command "while the process
+is attaching" (an `expr` is refused for that reason, and a `process status` after a six-second sleep hung until killed).
+Feeding the commands on **stdin** to a non-batch `lldb` after the `-o` attach works: `expr -a true … (BOOL)true` returned
+`YES` with the app in the foreground, and `[[BGTaskScheduler sharedScheduler]
+_simulateLaunchForTaskWithIdentifier:@"MBO.Fernlet.companion-refresh"]` ran, returned nothing, and **delivered nothing**
+— no `trigger=handle`, no `runFinished`, no framework line in the mirror — with a request pending at the time (this
+is the opposite precondition from Lane E's Simulator, where the SPI declined because nothing was pending). Ten minutes,
+as budgeted; the rows below rely on the schedule.
+
+**Timeline (UTC).**
+
+| When | What | Evidence |
+| --- | --- | --- |
+| 17:02:54.663 | Launch (console, DT_MODE), pid 9739; registration accepted | `[audit] companionRefresh.registered` |
+| 17:03:39 | Backgrounded by `devicectl … launch --activate com.apple.mobilesafari` | the `.background` scene edge |
+| **17:03:40.158** | **Submission ACCEPTED** — the first on any machine | `[audit] companionRefresh.submitted trigger=background`; framework (xctrace): `submitTaskRequest: <BGAppRefreshTaskRequest: MBO.Fernlet.companion-refresh, earliestBeginDate: 2026-09-21 17:18:40 +0000>` — submit + 15:00 to the second; the scheduler's activity `bgRefresh-MBO.Fernlet.companion-refresh:10C5F0` |
+| 17:04:38 | Fronted again (`--activate MBO.Fernlet`, no `--terminate-existing`: pid 9739 kept) | — |
+| 17:06:39 – 17:12:25 | The lldb probe, three attempts, verdict above | `run1/lldb-simulate-launch{,2,3}.log` |
+| 17:11:20.643 | A `.background` edge with a request pending (the app fell to background while lldb held it) | `[audit] companionRefresh.edgeFoundARequestAlreadyPending` — **D7** |
+| 17:12:43.594 | The same edge again, Safari re-activated from the Mac at 17:12:42Z | `[audit] companionRefresh.edgeFoundARequestAlreadyPending` — **D7**, twice |
+| 17:18:40 | The floor. No grant followed it in the 39 minutes the phone stayed off the charger (≈17:58), screen unlocked | the console carries nothing after 17:33:38 |
+| 17:33:38.352 | A third edge, from the Safari activation that opened the v2 profile (something had fronted Fernlet in between — inferred, not logged) | `[audit] companionRefresh.edgeFoundARequestAlreadyPending` — **D7**, three of three, no floor slide |
+| 17:57:58.894 | **pid 9739 killed with signal 9** while backgrounded. **Cause unread**: nothing in the trace at that second names a reason; the cable went in within the same minute and the owner was on Settings → Fernlet twenty seconds later, and either would do it (a wired console session lost, or a per-app permission change — iOS SIGKILLs for both). The per-app Background App Refresh switch is on that Settings page, so **D5's toggle will cost the process every time** | console: `App terminated due to signal 9`; trace: `termination reported by launchd ( 11 , 0 , 9 )` |
+| 17:58:19.179 | **A launch nobody on the Mac made — and not the refresh either.** `liveactivitiesd`: `Activity authorization for bundleid: MBO.Fernlet changed to: 1` (17:58:17.906, the Live Activities switch) → `Launching process to deliver push token` → `Sending request to open "MBO.Fernlet"`; pid 10146 registered (`companionRefresh.registered <private>` — the empty context renders `<private>` with no DT_MODE, which is how a non-devicectl launch is recognised) and was killed 1.06 s later, between `Preferences … TCCAccessSetInternal service=kTCCServiceFaceID` (17:58:18.699) and `…Camera` (17:58:19.049) for `MBO.Fernlet` — a permission change SIGKILLs the app. Recorded because it is exactly the shape a D1 cold launch would have, from the wrong daemon | trace, 17:58:17.906 → 17:58:20.239 |
+| — | The cable was IN at the next preflight (`en9` present, `transportType: wired`): charging from here on | preflight |
+| 17:59:26.454 | **Low Power Mode ON** (the owner's report — no log line carries the power state; the per-app Background App Refresh switch greys out under it), cable in, charging: relaunch, pid 10156, registration accepted | `[audit] companionRefresh.registered` |
+| **17:59:28.202** | **Submission ACCEPTED under Low Power Mode** — the edge fired by Safari at 17:59:27; floor 18:14:28 | `[audit] companionRefresh.submitted trigger=background` — **D6, the "on" half** |
+| 18:04:56.294, 18:05:02.497 | Two more edges with the request pending (the owner fronted Fernlet), under Low Power Mode | `edgeFoundARequestAlreadyPending` — **D7**, five of five |
+| before 18:25 | pid 10156 killed with signal 9 again (the owner at the phone; cause not read — see the witness gap below); phone locked at 18:25 | console: `App terminated due to signal 9` |
+| 18:27:37 | pid 10605 appeared with no launcher on the Mac, the phone unlocked, Low Power Mode still on — **the owner opening Fernlet** (confirmed by the owner at 18:46). Worth a row because the recording spanning that minute was stopped early to read it, and a `SIGINT` to a background `xctrace` leaves the bundle unreadable (`Document Missing Template Error`) — the first of two Instruments lessons this run paid for. **A pid-appearance poll cannot tell a cold launch from a tap; only the trace can** | `devicectl … processes` poll; the owner |
+| 18:28:16 → 18:42:33 | **Witness gap.** The early stop above, then a second session started while the first was finalising (`_lockKPerf: could not lock kperf. Likely another session just started` — the second lesson), then a leftover recorder that had to be killed. No line from the phone for fourteen minutes | `run1/run.txt` |
+| 18:42:33 | Recording resumed as sequential 15-minute chunks (`chunks.sh`: each starts only when no `xctrace` is alive) | `c-2.trace` … |
+| 18:43:04.280 | Relaunch (console, DT_MODE) so the process that receives the next grant is readable; pid 10752 registered. Low Power Mode on, cable in, charging | `[audit] companionRefresh.registered` |
+| **18:43:05.901** | **Submission ACCEPTED**, floor 18:58:05 | `[audit] companionRefresh.submitted trigger=background` |
+| ≈18:45 | **Low Power Mode OFF** (the owner), request from 18:43:05 still pending — so D6's delivery half reads "accepted under Low Power Mode, delivered after it?" | the owner, 18:46 |
+| 18:47 | **D5's switch cannot be flipped on this phone.** With Low Power Mode off, Settings → General → Background App Refresh → Fernlet is disabled (it only *shows* off while Low Power Mode is on). Submissions are accepted, so refresh is not off for the app — the switch itself is locked, which on an unmanaged phone is what a Screen Time restriction (Content & Privacy Restrictions → Allow Changes → *Background App Activities*) looks like. Not a code finding; the row waits on the owner lifting the restriction | the owner, 18:47 |
+| 18:58:05 | The floor. **No grant by the time this record was written**; the app-side witness (console pid 3492) and the framework-side chunks (`c-2` …, 15 min each, no overlap) stay running past the record — see *How to resume* | — |
+
+#### The rows
+
+| Row | Result | Evidence | When (UTC) | Charging | Profile |
+| --- | --- | --- | --- | --- | --- |
+| **P10-D1** cold background launch | **NOT REACHED** — no grant has come, so no cold launch has been asked for; the setup is written (a devicectl `terminate` after an accepted submission, chunks recording) and the row's outcome VALUE will read `<private>` regardless (profile refused). A `liveactivitiesd` launch at 17:58:19 had the row's exact shape from the wrong daemon | `long1` trace, `window-10146.txt` | — | charging | no |
+| **P10-D2** a grant on iOS's own schedule | **NOT REACHED in 1 h 55 min** across three accepted requests (floors 17:18:40, 18:14:28, 18:58:05), screen unlocked or locked, charger off then on, Low Power Mode off, on, off. The scheduler wrote **nothing** naming the activity in 45 min of trace at the captured levels; there is no line to quote for *why*. The overnight window is the next measurement | consoles `run1`, `d6-lpm-on`, `run2`; `long1` | 17:03–18:58 | both | no |
+| **P10-D3** the real conformer's expiration handler | **NOT REACHED** — needs D2 | — | — | — | — |
+| **P10-D4** the 15-minute floor honoured | **HALF**: the request the app builds carries `earliestBeginDate = submit + 15:00` to the second on a device (`submitTaskRequest: … earliestBeginDate: 2026-09-21 17:18:40 +0000` for a 17:03:40 submit). Whether iOS respects the floor from above is D2's delivery time minus the submit time — **not reached** | `probe.trace` export | 17:03:40 | not charging | no |
+| **P10-D5** Background App Refresh off in Settings | **BLOCKED on the phone's own policy**: the per-app switch is disabled with Low Power Mode off (submissions are accepted, so refresh is not off for the app — the switch is locked; a Screen Time *Background App Activities* restriction is the ordinary cause). The refusal it would produce was not observed. Not a code finding | the owner, 18:47 | — | charging | no |
+| **P10-D6** Low Power Mode | **HALF, and the empirical half is the surprise: a submission is ACCEPTED under Low Power Mode** (`submitted trigger=background` at 17:59:28 and again at 18:43:05, both with Low Power Mode on — the owner's report; no log line carries the power state), so Low Power Mode does not refuse the *ask*. Whether it withholds the *delivery* is D2's question with one more variable; the 18:43:05 request was still pending when Low Power Mode went off at ≈18:45 | `d6-lpm-on`, `run2` consoles | 17:59:28, 18:43:05 | charging | no |
+| **P10-D7** `edgeFoundARequestAlreadyPending` | **EARNED — five times**: 17:11:20.643, 17:12:43.594, 17:33:38.352 (pid 9739), 18:04:56.294, 18:05:02.497 (pid 10156, under Low Power Mode). Every one after an accepted submission, none re-asked, the floor never slid | consoles `run1`, `d6-lpm-on` | 17:11–18:05 | both | no |
+| **P10-D8** `deliveryAbsorbed` | **NOT REACHED** — needs two deliveries | — | — | — | — |
+
+**How to resume.** The scratchpad of this session holds the scripts (`launch.sh`, `toggle-row.sh`, `chunks.sh`, `extract.sh`,
+`window.py`, `sysdiag.sh`) and STATE.md; they are not in the repo. The shape that works: a devicectl `--console` launch with
+`OS_ACTIVITY_DT_MODE=YES` (the app-side witness, values in the clear), plus `chunks.sh <prefix> <n> 15` (the framework-side
+witness, sequential 15-minute `xctrace` recordings with no overlap), the phone locked, charging, hands off, **overnight**.
+Read a chunk with `extract.sh <trace> <xml>` (the companion and framework lines with UTC) or `window.py <xml> <start-date>
+<from> <to>` (every resolved line in a window). When a grant lands: D2 from the console (`trigger=handle` → outcome →
+`runFinished`), D4 = its time minus the last `submitted`, D3 only if the run outlives the budget, then `devicectl … terminate`
+the app with the tail's request pending and wait again for D1 (names only) and, on a second delivery to a held task, D8.
+Never `SIGINT` a background `xctrace`; never start one while another is finalising; never flip anything under Settings →
+Fernlet while a run is pending.
+
 ### Security, both lanes
 
 | Check | Required result | Result | Date |

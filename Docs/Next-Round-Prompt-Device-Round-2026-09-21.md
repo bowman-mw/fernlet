@@ -23,7 +23,10 @@ read (§17.2.3 finding 2).
    present and non-fatal; routed text/photo need `FERNLET_MESH_ROLE=founder|joiner` + `FLOWS_AFTER`).
 2. **§15.5, P10's eight rows** — one phone. D1 and D2 come together (background the app and leave the
    phone alone); D5 and D6 are two Settings toggles; D3, D4, D7 and D8 fall out of D2 once a grant
-   happens at all.
+   happens at all. **FIRST ATTEMPT 2026-09-21** (runbook *Lane E* § *Device run*; plan §28.7): D7 earned, D4
+   and D6 half, D5 blocked by the phone's policy, D1–D3/D8 not reached — no grant in 1 h 55 min. The rest is
+   an **overnight** window from the runbook's *How to resume*; the logging profile is refused by iOS 26.6.1
+   (owner decision), and `OS_ACTIVITY_DT_MODE=YES` covers every devicectl-launched row instead.
 3. **§15.1** radio matrix — a QUIC connection surviving background + lock, re-dial via a cached
    endpoint while backgrounded, a fresh background browse (expected to fail — record it), each ×
    infra-Wi-Fi and AWDL, Low Power Mode both ways, memory-pressure kills. Rows F1–F6. Two phones.
@@ -38,7 +41,7 @@ Kill audit streams **by saved PID**, never `pkill -f "log stream"`. Capture `sub
 "com.apple.BackgroundTasks"` beside `com.fernlet` — a second, independent witness. A DEBUG build no
 longer crashes on exactly these rows (P9's `assertionFailure` sweep, `dad86e9`), which is what made
 them runnable. **Do not re-run Lane E on a Simulator** — its verdict is recorded with its evidence
-(`Docs/Mesh-Network-Feasibility-Runbook.md:2256`).
+(`Docs/Mesh-Network-Feasibility-Runbook.md:2375`).
 
 ### B. The owner says D-4.3 → the MC→QUIC cutover
 
