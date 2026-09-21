@@ -38,6 +38,7 @@
 /Scripts/git-hooks/                           @bowman-mw
 /Scripts/release-checksum.sh                  @bowman-mw
 /Scripts/run-gated-suites.sh                  @bowman-mw
+/Scripts/run-gated-suites-selftest.sh         @bowman-mw
 /Scripts/power-of-10-scan.py                  @bowman-mw
 /Scripts/power-of-10-allowlist.json           @bowman-mw
 /.github/workflows/s3-wall.yml                @bowman-mw

@@ -173,9 +173,14 @@ enum MeshRoutedPhotoFixtures {
 /// the gap on the production side is `MeshNetworkManager.heldMeshAuditContext(_:)`, which adds the
 /// one `held` key to every line these counts read.
 ///
+/// `internal` rather than `private` since P10 item 5: `MeshRoutedLockedDeviceTests` is the second
+/// reader. Its eight `mesh.routedAccess.*` counts are `== 1` over the same process-global capture —
+/// the exact shape item 7's fix review closed here — and giving that file a predicate of its own
+/// would be the second mechanism this rule exists to prevent.
+///
 /// - Parameter meshID: The mesh the cell's own device holds.
 /// - Returns: A predicate over one captured line's context.
-private func heldBy(_ meshID: UUID) -> ([String: String]) -> Bool {
+func heldBy(_ meshID: UUID) -> ([String: String]) -> Bool {
     { $0["held"] == meshID.uuidString }
 }
 
@@ -737,7 +742,7 @@ struct MeshRoutedPhotoSenderTests {
         rig.capturePhoto(at: 0)
         try await rig.settle()
 
-        #expect(capture.count(of: "mesh.merge.routedQuiescent") >= 1,
+        #expect(capture.count(of: "mesh.merge.routedQuiescent", where: heldBy(rig.meshID)) >= 1,
                 "the ask door's own answer must still bind after an origination")
         // Witnessed on THIS rig's own state, not on the process-global audit count (D-6a.10, and a
         // 2026-09-11 sighting: `mesh.merge.routedQuiescentUnbound` is emitted by every other drain
@@ -926,7 +931,7 @@ struct MeshRoutedPhotoDeliveryTests {
         #expect(rig.nodes[1].manager.meshPhotos.isEmpty, "a blocked origin never reaches the wall")
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: key)?.isComplete == true,
                 "custody is kept: a view filter over an unmutated union, never a drop")
-        #expect(capture.count(of: "mesh.routedProjection.blockedOrigin") >= 1,
+        #expect(capture.count(of: "mesh.routedProjection.blockedOrigin", where: mine) >= 1,
                 "the refusal is named")
         #expect(capture.count(of: "mesh.routedProjection.openFailed", where: mine) == 0,
                 "and nothing was opened before it: the unopenable wrap was never reached")
@@ -958,6 +963,11 @@ struct MeshRoutedPhotoDeliveryTests {
         #expect(rig.nodes[1].manager.membershipVerifier == nil, "the ledger is gone")
         #expect(rig.nodes[1].manager.meshPhotos.isEmpty, "so nothing may be attributed, or shown")
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: key) != nil, "custody is kept")
+        // UNSCOPED, deliberately, and this cell's own premise is the reason: the `leaveMesh()`
+        // above nils `currentMesh`, so `heldMeshAuditContext(_:)` OMITS the `held` key here by
+        // design (it writes no fallback — an unscopeable line must not look scoped). A `where:` on
+        // `held` would read 0 and the cell would red for the wrong reason. It stays `>= 1`, never
+        // `== N`: the weaker form is the only honest one over a process-global count (D-6a.10).
         #expect(capture.count(of: "mesh.routedProjection.originUnresolvable") >= 1,
                 "and the refusal is named once per attempt")
     }
@@ -1292,7 +1302,7 @@ struct MeshRoutedPhotoDeliveryTests {
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
 
         #expect(rig.nodes[1].manager.meshPhotos.isEmpty, "a removed origin reaches no wall")
-        #expect(capture.count(of: "mesh.routedProjection.originRemoved") >= 1,
+        #expect(capture.count(of: "mesh.routedProjection.originRemoved", where: heldBy(rig.meshID)) >= 1,
                 "and the refusal is named, distinctly from an origin nobody ever admitted")
         #expect(rig.routedIndex(rig.nodes[1])?
             .record(for: MeshRoutedItemKey(item.manifest)) != nil,
@@ -1697,6 +1707,13 @@ struct MeshKeyAdvertisementDeliveryTests {
                 "the row for the member the ledger cannot prove was dropped")
         #expect(reborn.keyAdvertisements.advertisement(for: rig.nodes[2].fingerprint) == nil,
                 "and it is that row, not another")
+        // UNSCOPED, deliberately. The emitter DOES go through `heldMeshAuditContext(_:)`, but this
+        // is the launch-restore path and `restoreSessionContextAtLaunch` leaves `currentMesh` nil on
+        // purpose — "restoring is not reconnecting", pinned by `MeshSessionLifecycleManagerTests`
+        // (declared in MeshSessionStateMachineTests.swift, which declares four suites and no type of
+        // that name) — so the door omits the key. The fold's own context cannot stand in: that
+        // rule is counts only, never a fingerprint. Scoping this would mean restoring a mesh at
+        // launch, which is a behaviour change, not a test fix.
         #expect(capture.count(of: "mesh.keyAgreement.rejected") >= 1,
                 "the drop is named, never silent")
         reborn.leaveMesh()

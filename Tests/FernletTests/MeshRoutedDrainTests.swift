@@ -672,9 +672,9 @@ struct MeshRoutedDrainTests {
                 "the answer re-offered a leg this peer had already been delivered")
         // Scoped to THIS rig's mesh (P9 item 7): the capture is process-global and sibling routed
         // suites emit the same token in parallel, so an unscoped `== 1` is a process-wide claim.
-        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt", where: {
             $0["held"] == rig.meshID.uuidString
-        }
+        })
         #expect(refusals == 1, "the refusal was not named exactly once in this rig's mesh")
     }
 
@@ -719,9 +719,9 @@ struct MeshRoutedDrainTests {
             the stale digest was not answered at all: every delivery this device custodies for a \
             peer whose clock stepped backwards stalls for the length of the step
             """)
-        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt", where: {
             $0["held"] == rig.meshID.uuidString
-        }
+        })
         #expect(refusals == 1, "the refused record was not named exactly once in this rig's mesh")
     }
 
@@ -755,9 +755,9 @@ struct MeshRoutedDrainTests {
         try await receiveInventory(rig, steppedBack, at: 0, from: 1, now: MeshRoutedDrainRig.now)
         try await rig.settle(until: { self.heldChunkCount(rig, 1, item.key) == item.chunks.count })
 
-        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt", where: {
             $0["held"] == rig.meshID.uuidString
-        }
+        })
         #expect(refusals == 1,
                 "the stepped-back digest was not refused as a record, so the cell proves nothing")
         #expect(rig.nodes[0].manager.peerRoutedInventories[peer]?.inventorySentAt == recorded,
@@ -800,9 +800,9 @@ struct MeshRoutedDrainTests {
         #expect(after.inventorySentAt == now)
         // An ABSENCE over a process-global signal is the D-6a.10 shape at its worst: unscoped, this
         // cell fails on another rig's honest refusal and says nothing about this one.
-        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt", where: {
             $0["held"] == rig.meshID.uuidString
-        }
+        })
         #expect(refusals == 0, "an idempotent replay of one digest must not audit a refusal")
     }
 
@@ -832,9 +832,9 @@ struct MeshRoutedDrainTests {
         #expect(after.inventorySentAt == late.sentAt, "a newer digest must move the stamp forward")
         #expect(after.inventory?.entries.isEmpty == false, "and must replace the recorded holdings")
         #expect(after.quiescentLocalAsOf == late.sentAt, "and must have been answered")
-        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt", where: {
             $0["held"] == rig.meshID.uuidString
-        }
+        })
         #expect(refusals == 0, "a digest that moved the record forward must not audit a refusal")
     }
 
@@ -866,9 +866,9 @@ struct MeshRoutedDrainTests {
         #expect(inventories[rig.nodes[2].fingerprint]?.inventorySentAt == early.sentAt,
                 "peer B's opening stamp was judged against peer A's record")
         // All three nodes share one mesh id, so the predicate covers the whole rig and nothing else.
-        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt") {
+        let refusals = capture.count(of: "mesh.routedInventory.staleSentAt", where: {
             $0["held"] == rig.meshID.uuidString
-        }
+        })
         #expect(refusals == 0, "a second peer's earlier stamp is not a regression of anything")
     }
 
@@ -918,9 +918,9 @@ struct MeshRoutedDrainTests {
         #expect(rig.nodes[0].manager.peerRoutedInventories[peer]?.inventorySentAt == newer.sentAt,
                 "this rig's own refusal never happened, so neither count below proves anything")
         let everyRig = capture.count(of: "mesh.routedInventory.staleSentAt")
-        let mine = capture.count(of: "mesh.routedInventory.staleSentAt") {
+        let mine = capture.count(of: "mesh.routedInventory.staleSentAt", where: {
             $0["held"] == rig.meshID.uuidString
-        }
+        })
         #expect(mine == 1, "the scoped reader counts only the refusal this rig's own mesh caused")
         #expect(everyRig >= 3, """
             the UNSCOPED reader is what the six sibling cells used before P9 item 7: it counts \

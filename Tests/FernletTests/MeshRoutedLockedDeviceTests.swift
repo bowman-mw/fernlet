@@ -308,18 +308,23 @@ struct MeshRoutedLockedDeviceTests {
         capture.install()
         defer { capture.uninstall() }
         let manager = rig.nodes[1].manager
+        // Every `== 1` below is scoped to THIS rig's mesh (D-6a.10): `MeshRoutedBackpressureAudit-
+        // Capture` reads a process-global registry and every sibling routed suite pushes gates of
+        // its own, so an unscoped `== 1` here is a claim about the whole process. `heldBy` (declared
+        // in MeshRoutedPhotoDeliveryTests.swift) is the one reader, never a second mechanism.
+        let mine = heldBy(rig.meshID)
 
         let first = try #require(push(Self.openGate, into: manager), "a rising edge owes a pass")
 
         #expect(first.legs.protectedDataRose, "the data-protection leg rose")
         #expect(first.legs.foregroundRose, "the foreground leg rose")
         #expect(first.legs.duressCleared == false, "no duress session was active")
-        #expect(capture.count(of: "mesh.routedAccess.reentry") == 1, "the pass ran more than once")
-        #expect(capture.count(of: "mesh.routedAccess.gateChanged") == 1, "the change logged twice")
+        #expect(capture.count(of: "mesh.routedAccess.reentry", where: mine) == 1, "the pass ran more than once")
+        #expect(capture.count(of: "mesh.routedAccess.gateChanged", where: mine) == 1, "the change logged twice")
 
         #expect(push(Self.openGate, into: manager) == nil, "an unchanged push must do nothing")
-        #expect(capture.count(of: "mesh.routedAccess.reentry") == 1, "an unchanged push ran a pass")
-        #expect(capture.count(of: "mesh.routedAccess.gateChanged") == 1, "an unchanged push logged")
+        #expect(capture.count(of: "mesh.routedAccess.reentry", where: mine) == 1, "an unchanged push ran a pass")
+        #expect(capture.count(of: "mesh.routedAccess.gateChanged", where: mine) == 1, "an unchanged push logged")
         #expect(manager.routedAccessGate == Self.openGate, "the pushed value must be the stored one")
     }
 
@@ -349,7 +354,7 @@ struct MeshRoutedLockedDeviceTests {
         )
         #expect(report.legs.protectedDataRose, "the unlock leg must be the one that rose")
         #expect(report.legs.foregroundRose == false, "the scene never moved in this pair")
-        #expect(capture.count(of: "mesh.routedAccess.reentry") == 1,
+        #expect(capture.count(of: "mesh.routedAccess.reentry", where: heldBy(rig.meshID)) == 1,
                 "a lock/unlock pair must produce exactly one pass")
     }
 
@@ -389,7 +394,7 @@ struct MeshRoutedLockedDeviceTests {
         // `heartsPending` has always meant.
         #expect(manager.heartLedger == nil, "the rig wires no heart ledger, which is what withholds the judgement")
         #expect(report.heartsPending == 1, "the pending heart must be counted")
-        #expect(capture.count(of: "mesh.routedAccess.heartStageEvaluable") == 1,
+        #expect(capture.count(of: "mesh.routedAccess.heartStageEvaluable", where: heldBy(rig.meshID)) == 1,
                 "the heart stage was not re-evaluated when duress cleared")
     }
 
@@ -415,13 +420,13 @@ struct MeshRoutedLockedDeviceTests {
         #expect(deferredPass.heartsPending == 1, "the pending heart must be counted")
         #expect(manager.mayCommitRoutedHeartLedgerJudgement == false,
                 "a backgrounded app may not commit a ledger judgement")
-        #expect(capture.count(of: "mesh.routedAccess.heartStageDeferred") == 1,
+        #expect(capture.count(of: "mesh.routedAccess.heartStageDeferred", where: heldBy(rig.meshID)) == 1,
                 "the deferred heart stage was not named")
 
         let openPass = try #require(push(Self.openGate, into: manager), "the foreground edge rose")
         #expect(openPass.heartsPending == 1, "the same heart is still pending")
         #expect(manager.mayCommitRoutedHeartLedgerJudgement, "the whole gate is open now")
-        #expect(capture.count(of: "mesh.routedAccess.heartStageEvaluable") == 1,
+        #expect(capture.count(of: "mesh.routedAccess.heartStageEvaluable", where: heldBy(rig.meshID)) == 1,
                 "the heart stage was not evaluated behind an open gate")
         let record = try #require(rig.routedIndex(rig.nodes[1])?.record(for: heart.key))
         // **Re-aimed at P6 item 6.** The ceremony is real now, so "no heart is committed" is no

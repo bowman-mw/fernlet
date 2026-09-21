@@ -1095,12 +1095,14 @@ struct MeshP9McRetirementAcceptanceTests {
 ///    branch, `openTransferCount` returning to 0, and a share in flight DURING a glare collapse.
 /// 4. **Two owner decisions**: P9-3-A (a configured Fernlet Lock parks both 1:1 radios permanently —
 ///    pre-existing, and a run-policy row is a P7 bug fix, not a P9 edit) and 9.4-LATER's D-4.1/D-4.3.
-/// 5. **Eleven P9-touched suites CI does not run**, each with its reason in ``ungatedByDesign`` —
-///    seven timed weak-reference polls, three routed behaviour suites item 7 only re-scoped, and
-///    item 1's own wall. The accounting over them is total, so a twelfth cannot appear quietly.
+/// 5. **Eight P9-touched suites CI does not run**, each with its reason in ``ungatedByDesign`` —
+///    seven timed weak-reference polls and item 1's own wall. It was ELEVEN until P10 item 5: the
+///    three routed behaviour suites item 7 only re-scoped are on the mesh line now, and their rows
+///    left that map in the same commit. The accounting over them is total, so a ninth cannot
+///    appear quietly.
 /// 6. **Two coverage holes of this phase's own walls**: item 8's ratchet is checked for staleness
-///    on CI and for accuracy nowhere (the UI target never runs there), and forty-two unscoped
-///    `count(of:)` audit reads survived item 7's sweep — a ratchet here, not a zero.
+///    on CI and for accuracy nowhere (the UI target never runs there), and TWENTY unscoped
+///    `count(of:)` audit reads survive item 7's sweep and P10 item 5's — a ratchet, not a zero.
 @Suite(.serialized)
 struct MeshP9HonestyAcceptanceTests {
 
@@ -1166,14 +1168,6 @@ struct MeshP9HonestyAcceptanceTests {
             "MemoryLifecycleTests.swift, same poll shape, and not a mesh row at all.",
         "LocalOnlyPersistentHistoryPruneTests":
             "MemoryLifecycleTests.swift, same poll shape, and not a mesh row at all.",
-        "MeshRoutedBackpressureTests":
-            "a P5/P6 routed behaviour suite. P9 touched the file only to scope its process-global "
-            + "audit counts (item 7), which is not a claim of this phase; it was ungated before P9 "
-            + "and pricing it onto the line is P10's, not a P9 edit.",
-        "MeshRoutedParkedDropDoorTests":
-            "declared in MeshRoutedBackpressureTests.swift, same argument.",
-        "RoutedDeliveryHoldCopyTests":
-            "declared in MeshRoutedBackpressureTests.swift, same argument.",
         "PersistenceFailureAuditTests":
             "P9 item 1's wall (27 assertionFailure-in-catch traps turned into audited returns). "
             + "It is not a mesh suite, the mesh line is not its home, and it has never been on any "
@@ -1367,10 +1361,28 @@ struct MeshP9HonestyAcceptanceTests {
     /// to be inferred from a workflow nobody reads.
     ///
     /// (b) Item 7 scoped the routed-inventory family's process-global audit counts to their own
-    /// rigs. Forty-two `.count(of:)` reads with no `where:` survive it, across eleven files
-    /// (43 by raw grep; one of those is a comment line, and this cell reads comment-stripped
-    /// source). Each is a count over every rig alive in the process, and several compare `== N`.
-    /// They are a RATCHET here, not a zero: the number may fall, never rise.
+    /// rigs. Forty-two `.count(of:)` reads with no `where:` survived it; P10 item 5 took that to
+    /// **twenty** — seven production doors gained the `held` key and twenty-two reads were scoped
+    /// or re-spelled with the `where:` label — and the twenty left are the ones with a reason:
+    ///   * **six are not this reader at all** — `MilestoneEconomy.count(of:in:)` over a local array
+    ///     in `MilestoneLedgerTests` / `MilestoneResetBoundaryTests`. This cell's needle is a
+    ///     spelling, not a type, so they sit inside the number permanently. Narrowing the needle to
+    ///     exclude them would be editing a wall to make a number look better;
+    ///   * **two are the proof cells** — `MeshRoutedDrainTests` and `MeshRoutedPhotoDeliveryTests`
+    ///     each read UNSCOPED on purpose, beside the scoped read, to show the two differ;
+    ///   * **five reads sit at four emitters that are unscopeable**: the line is written by a
+    ///     device holding no mesh, so `heldMeshAuditContext(_:)` omits the key by design rather
+    ///     than writing a fallback — the descriptor door's uncommitted-slot drop (it refuses BEFORE
+    ///     the mesh guard), the projection after a `leaveMesh()`, the launch-restore
+    ///     key-advertisement refusal, and `mesh.promotion.refusedExistingMesh`, whose guard IS
+    ///     `currentMesh == nil` and which is read twice;
+    ///   * **seven have an emitter that COULD carry the key** and were not changed: item 5 stopped
+    ///     at the routed-access / photo / founding `== N` cluster, which is where the defect
+    ///     concentrated. Five of the seven are the weaker `> 0` / `== 0` form; two
+    ///     (`routedDrain.heldBackSetFull`, `routedShare.recipientIsSelf`) are still `== 1` over a
+    ///     process-global capture and are the next two to take. 6 + 2 + 5 + 7 = 20.
+    /// The number may fall, never rise. Re-derive it, never remember it — this cell's own needle
+    /// over comment-stripped source is the only count that means anything.
     @Test func theRatchetsUIHalfAndTheUnscopedAuditCountsAreNamedRatherThanImplied() throws {
         let workflow = try RepoRoot.source(MeshP9Acceptance.workflowPath)
         let gated = Set(CIGateSelectorBoundaryTests.gatedSteps(in: workflow).flatMap(\.suites))
@@ -1412,8 +1424,8 @@ struct MeshP9HonestyAcceptanceTests {
             }
         }
         let total = unscoped.values.reduce(0, +)
-        #expect(total <= 42, """
-            \(total) unscoped audit-count reads, up from the 42 item 7 left behind \
+        #expect(total <= 20, """
+            \(total) unscoped audit-count reads, up from the 20 P10 item 5 left behind \
             (\(unscoped.keys.sorted())). Each answers for every rig alive in the process, and a \
             new `== N` among them is item 7's defect again — scope it with `where:` on the rig's \
             own context, the reader that exists for this

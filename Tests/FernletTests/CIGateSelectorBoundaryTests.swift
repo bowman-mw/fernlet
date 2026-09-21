@@ -77,6 +77,17 @@ import Testing
     /// and the acquire path's repair) and `WidgetSnapshotContentEqualityTests` (the content/metadata
     /// split "reload only on change" rests on). Neither is a mesh battery either, so this pin is
     /// again the only thing that would notice a name LEAVING that line — adding one is silent.
+    ///
+    /// RE-MEASURED again at P10 item 5 (2026-09-21): `mesh-batteries` 118 → 135, for the eleven
+    /// sibling suites the mesh step's own comment had named as deliberately left off (83 cells in
+    /// six files whose other suite was already on the line), the three suites of
+    /// `MeshRoutedBackpressureTests.swift` that `MeshP9HonestyAcceptanceTests.ungatedByDesign` said
+    /// were P10's to price (22 cells), and `PeerTransportNeutralityTests.swift`'s three (19 cells,
+    /// gated on their own argument — the `isSameEndpoint(as:)` rule and the fake fabric the whole
+    /// line rests on). None of the seventeen is a `MeshP<n>…AcceptanceTests`, so
+    /// `everyMeshAcceptanceBatteryIsGated` demanded none of them: this count and that step's
+    /// MEASURED floor are the only two things that stop a name leaving the line again. The pin is
+    /// `>=`, so ADDING a name passes silently — raising it here is what makes it bite.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 7,
         "no-tracking": 1,
@@ -84,7 +95,7 @@ import Testing
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
-        "mesh-batteries": 118
+        "mesh-batteries": 135
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and

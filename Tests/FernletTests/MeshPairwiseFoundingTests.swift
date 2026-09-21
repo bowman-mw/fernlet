@@ -493,10 +493,18 @@ struct MeshPairwiseFoundingTests {
             rig.roster(0).count == 2 && rig.roster(1).count == 2
         })
 
-        #expect(capture.count(of: "mesh.descriptor.yieldedNewbornMesh") > 0,
-                "the yield is named")
-        #expect(capture.count(of: "mesh.descriptor.droppedForeignMesh") > 0,
-                "and so is the drop on the side that did NOT yield, which used to be silent")
+        // Both lines already carry a per-rig key and neither needed a production change: the
+        // yield names the mesh it ADOPTED and the drop names the mesh the dropper HELD, and after
+        // the settle above those are the same surviving id. Unscoped, these were claims about every
+        // founding rig alive in the process (D-6a.10) — sibling suites found pairs in parallel.
+        let survivor = try #require(rig.nodes[0].manager.currentMesh?.meshID,
+                                    "the settle above leaves exactly one mesh standing")
+        #expect(capture.count(of: "mesh.descriptor.yieldedNewbornMesh", where: {
+            $0["adopted"] == survivor.uuidString
+        }) > 0, "the yield is named")
+        #expect(capture.count(of: "mesh.descriptor.droppedForeignMesh", where: {
+            $0["held"] == survivor.uuidString
+        }) > 0, "and so is the drop on the side that did NOT yield, which used to be silent")
     }
 
     /// P8 item 0, device finding (a): without UWB the two commits are two taps seconds apart. The
@@ -543,9 +551,9 @@ struct MeshPairwiseFoundingTests {
                 "both halves are live")
         // Scoped to THIS rig's mesh: the capture is process-global and the full suite runs other
         // founding rigs in parallel, whose re-announcements would otherwise be counted here.
-        let reannounced = capture.count(of: "mesh.descriptor.reannouncedToNewbornPeer") {
+        let reannounced = capture.count(of: "mesh.descriptor.reannouncedToNewbornPeer", where: {
             $0["held"] == mintedByLower.uuidString
-        }
+        })
         #expect(reannounced == (lowerTapsFirst ? 1 : 0),
                 "the repair fires exactly once, and only in the ordering the yield alone cannot fix")
     }
@@ -588,7 +596,7 @@ struct MeshPairwiseFoundingTests {
                 "the pair converges even though the yielder holds another mesh's custody")
         #expect(rig.nodes[0].manager.currentMesh?.meshID == rig.nodes[1].manager.currentMesh?.meshID,
                 "one mesh, not two")
-        #expect(capture.count(of: "mesh.descriptor.yieldRefusedRoutedContent") { $0["held"] == yielderMesh.uuidString } == 0,
+        #expect(capture.count(of: "mesh.descriptor.yieldRefusedRoutedContent", where: { $0["held"] == yielderMesh.uuidString }) == 0,
                 "custody of ANOTHER mesh's item is not content this newborn mesh holds (scoped to this rig's mesh)")
         #expect(rig.routedIndex(yielder)?.items.contains { $0.key == foreignKey } == true,
                 "and that custody survives the yield untouched")

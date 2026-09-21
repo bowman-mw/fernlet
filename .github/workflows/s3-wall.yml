@@ -123,8 +123,25 @@ jobs:
           echo "Using simulator: $name"
           echo "FERNLET_DESTINATION=platform=iOS Simulator,name=$name" >> "$GITHUB_ENV"
 
-      - name: Enforcement self-test (prove the wall is load-bearing) + clean-tree check
-        run: Scripts/spm-wall-selftest.sh
+      - name: Enforcement self-tests (prove the wall AND the test gate are load-bearing) + clean-tree check
+        # Two negative self-tests. Each plants a defect, requires the wall to refuse it, and then
+        # requires the clean case to pass — a negative alone proves nothing about the mechanism.
+        #   * spm-wall-selftest.sh plants a forbidden cross-wall import into the walled AIProviders
+        #     target and requires the compiler wall to reject it (WI-3), then re-runs the wall check
+        #     on the clean tree.
+        #   * run-gated-suites-selftest.sh (P10 item 5 (c)) stubs `xcodebuild` and `xcrun` on PATH
+        #     and requires run-gated-suites.sh to refuse a green-LOOKING run whose output carries
+        #     `Restarting after unexpected exit, crash, or test timeout`. Until this existed the
+        #     restart guard was executed only at its `--check-log` seam — a SECOND code path — so a
+        #     refactor that dropped the `tee`, renamed `$RUN_LOG` or moved the grep would have left
+        #     the seam green and every floor on this workflow inflated by re-run suites. It needs no
+        #     Simulator and no build: the stubs are what the gate reads.
+        # Neither line names Scripts/run-gated-suites.sh as a word, so CIGateSelectorBoundaryTests'
+        # `gatedSteps` parses no step here and no measured suite-name count moves.
+        run: |
+          set -euo pipefail
+          Scripts/spm-wall-selftest.sh
+          Scripts/run-gated-suites-selftest.sh
 
       - name: Grep-wall (S3BoundaryTests) + the companion-refresh seam
         # `AuditRatchetBoundaryTests` joins the two at P9 item 9's fix review (2026-09-20). It is a
@@ -412,7 +429,8 @@ jobs:
         #         assertion over the doc that records it; the two determinism digests' single home;
         #         and this battery's own gating. (+2 at the fix review: the total accounting over
         #         the forty-nine P9-touched suites, and the two coverage holes of P9's own walls —
-        #         the ratchet half CI never runs and the forty-two unscoped audit counts.)
+        #         the ratchet half CI never runs and the unscoped audit counts - forty-two when
+        #         that cell was written, twenty since P10 item 5.)
         #   +  9  PresenceEpochPostureTests   + 11  PresenceAdvertisementTests        (item 2 pass 1)
         #   + 24  PresenceManagerTests        + 20  PresenceOverQUICTests             (item 2)
         #   + 20  RecipeShareTransferTests    + 34  RecipeShareOverQUICTests          (item 3)
@@ -459,11 +477,12 @@ jobs:
         #         tests. Gated because the file is radio-free and deterministic: the sessions it
         #         constructs are never started, NetworkPeerChannel's advertise/browse doors are
         #         no-ops, and there is not one sleep or wall-clock wait in its 2565 lines.
-        # Eleven P9-touched suites are deliberately NOT gated and are named with their reasons in
+        # EIGHT P9-touched suites are deliberately NOT gated and are named with their reasons in
         # MeshP9HonestyAcceptanceTests.ungatedByDesign: MemoryLifecycleTests' seven timed weak-ref
-        # polls (a floor cannot price a deallocation observed by waiting), the three behaviour
-        # suites in MeshRoutedBackpressureTests.swift that item 7 only re-scoped, and
-        # PersistenceFailureAuditTests (item 1's wall, not a mesh suite).
+        # polls (a floor cannot price a deallocation observed by waiting) and
+        # PersistenceFailureAuditTests (item 1's wall, not a mesh suite). It was eleven until P10
+        # item 5: the three behaviour suites in MeshRoutedBackpressureTests.swift that item 7 only
+        # re-scoped are on THIS line now, and their three rows left that map in the same commit.
         # RAISED 860 -> 1048, MEASURED over this exact 118-name list on a Mac (2026-09-20), floor 1,
         # read off the result bundle: "Test run with 1048 tests in 118 suites passed after 192.745
         # seconds", 0 failed, no `Restarting after unexpected exit` line. 860 + 186 (the six terms
@@ -471,9 +490,75 @@ jobs:
         # the source, and the floor is shown red once with a suite removed from the line before it
         # is committed. The NAME count moves 97 -> 118 in CIGateSelectorBoundaryTests'
         # `measuredSuiteNameCounts` in this same commit, and `s3-grep` 2 -> 3.
+        # P10 item 5 (a) (2026-09-21) gates SEVENTEEN more names in two tiers.
+        # TIER 1+2, fourteen names / 105 cells: the ELEVEN sibling suites the block above named as
+        # deliberately left off (83 cells in six files whose OTHER suite was already on this line)
+        # plus the three suites of MeshRoutedBackpressureTests.swift that
+        # MeshP9HonestyAcceptanceTests.ungatedByDesign said were P10's to price (22 cells). Their
+        # three `ungatedByDesign` rows are DELETED in this same commit - that map reds for a suite
+        # CI does run, which is the opposite failure and the one that teaches a reader to distrust
+        # the rest.
+        # Of the seven P9-touched suites the P10 launcher lists as possibly-still-honesty-rows, SIX
+        # are already on this line (ProximityRecipeShareCapTests, ProximityRecipeShareDiagnostics-
+        # Tests, MeshTransportSelectionTests, PresenceHeartsTests, PresenceTagTests and all sixteen
+        # suites of NetworkMeshTransportTests.swift) - item 9's fix review gated them. The seventh,
+        # `PeerTransportNeutralityTests`, names no declared type at all: that FILE declares
+        # PeerHandleIdentityTests, MeshMultipeerSessionIdentityTests and FakePeerTransportTests, and
+        # it is not in `git diff bb454fe..HEAD -- Tests/FernletTests`, so P9 never touched it and
+        # `p9TouchedSuites` correctly omits it. It is TIER 3 below, on its own argument.
+        # Per suite, counted over `@Test` FUNCTIONS inside each DECLARATION - a grep for @Suite
+        # under-counts, and a grep for @Test over a FILE over-counts across its siblings:
+        #   + 16  MeshRoutedManifestGoldenTests          (MeshRoutedManifestTests.swift)
+        #   + 10  MeshRoutedTypeRegistryConsumerTests    (MeshRoutedTypeRegistryTests.swift)
+        #   +  9  MeshRoutedCustodyHandoffWallTests      (MeshRoutedCustodyHandoffTests.swift)
+        #   +  9  MeshRoutedItemSealGoldenTests          (MeshRoutedItemSealTests.swift)
+        #   +  8  MeshRoutedCustodyHandoffDoorTests      (MeshRoutedCustodyHandoffTests.swift)
+        #   +  8  MeshRoutedTypeRegistryDoorTests        (MeshRoutedTypeRegistryTests.swift)
+        #   +  7  MeshRoutedDeliveryPersistenceTests     (MeshRoutedCustodyTests.swift)
+        #   +  6  MeshRoutedSweepTests                   (MeshRoutedCapacityTests.swift)
+        #   +  4  MeshRoutedCustodyParityTests           (MeshRoutedCustodyTests.swift)
+        #   +  4  MeshRoutedParkedDropTests              (MeshRoutedCapacityTests.swift)
+        #   +  2  MeshRoutedTypeRegistryFourthTypeTests  (MeshRoutedTypeRegistryTests.swift)
+        #   = 83, the number the block above named, RE-COUNTED at this commit rather than carried.
+        #   + 12  MeshRoutedBackpressureTests  +  7  MeshRoutedParkedDropDoorTests
+        #   +  3  RoutedDeliveryHoldCopyTests   (all three in MeshRoutedBackpressureTests.swift)
+        #   = 22.
+        # All fourteen are @Suite structs (thirteen .serialized; RoutedDeliveryHoldCopyTests is a
+        # plain @Suite over value copies), and all seven files are radio-free and sleep-free - no
+        # NWListener/NWConnection/NWBrowser, no Task.sleep/Thread.sleep/usleep/asyncAfter, no
+        # NotificationCenter, nothing .disabled or .timeLimit-ed. The one `Date()` among them
+        # (MeshRoutedBackpressureTests.swift, aDismissalNeverSilencesADifferentHold) is an instant
+        # handed to a value initializer, not a deadline anything waits on. So: one step, no
+        # isolation. Each already runs in THIS process beside its gated sibling in any local
+        # full-suite run, so none of them is a new interaction.
+        # TIER 3, three names / 19 cells: PeerTransportNeutralityTests.swift's
+        #   +  10  FakePeerTransportTests   +  5  PeerHandleIdentityTests
+        #   +   4  MeshMultipeerSessionIdentityTests
+        # gated on its OWN argument, not on P9's: it holds the `PeerHandle.isSameEndpoint(as:)` rule
+        # the mesh call sites depend on, the plan's endpoint->identity split, and the FakePeerNetwork
+        # fabric every acceptance battery on this line is built on - a fake nobody checks is a source
+        # of false confidence. It is the only addition here that waits on wall clock, and it waits
+        # the way this repository requires: `waitUntil` pairs a 5 s deadline with a 200-poll FLOOR,
+        # because a deadline alone measures wall time that keeps advancing while a @MainActor suite
+        # is starved by every other @MainActor suite in a loaded run. No radio is ever started - the
+        # MCNearbyServiceBrowser / MCNearbyServiceAdvertiser it builds are delegate ARGUMENTS,
+        # neither startBrowsingForPeers nor startAdvertisingPeer is called, and every session takes
+        # `usesEphemeralPeerID: true`, so the archived FileMCPeerIDStore the shipping radios share is
+        # never touched. If the MC->QUIC cutover empties that file, these three names leave the line
+        # deliberately - which is the point of pinning the NAME count beside the floor.
+        # RAISED 1048 -> 1172, MEASURED over this exact 135-name list on a Mac (2026-09-21),
+        # floor 1, read off the result bundle: "Test run with 1172 tests in 135 suites passed after
+        # 193.995 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit` line. The
+        # line was then re-run AT 1172 to prove it passes at its own floor, and shown red once with
+        # a name removed. 1048 + 105 + 19 = 1172 is the ARITHMETIC CHECK, never the source - it
+        # happens to agree here, which is what a measurement is for and not a substitute for one.
+        # PRICE, MEASURED on the same warm bundle: 192.745 s -> 193.995 s, +1.25 s for +124 cells.
+        # That is an order of magnitude under the two deltas this step already records (+247 cells
+        # cost +11 s at P8 item 1, +329 cost +27 s at P9 items 6 and 9): those runs re-measured a
+        # cold bundle, and these 124 cells are pure in-process table and golden work.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1048 \
+          Scripts/run-gated-suites.sh mesh-batteries 1172 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -591,4 +676,21 @@ jobs:
             MeshIntroductionNonceCacheTests \
             MeshInboundRankingTests \
             MeshTunnelConvergenceTests \
-            MeshTransferStreamTableTests
+            MeshTransferStreamTableTests \
+            MeshRoutedManifestGoldenTests \
+            MeshRoutedTypeRegistryConsumerTests \
+            MeshRoutedTypeRegistryDoorTests \
+            MeshRoutedTypeRegistryFourthTypeTests \
+            MeshRoutedCustodyHandoffWallTests \
+            MeshRoutedCustodyHandoffDoorTests \
+            MeshRoutedItemSealGoldenTests \
+            MeshRoutedDeliveryPersistenceTests \
+            MeshRoutedCustodyParityTests \
+            MeshRoutedSweepTests \
+            MeshRoutedParkedDropTests \
+            MeshRoutedBackpressureTests \
+            MeshRoutedParkedDropDoorTests \
+            RoutedDeliveryHoldCopyTests \
+            PeerHandleIdentityTests \
+            MeshMultipeerSessionIdentityTests \
+            FakePeerTransportTests
