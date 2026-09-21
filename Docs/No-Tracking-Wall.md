@@ -247,18 +247,20 @@ radio behind them (plan §18 decision 4, still the owner's), pinned in neither d
 declared type in none of the three sets fails the test until it is classified here and given a row
 in the table above.
 
-**Three Info.plist keys, and what each one now backs.** Two of the three were added ahead of the code
-that uses them; that asymmetry is closing as the migration lands, so the state is stated plainly:
+**Four Info.plist keys, and what each one now backs.** Two were added ahead of the code that uses
+them; that asymmetry is closing as the migration lands, so the state is stated plainly. P10 item 3
+adds the fourth row (`UIBackgroundModes`) and closes the third's "still inert" note:
 
 | Key | Value | What backs it today |
 |---|---|---|
 | `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the friend mesh's MC radio and the three QUIC radios already do. Not new with the QUIC work. |
 | `NSBonjourServices` → `_fernlet-mesh2._udp`, `_fernlet-near2._udp`, `_fernlet-recipe2._udp` | Three added entries | All genuinely used: `NetworkMeshSession` advertises and browses the first in Release (the DEBUG probe uses the same one), `NetworkPresenceSession` the second and `NetworkRecipeShareSession` the third. A service type is a name, not a destination — declaring one grants no reach beyond the local link. |
-| `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) | Still inert: a permitted identifier grants nothing until a task is registered and submitted, which only the DEBUG probe does. Runtime registration uses the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. P8 needs it. |
+| `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) and, since P10 item 3, `MBO.Fernlet.companion-refresh` | **No longer inert.** The mesh's wildcard is still only exercised by the DEBUG probe and by the P8 host's runtime registration of the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. The companion identifier is a WHOLE identifier, not a prefix — there is exactly one companion refresh per process — and `CompanionRefreshCoordinator` registers it on every launch. A permitted identifier still grants nothing on its own: it widens what the app may ASK for, and iOS decides whether an opportunistic refresh ever runs. Neither task sends anything anywhere; the companion refresh makes no network request at all, which `BackgroundRefreshBoundaryTests` enforces by forbidding every networking module under `App/Fernlet/CompanionRefresh/`. |
+| `UIBackgroundModes` | `remote-notification`, and since P10 item 3 `fetch` | `fetch` is what lets iOS deliver a `BGAppRefreshTask` at all; without it the identifier is registered and the task is never launched. It buys the app an occasional short opportunistic wake to roll the day, recompute the companion and refresh the widget — all of it local. **It is not a networking permission and not a location one:** the handler may never reach the mesh, HealthKit, a CloudKit force-sync or Foundation Models, which is a repository gate (plan §16.4) rather than a promise. `remote-notification` is unchanged. No `processing` mode is declared; neither background task in this app is a `BGProcessingTask`. |
 
-None of the three carries data anywhere. They widen what the app is *permitted* to do on the local
-link, not what it does, and the wall's §3 host allowlist is unchanged by all of it — a Bonjour service
-type is not a destination.
+None of the four carries data anywhere. They widen what the app is *permitted* to do — on the local
+link, or in the background — not what it does, and the wall's §3 host allowlist is unchanged by all of
+it: a Bonjour service type is not a destination, and a background mode is not a connection.
 
 **The marker gap is now closed — with a second family, not a longer list.** `NoTrackingBoundaryTests`
 banned the marker names `NWConnection` and `NWBrowser`; TN3213 renamed the API to `NetworkConnection` /

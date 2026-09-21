@@ -84,6 +84,13 @@ struct FernletApp: App {
         // until physical-device validation approves a production mesh coordinator.
         NetworkMeshFeasibilityProbe.registerBackgroundTask()
         #endif
+        // P10 item 3 (plan §17.2): the companion `BGAppRefreshTask`'s ONE registration.
+        // `BGTaskScheduler` requires every identifier to be registered before launch finishes, and a
+        // SwiftUI `App`'s `init()` is the only hook this app has inside that window — the same
+        // reason the DEBUG probe above registers here. Registering does NOT submit: the two
+        // submission triggers are the handler's own tail and the `.background` scene edge
+        // (`handleScenePhaseChange(_:)`), never a timer.
+        CompanionRefreshCoordinator.shared.registerAtLaunch()
         // Install the concrete HealthKit cache cleaner before any HealthKitService is
         // constructed. The gateway module has NO default cleaner (WI-2: defaultCacheClearer
         // is nil, so disableIntegration() fails closed rather than silently skipping the
@@ -340,6 +347,10 @@ struct FernletApp: App {
                 pushProximityRunPolicy(store, phase: newPhase, protectedData: protectedDataAvailableNow)
             }
             lockService.lock(reason: .background)
+            // P10 item 3: submission trigger (b). Outside the `case .ready` guard on purpose — the
+            // refresh chain must survive a launch whose store never became ready, and the handler
+            // acquires its own store through `FernletStoreAccess` when it runs.
+            CompanionRefreshCoordinator.shared.appDidEnterBackground()
         } else if newPhase == .active {
             // A launch that could not read the keychain (background relaunch / pre-first-unlock
             // prewarm) failed CLOSED to `.locked`, which is right but sticky: on an

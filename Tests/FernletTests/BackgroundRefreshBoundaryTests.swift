@@ -151,10 +151,11 @@ struct BackgroundRefreshBoundaryTests {
     /// code and is held to everything below.
     static let refreshRoot = "App/Fernlet/CompanionRefresh"
 
-    /// Floor for the walk. Item 2 ships one file; items 3 and 4 add more, and this may be raised
-    /// with them. A root that stops resolving reports zero and would otherwise pass vacuously,
-    /// which is the failure mode `RepoRoot`'s own doc comment exists to describe.
-    static let minimumFilesScanned = 1
+    /// Floor for the walk, MEASURED: item 2's identifier, and item 3's scheduling seam and
+    /// coordinator. Item 4 adds more and may raise it again. A root that stops resolving reports
+    /// zero and would otherwise pass vacuously, which is the failure mode `RepoRoot`'s own doc
+    /// comment exists to describe — so the floor tracks the real count rather than staying at one.
+    static let minimumFilesScanned = 3
 
     /// The companion refresh's frozen task identifier, repeated here on purpose.
     ///

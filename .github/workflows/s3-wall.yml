@@ -126,7 +126,7 @@ jobs:
       - name: Enforcement self-test (prove the wall is load-bearing) + clean-tree check
         run: Scripts/spm-wall-selftest.sh
 
-      - name: Grep-wall (S3BoundaryTests)
+      - name: Grep-wall (S3BoundaryTests) + the companion-refresh seam
         # `AuditRatchetBoundaryTests` joins the two at P9 item 9's fix review (2026-09-20). It is a
         # pure SOURCE scan — every frozen `UXScreenProbe.auditBaselines` entry still names a probed
         # screen, and the probe inventory cannot silently shrink — so it belongs with the walls
@@ -142,10 +142,22 @@ jobs:
         # HealthKit, a CloudKit force-sync, Foundation Models, or store creation. It belongs on this
         # line for the same reason the other two do: nothing else runs it, and §16.4 requires it to
         # be a gate from the commit that creates the directory, not from the commit that fills it.
+        #
+        # `CompanionRefreshSchedulingTests` joins them at P10 item 3. It is NOT a source scan — it is
+        # the tier-1 behaviour suite over the refresh scheduling seam's two fakes (one registration
+        # with the frozen identifier, the request's earliest-begin policy, the chain's re-submission
+        # before the completion, a refusal reported rather than swallowed, and exactly-once
+        # completion over a five-row table) plus the pins that keep the refresh seam and the mesh's
+        # apart. It rides THIS line rather than the mesh one for two reasons: it is not a
+        # `MeshP<n>…AcceptanceTests`, so `everyMeshAcceptanceBatteryIsGated` does not demand it
+        # anywhere; and this step's floor is the shared `1`, so adding a name here needs no Mac to
+        # re-measure, whereas the mesh step's floor is a measured test count that a draft must not
+        # guess at. Item 9 may move it when it measures its own battery line.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
-            AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests
+            AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests \
+            CompanionRefreshSchedulingTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an

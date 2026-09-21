@@ -28,6 +28,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>MBO.Fernlet.mesh-continuation.*</string>
+		<string>MBO.Fernlet.companion-refresh</string>
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
@@ -79,6 +80,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>fetch</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict>

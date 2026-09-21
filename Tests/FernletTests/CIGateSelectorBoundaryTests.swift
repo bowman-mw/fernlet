@@ -66,8 +66,13 @@ import Testing
     /// RE-MEASURED again at P10 item 2 (2026-09-20): `s3-grep` 3 → 4, for
     /// `BackgroundRefreshBoundaryTests` — plan §16.4's background-refresh import wall, which has no
     /// compiler half and runs on no other line.
+    ///
+    /// RE-MEASURED again at P10 item 3 (2026-09-20): `s3-grep` 4 → 5, for
+    /// `CompanionRefreshSchedulingTests` — the refresh scheduling seam's tier-1 suite, which is not
+    /// a `MeshP<n>…AcceptanceTests` and is therefore demanded by `everyMeshAcceptanceBatteryIsGated`
+    /// nowhere. The step's floor stays the shared `1`; only the NAME count moves here.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 4,
+        "s3-grep": 5,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,

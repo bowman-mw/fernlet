@@ -523,6 +523,11 @@ struct MeshContinuationTaskHostWallTests {
     /// The host.
     private static let host = "MeshContinuationTaskHost.swift"
 
+    /// P10 item 3's companion-refresh seam — the app's THIRD `BackgroundTasks` home, and the only
+    /// one that speaks `BGAppRefreshTask`. Named here rather than allowed in by loosening the set,
+    /// so a fourth home still reds: two tasks is the whole inventory, and each has exactly one file.
+    private static let refreshSeam = "CompanionRefreshScheduling.swift"
+
     /// Cell (g)'s one permitted home for the proximity Live Activity spellings, by file name.
     private static let anchorFile = "ProximityForegroundAnchor.swift"
 
@@ -564,17 +569,29 @@ struct MeshContinuationTaskHostWallTests {
         MeshP7Acceptance.homes(of: needle, in: sources)
     }
 
-    /// **(a)** `BackgroundTasks` is reachable from exactly two files: item 6's seam and the DEBUG
-    /// probe. A third would mean something other than the host is scheduling work.
-    @Test func theBackgroundTasksFrameworkHasTwoHomesInTheApp() throws {
+    /// **(a)** `BackgroundTasks` is reachable from exactly three files: item 6's seam, the DEBUG
+    /// probe, and P10 item 3's companion-refresh seam. A fourth would mean something other than
+    /// those two task owners is scheduling work.
+    ///
+    /// **The two TASK CLASSES stay one-to-one with their seams**, which is the half that matters
+    /// once there are two tasks: `BGContinuedProcessingTask` is the mesh's and is named only in the
+    /// mesh's seam (and the probe it was copied from); `BGAppRefreshTask` is the refresh's and is
+    /// named only in the refresh's. That is the mechanical statement of P10's decision row — do not
+    /// widen the mesh's seam to carry a second task — and it reds in BOTH directions: the mesh's
+    /// seam growing a refresh, or the refresh's growing a continuation.
+    @Test func theBackgroundTasksFrameworkHasThreeHomesInTheApp() throws {
         let app = try Self.codeSources(under: "App")
         #expect(app.count >= 100, "the app-target scan lost its files")
-        #expect(Set(Self.homes(of: "import BackgroundTasks", in: app)) == [Self.seam, Self.probe],
-                "the framework is imported by the seam and by the DEBUG probe, and by nothing else")
-        #expect(Set(Self.homes(of: "BGTaskScheduler", in: app)) == [Self.seam, Self.probe],
-                "and the scheduler is named in the same two places")
+        #expect(Set(Self.homes(of: "import BackgroundTasks", in: app))
+                == [Self.seam, Self.probe, Self.refreshSeam],
+                "the framework is imported by the two seams and the DEBUG probe, and by nothing else")
+        #expect(Set(Self.homes(of: "BGTaskScheduler", in: app))
+                == [Self.seam, Self.probe, Self.refreshSeam],
+                "and the scheduler is named in the same three places")
         #expect(Set(Self.homes(of: "BGContinuedProcessingTask", in: app)) == [Self.seam, Self.probe],
-                "as is the task type")
+                "the mesh's task type stays the mesh's — the refresh seam must never name it")
+        #expect(Set(Self.homes(of: "BGAppRefreshTask", in: app)) == [Self.refreshSeam],
+                "and the refresh's task type stays the refresh's — one home, and not the mesh's seam")
         #expect(Self.homes(of: "BGTaskScheduler", in: app).filter { $0 == Self.host }.isEmpty,
                 "the host speaks the seam's protocols, never the framework")
     }
@@ -742,7 +759,8 @@ struct MeshContinuationTaskHostWallTests {
     }
 
     /// **(f)** The concrete identifier is inside the plist's permitted wildcard, and no background
-    /// mode was added for it.
+    /// mode was added FOR IT — P10 item 3's `fetch` belongs to the companion `BGAppRefreshTask`,
+    /// and `processing`, a third task class this app does not use, is still absent.
     @Test func theConcreteIdentifierIsInsideThePlistWildcard() throws {
         let plist = try RepoRoot.source("App/Fernlet/Info.plist")
         #expect(plist.contains("<string>MBO.Fernlet.mesh-continuation.*</string>"),
@@ -750,7 +768,11 @@ struct MeshContinuationTaskHostWallTests {
         let identifier = MeshContinuationTaskHost.identifier(for: UUID())
         #expect(identifier.hasPrefix("MBO.Fernlet.mesh-continuation."),
                 "and every identifier the host mints is under it — a UUID's characters are legal in one")
+        // A continued-processing task needs no `UIBackgroundModes` entry of its own, and none was
+        // added FOR IT. P10 item 3 added `fetch` for the companion `BGAppRefreshTask`, which is a
+        // different task with a different mode; `processing` belongs to `BGProcessingTask`, which
+        // this app does not use at all, and its absence is what this line still says.
         #expect(!plist.contains("<string>processing</string>"),
-                "a continued-processing task needs no `UIBackgroundModes` entry, and none was added")
+                "a `BGProcessingTask` mode appeared; neither task in this app is one")
     }
 }
