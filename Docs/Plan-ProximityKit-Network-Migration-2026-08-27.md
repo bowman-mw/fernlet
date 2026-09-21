@@ -6102,7 +6102,7 @@ honesty suite; no production anchor below moves.*
   the degraded ladder**, Wi-Fi Aware; two devices minimum, four for topology. (2) **P9's two rows** —
   the P9-2-C boundary-wake drift measure (two Simulators woke +0.8 s at a 300 s arm and **+51 s** at
   767 s, together within 0.3 s: the host suspending both timers) and **Lane D** (phone ↔ Simulator,
-  cable out, F11), the cheapest first run. (3) **P10's eight** (§15.5), behind one prerequisite: **the
+  cable out, F11), the cheapest first run. **Lane D RAN on 2026-09-21 — §28.6.** (3) **P10's eight** (§15.5), behind one prerequisite: **the
   private-data logging profile**. Lane gotchas unchanged (§26.2, §27.2), plus: a Simulator up for
   hours stops behaving — erase and reboot; rebuild before any lane run; kill streams by saved PID.
 
@@ -6179,3 +6179,38 @@ complete and tier 1 agrees with it, **not** that a device does.
   reason the suite does not open `Docs/Mesh-Migration-Loop-Ledger-P10.md`: uncommitted until the
   close-out, so a cell reading it would pass in the worktree that wrote it and throw in every clean
   checkout.
+
+### 28.6 The device round's first entry — Lane D, run 2026-09-21
+
+**Lane D ran** (the production `NetworkMeshSession` over QUIC, the owner's iPhone 17 Pro Max on iOS
+26.6.1 ↔ an iPhone 17 Simulator, infrastructure Wi-Fi with the cable out, `main` = `08898be` rebuilt for
+the lane). The record is the runbook's *Lane D* section — every row of its table now carries a result and
+a date; device row **F11** is filled. What it settles for this plan:
+
+- **The shipping transport works on a physical radio.** One tunnel per side in 6–8 s, **0** `tunnelEnded`
+  across 5 min 8 s, heartbeats over datagrams both ways at 30 s, capabilities and the shop catalogue both
+  ways. Every path line reads `interface: en0[802.11], uses wifi` with `%en0`-scoped peers; `awdl0` and
+  `en9` appear zero times. Lane A's 2026-09-01 Wi-Fi rows are earned.
+- **Lane A's `EEXIST` residual is closed, not fixed.** On every re-dial (terminate and freeze variants,
+  2 of 2) the survivor's listener refused the FIRST inbound flow with
+  `NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` → `Failed to create connection from listener`, and
+  the next flow 70 ms later formed the tunnel with zero app-level retries. The probe died on it because it
+  ended its listener on the first error; `endTunnel` keeps listening. **No production change** —
+  §8.7's fix candidates are not needed.
+- **The transport's 90 s idle timeout is unreachable on a live-but-silent peer:** the app's
+  three-missed-beats eviction (`tunnelEnded localEviction`) fires at +89 s and wins. Recorded, not a
+  defect — it is the designed layering — but a §15.1 background row that expects an `idleTimeout` cause
+  will never see one.
+- **Routed text and photos on hardware need the P6 shape**, not the 2026-09-01 seven variables:
+  `FERNLET_MESH_ROLE=founder|joiner` **and** `FERNLET_MESH_FLOWS_AFTER`, because the routed mint needs a
+  derived roster and a seeded pair without roles never builds one. With that shape (run 4) text crossed
+  both ways (`chat received=1 sent=1`) and the photo crossed on per-transfer streams both ways. The Lane D
+  table's "App flows" row records both halves.
+- **Two tooling facts that cost a launch each:** `devicectl … launch … MBO.Fernlet -- -completeOnboarding`
+  (the `--` or `devicectl` eats the app argument as its own flags), and `OS_ACTIVITY_DT_MODE=YES` in the
+  launch environment mirrors the phone's `os_log` — audit contexts **in the clear** — into the console
+  transcript, which is a second witness for any devicectl-launched row but not for §15.5's D1 (no launcher
+  there; the private-data logging profile remains that row's prerequisite).
+
+**What this does not move.** §15.1–§15.4 and §15.5 remain NOT RUN: Lane D is one phone in the
+foreground on Wi-Fi. The next entry is §15.1's background + lock rows, two phones.
