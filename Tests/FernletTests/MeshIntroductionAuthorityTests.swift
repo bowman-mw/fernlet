@@ -352,17 +352,25 @@ struct MeshIntroductionAuthorityRosterTests {
 
     // MARK: The join-door predicate (D-4.3 Option 1)
 
-    /// `mayAdmitStrangerProvisionally` is the posture half of the MC invitation gate, and nothing
-    /// else: the one flag `holdCommittedLinks()` lowers, AND "no mesh, or an open one".
+    /// `mayAdmitStrangerProvisionally` is two flags and nothing else: the one
+    /// `holdCommittedLinks()` lowers, AND the user's own open/closed control.
+    ///
+    /// It is **stricter** than the MC invitation gate it sits beside, not "the posture half" of it:
+    /// `shouldAcceptInvitation` is `isAdmittingNewPeers || hasCommittedSlot` and never reads
+    /// `isSessionOpen` at all. This predicate drops the committed peer's excuse — a stranger has no
+    /// slot to have committed — and adds the open/closed answer the seat gate gives one layer up.
     ///
     /// Four rows, each the state a phone is actually in:
-    /// - **no mesh, doors open** — two people meeting for the first time, the case the QUIC radio
-    ///   could not serve at all before this;
+    /// - **no mesh, session open** — two people meeting for the first time, the case the QUIC radio
+    ///   could not serve at all before this (`isSessionOpen` defaults true, and `startJoin()` sets
+    ///   it true, so this is what a phone that has met nobody is in);
     /// - **an open mesh** — a session whose owner is inviting;
     /// - **a closed mesh** — refused at the transport, which is deliberately stronger than the MC
     ///   radio, where the tunnel exists until `maySeatVerifiedPeer` evicts it a moment later;
     /// - **under a hold** — a backgrounded session admits nobody new on either radio.
-    @Test func theJoinDoorPredicateIsTheInvitationGatesPostureHalf() throws {
+    ///
+    /// The fifth state — a closed session with NO mesh — is the sibling cell below.
+    @Test func theJoinDoorPredicateIsTheHoldFlagAndAnOpenSession() throws {
         let (identity, service) = try makeIdentity()
         defer { KeychainItem.deleteAll(service: service) }
         let manager = MeshNetworkManager(
@@ -370,7 +378,7 @@ struct MeshIntroductionAuthorityRosterTests {
         )
 
         #expect(manager.mayAdmitStrangerProvisionally,
-                "no mesh and the doors open is a first meeting — the case that had no path at all")
+                "no mesh and the session open is a first meeting — the case that had no path at all")
         #expect(manager.roster.admitsStrangersProvisionally,
                 "and the answer rides out on the roster the transport re-asks for every introduction")
 
@@ -390,6 +398,39 @@ struct MeshIntroductionAuthorityRosterTests {
         #expect(!manager.mayAdmitStrangerProvisionally,
                 "a held session admits nobody new — the ONE flag holdCommittedLinks() lowers")
         #expect(!manager.roster.admitsStrangersProvisionally)
+        manager.leaveMesh()
+    }
+
+    /// **A closed session shuts the join door before a descriptor exists, too.**
+    ///
+    /// The state `MeshClosedMeshStarTopologyTests.aClosedSessionWithNoMeshStillRefusesEveryLink`
+    /// pins for the three MC gates — `setSessionOpen(false)` with `currentMesh == nil` — and the
+    /// QUIC join door has to answer it the same way. It is not hypothetical: `setSessionOpen(false)`
+    /// does NOT lower `isAdmittingNewPeers` (only `holdCommittedLinks()` does), so a predicate that
+    /// excused a mesh-less device from the open/closed test would answer "admit a stranger" for a
+    /// user who has just said they are not forming a session with anybody — and would say it while
+    /// the MC gates beside it were refusing every link.
+    ///
+    /// The other three doors are asserted alongside, so a failure says whether the join door drifted
+    /// from them or they all moved together.
+    @Test func aClosedSessionWithNoMeshShutsTheJoinDoorToo() throws {
+        let (identity, service) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: service) }
+        let manager = MeshNetworkManager(
+            store: store, transport: FakeMeshTransportSession(), identity: identity
+        )
+        manager.markProximityJoinForTesting()
+        #expect(manager.currentMesh == nil, "test premise: no descriptor exists yet")
+
+        manager.setSessionOpen(false)
+
+        #expect(!manager.mayAdmitStrangerProvisionally, """
+            a closed pre-mesh session admits nobody — the same answer its three MC gates give, and \
+            the reason there is no `currentMesh == nil` escape in the predicate
+            """)
+        #expect(!manager.roster.admitsStrangersProvisionally,
+                "and the shut door rides out on the roster the transport re-asks for")
+        #expect(manager.roster.memberCount == 0, "test premise: an empty roster, so every peer is a stranger")
         manager.leaveMesh()
     }
 
