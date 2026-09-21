@@ -30,6 +30,9 @@ imprecise at HEAD and are corrected here rather than rewritten in place, so the 
    session, never reset).
 5. §2's "adding a `MeshTransportHandlers` member would be a transport-seam change `TransportNeutralityBoundaryTests`
    polices" is false — that wall is an MC-import grep. The reason not to add one stands (nothing would read it).
+6. **§0's opener is now history:** "the friend mesh ships on MultipeerConnectivity (`shippingDefault = .multipeer`, `:267`)"
+   was true when this was written; the FLIP landed the same evening (`5d88247`, Variant B — `shippingDefault` is `.quic`,
+   at `MeshTransportSelection.swift:342` now; MC is a DEBUG-only bisect path until the deletion round).
 **Still owed and unrun:** the unseeded Lane C pair run (test (vi)); the capability has never been observed on any radio.
 
 ## 0. The one-paragraph version
