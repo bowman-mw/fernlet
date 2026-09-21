@@ -573,12 +573,10 @@ jobs:
         # suites", 0 skipped, no `Restarting after unexpected exit` line. The line was then re-run
         # AT 1198 and shown red once at 1199. 1172 + 26 = 1198 is the ARITHMETIC CHECK, never the
         # source. The battery's 26 cells are 5 + 6 + 5 + 5 + 5 across the five clause files.
-        # KNOWN RED, NOT THIS BATTERY'S: MeshRoutedHeartCeremonyTests'
-        # everyHeartFailureCauseHasItsOwnSentence fails on the .heartsOff row, a LocalizedStringKey
-        # == whose two sides print identically. It reproduces ALONE on a clean build, and the only
-        # tracked change between item 5's green 1172-run at 288f501 and this commit is a Docs/
-        # markdown file - so it is environmental (item 8 erased and re-booted the iPhone 17
-        # simulator between the two runs) and is the close-out's to triage, not this line's.
+        # THE RED THAT BLOCK RECORDED WAS NOT ENVIRONMENTAL: MeshRoutedHeartCeremonyTests'
+        # everyHeartFailureCauseHasItsOwnSentence carried a latent `LocalizedStringKey ==` defect - not a
+        # value comparison for an interpolated key - that codegen exposed when item 9 added five files to
+        # the test module; the cell compares `String(describing:)` now and this line is green at 1198/140.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1198 \

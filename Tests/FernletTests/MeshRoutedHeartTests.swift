@@ -788,9 +788,18 @@ struct MeshRoutedHeartCeremonyTests {
     /// when the store was full and that Fernlet was holding all it can when the store was
     /// unreadable: the audit line and the sentence disagreeing about the same failure.
     ///
-    /// The expected values are built with the SAME interpolation shape as the copy, because a
-    /// `LocalizedStringKey` compares its key and its arguments — a flat literal would not match an
-    /// interpolated one even for identical rendered text.
+    /// The expected values are built with the SAME interpolation shape as the copy, and each row is
+    /// compared through `String(describing:)` rather than `==`, because **`LocalizedStringKey`'s
+    /// `==` is not a value comparison for an interpolated key**. Measured on this cell: two keys
+    /// with the same `key` bytes, the same `hasFormatting`, the same `.value("Robin", nil)`
+    /// argument and byte-identical descriptions compared UNEQUAL on the `.heartsOff` row — and
+    /// WHICH row does it moves with unrelated source elsewhere in the module, so item 9 adding five
+    /// files to the test target turned a cell that had been green at item 5 red without touching it.
+    /// It is codegen, not copy, and `==` would go on hiding a real swap behind the same coin flip.
+    ///
+    /// The description carries the `%@` key AND the arguments, so this still compares the KEY a
+    /// translator receives — nothing here renders a string, and no `String(localized:)` enters the
+    /// suite (`LocalizationBoundaryTests` stays the authority on that).
     @Test func everyHeartFailureCauseHasItsOwnSentence() {
         let name = "Robin"
         let table: [(MeshNetworkManager.SessionHeartFailure, LocalizedStringKey)] = [
@@ -813,11 +822,13 @@ struct MeshRoutedHeartCeremonyTests {
                 "a new cause owes a row here, not just a sentence")
         // R2: bounded by the table.
         for (cause, expected) in table {
-            #expect(SessionHeartStatusCopy.message(cause, recipientName: "Robin Jones") == expected,
+            let sentence = SessionHeartStatusCopy.message(cause, recipientName: "Robin Jones")
+            #expect(String(describing: sentence) == String(describing: expected),
                     "each cause must carry its own sentence, not its neighbour's")
         }
-        #expect(SessionHeartStatusCopy.message(.storageUnreachable, recipientName: "Robin Jones")
-                != SessionHeartStatusCopy.message(.holdingAllItCan, recipientName: "Robin Jones"),
+        let unreachable = SessionHeartStatusCopy.message(.storageUnreachable, recipientName: "Robin Jones")
+        let holding = SessionHeartStatusCopy.message(.holdingAllItCan, recipientName: "Robin Jones")
+        #expect(String(describing: unreachable) != String(describing: holding),
                 "the two routed-store causes are the pair the swap hid")
     }
 }

@@ -52,6 +52,25 @@ struct MeshP10DiffRuleAcceptanceTests {
             .appendingPathComponent("MeshP10DiffRuleAcceptanceTests-\(UUID().uuidString)", isDirectory: true)
     }
 
+    /// Removes a directory this suite made, and SAYS SO when it cannot.
+    ///
+    /// The other half of ``temporaryDirectory()``: the cells below write real snapshot files through
+    /// the real mirror, and without this every run of the battery leaves a
+    /// `MeshP10DiffRuleAcceptanceTests-<uuid>` directory in the container's temporary directory
+    /// forever. A bare `try?` would do it in one line and swallow the error — Power of 10's R7 — so
+    /// the removal is explicit and bounded: absence is not a failure (a cell that never published
+    /// has nothing to clean), a removal that FAILS is, because the suite is then leaking after all.
+    ///
+    /// - Parameter url: The directory to remove.
+    private func removeDirectory(_ url: URL) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            Issue.record("the diff-rule suite could not remove \(url.lastPathComponent): \(error)")
+        }
+    }
+
     /// §17.2's eight step bindings, bound to a real mirror and one fixed snapshot.
     ///
     /// The publish step is the SHIPPING door (`publishIfContentChanged(_:)`) over the real file
@@ -134,7 +153,9 @@ struct MeshP10DiffRuleAcceptanceTests {
     /// compared exactly.
     @Test func aStampOnlyDifferenceIsWrittenReloadsNothingAndEndsUnchanged() async {
         var reloads = 0
-        let mirror = WidgetSnapshotMirror(directory: temporaryDirectory(), reloadTimelines: { reloads += 1 })
+        let directory = temporaryDirectory()
+        defer { removeDirectory(directory) }
+        let mirror = WidgetSnapshotMirror(directory: directory, reloadTimelines: { reloads += 1 })
         let first = WidgetSnapshotContentEqualityTests.baseline()
 
         let opening = await run(mirror, first)
@@ -172,8 +193,9 @@ struct MeshP10DiffRuleAcceptanceTests {
         // R2: bounded by the flip table, itself pinned whole against the content fields above.
         for flip in WidgetSnapshotContentEqualityTests.flips {
             var reloads = 0
-            let mirror = WidgetSnapshotMirror(
-                directory: temporaryDirectory(), reloadTimelines: { reloads += 1 })
+            let directory = temporaryDirectory()
+            defer { removeDirectory(directory) }
+            let mirror = WidgetSnapshotMirror(directory: directory, reloadTimelines: { reloads += 1 })
             let baseline = WidgetSnapshotContentEqualityTests.baseline()
             _ = await run(mirror, baseline)
 
@@ -199,7 +221,9 @@ struct MeshP10DiffRuleAcceptanceTests {
     /// as an improvement nobody decided on.
     @Test func theForegroundPublishPathStillReloadsUnconditionally() {
         var reloads = 0
-        let mirror = WidgetSnapshotMirror(directory: temporaryDirectory(), reloadTimelines: { reloads += 1 })
+        let directory = temporaryDirectory()
+        defer { removeDirectory(directory) }
+        let mirror = WidgetSnapshotMirror(directory: directory, reloadTimelines: { reloads += 1 })
         let snapshot = WidgetSnapshotContentEqualityTests.baseline()
 
         mirror.publish(snapshot)

@@ -130,9 +130,15 @@ struct MeshP10ImportWallAcceptanceTests {
     ///
     /// Three sets and one derivation. `permittedModules` is DERIVED from the reasons map so the
     /// filter and the explanations cannot drift apart; the permitted set is disjoint from both
-    /// forbidden maps, so no module is quietly on two lists; and the allowlist stays small, because
-    /// a name added to it is a claim that a ≤ 30 s opportunistic task needs a new framework, and
-    /// that belongs in a review with its argument rather than in a drive-by edit.
+    /// forbidden maps, so no module is quietly on two lists; and the allowlist is pinned to the SIX
+    /// names it holds — by count and by name — because a name added to it is a claim that a
+    /// ≤ 30 s opportunistic task needs a new framework, and that belongs in a review with its
+    /// argument rather than in a drive-by edit.
+    ///
+    /// Pinned at the MEASURED six rather than bounded by a round number: the `<= 8` this cell
+    /// shipped with left two slots a seventh and an eighth framework could occupy in silence, which
+    /// is the whole review the clause exists to force. Both halves are read off the wall's own
+    /// `permitted` set, so the two suites cannot drift apart without one of them going red.
     @Test func theModuleClassificationIsAPartitionAndTheAllowlistIsSmall() {
         let permitted = BackgroundRefreshBoundaryTests.permittedModules
         let forbidden = Set(BackgroundRefreshBoundaryTests.forbiddenModuleReasons.keys)
@@ -142,10 +148,16 @@ struct MeshP10ImportWallAcceptanceTests {
                 "the permitted set is derived from the reasons, so a name cannot be allowed unexplained")
         #expect(permitted.isDisjoint(with: forbidden), "no FernletKit module is both allowed and forbidden")
         #expect(permitted.isDisjoint(with: frameworks), "and no Apple framework is")
-        #expect(permitted.count <= 8, """
-            the refresh handler's allowlist has grown to \(permitted.count) modules. Each name is a \
-            claim that a fifteen-minute opportunistic task needs a framework; raise this only with \
-            the claim written down
+        #expect(permitted.count == 6, """
+            the refresh handler's allowlist is \(permitted.count) modules, not the six this clause \
+            measured. Each name is a claim that a fifteen-minute opportunistic task needs a \
+            framework; move this pin only with the claim written down
+            """)
+        #expect(permitted == ["Foundation", "BackgroundTasks", "WidgetKit",
+                              "FernletFoundation", "FernletDomainModel", "os"], """
+            …and they are those six BY NAME (\(permitted.sorted().joined(separator: ", "))). A \
+            count alone lets one name leave as another arrives, which is a framework entering the \
+            ≤ 30 s task with nobody's argument behind it
             """)
         // R2: bounded by the four frameworks §17.2 names by hand.
         for framework in ["HealthKit", "CloudKit", "FoundationModels", "MultipeerConnectivity"] {
