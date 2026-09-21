@@ -654,6 +654,7 @@ every landing below, and so was the `FernletTests` suite.
    updated in the same commit. **Cost:** none technically — but the value of that census is that
    every entry was looked at by a person, so it wants the owner's eyes **as a policy act**.
 8. **QUIC is not the default, and MC still ships.** `FERNLET_MESH_TRANSPORT=quic` is DEBUG-only and
+   **Superseded 2026-09-21 (the flip, §17.1.2 deviation 1 / §28.8):** QUIC IS the default since `5d88247`; MC ships on no path and is a DEBUG-only bisect path until the deletion round.
    read once per launch; a Release build can only answer MC. **Cost:** none — this is the P2 boundary
    working exactly as designed (§18: "P9 after P2 is proven"). The cost arrives later, as the field
    evidence P9 needs and P2 could not produce.
@@ -3727,6 +3728,12 @@ three new `Docs/` files.
    ships MC as the mesh's default transport and QUIC refuses a stranger before any app frame, so the
    deletion ships a build where two phones that have never met cannot found a mesh. D-4.2 (split) was
    taken as the working default; D-4.1/D-4.3 is the owner's. **§17.1 must not be read as MC retired.**
+   **2026-09-21 — the FLIP is BUILT** (D-4.3 taken, §28.8): `MeshTransportFactory.shippingDefault` is `.quic` (`5d88247`), the
+   selection seam and the DEBUG `FERNLET_MESH_TRANSPORT=multipeer` bisect path kept (Variant B) until the deletion round,
+   D-4.4 pure retire (`6e1822e`), `browsed peers=` names `.private` (`409b714`), docs (`c828f36`, `7d28cc4`), mesh line
+   1221 (`8b124e5`), then the flip's verify fixes `ad85cd7`/`7f16277`/`7e0c38c`/`4e70d0a` — the mesh radio's diagnostics label peers through a salted session-scoped `peerLabel(for:)` like its siblings and the `tunnelEnded` fingerprint is `.private` (the verify's HIGH: eight peer-derived `.public` sites, one of them the stable identity fingerprint, on a radio that now ships) — mesh line MEASURED **1222 / 141**. **MC is still not deleted**: the two files, the `_fernlet-friend` strings, the permit
+   list and the 34-file test sweep are the deletion round's. §17.1 may now be read as "QUIC ships; MC is a DEBUG bisect
+   path on its way out".
 2. **Four of the eight plist strings, not eight.** `_fernlet-friend._{tcp,udp}` are **live** (the
    shipping MC mesh); `_fernlet-coach._{tcp,udp}` are **held** — `MultipeerServiceType.trainer` is
    reachable only through `begin(mode: .trainer)`, which no shipping call passes (§18 decision 4's
@@ -6136,7 +6143,7 @@ honesty suite; no production anchor below moves.*
 | Decision | Default if the owner is silent | Why |
 |---|---|---|
 | **The device round** | Run it. | Three phases overdue and the only unpaid risk left; a Simulator answers no row. Lane D first (one phone), then §15.1, then the soak. |
-| **9.4-LATER, the MC→QUIC cutover** | **D-4.3 TAKEN by the owner (2026-09-21, later the same day as §28.8): Option 1 — cut over WITH provisional stranger admission while the join doors are open, plus Option 1b's frame-gating half; §15 still undated, knowingly. D-4.4 taken as PURE RETIRE (against the design's recommendation; cost in the ledger). The series is flip → gate → delete: the admission path and the default flip this round, the MC files, the `_fernlet-friend` plist strings, the permit list and the test sweep the round after.** | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
+| **9.4-LATER, the MC→QUIC cutover** | **D-4.3 TAKEN by the owner (2026-09-21, later the same day as §28.8): Option 1 — cut over WITH provisional stranger admission while the join doors are open, plus Option 1b's frame-gating half; §15 still undated, knowingly. D-4.4 taken as PURE RETIRE (against the design's recommendation; cost in the ledger). The series is flip → gate → delete: the admission path and the default flip this round, the MC files, the `_fernlet-friend` plist strings, the permit list and the test sweep the round after. **The FLIP is BUILT (`5d88247`…`7d28cc4` + verify fixes `ad85cd7`…`4e70d0a`, mesh line 1222 / 141); the deletion round is next.** | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
 | **D-4.4** (the `MCPeerIDStore` wipe row → a legacy `FileManager` sweep) | **TAKEN 2026-09-21 with D-4.3: PURE RETIRE** (the owner's call, against the sweep the design recommended). | `FernletPeerID.archive` survives on any pre-P9 install, so the cutover commit owes the sweep in the same breath. |
 | **P9-3-A** (a configured lock parks the 1:1 radios) | Leave the policy alone; surface **why** instead. | Changing a run-policy row is a P7 bug fix that re-runs the 23 040-row product. Unchanged from §27.3. |
 | **D-10.4.5** — the foreground after-hook still reloads unconditionally; only the handler's `publishIfContentChanged` diffs | **DEFERRED** here, and it is the owner's one-line call. Silent default: **narrow it**, one line plus a cell. | §17.2 scopes the diff to the refresh handler, so `WidgetSnapshotMirror.publish(_:)` is correct as scoped and every caller there is a persisted change; but the mirror makes the diff free for both paths now, and the difference will outlive the reason for it. |
@@ -6313,8 +6320,19 @@ without touching the phone (§15.5's overnight window kept running on it). The r
   re-propose booking (capped at 2 per endpoint, never reset) so a genuine friend is not stranded. §7.2's bullet amended above.
   mesh-batteries **MEASURED 1220 / 141**. Blind verify found 1 HIGH (a per-endpoint refund made the never-refilled cap
   refillable) + 6 MEDIUM (the exposure window is **5 minutes**, not 25 s — `transitionToProximityGate` re-arms; the predicate's
-  `currentMesh == nil` leg; seven stale "members-only" sentences; the arm undriven), all fixed. **The flip is next** (§9.4-LATER
-  stays LATER until it lands); the unseeded Lane C run and the device rows are owed; MC deletion the round after.
+  `currentMesh == nil` leg; seven stale "members-only" sentences; the arm undriven), all fixed.
+- **And the FLIP is BUILT, the same evening** (`5d88247` default `.quic` under Variant B — the selection seam and the DEBUG
+  `FERNLET_MESH_TRANSPORT=multipeer` bisect path stay until the deletion round; `6e1822e` D-4.4 pure retire — the archive leg
+  and the wipe row gone, a pre-flip install's `FernletPeerID.archive` left behind by decision; `409b714` `browsed peers=`
+  names `.private`; `c828f36`/`7d28cc4` docs; `8b124e5` floor 1221; verify fixes `ad85cd7`/`7f16277`/`7e0c38c`/`4e70d0a`, floor **1222 MEASURED**). The flip's blind verify found 1 HIGH — eight peer-derived `.public` log sites on the now-shipping mesh radio, one of them the stable identity fingerprint on every teardown, where the round's own dated note had claimed §8.7 finding 1 closed — fixed with the siblings' salted `peerLabel(for:)`; plus 5 MEDIUM (a permit-list reason falsified by D-4.4, a user-visible "Multipeer" row label, six sentences false regardless of Variant B) and 3 LOW. Three things the flip learned: the
+  survey's `MeshNetworkManager.swift` Edits 5/6 had already been taken by the admission work and re-applying them would have
+  undone it; **the repo has no DocC build anywhere**, so "warnings are errors" for DocC is unenforced (the link inventory,
+  528 → 528, stood in); and **the wipe leg's retirement went red nowhere** — the wipe wall pins that a function exists and
+  is called, never what it does. Owed: the Edit 7 prose sweep (29 files, all still true while MC is a DEBUG radio), the
+  unseeded Lane C run (the capability has never been observed on any radio), `accepted`/`datagramCapacity` still `.public`,
+  the inspector's two bare strings. **The deletion round is next**: the two MC files, the `_fernlet-friend` strings, the
+  permit list emptied, the 34-file test sweep, `PeerIDArchiveWipeTests`/`MultipeerPeerTests` with the store, then the
+  prose sweep — after the flip has been observed on a Simulator pair unseeded, and, when phones are in hand, on hardware.
 - **A rule this round adds to §28.5's list:** *a design's "mechanism" sentence must name the subscriber, not the hook.*
   The draft routed a new flag through `onPeerVerified`, which is declared and fired and read by nothing; only the blind
   verify's grep caught it. Grep the READER of every seam a design leans on before writing the size.
