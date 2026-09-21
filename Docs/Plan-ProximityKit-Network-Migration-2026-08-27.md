@@ -461,6 +461,16 @@ proved about the testing lanes — which is the largest thing P2 changed about t
   peers' TLS certificate fingerprints (decide only if forced; note in the runbook).
 - Reject before any app frame: unknown identity, non-roster member, hard-departed/removed member,
   ended/foreign meshID, introduction failure, or replayed nonces (per-session nonce cache, bounded).
+  **Amended 2026-09-21 (D-4.3, Option 1 — `Docs/Mesh-Stranger-Admission-Design-2026-09-21.md`, §28.8):** a
+  *non-roster member* is no longer refused unconditionally. While the manager's join doors are open
+  (`isAdmittingNewPeers` and no mesh or an open one), the introduction admits a stranger **provisionally** to a
+  *tunnel*, never to a roster — the posture the MultipeerConnectivity radio shipped, with the key proven by the
+  signed transcript and TLS underneath — and a foreign meshID is tolerated for exactly that provisional stranger
+  (a stranger is asking into whatever mesh this is; two newborn founders are strangers to each other's one-member
+  roster), the transcript naming the responder's meshID on both sides. A barred key is refused regardless; a
+  member of another mesh is still `.foreignMesh`; membership is decided at the existing three doors (the seat
+  check at the identity introduction, the commit, the admission request). A provisional peer is sent this
+  device's identity introduction before commit, as on MC.
 - ALPN `fernlet-mesh-v1`; explicit length framing stays `SealedPayloadFraming` (wire2), and the QUIC
   receive-window/frame caps move in lockstep with `maxInboundWireBytes` exactly as the MC comment
   demands today.
@@ -6126,8 +6136,8 @@ honesty suite; no production anchor below moves.*
 | Decision | Default if the owner is silent | Why |
 |---|---|---|
 | **The device round** | Run it. | Three phases overdue and the only unpaid risk left; a Simulator answers no row. Lane D first (one phone), then §15.1, then the soak. |
-| **9.4-LATER, the MC→QUIC cutover** | **D-4.1 — hold**, unchanged for a second phase. **The design is written (2026-09-21, §28.8) and D-4.3 is ASKED, redefined as "cut over WITH provisional stranger admission"; the answer is the owner's.** | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
-| **D-4.4** (the `MCPeerIDStore` wipe row → a legacy `FileManager` sweep) | Decide **with** D-4.1/D-4.3, never after. | `FernletPeerID.archive` survives on any pre-P9 install, so the cutover commit owes the sweep in the same breath. |
+| **9.4-LATER, the MC→QUIC cutover** | **D-4.3 TAKEN by the owner (2026-09-21, later the same day as §28.8): Option 1 — cut over WITH provisional stranger admission while the join doors are open, plus Option 1b's frame-gating half; §15 still undated, knowingly. D-4.4 taken as PURE RETIRE (against the design's recommendation; cost in the ledger). The series is flip → gate → delete: the admission path and the default flip this round, the MC files, the `_fernlet-friend` plist strings, the permit list and the test sweep the round after.** | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
+| **D-4.4** (the `MCPeerIDStore` wipe row → a legacy `FileManager` sweep) | **TAKEN 2026-09-21 with D-4.3: PURE RETIRE** (the owner's call, against the sweep the design recommended). | `FernletPeerID.archive` survives on any pre-P9 install, so the cutover commit owes the sweep in the same breath. |
 | **P9-3-A** (a configured lock parks the 1:1 radios) | Leave the policy alone; surface **why** instead. | Changing a run-policy row is a P7 bug fix that re-runs the 23 040-row product. Unchanged from §27.3. |
 | **D-10.4.5** — the foreground after-hook still reloads unconditionally; only the handler's `publishIfContentChanged` diffs | **DEFERRED** here, and it is the owner's one-line call. Silent default: **narrow it**, one line plus a cell. | §17.2 scopes the diff to the refresh handler, so `WidgetSnapshotMirror.publish(_:)` is correct as scoped and every caller there is a persisted change; but the mirror makes the diff free for both paths now, and the difference will outlive the reason for it. |
 | **The three UI residuals** | Pin CI's Simulator device **first**; the three fall out of it. **PINNED 2026-09-21 (`97d1bd9` + verify fixes `18dd46a`); the three are now takeable.** | `s3-wall.yml` fell back to the newest available iPhone with a `::warning::` while the baselines are pinned four ways to an iPhone 17; it is a hard failure now, read by `CIGateSelectorBoundaryTests`. |
@@ -6294,6 +6304,17 @@ without touching the phone (§15.5's overnight window kept running on it). The r
   and/or Option 2's two-scan ceremony) and D-4.2 (the split as it stands) remain. **The session stops here for the
   owner's answer** (the launcher's stop condition 1). On D-4.3: the admission path with its tests and the target-mesh
   rule, then the six anchored patches with the pins raised, gate, the Lane C unseeded run — MC deletion the round after.
+- **Later the same day — the owner answered and the admission path is BUILT.** D-4.3 taken as Option 1 (+ 1b's gating
+  half), D-4.4 as pure retire. Commits `5c8d5ac`/`c00b193`/`78a94db` + verify fixes `0831c6e`/`ae06077`/`8a01011`/`4667d83`:
+  `MeshIntroductionRoster.admitsStrangersProvisionally` set from `isAdmittingNewPeers && isSessionOpen`; the roster verdict
+  read before the meshID compare, a mismatch tolerated only for a provisional stranger, the transcript naming the responder's
+  id; the group-key family and the vouch list gated on commit (**load-bearing**: a stranger with a well-formed epoch can now
+  reach `.reconcile`, contained only because the merge's frames are commit-gated); a pre-commit timeout eviction refunds its
+  re-propose booking (capped at 2 per endpoint, never reset) so a genuine friend is not stranded. §7.2's bullet amended above.
+  mesh-batteries **MEASURED 1220 / 141**. Blind verify found 1 HIGH (a per-endpoint refund made the never-refilled cap
+  refillable) + 6 MEDIUM (the exposure window is **5 minutes**, not 25 s — `transitionToProximityGate` re-arms; the predicate's
+  `currentMesh == nil` leg; seven stale "members-only" sentences; the arm undriven), all fixed. **The flip is next** (§9.4-LATER
+  stays LATER until it lands); the unseeded Lane C run and the device rows are owed; MC deletion the round after.
 - **A rule this round adds to §28.5's list:** *a design's "mechanism" sentence must name the subscriber, not the hook.*
   The draft routed a new flag through `onPeerVerified`, which is declared and fired and read by nothing; only the blind
   verify's grep caught it. Grep the READER of every seam a design leans on before writing the size.
