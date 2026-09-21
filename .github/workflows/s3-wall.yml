@@ -610,9 +610,23 @@ jobs:
         # shuts the join door — finding 3's regression). MEASURED over this exact 141-name list on a
         # Mac after a build-for-testing, read off the result bundle: "Test run with 1220 tests in
         # 141 suites", no restart. 1217 + 3 = 1220 is the ARITHMETIC CHECK, never the number.
+        # RAISED 1220 -> 1221 (2026-09-21, the cutover round's item 1.3 - the MC->QUIC FLIP,
+        # MeshTransportFactory.shippingDefault .multipeer -> .quic). ONE suite already on this line
+        # gained ONE cell and no suite joined or left, so the NAME count stays 141 and
+        # CIGateSelectorBoundaryTests' `measuredSuiteNameCounts` is untouched: NetworkMeshSessionTests
+        # +1 (theBrowseTranscriptLogsItsCountPubliclyAndItsPeerNamesPrivately - plan section 8.7
+        # finding 1's owed log downgrade, taken now because the flip is what made this radio the
+        # shipping one: the `browsed peers=` COUNT stays privacy: .public and the nearby Bonjour
+        # instance NAMES go privacy: .private). Nothing was retired. The flip RENAMED three cells in
+        # MeshTransportSelectionTests and one in MeshP9McRetirementAcceptanceTests and turned their
+        # VALUES over, which moves no count; D-4.4's pure retire deleted a production leg that no
+        # cell in the repository ever drove. MEASURED over this exact 141-name list on a Mac after a
+        # build-for-testing, read off the result bundle: "Test run with 1221 tests in 141 suites
+        # passed after 171.894 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit`
+        # line. 1220 + 1 = 1221 is the ARITHMETIC CHECK, never the number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1220 \
+          Scripts/run-gated-suites.sh mesh-batteries 1221 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
