@@ -88,6 +88,15 @@ xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet 
 > `CIGateSelectorBoundaryTests` pins every named suite to a declared type. Use the same script
 > locally — `Scripts/run-gated-suites.sh check 1 NoTrackingBoundaryTests` — and it will refuse the
 > green banner over nothing for you too.
+>
+> The floor has a second half: a test run that **restarts** re-runs suites, so the bundle's
+> `totalTestCount` counts cells twice and a floor it clears proves nothing. The script refuses a
+> run whose output carries `Restarting after unexpected exit, crash, or test timeout`, and since
+> P10 item 5 that refusal is itself proved on the LIVE branch rather than only at its
+> `--check-log` seam: `Scripts/run-gated-suites-selftest.sh` runs the real script with
+> `xcodebuild` and `xcrun` stubbed on `PATH` — a green-looking run, a count above the floor —
+> and asserts the exit code with the restart line present and absent, on both code paths. It
+> needs no Simulator and runs beside `spm-wall-selftest.sh` on CI's enforcement step.
 
 | Claim | Verification |
 |---|---|

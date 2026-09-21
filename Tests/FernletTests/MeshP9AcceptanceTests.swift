@@ -1362,25 +1362,35 @@ struct MeshP9HonestyAcceptanceTests {
     ///
     /// (b) Item 7 scoped the routed-inventory family's process-global audit counts to their own
     /// rigs. Forty-two `.count(of:)` reads with no `where:` survived it; P10 item 5 took that to
-    /// **twenty** — seven production doors gained the `held` key and twenty-two reads were scoped
-    /// or re-spelled with the `where:` label — and the twenty left are the ones with a reason:
+    /// **twenty** and item 5's own verify review to **seventeen** — nine production doors gained
+    /// the `held` key and twenty-five reads were scoped or re-spelled with the `where:` label — and
+    /// the seventeen left are the ones with a reason:
     ///   * **six are not this reader at all** — `MilestoneEconomy.count(of:in:)` over a local array
     ///     in `MilestoneLedgerTests` / `MilestoneResetBoundaryTests`. This cell's needle is a
     ///     spelling, not a type, so they sit inside the number permanently. Narrowing the needle to
     ///     exclude them would be editing a wall to make a number look better;
     ///   * **two are the proof cells** — `MeshRoutedDrainTests` and `MeshRoutedPhotoDeliveryTests`
     ///     each read UNSCOPED on purpose, beside the scoped read, to show the two differ;
-    ///   * **five reads sit at four emitters that are unscopeable**: the line is written by a
+    ///   * **three reads sit at three emitters that are unscopeable**: the line is written by a
     ///     device holding no mesh, so `heldMeshAuditContext(_:)` omits the key by design rather
     ///     than writing a fallback — the descriptor door's uncommitted-slot drop (it refuses BEFORE
-    ///     the mesh guard), the projection after a `leaveMesh()`, the launch-restore
-    ///     key-advertisement refusal, and `mesh.promotion.refusedExistingMesh`, whose guard IS
-    ///     `currentMesh == nil` and which is read twice;
-    ///   * **seven have an emitter that COULD carry the key** and were not changed: item 5 stopped
+    ///     the mesh guard), the projection after a `leaveMesh()`, and the launch-restore
+    ///     key-advertisement refusal, which `restoreSessionContextAtLaunch(now:)` reaches with
+    ///     `currentMesh` deliberately nil ("restoring is not reconnecting");
+    ///   * **six have an emitter that COULD carry the key** and were not changed: item 5 stopped
     ///     at the routed-access / photo / founding `== N` cluster, which is where the defect
-    ///     concentrated. Five of the seven are the weaker `> 0` / `== 0` form; two
-    ///     (`routedDrain.heldBackSetFull`, `routedShare.recipientIsSelf`) are still `== 1` over a
-    ///     process-global capture and are the next two to take. 6 + 2 + 5 + 7 = 20.
+    ///     concentrated. Five of the six are the weaker `> 0` / `== 0` form; one
+    ///     (`routedShare.recipientIsSelf`) is still `== 1` over a process-global capture and is the
+    ///     next to take. 6 + 2 + 3 + 6 = 17.
+    ///
+    /// **Item 5's verify review moved two of them, and one had a FALSE reason.**
+    /// `mesh.promotion.refusedExistingMesh` was filed in the third bucket as written by a device
+    /// holding no mesh — but its `log(` is in the **else** of `guard currentMesh == nil`, so it
+    /// fires only when a mesh IS held, and the cell reading it asserts one is held five lines
+    /// earlier. Scoping a read is never enough on its own: the EMITTER's branch is what decides
+    /// whether the key can be there at all, and the guard's name is not that branch.
+    /// `routedDrain.heldBackSetFull` was the one new unscoped `== 1` this item put on the gated
+    /// line. Both doors now carry the key and all three reads are scoped.
     /// The number may fall, never rise. Re-derive it, never remember it — this cell's own needle
     /// over comment-stripped source is the only count that means anything.
     @Test func theRatchetsUIHalfAndTheUnscopedAuditCountsAreNamedRatherThanImplied() throws {
@@ -1424,8 +1434,8 @@ struct MeshP9HonestyAcceptanceTests {
             }
         }
         let total = unscoped.values.reduce(0, +)
-        #expect(total <= 20, """
-            \(total) unscoped audit-count reads, up from the 20 P10 item 5 left behind \
+        #expect(total <= 17, """
+            \(total) unscoped audit-count reads, up from the 17 P10 item 5's fix left behind \
             (\(unscoped.keys.sorted())). Each answers for every rig alive in the process, and a \
             new `== N` among them is item 7's defect again — scope it with `where:` on the rig's \
             own context, the reader that exists for this

@@ -1360,6 +1360,9 @@ struct MeshPairwiseFoundingTests {
         let manager = rig.nodes[0].manager
         let founded = try #require(manager.currentMesh?.meshID)
         let verifier = try #require(manager.membershipVerifier)
+        // The refusal below is written by a device that HOLDS this mesh — it is the `else` of
+        // `currentMesh == nil` — so the line carries `held` and the counts are this rig's own.
+        let mine = heldBy(founded)
 
         rig.link(0, 2)
         rig.commit(0, 2)
@@ -1369,12 +1372,13 @@ struct MeshPairwiseFoundingTests {
                 "and the session's ledger is the one the founding armed")
         #expect(rig.roster(0) == [rig.identities[0].localFingerprint],
                 "a second commit is not an admission, so the derived roster did not move")
-        #expect(capture.count(of: "mesh.promotion.refusedExistingMesh") == 0,
+        #expect(capture.count(of: "mesh.promotion.refusedExistingMesh", where: mine) == 0,
                 "the caller's own `currentMesh == nil` gate is what kept it out")
         // And the guard inside the function refuses when it IS reached directly.
         #expect(!manager.promoteToMeshForTesting(),
                 "the invariant lives with the function, not only with its one caller")
-        #expect(capture.count(of: "mesh.promotion.refusedExistingMesh") == 1, "and it is named")
+        #expect(capture.count(of: "mesh.promotion.refusedExistingMesh", where: mine) == 1,
+                "and it is named, on a line this rig's own mesh id scopes")
         #expect(manager.currentMesh?.meshID == founded, "with nothing touched")
     }
 

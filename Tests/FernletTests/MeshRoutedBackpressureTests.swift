@@ -470,6 +470,8 @@ struct MeshRoutedBackpressureTests {
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
         defer { capture.uninstall() }
+        // Every node of this rig holds `rig.meshID`, and the door writes from inside that state.
+        let mine = heldBy(rig.meshID)
 
         // R2: a hard constant ceiling — the store's own item cap, plus one.
         for _ in 0...MeshRoutedStoreFormat.maxItems {
@@ -479,7 +481,8 @@ struct MeshRoutedBackpressureTests {
             )
         }
 
-        #expect(capture.count(of: "mesh.routedDrain.heldBackSetFull") == 1)
+        #expect(capture.count(of: "mesh.routedDrain.heldBackSetFull", where: mine) == 1,
+                "the bound this rig's own device named, not a sibling's")
         #expect(manager.routedDeliveryHold?.itemCount == MeshRoutedStoreFormat.maxItems,
                 "the count saturates at the bound it named")
     }
