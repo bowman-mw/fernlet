@@ -1436,18 +1436,53 @@ Tests: `theReproposeBudgetIsSpentAndNeverRefilled`, `theReproposeBudgetIsPerEndp
 One posture worth stating: a `currentMesh` with an **empty** member list and no ledger refuses
 everybody, this device included. That is fail-closed and deliberate.
 
-**Logging note — TAKEN 2026-09-21, in the MC→QUIC cutover.** `browsed peers=` used to print nearby
-Bonjour instance names at `.notice` with `privacy: .public`, matching the precedent set by
-`accepted`/`datagramCapacity`, and that was acceptable only while the QUIC radio was DEBUG-only.
-The cutover made it the shipping radio, so the owed downgrade landed with it (plan §8.7 finding 1):
-**`noteBrowseSet` now interpolates the COUNT at `privacy: .public` and the NAMES at
-`privacy: .private`.** Hygiene, not a leak fix — a mesh instance name is `MeshLinkAdvertisement`'s
-random per-session token, not a device name — but a system-log line naming who else was in the room
-does not belong in a sysdiagnose. **The lane transcripts are unaffected:** the DEBUG
-`MeshTransportConsoleLog.echo` beside it still carries the whole line, names included, which is what
-every `--console-pty` recipe in this runbook greps. The *neighbours* named in the old sentence
-(`accepted`, `datagramCapacity`) are **still `.public` and still owed** — they carry link keys and
-capacities, not instance names, and pricing them is a separate item.
+**Logging note — TAKEN 2026-09-21, in the MC→QUIC cutover, and COMPLETED the same day.**
+`browsed peers=` used to print nearby Bonjour instance names at `.notice` with `privacy: .public`,
+and that was acceptable only while the QUIC radio was DEBUG-only. The cutover made it the shipping
+radio, so the owed downgrade landed with it (plan §8.7 finding 1): **`noteBrowseSet` now
+interpolates the COUNT at `privacy: .public` and the NAMES at `privacy: .private`.** Hygiene, not a
+leak fix — a mesh instance name is `MeshLinkAdvertisement`'s random per-session token, not a device
+name — but a system-log line naming who else was in the room does not belong in a sysdiagnose.
+
+**The first version of this note named the wrong residual, and the real one was worse.** It said
+`accepted`/`datagramCapacity` were "still `.public` and still owed". Both halves were wrong.
+`accepted` is not a logged line at all — it, and `redundantTunnelClosed` beside it, go only to
+`MeshTransportConsoleLog.echo`, which is an empty function outside DEBUG, so neither ever reached
+the system log. `datagramCapacity` did, and so did **nine** other lines, and what they carried was
+not a capacity: it was `MeshLinkKey.rawValue`, the browsed Bonjour endpoint id, which contains the
+peer's advertised instance name verbatim — the exact value the `browsed peers=` downgrade had just
+been made to keep out. Worse, `tunnelEnded` interpolated `tunnel.verified?.fingerprint` — the peer's
+**stable** 16-character identity fingerprint, the value the ledger, the roster and the moderation
+record are keyed on — at `privacy: .public` on every teardown.
+
+**What was done.** `NetworkMeshSession` gained the two sibling radios' salted, session-scoped
+`peerLabel(for:)`: 12 hexadecimal characters of SHA-256 over a 256-bit salt drawn once at
+construction, never persisted, never advertised, gone with the session, so a reader who holds the
+peer's public name still cannot re-link two excerpts. Every peer-scoped diagnostic now goes through
+`peerLines(_:key:detail:)`, which returns the line twice — `logged`, naming the peer by its label,
+for `os.Logger`; `echoed`, naming it by the raw endpoint id, for the DEBUG console mirror.
+`tunnelEnded`'s fingerprint moved to `privacy: .private` and keeps its place on the line; the DEBUG
+echo keeps it in clear. `NetworkMeshSessionTests.noPublicDiagnosticOnTheShippingRadioCarriesAPeerDerivedValue`
+is the wall: it reads the file, extracts every `privacy: .public` interpolation, and fails on a
+peer-derived token — and, because that scan alone would not see `let line = "… \(key.rawValue)"`
+logged as `\(line, privacy: .public)`, it also refuses a raw endpoint id in any string literal
+outside the two builders.
+
+**What is still `.public`, and why none of it is peer-derived.** On the mesh radio: `keys.count`
+(the browse-set size), `attempt` (the dial-retry number), `error.localizedDescription` twice (the
+framework's listener/browser wait text), `reason` (a dial-failure reason), `message` (`report`'s
+frozen diagnostic English), and `lines.logged` / `logged`, which carry the label. The two sibling
+radios were already on this footing and were re-checked in the same pass: their only public
+interpolations are `self.peerLabel(for:)`, `error.localizedDescription`, `message` and a teardown
+`reason`.
+
+**The lane transcripts are unaffected, byte for byte.** The DEBUG `MeshTransportConsoleLog.echo`
+beside each of these lines still carries the raw endpoint id, and every echoed string is character
+for character what it was before this change — `dial refused`, `datagramCapacity`, `tunnelEnded`,
+`transfer`, `heartbeat`, `inbound tunnel refused` and `browsed peers=` all included. Every
+`--console-pty` recipe in this runbook greps those, and none of them needs re-running. What did
+change shape is the *system log*: a `xctrace`/Console reader now sees a 12-character label where it
+saw `fernlet-mesh-…`, which is stable within a session and therefore still tells two peers apart.
 
 #### The 3/3 proof (runs 2026-09-02, item 0b)
 

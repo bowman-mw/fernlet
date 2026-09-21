@@ -1411,6 +1411,133 @@ struct NetworkMeshSessionTests {
             was added for
             """)
     }
+
+    // MARK: Peer-derived values in the shipping radio's system log
+
+    /// The literal a public interpolation ends with, and the marker the scan walks.
+    static let publicInterpolationMarker = ", privacy: .public)"
+
+    /// How a peer-derived value is spelled on this radio: the browsed endpoint id and its
+    /// `rawValue`, the ``MeshLinkKey`` it is wrapped in, the advertised instance name, and the
+    /// verified identity fingerprint.
+    static let peerDerivedTokens = [
+        "key", "endpoint", "rawvalue", "fingerprint", "instance", "name", "peer"
+    ]
+
+    /// Every expression interpolated at `privacy: .public` on one line of Swift.
+    ///
+    /// Walks to each marker and takes the nearest `\(` *before* it, so a line carrying a public
+    /// and a private interpolation yields only the public one — which is exactly the shape
+    /// `noteTunnelEnded` writes, and reading it per-LINE rather than per-INTERPOLATION would
+    /// condemn the fix for the leak it closed.
+    static func publicInterpolations(in line: String) -> [String] {
+        var found: [String] = []
+        var rest = Substring(line)
+        // R2: every pass consumes at least the marker, and the line is finite.
+        while let marker = rest.range(of: publicInterpolationMarker) {
+            let head = rest[rest.startIndex..<marker.lowerBound]
+            if let open = head.range(of: "\\(", options: .backwards) {
+                found.append(String(head[open.upperBound...]))
+            }
+            rest = rest[marker.upperBound...]
+        }
+        return found
+    }
+
+    /// Whether one publicly-interpolated expression carries a value derived from a peer.
+    ///
+    /// Two exemptions, and both are the point of the fix rather than holes in it:
+    /// ``NetworkMeshSession/peerLabel(for:)`` is the sanctioned labeller (its own call names two
+    /// forbidden tokens), and a `.count` identifies nobody — `browsed peers=\(keys.count)` is the
+    /// one peer-shaped interpolation the cutover deliberately KEPT public.
+    static func isPeerDerived(_ expression: String) -> Bool {
+        let normalized = expression.lowercased()
+        guard !normalized.contains("peerlabel(") else { return false }
+        guard !normalized.hasSuffix(".count") else { return false }
+        return peerDerivedTokens.contains { normalized.contains($0) }
+    }
+
+    /// **Nothing peer-derived reaches the shipping radio's system log.**
+    ///
+    /// The cutover (2026-09-21) made `NetworkMeshSession` the radio every launch gets, and moved
+    /// none of its diagnostics. Ten of them interpolated `MeshLinkKey.rawValue` — the browsed
+    /// Bonjour endpoint id, which contains the peer's advertised instance name verbatim — at
+    /// `privacy: .public`, and `noteTunnelEnded` interpolated the peer's **stable** 16-character
+    /// identity fingerprint, the value the ledger and the moderation record are keyed on, at
+    /// `.public` on every single teardown. `409b714` redacted only `browsed peers=`. The two
+    /// sibling radios had run on a salted, session-scoped `peerLabel(for:)` since they shipped;
+    /// this radio now does too, and this is the wall that keeps it there.
+    ///
+    /// Source, not behaviour, and deliberately so — `os.Logger`'s redaction happens inside the
+    /// unified logging system and a unit test cannot observe which interpolation was public. What
+    /// IS observable is the shape of the call, and the shape is the whole decision.
+    ///
+    /// Three claims, because one alone leaves the hole the leak actually came through:
+    ///
+    /// 1. No `privacy: .public` interpolation names a peer-derived token.
+    /// 2. `peerLines(_:key:detail:)` still builds its two halves differently — the logged one
+    ///    through the label, the echoed one through the raw id. Collapse them and claim 1 stays
+    ///    green while every line goes back to naming peers.
+    /// 3. Outside those two builders, no string literal in the file interpolates the raw endpoint
+    ///    id at all — which is the indirection that let `let line = "… \(key.rawValue)"` followed
+    ///    by `\(line, privacy: .public)` read as clean to a per-interpolation scan.
+    @Test func noPublicDiagnosticOnTheShippingRadioCarriesAPeerDerivedValue() throws {
+        let code = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
+        )
+
+        var offenders: [String] = []
+        for line in code.split(separator: "\n", omittingEmptySubsequences: false) {
+            let text = String(line)
+            for expression in Self.publicInterpolations(in: text) where Self.isPeerDerived(expression) {
+                offenders.append("\(expression) — in: \(text.trimmingCharacters(in: .whitespaces))")
+            }
+        }
+        #expect(offenders.isEmpty, """
+            the shipping mesh radio logs a peer-derived value at `privacy: .public` again. Every \
+            such value — the link key, the browsed endpoint id, the advertised instance name, the \
+            identity fingerprint — must interpolate through `peerLabel(for:)`, which is salted \
+            per session and gone with it. Counts, causes, capacities and durations stay public. \
+            Offending interpolations:
+            \(offenders.joined(separator: "\n"))
+            """)
+
+        let builder = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "private func peerLines(", in: code),
+            "peerLines is gone — the split between the logged line and the echoed one has no home"
+        )
+        #expect(builder.contains("logged: \"\\(body) for \\(peerLabel(for: key))\\(tail)\""), """
+            the LOGGED half of a peer-scoped line no longer names the peer by its session label. \
+            That half goes to `os.Logger`, is persisted, and leaves the device in a sysdiagnose
+            """)
+        #expect(builder.contains("echoed: \"\\(body) for \\(key.rawValue)\\(tail)\""), """
+            the ECHOED half lost the raw endpoint id. That half goes to \
+            `MeshTransportConsoleLog`, which is an empty function outside DEBUG, and it is the \
+            transcript the runbook's Simulator lanes grep — a lane that cannot match a tunnel \
+            line against its own `browsed peers=` list cannot tell a star from a mesh
+            """)
+
+        let tunnelEnded = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "private func noteTunnelEnded(", in: code),
+            "noteTunnelEnded is gone — the teardown line that leaked the fingerprint has no home"
+        )
+        #expect(tunnelEnded.contains("fingerprint=\\(fingerprint, privacy: .private)"), """
+            the teardown line stopped redacting the peer's identity fingerprint. It is STABLE — \
+            the ledger, the roster and the moderation record are keyed on it — and it was public \
+            on every teardown of the shipping radio until the cutover's fix
+            """)
+
+        let remainder = code
+            .replacingOccurrences(of: builder, with: "")
+            .replacingOccurrences(of: tunnelEnded, with: "")
+        #expect(!remainder.contains("\\(key.rawValue)"), """
+            a string literal outside `peerLines` and `noteTunnelEnded` interpolates the raw \
+            endpoint id. That is the indirection the leak travelled through: a `let line = "… \
+            \\(key.rawValue)"` logged as `\\(line, privacy: .public)` names a peer while \
+            reading as clean to a per-interpolation scan. Build peer-scoped lines with \
+            `peerLines(_:key:detail:)`
+            """)
+    }
 }
 
 // MARK: - MeshIntroductionHarness
