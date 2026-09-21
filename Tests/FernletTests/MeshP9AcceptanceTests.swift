@@ -28,9 +28,11 @@
 // `Info.plist`; the radio advertising the posture's OWN bytes; `makeSession:` existing to inject a
 // fake through. A needle satisfied by a rename alone is named as such in `GATES.md` and is not one.
 //
-// **What this battery does NOT claim** is in clause (e), by name and not by omission: item 4 is
-// SPLIT and the friend mesh still ships on MultipeerConnectivity, so clause (d) is an HONESTY row
-// asserting the current truth rather than a zero-list; the two lane rows (9.2.2, 9.3.2) are tier-2
+// **What this battery does NOT claim** is in clause (e), by name and not by omission: item 4 was
+// SPLIT, and although the MC->QUIC FLIP landed on 2026-09-21 the two MC files, the _fernlet-friend
+// plist pair and the permit list are held through it for the DEBUG bisect path, so clause (d) is
+// still an HONESTY row asserting the current truth rather than a zero-list — it becomes the
+// zero-list in the deletion round; the two lane rows (9.2.2, 9.3.2) are tier-2
 // sim↔sim observations; item 0's rows need phones in the owner's hands; P9-3-A is a product
 // decision on P7's run-policy table. The two determinism digests keep their one home in
 // `MeshP5AcceptanceTests`, this file spells neither, and the gate that runs it re-runs the
