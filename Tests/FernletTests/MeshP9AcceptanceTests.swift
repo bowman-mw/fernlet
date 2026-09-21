@@ -1022,10 +1022,11 @@ struct MeshP9McRetirementAcceptanceTests {
             the tree is red
             """)
         // The type check is deliberately narrower than the import check, and scoped to the PACKAGE.
-        // Two real, benign occurrences would otherwise trip a substring walk and teach the next
-        // author to widen the wall rather than read it: the app's connection inspector renders the
-        // literal row label `"MCSession"`, and `MeshNetworkManager` calls Fernlet's own
-        // `FileMCPeerIDStore()` in the delete-all sweep. `TransportNeutralityBoundaryTests` is the
+        // Real, benign occurrences would otherwise trip a substring walk and teach the next author
+        // to widen the wall rather than read it: the app's connection inspector renders the literal
+        // row label `"MCSession"`. (It was TWO until 2026-09-21 — `MeshNetworkManager` also called
+        // Fernlet's own `FileMCPeerIDStore()` in the delete-all sweep, until D-4.4's pure retire
+        // took that leg.) `TransportNeutralityBoundaryTests` is the
         // wall that covers both correctly — it matches WHOLE IDENTIFIERS — which is exactly why
         // this commit puts that suite on a CI line for the first time. These three names have no
         // Fernlet-owned prefix collision anywhere, so a substring walk is sound for them.

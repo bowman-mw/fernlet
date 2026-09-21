@@ -188,7 +188,6 @@ general proof against arbitrarily renamed storage.
 | Health capabilities ever requested — the record of which `HealthCapability` prompts Fernlet has ever shown, including **`cycleTracking` and `intimateLogging`** | Keychain `com.fernlet.healthkit-anchors`, account `fernlet.healthkit.requested-capabilities` (after-first-unlock, this-device-only, so it never rides a device backup and is not readable with `defaults read`). Installs predating 2026-08-20 also carry a plaintext `UserDefaults` array under the same key; reading the ledger drains it into the keychain and removes it | `HealthCapabilityRequestLedger.clear` (also called by `HealthKitService.disableIntegration`, so "turn Health off" clears it too). Deletes the ACCOUNT, never the service — the anchor rows in the same slot survive by design, see the deliberate-exceptions table |
 | Companion petting state — pets counted in the current rolling window, when that window opened, when the settled period ends, and which settle already showed its soft line | UserDefaults `fernlet.companionPets.count`, `fernlet.companionPets.windowStart`, `fernlet.companionPets.cooldownUntil`, `fernlet.companionPets.settledLineShownFor` (`PetInteractionGovernor`, device-local, never synced) | `PetInteractionGovernor.clearPersistentState` (the method already existed; until 2026-08-20 its only caller was a `#if DEBUG` UI-test seam, so RELEASE never cleared it). Plain UserDefaults removals — no failure signal |
 | **Proximity identity keypairs + backup-escrow keychain rows** | Keychain `com.fernlet.identity` (survives reinstall) | `wipeIdentityForDeleteAll` ×3 (mesh, presence, recipe share — each also drops its in-memory key cache) |
-| **MC peer-identity archive** — the device name (in practice the user's own first name) plus the stable `MCPeerID` the mesh and recipe-share radios advertise | `Application Support/FernletPeerID.archive` | `wipeIdentityForDeleteAll` (mesh leg, via `FileMCPeerIDStore.clearForDeleteAll()`; the next radio start mints a fresh peer id, and a refusing file system now throws instead of leaving the identifier behind) |
 | **A duress recovery-custodian enrollment the identity wipe just invalidated** | Keychain `com.fernlet.lock` — `.recoveryBlob`, both custodian public keys, the recorded owner key | `identityRotatedHook` → `DuressRecoveryCoordinator.reconcileEnrollmentWithLocalIdentity()`, fired immediately after the row above. The blob is sealed with THIS device's key-agreement key mixed into the derivation and the custodian opens it with the live one, so rotating the identity makes it unopenable by anybody — while the app lock, the content key and the enrollment rows all survive this funnel by design. Retiring it is what stops `DuressMode.recoveryLock` staying armed over a dead blob (firing it would destroy every local unlock key for a ceremony that can only fail); an armed `.recoveryLock` is rewritten to the non-destructive `.decoy` at the same moment. Also run at launch, as the backstop for a wipe whose process died first |
 | Moderation peer-ban records (30-day bans of OTHER designers, keyed to their identity fingerprints; the record's subject field embeds the fingerprint too) | Keychain — service `com.fernlet.moderation`, `peerBan:` accounts (survives reinstall) | `moderationBanStore.clearPeerBansForDeleteAll` — removes ONLY `peerBan:` rows; the self-ban row in the same service is a deliberate survivor (see the exceptions table, 2026-07-17 decision) |
 | Journal device key | Keychain `com.fernlet.journal` | `deviceJournalKey` delete |
@@ -204,6 +203,19 @@ general proof against arbitrarily renamed storage.
 
 (The `heartsAwayDelivery` consent flag itself lives in FernletSettings inside the snapshot — the
 repository purge takes it.)
+
+*The **MC peer-identity archive** row — `Application Support/FernletPeerID.archive`, the device name
+plus the stable `MCPeerID` the mesh and recipe-share radios advertised — was **retired on
+2026-09-21** with the MC→QUIC cutover, not merely unlisted. The MultipeerConnectivity radio is no
+longer constructed on any shipping path, so **no radio mints or archives a peer identity any more**:
+the three QUIC radios each mint a fresh TLS identity and a random instance name per epoch (mesh,
+presence) or per start (recipe share), and there is nothing stable left to wipe. The leg in
+`MeshNetworkManager.wipeIdentityForDeleteAll` retired with it — **decision D-4.4, the owner's, a
+PURE RETIRE taken against the survey's recommended legacy `FileManager` sweep** (recorded in
+`Docs/Mesh-Migration-Loop-Ledger-Cutover-2026-09-21.md`). The cost, stated rather than implied: an
+install that ran a **pre-flip** build still holds that file and **delete-all leaves it behind**. The
+only install in the world is the owner's own phone, it has run pre-flip builds, and it will hold the
+file until a reinstall.*
 
 ## Deliberate exceptions — surfaces that survive Delete everything BY DESIGN
 
