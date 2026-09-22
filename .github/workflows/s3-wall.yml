@@ -681,9 +681,20 @@ jobs:
         # a build-for-testing, read off the result bundle: "Test run with 1222 tests in 141 suites
         # passed after 245.622 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit`
         # line. 1216 + 3 + 3 = 1222 is the ARITHMETIC CHECK, never the number.
+        # RAISED 1222 -> 1226 (2026-09-22, the owner-calls round's third blind verify). ONE suite
+        # already on this line gained FOUR cells and no suite joined or left, so the NAME count stays
+        # 141 and CIGateSelectorBoundaryTests is untouched: MeshNameWithholdingTests +4 (the join
+        # request goes to committed slots only; a withheld vote is filled on receipt; the QR
+        # ceremony's pre-commit challenge names nobody - the door keys on the SLOT; the disclosure
+        # subscriber stays rename-only). The reconnect session's 31fafd6, landed between the two
+        # measurements, changed no cell count on this list. MEASURED over this exact 141-name list on
+        # a Mac, in a CLEAN worktree of 316ae29 under the home directory, after a build-for-testing,
+        # read off the result bundle: "Test run with 1226 tests in 141 suites passed after 178.883
+        # seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit` line. 1222 + 4 = 1226
+        # is the ARITHMETIC CHECK, never the number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1222 \
+          Scripts/run-gated-suites.sh mesh-batteries 1226 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
