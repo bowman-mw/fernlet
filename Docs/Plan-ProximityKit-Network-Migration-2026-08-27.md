@@ -654,7 +654,7 @@ every landing below, and so was the `FernletTests` suite.
    updated in the same commit. **Cost:** none technically — but the value of that census is that
    every entry was looked at by a person, so it wants the owner's eyes **as a policy act**.
 8. **QUIC is not the default, and MC still ships.** `FERNLET_MESH_TRANSPORT=quic` is DEBUG-only and
-   **Superseded 2026-09-21 (the flip, §17.1.2 deviation 1 / §28.8):** QUIC IS the default since `5d88247`; MC ships on no path and is a DEBUG-only bisect path until the deletion round.
+   **Superseded 2026-09-21 (the flip, §17.1.2 deviation 1 / §28.8):** QUIC IS the default since `5d88247`; MC ships on no path and is a DEBUG-only bisect path until the deletion round. **Deleted 2026-09-22** (`ec05b0c`): no MC code remains in the tree.
    read once per launch; a Release build can only answer MC. **Cost:** none — this is the P2 boundary
    working exactly as designed (§18: "P9 after P2 is proven"). The cost arrives later, as the field
    evidence P9 needs and P2 could not produce.
@@ -3621,7 +3621,7 @@ No-Tracking-Wall, privacy copy, this plan's checkboxes.
 
 ## 17. Phase P9/P10 and paperwork
 
-### 17.1 P9 — remaining radios and MC retirement — **BUILT** (2026-09-20, tier 1 + 1b + **tier 2**; the MC deletion **SPLIT**, its second half blocked on the owner)
+### 17.1 P9 — remaining radios and MC retirement — **BUILT** (2026-09-20, tier 1 + 1b + **tier 2**; the MC deletion **SPLIT** then, **COMPLETE 2026-09-22** — the deletion round, §28.8)
 
 **BUILT on 2026-09-20 — with three honest exceptions, stated first.** (1) **MultipeerConnectivity
 was NOT deleted.** `MeshTransportFactory.shippingDefault` is `.multipeer`
@@ -3630,7 +3630,11 @@ launch, so deleting `MeshMultipeerSession.swift` is the friend mesh's **MC→QUI
 cleanup — and QUIC has no first-meeting stranger-admission path (**§8.7 finding 3**, which the P9
 ledger's item 4 row and `df37afb`'s commit message mis-cite as "§11 finding 3"; the item-4 design
 note cites it correctly as plan §8). Item 4 was **split**: the dead strings left now, the deletion
-waits on the owner's decision D-4.1/D-4.3. (2) **§15 is still NOT RUN** — P9 had one phone and
+waits on the owner's decision D-4.1/D-4.3. **Closed 2026-09-22:** D-4.3 was taken (Option 1), the
+flip landed on 2026-09-21, the unseeded Lane C pair observed the provisional path founding a mesh
+on a real tunnel, and the deletion round removed MultipeerConnectivity from the tree the same day —
+`import MultipeerConnectivity` occurs zero times under `FernletKit/Sources` and `App/`, and
+`TransportNeutralityBoundaryTests.permittedFiles` is `[]` (§17.1.2 deviation 1, §28.8). (2) **§15 is still NOT RUN** — P9 had one phone and
 needed two to four in the owner's hands. (3) **No full-suite run happened this phase**, by the
 owner's standing instruction since P8 item 0; the last measured full suite remains P8's close-out
 (5 055 / 513).
@@ -3734,6 +3738,17 @@ three new `Docs/` files.
    1221 (`8b124e5`), then the flip's verify fixes `ad85cd7`/`7f16277`/`7e0c38c`/`4e70d0a` — the mesh radio's diagnostics label peers through a salted session-scoped `peerLabel(for:)` like its siblings and the `tunnelEnded` fingerprint is `.private` (the verify's HIGH: eight peer-derived `.public` sites, one of them the stable identity fingerprint, on a radio that now ships) — mesh line MEASURED **1222 / 141**. **MC is still not deleted**: the two files, the `_fernlet-friend` strings, the permit
    list and the 34-file test sweep are the deletion round's. §17.1 may now be read as "QUIC ships; MC is a DEBUG bisect
    path on its way out".
+   **2026-09-22 — DELETED** (the deletion round, `ec05b0c`, after item 0's unseeded Lane C observation `3eb1768`):
+   `MeshMultipeerSession.swift` and `MCPeerIDStore.swift` gone; `MeshTransportSelection.swift` at Variant A (`MeshTransportKind`,
+   `MeshTransportFactory`, `resolvedKind`, the `FERNLET_MESH_TRANSPORT` read and both MC conformances gone; `MeshTransportSession`
+   and `MeshPeerChannel` stay for the suite's fake); `MeshNetworkManager.init` defaults to `NetworkMeshSession()` directly;
+   `_fernlet-friend._{tcp,udp}` out of `Info.plist` (the coach pair held, §18 decision 4); `permittedFiles = []` with the suite
+   kept and asserting zero; `MeshP9McRetirementAcceptanceTests` the zero-list; `MultipeerPeerTests`, `PeerIDArchiveWipeTests`,
+   `MeshTransportErrorSurfacingTests` and `MeshMultipeerSessionIdentityTests` deleted (the cap-identity `#expect` ported into
+   `NetworkMeshWireTests`; the ephemeral-identity invariant satisfied by construction); `grep -rl MultipeerConnectivity Tests/`
+   34 → 16, all prose or needle lists; mesh-batteries **140 names / floor 1214 MEASURED**; Power of 10 density 0.775 (floor 0.68).
+   §17.1 may now be read as **"QUIC ships; MC is gone."** The hardware half — the unseeded first meeting between two phones —
+   is the device round's.
 2. **Four of the eight plist strings, not eight.** `_fernlet-friend._{tcp,udp}` are **live** (the
    shipping MC mesh); `_fernlet-coach._{tcp,udp}` are **held** — `MultipeerServiceType.trainer` is
    reachable only through `begin(mode: .trainer)`, which no shipping call passes (§18 decision 4's
@@ -5834,7 +5849,7 @@ for anything this section states about HEAD.**
 | **The first iteration** | **Item 0 = the owner's device lanes** (P8's items 8 and 9) and the two owed re-runs, if devices are in hand; otherwise say so, record it, and start P9's radios. | P8's acceptance is the oldest unpaid bill in the plan, and it is cheap for whoever holds two phones. It blocks shipping, not P9. |
 | **Presence over QUIC, posture first** | **Reproduce the ephemeral posture before the framing**: a fresh TLS identity and a randomized instance name per 900 s epoch, pinned by a cell, then move the payload. | The posture is the privacy claim; the framing is mechanics. A presence radio that is stable-named for one release is a tracking surface. |
 | **Recipe share over QUIC** | **Request/response streams that preserve pause/resume semantics**, over the same `NetworkMeshSession` machinery, with the transfer-stream table as the model. | Pause/resume is a shipped user-visible behaviour; a swap that loses it is a regression nobody will attribute to the transport. |
-| **When MC is deleted** | **In the same phase, after both radios cross** — two files plus the plist strings plus the wipe row, with `TransportNeutralityBoundaryTests.permittedFiles` emptied in the same commit. | A permit list with entries nothing needs is a wall that has stopped meaning anything. |
+| **When MC is deleted** | **In the same phase, after both radios cross** — two files plus the plist strings plus the wipe row, with `TransportNeutralityBoundaryTests.permittedFiles` emptied in the same commit. **DONE 2026-09-22** (the deletion round, one round after the flip: the wipe row had already retired under D-4.4; the permit list emptied in the deletion commit, the suite kept and asserting zero). | A permit list with entries nothing needs is a wall that has stopped meaning anything. |
 | **The coach radio (plan §18 decision 4)** | **Hold the two `_fernlet-coach._{tcp,udp}` strings; drop the other six.** `PeerTransport.trainer = "fernlet-coach"` (`FernletKit/Sources/ProximityKit/Transport/PeerTransport.swift:14`), `CoachSessionTrustPolicy` and `TrainerPayloads` still ship. | §17.1 says "the eight"; §18 leaves the disposition open. Deleting the coach types is a product decision about the Coach app, not transport cleanup — take it deliberately or not at all. |
 | **The 1:1 foreground anchors** | **Retire them.** Ship a widget configuration only if the owner wants the Live Activity; otherwise delete the request path and keep the orphan reaper. | They have never rendered. Shipping a widget is a product decision; keeping doomed requests is not. |
 | **P10's scheduling** | **Schedule at handle + background, never on a timer**, and complete once — the same idempotent-shutdown shape P8 proved. | §17.2, and P8's table is the proof that exactly-once needs a table, not a flag. |
@@ -6143,7 +6158,7 @@ honesty suite; no production anchor below moves.*
 | Decision | Default if the owner is silent | Why |
 |---|---|---|
 | **The device round** | Run it. | Three phases overdue and the only unpaid risk left; a Simulator answers no row. Lane D first (one phone), then §15.1, then the soak. |
-| **9.4-LATER, the MC→QUIC cutover** | **D-4.3 TAKEN by the owner (2026-09-21, later the same day as §28.8): Option 1 — cut over WITH provisional stranger admission while the join doors are open, plus Option 1b's frame-gating half; §15 still undated, knowingly. D-4.4 taken as PURE RETIRE (against the design's recommendation; cost in the ledger). The series is flip → gate → delete: the admission path and the default flip this round, the MC files, the `_fernlet-friend` plist strings, the permit list and the test sweep the round after. **The FLIP is BUILT (`5d88247`…`7d28cc4` + verify fixes `ad85cd7`…`4e70d0a`, mesh line 1222 / 141); the deletion round is next.** | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
+| **9.4-LATER, the MC→QUIC cutover** | **D-4.3 TAKEN by the owner (2026-09-21, later the same day as §28.8): Option 1 — cut over WITH provisional stranger admission while the join doors are open, plus Option 1b's frame-gating half; §15 still undated, knowingly. D-4.4 taken as PURE RETIRE (against the design's recommendation; cost in the ledger). The series is flip → gate → delete: the admission path and the default flip this round, the MC files, the `_fernlet-friend` plist strings, the permit list and the test sweep the round after. **The FLIP is BUILT (`5d88247`…`7d28cc4` + verify fixes `ad85cd7`…`4e70d0a`, mesh line 1222 / 141). The DELETION is DONE 2026-09-22 (`ec05b0c`, after the unseeded Lane C observation `3eb1768`; mesh line 1214 / 140).** | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
 | **D-4.4** (the `MCPeerIDStore` wipe row → a legacy `FileManager` sweep) | **TAKEN 2026-09-21 with D-4.3: PURE RETIRE** (the owner's call, against the sweep the design recommended). | `FernletPeerID.archive` survives on any pre-P9 install, so the cutover commit owes the sweep in the same breath. |
 | **P9-3-A** (a configured lock parks the 1:1 radios) | Leave the policy alone; surface **why** instead. | Changing a run-policy row is a P7 bug fix that re-runs the 23 040-row product. Unchanged from §27.3. |
 | **D-10.4.5** — the foreground after-hook still reloads unconditionally; only the handler's `publishIfContentChanged` diffs | **DEFERRED** here, and it is the owner's one-line call. Silent default: **narrow it**, one line plus a cell. | §17.2 scopes the diff to the refresh handler, so `WidgetSnapshotMirror.publish(_:)` is correct as scoped and every caller there is a persisted change; but the mirror makes the diff free for both paths now, and the difference will outlive the reason for it. |
@@ -6336,3 +6351,48 @@ without touching the phone (§15.5's overnight window kept running on it). The r
 - **A rule this round adds to §28.5's list:** *a design's "mechanism" sentence must name the subscriber, not the hook.*
   The draft routed a new flag through `onPeerVerified`, which is declared and fired and read by nothing; only the blind
   verify's grep caught it. Grep the READER of every seam a design leans on before writing the size.
+- **The deletion round, 2026-09-22 — item 0, the gate: the QUIC first-meeting capability is OBSERVED** (`3eb1768`; the
+  record is `Docs/Mesh-Migration-Loop-Ledger-Deletion-2026-09-22.md` and the runbook's "Lane C — the deletion round's
+  item 0"). Two Simulators with no `FERNLET_MESH_MATRIX_MEMBERS` and no seeded descriptor found a mesh through the
+  provisional path over a real QUIC tunnel on the first unseeded launch: the roster consulted at the introduction empty
+  on both (audit `legacyRosterFallback members=0`), `accepted` both ways with zero `refused` (the only path to an accept
+  at `rosterMembers=0` is `guard roster.admitsStrangersProvisionally`), the identity introduction, both commits, both
+  mints (the later committer dropped the early descriptor uncommitted, the yielder `yieldedNewbornMesh`), the shipping
+  auto-grant (`autoGrantedFoundingPair`; the harness fallbacks silent — `founder armed=false`, no `admitting`, no
+  `requesting admission`), `derived=2` on both under one epoch head **1.6 s from browse**. Then the double-mint re-dial:
+  the joiner frozen the instant the founder's driver committed, the founder alone at `derived=1`, the tunnel ended at
+  +90 s by the three-missed-beats rule (`NWError 60`), thaw, **both sides re-introduced and re-accepted** with the
+  founder holding a real meshID and the joiner mesh-less — the tolerated arm firing both ways, where before D-4.3 this
+  exact shape was matrix row 4's `refused foreignMesh … mesh=00000000-…` — both re-committed, the joiner minted and
+  yielded, auto-grant, `derived=2` on both **4 s after the thaw**. One harness limitation found and fixed on the way
+  (`MeshFlowDriver` asked each slot to commit once per `PeerSlot.id`, and the id is the peer's, so a re-dialed slot was
+  never asked again; keyed on the coordinator instance now) and one thing observed for free (nine coordinator beacons
+  dropped by the joiner's uncommitted slot — Option 1b's gate live on a provisional peer). What the lane did not produce:
+  the both-real-ids re-dial (the same arm, tier-1 only) and hardware (the device round's).
+- **Item 1, the deletion, the same day (`ec05b0c`; the prose sweep `f9ea93c`).** MultipeerConnectivity left the tree:
+  the two files, Variant A of the selection seam (no kind, no factory, no launch variable, no bisect door — `NetworkMeshSession`
+  is the only radio any build constructs, and `MeshNetworkManager.init` names it directly), the `_fernlet-friend` plist
+  pair (the coach pair held, §18 decision 4 still the owner's), `permittedFiles = []` with the wall kept and asserting
+  zero, `MeshP9McRetirementAcceptanceTests` the zero-list at last, four MC suites deleted (the one cap-identity
+  `#expect` ported into `NetworkMeshWireTests`), the 16-file bare-import sweep, the test tree 34 → 16 files naming the
+  framework (prose and needle lists only), mesh-batteries **140 names / floor 1214 MEASURED** (`MeshMultipeerSessionIdentityTests`
+  was on the line — the one deliberate LOWERING of `measuredSuiteNameCounts`, argued in place), the Power of 10 allowlist
+  entry for the deleted file gone (density 0.775 at floor 0.68), the docs (FileIndex, ProximityFunctionIndex — whose
+  `PeerHandle.swift / MCPeerIDStore.swift` heading had been wrong since before this round — DocC 528 → 523 symbol
+  occurrences, No-Tracking-Wall §4c, the runbook sentence, PrivacyWipeCoverage's prose). Three things the survey's
+  appendices did not list, found by a blind re-anchoring before any edit: a hard compile break in
+  `NetworkMeshWireTests` naming the MC radio's cap, a 16th bare import in a mock, and the harness banner's dead
+  `FERNLET_MESH_TRANSPORT` read. One decision against the cutover round's in-file note: the inspector's "MCSession" row
+  label is renamed ("Session state") and the persisted `mcSessionState` FIELD is not (a frozen `Codable` key; a decode
+  shim for it buys nothing a user sees). The owed hardenings the launcher priced (`recordError(domain:)` labels
+  unlocalized; `MeshLinkTable.links` never evicted by the cache eviction; the wipe wall pins existence, not effect) are
+  NOT taken here — none is a one-liner, each is a round item, and they stay in §28.4's list. **The blind verify found 2
+  MEDIUM + 7 LOW + 6 NOTE, all fixed in `3de2d2b`** (mesh line re-measured **1216 / 140**): the QUIC radio's OWN
+  oversized-datagram drop and outbound over-cap refusal were unpinned once the MC suite went (the surviving wire cells
+  exercised `NetworkMeshWire.payloadLength` only) — now one predicate, `NetworkMeshSession.withinWireCeiling(_:)`, pinned as a
+  value with both call sites pinned by needle; the item 0 harness fix's `ObjectIdentifier` dedupe could skip a coordinator
+  minted at a recycled address — the table retains its coordinators now; the seam's retired names were pinned out of one
+  file only (now the whole package); the init-default source pin was satisfiable by a trailing comment (now a code line);
+  two MEASURED annotations and one hook count were carried, not measured; and four wording faults in the item 0 record.
+  Confirmed on the way: `MultipeerServiceType.trainer` is dead in shipping (§18 decision 4 stands, the owner's), and
+  `ProximityCoordinator.serviceType(for:)`'s `"fernlet-friend"` literal is inert (said at the site).
