@@ -2731,6 +2731,29 @@ stays tier-1 only. The re-dial reused both `sid`s and both endpoints. The founde
 in all three runs (`armed=false` on whichever side carried it; no `admitting`, no `requesting
 admission`) — on an unseeded run it exists only to keep the harness's fallback loops off the yielder.
 
+**What the lane also observed — read back after the record was first written (2026-09-22, the same
+day): the continued-processing task is GRANTED on the phone, at every first commit.** Every phone
+transcript of this lane — and, re-read now, every Lane D transcript of 2026-09-21 — carries the P8 chain
+in full: `mesh.continuation.registered event=meshStarted state=idle` → `registered
+id=MBO.Fernlet.mesh-continuation.<meshID>` → `submitted event=firstPeerCommitted state=requested` →
+`submitted id=…` → **`mesh.continuation.started event=taskStarted state=running`**, 4–7 ms after the
+submission (today 11:22:22.569, 11:25:32.873, 11:28:26.725; on 2026-09-21 12:22:22.166, 12:28:32.957,
+12:35:57.252 — six of six). `started` is the coordinator's "the system delivered the task and the app
+adopted it": the real `SystemContinuationScheduler` conformer registered, submitted a user-started
+`.fail` request from the foreground, and had it delivered. In run 2 the task stayed `running` across the
+re-dial (`absorbed event=firstPeerCommitted state=running` at 11:30:22.15; the same on 2026-09-21's
+run 2 at 12:27:34.06). No `refused`, no `expired`, no `cancelled`, no `completed` in any transcript —
+every run ended by `devicectl … terminate`, which leaves no app-side line. So three of §15's tier-3
+rows moved today without anyone asking them to: *Registration accepted* — observed; *A `.fail`
+submission granted* — **observed, six of six**; *The launch and expiration handlers firing* — the launch
+half observed, the expiration half not (no task has yet run to its budget). Both records that said "no
+`BGTaskScheduler` grant of any class has been observed on this phone" — this section's first draft and
+*Lane B*'s status paragraph — were wrong about the continuation class and are corrected in place; the
+companion-refresh class (§15.5) is still ungranted. What the grant does NOT yet say: whether the task
+survives the app leaving the foreground, whether the tunnel outlives it, and whether slow progress
+keeps it alive for hours — that is §15.3's soak, F9, which the owner has scheduled for the evening of
+2026-09-22 (one phone in normal use, the Simulator holding the far end).
+
 **What this lane still cannot say.** Two *phones*: this was one phone and a Simulator sharing the
 Mac's network stack on one side, so §15.1's background-and-lock rows, AWDL, Low Power Mode and the
 partition walks are untouched (*Lane B*, dated). The Simulator-survivor direction of the re-dial
@@ -2773,9 +2796,11 @@ the run — not attempted. *Low Power Mode* (F5) — UNREACHABLE without the own
 empirical Low Power datum on this phone is §15.5 D6's (a refresh submission is accepted under it). *Progress soak*
 (F9, F12) — NOT RUN: reachable with one phone and a Simulator holding the far end, but it needs the phone in the
 owner's normal use for 3 h / 6 h while it stays on the Mac's Wi-Fi, which this session did not have; **the degraded
-ladder stays unchosen.** *Resource budget* — no product budget exists (unchanged). *Continued task*,
-*Cancellation*, *Force quit* — UNREACHABLE: each needs a granted continuation on the phone, and no `BGTaskScheduler`
-grant of any class has yet been observed on it (§15.5). *Partition walks* (F7–F8) — UNREACHABLE, three phones.
+ladder stays unchosen.** *Resource budget* — no product budget exists (unchanged). *Continued task* — **OBSERVED, the grant
+half** (read back the same day from this and the 2026-09-21 Lane D transcripts: the continued-processing task was granted
+and started at every first commit, six of six — *Lane D* § *The device round's item 1*, last paragraph; the running
+card was not looked at). *Cancellation*, *Force quit* — NOT RUN: each needs the granted task to end or the app to be
+force-quit while it runs; every run so far ended by `devicectl terminate`. *Partition walks* (F7–F8) — UNREACHABLE, three phones.
 *Wi-Fi Aware* (F10) — the owner's call, not this session's two days. *QUIC hold on real radios* — NOT RUN: needs the
 phone backgrounded with a committed link held, i.e. the same hands as the background row. **P9-2-C** (the presence
 boundary-wake drift, not in this table) — NOT RUN: presence has no launch-env hook (a Settings switch on the phone,
@@ -2787,9 +2812,10 @@ no hands. Every row above keeps its 2026-09-19 status and date below.
 | Four-device topology | Simultaneous starts and topology changes leave at most one connection per peer pair, at `maxConnections = 4`. | **NOT RUN — owner's devices (P8 item 9).** Unchanged by P8; four devices, plan §15.1, device row F7 | 2026-09-19 |
 | Background operation | An established connection survives backgrounding and lock; re-dial via cached endpoint works while backgrounded; a fresh background Bonjour browse is recorded either way (failure is the expected, documentable result). | **Still deferred to P8 / plan §15.1 — and the sim lane cannot stand in for it.** What the sim lane DID earn on 2026-09-19 (P8 item 2, row (a)) is the half above the transport: a real `.background` scene edge drops the pushed `appIsForeground` leg (`mesh.routedAccess.gateChanged … foreground=false`) and holds the routed re-entry down until the foreground push. Whether a **connection** survives that edge is untouched — the sim lane held no connection to survive it (finding L-4), and a Simulator answers `BGTaskSchedulerErrorDomain error 1` to the continuation that would keep the process alive on a device | 2026-09-19 (gate half only; transport half deferred) |
 | Low Power Mode | Behaviour on and off is recorded empirically. Apple documents neither direction. | **NOT RUN — owner's devices (P8 item 9).** Unchanged by P8; the empirical answer is the deliverable. Plan §15.1, device row F5 | 2026-09-19 |
-| Progress soak | Three-hour and six-hour sessions survive while elapsed-based progress advances. Failure activates the degraded ladder in plan §14, it does not sink the plan. | **NOT RUN — owner's devices (P8 item 9).** *Now answerable:* item 4's ratcheted elapsed-toward-ceiling progress, driven from the poller's tick by item 6. **This row decides the degraded ladder**, which is therefore unchosen. Plan §15.3, device rows F9 and F12 | 2026-09-19 |
+| Progress soak | Three-hour and six-hour sessions survive while elapsed-based progress advances. Failure activates the degraded ladder in plan §14, it does not sink the plan. | **NOT RUN — owner's devices (P8 item 9).** *Now answerable:* item 4's ratcheted elapsed-toward-ceiling progress, driven from the poller's tick by item 6. **This row decides the degraded ladder**, which is therefore unchosen. Plan §15.3, device rows F9 and F12. **Scheduled: a 6 h run the evening of 2026-09-22**, one phone in normal use ↔ the Simulator holding the far end, the grant already observed (row above) | 2026-09-19; scheduled 2026-09-22 |
 | Resource budget | Battery, peak memory, throughput, and photo-size measurements meet an approved product budget. | **NOT RUN — owner's devices (P8 item 9).** No approved product budget exists yet — that is the owner's, and it gates nothing until §15.3 says the task survives at all. Plan §15.3 | 2026-09-19 |
 | Continued task | A user-started request either begins with system activity or reports the `.fail` refusal clearly. | **NOT RUN — owner's devices (P8 item 9).** *Now answerable both ways:* a grant produces the running card, and the four refusal arms (register refused, identifier cap, missing identifier, submission cap) produce the refusal sentence on the Friends card. A Simulator returns error 1 for every submission, so **no grant has been observed anywhere**. Plan §14 | 2026-09-19 |
+| Continued task — **the grant half, on the phone** | (same row) | **OBSERVED 2026-09-21 and 2026-09-22, six of six runs** (read back 2026-09-22): `mesh.continuation.registered` → `submitted event=firstPeerCommitted` → `started event=taskStarted state=running` 4–7 ms after the submission on every Lane D and unseeded run; the task stayed `running` across a re-dial. The refusal arms and the running card unobserved; the task's end never observed (every run terminated from the Mac). *Lane D* § *The device round's item 1*, last paragraph | 2026-09-22 |
 | Cancellation | Every path stops the probe and completes the task exactly once. | **NOT RUN — owner's devices (P8 item 9).** *Proven at tier 1, unproven on a device:* exactly-once completion is a biconditional over all 48 rows and a 28 080-walk sweep, and a second completion audits as a no-op — but the real `SystemContinuationTaskHandle` conformer is exercised by no test. Plan §14 | 2026-09-19 |
 | Force quit | Evidence confirms durable production acknowledgements cannot depend on an expiration callback. | **NOT RUN — owner's devices (P8 item 9).** Unchanged by P8; the claim it tests (durable acknowledgements cannot depend on an expiration callback) is why the routed store's receipts never do. Plan §14 | 2026-09-19 |
 | Partition walks | The plan's §10 partition scenarios, physically. | **NOT RUN — owner's devices (P8 item 9).** Unchanged by P8. Plan §15.2, device rows F7–F8 | 2026-09-19 |

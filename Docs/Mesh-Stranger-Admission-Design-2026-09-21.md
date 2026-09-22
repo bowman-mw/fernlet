@@ -346,3 +346,9 @@ built first; or D-4.2, the split as it stands.**
 
 Nothing else in this document is a decision: 1b's name deferral, P9-3-A, the `_fernlet-coach`
 strings (§18 decision 4, default hold) and the degraded ladder are untouched by any option.
+
+**Taken 2026-09-22 (the device round's item 3, the owner):** 1b's name deferral — **withhold the display
+name until commit** (build it); Option 2 — **leave it alone**, QR stays the in-session verification;
+P9-3-A — **make it work**; the coach strings — **hold**; the degraded ladder — decided by the 6 h soak
+scheduled for that evening. Plan §28.3/§28.9; the build launcher is
+`Docs/Next-Round-Prompt-Owner-Calls-2026-09-22.md`.
