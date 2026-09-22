@@ -390,7 +390,8 @@ enum MeshFlowDriver {
             switch slot.coordinator.state {
             case .awaitingManualCommit, .awaitingProximityCommit:
                 state.asked[ObjectIdentifier(slot.coordinator)] = slot.coordinator
-                echo("committing slot gate=\(slot.coordinator.state.debugLabel)")
+                let shown = shownPeer(of: slot.coordinator.state) ?? "-"
+                echo("committing slot gate=\(slot.coordinator.state.debugLabel) peer=\(shown)")
                 manager.commitManualProximity(slotID: slot.id)
             default:
                 continue
@@ -542,7 +543,27 @@ enum MeshFlowDriver {
     /// was never driven".
     private static func slotSummary(_ manager: MeshNetworkManager) -> String {
         let states = manager.slots.map(\.coordinator.state.debugLabel).sorted().joined(separator: ",")
-        return "total=\(manager.slots.count) committed=\(committedSlotCount(manager)) states=[\(states)]"
+        let peers = manager.slots.compactMap { shownPeer(of: $0.coordinator.state) }.sorted()
+            .joined(separator: ",")
+        return "total=\(manager.slots.count) committed=\(committedSlotCount(manager)) states=[\(states)] "
+            + "peers=[\(peers)]"
+    }
+
+    /// What the join screen shows for a slot's peer — its fingerprint while the display name is
+    /// withheld (stranger-admission Option 1b, 2026-09-22), the disclosed name after — or nil for
+    /// a state that holds no verified identity yet.
+    ///
+    /// This is the Lane C witness for Option 1b: `peers=[…]` rides the `slots` line, which is
+    /// re-echoed whenever it changes, so one console shows the fingerprint at the gate and the
+    /// name arriving after the commit without a new report line or a new state field.
+    private static func shownPeer(of state: ProximityCoordinator.State) -> String? {
+        switch state {
+        case .awaitingProximityCommit(let peer), .awaitingManualCommit(let peer),
+             .awaitingUserConfirmation(let peer), .connected(let peer), .transferring(let peer, _):
+            return peer.displayNameOrFingerprint
+        default:
+            return nil
+        }
     }
 
     /// The capability tokens every connected peer advertised, sorted and de-duplicated.

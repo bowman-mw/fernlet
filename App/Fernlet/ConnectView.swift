@@ -774,7 +774,7 @@ struct FriendsView: View {
             case .connected(let p), .transferring(let p, _),
                  .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
                  .awaitingUserConfirmation(let p):
-                return p.displayName
+                return p.displayNameOrFingerprint
             default:
                 break
             }
@@ -1240,9 +1240,13 @@ private struct NearbySlotRow: View {
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(peerName)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                if let withheldFingerprint {
+                    FingerprintText(withheldFingerprint, color: Color.bark)
+                } else {
+                    Text(peerName)
+                        .font(.fernlet(.headerMedium))
+                        .foregroundStyle(Color.bark)
+                }
                 Text(stateLabel)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
@@ -1345,9 +1349,27 @@ private struct NearbySlotRow: View {
         switch slot.coordinator.state {
         case .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
              .awaitingUserConfirmation(let p), .connected(let p), .transferring(let p, _):
-            return p.displayName
+            return p.displayNameOrFingerprint
         default:
             return slot.peer.displayHint
+        }
+    }
+
+    /// The fingerprint to show in place of a name — stranger-admission Option 1b (the owner's call
+    /// of 2026-09-22).
+    ///
+    /// Until this device commits, the peer has disclosed no name, so the row shows the fingerprint
+    /// the two people can read to each other; the name replaces it on the first frame after the
+    /// 15 cm dwell or the tap. Rendering it through ``FingerprintText`` rather than as a plain
+    /// name is the point: it spells out for VoiceOver, truncates in the middle, and reads as an
+    /// identifier rather than as somebody's name.
+    private var withheldFingerprint: String? {
+        switch slot.coordinator.state {
+        case .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
+             .awaitingUserConfirmation(let p), .connected(let p), .transferring(let p, _):
+            return p.isDisplayNameWithheld ? p.fingerprint : nil
+        default:
+            return nil
         }
     }
 

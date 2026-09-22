@@ -412,7 +412,12 @@ struct ProximityCoordinatorTests {
             return
         }
         #expect(peerIdentity.fingerprint == remote.localFingerprint)
-        #expect(peerIdentity.displayName == "Remote Device")
+        // Option 1b (2026-09-22): a pre-commit identity carries NO name, even though this peer's
+        // introduction (an older build's shape) named itself "Remote Device" — the guarantee must
+        // not depend on the peer's build. The join screen shows the fingerprint instead.
+        #expect(peerIdentity.isDisplayNameWithheld, "a pre-commit identity carries no name")
+        #expect(peerIdentity.displayNameOrFingerprint == remote.localFingerprint,
+                "and what a surface shows for it is the fingerprint")
     }
 
     @Test func legacyAdvertisedFingerprintNoLongerBindsToCanonicalIntroduction() async throws {
@@ -545,7 +550,9 @@ struct ProximityCoordinatorTests {
         transport.simulateInboundData(data, from: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
 
-        #expect(inspector.liveLog?.peer?.displayName == "Remote Device")
+        // Option 1b: before the commit the Inspector names the peer by its fingerprint — the same
+        // line the Lane C pair run reads as `peer=<fingerprint>` before the dwell or the tap.
+        #expect(inspector.liveLog?.peer?.displayName == remote.localFingerprint)
         #expect(inspector.liveLog?.peer?.confirmedFingerprint == remote.localFingerprint)
         #expect(inspector.liveLog?.envelopes.contains { record in
             record.envelopeID == envelope.envelopeID &&
@@ -1058,12 +1065,13 @@ struct ProximityCoordinatorTests {
     private func signedHeartbeat(
         from identity: IdentityService,
         kind: String = "ack",
+        displayName: String = "Remote Device",
         payloadOverride: Data? = nil
     ) throws -> Data {
         let body = HeartbeatWireBody(kind: kind, heartbeatID: UUID(), sentAt: Date(), responseTo: nil)
         let envelope = try FernletIdentityEnvelope.signed(
             identityService: identity,
-            senderDisplayName: "Remote Device",
+            senderDisplayName: displayName,
             payloadType: .sessionHeartbeat,
             payloadSummary: PayloadSummary(title: "Heartbeat"),
             payload: payloadOverride ?? (try JSONEncoder().encode(body))
@@ -1192,6 +1200,127 @@ struct ProximityCoordinatorTests {
 
         #expect(!isConnected(coordinator),
                 "An undecodable heartbeat body must never commit, even with local proximity evidence")
+    }
+
+
+    // MARK: - Option 1b: the display name is withheld until commit (owner's call, 2026-09-22)
+
+    /// Every identity envelope this side sent before it committed, decoded off the mock radio.
+    private func envelopesSent(on transport: MockMultipeerTransport) throws -> [FernletIdentityEnvelope] {
+        try transport.sentData.map { try JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.0) }
+    }
+
+    /// Reaches `.awaitingUserConfirmation` on a trainer-mode coordinator — this side has verified
+    /// the peer and has NOT committed — and returns the peer handle.
+    private func reachUncommittedGate(
+        _ coordinator: ProximityCoordinator,
+        transport: MockMultipeerTransport,
+        remote: IdentityService
+    ) async throws -> PeerHandle {
+        let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { if case .awaitingIdentityIntroduction = coordinator.state { return true }; return false }
+        await coordinator.tapToConfirm()
+        transport.simulateInboundData(try JSONEncoder().encode(signedIntroduction(from: remote)), from: peer)
+        await waitUntil { if case .awaitingUserConfirmation = coordinator.state { return true }; return false }
+        return peer
+    }
+
+    /// Nothing this side sends before it commits names it: not the acknowledgement it owes the
+    /// peer's introduction, and not the summary the receiver renders verbatim.
+    @Test func nothingSentBeforeTheCommitCarriesTheLocalName() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let transport = MockMultipeerTransport()
+        let coordinator = makeCoordinator(identity: local, transport: transport)
+        _ = try await reachUncommittedGate(coordinator, transport: transport, remote: remote)
+        await waitUntil { !transport.sentData.isEmpty }
+
+        let sent = try envelopesSent(on: transport)
+        let identityFrames = sent.filter {
+            $0.payloadType == .identityIntroduction || $0.payloadType == .identityAcknowledge
+        }
+        #expect(!identityFrames.isEmpty, "the handshake did send an identity frame — the claim is not vacuous")
+        let nameless = sent.allSatisfy { $0.senderDisplayName.isEmpty && $0.disclosedSenderDisplayName == nil }
+        #expect(nameless, "every frame sent before the commit withholds the local name")
+        let summariesNameless = sent.allSatisfy { !$0.payloadSummary.title.contains("Local Device") }
+        #expect(summariesNameless, "and no summary interpolates it — the receiver renders that field verbatim")
+    }
+
+    /// The leak one gate closes: a peer that commits FIRST sends a heartbeat, and the ack this side
+    /// owes it used to carry the local name out before the person here had tapped anything. The
+    /// peer's own name on that heartbeat is not adopted either — this side has not committed.
+    @Test func aHeartbeatAnsweredBeforeTheCommitWithholdsTheNameAndAdoptsNone() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let transport = MockMultipeerTransport()
+        let coordinator = makeCoordinator(identity: local, transport: transport)
+        let peer = try await reachUncommittedGate(coordinator, transport: transport, remote: remote)
+        let framesBeforePing = transport.sentData.count
+
+        transport.simulateInboundData(try signedHeartbeat(from: remote, kind: "ping"), from: peer)
+        await waitUntil { transport.sentData.count > framesBeforePing }
+
+        let answers = try envelopesSent(on: transport).dropFirst(framesBeforePing)
+            .filter { $0.payloadType == .sessionHeartbeat }
+        #expect(answers.count == 1, "the pre-commit ping was answered — the ack path really ran")
+        #expect(answers.allSatisfy { $0.senderDisplayName.isEmpty }, "and the ack carries no local name")
+        guard case .awaitingUserConfirmation(let identity) = coordinator.state else {
+            Issue.record("Expected the uncommitted gate, got \(coordinator.state)")
+            return
+        }
+        #expect(identity.isDisplayNameWithheld,
+                "the peer's name on a pre-commit heartbeat is not adopted — this side has not committed")
+    }
+
+    /// After the commit the name follows on the first verified frame that discloses it: the state
+    /// is re-emitted named, the subscriber hears it exactly once, a later frame cannot rename the
+    /// peer mid-session, and what this side sends from here on carries its own name.
+    @Test func theNameFollowsTheCommitOnceAndCannotBeRenamed() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let transport = MockMultipeerTransport()
+        let coordinator = makeCoordinator(identity: local, transport: transport)
+        var disclosures: [String] = []
+        coordinator.onPeerDisplayNameDisclosed = { disclosures.append($0.displayName) }
+        let peer = try await connectCoordinator(coordinator, transport: transport, local: local, remote: remote)
+        guard case .connected(let committed) = coordinator.state else {
+            Issue.record("Expected .connected, got \(coordinator.state)")
+            return
+        }
+        #expect(committed.isDisplayNameWithheld, "the commit itself discloses nothing — the name is still owed")
+
+        transport.simulateInboundData(try signedHeartbeat(from: remote, kind: "ping"), from: peer)
+        await waitUntil { disclosures.count == 1 }
+        guard case .connected(let named) = coordinator.state else {
+            Issue.record("Expected .connected, got \(coordinator.state)")
+            return
+        }
+        #expect(named.displayName == "Remote Device", "the first post-commit frame delivers the name into the state")
+        #expect(named.fingerprint == committed.fingerprint && named.signingPublicKey == committed.signingPublicKey,
+                "onto the same verified identity — only the name moved")
+        #expect(disclosures == ["Remote Device"], "and the subscriber heard it exactly once")
+
+        let answer = try envelopesSent(on: transport).last { $0.payloadType == .sessionHeartbeat }
+        #expect(answer?.senderDisplayName == "Local Device", "a committed side answers under its own name")
+
+        let framesBeforeRename = transport.sentData.count
+        transport.simulateInboundData(try signedHeartbeat(from: remote, kind: "ping", displayName: "Somebody Else"), from: peer)
+        await waitUntil { transport.sentData.count > framesBeforeRename }
+        #expect(transport.sentData.count > framesBeforeRename, "the renaming frame was processed — it was answered")
+        guard case .connected(let after) = coordinator.state else {
+            Issue.record("Expected .connected, got \(coordinator.state)")
+            return
+        }
+        #expect(after.displayName == "Remote Device", "a later frame cannot rename the peer mid-session")
+        #expect(disclosures.count == 1, "and the subscriber is not told twice")
     }
 
 }
