@@ -2376,6 +2376,46 @@ streams, and in the two run-2 directories `events.log` the freeze/end/thaw insta
 `transport=default(quic)` because that is what the build the lane ran on printed; the deletion
 commit made the token the constant `transport=quic`, so a re-run at HEAD prints that.
 
+### Lane C — Option 1b: the display name withheld until commit (run 2026-09-22, owner-calls item 2)
+
+**OBSERVED on both nodes: each phone shows the other's FINGERPRINT at the commit gate and its NAME
+only after the commit.** The owner's call of the device round (ledger item 3, decision 1), built at
+`e83ec82`: nothing a coordinator sends before its own commit carries the local display name, an
+identity built from an introduction carries none whatever the peer sent, and the name is adopted
+from the first verified post-commit envelope (plan §28.3; `ProximityKit.md` states the invariant).
+
+Build: `e83ec82` plus the DEBUG harness line it carries (`MeshFlowDriver`'s `slots` summary gained
+`peers=[…]` — what the join screen shows per slot, `PeerIdentity.displayNameOrFingerprint` — and the
+commit line gained `peer=…`). Debug `build-for-testing` bundle, `strings` confirmed both the kit's
+`peer display name disclosed after commit` and the driver's `peers=[`; `pgrep -x xcodebuild` empty
+for the run. Both apps **uninstalled and reinstalled** first. Nodes — **A** `iPhone 17`
+(`09F57BCA-…A88`, fp `b8e515bb773c3239`, new: the uninstall reminted A's identity) as **founder**
+(the lower fingerprint), **B** `iPhone 17 Pro` (`454FCC9C-…661B`, fp `fb795f343c2954da`,
+unchanged) as joiner; the deletion round's unseeded recipe exactly (no `MATRIX_MEMBERS`, no
+`MATRIX_MESH_ID`, `FLOWS=commit`, joiner 3 s after the founder), 120 s, a per-node audit stream
+started before each launch and killed by saved PID. Both banners: `no descriptor seeded: roster
+stays empty, every peer verdicts stranger`, `transport=quic`; `browsed peers=1` on both — the
+concurrent session's Fernlet process on `iPhone 17 Pro Max` (non-matrix) and its two booted
+`Fernlet Reconnect` Simulators (no Fernlet running) never entered either browse set.
+
+| Check | Required | Result | Evidence (console, `[mesh-flow]`) |
+| --- | --- | --- | --- |
+| A sees B by fingerprint at the gate | `peer=<B's fp>` | **Observed** | `committing slot gate=awaitingProximityCommit peer=fb795f343c2954da`; `slots total=1 committed=0 states=[awaitingProximityCommit] peers=[fb795f343c2954da]` |
+| A sees B's name after the commit | `peers=[<B's name>]` | **Observed** | `slots total=1 committed=1 states=[connected] peers=[iPhone 17 Pro]` |
+| B sees A by fingerprint at the gate | `peer=<A's fp>` | **Observed** | `committing slot gate=awaitingProximityCommit peer=b8e515bb773c3239`; `… states=[awaitingProximityCommit] peers=[b8e515bb773c3239]` |
+| B sees A's name after the commit | `peers=[<A's name>]` | **Observed** | `slots total=1 committed=1 states=[connected] peers=[iPhone 17]` |
+| The unseeded founding is unaffected | `derived=2`, one epoch head | **Observed** | both `membership ledger=present derived=2 barred=0 status=active epochRef=1.2c69b90da4da29f39abf9e340ec424fc.b8e515bb773c3239`; audit: `legacyRosterFallback members=0` on both at 14:51:28.78, A `autoGrantedFoundingPair` :29.92, B `yieldedNewbornMesh` :29.89 → `bootstrapped` :29.93 → `adopted members=2` :30.00 (introduction to `derived=2` ≈ 1.2 s) |
+| No refusal introduced | zero introduction/tunnel refusals | **Observed** | every audit `refused`/`rejected`/`error` line is a known Simulator or ordering artefact: `mesh.continuation.submitRefused … BGTaskSchedulerErrorDomain Code=1` (a Simulator refuses every submission, P10), `health.changeObservationUnavailable`, `brandedCatalog.odr.unavailable`, and B's `mesh.keyAgreement.rejected … never admitted` — the deletion round's benign park-and-reoffer |
+
+**What this run does not show.** The console lines are un-timestamped poll output, so the gap
+between the commit and the disclosure is bounded by the driver's poll (one `slots` line to the
+next), not measured; the unit cells pin the mechanism (`ProximityCoordinatorTests`: the name
+follows on the first post-commit frame, once, from the verified key). The Simulator's `NIRangingSession`
+reports hardware support, so both commits were the driver's stand-in for the 15 cm dwell — the
+manual-tap branch and a real UWB dwell are the same `confirmPeerIdentity()` and were not driven
+separately. A peer on an OLDER build (which still names itself in its introduction) was not run;
+`validIdentityIntroductionMovesToUserConfirmation` pins that its name is ignored until commit.
+
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, **run 2026-09-21**)
 
 **The shipping transport has never run on hardware.** Lane A puts the *spike* on a device; Lane C

@@ -110,7 +110,11 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `acceptPendingInvite()` | Accepts an inbound invite, stores the transport peer, and either sends a friend identity intro or enters trainer tap confirmation. |
 | `rejectPendingInvite()` | Rejects or cancels an invite and returns to idle. |
 | `tapToConfirm()` | Completes trainer tap confirmation when the state is waiting for a tap. |
-| `confirmPeerIdentity()` | Promotes a verified pending identity to connected, starts heartbeats and foreground anchoring, and records diagnostics. |
+| `confirmPeerIdentity()` | Promotes a verified pending identity to connected, starts heartbeats and foreground anchoring, and records diagnostics. The commit: from here `disclosedDisplayName` carries the real name (Option 1b, 2026-09-22). |
+| `disclosedDisplayName` | The local name as this side will disclose it NOW: `""` until `confirmPeerIdentity()`, the real name after. Read by all five send sites (intro, ack, both heartbeat directions, `sendPayload`) — Option 1b's one send-side gate. |
+| `adoptDisclosedDisplayName(from:)` | Runs first in `dispatchVerified`: takes the peer's name from the first verified post-commit envelope that discloses one (committed side, name still withheld, signing key matches), re-emits `.connected`/`.transferring` named, fires `onPeerDisplayNameDisclosed`. Once per session; no mid-session rename. |
+| `onPeerDisplayNameDisclosed` | Subscriber seam for the late name; `MeshNetworkManager` re-records the roster entry and `ProximityRecipeShareManager` re-files the picker row. |
+| `PeerIdentity.isDisplayNameWithheld` / `displayNameOrFingerprint` | Empty name = withheld (every other ingest floors at "A friend"); what every render/persist site shows — the fingerprint until the name is disclosed. |
 | `send(_:)` | Encodes and sends a prebuilt signed envelope over reliable transport while updating state, byte counts, foreground activity, and audit logs. |
 | `sendPayload(type:summary:payload:sealed:)` | Builds, optionally seals, signs, and sends an envelope for app payload data. |
 | `sealIfNeeded(_:sealed:)` | Pairwise-seals payload bytes to the connected peer's key-agreement public key when requested. |
@@ -123,7 +127,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `handleDistance(_:)` | Records distance samples and drives friend proximity commit or trainer tap confirmation. |
 | `commitManualProximity()` | Manually commits a verified peer from proximity/manual waiting states. |
 | `finishTapConfirmation(for:)` | Moves to identity introduction after trainer tap confirmation and sends the intro envelope. |
-| `sendIdentityIntroduction(to:)` | Sends a signed identity introduction containing ranging capability and optional discovery token. |
+| `sendIdentityIntroduction(to:)` | Sends a signed identity introduction containing ranging capability and optional discovery token — and, since Option 1b, NO display name (summary `"Hello"`). |
 | `handleInbound(_:)` | Decodes, trust-filters, verifies, decrypts, logs, and dispatches inbound envelopes. |
 | `makeIdentityRangingPayload()` | Encodes local ranging mode and NI discovery token for handshake payloads. |
 | `sendIdentityAcknowledgement(to:)` | Sends a signed acknowledgement with local ranging details. |
@@ -133,7 +137,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `updateInspectorPeer(identity:transportPeer:)` | Publishes peer display/fingerprint/key details to the inspector. |
 | `updateInspectorTransport(state:disconnected:)` | Updates the transport session state — carried in `ConnectionSessionLog.TransportInfo.mcSessionState`, whose spelling is frozen from the MultipeerConnectivity era — and the connected/disconnected timestamps in inspector transport info. |
 | `updateInspectorRangingMode(_:)` | Publishes current ranging mode to the inspector. |
-| `handleIdentityEnvelope(_:plaintext:from:)` | Validates advertised fingerprint, starts ranging, records peer identity, sends acknowledgement, and routes to friend proximity gate, trusted auto-confirm, or user confirmation. |
+| `handleIdentityEnvelope(_:plaintext:from:)` | Validates advertised fingerprint, starts ranging, records peer identity (name withheld, whatever the peer sent — Option 1b), sends acknowledgement, and routes to friend proximity gate, trusted auto-confirm, or user confirmation. |
 | `transitionToProximityGate(peerIdentity:)` | Replaces the short session timeout with a longer proximity timeout and chooses UWB or manual commit state. |
 | `startRangingIfPossible(with:from:)` | Starts NearbyInteraction from a peer token, or records RSSI fallback when unsupported/unavailable. |
 | `serviceType(for:)` | Maps trainer/friend modes to their frozen service-type tokens. The trainer one still hangs off the `MultipeerServiceType` enum, whose name is historical — the coach channel is a deferred seam, not a live MultipeerConnectivity radio. |
@@ -1404,6 +1408,7 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 | `canonicalBytes(for envelope:)` | Deterministically encodes an envelope with empty signature for signing/verification. |
 | `verify(identityService:replayCache:)` | Validates schema, expiry, signature, recipient, required sealing, replay status, and decrypts payload if sealed. |
 | `signed(...)` | Builds and signs a schema-version-1 identity envelope. |
+| `disclosedSenderDisplayName` | The sender's sanitized name, or `nil` when it withheld one (empty field) — unlike `sanitizedSenderDisplayName`, whose "A friend" floor cannot tell withheld from blank (Option 1b, 2026-09-22). |
 
 ### `PayloadType.swift`
 

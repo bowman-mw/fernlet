@@ -352,3 +352,18 @@ name until commit** (build it); Option 2 — **leave it alone**, QR stays the in
 P9-3-A — **make it work**; the coach strings — **hold**; the degraded ladder — decided by the 6 h soak
 scheduled for that evening. Plan §28.3/§28.9; the build launcher is
 `Docs/Next-Round-Prompt-Owner-Calls-2026-09-22.md`.
+
+**Built 2026-09-22** (owner-calls items 1 and 2). P9-3-A: `4d1fa0b` — the app-lock fact is retired
+from the run policy, not re-projected. **1b's name deferral: `e83ec82`**, with two departures from
+this section's sketch, both found by reading the subscriber first (§28.5's rule):
+(a) **the gate is on every send, not on the introduction** — a peer that commits first sends a
+heartbeat, and the ack owed to it would otherwise have carried the name before the local commit, so
+all five coordinator send sites read one `disclosedDisplayName` that is empty until
+`confirmPeerIdentity()`; (b) **no new frame** — every post-commit envelope already carried
+`senderDisplayName`, so "the name following on `.connected`" is a subscriber
+(`adoptDisclosedDisplayName(from:)`, then `onPeerDisplayNameDisclosed` into the mesh roster and the
+recipe picker), not a new payload type, and the wire shape is unchanged (an empty name is a value).
+The receive side ignores any name on an introduction, so an OLDER peer that still names itself is
+shown by fingerprint too. The trust paragraph's disclosure is closed: a bystander with the doors open
+now learns a key and a fingerprint, not a name. Observed on two Simulators (runbook, *Lane C —
+Option 1b*): each side shows the other's fingerprint at the gate and the name after the commit.
