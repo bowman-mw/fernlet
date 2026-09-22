@@ -547,6 +547,11 @@ struct FriendsView: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
         .accessibilityIdentifier("friends.sessionResume")
+        // Owner-calls item 3 (2026-09-22): an ending is news ONCE. Appearing marks it shown in the
+        // sealed context, so the next cold start is silent about it; this launch's card stays up
+        // (the manager's presentation reads the copy loaded at launch). Offers and the
+        // could-not-reopen card are not marked — the manager only writes for an ending.
+        .onAppear { manager.acknowledgeSessionEndingPresented() }
     }
 
     /// The background continuation's card (network migration P8 item 7): what a refusal, an expiry
