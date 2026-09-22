@@ -3807,6 +3807,20 @@ three new `Docs/` files.
    is a private surface where both radios stop anyway. **Nothing tells the user why.** This is a
    product decision on P7's 23 040-row run-policy table, so changing a row is a P7 bug fix and
    re-runs the whole product.
+   **FIXED 2026-09-22** — the owner's call of the device round (§28.3 decision 3, *make it work*),
+   built on `Docs/Next-Round-Prompt-Owner-Calls-2026-09-22.md` item 1. The fact is **retired**, not
+   re-projected: the `!input.appLockEngaged` leg is gone from both rows, `Input.appLockEngaged` and
+   the `appLockEngaged(_:)` projection are deleted, every feed is retired (`FernletApp`'s scene
+   push, `ContentView`'s view helper, `FernletStore.ProximityEdgeFacts` and all three funnel
+   entries), and `ProximityRunPolicy.swift` no longer imports `FernletLock` — so the leg cannot
+   return without a deliberate new input. A scoped lock protects the Private tab, the progress
+   photos and the lock settings; it is not a radio switch, and the mesh row never had the leg. The
+   product is **11 520** rows (3 × 5 × 4 × 3 × 2⁶), re-pinned in `ProximityRunPolicyTests` and
+   `MeshP7RunPolicyAcceptanceTests`; the old "the app lock moves presence and recipe only" cell is
+   replaced by its inverse stated positively (all 384 opted-in, foreground, hard-stop-free presence
+   rows and all 288 recipe rows RUN). Red shown once against the restored old table. The
+   `ContentView` lock-state edge survives as the view's duress feed and the gate's re-entry pass, so
+   the view-edge count stays 7. Recorded in the runbook's *Lane C — P9 item 3* findings.
 2. **P9-2-B — a mutual friend whose only friend is you never becomes nearby, and nothing says so.**
    Layer-3 self-exclusion drops an advertisement whose token set is a subset of our own, and a
    sole-friend pair's sets are identical by construction. Documented as an accepted residual in the
