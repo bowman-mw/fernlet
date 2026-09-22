@@ -2260,7 +2260,7 @@ SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=unseeded1-founder \
 SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit SIMCTL_CHILD_FERNLET_MESH_ROLE=founder \
 xcrun simctl launch --console-pty <A-udid> MBO.Fernlet -completeOnboarding
-# joiner, 3 s later: the same six variables with LABEL=unseeded1-joiner and ROLE=joiner
+# joiner, 3 s later: the same five variables with LABEL=unseeded1-joiner and ROLE=joiner
 ```
 
 The banner reads `no descriptor seeded: roster stays empty, every peer verdicts stranger` on both,
@@ -2271,7 +2271,7 @@ retires with the seam in this round).
 
 | Check | Required | Result | Evidence |
 | --- | --- | --- | --- |
-| The roster consulted at the introduction is EMPTY on both sides | `members=0` | **Observed** | audit `mesh.introductionAuthority.legacyRosterFallback members=0` on A and on B, 0.3 ms apart, at the introduction |
+| The roster consulted at the introduction is EMPTY on both sides | `members=0` | **Observed** | audit `mesh.introductionAuthority.legacyRosterFallback members=0` on A and on B, 0.5 ms apart, at the introduction |
 | `admitsStrangersProvisionally` answers the introduction | a tunnel where P2's matrix row 1 recorded `refused unknownIdentity … rosterMembers=0` | **Observed** — the same launch shape as row 1, and the introduction ACCEPTED on both sides | A: `[mesh-quic] accepted fb795f343c2954da sid=B6453553-…: tunnel activated, tunnels=1`; B: `accepted 1b4fd5b9e6f123e5 sid=7B49DC16-…: tunnel activated, tunnels=1`. Zero `refused` lines on either node. An accept at `rosterMembers=0` has exactly one path through `MeshChannelIntroductionExchange.receive`: `guard roster.admitsStrangersProvisionally else { return .unknownIdentity }` |
 | The identity introduction, then the commit | slot at the gate, then `connected` | **Observed** | both: `committing slot gate=awaitingProximityCommit` → `slots total=1 committed=1 states=[connected]`; `capabilities peer=[activities,…,wire2]` |
 | `promoteToMesh` on the first commit — both halves mint | a descriptor on each side, the double mint repaired | **Observed, both halves** | A (committed second): audit `mesh.meshDescriptor.droppedUncommittedSlot` at 23:59:24.03 — B's descriptor arrived while A was still uncommitted (the commit-timing race P8 item 0 named), then A founded and announced its own; B: `mesh.descriptor.yieldedNewbornMesh adopted=5612A710-…` at :24.22, `mesh.session.abandonedNotDurable` (the yield's unwind), `mesh.sessionCeiling.armedFromAdoptedMesh` |
@@ -2324,9 +2324,9 @@ this section). Rebuilt, reinstalled, re-run.
 
 | Check | Required | Result | Evidence |
 | --- | --- | --- | --- |
-| The founder founds ALONE | `derived=1` with the joiner frozen at the gate | **Observed** | A at 04:09:40Z: `committing slot` → `committed=1` → `founder armed=false ledger=present derived=1`; B's last line before the freeze: `slots total=1 committed=0 states=[awaitingProximityCommit]` (its own commit ask had gone out in the same second and had not landed) |
+| The founder founds ALONE | `derived=1` with the joiner frozen at the gate | **Observed** | A at 04:09:40Z: `committing slot` → `committed=1` → `founder armed=false ledger=present derived=1`; B's last line before the freeze: `slots total=1 committed=0 states=[awaitingProximityCommit]` — whether B's own commit ask had gone out before the freeze is undecidable from the untimestamped console (the run's freeze-instant probe counted 0 `committing slot` lines); what is decidable is that B's audit stream carries no `mesh.keyAgreement.folded` until after the thaw, so B minted for the first time at the re-dial |
 | The tunnel dies between the commits | the founder ends it by the heartbeat rule | **Observed** | A at 04:11:10Z (+90 s): `tunnelEnded controlStreamEnded fb795f343c2954da live=true tunnels=0 … NWError error 60`, `slots total=0` |
-| Both re-introduce under the tolerated meshID | `accepted` on both, A real-id vs B unbound | **Observed** | after the thaw at 04:11:12Z: B `tunnelEnded … NWError 60` + `heartbeat datagram refused … NWError 57` → `slots total=0`; then A `accepted fb795f343c2954da sid=DE68C433-…: tunnel activated, tunnels=1`, B `accepted 1b4fd5b9e6f123e5 sid=B4697812-…: tunnel activated, tunnels=1`; zero `refused` on either node in the whole run |
+| Both re-introduce under the tolerated meshID | `accepted` on both, A real-id vs B unbound | **Observed** | after the thaw at 04:11:12Z: B `tunnelEnded … NWError 60` + `heartbeat datagram refused … NWError 57` → `slots total=0`; then A `accepted fb795f343c2954da sid=DE68C433-…: tunnel activated, tunnels=1`, B `accepted 1b4fd5b9e6f123e5 sid=B4697812-…: tunnel activated, tunnels=1`; zero introduction refusals (`refused … as responder`) on either node in the whole run — the one `refused` word in the transcripts is the joiner's `heartbeat datagram refused` fallback line |
 | The second commit, the second mint, the convergence | both commit; the joiner mints and yields; auto-grant; `derived=2` | **Observed** | both: `committing slot gate=awaitingProximityCommit` (the fixed driver); B audit: `mesh.descriptor.yieldedNewbornMesh adopted=93C7EE35-…` 04:11:15.94 → `abandonedNotDurable` → `sessionCeiling.armedFromAdoptedMesh` → `membershipLedger.bootstrapped` :15.98 → `adopted members=2` :16.05; A audit: `mesh.admissionRequest.autoGrantedFoundingPair` :15.97, `membershipLedger.reGossiped frames=2` :16.03; both consoles: `membership ledger=present derived=2 barred=0 status=active epochRef=1.86a855f8abb18c57a44137320b47976f.1b4fd5b9e6f123e5` |
 | Timing | — | **thaw → `derived=2` in 4 s** | 04:11:12Z → 04:11:16.05Z |
 
@@ -2349,8 +2349,10 @@ loops on the side that never yields.
 
 Raw logs: the session scratch `lanec/` — `harvest/`, `run1/`, `run2-first-attempt/`, `run2/`
 (`founder.log` / `joiner.log` are the `--console-pty` transcripts, `audit-*.log` the audit
-streams, `events.log` the freeze/end/thaw instants); the scripts `common.sh`, `harvest.sh`,
-`run1.sh`, `run2.sh` beside them.
+streams, and in the two run-2 directories `events.log` the freeze/end/thaw instants); the scripts
+`common.sh`, `harvest.sh`, `run1.sh`, `run2.sh` beside them. The banner quoted above reads
+`transport=default(quic)` because that is what the build the lane ran on printed; the deletion
+commit made the token the constant `transport=quic`, so a re-run at HEAD prints that.
 
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, **run 2026-09-21**)
 

@@ -656,9 +656,20 @@ jobs:
         # build-for-testing, read off the result bundle: "Test run with 1214 tests in 140 suites
         # passed after 181.673 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit`
         # line. 1222 - 4 - 4 = 1214 is the ARITHMETIC CHECK, never the number.
+        # RAISED 1214 -> 1216 (2026-09-22, the deletion round's blind verify, finding 1). ONE suite
+        # already on this line gained TWO cells and no suite joined or left, so the NAME count stays
+        # 140 and CIGateSelectorBoundaryTests is untouched: NetworkMeshWireTests +2
+        # (theRadioAdmitsAFrameAtExactlyTheCeilingAndRefusesOneByteOver and
+        # bothWireDirectionsAskThePredicateAtTheirGuard - the QUIC radio's OWN oversized-datagram
+        # drop and outbound over-cap refusal, unpinned once the MC suite that drove them by delegate
+        # was deleted; now one predicate, NetworkMeshSession.withinWireCeiling(_:), pinned as a value
+        # with both call sites pinned by source needle). MEASURED over this exact 140-name list on a
+        # Mac after a build-for-testing, read off the result bundle: "Test run with 1216 tests in
+        # 140 suites passed after 180.646 seconds", 0 failed, 0 skipped, no `Restarting after
+        # unexpected exit` line. 1214 + 2 = 1216 is the ARITHMETIC CHECK, never the number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1214 \
+          Scripts/run-gated-suites.sh mesh-batteries 1216 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

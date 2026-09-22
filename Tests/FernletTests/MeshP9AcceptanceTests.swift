@@ -530,9 +530,9 @@ struct MeshP9PresenceSwapAcceptanceTests {
 
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         // Anti-vacuity floors, RE-MEASURED at item 9's fix review (NOTE 4) and set within ~20%
-        // of reality rather than at a round 100: 143 files here. A floor a deleted third of the
+        // of reality rather than at a round 100: 141 files here (143 before the deletion round). A floor a deleted third of the
         // package still clears is a floor that cannot fail.
-        #expect(kit.count >= 120, "the ProximityKit scan lost its files (143 when this was measured)")
+        #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
         #expect(Set(MeshP7Acceptance.homes(of: "PresenceRadioSession", in: kit))
                 == ["PresenceManager.swift", "NetworkPresenceSession.swift"], """
                 the presence seam has exactly two homes in the package — the manager that drives it \
@@ -922,22 +922,33 @@ struct MeshP9McRetirementAcceptanceTests {
                 the CI name count and this cell in the same commit — it is not a fix for a red
                 """)
         }
+        // A code LINE, not a substring of the comment-stripped file: `codeOnly` drops whole-line
+        // comments only, so a trailing `// transport ?? NetworkMeshSession()` would otherwise satisfy
+        // this pin (the deletion round's verify, finding 7). The VALUE half is
+        // `MeshTransportSelectionTests.theAppsInitializerRunsOnTheQUICRadio`.
         let manager = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"))
-        #expect(manager.contains("transport ?? NetworkMeshSession()"), """
+        let initDefault = manager.split(separator: "\n").contains { line in
+            (line.components(separatedBy: "//").first ?? "").contains("transport ?? NetworkMeshSession()")
+        }
+        #expect(initDefault, """
             MeshNetworkManager.init no longer defaults its radio to `NetworkMeshSession()` directly. \
             There is no selection seam left to route through: a second radio, a factory or a launch \
             variable here is the seam the deletion round removed coming back
             """)
-        let seam = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source(MeshP9Acceptance.transportSelectionPath))
+        // The WHOLE package, not the one file the seam used to live in: the four names are
+        // Fernlet's own, so neither the import wall nor `TransportNeutralityBoundaryTests`' SDK
+        // symbols would see a `MeshTransportKind` re-introduced in a new file (the deletion round's
+        // verify, finding 6). Comment-stripped sources, as every walk in this battery.
+        let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         // R2: bounded by the four retired identifiers.
         for retired in ["MeshTransportKind", "MeshTransportFactory", "quicSelectionEnvironmentKey",
                         "MeshMultipeerSession"] {
-            #expect(!seam.contains(retired), """
-                `\(retired)` is back in MeshTransportSelection.swift. The selection seam retired with \
-                the second radio (Variant A of the survey's patch); `MeshTransportSession` and \
-                `MeshPeerChannel` are the whole surface now
+            let homes = Set(MeshP7Acceptance.homes(of: retired, in: kit)).sorted()
+            #expect(homes.isEmpty, """
+                `\(retired)` is back, in \(homes). The selection seam retired with the second radio \
+                (Variant A of the survey's patch); `MeshTransportSession` and `MeshPeerChannel` are \
+                the whole surface now, and a second radio is a phase decision
                 """)
         }
         // The second reason, at the line that enforces it rather than in the note that states it.
@@ -984,9 +995,9 @@ struct MeshP9McRetirementAcceptanceTests {
     @Test func theFrameworkImportHasNoHomeAndNoFrameworkTypeIsNamed() throws {
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         let app = try MeshP7Acceptance.sources(under: "App/Fernlet")
-        // MEASURED floors (NOTE 4): 141 and 179 files after the deletion. See clause (b) for why not 100.
+        // MEASURED floors (NOTE 4): 141 and 185 files after the deletion. See clause (b) for why not 100.
         #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
-        #expect(app.count >= 140, "the app-target scan lost its files (179 when this was measured)")
+        #expect(app.count >= 140, "the app-target scan lost its files (185 when this was measured)")
         let homes = Set(MeshP7Acceptance.homes(of: "import MultipeerConnectivity", in: kit + app)).sorted()
         #expect(homes.isEmpty, """
             MultipeerConnectivity is imported in \(homes). The framework left the tree in the \

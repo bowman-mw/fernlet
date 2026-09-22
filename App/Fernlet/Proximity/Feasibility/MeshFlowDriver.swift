@@ -111,9 +111,13 @@ struct MeshFlowRunState {
     /// id is the peer's id, so a slot that is torn down and re-dialed to the same peer comes back
     /// under the same `UUID` with a fresh `ProximityCoordinator` at the gate — and keyed on the id
     /// the driver never asked it again, which left both halves of the unseeded re-dial run parked at
-    /// `awaitingProximityCommit` for the rest of the run. The set is pruned to the live coordinators
-    /// on every poll, so a freed instance's identifier cannot shadow a later one.
-    var asked: Set<ObjectIdentifier> = []
+    /// `awaitingProximityCommit` for the rest of the run. Each entry RETAINS its coordinator, because
+    /// an `ObjectIdentifier` is an address and a freed instance's address can be handed to the next
+    /// coordinator the manager mints (the deletion round's verify, finding 2): a retained object
+    /// cannot be freed, so its identifier cannot be recycled while the entry lives. The table is
+    /// pruned to the live coordinators on every poll, so a slot's teardown releases its entry one poll
+    /// later and nothing accumulates.
+    var asked: [ObjectIdentifier: ProximityCoordinator] = [:]
 
     /// The slot summary at the last report.
     var slots = ""
@@ -381,11 +385,11 @@ enum MeshFlowDriver {
     /// exactly as it stands in for the first). Bounded by the manager's slot cap.
     private static func commitPendingSlots(manager: MeshNetworkManager, state: inout MeshFlowRunState) {
         let live = Set(manager.slots.map { ObjectIdentifier($0.coordinator) })
-        state.asked.formIntersection(live)
-        for slot in manager.slots where !state.asked.contains(ObjectIdentifier(slot.coordinator)) {
+        state.asked = state.asked.filter { live.contains($0.key) }
+        for slot in manager.slots where state.asked[ObjectIdentifier(slot.coordinator)] == nil {
             switch slot.coordinator.state {
             case .awaitingManualCommit, .awaitingProximityCommit:
-                state.asked.insert(ObjectIdentifier(slot.coordinator))
+                state.asked[ObjectIdentifier(slot.coordinator)] = slot.coordinator
                 echo("committing slot gate=\(slot.coordinator.state.debugLabel)")
                 manager.commitManualProximity(slotID: slot.id)
             default:

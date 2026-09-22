@@ -928,6 +928,33 @@ struct NetworkMeshWireTests {
                 "The transport floor must stay pinned to the inflate ceiling every sealed body obeys")
     }
 
+    /// The radio's OWN size gate, not the wire header's: `receiveDatagrams` drops an over-ceiling
+    /// datagram before it reaches a channel and `send` refuses an over-ceiling frame before any byte
+    /// goes out, and both ask `withinWireCeiling(_:)`. The retired MultipeerConnectivity suite
+    /// pinned the drop by driving a delegate; tier 1 cannot build a live `Network.QUIC.Datagrams`,
+    /// so the predicate is pinned as a VALUE here and the two call sites by source needle below —
+    /// a `>=`, a doubled ceiling or an inlined comparison at either site reddens one or the other.
+    @Test func theRadioAdmitsAFrameAtExactlyTheCeilingAndRefusesOneByteOver() {
+        let ceiling = NetworkMeshSession.maxInboundWireBytes
+        #expect(NetworkMeshSession.withinWireCeiling(ceiling), "a frame at exactly the ceiling must pass")
+        #expect(NetworkMeshSession.withinWireCeiling(0), "an empty frame is the framing's problem, not the gate's")
+        #expect(!NetworkMeshSession.withinWireCeiling(ceiling + 1), "one byte over the ceiling must be refused")
+        #expect(!NetworkMeshSession.withinWireCeiling(Int.max), "and so must anything absurd")
+    }
+
+    /// Both wire directions consult the predicate at their guard, spelled exactly so — the datagram
+    /// receive path (a DROP, `mesh.quic.droppedOversizedDatagram`) and `send` (an outbound refusal).
+    @Test func bothWireDirectionsAskThePredicateAtTheirGuard() throws {
+        let source = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift"))
+        #expect(source.contains("guard Self.withinWireCeiling(payload.count) else {"),
+                "the datagram receive path no longer gates on withinWireCeiling(_:)")
+        #expect(source.contains("guard Self.withinWireCeiling(data.count) else {"),
+                "send(_:to:mode:) no longer gates on withinWireCeiling(_:)")
+        #expect(!source.contains("count <= Self.maxInboundWireBytes"),
+                "an inline comparison against the ceiling bypasses the one predicate the cells pin")
+    }
+
     /// Every failure the transport can raise says something. This is the surface that makes a dead
     /// radio visible instead of silent, so an unnamed case would defeat its own purpose.
     @Test func everyTransportErrorCarriesADiagnostic() {

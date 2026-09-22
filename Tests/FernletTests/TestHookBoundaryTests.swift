@@ -47,9 +47,9 @@ struct TestHookBoundaryTests {
     /// Floor for the shipping scan (367 files at the time of writing); a root that stops resolving trips it.
     static let minimumShippingFilesScanned = 300
 
-    /// Real (non-comment) hook reads today: **68** across all four families (P6 item 10 added three
-    /// mesh ones). A wall that finds fewer has stopped looking — comment stripping or the token
-    /// matcher has broken.
+    /// Real (non-comment) hook reads today: **67** across all four families (P6 item 10 added three
+    /// mesh ones; the deletion round, 2026-09-22, retired `FERNLET_MESH_TRANSPORT`'s one). A wall
+    /// that finds fewer has stopped looking — comment stripping or the token matcher has broken.
     static let minimumHookLines = 40
 
     /// The tokens that name a debug/test launch hook.
