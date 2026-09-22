@@ -21,19 +21,32 @@ read (§17.2.3 finding 2).
 1. **Lane D** — the production transport, phone ↔ Simulator, cable out (device row F11). One phone;
    the cheapest first run — **RUN 2026-09-21** (runbook *Lane D*: every row dated; the NECP `EEXIST` is
    present and non-fatal; routed text/photo need `FERNLET_MESH_ROLE=founder|joiner` + `FLOWS_AFTER`).
+   **The UNSEEDED first meeting RAN on the deletion build, 2026-09-22** (runbook *Lane D* § *The device round's item 1*;
+   plan §28.9): phone founder ↔ Simulator joiner founded through the provisional path (`derived=2` ≈1.4 s from browse) and
+   the double-mint re-dial converged (≈4 s after the thaw). A locked phone refuses the launch — unlock first.
 2. **§15.5, P10's eight rows** — one phone. D1 and D2 come together (background the app and leave the
    phone alone); D5 and D6 are two Settings toggles; D3, D4, D7 and D8 fall out of D2 once a grant
    happens at all. **FIRST ATTEMPT 2026-09-21** (runbook *Lane E* § *Device run*; plan §28.7): D7 earned, D4
    and D6 half, D5 blocked by the phone's policy, D1–D3/D8 not reached — no grant in 1 h 55 min. The rest is
    an **overnight** window from the runbook's *How to resume*; the logging profile is refused by iOS 26.6.1
    (owner decision), and `OS_ACTIVITY_DT_MODE=YES` covers every devicectl-launched row instead.
+   **OVERNIGHT WINDOW READ BACK 2026-09-22: no grant** — 1 h 56 min from the 18:43:05Z submit until the phone left the
+   Mac's reach at ≈20:39Z (a wired console session; a pulled cable does this); ≈3 h 51 min pending across both sessions
+   with no delivery; the app was not running the next morning. The next window is the owner's to arrange (runbook *Lane E*
+   § *The overnight window, read back 2026-09-22*; plan §28.9). The trace carries the framework's lines only — the console
+   is the app-side witness.
 3. **§15.1** radio matrix — a QUIC connection surviving background + lock, re-dial via a cached
    endpoint while backgrounded, a fresh background browse (expected to fail — record it), each ×
    infra-Wi-Fi and AWDL, Low Power Mode both ways, memory-pressure kills. Rows F1–F6. Two phones.
+   **2026-09-22: UNREACHABLE — one phone** (runbook *Lane B*, dated per row).
 4. **§15.2** partition walks (three phones, four for topology), then **§15.3** the 3 h / 6 h soak —
    **that row decides the degraded ladder**, unchosen until it runs.
+   **2026-09-22: partition walks UNREACHABLE (one phone); the soak NOT RUN** — reachable with one phone and a Simulator,
+   but it needs the owner's normal use for 3 h / 6 h on the Mac's Wi-Fi. The ladder stays unchosen.
 5. **P9-2-C** the boundary-wake drift on hardware; **§15.4** Wi-Fi Aware, bounded to two days, a
    recommendation not a dependency.
+   **2026-09-22: P9-2-C NOT RUN** (presence is a Settings switch on the phone, a third friend must be seeded, and the arm
+   is ≥ 767 s — the owner's hands); **§15.4 unchanged** (the owner's call).
 
 **Walls that bite here:** cables out for every background or lock row, then check no ready line names
 `en8` / `en9` / `anpi0`. Rebuild before every lane run — a build log's date is not the tree's date.

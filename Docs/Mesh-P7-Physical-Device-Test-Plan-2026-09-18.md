@@ -176,7 +176,8 @@ Fill one line per row per run. Device models and iOS versions once at the top of
 | E6 | not run on device (tier 1 only) | — | — |
 | E7 | | | |
 | F11 | **pass** — the production QUIC mesh formed phone ↔ Simulator over infrastructure Wi-Fi with the cable out (`en9` absent, flows on `en0[802.11]`), one tunnel per side, 0 `tunnelEnded` across 5 min 8 s, heartbeats over datagrams both ways, re-dial accepted after both a terminate and a freeze; the NECP `EEXIST` refusal is present on the first inbound flow of every re-dial and non-fatal. Full record: runbook *Lane D* | 2026-09-21 | iPhone 17 Pro Max (iOS 26.6.1) ↔ iPhone 17 Simulator (iOS 26.5), Xcode 26.5 |
-| F1–F12 | see the runbook's Lane B table | | |
+| F11 (unseeded) | **pass** — the UNSEEDED first meeting on the deletion build: phone (founder, the lower fingerprint) ↔ Simulator with no `MEMBERS` / `MESH_ID` founded a mesh through the provisional stranger admission (`legacyRosterFallback members=0` → `accepted` both ways, zero introduction refusals → both commit → the double mint repaired → `autoGrantedFoundingPair` → `derived=2` on both, ≈1.4 s from browse), and the double-mint re-dial converged (the Simulator frozen at the phone's commit, the dead tunnel ended by the transport at +111 s, both re-introduced under the tolerated meshID, `derived=2` again ≈4 s after the thaw). Full record: runbook *Lane D* § *The device round's item 1* | 2026-09-22 | iPhone 17 Pro Max (iOS 26.6.1) ↔ iPhone 17 Pro Simulator (iOS 26.5), Xcode 26.5, build `d88062c` |
+| F1–F12 | see the runbook's Lane B table — **2026-09-22: every remaining row named UNREACHABLE or NOT RUN with one phone** in its dated status paragraph | 2026-09-22 | one phone |
 
 **A deviation from the Expected column is a finding, by row name**, into the P8 ledger; a row that
 passes for a reason other than the one stated (a Simulator-style accident, a tethered phone that never

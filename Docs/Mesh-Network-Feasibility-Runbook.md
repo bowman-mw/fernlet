@@ -22,6 +22,10 @@ original framing — is superseded. What still holds: **do not ship background c
 the §15 rows below carry real results.
 **Lane D ran on 2026-09-21** — the production transport, phone ↔ Simulator, infrastructure Wi-Fi with the
 cable out; every row of its table carries a result and a date (see *Lane D* below). §15 remains unrun.
+**The device round ran on 2026-09-22** on the DELETION build — the UNSEEDED first meeting between the phone and a
+Simulator founded a mesh through the provisional path and survived the double-mint re-dial (*Lane D* § *The device
+round's item 1*); §15.5's overnight window was read back with no grant (*Lane E* § *The overnight window, read back*);
+§15.1–§15.4 remain unrun for want of a second phone, each row named as such in *Lane B*.
 
 ## What the probe validates
 
@@ -2588,6 +2592,155 @@ infrastructure won the path race every time; a peer-to-peer-only row needs the M
 the Simulator-survivor direction of the reconnect rows (killing the phone's `--console` kills the app, so
 the phone was always the survivor), and a real `idleTimeout` cause, which the app's eviction pre-empts.
 
+
+#### The device round's item 1 — the UNSEEDED first meeting on hardware (run 2026-09-22)
+
+**The QUIC first-meeting capability is OBSERVED on a physical radio.** The owner's phone and a
+Simulator, with **no** `FERNLET_MESH_MATRIX_MEMBERS`, **no** `FERNLET_MESH_MATRIX_MESH_ID` and nothing
+persisted between them, found a mesh through the provisional path over a real QUIC tunnel on
+infrastructure Wi-Fi with the cable out, converged to `derived=2` under one epoch head in about
+**1.4 s** from browse, and — the tunnel killed between the two commits — re-introduced under the
+tolerated meshID and converged again **≈4 s** after the thaw. This is the hardware half of the
+deletion round's item 0 (*Lane C — the deletion round's item 0* above), on the build that has no
+MultipeerConnectivity in it. Three runs: run 1 with the harness roles inverted by a script bug
+(passed anyway), run 1b with the roles as the recipe says (the record), run 2 the re-dial.
+
+**Environment.** `main` = `d88062c` (the deletion round's close), rebuilt for this lane into a fresh
+DerivedData — `xcodebuild build -scheme Fernlet -configuration Debug` once for
+`platform=iOS,id=<udid>` with automatic signing (15:14:05Z → 15:15:25Z) and once for the Simulator
+(15:15:xxZ → 15:18:02Z), `** BUILD SUCCEEDED **`, zero `error:`, both — installed fresh on both nodes
+(`devicectl device install app` 15:17:23Z; `simctl install` 15:20:48Z). Phone: the owner's
+**iPhone 17 Pro Max** (`iPhone18,2`, iOS **26.6.1**, fp `5c73ce4c29dc84be` — unchanged from Lane D and
+§15.5, keychain-backed across the reinstall). Simulator: **iPhone 17 Pro** (`454FCC9C-…661B`, iOS 26.5,
+fp `fb795f343c2954da` — unchanged since P9 and the deletion round). Mac: Xcode 26.5. The phone on
+`transportType: localNetwork` with the cable out (`en9 present = 0` at every preflight), `awdl0` never
+carrying a flow. No `xcodebuild` and no `xctrace` during any run (both counted in the preflight).
+Witnesses: the phone's `devicectl … --console` transcript with `OS_ACTIVITY_DT_MODE=YES` (the
+`[mesh-quic]` / `[mesh-flow]` console AND the audit contexts in the clear, stamped by the phone's
+clock); the Simulator's `simctl spawn … log stream --predicate 'subsystem == "com.fernlet"'` (audit,
+the Mac's clock); a host `log stream` for the Simulator's `Fernlet` process (`com.apple.network` —
+interfaces and NECP). Streams started before each launch and killed by saved PID after it.
+
+**The phone must be unlocked and awake, by the owner's hand.** The first launch of the day, with the
+phone locked, was refused by SpringBoard before the app started: `FBSOpenApplicationErrorDomain
+error 7 (Locked)` — *"Unable to launch MBO.Fernlet because the device was not, or could not be,
+unlocked"*. `devicectl` has no unlock; every run below carries `passcodeRequired=false` in its
+preflight because the owner unlocked the phone and kept it awake for the twelve minutes the three
+runs took. Add it to the walls: **a locked phone is a refused launch, not a dead radio.**
+
+**The recipe — Lane C's unseeded pair launch with one node moved onto the phone.** The founder role
+goes on the **lower fingerprint** (`foundsPairwiseMesh(local:peer:)` is `local < peer`), which here
+is the phone (`5c73…` < `fb79…`), and that is also the only workable assignment for the re-dial:
+killing the phone's `--console` process kills the app, so the phone can only ever be the survivor and
+the Simulator the side that is frozen. Phone side (the Xcode-scheme step, without Xcode):
+
+```
+xcrun devicectl device process launch --device <coredevice-uuid> --terminate-existing --activate --console \
+  --environment-variables '{"OS_ACTIVITY_DT_MODE":"YES","FERNLET_MESH_MATRIX":"1","FERNLET_MESH_CONSOLE_LOG":"1",
+                            "FERNLET_MESH_MATRIX_LABEL":"hw-run1b-founder","FERNLET_MESH_FLOWS":"commit","FERNLET_MESH_ROLE":"founder"}' \
+  MBO.Fernlet -- -completeOnboarding
+# Simulator, 3 s later: the same five FERNLET_ variables under SIMCTL_CHILD_, LABEL=hw-run1b-joiner, ROLE=joiner
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=hw-run1b-joiner \
+SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit SIMCTL_CHILD_FERNLET_MESH_ROLE=joiner \
+xcrun simctl launch --console-pty <sim-udid> MBO.Fernlet -completeOnboarding
+```
+
+No `FERNLET_MESH_TRANSPORT` — the variable no longer exists (`ec05b0c`); the banner reads
+`transport=quic` on both. The banner's second line reads `no descriptor seeded: roster stays empty,
+every peer verdicts stranger` on both.
+
+##### Run 1b — the unseeded founding (`hw-run1b-*`, 150 s; phone launched 15:25:27Z, Simulator 15:25:30Z)
+
+| Check | Required | Result | Evidence |
+| --- | --- | --- | --- |
+| The roster consulted at the introduction is EMPTY on both sides | `members=0` | **Observed** | phone audit `mesh.introductionAuthority.legacyRosterFallback members=0` at 11:25:32.385 (phone clock); Simulator audit the same at 11:25:32.329 (Mac clock) |
+| `admitsStrangersProvisionally` answers the introduction on a physical radio | a tunnel where P2's matrix row 1 recorded `refused unknownIdentity … rosterMembers=0` | **Observed — ACCEPTED both ways** | phone: `[mesh-quic] accepted fb795f343c2954da sid=BBC5EE83-…: tunnel activated, tunnels=1`; Simulator: `accepted 5c73ce4c29dc84be sid=57FFABC9-…: tunnel activated, tunnels=1`. Zero introduction refusals on either node (`refused … as responder`, `inbound tunnel refused`, `dial refused` all 0). The one "refused" word in the phone's transcript is libnetwork's `failed with error Connection refused` on a **global-IPv6** candidate flow (`[C4] 2605:ad80:…`) while the link-local `%en0` flow formed the tunnel — a path-race loser, not an introduction |
+| The identity introduction, then the commit | slot at the gate, then `connected` | **Observed** | phone: `committing slot gate=awaitingManualCommit` → `slots total=1 committed=1 states=[connected]`; Simulator: `committing slot gate=awaitingProximityCommit` → `connected`. The two sides sat at **different gates** in every run — the phone's slot at `awaitingManualCommit`, the Simulator's at `awaitingProximityCommit` — and the driver commits either (both are the coordinator's pre-commit states, `ProximityCoordinator.swift:611-612`). Recorded, not interpreted here |
+| `promoteToMesh` on the first commit — both halves mint, the double mint repaired | a descriptor on each side, one survives | **Observed — the OTHER arm from the Simulator lane.** The phone (founder, lower fingerprint) committed **first** (`mesh.keyAgreement.folded held=7F746521-…` at :32.854) and, when the Simulator's newborn descriptor arrived, **dropped it and re-announced its own**: `mesh.descriptor.droppedForeignMesh held=7F746521-… offered=EA665D1D-…` + `mesh.descriptor.reannouncedToNewbornPeer` at :33.285. The Simulator: `mesh.meshDescriptor.droppedUncommittedSlot` at :32.998 (the phone's descriptor arrived while the Simulator was still uncommitted — the commit-timing race), then folded its own `EA665D1D-…` at :33.148, then `mesh.descriptor.yieldedNewbornMesh adopted=7F746521-…` at :33.232 → `mesh.session.abandonedNotDurable` → `mesh.sessionCeiling.armedFromAdoptedMesh`. In the Simulator lane's run 1 the LATER committer dropped the early descriptor uncommitted; here the earlier committer dropped the foreign one and re-announced. Both arms end in one mesh, the founder's | 
+| The admission request, auto-granted | a grant with no owner tap and no harness grant | **Observed — the shipping auto-grant** | phone audit `mesh.admissionRequest.autoGrantedFoundingPair` :33.325, `mesh.membershipLedger.reGossiped frames=2` :33.425; Simulator `[mesh-quic] membershipRecord fernlet.mesh.member-admission.v1 accepted`, audit `mesh.membershipLedger.bootstrapped` :33.280, `mesh.membershipLedger.adopted members=2` :33.394. **The harness fallbacks were silent:** phone `founder armed=false ledger=present derived=2`, no `admitting …` line; no `requesting admission` on the Simulator |
+| `derived=2` on both, one epoch head | both `[mesh-flow] membership ledger=present derived=2` | **Observed** | both consoles: `membership ledger=present derived=2 barred=0 status=active epochRef=1.83eb0a4bce97761e7f307a99fda9361d.5c73ce4c29dc84be` — the phone, the lower fingerprint, is the coordinator named inside the ref |
+| Stability | one activation per side, no ends | **Observed** | one `tunnel activated, tunnels=1` per side, **0** `tunnelEnded`, `datagramCapacity usable=0 requested=1024 required=22 idleTimeoutMs=90000 beatSeconds=30` on both, **4/4** heartbeats over datagrams each way at 30 s spacing across the 150 s window, zero `heartbeat datagram refused` |
+| Wi-Fi path | flows on `en0`, `en9` absent, `awdl0` absent | **Observed** | host witness for the Simulator's process: `interface: en0[802.11], uses wifi`, peer `fe80::4f5:3025:4e7c:e39%en0` (the phone's link-local); `en9` 0, `awdl0` 0; the phone's own `nw_` lines name `fe80::1014:f09:7235:7f56%en0` (the Mac's) |
+
+The Simulator lane's key-agreement artefact reproduced exactly: the Simulator logged
+`mesh.keyAgreement.rejected … The record's signer was never admitted to this mesh.` → `parked` →
+`parkedReoffered count=1` → `folded` at :33.36–:33.39, the phone's record reaching it before its
+ledger held the phone's founder admission. Self-healing, nothing lost.
+
+**Timeline** (each line on the clock of the device that wrote it; the two clocks agree to ≈60 ms on
+the roster line both sides log at the same handshake): the Simulator was already dialing the phone's
+Bonjour endpoint at 11:25:32.00; the phone `browsed peers=1` :32.22; the empty roster consulted on
+both :32.33/:32.39; tunnel :32.39; the phone commits :32.85; the Simulator drops the phone's early
+descriptor :33.00, folds its own :33.15, yields :33.23; the phone drops the foreign one and
+re-announces :33.29, auto-grants :33.33; the Simulator bootstraps :33.28, adopts `members=2` :33.39.
+**Browse to `derived=2`: ≈1.4 s.** Launch to tunnel: 2.4 s after the Simulator's launch.
+
+**The NECP `EEXIST`, on a FIRST dial this time.** The phone's transcript carries Lane A's exact
+signature at the first inbound flow of the run — `nw_path_evaluator_create_flow_inner
+NECP_CLIENT_ACTION_ADD_FLOW … [17: File exists]` → `[C2] Failed to create connection from listener`
+at 11:25:32.15 — and the next flow, within the same second, formed the tunnel; zero
+`introductionFailed`, zero `gave up`, zero `dial refused`. Lane D recorded it only on re-dials
+(2 of 2); here it appeared on the first dial of run 1b and on neither dial of runs 1 and 2. Still
+present, still non-fatal, still absorbed below the app.
+
+##### Run 1 — the same founding with the harness roles inverted (`hw-unseeded1-*`, 150 s) — passed; recorded because it happened
+
+The lane's own script carried `roles` into a pipeline (`{ preflight; roles; } | tee …`), so the
+variables it set died with the subshell and the launch order fell through to the other branch:
+the **founder** role went on the **Simulator** (the HIGHER fingerprint — the half the shipping code
+makes yield) and the joiner role on the phone. The deletion round declined to run exactly this
+configuration because the harness's founder loop on the yielding half could race the yield
+(`armFounderLedgerForHarness()` guards on `membershipVerifier == nil`, the yielder's state between
+`unwindNewbornMesh()` and the grant). One sample says it did not bite: the same chain crossed —
+Simulator `droppedUncommittedSlot` 11:22:22.51, `yieldedNewbornMesh adopted=0BF41BE2-…` :23.17;
+phone `droppedForeignMesh` + `reannouncedToNewbornPeer` :23.21, `autoGrantedFoundingPair` :23.28,
+`reGossiped frames=2` :23.30; Simulator `bootstrapped` :23.22, `adopted members=2` :23.27; both
+`derived=2` under `1.1e1b57f4ef6613049e2f210ab07dcebb.5c73ce4c29dc84be`; **≈1.0 s** from the phone's
+browse (:22.25); 0 `tunnelEnded`, 4/4 heartbeats each way, 0 NECP lines. The founder loop on the
+yielding Simulator printed `founder armed=false ledger=present derived=2` — the shipping founding had
+already produced the ledger by the driver's next poll, so the role stayed inert on this side too.
+**Not the record** — run 1b is — but one more data point that the roles are inert on an unseeded run.
+The script fix: call the function outside any pipeline (`preflight | tee …; roles | tee -a …; roles
+>/dev/null`).
+
+##### Run 2 — the double-mint re-dial on hardware (`hw-unseeded2-*`): the tunnel killed between the two commits
+
+The shape is the Simulator lane's: a watcher on the **phone's** console sends `SIGSTOP` to the
+Simulator's process the instant the phone's driver commits (`grep -q "committing slot"` at 50 ms),
+so the phone founds alone; the dead tunnel ends; `SIGCONT`; watch the re-dial converge. The
+Simulator is the frozen side because it must be (above). Phone launched 15:28:21Z, Simulator
+15:28:24Z; **freeze 15:28:26Z** (Mac clock, the watcher) — the Simulator had **0** commits and **0**
+ledgers at that instant (`slots total=1 committed=0 states=[awaitingProximityCommit]`, its audit
+stream carrying only `legacyRosterFallback members=0` at 11:28:26.148 before the thaw), so it minted
+for the first time at the re-dial.
+
+| Check | Required | Result | Evidence |
+| --- | --- | --- | --- |
+| The founder founds ALONE | `derived=1` with the joiner frozen at the gate | **Observed** | phone: `committing slot gate=awaitingManualCommit` → `committed=1 states=[connected]` → `founder armed=false ledger=present derived=1 barred=0 status=active`; then `states=[discovering]` while it waited |
+| The tunnel dies between the commits | the survivor ends it | **Observed — by the TRANSPORT's idle timeout, at +111 s** | phone at 11:30:17.25: `tunnelEnded controlStreamEnded fb795f343c2954da live=true tunnels=0 … The outbound QUIC tunnel ended: … (Network.NWError error 60 - Operation timed out)`, `slots total=0`, after **three** unanswered `heartbeat sending over datagram` lines. No `localEviction` line. Compare Lane D's freeze row, where a **beating** link three minutes old saw the app's `tunnelEnded localEviction` at +89 s, and the Simulator lane's run 2, where a link frozen at the commit ended with this same `controlStreamEnded` / error 60 token at +90 s (that record calls it the three-missed-beats rule; the token is the transport's). On hardware the link frozen at its commit outlived `idleTimeoutMs=90000` by ≈21 s before the transport ended it |
+| Both re-introduce under the tolerated meshID | `accepted` on both, phone real-id vs Simulator unbound | **Observed** | thaw 15:30:19Z; the Simulator's own `tunnelEnded controlStreamEnded 5c73ce4c29dc84be … error 60` + `heartbeat datagram refused … error 57` → `slots total=0`; then phone `accepted fb795f343c2954da sid=8B5E4693-…: tunnel activated, tunnels=1` and Simulator `accepted 5c73ce4c29dc84be sid=CA836B5D-…` — **the same `sid`s as before the freeze** on both (both processes survived), phone `activated` 1 → 2; zero introduction refusals on either node in the whole run |
+| The second commit, the second mint, the convergence | both commit; the joiner mints and yields; auto-grant; `derived=2` | **Observed** | both `committing slot`; Simulator audit: `droppedUncommittedSlot` ×5 (`meshDescriptor`, `registryPayload` ×2, `membershipEvent`, `routedDrain` — the phone's frames landing on the still-uncommitted re-dialed slot, Option 1b's gate live) at 11:30:22.11, `keyAgreement.folded held=4AD03F8E-…` :22.42 (its own mint), `mesh.descriptor.yieldedNewbornMesh adopted=424F5418-…` :22.54 → `abandonedNotDurable` → `armedFromAdoptedMesh` → `membershipLedger.bootstrapped` :22.589 → `adopted members=2` :22.675; phone audit: `mesh.descriptor.droppedForeignMesh held=424F5418-… offered=4AD03F8E-…` + `reannouncedToNewbornPeer` :22.590, `mesh.admissionRequest.autoGrantedFoundingPair` :22.634, `reGossiped frames=2` :22.695; both consoles `membership ledger=present derived=2 barred=0 status=active epochRef=1.2d0a6d89731c3acbba70372ecfd39fcc.5c73ce4c29dc84be`; heartbeats over datagrams both ways for the 180 s that followed |
+| Timing | — | **thaw → `derived=2` on both in ≈4–5 s** | 15:30:19Z thaw (Mac) → the Simulator's `adopted members=2` at 11:30:22.675 (Mac clock, +3.7 s) → both consoles at `derived=2` by the watcher's 15:30:24Z poll |
+
+**What this shape is, precisely** — the same as the Simulator lane's: at the re-dial the phone held a
+real meshID (`424F5418-…`) and the Simulator held `unbound` (its pre-freeze commit never happened),
+so real-vs-unbound is what hardware has now shown; the both-real-ids re-dial rides the same arm and
+stays tier-1 only. The re-dial reused both `sid`s and both endpoints. The founder ROLE stayed inert
+in all three runs (`armed=false` on whichever side carried it; no `admitting`, no `requesting
+admission`) — on an unseeded run it exists only to keep the harness's fallback loops off the yielder.
+
+**What this lane still cannot say.** Two *phones*: this was one phone and a Simulator sharing the
+Mac's network stack on one side, so §15.1's background-and-lock rows, AWDL, Low Power Mode and the
+partition walks are untouched (*Lane B*, dated). The Simulator-survivor direction of the re-dial
+(the phone frozen or killed) is unreachable while the phone is driven through `--console`.
+
+Raw logs: the session scratch `lane/` — `harvest/` (both identity lines), `run1-inverted/`,
+`run1b/`, `run2/` (`phone.log` the devicectl console with the audit mirror, `sim.log` the
+`--console-pty` transcript, `audit-sim.log` the Simulator's audit stream, `witness-sim.log` the host
+network witness, `run.txt` the preflight and the launch/tunnel/window stamps, `events.log` in run 2
+the freeze/end/thaw instants); the scripts `common.sh`, `harvest-phone.sh`, `harvest-sim.sh`,
+`run1.sh`, `run2.sh` beside them. Not in the repo.
+
 ### Lane B — physical multi-device and background (deferred to P8; see plan §15)
 
 These rows do not gate P1 or P2. They gate **shipping background continuation**, and they are
@@ -2607,6 +2760,25 @@ changed is that these rows are now *answerable*: the production coordinator keep
 task ends, where the probe tore its own down, so the "Background operation" row finally has a binary
 that can answer it. Every row below is the owner's devices, P8 launcher item 9, and the device plan
 `Docs/Mesh-P7-Physical-Device-Test-Plan-2026-09-18.md` § F is the same list as a checklist.
+
+**Status at the device round (2026-09-22): still no row run — ONE phone was in hand, and every row here needs two
+to four, or the owner's hands on the one.** The round ran the one-phone rows it could (the unseeded first meeting,
+*Lane D* § *The device round's item 1*; §15.5's read-back, *Lane E*) and names the rest rather than inferring them:
+*Four-device topology* — UNREACHABLE, four phones (F7). *Background operation* (F1–F3, F6) — UNREACHABLE as
+specified: the transport half needs a second phone to hold the far end while this one backgrounds and locks; a
+phone ↔ Simulator variant would answer only the phone's half and needs the owner to lock the phone by hand during
+the run — not attempted. *Low Power Mode* (F5) — UNREACHABLE without the owner at the phone for the toggle; the one
+empirical Low Power datum on this phone is §15.5 D6's (a refresh submission is accepted under it). *Progress soak*
+(F9, F12) — NOT RUN: reachable with one phone and a Simulator holding the far end, but it needs the phone in the
+owner's normal use for 3 h / 6 h while it stays on the Mac's Wi-Fi, which this session did not have; **the degraded
+ladder stays unchosen.** *Resource budget* — no product budget exists (unchanged). *Continued task*,
+*Cancellation*, *Force quit* — UNREACHABLE: each needs a granted continuation on the phone, and no `BGTaskScheduler`
+grant of any class has yet been observed on it (§15.5). *Partition walks* (F7–F8) — UNREACHABLE, three phones.
+*Wi-Fi Aware* (F10) — the owner's call, not this session's two days. *QUIC hold on real radios* — NOT RUN: needs the
+phone backgrounded with a committed link held, i.e. the same hands as the background row. **P9-2-C** (the presence
+boundary-wake drift, not in this table) — NOT RUN: presence has no launch-env hook (a Settings switch on the phone,
+by hand), the lane needs a third friend seeded (finding P9-2-B) and a ≥ 767 s arm; not attempted with one phone and
+no hands. Every row above keeps its 2026-09-19 status and date below.
 
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |
@@ -2835,7 +3007,7 @@ as budgeted; the rows below rely on the schedule.
 | Row | Result | Evidence | When (UTC) | Charging | Profile |
 | --- | --- | --- | --- | --- | --- |
 | **P10-D1** cold background launch | **NOT REACHED** — no grant has come, so no cold launch has been asked for; the setup is written (a devicectl `terminate` after an accepted submission, chunks recording) and the row's outcome VALUE will read `<private>` regardless (profile refused). A `liveactivitiesd` launch at 17:58:19 had the row's exact shape from the wrong daemon | `long1` trace, `window-10146.txt` | — | charging | no |
-| **P10-D2** a grant on iOS's own schedule | **NOT REACHED in 1 h 55 min** across three accepted requests (floors 17:18:40, 18:14:28, 18:58:05), screen unlocked or locked, charger off then on, Low Power Mode off, on, off. The scheduler wrote **nothing** naming the activity in 45 min of trace at the captured levels; there is no line to quote for *why*. The overnight window is the next measurement | consoles `run1`, `d6-lpm-on`, `run2`; `long1` | 17:03–18:58 | both | no |
+| **P10-D2** a grant on iOS's own schedule | **NOT REACHED in 1 h 55 min** across three accepted requests (floors 17:18:40, 18:14:28, 18:58:05), screen unlocked or locked, charger off then on, Low Power Mode off, on, off. The scheduler wrote **nothing** naming the activity in 45 min of trace at the captured levels; there is no line to quote for *why*. The overnight window is the next measurement — **read back 2026-09-22: NO GRANT in the overnight window either** (1 h 56 min from the 18:43:05 submit until the phone left the Mac's reach at ≈20:39; see *The overnight window, read back* below) | consoles `run1`, `d6-lpm-on`, `run2`; `long1` | 17:03–18:58 | both | no |
 | **P10-D3** the real conformer's expiration handler | **NOT REACHED** — needs D2 | — | — | — | — |
 | **P10-D4** the 15-minute floor honoured | **HALF**: the request the app builds carries `earliestBeginDate = submit + 15:00` to the second on a device (`submitTaskRequest: … earliestBeginDate: 2026-09-21 17:18:40 +0000` for a 17:03:40 submit). Whether iOS respects the floor from above is D2's delivery time minus the submit time — **not reached** | `probe.trace` export | 17:03:40 | not charging | no |
 | **P10-D5** Background App Refresh off in Settings | **BLOCKED on the phone's own policy**: the per-app switch is disabled with Low Power Mode off (submissions are accepted, so refresh is not off for the app — the switch is locked; a Screen Time *Background App Activities* restriction is the ordinary cause). The refusal it would produce was not observed. Not a code finding | the owner, 18:47 | — | charging | no |
@@ -2853,6 +3025,72 @@ Read a chunk with `extract.sh <trace> <xml>` (the companion and framework lines 
 the app with the tail's request pending and wait again for D1 (names only) and, on a second delivery to a held task, D8.
 Never `SIGINT` a background `xctrace`; never start one while another is finalising; never flip anything under Settings →
 Fernlet while a run is pending.
+
+
+#### The overnight window, read back 2026-09-22 — no grant; the window ended by the phone at ≈20:39Z
+
+**Read at 15:10Z on 2026-09-22, before anything touched the phone**: no `xctrace` and no `devicectl`
+process was alive on the Mac (`pgrep`), so the recorders had already stopped on their own; the
+scratchpad `p10dev/` of the 2026-09-21 session was read as it stood.
+
+**The app-side witness** — `run2/device-console.log`, pid 10752, `companionRefresh.registered`
+18:43:04.280Z, `companionRefresh.submitted trigger=background` 18:43:05.901Z, floor 18:58:05Z —
+carries **no** `trigger=handle`, **no** `runFinished`, **no** `taskWasDelivered`, **no**
+`edgeFoundARequestAlreadyPending` and no termination line. Its last entry is devicectl's own:
+`ERROR: An error occurred while communicating with a remote process. (com.apple.dt.CoreDeviceError
+error 3) … The connection was invalidated. (com.apple.Mercury.error error 1001)`; the file's mtime is
+20:39Z. That console session was on the **wired** transport (the 18:43:03Z preflight: `en9 present =
+1`, `transport = wired`, "do not unplug"), so a cable pull does exactly this.
+
+**The framework-side witness** — the chunks. Readable, with their `--toc` windows: `c-2`
+18:42:34–18:57:34Z, `c-3` 18:59:24–19:14:25Z, `night-2` 19:31:19–19:46:19Z, `night-3`
+19:47:49–20:02:49Z, `night-4` 20:04:07–20:19:08Z, `night-5` 20:20:19–20:35:20Z; `night-6`
+20:36:35–20:39:39Z exported **zero rows**; from `night-7` (20:39:39Z) the recorder reported *Timed
+out waiting for device to boot* — the phone unreachable to `xctrace` — and `night-8` … `night-40`
+each ended within seconds through 20:43:53Z (`night-9`, 20:40:32–20:41:36Z, caught 1 923 rows, none
+Fernlet's). **`c-4` (19:15:45–19:30Z) is unreadable**: the `c` chain was still finalising it when the
+`night` chain's first chunk started at 19:30:04Z — `chunks.sh`'s one-recorder gate sees a *running*
+`xctrace`, not one finalising — so `night-1` failed on the kperf lock and `c-4` never wrote its
+bundle. A 15½-minute gap in the framework witness, 19:15:45 → 19:31:19Z, covered by the console alone.
+
+**In every readable chunk**: `bgRefresh-MBO.Fernlet.companion-refresh:44EF40` appears exactly once,
+in `c-2` at 18:43:05.885Z (`Submitting task request activity`, beside `submitTaskRequest:
+<BGAppRefreshTaskRequest: MBO.Fernlet.companion-refresh, earliestBeginDate: 2026-09-21 18:58:05
++0000>` — submit + 15:00 to the second, again); **no** `STARTING`, `RUNNING` or `COMPLETED` for it in
+any chunk; no `companion-refresh` mention after that second; **no termination of pid 10752** in any
+chunk; `dasd` logged nothing naming the activity at the captured levels, for the second day.
+
+**Verdict — D2 NOT REACHED in the overnight window: no grant from 18:43:05Z to at least 20:35:20Z
+(the last readable framework minute) and none on the app side until the console died at ≈20:39Z —
+1 h 56 min after the submit, 1 h 41 min past the floor.** Across the two device sessions that is
+**≈3 h 51 min** of accepted-and-pending time (three requests on the 2026-09-21 afternoon, one that
+evening) with no delivery. The window was ended by the **phone**, not by iOS and not by a session:
+at ≈20:39Z it left the Mac's reach (the console invalidated and `xctrace` timing out within the same
+minute), which is what a pulled cable or a phone carried off the Wi-Fi looks like from the Mac; what
+happened at the phone is the owner's to say. At 15:10Z the next day the phone was back on
+`localNetwork`, cable out, locked, and **Fernlet was not running** — pid 10752 died somewhere in the
+unwitnessed 18½ hours, cause unread, and with it the pending request from 18:43:05Z is unobservable.
+D1, D3 and D8 remain not reached (they need a grant); D4, D5, D6 and D7 are unchanged.
+
+**A witness finding that narrows the 2026-09-21 note.** The `c-2` export carries **none** of the
+app's own `companionRefresh.*` audit lines — 0 rows matching `companionRefresh` in 511 654 — although
+the console mirror shows `registered` and `submitted` for the same pid in the same second, and
+although the 2026-09-21 probe-window export (`oslog.xml`) *did* carry `companionRefresh.submitted
+trigger=background` in the clear. The app's own rows in `c-2` stop at 18:43:15Z, eleven seconds
+after launch; the framework's `submitTaskRequest:` line in the app's process at :05.885 is there.
+Why the audit lines reached logd in the probe window and not in this one is not resolved here (a
+`--console` session's DT stream diverting the app's log, or the info level not persisting once the
+app is backgrounded, are the two candidates). The practical rule: **for a companion-refresh row the
+devicectl console is the app-side witness, and the trace is the framework-side witness only** —
+`com.apple.BackgroundTasks` in the app's process plus `dasd`. For D1, which has no console, the
+trace would show the framework's lines and `runningboardd`'s launch, never the app's audit.
+
+**What §15.5 now says.** After ≈3 h 51 min of pending time on two days with no delivery, D2 moves
+from "not reached — the window was short" to **"not reached — a grant has not come in any window
+this phone has offered"**. The next measurement is the owner's to arrange, not a session's: a window
+of several hours with the phone on the charger, on the Mac's Wi-Fi, untouched, the console launched
+wirelessly (not wired — a wired console dies with the cable), or the app relaunched by the owner
+with no console at all and the trace as the only witness. Stop condition 3 applied to one row.
 
 ### Security, both lanes
 
