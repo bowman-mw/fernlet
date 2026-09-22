@@ -74,6 +74,22 @@ final class MeshNameWithholdingRig {
         return try JSONDecoder().decode(MeshRemovalProposalPayload.self, from: envelope.payload)
     }
 
+    /// The admission requests `endpoint` was sent, decoded out of their (unsealed) envelopes.
+    func admissionRequests(on endpoint: FakePeerTransport) throws -> [MeshAdmissionRequestPayload] {
+        try envelopes(on: endpoint).filter { $0.payloadType == .meshAdmissionRequest }
+            .map { try JSONDecoder().decode(MeshAdmissionRequestPayload.self, from: $0.payload) }
+    }
+
+    /// An open mesh this device is NOT a member of — the joiner's view when a descriptor arrives.
+    static func meshToJoin() -> MeshDescriptor {
+        let instant = Date(timeIntervalSince1970: 1_700_000_000)
+        return MeshDescriptor(
+            meshID: UUID(), name: "Joinable", mode: .open, members: [],
+            nameSetAt: instant, nameSetBy: fingerprintA, modeSetAt: instant, modeSetBy: fingerprintA,
+            createdAt: instant
+        )
+    }
+
     /// Lets the spawned per-slot sends run — bounded, no sleeps.
     func drain() async {
         // R2: bounded.
@@ -135,6 +151,141 @@ struct MeshNameWithholdingTests {
         rig.manager.renameSessionParticipant(fingerprint: "f0f0f0f0f0f0f0f0", to: "Refused Stranger")
         #expect(rig.manager.sessionRoster.count == rows, "a fingerprint the seat never recorded gets no row")
         #expect(!rig.manager.sessionRoster.contains { $0.displayName == "Refused Stranger" }, "and its name lands nowhere")
+    }
+
+    // MARK: - The owner-calls re-verify (2026-09-22): the receiving side and the missing pins
+
+    /// **The join request asks committed slots only.** A blanked request made the admitter mint "A
+    /// friend" into the descriptor (the re-verify's FIX); now the stranger gets no request at all,
+    /// and both committed members get one that names this device.
+    @Test func aJoinRequestGoesOnlyToSlotsThisDeviceCommitted() async throws {
+        let rig = MeshNameWithholdingRig()
+        let localName = rig.store.resolvedProximityDisplayName
+        rig.manager.currentMesh = MeshNameWithholdingRig.meshToJoin()
+        #expect(rig.manager.requestAdmissionForHarness(), "the joiner holds a committed slot, so it asks")
+        await rig.drain()
+        #expect(try rig.admissionRequests(on: rig.stranger).isEmpty, "the uncommitted stranger is not asked at all")
+        let toA = try rig.admissionRequests(on: rig.memberA)
+        let toB = try rig.admissionRequests(on: rig.memberB)
+        #expect(toA.count == 1 && toB.count == 1, "each committed member is asked once")
+        #expect((toA + toB).allSatisfy { $0.requesterDisplayName == localName },
+                "and the request names this device — a committed admitter is owed the name, never \"A friend\"")
+    }
+
+    /// **A withheld vote is filled on receipt** from what this device already knows: the target from
+    /// the descriptor, the proposer from the session roster, an unknown member by fingerprint — and a
+    /// name the sender disclosed is kept as sent. Before, the card read " asked to remove ." with a
+    /// live "Second Removal" button for the vote's whole 60 s (the re-verify's FIX).
+    @Test func aWithheldVoteIsFilledFromWhatThisDeviceAlreadyKnows() {
+        let rig = MeshNameWithholdingRig()
+        let instant = Date()
+        var mesh = MeshNameWithholdingRig.meshToJoin()
+        mesh.members = [MeshMember(
+            fingerprint: MeshNameWithholdingRig.fingerprintA, displayName: "Alex",
+            signingPublicKey: Data([1]), keyAgreementPublicKey: Data([2]), joinedAt: instant
+        )]
+        rig.manager.currentMesh = mesh
+        rig.manager.recordSessionParticipant(
+            displayName: "Blair", fingerprint: MeshNameWithholdingRig.fingerprintB,
+            signingPublicKey: Data([3]), keyAgreementPublicKey: Data([4])
+        )
+        let withheld = MeshRemovalProposalPayload(
+            id: UUID(), targetFingerprint: MeshNameWithholdingRig.fingerprintA, targetDisplayName: "",
+            proposerFingerprint: MeshNameWithholdingRig.fingerprintB, proposerDisplayName: "",
+            createdAt: instant, expiresAt: instant.addingTimeInterval(60)
+        )
+        rig.manager.ingestRemovalProposalForTesting(withheld)
+        let stored = rig.manager.pendingRemovalProposals.first(where: { $0.id == withheld.id })
+        #expect(stored != nil, "the withheld vote was stored")
+        #expect(stored?.targetDisplayName == "Alex", "the target's name comes from the descriptor")
+        #expect(stored?.proposerDisplayName == "Blair", "the proposer's from the session roster")
+        #expect(stored?.targetFingerprint == withheld.targetFingerprint, "and the vote is the same vote")
+
+        let unknown = "0f0f0f0f0f0f0f0f"
+        let fromAStranger = MeshRemovalProposalPayload(
+            id: UUID(), targetFingerprint: MeshNameWithholdingRig.fingerprintA, targetDisplayName: "Named As Sent",
+            proposerFingerprint: unknown, proposerDisplayName: "",
+            createdAt: instant, expiresAt: instant.addingTimeInterval(60)
+        )
+        rig.manager.ingestRemovalProposalForTesting(fromAStranger)
+        let second = rig.manager.pendingRemovalProposals.first(where: { $0.id == fromAStranger.id })
+        #expect(second?.proposerDisplayName == unknown, "an unknown member is shown by fingerprint, never blank")
+        #expect(second?.targetDisplayName == "Named As Sent", "and a name the sender disclosed is kept as sent")
+    }
+
+    /// **The QR ceremony's challenge withholds the name** — the ceremony runs BEFORE the commit by
+    /// design, and it is the one mesh send whose `fingerprint:` argument is non-nil while the slot's
+    /// own is nil. The door must key on the SLOT; keyed on the argument it would name this device on
+    /// every ceremony (the re-verify's FIX: that mutation survived every suite).
+    @Test func theQRCeremonysChallengeToAnUncommittedSlotCarriesNoName() async throws {
+        let rig = MeshNameWithholdingRig()
+        let bobService = "com.fernlet.test.name-withholding.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: bobService) }
+        let bob = IdentityService(keychainService: bobService)
+        try bob.ensureProvisioned()
+        let network = FakePeerNetwork()
+        let endpoint = network.addEndpoint(named: "bob")
+        let coordinator = try await Self.coordinatorAtManualCommit(remote: bob, peer: endpoint.handle)
+        rig.manager.addSlotForTesting(coordinator: coordinator, peer: endpoint.handle,
+                                      fingerprint: nil, channel: endpoint.transport)
+        let qr = try ProximityVerifyQR.makeURL(identity: bob)
+        #expect(rig.manager.beginQRVerification(with: qr.url, slotID: endpoint.handle.id), "the ceremony started")
+        await rig.drain()
+        let challenges = try endpoint.transport.sentFrames
+            .map { try JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+            .filter { $0.payloadType == .verifyChallenge }
+        #expect(challenges.count == 1, "the challenge really went out on the uncommitted slot")
+        #expect(challenges.allSatisfy { $0.senderDisplayName.isEmpty }, "and it names nobody — the door keys on the slot")
+        withExtendedLifetime(network) {}
+    }
+
+    /// A friend-mode coordinator at the manual-commit gate for `remote` — the QR ceremony's
+    /// precondition — on its own mock radio, so only the slot's channel carries mesh frames.
+    private static func coordinatorAtManualCommit(remote: IdentityService, peer: PeerHandle) async throws -> ProximityCoordinator {
+        let transport = MockMultipeerTransport()
+        let local = IdentityService(keychainService: "com.fernlet.test.name-withholding.local.\(UUID().uuidString)")
+        try local.ensureProvisioned()
+        let coordinator = ProximityCoordinator(
+            identity: local, transport: transport, ranging: MockRangingProvider(isHardwareSupported: false),
+            inspector: nil, replayCache: ReplayCache(), foregroundAnchor: nil, displayName: "Local", timeoutSeconds: 0
+        )
+        await coordinator.begin(role: .browser, mode: .friend)
+        transport.simulateConnected(peer: peer)
+        let introduction = try FernletIdentityEnvelope.signed(
+            identityService: remote, senderDisplayName: "", payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello"), payload: Data()
+        )
+        // R2: bounded settle for the coordinator's fire-and-forget hops.
+        for _ in 0..<50 {
+            if case .awaitingIdentityIntroduction = coordinator.state { break }
+            await Task.yield()
+        }
+        transport.simulateInboundData(try JSONEncoder().encode(introduction), from: peer)
+        // R2: bounded settle.
+        for _ in 0..<200 {
+            if case .awaitingManualCommit = coordinator.state { break }
+            await Task.yield()
+        }
+        guard case .awaitingManualCommit = coordinator.state else {
+            Issue.record("Expected the manual-commit gate, got \(coordinator.state)")
+            throw CancellationError()
+        }
+        return coordinator
+    }
+
+    /// **The disclosure subscriber stays rename-only** — the WIRING, not just the helper: rewiring it
+    /// back to `recordSessionParticipant` (which appends) passed every suite (the re-verify's FIX).
+    /// A refused stranger's named frame in the teardown window must not mint it a roster row.
+    @Test func theDisclosureSubscriberIsWiredToRenameOnly() throws {
+        let source = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
+        )
+        let closure = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "coordinator.onPeerDisplayNameDisclosed =", in: source),
+            "the manager no longer subscribes to the coordinator's disclosure"
+        )
+        #expect(closure.contains("renameSessionParticipant("), "the subscriber renames")
+        #expect(!closure.contains("recordSessionParticipant("), "and never records — recording appends a row")
     }
 
     /// Each name-bearing payload blanks exactly its names: every key, id, fingerprint and instant
