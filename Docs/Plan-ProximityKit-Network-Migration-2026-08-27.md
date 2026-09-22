@@ -3527,10 +3527,10 @@ matters most on the one row where no debugger *can* be attached.
 
 | Gate | Status | What P8 hands it |
 |---|---|---|
-| **15.1** radio matrix — an established QUIC connection surviving background + lock; re-dial via cached endpoint while backgrounded; a fresh background Bonjour browse (expected to fail — record it); each × infra-Wi-Fi and AWDL; Low Power Mode on/off; memory-pressure kills | **NOT RUN — owner's devices (item 9), 2026-09-19** | Item 6's host keeps the tunnel where the probe tore its own down, so the row is answerable for the first time. Item 3's `holdCommittedLinks()` is what keeps the committed links while the browser is paused, and `mesh.session.linksHeld` / `mesh.session.linksResumed` are the Console evidence. Device rows F1–F6. **Note finding 14:** there is no endpoint memory for a FULL link drop behind a hold — that is what the re-dial row measures. |
-| **15.2** partition walks — 2/2 with traffic both sides, walk back together, convergence + one post-merge rotation; 3/1 with a removal vote; a departure carried by a third member | **NOT RUN — owner's devices (item 9), 2026-09-19** | Nothing new from P8; P4's convergence and P5/P6's routing are what these rows exercise, now with a background task in hand on at least one member. Device rows F7–F8; three devices minimum, four for the topology row. |
-| **15.3** progress soak — 3 h and 6 h with elapsed-based progress under normal phone use; the gate is "the task survives while progress advances slowly" | **NOT RUN — owner's devices (item 9), 2026-09-19** | Item 4's `MeshContinuationProgress` — elapsed toward the six-hour ceiling, ratcheted, capped one unit short of completion so the system never ends a live task on our own 100 %. Item 6 drives it from the poller's tick only (no second clock). Device rows F9 and **F12** (the Control-Centre peek: `appForegroundDidChange(_:)` is level-triggered, so each peek completes and re-submits, spending one of the 8 `maxSubmissionsPerSession` — record how many peeks a normal hour costs). **This row decides the degraded ladder**, and until it is run the ladder is unchosen and P8's scope is unchanged. |
-| **15.4** Wi-Fi Aware evaluation, bounded to two days — hardware floor vs the app's device floor, whether `NetworkConnection` rides over it, battery profile | **NOT RUN — owner's call (item 9), 2026-09-19** | Nothing from P8; the outcome is a recommendation, not a dependency. Device row F10. |
+| **15.1** radio matrix — an established QUIC connection surviving background + lock; re-dial via cached endpoint while backgrounded; a fresh background Bonjour browse (expected to fail — record it); each × infra-Wi-Fi and AWDL; Low Power Mode on/off; memory-pressure kills | **NOT RUN — owner's devices (item 9), 2026-09-19. Device round 2026-09-22: UNREACHABLE, one phone** (runbook *Lane B*, dated) | Item 6's host keeps the tunnel where the probe tore its own down, so the row is answerable for the first time. Item 3's `holdCommittedLinks()` is what keeps the committed links while the browser is paused, and `mesh.session.linksHeld` / `mesh.session.linksResumed` are the Console evidence. Device rows F1–F6. **Note finding 14:** there is no endpoint memory for a FULL link drop behind a hold — that is what the re-dial row measures. |
+| **15.2** partition walks — 2/2 with traffic both sides, walk back together, convergence + one post-merge rotation; 3/1 with a removal vote; a departure carried by a third member | **NOT RUN — owner's devices (item 9), 2026-09-19. Device round 2026-09-22: UNREACHABLE, one phone** | Nothing new from P8; P4's convergence and P5/P6's routing are what these rows exercise, now with a background task in hand on at least one member. Device rows F7–F8; three devices minimum, four for the topology row. |
+| **15.3** progress soak — 3 h and 6 h with elapsed-based progress under normal phone use; the gate is "the task survives while progress advances slowly" | **NOT RUN — owner's devices (item 9), 2026-09-19. Device round 2026-09-22: NOT RUN** — reachable with one phone and a Simulator holding the far end, but it needs the phone in the owner's normal use for 3 h / 6 h on the Mac's Wi-Fi, which the session did not have; **the ladder stays unchosen** | Item 4's `MeshContinuationProgress` — elapsed toward the six-hour ceiling, ratcheted, capped one unit short of completion so the system never ends a live task on our own 100 %. Item 6 drives it from the poller's tick only (no second clock). Device rows F9 and **F12** (the Control-Centre peek: `appForegroundDidChange(_:)` is level-triggered, so each peek completes and re-submits, spending one of the 8 `maxSubmissionsPerSession` — record how many peeks a normal hour costs). **This row decides the degraded ladder**, and until it is run the ladder is unchosen and P8's scope is unchanged. |
+| **15.4** Wi-Fi Aware evaluation, bounded to two days — hardware floor vs the app's device floor, whether `NetworkConnection` rides over it, battery profile | **NOT RUN — owner's call (item 9), 2026-09-19; unchanged 2026-09-22** | Nothing from P8; the outcome is a recommendation, not a dependency. Device row F10. |
 
 **Tier-3 rows item 6 named, in addition to §15.1–§15.4** — each is a thing only a device can witness,
 and each has a fake standing in for it at tier 1 today:
@@ -3566,8 +3566,8 @@ environment.
 
 | Row | What a phone must show | Status |
 |---|---|---|
-| **P10-D1** cold background launch | iOS starting the app **because** a refresh came due, with no foreground launch before it. This is the launch in which `FernletStoreAccess` builds the process's first store with no HealthKit service — the whole reason item 4's pipeline is shaped as it is. No process to attach to, so no way to force it, and **the one row where no debugger can be attached** — hence the profile | **ATTEMPTED 2026-09-21 — NOT REACHED**: no grant came in 1 h 55 min, so no cold launch was asked for; the setup is written and the row's outcome value will read `<private>` regardless (iOS 26.6.1 refused the logging profile, unsigned and signed alike). Runbook *Lane E* § *Device run, 2026-09-21* |
-| **P10-D2** a grant on iOS's own schedule | Everything after `taskWasDelivered`: the tail's `submitNext(trigger: "handle")` **before** the work, the pipeline outcome (`reloaded` / `unchanged` / `scoringContextUnavailable` / `widgetActionsPending` / `publishedDespitePendingActions` / `writeFailed`), the WidgetKit timeline reload, and exactly-once completion | **ATTEMPTED 2026-09-21 — NOT REACHED**: three accepted requests (floors 17:18:40Z, 18:14:28Z, 18:58:05Z), screen locked and unlocked, charger off then on, Low Power Mode off/on/off — no delivery in 1 h 55 min, and the scheduler logged nothing naming the activity. The overnight window is next; the witness chain is described in the runbook |
+| **P10-D1** cold background launch | iOS starting the app **because** a refresh came due, with no foreground launch before it. This is the launch in which `FernletStoreAccess` builds the process's first store with no HealthKit service — the whole reason item 4's pipeline is shaped as it is. No process to attach to, so no way to force it, and **the one row where no debugger can be attached** — hence the profile | **ATTEMPTED 2026-09-21 — NOT REACHED**: no grant came in 1 h 55 min, so no cold launch was asked for; the setup is written and the row's outcome value will read `<private>` regardless (iOS 26.6.1 refused the logging profile, unsigned and signed alike). Runbook *Lane E* § *Device run, 2026-09-21*. **Overnight read-back 2026-09-22: still not reached** — no grant, so no cold launch (§28.9) |
+| **P10-D2** a grant on iOS's own schedule | Everything after `taskWasDelivered`: the tail's `submitNext(trigger: "handle")` **before** the work, the pipeline outcome (`reloaded` / `unchanged` / `scoringContextUnavailable` / `widgetActionsPending` / `publishedDespitePendingActions` / `writeFailed`), the WidgetKit timeline reload, and exactly-once completion | **ATTEMPTED 2026-09-21 — NOT REACHED**: three accepted requests (floors 17:18:40Z, 18:14:28Z, 18:58:05Z), screen locked and unlocked, charger off then on, Low Power Mode off/on/off — no delivery in 1 h 55 min, and the scheduler logged nothing naming the activity. **Overnight read-back 2026-09-22: NO GRANT in that window either** — 1 h 56 min from the 18:43:05Z submit until the phone left the Mac's reach at ≈20:39Z; ≈3 h 51 min of accepted-and-pending across the two sessions with no delivery; the window was ended by the phone, and the app was found not running the next morning. Runbook *Lane E* § *The overnight window, read back 2026-09-22*; §28.9 |
 | **P10-D3** the real conformer's expiration handler | Whether `SystemCompanionRefreshTaskHandle`'s `expirationHandler` hop reaches `taskDidExpire()` in time to cancel an in-flight run when the budget is the **system's** and not a test's. Tier 1 proves the coordinator's half; the conformer's half is exercised by no test anywhere | **NOT REACHED 2026-09-21** — needs D2 |
 | **P10-D4** the 15-minute floor honoured | Lane E proves the app *asks* for `now + 15 min` and that `earliestBeginInterval` is carried to the second. Whether iOS respects that floor, and what it grants in practice, is a phone measurement | **HALF, 2026-09-21**: on a device the request carries `earliestBeginDate = submit + 15:00` to the second (`submitTaskRequest: … earliestBeginDate: 2026-09-21 17:18:40 +0000` for a 17:03:40Z submit). Whether iOS respects the floor from above is D2's delivery time — not reached |
 | **P10-D5** Background App Refresh off in Settings | The Simulator has no such switch. This is the setting that produces the refusal a real user can cause — the one `companionRefresh.submitRefused` exists to make attributable, and the one whose `error=` the profile has to un-redact | **BLOCKED 2026-09-21 — the phone's own policy, not a code finding**: the per-app switch is disabled with Low Power Mode off while submissions are accepted (a Screen Time *Background App Activities* restriction is the ordinary cause). The refusal was not observed |
@@ -3583,6 +3583,8 @@ grant happens at all.
 
 **Results land in the runbook's Lane E table with dates**, beside the Simulator rows they are the
 other half of.
+
+**Second device entry, 2026-09-22 (§28.9):** the overnight window read back — no grant; the window ended by the phone; D2 now reads "a grant has not come in any window this phone has offered". §15.1–§15.4 named UNREACHABLE with one phone (runbook *Lane B*).
 
 **First device entry, 2026-09-21 (§28.7):** D7 earned, D4 and D6 half, D5 blocked by the phone's own policy,
 D1–D3 and D8 not reached for want of a grant in 1 h 55 min. The record is the runbook's *Lane E* § *Device run,
@@ -3748,7 +3750,9 @@ three new `Docs/` files.
    `NetworkMeshWireTests`; the ephemeral-identity invariant satisfied by construction); `grep -rl MultipeerConnectivity Tests/`
    34 → 16, all prose or needle lists; mesh-batteries **140 names / floor 1214 MEASURED**; Power of 10 density 0.775 (floor 0.68).
    §17.1 may now be read as **"QUIC ships; MC is gone."** The hardware half — the unseeded first meeting between two phones —
-   is the device round's.
+   is the device round's. **2026-09-22 — the hardware half is OBSERVED, phone ↔ Simulator** (§28.9; runbook *Lane D* § *The
+   device round's item 1*): the unseeded pair founded through the provisional path on a physical radio (`derived=2` in ≈1.4 s)
+   and the double-mint re-dial converged (≈4 s after the thaw). Two *phones* is still owed — it needs a second phone.
 2. **Four of the eight plist strings, not eight.** `_fernlet-friend._{tcp,udp}` are **live** (the
    shipping MC mesh); `_fernlet-coach._{tcp,udp}` are **held** — `MultipeerServiceType.trainer` is
    reachable only through `begin(mode: .trainer)`, which no shipping call passes (§18 decision 4's
@@ -6396,3 +6400,54 @@ without touching the phone (§15.5's overnight window kept running on it). The r
   two MEASURED annotations and one hook count were carried, not measured; and four wording faults in the item 0 record.
   Confirmed on the way: `MultipeerServiceType.trainer` is dead in shipping (§18 decision 4 stands, the owner's), and
   `ProximityCoordinator.serviceType(for:)`'s `"fernlet-friend"` literal is inert (said at the site).
+
+### 28.9 The device round — the deletion build on hardware (2026-09-22)
+
+**Run** from the launcher's entry condition **A** with ONE phone (the owner's iPhone 17 Pro Max, iOS 26.6.1) on the
+deletion build (`d88062c`), in a worktree of its own, the plan edited as index-only blobs. The record is
+`Docs/Mesh-Migration-Loop-Ledger-Device-2026-09-22.md`; the evidence is the runbook's *Lane D* § *The device round's item
+1*, *Lane E* § *The overnight window, read back 2026-09-22*, and *Lane B*'s dated status paragraph. **Both entry conditions
+were checked first:** the phone connected over Wi-Fi (`localNetwork`, cable out), no second phone; no `xctrace` or
+`devicectl` process alive, the overnight recorders having stopped on their own — so the phone could be touched. What
+it settles:
+
+- **§15.5's overnight window: NO GRANT, and the phone ended the window.** The app-side console (pid 10752, submitted
+  18:43:05Z, floor 18:58:05Z) carries no `trigger=handle` and no `runFinished` before devicectl's *connection was
+  invalidated* at ≈20:39Z; the framework-side chunks (readable 18:42–20:35Z, one 15½-min gap where a chunk never
+  finalised) carry the submission once and never a start; the phone left the Mac's reach at 20:39:39Z (a wired console
+  session — a pulled cable does this). ≈3 h 51 min of accepted-and-pending across two days with no delivery. D2 now reads
+  **"a grant has not come in any window this phone has offered"**; D1/D3/D8 still need one; the next window is the
+  owner's to arrange (hours, charger, Wi-Fi console or no console). A witness rule was narrowed on the way: the trace
+  carried NONE of the app's own `companionRefresh.*` audit lines for this launch (the console mirror did), so **the console
+  is the app-side witness and the trace the framework-side witness only**; the 2026-09-21 "in the clear in logd too" held
+  for that day's probe window and not for this one, cause unresolved.
+- **The unseeded first meeting is OBSERVED on hardware — the deletion build's gate on a physical radio.** Phone (fp
+  `5c73…`, the lower fingerprint, founder) ↔ iPhone 17 Pro Simulator (`fb79…`, joiner), no `MEMBERS`, no `MESH_ID`,
+  `FLOWS=commit`, infrastructure Wi-Fi, cable out. Run 1b: the empty roster consulted on both (`legacyRosterFallback
+  members=0`), `accepted` both ways with zero introduction refusals, both commit, both mint — **the other arm** of the
+  double-mint repair from the Simulator lane: the phone committed first and `droppedForeignMesh` +
+  `reannouncedToNewbornPeer`, the Simulator `droppedUncommittedSlot` then `yieldedNewbornMesh` — the shipping
+  `autoGrantedFoundingPair`, `bootstrapped` / `adopted members=2`, `derived=2` on both under one epoch head naming the
+  phone, **≈1.4 s from browse**; 0 `tunnelEnded`, heartbeats over datagrams both ways, `en0`, no `awdl0`, no `en9`. Run 2:
+  the Simulator frozen at the phone's commit; the phone founded alone (`derived=1`); the dead tunnel ended **by the
+  transport's idle timeout at +111 s** (`controlStreamEnded`, NWError 60 — no app `localEviction`; Lane D's beating link
+  had shown `localEviction` at +89 s, the Simulator lane the same transport token at +90 s); thaw → both re-introduced
+  under the tolerated meshID (phone real-id vs Simulator unbound, the same `sid`s), re-committed, the Simulator minted and
+  yielded, auto-grant, **`derived=2` on both ≈4 s after the thaw**. Run 1 — the same founding with the harness roles
+  inverted by a script bug (a `roles` function run in a pipeline) — also passed, one sample that the founder role on
+  the yielding half is inert too. The NECP `EEXIST` appeared once on a FIRST dial (absorbed, as always). Two walls
+  learned: **a locked phone is a refused launch** (`FBSOpenApplicationErrorDomain error 7`), so the row needs the owner's
+  unlock and an awake phone; and a shell function that sets variables must not be called in a pipeline.
+- **§15.1–§15.4 and P9-2-C: UNREACHABLE or NOT RUN with one phone, each named** in the runbook's *Lane B* — two
+  phones for the radio matrix and the background/lock rows, three or four for the partition walks, the owner's hands for
+  Low Power Mode, the presence switch and a locked phone; the soak is reachable with one phone and a Simulator but needs
+  the owner's normal use for 3 h / 6 h on the Mac's Wi-Fi, which the session did not have. **The degraded ladder stays
+  unchosen.** Nothing was inferred from a Simulator.
+- **The owner's calls are asked in one page** (the ledger's *Item 3*) and not decided: Option 1b's name deferral,
+  Option 2's two-scan pre-admission, P9-3-A (surface why), the `_fernlet-coach` strings (§18 decision 4), the degraded
+  ladder (no numbers yet); and the three owed hardenings priced by the deletion round — `recordError(domain:)`'s
+  unlocalized inspector labels, `MeshLinkTable.links` outside the cache eviction, the wipe wall pinning existence and not
+  effect — priced again there, still not taken.
+- **State:** `origin/main` had caught up to `d88062c` by the time this round opened (the owner pushed); the round's
+  commits sit on top, not pushed. The plan's phases remain spent; what is left is the owner's — a second phone for
+  §15, the §15.5 window, and the calls above.
