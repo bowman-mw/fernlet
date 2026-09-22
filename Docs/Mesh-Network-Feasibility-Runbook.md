@@ -2347,6 +2347,27 @@ tap; the harness stood in for the first commit and not the second. **Fix:** the 
 the coordinator instance (`ObjectIdentifier`) and pruned to the live set each poll (committed with
 this section). Rebuilt, reinstalled, re-run.
 
+> **Corrected 2026-09-22 (the owner's phone ↔ Simulator report).** "On the product path a user
+> re-commits by dwell or tap" was never true while a session is up: the only controls that answer a
+> gate are the Friends tab's pre-session slot rows, and the session's camera covers them. The owner hit
+> exactly this first attempt's state on hardware — the phone suspended when iOS expired its
+> continued-processing task, the re-dial landed both slots at their gates, chat was sent and never
+> arrived, and the Simulator's log carried `mesh.groupKey.droppedUncommittedSlot`. The product now
+> re-seats a **returning member** itself: `MeshNetworkManager.reseatReturningMembers()` commits a
+> gated slot whose verified key is on the signed roster of the live mesh **and** is the key the QUIC
+> channel introduction proved for that link (`mesh.slot.returningMemberCommitted`, within
+> milliseconds of the gate on both nodes); a member this device voted out is not re-seated, and a
+> mismatched key is refused once, audited as `mesh.slot.returningMemberRefusedMismatchedKey`. A run
+> that wants to observe that must stop the driver standing in for re-dials: `FERNLET_MESH_FLOWS` now
+> takes `firstMeetingOnly`, which commits each peer's first-meeting gate only and echoes
+> `leaving slot gate=… peer=… to the product (firstMeetingOnly: a re-dial)` for a peer it has already
+> seen commit. Two further cautions for reading any
+> Simulator heal: the Simulator's *simulated* Nearby Interaction measures the distance between the
+> two Simulator windows, so overlapping windows let the 15 cm dwell commit a re-dialed gate by itself
+> (≈3 s after the thaw) and a pre-fix heal can look healthy; and this run's founding-race shape (a
+> peer that is not yet a member on one side) is NOT re-seated — its gate still waits for a dwell or
+> a tap, which the in-session side cannot offer on non-UWB hardware.
+
 **Second attempt — PASS.**
 
 | Check | Required | Result | Evidence |

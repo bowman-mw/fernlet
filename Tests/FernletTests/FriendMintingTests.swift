@@ -267,7 +267,12 @@ struct FriendReviewBatchTests {
 
     /// Finding 6: the pairwise ask-to-remove shortcut (sole other peer ⇒ just leave) must not
     /// end in a keep prompt for the very peer the user asked to remove.
-    @Test func pairwiseAskToRemoveYieldsNoKeepPromptForThatPeer() {
+    ///
+    /// Awaited since 2026-09-22: the shortcut leaves through `leaveSessionAfterNotifyingPeers()`,
+    /// which tells the partner before the teardown (`MeshReturningMemberReseatTests` proves the
+    /// partner's side), so the session ends one hop after the call rather than inside it. The roster
+    /// is pruned synchronously, before that hop, which is what keeps the peer out of the batch.
+    @Test func pairwiseAskToRemoveYieldsNoKeepPromptForThatPeer() async {
         let manager = MeshNetworkManager(store: store)
         manager.recordSessionParticipant(
             displayName: "Bob", fingerprint: "bob-fp-0011223344",
@@ -291,11 +296,31 @@ struct FriendReviewBatchTests {
 
         manager.proposeRemoval(of: MeshSessionParticipant(
             fingerprint: "bob-fp-0011223344", displayName: "Bob", isLocal: false))
+        #expect(manager.sessionRoster.isEmpty, "pruned before the teardown can promote it")
 
+        await waitForTeardown { manager.currentMesh == nil }
         #expect(manager.currentMesh == nil, "The shortcut ends the session")
         #expect(manager.sessionRoster.isEmpty)
         #expect(manager.pendingFriendReview == nil,
                 "No batch promotes — the only roster entry was the peer being removed")
+    }
+
+    /// Gives up only once the deadline has passed AND `minimumPolls` observations have been made
+    /// (wall-clock alone expires while a `@MainActor` suite is starved in a loaded full-suite run).
+    private func waitForTeardown(
+        timeout: Duration = .seconds(2),
+        minimumPolls: Int = 400,
+        condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        var polls = 0
+        while !condition() {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
+            // A cancelled sleep ends the wait; the cell's own expectation then reports the state.
+            do { try await Task.sleep(for: .milliseconds(5)) } catch { return }
+        }
     }
 }
 

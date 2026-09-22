@@ -116,16 +116,48 @@ import CoreGraphics
     }
 
     @Test func islandGlassClearsTheIslandBand() {
-        // The open preview glass sits below the island band on an island device, and the status LED
-        // rides between the island band and the glass.
+        // The open preview glass sits below the island band on an island device.
         let m = metrics(topInset: 59)
         let glass = m.glassFrame(openness: 1)
         let glassTop = glass.centerY - glass.size.height / 2
         #expect(glassTop > m.topInset)
-        let islandBottom = m.closedCenterY + m.closedSize.height / 2
-        let led = m.ledCenterY(openness: 1)
-        #expect(led > islandBottom)
-        #expect(led < glassTop)
+    }
+
+    // MARK: - Status LED (2026-09-22)
+
+    @Test func islandDeviceDrawsNoStatusLEDBecauseTheIslandShowsItsOwn() {
+        // iOS lights its own green camera-in-use dot inside the Dynamic Island; the housing's LED
+        // sat directly beneath it as a second, fake green dot. It must not be drawn at any openness.
+        for inset in [CGFloat(55), 59, 62] {
+            let m = metrics(topInset: inset)
+            #expect(m.deviceClass == .island)
+            #expect(!m.showsStatusLED)
+            for openness in [0.0, 0.5, 1.0] {
+                #expect(m.ledCenterY(openness: openness) == nil,
+                        "an island phone gets no LED position, so the view has nothing to draw")
+            }
+        }
+    }
+
+    @Test func notchAndFlatDevicesKeepTheStatusLEDInsideTheOpenHousing() {
+        // A phone with no island keeps the in-scene "camera on" cue: the LED rides in the shell's
+        // top gap, between the open housing's top edge and the preview glass.
+        for inset in [CGFloat(47), 20] {
+            let m = metrics(topInset: inset)
+            #expect(m.deviceClass != .island)
+            #expect(m.showsStatusLED)
+            guard let led = m.ledCenterY(openness: 1) else {
+                Issue.record("a notch / flat phone must get an LED position")
+                continue
+            }
+            let housing = m.frame(openness: 1)
+            let housingTop = housing.centerY - housing.size.height / 2
+            let glass = m.glassFrame(openness: 1)
+            let glassTop = glass.centerY - glass.size.height / 2
+            #expect(led > housingTop)
+            #expect(led < glassTop)
+            #expect(m.ledCenterY(openness: 0) == m.closedCenterY, "closed, it starts in the anchor")
+        }
     }
 
     @Test func previewOpacityFadesInWithOpenness() {

@@ -36,6 +36,19 @@ enum MeshFlowVerb: String, CaseIterable, Sendable {
     /// Commit the peer's slot and report, driving nothing else.
     case commit
 
+    /// Stand in for the dwell or tap at **each peer's first meeting only**, and never for a re-dial
+    /// (2026-09-22).
+    ///
+    /// Without it the driver commits every slot it finds at a proximity gate, a re-dialed one
+    /// included — and that stand-in is what hid the reconnect defect this verb was added to
+    /// expose. On the product path nobody re-taps: the slot rows that carry the Connect and Force
+    /// controls are not on screen while a session's camera is up, so a re-dialed member sat at
+    /// its gate for good while every Lane C heal reported convergence. With this verb a peer's
+    /// first commit is the person's gesture and every later one must come from the product itself.
+    /// Per peer, not per run: a third device meeting the pair for the first time still gets its
+    /// gesture.
+    case firstMeetingOnly
+
     /// Report the capability list the peer advertised in its signed identity introduction.
     case capabilities
 
@@ -118,6 +131,22 @@ struct MeshFlowRunState {
     /// pruned to the live coordinators on every poll, so a slot's teardown releases its entry one poll
     /// later and nothing accumulates.
     var asked: [ObjectIdentifier: ProximityCoordinator] = [:]
+
+    /// The fingerprints of the peers a slot of this run has committed to — the people this run has
+    /// already met. A ``MeshFlowVerb/firstMeetingOnly`` run leaves the gate of any peer in here to
+    /// the product, because a gate for somebody already met is a re-dial, not a first meeting.
+    /// Capped at ``maxMetPeers`` (R3).
+    private(set) var metPeerFingerprints: Set<String> = []
+
+    /// The cap on ``metPeerFingerprints``. A matrix lane runs two or three devices.
+    static let maxMetPeers = 16
+
+    /// Adds the committed peers in `fingerprints` to ``metPeerFingerprints``, up to its cap.
+    mutating func recordMeetings(_ fingerprints: [String]) {
+        for fingerprint in fingerprints where metPeerFingerprints.count < Self.maxMetPeers {
+            metPeerFingerprints.insert(fingerprint)
+        }
+    }
 
     /// The slot summary at the last report.
     var slots = ""
@@ -383,19 +412,39 @@ enum MeshFlowDriver {
     /// the transcript — and a re-dialed slot carries a fresh coordinator, so it is asked afresh (the
     /// user re-commits by dwell or tap on the product path; this stands in for that second commit
     /// exactly as it stands in for the first). Bounded by the manager's slot cap.
+    ///
+    /// **Corrected 2026-09-22.** "The user re-commits by dwell or tap" was never true: the rows
+    /// that carry those controls are hidden while a session is up, and a member coming back is now
+    /// re-seated by the product itself (`MeshNetworkManager.reseatReturningMembers()`). A
+    /// ``MeshFlowVerb/firstMeetingOnly`` run therefore stops standing in for a peer once that peer
+    /// has committed, and names each gate it leaves alone, so a heal it reports is the product's
+    /// and not the driver's.
     private static func commitPendingSlots(manager: MeshNetworkManager, state: inout MeshFlowRunState) {
         let live = Set(manager.slots.map { ObjectIdentifier($0.coordinator) })
         state.asked = state.asked.filter { live.contains($0.key) }
+        state.recordMeetings(manager.slots.compactMap(\.fingerprint))
+        let leavesReDialsToProduct = MeshMatrixDebugOptions.flows.contains(.firstMeetingOnly)
         for slot in manager.slots where state.asked[ObjectIdentifier(slot.coordinator)] == nil {
-            switch slot.coordinator.state {
-            case .awaitingManualCommit, .awaitingProximityCommit:
-                state.asked[ObjectIdentifier(slot.coordinator)] = slot.coordinator
-                let shown = shownPeer(of: slot.coordinator.state) ?? "-"
-                echo("committing slot gate=\(slot.coordinator.state.debugLabel) peer=\(shown)")
-                manager.commitManualProximity(slotID: slot.id)
-            default:
+            guard let gated = gatedFingerprint(of: slot.coordinator.state) else { continue }
+            state.asked[ObjectIdentifier(slot.coordinator)] = slot.coordinator
+            let gate = slot.coordinator.state.debugLabel
+            let shown = shownPeer(of: slot.coordinator.state) ?? "-"
+            guard !(leavesReDialsToProduct && state.metPeerFingerprints.contains(gated)) else {
+                echo("leaving slot gate=\(gate) peer=\(shown) to the product (firstMeetingOnly: a re-dial)")
                 continue
             }
+            echo("committing slot gate=\(gate) peer=\(shown)")
+            manager.commitManualProximity(slotID: slot.id)
+        }
+    }
+
+    /// The fingerprint of the peer waiting at `state`'s commit gate, or nil when it is at none.
+    private static func gatedFingerprint(of state: ProximityCoordinator.State) -> String? {
+        switch state {
+        case .awaitingManualCommit(let peer), .awaitingProximityCommit(let peer):
+            return peer.fingerprint
+        default:
+            return nil
         }
     }
 
@@ -425,7 +474,7 @@ enum MeshFlowDriver {
         switch verb {
         case .heart:
             fireHeart(manager: manager, store: store)
-        case .commit, .capabilities, .shop:
+        case .commit, .firstMeetingOnly, .capabilities, .shop:
             echo("armed \(verb.rawValue)")
         case .chat, .chatAgeGated:
             echo("sending chat isChatAllowed=\(manager.isChatAllowed)")

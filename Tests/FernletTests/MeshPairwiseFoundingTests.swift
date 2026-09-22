@@ -1870,6 +1870,12 @@ struct MeshPairwiseFoundingTests {
                 "so removing the only peer ends the session instead of opening a vote nobody can win")
         #expect(!manager.sessionRoster.contains { $0.fingerprint == peer.fingerprint },
                 "and the peer the user asked to remove is never offered by the keep prompt")
+        // The shortcut leaves through the signed ending now (2026-09-22), which is asynchronous:
+        // the session is over only once that leave has run.
+        try await rig.settle([0], until: { manager.currentMesh == nil })
+        #expect(manager.currentMesh == nil, "the shortcut ends the session")
+        #expect(!(manager.pendingFriendReview?.entries ?? []).contains { $0.fingerprint == peer.fingerprint },
+                "and the teardown promoted no keep prompt for the removed peer")
     }
 
     // MARK: The headline — the app's own content path, measured at the recipient

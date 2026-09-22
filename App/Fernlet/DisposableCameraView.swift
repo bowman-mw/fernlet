@@ -484,14 +484,15 @@ struct IslandViewfinderMetrics: Equatable {
     private func shellInset(openness: Double) -> CGFloat { 13 * clamp(openness) + 2 }
 
     /// Vertical gap from the housing's top edge down to the preview glass. On island devices the
-    /// open gap clears the whole island band + status LED (the housing top is at the screen top);
-    /// elsewhere it is the shell's decorative top gap.
+    /// open gap clears the whole island band with a margin beneath it (the housing top is at the
+    /// screen top); elsewhere it is the shell's decorative top gap, which the status LED rides in.
     private func ledGap(openness: Double) -> CGFloat {
         let openMax: CGFloat = deviceClass == .island ? topInset + 22 : 34
         return lerp(4, openMax, clamp(openness))
     }
 
-    /// The live-preview window, inset inside the housing shell and pushed below the status LED.
+    /// The live-preview window, inset inside the housing shell and pushed below the island band
+    /// (island devices) or the status LED (notch / flat).
     /// A single, structurally-stable `CameraPreviewView` is positioned at this frame so the live
     /// `AVCaptureSession` attachment survives rotation instead of being torn down and rebuilt.
     func glassFrame(openness: Double) -> Frame {
@@ -514,18 +515,22 @@ struct IslandViewfinderMetrics: Equatable {
         max(0, min((openness - 0.3) / 0.6, 1))
     }
 
-    /// Center Y of the status LED — rides in the closed island pill, then settles just below the
-    /// island band (island devices) or near the shell's top gap (notch / flat) as it opens.
-    func ledCenterY(openness: Double) -> CGFloat {
-        let openY: CGFloat
-        switch deviceClass {
-        case .island:
-            // Just below the island band, inside the merged housing.
-            openY = topInset * 0.5 + closedSize.height / 2 + 9
-        case .notch, .flat:
-            let housingTopOpen = openCenterY - openSize.height / 2
-            openY = housingTopOpen + ledGap(openness: 1) * 0.4 + 6
-        }
+    /// Whether the decorative green "camera on" LED is drawn at all.
+    ///
+    /// Not on a Dynamic Island phone (2026-09-22): iOS already lights its own green camera-in-use
+    /// dot inside the island the moment the capture session runs, and the housing's LED sat
+    /// directly beneath it — two green dots stacked one under the other, the second one fake.
+    /// A notch or flat phone keeps it: there the LED is the in-scene "camera on" cue the housing
+    /// was designed around, and nothing else occupies that spot.
+    var showsStatusLED: Bool { deviceClass != .island }
+
+    /// Center Y of the status LED, or nil where ``showsStatusLED`` is false — so the position and
+    /// the decision to draw it are one answer and cannot drift apart. Starts in the closed anchor
+    /// and settles near the shell's top gap as the housing opens.
+    func ledCenterY(openness: Double) -> CGFloat? {
+        guard showsStatusLED else { return nil }
+        let housingTopOpen = openCenterY - openSize.height / 2
+        let openY = housingTopOpen + ledGap(openness: 1) * 0.4 + 6
         return lerp(closedCenterY, openY, clamp(openness))
     }
 
@@ -935,8 +940,8 @@ struct DisposableCameraView: View {
             .position(x: metrics.centerX, y: housing.centerY)
     }
 
-    /// Portrait framing chrome: reticle brackets over the glass + the status LED just below the
-    /// island band.
+    /// Portrait framing chrome: reticle brackets over the glass, plus the status LED in the shell's
+    /// top gap on a phone with no Dynamic Island (``IslandViewfinderMetrics/showsStatusLED``).
     private func islandFraming(
         metrics: IslandViewfinderMetrics,
         glass: GlassRect,
@@ -948,8 +953,10 @@ struct DisposableCameraView: View {
                 .opacity(glass.previewOpacity)
                 .position(x: glass.rect.midX, y: glass.rect.midY)
 
-            islandCameraLED(openness: openness)
-                .position(x: metrics.centerX, y: metrics.ledCenterY(openness: openness))
+            if let ledCenterY = metrics.ledCenterY(openness: openness) {
+                islandCameraLED(openness: openness)
+                    .position(x: metrics.centerX, y: ledCenterY)
+            }
         }
     }
 
@@ -970,7 +977,9 @@ struct DisposableCameraView: View {
     }
 
     /// The classic "camera on" green LED (#5EE06A) that rides at the top of the housing, breathing
-    /// with a slow pulse once the viewfinder is open.
+    /// with a slow pulse once the viewfinder is open. Drawn only where
+    /// ``IslandViewfinderMetrics/showsStatusLED`` — never under a Dynamic Island, whose own green
+    /// camera indicator it would duplicate.
     private func islandCameraLED(openness: Double) -> some View {
         // Base visibility fades the LED in with the housing; once armed it breathes 0.8↔1.0. The
         // breathe is clock-driven (TimelineView) rather than a repeatForever animation: disarming

@@ -44,6 +44,17 @@ final class FakeMeshTransportSession: MeshTransportSession {
     private(set) var disconnectedPeers: [PeerHandle] = []
     /// One entry per ``disconnectedPeers`` entry, in the same order: why the owner freed it.
     private(set) var disconnectCauses: [MeshSlotEvictionCause] = []
+    /// Every far-end-close wait the owner asked for, in order: whose links, and the bound it gave.
+    private(set) var remoteCloseWaits: [(peers: [PeerHandle], seconds: TimeInterval)] = []
+    /// ``stopCount`` at the moment of each wait — the ORDER claim a leaver's wait exists for: it
+    /// must come before the radio goes down, or there is no link left for the partner to close.
+    private(set) var stopCountAtRemoteCloseWaits: [Int] = []
+    /// What every far-end-close wait answers. The fake has no far end, so it is the test's to say.
+    var remoteCloseOutcome: MeshRemoteCloseOutcome = .nothingToWaitFor
+    /// The signing key this fake "proved" for each endpoint — a test's stand-in for the QUIC radio's
+    /// signed channel introduction. An endpoint with no entry proved nothing, which is the
+    /// fail-closed answer the protocol's default gives.
+    var verifiedSigningKeys: [PeerEndpointKey: Data] = [:]
 
     // MARK: - MeshTransportSession
 
@@ -89,6 +100,21 @@ final class FakeMeshTransportSession: MeshTransportSession {
     func disconnectPeer(_ peer: PeerHandle, cause: MeshSlotEvictionCause) {
         disconnectedPeers.append(peer)
         disconnectCauses.append(cause)
+    }
+
+    /// Records the wait and answers at once with ``remoteCloseOutcome``: this fabric has no far end
+    /// whose close could answer it, so recording it changes no cell's timing.
+    func awaitRemoteClose(
+        of peers: [PeerHandle], within seconds: TimeInterval
+    ) async -> MeshRemoteCloseOutcome {
+        remoteCloseWaits.append((peers, seconds))
+        stopCountAtRemoteCloseWaits.append(stopCount)
+        return remoteCloseOutcome
+    }
+
+    /// The key a test set for this endpoint in ``verifiedSigningKeys``, or nil.
+    func verifiedSigningPublicKey(for peer: PeerHandle) -> Data? {
+        verifiedSigningKeys[peer.endpoint]
     }
 
     // MARK: - Driving the owner
