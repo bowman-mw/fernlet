@@ -49,7 +49,7 @@ import ProximityKit
         session: ProximitySessionPresence = .absent
     ) -> ProximityRunPolicy.Verdict {
         ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(
-            phase: phase, tab: tab, lock: false, duress: duress, protected: true, belowAge: false,
+            phase: phase, tab: tab, duress: duress, protected: true, belowAge: false,
             wipe: wipe, continuation: continuation, session: session, presence: true, recipe: true
         ))
     }
@@ -492,7 +492,7 @@ import ProximityKit
             #expect(!view.contains(name), "a retired radio member came back to ContentView")
         }
         let viewEdges = view.components(separatedBy: "applyProximityRunPolicyFromView()").count - 1
-        #expect(viewEdges == 7, "the view hands the funnel six edges through one helper — tab, lock, opt-in, age, session liveness, launch — plus that helper's declaration")
+        #expect(viewEdges == 7, "the view hands the funnel six edges through one helper — tab, the lock transition (the view's duress feed since P9-3-A retired the lock fact), opt-in, age, session liveness, launch — plus that helper's declaration")
         let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
         let storeEdges = store.components(separatedBy: "reapplyProximityRunPolicy(").count - 1
         #expect(storeEdges == 6, "the store's own edges — two opt-in setters, P8 item 6's continuation feed, the wipe's raise and lower — plus the declaration")

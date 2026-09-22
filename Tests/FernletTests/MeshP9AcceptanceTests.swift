@@ -32,7 +32,7 @@
 // SPLIT; the MC->QUIC FLIP landed on 2026-09-21 and the DELETION on 2026-09-22, so clause (d) is
 // now the zero-list it was always meant to become (the two MC files absent, the framework imported
 // nowhere, the _fernlet-friend pair retired); the two lane rows (9.2.2, 9.3.2) are tier-2
-// sim↔sim observations; item 0's rows need phones in the owner's hands; P9-3-A is a product
+// sim↔sim observations; item 0's rows need phones in the owner's hands; P9-3-A was a product
 // decision on P7's run-policy table. The two determinism digests keep their one home in
 // `MeshP5AcceptanceTests`, this file spells neither, and the gate that runs it re-runs the
 // determinism suites.
@@ -1133,7 +1133,8 @@ struct MeshP9McRetirementAcceptanceTests {
 /// 3. **Three rows nothing has ever observed**, Simulator or otherwise: the `.remove` → republish
 ///    branch, `openTransferCount` returning to 0, and a share in flight DURING a glare collapse.
 /// 4. **Two owner decisions**: P9-3-A (a configured Fernlet Lock parks both 1:1 radios permanently —
-///    pre-existing, and a run-policy row is a P7 bug fix, not a P9 edit) and 9.4-LATER's D-4.1/D-4.3.
+///    pre-existing, and a run-policy row is a P7 bug fix, not a P9 edit; ANSWERED and fixed
+///    2026-09-22, the fact retired) and 9.4-LATER's D-4.1/D-4.3.
 /// 5. **Eight P9-touched suites CI does not run**, each with its reason in ``ungatedByDesign`` —
 ///    seven timed weak-reference polls and item 1's own wall. It was ELEVEN until P10 item 5: the
 ///    three routed behaviour suites item 7 only re-scoped are on the mesh line now, and their rows
@@ -1284,12 +1285,13 @@ struct MeshP9HonestyAcceptanceTests {
         let ledger = try RepoRoot.source("Docs/Mesh-Migration-Loop-Ledger-P9.md")
         #expect(ledger.contains("blocked (owner)"), "item 0 is no longer recorded as blocked")
         #expect(ledger.contains("P9-3-A"), """
-            the lock finding is gone. A configured Fernlet Lock stops the recipe-share and presence \
-            radios PERMANENTLY — `FernletLockState.locked` is the RESTING state of a configured \
-            lock, and nothing tells the user why. Pre-existing, found by the 9.3.2 lane rather than \
-            caused by it, and NOT fixable here: which lock states may run the 1:1 radios is a row \
-            of P7's 23 040-row run-policy table, so changing one is a P7 bug fix that re-runs the \
-            whole product
+            the lock finding left the ledger. It was FIXED on 2026-09-22 — the owner answered \
+            "make it work" and the `appLockEngaged` fact was RETIRED from the run policy rather \
+            than re-projected (23 040 rows → 11 520) — and the row is what makes the fix \
+            explicable: a configured Fernlet Lock used to stop the recipe-share and presence radios \
+            PERMANENTLY, because `FernletLockState.locked` is the RESTING state of a configured \
+            lock and nothing told the user why. Delete the row and the next reader sees a leg that \
+            was removed for no recorded reason
             """)
         #expect(ledger.contains("9.4-LATER"), "and the MC→QUIC cutover's deferred half")
     }

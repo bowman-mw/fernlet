@@ -844,7 +844,7 @@ struct BackgroundRefreshBoundaryTests {
         // report exactly one needle, and the right one — a plain-substring matcher answers the first
         // two with two reports each, and a matcher that over-corrects answers them with none.
         let sceneEdge = Self.violations(
-            in: "_ = store.applyProximityRunPolicy(appLockEngaged: false, duressSessionActive: false)\n",
+            in: "_ = store.applyProximityRunPolicy(duressSessionActive: false)\n",
             path: "P.swift"
         )
         #expect(sceneEdge.count == 1, "expected one report, got: \(sceneEdge)")

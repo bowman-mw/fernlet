@@ -3,11 +3,11 @@
 //
 // Network migration P7 item 1 (plan §13 option A; the P7 launcher's item 1): the app-layer run
 // policy as a VALUE — one pure function from everything the app knows about its own lifecycle
-// (scene, tab, app lock and duress, iOS data protection, the age ruling, a delete-all in flight,
+// (scene, tab, duress, iOS data protection, the age ruling, a delete-all in flight,
 // P8's continuation task, and what the mesh manager currently holds) to what each proximity radio
 // must do right now, plus the routed access gate the app already assembles.
 //
-// **A value, not a coordinator.** Everything that makes this decision hard — eleven inputs, four
+// **A value, not a coordinator.** Everything that makes this decision hard — ten inputs, four
 // radios, a continuation state that does not exist yet — is combinatorial, and combinatorics belong
 // in a table a test can enumerate, not in a control flow only a scene can reach. §13 rejects a
 // self-observing ProximityKit (option B: it imports no UIKit and cannot import `FernletLock`) and a
@@ -25,7 +25,10 @@
 // **It decides radios, never plaintext.** `routedAccessGate` is the same three facts
 // `FernletApp.pushRoutedAccessGate(_:protectedData:foreground:)` assembles today and nothing else:
 // iOS data protection gates plaintext, Fernlet's app lock gates nothing in the mesh, and a duress
-// session closes the gate (D-10.3). The gate reads no tab, no age ruling, no wipe and no
+// session closes the gate (D-10.3). Since P9-3-A's fix (2026-09-22) the app lock reaches no RADIO
+// either — the fact and its projection are retired and this file imports no `FernletLock` at all,
+// which is what makes "a scoped lock protects the Private tab, not a radio" structural rather than
+// a row somebody can flip back. The gate reads no tab, no age ruling, no wipe and no
 // continuation state, and this policy grows no second opinion about what may be decrypted — that
 // is the bug class §13 rejects option C for, and P8 needs the gate's `appIsForeground` leg and the
 // heart predicate's `sessionState` leg to stay independent so they can disagree on purpose.
@@ -65,7 +68,6 @@
 import Foundation
 import SwiftUI
 import FernletDomainModel
-import FernletLock
 import ProximityKit
 
 // MARK: - ProximityRunState
@@ -183,8 +185,8 @@ nonisolated enum ProximityRunPolicy {
     /// Everything the policy reads — the whole input product `ProximityRunPolicyTests` enumerates.
     ///
     /// Every field is a fact the app already holds; none is derived here. Where a field is a
-    /// projection of a richer value (`appLockEngaged`, `belowMinimumAge`, `session`), its doc says
-    /// exactly which projection, so item 3's wiring has nothing to decide.
+    /// projection of a richer value (`belowMinimumAge`, `session`), its doc says exactly which
+    /// projection, so item 3's wiring has nothing to decide.
     nonisolated struct Input: Equatable, Hashable, Sendable {
 
         /// The SwiftUI scene phase as the app sees it. The policy reads it through
@@ -194,12 +196,6 @@ nonisolated enum ProximityRunPolicy {
 
         /// The selected top-level tab.
         let selectedTab: FernletTab
-
-        /// Fernlet's own app lock is `.locked` — the projection of `FernletLockState` that
-        /// `ContentView.shouldRunPresence` and `shouldListenForRecipeShares` read today
-        /// (`.notConfigured` and `.unlocked` are both `false`). Reaches presence and recipe only:
-        /// Fernlet's app lock gates nothing in the mesh (D-10.3).
-        let appLockEngaged: Bool
 
         /// `FernletLockService.isDuressSessionActive`. A hard stop for every radio, and the gate's
         /// `duressActive` leg.
@@ -230,12 +226,11 @@ nonisolated enum ProximityRunPolicy {
         /// `settings.allowNearbyRecipeShares`.
         let allowNearbyRecipeShares: Bool
 
-        /// Builds an input from the eleven facts.
+        /// Builds an input from the ten facts.
         ///
         /// - Parameters:
         ///   - scenePhase: The scene phase.
         ///   - selectedTab: The selected tab.
-        ///   - appLockEngaged: Whether the app lock is `.locked`.
         ///   - duressSessionActive: Whether a duress session is active.
         ///   - protectedDataAvailable: Whether iOS data protection permits protected reads now.
         ///   - belowMinimumAge: Whether the system ruled this account below the mesh's minimum age.
@@ -247,7 +242,6 @@ nonisolated enum ProximityRunPolicy {
         init(
             scenePhase: ScenePhase,
             selectedTab: FernletTab,
-            appLockEngaged: Bool,
             duressSessionActive: Bool,
             protectedDataAvailable: Bool,
             belowMinimumAge: Bool,
@@ -259,7 +253,6 @@ nonisolated enum ProximityRunPolicy {
         ) {
             self.scenePhase = scenePhase
             self.selectedTab = selectedTab
-            self.appLockEngaged = appLockEngaged
             self.duressSessionActive = duressSessionActive
             self.protectedDataAvailable = protectedDataAvailable
             self.belowMinimumAge = belowMinimumAge
@@ -330,19 +323,6 @@ nonisolated enum ProximityRunPolicy {
     }
 
     // MARK: The projections
-
-    /// ``Input/appLockEngaged`` from the lock service's state: `.locked` only, exactly as
-    /// `ContentView.shouldRunPresence` and `shouldListenForRecipeShares` read it today.
-    ///
-    /// - Parameter state: `FernletLockService.state`.
-    /// - Returns: `true` for `.locked` (with or without a cooldown), `false` for `.notConfigured`
-    ///   and every `.unlocked` scope.
-    static func appLockEngaged(_ state: FernletLockState) -> Bool {
-        switch state {
-        case .locked: return true
-        case .notConfigured, .unlocked: return false
-        }
-    }
 
     /// ``Input/belowMinimumAge`` from the age record: a **ruling**, never an absence.
     ///
@@ -470,21 +450,28 @@ nonisolated enum ProximityRunPolicy {
         }
     }
 
-    /// The presence radio: today's `ContentView.shouldRunPresence` — opted in, foreground, not
-    /// app-locked, on Home / Food / Move / Friends — with `.inactive` counted as foreground.
+    /// The presence radio: opted in, foreground, on Home / Food / Move / Friends — with
+    /// `.inactive` counted as foreground.
+    ///
+    /// P9-3-A (2026-09-22): the `!input.appLockEngaged` leg this row inherited from
+    /// `ContentView.shouldRunPresence` is GONE. `FernletLockState.locked` is the resting state of a
+    /// configured lock, so that leg parked this radio permanently for anyone who had one — while
+    /// the mesh row, which carries the same person's session, never had the leg at all. A scoped
+    /// lock protects the Private tab, the progress photos and the lock settings; it is not a radio
+    /// switch, and there was no surface telling anyone it had become one.
     private static func presenceState(_ input: Input, foreground: Bool, hardStop: Bool) -> ProximityRunState {
-        guard !hardStop, foreground, input.allowNearbyPresence, !input.appLockEngaged else { return .stop }
+        guard !hardStop, foreground, input.allowNearbyPresence else { return .stop }
         switch input.selectedTab {
         case .home, .food, .move, .social: return .foregroundOnly
         case .personal: return .stop
         }
     }
 
-    /// The recipe-share listener: today's `ContentView.shouldListenForRecipeShares` — opted in,
-    /// foreground, not app-locked, on Home / Food / Move (never Friends) — with `.inactive` counted
-    /// as foreground.
+    /// The recipe-share listener: opted in, foreground, on Home / Food / Move (never Friends) —
+    /// with `.inactive` counted as foreground. P9-3-A retired its app-lock leg too, for the reason
+    /// ``presenceState(_:foreground:hardStop:)`` states.
     private static func recipeShareState(_ input: Input, foreground: Bool, hardStop: Bool) -> ProximityRunState {
-        guard !hardStop, foreground, input.allowNearbyRecipeShares, !input.appLockEngaged else { return .stop }
+        guard !hardStop, foreground, input.allowNearbyRecipeShares else { return .stop }
         switch input.selectedTab {
         case .home, .food, .move: return .foregroundOnly
         case .social, .personal: return .stop

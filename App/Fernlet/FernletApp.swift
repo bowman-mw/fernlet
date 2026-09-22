@@ -277,11 +277,11 @@ struct FernletApp: App {
     /// Hands one lifecycle edge to the run-policy funnel (network migration P7 item 2; the gate
     /// push it replaced was P5 item 10's).
     ///
-    /// `FernletStore.applyProximityRunPolicy(scenePhase:protectedDataAvailable:appLockEngaged:duressSessionActive:now:)`
+    /// `FernletStore.applyProximityRunPolicy(scenePhase:protectedDataAvailable:duressSessionActive:now:)`
     /// is the ONE place the app assembles a `ProximityRunPolicy.Input` and the ONLY writer of
     /// `MeshNetworkManager.applyRoutedAccessGate(_:now:)` outside ProximityKit. This file owns only
     /// the facts the scene knows — the phase, the sampled or literal protected-data fact, and the
-    /// lock service's two facts, read at the edge itself so the activation edge carries the state
+    /// lock service's duress fact, read at the edge itself so the activation edge carries the state
     /// `refreshStateFromKeychain()` just derived. It decides nothing: the raw phase goes down, and
     /// `ProximityRunPolicy.isForeground(_:)` is the one place ``routedGateForeground(for:)`` is read.
     ///
@@ -295,7 +295,6 @@ struct FernletApp: App {
         store.applyProximityRunPolicy(
             scenePhase: phase,
             protectedDataAvailable: protectedData,
-            appLockEngaged: ProximityRunPolicy.appLockEngaged(lockService.state),
             duressSessionActive: lockService.isDuressSessionActive
         )
     }

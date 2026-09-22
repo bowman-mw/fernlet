@@ -1991,12 +1991,13 @@ final class FernletStore {
     /// self-stopping on a poll that reports the session gone. Memory-only.
     @ObservationIgnored var sessionPollTask: Task<Void, Never>?
 
-    /// The four scene-side facts of the last edge, retained so the view's and the store's own edges
+    /// The three scene-side facts of the last edge, retained so the view's and the store's own edges
     /// can re-run the policy without a scene (P7 item 3).
     @ObservationIgnored private var proximityEdgeFacts: ProximityEdgeFacts?
 
     /// The scene-side facts of one edge: what only `FernletApp` samples (the phase and the
-    /// protected-data fact) and what the lock service says at that instant.
+    /// protected-data fact) and what the lock service says about duress at that instant. Fernlet's
+    /// own app lock was a fourth until P9-3-A's fix (2026-09-22) retired it from the policy.
     private struct ProximityEdgeFacts {
 
         /// The scene phase at the edge.
@@ -2005,9 +2006,6 @@ final class FernletStore {
         /// iOS data protection at the edge.
         let protectedDataAvailable: Bool
 
-        /// Fernlet's app lock is `.locked` at the edge.
-        let appLockEngaged: Bool
-
         /// A duress session is active at the edge.
         let duressSessionActive: Bool
 
@@ -2015,10 +2013,10 @@ final class FernletStore {
         /// (backgrounded, protected data unavailable), so a store-side or view-side edge that lands
         /// before `FernletApp`'s launch push pushes the fail-closed gate every manager already holds
         /// and asks every radio for `stop` or `hold` — never a start.
-        static func beforeFirstEdge(appLockEngaged: Bool, duressSessionActive: Bool) -> ProximityEdgeFacts {
+        static func beforeFirstEdge(duressSessionActive: Bool) -> ProximityEdgeFacts {
             ProximityEdgeFacts(
                 scenePhase: .background, protectedDataAvailable: false,
-                appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
+                duressSessionActive: duressSessionActive
             )
         }
     }
@@ -2027,15 +2025,15 @@ final class FernletStore {
     /// scene legs, the two protected-data notifications and the duress observer. Retains the four
     /// facts for the other two entries and runs the policy.
     ///
-    /// The lock facts are PARAMETERS rather than reads of ``lockState`` / ``duressSessionActive``
-    /// deliberately: those mirrors are written by `ContentView`'s observers and can lag an edge by a
+    /// `duressSessionActive` is a PARAMETER rather than a read of ``duressSessionActive``
+    /// deliberately: that mirror is written by `ContentView`'s observer and can lag an edge by a
     /// runloop turn, while the activation edge must carry the state `refreshStateFromKeychain()`
-    /// just derived (P5 item 10's ordering).
+    /// just derived (P5 item 10's ordering). Fernlet's app lock was the second such fact until
+    /// P9-3-A's fix (2026-09-22) retired it from the policy: it reaches no radio and no gate leg.
     ///
     /// - Parameters:
     ///   - scenePhase: The phase at this edge — the handler's `newPhase`, or the environment value.
     ///   - protectedDataAvailable: Whether iOS data protection permits protected reads now.
-    ///   - appLockEngaged: `ProximityRunPolicy.appLockEngaged(_:)` of the lock service's state.
     ///   - duressSessionActive: `FernletLockService.isDuressSessionActive`, read at the edge.
     ///   - now: The instant the gate's re-entry pass is judged against.
     /// - Returns: The verdict, also kept in ``proximityRunVerdict``.
@@ -2043,13 +2041,12 @@ final class FernletStore {
     func applyProximityRunPolicy(
         scenePhase: ScenePhase,
         protectedDataAvailable: Bool,
-        appLockEngaged: Bool,
         duressSessionActive: Bool,
         now: Date = Date()
     ) -> ProximityRunPolicy.Verdict {
         let facts = ProximityEdgeFacts(
             scenePhase: scenePhase, protectedDataAvailable: protectedDataAvailable,
-            appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
+            duressSessionActive: duressSessionActive
         )
         proximityEdgeFacts = facts
         // P8 item 6: the scene's foreground fact, decided ONCE by
@@ -2064,25 +2061,27 @@ final class FernletStore {
     }
 
     /// A VIEW edge (P7 item 3): `ContentView`'s tab change, lock-state change, the presence opt-in
-    /// and the age record moving, and its launch wiring. The lock facts are read fresh at the edge;
+    /// and the age record moving, and its launch wiring. The duress fact is read fresh at the edge;
     /// the scene facts are the ones the last scene edge retained — a tab or lock change happens with
     /// no scene transition in flight — or, before the first scene edge, the most restrictive scene.
     ///
+    /// The lock-state edge survives P9-3-A's fix even though the app lock is no longer an input:
+    /// a duress UNLOCK moves `FernletLockService.state` and `isDuressSessionActive` together, so
+    /// this is the view's duress feed, and every edge is also the gate's re-entry pass at a fresh
+    /// instant (``runProximityPolicy(_:now:)`` pushes the gate on every pass, diff or no diff).
+    ///
     /// - Parameters:
-    ///   - appLockEngaged: `ProximityRunPolicy.appLockEngaged(_:)` of the lock service's state.
     ///   - duressSessionActive: `FernletLockService.isDuressSessionActive`, read at the edge.
     ///   - now: The instant the gate's re-entry pass is judged against.
     /// - Returns: The verdict, also kept in ``proximityRunVerdict``.
     @discardableResult
     func applyProximityRunPolicy(
-        appLockEngaged: Bool, duressSessionActive: Bool, now: Date = Date()
+        duressSessionActive: Bool, now: Date = Date()
     ) -> ProximityRunPolicy.Verdict {
-        let scene = proximityEdgeFacts ?? .beforeFirstEdge(
-            appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
-        )
+        let scene = proximityEdgeFacts ?? .beforeFirstEdge(duressSessionActive: duressSessionActive)
         let facts = ProximityEdgeFacts(
             scenePhase: scene.scenePhase, protectedDataAvailable: scene.protectedDataAvailable,
-            appLockEngaged: appLockEngaged, duressSessionActive: duressSessionActive
+            duressSessionActive: duressSessionActive
         )
         proximityEdgeFacts = facts
         return runProximityPolicy(facts, now: now)
@@ -2095,10 +2094,7 @@ final class FernletStore {
     /// - Returns: The verdict, also kept in ``proximityRunVerdict``.
     @discardableResult
     func reapplyProximityRunPolicy(now: Date = Date()) -> ProximityRunPolicy.Verdict {
-        let facts = proximityEdgeFacts ?? .beforeFirstEdge(
-            appLockEngaged: ProximityRunPolicy.appLockEngaged(lockState),
-            duressSessionActive: duressSessionActive
-        )
+        let facts = proximityEdgeFacts ?? .beforeFirstEdge(duressSessionActive: duressSessionActive)
         return runProximityPolicy(facts, now: now)
     }
 
@@ -2109,7 +2105,7 @@ final class FernletStore {
     /// before discovery is re-armed; on a hard stop the gate closes before the session is torn down.
     ///
     /// The store owns the tab mirror (``selectedTab``), the age record, the wipe bracket, the two
-    /// nearby opt-ins and the manager's two session predicates; the edge owns the other four facts.
+    /// nearby opt-ins and the manager's two session predicates; the edge owns the other three facts.
     /// `continuation` is ``meshContinuationState``'s feed since P8 item 6 — the policy is FED, never
     /// driven: nothing in this body registers, submits or completes a task, and nothing outside
     /// ``MeshContinuationTaskHost`` writes the claim. The host is deliberately not called from
@@ -2120,7 +2116,6 @@ final class FernletStore {
         let input = ProximityRunPolicy.Input(
             scenePhase: facts.scenePhase,
             selectedTab: selectedTab,
-            appLockEngaged: facts.appLockEngaged,
             duressSessionActive: facts.duressSessionActive,
             protectedDataAvailable: facts.protectedDataAvailable,
             belowMinimumAge: ProximityRunPolicy.belowMinimumAge(ageAssurance.record),

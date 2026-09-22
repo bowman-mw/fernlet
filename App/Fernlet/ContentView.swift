@@ -1763,17 +1763,19 @@ struct ContentView: View {
     }
 
     /// Hands this view's edges — a tab change, a lock-state change, the presence opt-in moving, the
-    /// age record moving, and the launch wiring — to the run-policy funnel (network migration P7
-    /// item 3), with the lock service's two facts read fresh at the edge and the scene facts the
-    /// last scene edge handed down through `FernletApp`. What used to be three private guards here
+    /// age record moving, the session's liveness moving, and the launch wiring — to the run-policy
+    /// funnel (network migration P7 item 3), with the lock service's duress fact read fresh at the
+    /// edge and the scene facts the last scene edge handed down through `FernletApp`.
+    ///
+    /// P9-3-A's fix (2026-09-22) retired the app-lock fact from the policy, and the lock-state edge
+    /// stays: a duress unlock moves the lock state and `isDuressSessionActive` together, so that
+    /// edge is this view's duress feed, and every edge is the gate's re-entry pass at a fresh
+    /// instant. What used to be three private guards here
     /// (`shouldListenForRecipeShares`, `shouldRunPresence`, the Friends three-way arm) is one table,
     /// `ProximityRunPolicy`, and what used to be six direct radio calls is one executor,
     /// `ProximityRunSeams.swift`; this view speaks no radio verb (`ProximityRunSeamsTests`).
     private func applyProximityRunPolicyFromView() {
-        store.applyProximityRunPolicy(
-            appLockEngaged: ProximityRunPolicy.appLockEngaged(lockService.state),
-            duressSessionActive: lockService.isDuressSessionActive
-        )
+        store.applyProximityRunPolicy(duressSessionActive: lockService.isDuressSessionActive)
     }
 
     // Phase 3a: the clothing-shop listener chain that lived here is gone — the shop rides the friend

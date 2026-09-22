@@ -28,7 +28,9 @@
 //
 // **And the older debts P10 does not close:** plan §15.1–§15.4 (P8's device gate, never run),
 // item 0 (`blocked (owner)` — no phones), 9.4-LATER (the MC→QUIC cutover, D-4.1 hold), P9-3-A (the
-// lock parking both 1:1 radios) and D-10.4.5 (the foreground publish path, deferred).
+// lock parking both 1:1 radios — answered and FIXED 2026-09-22, and §17.1.3 finding 1 still carries
+// the record of what it did and why the leg went) and D-10.4.5 (the foreground publish path,
+// deferred).
 //
 // **Why no ledger read.** P8's and P9's honesty suites read their phase ledger, which was committed
 // early in each phase. `Docs/Mesh-Migration-Loop-Ledger-P10.md` is not committed until this phase's
@@ -233,9 +235,10 @@ struct MeshP10HonestyAcceptanceTests {
             """)
         #expect(plan.contains("9.4-LATER"), "the MC→QUIC cutover's deferred half (D-4.1 hold) left the plan")
         #expect(plan.contains("P9-3-A"), """
-            the lock finding is gone: a configured Fernlet Lock parks the presence and \
-            recipe-share radios permanently, and nothing tells the person why. Pre-existing, and \
-            not fixable here — the policy row belongs to P7's 23 040-row product
+            the lock finding left §17.1.3. It was FIXED on 2026-09-22 — the owner's "make it work" \
+            retired the `appLockEngaged` fact from the run policy outright (23 040 rows → 11 520) — \
+            and finding 1 is where both halves live: what a configured Fernlet Lock used to do to \
+            the presence and recipe-share radios, and why the leg was removed instead of rewired
             """)
 
         #expect(plan.contains("D-10.4.5"), """

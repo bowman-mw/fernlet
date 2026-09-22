@@ -2201,6 +2201,24 @@ duplicate). **`dialRefused`, `browserFailed`, `registrationWithdrawn`, `transfer
   item 1's table), not a pass-2 regression, and invisible to tier 1, which asserts exactly this
   mapping. Owner decision: either the input becomes "the lock UI is presented", or the radios key off
   something else.
+  **FIXED 2026-09-22** (the owner's call of the device round, ledger
+  `Docs/Mesh-Migration-Loop-Ledger-Device-2026-09-22.md` item 3, decision 3: *make it work*). The
+  third option was taken — **the fact itself is retired**, not re-projected: the `!appLockEngaged`
+  leg is gone from `presenceState` and `recipeShareState`, `ProximityRunPolicy.Input`'s
+  `appLockEngaged` field and the `appLockEngaged(_:)` projection are deleted, every feed is retired
+  (`FernletApp`'s scene push, `ContentView`'s view helper, `FernletStore`'s `ProximityEdgeFacts`),
+  and the policy file no longer imports `FernletLock` at all — so the leg cannot be flipped back
+  without a deliberate new input. The reasoning: a scoped lock protects the Private tab, the
+  progress photos and the lock settings; it is not a radio switch, and the mesh row — carrying the
+  same person's session — never had the leg. The run-policy product drops 23 040 → **11 520** rows
+  and the pin moved in `ProximityRunPolicyTests` and `MeshP7RunPolicyAcceptanceTests`; the cell that
+  said "the app lock moves presence and recipe only" is replaced by its inverse stated positively
+  (`noLockLegSurvivesAndAListenerRunsWheneverItsOwnRuleAllows`: on all 384 opted-in, foreground,
+  hard-stop-free presence rows and all 288 recipe rows the listener RUNS). Shown red once against
+  the restored old table: the P7 clause failed on the count, on `agrees` and on `inactiveIsForeground`,
+  and the new cell failed five ways. The lock-state edge in `ContentView` deliberately SURVIVES —
+  it is the view's duress feed (a duress unlock moves the lock state and `isDuressSessionActive`
+  together) and the gate's re-entry pass at that instant, so the view-edge count stays 7.
 * **P9-3-B — NOTE — the glare loser re-mints its posture mid-collapse.** A emitted `resumed` + a
   fresh `advertised` at `14:16:36.261535/.261551`, then `redundantTunnelClosed`, `connected` and
   `paused` again by `.261918`: the collapse evicts the connection record, which is the gate's resume

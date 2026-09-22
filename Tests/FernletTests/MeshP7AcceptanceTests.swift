@@ -122,12 +122,12 @@ enum MeshP7Acceptance {
 @Suite(.serialized)
 struct MeshP7RunPolicyAcceptanceTests {
 
-    /// All 23 040 rows, distinct, each agreeing with its flat re-statement, `.inactive` a foreground
-    /// scene on every one.
+    /// All 11 520 rows, distinct, each agreeing with its flat re-statement, `.inactive` a foreground
+    /// scene on every one. It was 23 040 until P9-3-A's fix (2026-09-22) retired `appLockEngaged`.
     @Test func theInputProductIsWholeAndEveryRowAgreesWithItsFlatStatement() {
         let rows = ProximityRunPolicyProduct.rows()
-        #expect(rows.count == 23_040 && Set(rows).count == 23_040,
-                "3 × 5 × 4 × 3 × 2⁷ rows, no two the same — a new input must move this number deliberately")
+        #expect(rows.count == 11_520 && Set(rows).count == 11_520,
+                "3 × 5 × 4 × 3 × 2⁶ rows, no two the same — a new input must move this number deliberately")
         let agrees = rows.allSatisfy { r in
             let v = ProximityRunPolicy.verdict(for: r)
             return v.mesh == ProximityRunPolicyProduct.expectedMesh(r)
@@ -167,7 +167,7 @@ struct MeshP7RunPolicyAcceptanceTests {
     /// background, and the gate reads only its three facts.
     @Test func nothingClaimsTheBackgroundUnderTheOnlyValueTheAppCanFeed() {
         let rows = ProximityRunPolicyProduct.rows().filter { $0.continuation == .notRequested }
-        #expect(rows.count == 5_760, "a quarter of the product")
+        #expect(rows.count == 2_880, "a quarter of the product")
         let inert = rows.allSatisfy { r in
             let v = ProximityRunPolicy.verdict(for: r)
             return v.mesh != .run && v.discovery != .run && v.presence != .run && v.recipeShare != .run
@@ -202,15 +202,22 @@ struct MeshP7GateWriterAcceptanceTests {
                 "and the gate value is assembled exactly once, by the policy")
 
         let store = MeshP7Acceptance.makeStore("p7-gate")
+        // The Private tab keeps both listeners and the search down on the foreground row below. It
+        // was the app lock's job until P9-3-A's fix retired that fact from the policy, and
+        // `allowNearbyRecipeShares` defaults to TRUE — a foreground row on a listening tab would
+        // start a real recipe listener on this store's production transports.
+        store.selectedTab = .personal
         #expect(store.meshNetworkManager.routedAccessGate == .closed, "every manager starts fail-closed")
         let opened = store.applyProximityRunPolicy(
-            scenePhase: .active, protectedDataAvailable: true, appLockEngaged: true,
+            scenePhase: .active, protectedDataAvailable: true,
             duressSessionActive: false, now: MeshP7Acceptance.instant
         )
         #expect(store.meshNetworkManager.routedAccessGate == opened.routedAccessGate && opened.routedAccessGate.isOpen,
-                "a foreground, unlocked-device edge opens the gate the manager holds — the app lock closes no leg")
+                "a foreground, unlocked-device, duress-free edge opens the gate the manager holds")
+        #expect(opened.presence == .stop && opened.recipeShare == .stop && opened.discovery == .stop,
+                "and this row starts no radio")
         let closed = store.applyProximityRunPolicy(
-            scenePhase: .background, protectedDataAvailable: false, appLockEngaged: true,
+            scenePhase: .background, protectedDataAvailable: false,
             duressSessionActive: false, now: MeshP7Acceptance.instant
         )
         #expect(store.meshNetworkManager.routedAccessGate == closed.routedAccessGate && !closed.routedAccessGate.isOpen,
