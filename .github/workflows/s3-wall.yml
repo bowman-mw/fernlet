@@ -667,9 +667,23 @@ jobs:
         # Mac after a build-for-testing, read off the result bundle: "Test run with 1216 tests in
         # 140 suites passed after 180.646 seconds", 0 failed, 0 skipped, no `Restarting after
         # unexpected exit` line. 1214 + 2 = 1216 is the ARITHMETIC CHECK, never the number.
+        # RAISED 1216 -> 1222 (2026-09-22, the owner-calls round). ONE suite JOINED this line and one
+        # suite already on it gained cells: MeshNameWithholdingTests +3 (NEW - Option 1b's mesh-half
+        # pin: a slot this device has not committed receives no display name at
+        # MeshNetworkManager.sendEnvelopeCore, envelope or payload; the round's blind verify found
+        # the first build leaking exactly there), so the NAME count moved 140 -> 141 in
+        # CIGateSelectorBoundaryTests' `measuredSuiteNameCounts` in the commit before this one; and
+        # MeshLinkTableTests +3 (item 4b - a closed link to an uncached endpoint keeps no record, a
+        # crowded room's records are bounded by the cache, only an idle record leaves with its
+        # entry). The P7/P9/P10 cells the round re-worded moved no count. MEASURED over this exact
+        # 141-name list on a Mac, in a CLEAN worktree of 65c9432 under the home directory (a /tmp
+        # worktree breaks the source-scan walls' path stripping through the /private symlink), after
+        # a build-for-testing, read off the result bundle: "Test run with 1222 tests in 141 suites
+        # passed after 245.622 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit`
+        # line. 1216 + 3 + 3 = 1222 is the ARITHMETIC CHECK, never the number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1216 \
+          Scripts/run-gated-suites.sh mesh-batteries 1222 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
