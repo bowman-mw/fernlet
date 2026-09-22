@@ -31,8 +31,8 @@ read (§17.2.3 finding 2).
    an **overnight** window from the runbook's *How to resume*; the logging profile is refused by iOS 26.6.1
    (owner decision), and `OS_ACTIVITY_DT_MODE=YES` covers every devicectl-launched row instead.
    **OVERNIGHT WINDOW READ BACK 2026-09-22: no grant** — 1 h 56 min from the 18:43:05Z submit until the phone left the
-   Mac's reach at ≈20:39Z (a wired console session; a pulled cable does this); ≈3 h 51 min pending across both sessions
-   with no delivery; the app was not running the next morning. The next window is the owner's to arrange (runbook *Lane E*
+   Mac's reach at ≈20:39Z (a wired console session; a pulled cable does this); ≈3 h 36 min pending across both sessions
+   (three requests, disjoint) with no delivery; the app was not running the next morning. The next window is the owner's to arrange (runbook *Lane E*
    § *The overnight window, read back 2026-09-22*; plan §28.9). The trace carries the framework's lines only — the console
    is the app-side witness.
 3. **§15.1** radio matrix — a QUIC connection surviving background + lock, re-dial via a cached
