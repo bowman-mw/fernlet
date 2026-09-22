@@ -4,7 +4,9 @@
 //
 //  DEBUG-only launch hooks for the P2 migration's rejection-matrix lane (Lane C in
 //  Docs/Mesh-Network-Feasibility-Runbook.md): two Simulators on one Mac, both running the
-//  PRODUCTION mesh over the QUIC radio (FERNLET_MESH_TRANSPORT=quic), seeded so each named
+//  PRODUCTION mesh over the QUIC radio — the only radio a build contains since the deletion
+//  round, and no longer selected by anything: the `FERNLET_MESH_TRANSPORT` variable that used to
+//  pick it is retired and inert — seeded so each named
 //  refusal in MeshIntroductionRejection can be produced and read out of a
 //  `simctl launch --console-pty` transcript.
 //

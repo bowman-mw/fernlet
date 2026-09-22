@@ -131,12 +131,12 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `sendHeartbeatAcknowledgement(for:to:)` | Sends an unreliable signed heartbeat ack. |
 | `recordEnvelope(_:direction:byteCount:signatureVerified:)` | Converts envelope traffic into `ConnectionSessionLog.EnvelopeRecord` diagnostics. |
 | `updateInspectorPeer(identity:transportPeer:)` | Publishes peer display/fingerprint/key details to the inspector. |
-| `updateInspectorTransport(state:disconnected:)` | Updates MCSession state and connected/disconnected timestamps in inspector transport info. |
+| `updateInspectorTransport(state:disconnected:)` | Updates the transport session state — carried in `ConnectionSessionLog.TransportInfo.mcSessionState`, whose spelling is frozen from the MultipeerConnectivity era — and the connected/disconnected timestamps in inspector transport info. |
 | `updateInspectorRangingMode(_:)` | Publishes current ranging mode to the inspector. |
 | `handleIdentityEnvelope(_:plaintext:from:)` | Validates advertised fingerprint, starts ranging, records peer identity, sends acknowledgement, and routes to friend proximity gate, trusted auto-confirm, or user confirmation. |
 | `transitionToProximityGate(peerIdentity:)` | Replaces the short session timeout with a longer proximity timeout and chooses UWB or manual commit state. |
 | `startRangingIfPossible(with:from:)` | Starts NearbyInteraction from a peer token, or records RSSI fallback when unsupported/unavailable. |
-| `serviceType(for:)` | Maps trainer/friend modes to Multipeer service types. |
+| `serviceType(for:)` | Maps trainer/friend modes to their frozen service-type tokens. The trainer one still hangs off the `MultipeerServiceType` enum, whose name is historical — the coach channel is a deferred seam, not a live MultipeerConnectivity radio. |
 | `discoveryInfo(for:mode:)` | Builds advertised discovery metadata for role, fingerprint, name, and capabilities. |
 | `transition(to:)` | Sets coordinator state and records state transition audit/inspector events. |
 | `fail(_:)` | Cancels timers, marks failed state, records audit, ends inspector session, and stops foreground anchoring. |
@@ -213,7 +213,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `activeSlots` | Filters slots to active slot kind. |
 | `setupMeshSession()` | Installs discovery, channel-ready, disconnect/retry, and invite-acceptance callbacks. |
 | `startSearching()` | Starts mesh advertising/browsing and observation. **The one re-arm funnel** — `startJoin()`, `startNewMesh(name:)` and `resumeSearchingForPartitionedMesh()` all end here — so it is also where `holdCommittedLinks()`'s door is reopened (`isAdmittingNewPeers = true`, audited `mesh.session.linksResumed` only when a hold is actually being undone) and where a paused radio comes back: `startRadios(discoveryInfo:)` resumes a running QUIC radio rather than no-op'ing on its `!isRunning` guard. |
-| `stopSearching()` | Cancels observation, stops MC session, cancels slot coordinators, clears slots and trust policies. Also restores `isAdmittingNewPeers` to its open default, so a teardown that follows a hold cannot strand the next session on this manager behind a shut door. |
+| `stopSearching()` | Cancels observation, stops the radio, cancels slot coordinators, clears slots and trust policies. Also restores `isAdmittingNewPeers` to its open default, so a teardown that follows a hold cannot strand the next session on this manager behind a shut door. |
 | `currentDiscoveryInfo()` | Builds the advertised TXT: version + per-launch session id, plus mesh id/name/member count when the mesh is open. No display name, no fingerprint. |
 | `updateDiscoveryInfo()` | Restarts advertiser with current discovery metadata. |
 | `hasCommittedSlot(for:)` | **P8 item 3 (findings F-2/F-4)**: whether `peer` holds a slot whose handshake has COMMITTED (`fingerprint != nil`), matched by endpoint through `slot(for:)`. Distinct from `hasSlot(for:)` on purpose — it is the ONLY excuse doors 2 and 3 make while `holdCommittedLinks()` is holding, and answering it with "holds a seat" re-admits the uncommitted candidate the hold has just disconnected. |
@@ -1918,9 +1918,9 @@ drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch 
 | `start()` / `stop()` | Lifecycle, owned by the app (opt-in setting + scene/tab/lock state) — not by this type. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
 | `presencePosture` / `rotateEpochIfNeeded()` | **P9 item 2 pass 1**: the one source of this radio's epoch index, advertised instance name and TLS identity (``PresenceEpochPosture``). Minted when the radio comes up, re-minted WHOLE at every 900 s boundary by the rotation tick the manager already runs — no new timer and no second clock, since every caller hands the rotation `nowProvider()` and the epoch is always `IdentityService.presenceEpoch(at:)` — and dropped by `stop()`, so a stood-down radio keeps no name and no certificate to come back up under. Fail-soft, NAMED (`presence.posture.mintFailed`) and BUDGETED: a mint that fails leaves NO posture rather than a stale one, tag derivation is untouched because the epoch still comes from the same clock, and the failed epoch is remembered so the six `refreshRoster()` call sites cannot turn one failure into a keygen and an audit row per refresh — one attempt and one row per epoch, then the boundary retries. **Pass 1 HOLDS the posture; nothing advertises it yet** — pass 2 binds the QUIC presence listener to it. |
-| `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster — **through** the posture, so a refresh that lands after a boundary rotates the name and the identity with the tags rather than advertising fresh tags under an old identifier. Pass 1 qualifier: that rotation is held, not advertised — pass 2 binds the QUIC presence listener, and until then the MC advertiser keeps one peer ID per `start()`. |
+| `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster — **through** the posture, so a refresh that lands after a boundary rotates the name and the identity with the tags rather than advertising fresh tags under an old identifier. Pass 1 qualifier, now spent: that rotation was held rather than advertised until pass 2 bound the QUIC presence listener; until then the MC advertiser kept one peer ID per `start()`. |
 | `isReachable(fingerprint:)` | Whether a friend is currently tag-matched nearby. |
-| `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the 8-peer `MCSession` cap. |
+| `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the radio's eight-peer link cap. |
 | `heartAffordance(...)` (`nonisolated static`) | The friend row's decision about which heart affordance to show. Takes the away-delivery setting as an explicit parameter rather than reading it off the host, so the affordance and the enforcement cannot drift apart. |
 | `queueAwayHeart` / `heartDropBundleProvider` / `onPeerPrekeyBundle` | The dead-drop seams: race-window sends and prekey-bundle gossip are handed to `HeartDropService` (see Away Hearts) instead of being reimplemented here. |
 | `proximityCoordinator(_:didReceive:plaintext:from:)` | Receive side. Accepts invitations only from tag-matched peers, and enforces the `allowNearbyHearts` opt-out, the trusted-friend gate, and the shared `ProximityHeartLedger` 5-minute receive window. |
@@ -1967,7 +1967,7 @@ and diffing always agree.
 
 Hosting, joining, offers, pending join requests, and host-authoritative roster convergence — riding
 the friend mesh with **no radio of its own**. Owned by `MeshNetworkManager` as a sub-manager (like
-`MeshClothingShop`), which wires in the two seams this type uses instead of touching `MCSession`:
+`MeshClothingShop`), which wires in the two seams this type uses instead of touching a radio:
 `send` (seal + sign + transmit to one verified fingerprint's committed slot) and
 `committedActivityPeerFingerprints`.
 
@@ -2107,7 +2107,7 @@ credits almost nothing, and the reboot-gap credit is capped). It is deliberately
 | `identitySection` | Shows local/peer identity and ranging mode. |
 | `distanceSection` | Shows latest/min/max distance, fallback status, and sparkline. |
 | `rangingStatusText` | Explains why no distance samples are visible. |
-| `transportSection` | Shows MCSession state, bytes, and RTT. |
+| `transportSection` | Shows the transport session state, bytes, and RTT. |
 | `eventsSection` | Shows recent event timeline. |
 | `envelopesSection` | Shows recent envelope records. |
 | `errorsSection` | Shows recorded errors. |

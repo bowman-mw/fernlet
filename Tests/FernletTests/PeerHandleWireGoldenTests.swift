@@ -30,8 +30,9 @@ struct PeerHandleWireGoldenTests {
     /// refactor that quietly coerced one into the other would still round-trip locally.
     static let goldenBroadcastEnvelopeHex = "00000000000000266665726e6c65742e63616e6f6e6963616c2e6964656e746974792d656e76656c6f70652e7632000000000000000211111111222233334444555555555555000000000000000401020304000000000000000405060708000000000000000c4c6f63616c2044657669636500000000000000001a6665726e6c65742e646961676e6f737469632e6563686f2e7631000000000000000006476f6c64656e000000000000000000000000000000000000000000000000000d7061796c6f61642d6279746573000000006553f10000"
 
-    /// A peer that advertised a fingerprint, built exactly as `MeshMultipeerSession.peer(for:)`
-    /// builds one: `advertisedFingerprint` is `discoveryInfo["fp"]`.
+    /// A peer that advertised a fingerprint, built exactly as a radio builds one — the retired
+    /// `MeshMultipeerSession.peer(for:)` did it this way too: `advertisedFingerprint` is
+    /// `discoveryInfo["fp"]`.
     private func fixedAdvertisingHandle() -> PeerHandle {
         let info = ["fp": "abcdef0123456789", "v": "1", "sid": "11111111-2222-3333-4444-555555555555"]
         return PeerHandle(

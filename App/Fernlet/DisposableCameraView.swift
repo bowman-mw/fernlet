@@ -1873,9 +1873,10 @@ struct DisposableCameraView: View {
 
     /// An inbound message arrived while the chat sheet was closed. While the app is active, a light
     /// notification haptic is the reliable in-app nudge (the dot badge on the chat button is already
-    /// showing). While it isn't active, fire a best-effort local notification instead — Multipeer
-    /// Connectivity usually suspends in the background, so this rarely reaches us there, but we fire it
-    /// if it does. Never fires while the chat sheet is open (the store doesn't count those as unread).
+    /// showing). While it isn't active, fire a best-effort local notification instead — the mesh radio
+    /// (MultipeerConnectivity then, QUIC now) usually suspends in the background, so this rarely reaches
+    /// us there, but we fire it if it does. Never fires while the chat sheet is open (the store doesn't
+    /// count those as unread).
     private func handleUnreadMessageArrival() {
         switch scenePhase {
         case .active:

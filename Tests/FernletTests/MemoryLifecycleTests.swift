@@ -9,7 +9,7 @@
 //    dealloc" header was void: a `guard let owner` above the await held the owner, and every slot,
 //    coordinator and transport it owns, until a change that could no longer come).
 //  - The three proximity managers must deallocate when released, with or without `stop()`.
-//  - MeshNetworkManager must free the MC link of every slot it evicts (a zombie link ate one of
+//  - MeshNetworkManager must free the transport link (the MC link then, the QUIC tunnel now) of every slot it evicts (a zombie link ate one of
 //    MC's 8 peer slots and made re-forming a slot with that peer impossible for the search).
 //  - PresenceManager must release a discovered peer whose match a re-evaluation dropped, and must
 //    run the coordinator's own teardown (ranging + Live Activity anchor) when the MC channel drops.
@@ -275,7 +275,7 @@ struct ProximityManagerDeallocationTests {
     }
 }
 
-// MARK: - MeshNetworkManager: evicted slots free their MC link
+// MARK: - MeshNetworkManager: evicted slots free their transport link (the MC link when this was written)
 
 @MainActor
 @Suite(.serialized)

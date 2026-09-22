@@ -107,8 +107,9 @@ public enum NotificationService {
     /// Identifier for the best-effort "new session message" local notification (TF b19 item 6).
     /// A single fixed id so successive messages COALESCE into one pending notification rather than
     /// stacking — the badge/haptic is the reliable in-app signal; this only fires the rare times a
-    /// message lands while the app is backgrounded mid-session (MultipeerConnectivity usually
-    /// suspends in the background, so this is genuinely best-effort).
+    /// message lands while the app is backgrounded mid-session (the mesh radio usually suspends in
+    /// the background — MultipeerConnectivity did, the QUIC radio does — so this is genuinely
+    /// best-effort).
     public static let sessionMessageID = "fernlet.sessionMessage"
 
     /// Best-effort local notification that a session message arrived while the app was NOT active

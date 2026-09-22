@@ -58,7 +58,8 @@ struct SealedIntroductionTests {
     private func cleanup(_ id: String) { KeychainItem.deleteAll(service: id) }
 
     /// A presence-style peer: NO advertised fingerprint (presence discoveryInfo carries only tags),
-    /// mirroring what `MeshMultipeerSession` produces for a heart channel.
+    /// mirroring what the presence radio produces for a heart channel — as the retired
+    /// `MeshMultipeerSession` did before it.
     private func presencePeer(name: String) -> PeerHandle {
         PeerHandle(
             id: UUID(),

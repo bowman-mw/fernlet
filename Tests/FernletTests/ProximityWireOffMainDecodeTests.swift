@@ -4,8 +4,9 @@
 // WI-9 regression suite. ProximityKit declares `.defaultIsolation(MainActor.self)`, which would
 // otherwise MainActor-isolate the proximity wire value types (and their synthesized `Codable`
 // conformances), the canonical signing serializer, and the pure `IdentityService` crypto statics —
-// pinning decode + signature verification of untrusted MCSession bytes to the main actor and forcing
-// reliance on the `.swiftLanguageMode(.v5)` escape hatch. WI-9 marks all of those `nonisolated`
+// pinning decode + signature verification of untrusted transport bytes (MCSession's then, QUIC's
+// now) to the main actor and forcing reliance on the `.swiftLanguageMode(.v5)` escape hatch. WI-9
+// marks all of those `nonisolated`
 // (+ `Sendable`).
 //
 // These tests lock that in two ways:

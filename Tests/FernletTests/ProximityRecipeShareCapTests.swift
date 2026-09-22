@@ -210,7 +210,7 @@ struct ProximityRecipeShareCapTests {
     }
 
     /// The connecting-window race: a second inviter must be refused while a FIRST peer is
-    /// invited/accepted but not yet MC-connected (`connections` alone can't see that window).
+    /// invited/accepted but not yet connected (`connections` alone can't see that window).
     @Test func invitationRefusedDuringConnectingWindow() {
         let host = RecipeCapTestHost()
         let radio = FakeRecipeShareRadioSession()
@@ -294,7 +294,7 @@ struct ProximityRecipeShareCapTests {
         #expect(manager.diagnosticEvents.contains { $0.message.contains("reopened") })
     }
 
-    /// A coordinator that fails/ends WITHOUT an MC disconnect (failed handshakes never fire
+    /// A coordinator that fails/ends WITHOUT a transport disconnect (failed handshakes never fire
     /// one) must still reopen the radio via the stale-coordinator sweep.
     @Test func staleCoordinatorSweepResumesDiscovery() async {
         let host = RecipeCapTestHost()
@@ -433,7 +433,7 @@ struct ProximityRecipeShareCapTests {
         manager.sendRecipeShare(makePayload(), to: recipient)
         #expect(manager.sendState == .connecting(recipientName: "Blair"))
 
-        // MC connect succeeds for the engaged recipient (the same add-path handleChannelReady
+        // The connect succeeds for the engaged recipient (the same add-path handleChannelReady
         // uses) — the pre-connect stage is over.
         registerConnection(on: manager, peer: target)
 

@@ -8,7 +8,10 @@
 
 import Foundation
 
-/// Which MultipeerConnectivity role this device played in a session (advertiser or browser).
+/// Which role this device played in a session (advertiser or browser).
+///
+/// The two spellings are MultipeerConnectivity's, from when it was the radio, and they are frozen:
+/// the enum is persisted by rawValue. Under QUIC the listening half is still the `advertiser`.
 ///
 /// Hoisted out of the app-side ProximityCoordinator so the audit/trust DTOs can name it without an
 /// upward edge; the coordinator keeps a `Role` typealias to it.

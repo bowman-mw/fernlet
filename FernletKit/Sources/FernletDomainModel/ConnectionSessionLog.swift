@@ -190,10 +190,14 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         }
     }
 
-    /// MultipeerConnectivity transport counters: session state, byte counts, radio flags, and RTT
-    /// samples.
+    /// Mesh transport counters: session state, byte counts, radio flags, and RTT samples.
     ///
     /// Everything here is locally observed diagnostics — nothing is trusted wire data.
+    ///
+    /// The `mcSessionState` spelling is HISTORICAL and FROZEN: it was minted when
+    /// MultipeerConnectivity was the radio, and it is a persisted `Codable` key, so renaming it
+    /// would orphan every row already written. The values it carries come from whichever radio
+    /// ran — the QUIC one, since the cutover.
     public struct TransportInfo: Codable, Equatable, Sendable {
         public var mcSessionState: String
         public var connectedAt: Date?

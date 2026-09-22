@@ -15,8 +15,9 @@
 // none of them.
 //
 // Tier 1: no rig, no radio, no simulator, no clock. The manager cells drive the production helpers
-// with `markRunningForTesting` and a MeshMultipeerSession that is never `start()`ed, exactly as
-// ProximityRecipeShareCapTests does, so pause/resume toggle a flag and touch no MCNearbyService*.
+// with `markRunningForTesting` over a `FakeRecipeShareRadioSession` that is never `start()`ed,
+// exactly as ProximityRecipeShareCapTests does, so pause/resume toggle a flag and nothing goes on
+// the air.
 
 @testable import ProximityKit
 import Foundation
@@ -184,8 +185,8 @@ struct RecipeShareTransferTests {
 
     /// **The pass-1 row.** A discovery pause or resume is accepted in every phase, terminal
     /// included, and moves none of them — closing the radio to new peers is not pausing a share in
-    /// flight. A pass-2 session that stood the connection down on a pause would break a send that
-    /// MultipeerConnectivity keeps alive, and nothing above the transport would say so.
+    /// flight. A pass-2 session that stood the connection down on a pause would break a send the
+    /// retired MultipeerConnectivity radio kept alive, and nothing above the transport would say so.
     @Test func discoveryPauseAndResumeNeverMoveTheExchange() {
         let paths: [[RecipeShareTransfer.Event]] = [
             [],

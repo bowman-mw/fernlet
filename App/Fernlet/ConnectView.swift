@@ -584,8 +584,9 @@ struct FriendsView: View {
 
     /// Shown in place of the "Looking for nearby friends…" pulse when the radios failed to start.
     ///
-    /// The transport already detects this (`MeshMultipeerSession`'s `didNotStart*` delegates) and
-    /// routes it to `manager.meshError`, but the only view that rendered `meshError` was
+    /// The transport already detects this (`NetworkMeshSession`'s `onTransportError`; the retired
+    /// MultipeerConnectivity session's `didNotStart*` delegates did before it) and routes it to
+    /// `manager.meshError`, but the only view that rendered `meshError` was
     /// `DisposableCameraView` — which exists only *inside* a session. A discovery failure happens
     /// before any session, so the message was set and never seen: the pulse span forever and the
     /// mesh looked simply broken. On device the overwhelmingly likely cause is a declined Local

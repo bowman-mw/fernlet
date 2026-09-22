@@ -186,11 +186,11 @@ struct MeshClosedMeshStarTopologyTests {
 
     /// **The 0b review's finding 1.** Relaxing the three link gates was safe on the QUIC radio
     /// because its signed channel introduction was members-only before any app frame. **MC has no
-    /// such stage** — and MC was the shipping default when this was written. (It is not since the
-    /// MC→QUIC flip of 2026-09-21: `MeshTransportFactory.shippingDefault` is `.quic`, and MC is a
-    /// DEBUG-only bisect path until the deletion round. That does not weaken the finding — see the
-    /// D-4.3 paragraph below, which is the reason it now matters on BOTH radios.) So the membership
-    /// decision has to be taken where MC *does* know the identity: the moment the slot's
+    /// such stage** — and MC was the shipping default when this was written. (It stopped being one
+    /// at the MC→QUIC flip of 2026-09-21, and the radio left the tree entirely at the deletion
+    /// round of 2026-09-22. That does not weaken the finding — see the D-4.3 paragraph below, which
+    /// is the reason it matters on the one radio that is left.) So the membership
+    /// decision has to be taken where the identity is actually known: the moment the slot's
     /// coordinator verifies it, before
     /// `onSlotConnected` sends the mesh descriptor, the photo manifest or the vouch list.
     ///

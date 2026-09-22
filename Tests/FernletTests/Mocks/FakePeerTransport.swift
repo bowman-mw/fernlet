@@ -94,7 +94,7 @@ final class VirtualClock {
 /// routes on — deliberately, because that is the identity a real transport preserves across a
 /// re-discovery. A test that wants to model discovery churn hands out two handles with different
 /// `id`s and the same endpoint key, and the fabric treats them as one device, exactly as
-/// `MeshMultipeerSession` does.
+/// `NetworkMeshSession` does (and the retired `MeshMultipeerSession` did before it).
 @MainActor
 final class FakePeerNetwork {
     /// Cap on endpoints in one fabric — the roster cap (8) with headroom, so a runaway scenario
@@ -241,7 +241,7 @@ final class FakePeerNetwork {
 /// One endpoint's ``PeerTransport``: everything it does routes through the shared
 /// ``FakePeerNetwork``, so a scenario is written against the fabric and observed here.
 ///
-/// Discovery is deliberately not modelled — the production conformer, `PeerChannelTransport`, does
+/// Discovery is deliberately not modelled — the production conformer, `NetworkPeerChannel`, does
 /// not model it either (the shared session owns advertise/browse), so a fake that invented a
 /// discovery state machine would test a shape production does not have. `startAdvertising` /
 /// `startBrowsing` record their arguments and publish the matching state, and that is all.
@@ -354,8 +354,9 @@ final class FakePeerTransport: PeerTransport {
 
     // MARK: - Pause contract
 
-    /// Matches `MeshMultipeerSession`: the radio goes quiet to new peers while live links keep
-    /// flowing, and `invite(_:)` must not be called until ``resumeDiscovery()``.
+    /// Matches the shipping radio (and the retired `MeshMultipeerSession` before it): the radio
+    /// goes quiet to new peers while live links keep flowing, and `invite(_:)` must not be called
+    /// until ``resumeDiscovery()``.
     func pauseDiscovery() { isDiscoveryPaused = true }
     func resumeDiscovery() { isDiscoveryPaused = false }
 
@@ -392,7 +393,7 @@ final class FakePeerTransport: PeerTransport {
 
 /// The fake also serves as a mesh slot CHANNEL, so `FakeMeshTransportSession` can hand
 /// `MeshNetworkManager` a real endpoint of this fabric where production hands it a
-/// `PeerChannelTransport` (MC) or a `NetworkPeerChannel` (QUIC).
+/// `NetworkPeerChannel` (the retired MC radio handed a `PeerChannelTransport` in its place).
 ///
 /// `peer` is this endpoint's own handle: a slot addresses its channel by the peer that channel
 /// carries, and on the fabric that is the endpoint itself. `notifyConnected()` publishes
