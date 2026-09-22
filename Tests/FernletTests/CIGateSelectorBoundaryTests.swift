@@ -111,6 +111,14 @@ import Testing
     /// invariant — a stable `PeerHandle.id` for the life of a session — is carried on the QUIC
     /// radio by `NetworkMeshSessionTests` and `MeshLinkTableTests`, both still on the line. This is
     /// the retirement argued, which is the one way this number may go down. Counted off the line.
+    ///
+    /// RE-MEASURED at the owner-calls round (2026-09-22): `mesh-batteries` 140 → 141, for
+    /// `MeshNameWithholdingTests` — the pin of stranger-admission Option 1b's MESH half: every mesh
+    /// frame is signed at `MeshNetworkManager.sendEnvelopeCore`, and a slot this device has not
+    /// committed must receive no display name there, envelope or payload. The first build leaked
+    /// exactly there and the round's blind verify found it (BLOCKER); the same verify found a sibling
+    /// privacy suite red on no CI line at all. Not a `MeshP<n>…AcceptanceTests`, so this entry is the
+    /// only thing that would notice it leaving. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 7,
         "no-tracking": 1,
@@ -118,7 +126,7 @@ import Testing
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
-        "mesh-batteries": 140
+        "mesh-batteries": 141
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and

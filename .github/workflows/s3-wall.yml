@@ -809,4 +809,5 @@ jobs:
             MeshP10HandlerPipelineAcceptanceTests \
             MeshP10DiffRuleAcceptanceTests \
             MeshP10ImportWallAcceptanceTests \
-            MeshP10HonestyAcceptanceTests
+            MeshP10HonestyAcceptanceTests \
+            MeshNameWithholdingTests
