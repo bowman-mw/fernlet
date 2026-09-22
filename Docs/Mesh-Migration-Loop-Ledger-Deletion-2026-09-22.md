@@ -1,0 +1,38 @@
+# Mesh Migration Loop Ledger — the deletion round (MultipeerConnectivity leaves the tree)
+
+**Round:** not a phase — plan §28 says the phases are spent. The launcher is
+[Next-Round-Prompt-Deletion-Round-2026-09-21.md](Next-Round-Prompt-Deletion-Round-2026-09-21.md); the round it follows is
+[Mesh-Migration-Loop-Ledger-Cutover-2026-09-21.md](Mesh-Migration-Loop-Ledger-Cutover-2026-09-21.md) (D-4.3 = Option 1, D-4.4 =
+pure retire, the flip BUILT at `5d88247`…`4e70d0a`).
+**Started:** 2026-09-21 23:45 local (item 0's first launch crossed midnight; every run is dated 2026-09-22 UTC) · **Closed:** —
+· **Tree at seed:** `main` = `515145b` (the launcher), 31 ahead of `origin/main` (`0a85e06`), not pushed.
+**Worktree:** `.claude/worktrees/happy-chatterjee-9cf9ef` on `claude/happy-chatterjee-9cf9ef`; main fast-forwarded after each
+item (`git -C <primary> merge --ff-only`); plan edits land in the primary as index-only blobs (the primary's working copy of the
+plan is held). **The phone was not touched** (§15.5's overnight recorders; runbook Lane E *How to resume*).
+
+## Items
+States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`.
+| # | Item | Prereq | State | SHA | Note |
+|---|---|---|---|---|---|
+| 0 | **The gate**: the unseeded Lane C pair — founding through the provisional path, then the double-mint re-dial | — | **done — PASS** | this commit (the record) | Run 1 (`unseeded1-*`): two mesh-less Simulators, `legacyRosterFallback members=0` on both, `accepted` both ways with zero `refused`, both commit, both mint (A `droppedUncommittedSlot` on B's early descriptor, B `yieldedNewbornMesh`), `autoGrantedFoundingPair` on A, `bootstrapped`/`adopted members=2` on B, **`derived=2` on both under one epoch head, 1.6 s from browse**; harness fallbacks silent (`armed=false`, no `admitting`, no `requesting admission`). Run 2 (`unseeded2-*`): joiner frozen (`SIGSTOP`) the instant the founder's driver committed → founder alone at `derived=1` → `tunnelEnded … NWError 60` at +90 s → thaw → **both re-introduced and re-accepted** (A real id vs B `unbound`, the tolerated arm both ways; pre-D-4.3 this is matrix row 4's `refused foreignMesh … mesh=00000000-…`) → both re-committed → B minted and yielded (`adopted=93C7EE35-…`) → `autoGrantedFoundingPair` → **`derived=2` on both, 4 s after the thaw**. Recorded: runbook "Lane C — the deletion round's item 0" + matrix row 1a + two dated corrections; the design's correction block; `MeshNetworkManager.armFounderLedgerForHarness` doc, `MeshPairwiseFoundingTests` cell doc, `MeshMatrixRole` doc. Plan §28.8: with the deletion blob. |
+| 0.1 | Harness fix the lane needed: `MeshFlowDriver`'s commit dedupe keyed on the coordinator instance, pruned to the live set | 0 | done | this commit | Found by run 2's first attempt: `PeerSlot.id == peer.id`, so a re-dialed slot came back under the same `UUID` with a fresh coordinator and `asked: Set<UUID>` never asked again — both halves parked at `awaitingProximityCommit` for 180 s (and the joiner dropped nine coordinator beacons, `mesh.groupKey.droppedUncommittedSlot` — Option 1b's gate observed live). DEBUG-only, app target, no env read added (`TestHookBoundaryTests` count unchanged), no persisted surface. Built (`xcodebuild build`, `** BUILD SUCCEEDED **`) before the second attempt. |
+| 1 | The deletion — one coherent commit series | 0 PASS | in-flight | — | Work list re-anchored at HEAD by a blind Opus survey before any edit (findings folded into the series: `NetworkMeshWireTests.bothTransportsShareOneInboundCeiling` is a hard compile break the survey's appendices did not list; 16 bare imports, not 15 — `Mocks/MockMultipeerTransport.swift`; a `Scripts/power-of-10-allowlist.json` R9-UNSAFE entry for the deleted file; the harness banner's dead `FERNLET_MESH_TRANSPORT` read; `MeshMultipeerSessionIdentityTests` is ON the mesh-batteries line → 141 → 140 names). |
+
+## Blocked on owner
+- Everything plan §28.4 carries. This round asks nothing new of the owner; the `_fernlet-coach` strings stay held (plan §18
+  decision 4's default), and the `ConnectionSessionLog.transport.mcSessionState` FIELD stays spelled as it is (a persisted
+  `Codable` token — see item 1's decisions).
+
+## Decisions taken
+| Decision | Choice | Taken on |
+|---|---|---|
+| Which node is the founder on an unseeded run | The **lower fingerprint** (`foundsPairwiseMesh` is `local < peer`): the harness's founder loop guards on `membershipVerifier == nil`, which is the yielder's exact state between `unwindNewbornMesh()` and the grant, so a founder role on the yielding half would race the shipping yield. On an unseeded run the roles are inert either way. | 2026-09-22 |
+| How to "kill the tunnel between the two commits" | Freeze the joiner's process (`SIGSTOP` by saved PID) from a watcher on the founder's console at its `committing slot` line; let the founder's three-missed-beats rule end the tunnel (+90 s); `SIGCONT`. Not a relaunch: a relaunch changes the `sid` and the endpoint and so proves less about the re-dial. | 2026-09-22 |
+| The harness limitation run 2 found | **Fixed in the harness, not worked around** — the re-dialed slot's second commit is exactly what the driver stands in for. Keyed on `ObjectIdentifier(slot.coordinator)`, pruned to the live coordinators each poll. | 2026-09-22 |
+| What the re-dial observation claims | **Real id vs `unbound`** at the re-dial (the joiner's pre-freeze commit never landed). The both-real-ids shape rides the same arm (`hello.meshID == localHello.meshID \|\| isProvisionalStranger` — the ids' values play no part) and stays tier-1 only; said so in the runbook rather than claimed. | 2026-09-22 |
+
+## Verify findings
+(one adversarial verify per item — implement → a verifier blind to the first's reasoning → fix)
+
+**Item 0:** no code verify dispatched — the item is an observation, and its record names every token a reader can grep for
+in the raw logs; the harness fix is eleven lines in a DEBUG file and is read by the deletion verify with the rest.

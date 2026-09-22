@@ -33,7 +33,7 @@ imprecise at HEAD and are corrected here rather than rewritten in place, so the 
 6. **§0's opener is now history:** "the friend mesh ships on MultipeerConnectivity (`shippingDefault = .multipeer`, `:267`)"
    was true when this was written; the FLIP landed the same evening (`5d88247`, Variant B — `shippingDefault` is `.quic`,
    at `MeshTransportSelection.swift:342` now; MC is a DEBUG-only bisect path until the deletion round).
-**Still owed and unrun:** the unseeded Lane C pair run (test (vi)); the capability has never been observed on any radio.
+**Test (vi) — RUN 2026-09-22 (the deletion round's item 0), and it PASSED on the first unseeded launch:** two Simulators with no seed found a mesh through the provisional path over a real QUIC tunnel (`derived=2` on both, 1.6 s from browse), and the double-mint re-dial — the tunnel killed between the two commits — re-introduced under the tolerated meshID and converged 4 s after the thaw. The record is `Docs/Mesh-Network-Feasibility-Runbook.md`, "Lane C — the deletion round's item 0". Not yet on hardware.
 
 ## 0. The one-paragraph version
 

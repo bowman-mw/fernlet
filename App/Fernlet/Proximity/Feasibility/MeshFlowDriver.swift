@@ -73,9 +73,13 @@ enum MeshFlowVerb: String, CaseIterable, Sendable {
 /// The roles are asymmetric on purpose. When they were written the QUIC transport was members-only
 /// by construction, so the seeded descriptor was the only thing that could open the first tunnel;
 /// since D-4.3 (2026-09-21) a stranger is admitted provisionally while the join doors are open, so
-/// an *unseeded* pair has a path too — one no radio has yet run. Either way the ``founder``
-/// collapses the seeded descriptor to itself and arms the real ledger once the tunnel is up, and
-/// the ``joiner`` then travels the shipping admission path to get onto it.
+/// an *unseeded* pair has a path too — run and observed on 2026-09-22 (the deletion round's item 0).
+/// On a seeded run the ``founder`` collapses the seeded descriptor to itself and arms the real
+/// ledger once the tunnel is up, and the ``joiner`` then travels the shipping admission path to get
+/// onto it. On an unseeded run both roles are **inert** — `promoteToMesh()` founds at the first
+/// commit and the shipping auto-grant admits the pair before either fallback fires (`armed=false`,
+/// no `admitting`, no `requesting admission`) — and the founder role's one job is to sit on the
+/// lower fingerprint, the half the shipping code keeps, so its fallback loop can never race a yield.
 enum MeshMatrixRole: String, CaseIterable, Sendable {
 
     /// No membership role: seed, connect, drive flows. The pre-item-9 behaviour.
@@ -100,8 +104,16 @@ struct MeshFlowRunState {
     /// Flows already fired. Each fires once per run.
     var fired: Set<MeshFlowVerb> = []
 
-    /// Slots already asked to commit, so a commit that has not landed yet is not asked twice.
-    var asked: Set<UUID> = []
+    /// Slot coordinators already asked to commit, so a commit that has not landed yet is not asked
+    /// twice.
+    ///
+    /// Keyed on the **coordinator instance**, not `PeerSlot.id` (deletion round, item 0). The slot
+    /// id is the peer's id, so a slot that is torn down and re-dialed to the same peer comes back
+    /// under the same `UUID` with a fresh `ProximityCoordinator` at the gate — and keyed on the id
+    /// the driver never asked it again, which left both halves of the unseeded re-dial run parked at
+    /// `awaitingProximityCommit` for the rest of the run. The set is pruned to the live coordinators
+    /// on every poll, so a freed instance's identifier cannot shadow a later one.
+    var asked: Set<ObjectIdentifier> = []
 
     /// The slot summary at the last report.
     var slots = ""
@@ -362,14 +374,18 @@ enum MeshFlowDriver {
     /// exactly how the app's own debug "Force" control commits a stuck UWB gate; this stands in for
     /// that control, not for a user's consent decision.
     ///
-    /// Each device commits its **own** slot; there is no remote commit. Asked once per slot, because
-    /// the commit lands a tick later and a second ask would only add a line to the transcript.
-    /// Bounded by the manager's slot cap.
+    /// Each device commits its **own** slot; there is no remote commit. Asked once per slot
+    /// coordinator, because the commit lands a tick later and a second ask would only add a line to
+    /// the transcript — and a re-dialed slot carries a fresh coordinator, so it is asked afresh (the
+    /// user re-commits by dwell or tap on the product path; this stands in for that second commit
+    /// exactly as it stands in for the first). Bounded by the manager's slot cap.
     private static func commitPendingSlots(manager: MeshNetworkManager, state: inout MeshFlowRunState) {
-        for slot in manager.slots where !state.asked.contains(slot.id) {
+        let live = Set(manager.slots.map { ObjectIdentifier($0.coordinator) })
+        state.asked.formIntersection(live)
+        for slot in manager.slots where !state.asked.contains(ObjectIdentifier(slot.coordinator)) {
             switch slot.coordinator.state {
             case .awaitingManualCommit, .awaitingProximityCommit:
-                state.asked.insert(slot.id)
+                state.asked.insert(ObjectIdentifier(slot.coordinator))
                 echo("committing slot gate=\(slot.coordinator.state.debugLabel)")
                 manager.commitManualProximity(slotID: slot.id)
             default:

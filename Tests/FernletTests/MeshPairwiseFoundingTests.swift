@@ -2045,12 +2045,14 @@ struct MeshPairwiseFoundingTests {
     /// the resulting CLOSED mesh refuses a stranger at the seat, which is the stage a provisional
     /// peer is judged at.
     ///
-    /// **What neither half is: the capability observed on a radio.** The unseeded Lane C row — two
-    /// Simulators with no `FERNLET_MESH_MATRIX_MEMBERS` seed meeting over QUIC and founding a mesh
-    /// through the provisional path — is the stranger-admission design's owed test (vi), and it is
-    /// **still owed and still unrun**. First-meeting founding over QUIC has a code path as of
-    /// D-4.3; it has never been observed on any radio, in any lane, and nothing in this file or in
-    /// `Docs/Mesh-Network-Feasibility-Runbook.md`'s Lane C section should be read as saying it has.
+    /// **What neither half is: the capability observed on a radio — and that observation exists
+    /// elsewhere.** The unseeded Lane C row — two Simulators with no `FERNLET_MESH_MATRIX_MEMBERS`
+    /// seed meeting over QUIC and founding a mesh through the provisional path — is the
+    /// stranger-admission design's test (vi), and it was **run and passed on 2026-09-22** (the
+    /// deletion round's item 0; `Docs/Mesh-Network-Feasibility-Runbook.md`, "Lane C — the deletion
+    /// round's item 0"): `derived=2` on both nodes 1.6 s from browse, and the double-mint re-dial
+    /// converged after a tunnel killed between the two commits. This cell is the tier-1 half of that
+    /// claim and nothing more; the hardware half is still the device round's.
     @Test func twoUnseededManagersOpenTheDoorFoundAMeshAndThenCloseItAgainstAStranger() async throws {
         let rig = try MeshFoundingRig.build(2, label: "provisional-founding")
         defer { rig.teardown() }

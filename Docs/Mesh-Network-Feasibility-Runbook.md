@@ -907,6 +907,7 @@ up the responder (and, because hellos are exchanged before either is judged, usu
 | **Accepted baseline** | **Observed** — both devices rostered in one mesh complete the introduction and activate a tunnel, in both directions. *Amended 2026-09-01: the same line now carries `tunnels=`, and re-runs show `tunnels=1` throughout — see the convergence row below for what that corrects* | `[mesh-quic] accepted fb795f343c2954da sid=5894C3A5-…: tunnel activated` on A, and `accepted 0a676d9bbfcbbced sid=9ABA2D76-…` on B |
 | **Convergence: at most one tunnel per verified pair** (2026-09-01, P2 item 13) | **Observed — and it corrects the reading below.** Four instrumented runs, ~100 s each, both Simulators rostered in one mesh over QUIC: every activation reports `tunnels=1`, so the pair holds exactly one connection at every instant. The repeated `accepted` lines are one tunnel that comes up, ends, and re-forms — **not** two coexisting ones | `[mesh-quic] accepted fb795f343c2954da sid=97D76DF2-…: tunnel activated, tunnels=1` ×3 on A, `accepted 3ed10f78c02b580a sid=A3456D0E-…: tunnel activated, tunnels=1` ×3 on B. **Control** (same binary, `MeshTunnelConvergence.resolve` stubbed to `.keepBoth`, i.e. the pre-item-13 behaviour): `tunnels=1` ×3 on both sides again, and no `redundantTunnelClosed` — so the single tunnel is **not** attributable to the collapse. The duplicate does not form on this lane at all |
 | 1. Unknown identity (no roster at all) | **Observed** — neither device holds a descriptor, so every peer verdicts stranger | `refused unknownIdentity as responder: mesh=00000000-…-000000000000 epoch="" rosterMembers=0 rosterBarred=0` → `A QUIC tunnel was refused: The peer is not a member of this mesh.` |
+| 1a. **Provisional stranger** — the same launch shape as row 1 with the join doors open (2026-09-22, the deletion round's item 0) | **Observed — ACCEPTED, both directions.** Since D-4.3 an empty roster no longer refuses: `admitsStrangersProvisionally` admits the stranger to a *tunnel*, and membership is decided at the three doors above the transport. Row 1's refusal is now the CLOSED-doors answer (`isAdmittingNewPeers && isSessionOpen` false), pinned at tier 1 in `MeshIntroductionAuthorityRosterTests` | audit `mesh.introductionAuthority.legacyRosterFallback members=0` on both, then `[mesh-quic] accepted fb795f343c2954da sid=B6453553-…: tunnel activated, tunnels=1` on A and `accepted 1b4fd5b9e6f123e5 sid=7B49DC16-…` on B — see "Lane C — the deletion round's item 0" below for the founding and the double-mint re-dial that followed |
 | 2. Non-roster member (valid identity, absent from THIS roster) | **Observed** — same mesh id on both sides, each roster holds two members and neither holds the peer | `refused unknownIdentity as responder: mesh=11111111-…-555555555555 epoch="" rosterMembers=2 rosterBarred=0`. Row 1 and row 2 are the same *rejection* and different *situations*; `rosterMembers` is what tells them apart, which is why the console line carries it. |
 | 3. Hard-departed / removed member | **Observed as `barredMember`** | `refused barredMember as responder: … rosterMembers=2 rosterBarred=1` → `The peer has departed, been removed, or been blocked.` **P3 item 7 made this the shipping authority's own answer.** `MeshNetworkManager.roster` is now the derived roster (`admitted − departed − removed`), and `SignedAdmissionRecord` keeps the admitted member's signing key inside the record — so a verified removal or departure names a *key* and fills `barred` for real (walled at tier 1 in `MeshIntroductionAuthorityTests`). What is still owed on a radio is a removal produced by a real quorum, which needs ≥ 3 nodes (⌊|roster|/2⌋ + 1 votes): until loop item 9's 3-node lane, a two-Simulator run still reaches the branch with `FERNLET_MESH_CHAOS_BARRED`. |
 | 4. Ended / foreign meshID | **Observed, both sub-cases** | *Ended*: the device that left names the unbound all-zero mesh id and still refuses for the mesh reason, not the roster reason — `refused foreignMesh as responder: mesh=00000000-…-000000000000 … rosterMembers=0` — which is the mesh gate firing ahead of the roster gate, live. *Foreign*: two real, different mesh ids — `refused foreignMesh as responder: mesh=11111111-…` against a peer naming `99999999-…`. |
@@ -1319,6 +1320,8 @@ founder/joiner shape is therefore a **prerequisite** for loop item 9, not a deta
 > and on the owner list exactly as the 2026-09-12 correction left the MC half. What is pinned today
 > is tier 1 only: the transport arm in `MeshChannelIntroductionTests`, the join-door predicate in
 > `MeshIntroductionAuthorityRosterTests`, and the manager half in `MeshPairwiseFoundingTests`.
+>
+> **Observed 2026-09-22 (the deletion round's item 0).** The unseeded pair run was made and passed on its first launch: two Simulators with no seed found a mesh through the provisional path (`derived=2` on both, 1.6 s from browse), and the double-mint re-dial converged after a tunnel killed between the two commits. The paragraph above is now history; the run is "Lane C — the deletion round's item 0" below.
 
 
 #### Fixed (0b) — the root cause was the owner's link gate, not the transport
@@ -1579,6 +1582,8 @@ this radio.**
 > provisional path. That is the stranger-admission design's owed test (vi); the capability has
 > **never been observed on any radio**, and this section's results remain results about the
 > **seeded** shape. Everything measured below stands exactly as recorded.
+>
+> **Done 2026-09-22.** The unseeded row was run and passed — "Lane C — the deletion round's item 0" below. The seams in the table stay what the sentence above says they are: a convenience that makes a seeded run reproducible, and on an unseeded run the founder role is inert (`armed=false`).
 
 The seams below are the smallest thing that opens it, and each one stands in for exactly one step:
 
@@ -2211,6 +2216,135 @@ acceptance run: pair + picture + D observing the pause and both resumes), `run3`
 200 s settled share), `run6_glare` (the 17 µs glare), `run5_idle` (the 5 min 27 s advertise),
 `run7_ui` (the review-sheet screenshots), `probeC` / `probeD` (the dark-device diagnosis); builds in
 `item3lane/logs/build{1,2,3}.log`; findings for the fix agent in `item3lane/findings.md`.
+
+### Lane C — the deletion round's item 0: the UNSEEDED pair — founding through the provisional path, then the double-mint re-dial (run 2026-09-22)
+
+**The QUIC first-meeting capability the cutover built is OBSERVED.** Two Simulators with **no**
+`FERNLET_MESH_MATRIX_MEMBERS`, **no** `FERNLET_MESH_MATRIX_MESH_ID` and nothing persisted between
+them found a mesh through the provisional path over a real QUIC tunnel, converged their derived
+rosters to `derived=2` under one epoch head in **1.6 s** from browse, and then — the tunnel killed
+between the two commits — re-introduced under the tolerated meshID and converged again **4 s** after
+the thaw. This is the stranger-admission design's owed test (vi), the gate the deletion round's
+launcher put in front of deleting MultipeerConnectivity, and it passed on the first unseeded launch.
+Every correction above that says the path "has never been observed on any radio" is dated by this
+section.
+
+Build: `515145b` (the deletion-round launcher, on the cutover round's last plan blob) plus the one
+harness fix this lane needed (`MeshFlowDriver`'s commit dedupe, below — committed as the deletion
+round's item 0), `xcodebuild build -scheme Fernlet` into a fresh DerivedData, `** BUILD SUCCEEDED **`,
+zero `error:`, installed fresh on both nodes. No `xcodebuild` ran during any run (`pgrep -x
+xcodebuild` empty), a fresh log directory per run, and a per-Simulator audit stream (`log stream
+--level info --predicate 'subsystem == "com.fernlet"'`) started before each launch and killed by
+saved PID after it. Nodes — **A** `iPhone 17` (`09F57BCA-…A88`, fp `1b4fd5b9e6f123e5`; the install
+had been erased since P9, so the fingerprint is new), **B** `iPhone 17 Pro` (`454FCC9C-…661B`, fp
+`fb795f343c2954da`, unchanged since P9). A third Simulator (`iPhone 17 Pro Max`, `9BA301C9-…B7`)
+was booted the whole time with a non-matrix Fernlet process another session had left on it; it
+never appeared in either node's browse set (`browsed peers=1` on both, every run), because a launch
+without `FERNLET_MESH_MATRIX=1` starts no mesh radio.
+
+**The recipe.** Lane C's pair launch with the seed variables **omitted** and the roles set. The
+founder role goes on the **lower fingerprint** — `foundsPairwiseMesh(local:peer:)` is `local < peer`,
+so that is the side the shipping code keeps when both halves mint, and the harness's founder loop on
+the OTHER side would race the yield (its `armFounderLedgerForHarness()` guard is `membershipVerifier
+== nil`, which is exactly the yielder's state between `unwindNewbornMesh()` and the grant).
+
+```
+# founder (the LOWER fingerprint) — no MESH_ID, no MEMBERS
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=unseeded1-founder \
+SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit SIMCTL_CHILD_FERNLET_MESH_ROLE=founder \
+xcrun simctl launch --console-pty <A-udid> MBO.Fernlet -completeOnboarding
+# joiner, 3 s later: the same six variables with LABEL=unseeded1-joiner and ROLE=joiner
+```
+
+The banner reads `no descriptor seeded: roster stays empty, every peer verdicts stranger` on both,
+and `transport=default(quic)`. `FERNLET_MESH_TRANSPORT` is not set (it is inert since the flip and
+retires with the seam in this round).
+
+#### Run 1 — the unseeded founding (`unseeded1-*`, 150 s)
+
+| Check | Required | Result | Evidence |
+| --- | --- | --- | --- |
+| The roster consulted at the introduction is EMPTY on both sides | `members=0` | **Observed** | audit `mesh.introductionAuthority.legacyRosterFallback members=0` on A and on B, 0.3 ms apart, at the introduction |
+| `admitsStrangersProvisionally` answers the introduction | a tunnel where P2's matrix row 1 recorded `refused unknownIdentity … rosterMembers=0` | **Observed** — the same launch shape as row 1, and the introduction ACCEPTED on both sides | A: `[mesh-quic] accepted fb795f343c2954da sid=B6453553-…: tunnel activated, tunnels=1`; B: `accepted 1b4fd5b9e6f123e5 sid=7B49DC16-…: tunnel activated, tunnels=1`. Zero `refused` lines on either node. An accept at `rosterMembers=0` has exactly one path through `MeshChannelIntroductionExchange.receive`: `guard roster.admitsStrangersProvisionally else { return .unknownIdentity }` |
+| The identity introduction, then the commit | slot at the gate, then `connected` | **Observed** | both: `committing slot gate=awaitingProximityCommit` → `slots total=1 committed=1 states=[connected]`; `capabilities peer=[activities,…,wire2]` |
+| `promoteToMesh` on the first commit — both halves mint | a descriptor on each side, the double mint repaired | **Observed, both halves** | A (committed second): audit `mesh.meshDescriptor.droppedUncommittedSlot` at 23:59:24.03 — B's descriptor arrived while A was still uncommitted (the commit-timing race P8 item 0 named), then A founded and announced its own; B: `mesh.descriptor.yieldedNewbornMesh adopted=5612A710-…` at :24.22, `mesh.session.abandonedNotDurable` (the yield's unwind), `mesh.sessionCeiling.armedFromAdoptedMesh` |
+| The admission request, auto-granted | a grant with no owner tap and no harness grant | **Observed — the shipping auto-grant, not the harness** | A: audit `mesh.admissionRequest.autoGrantedFoundingPair` at :24.25, `mesh.membershipLedger.reGossiped frames=2`; B: `[mesh-quic] membershipRecord fernlet.mesh.member-admission.v1 accepted`, audit `mesh.membershipLedger.bootstrapped` :24.26, `mesh.membershipLedger.adopted members=2` :24.32. **The harness fallbacks were silent:** A printed `founder armed=false ledger=present derived=2` (the shipping founding had already produced the ledger by the driver's next poll), no `admitting …` line on A, no `requesting admission` line on B |
+| `derived=2` on both, one epoch head | both `[mesh-flow] membership ledger=present derived=2` | **Observed** | both: `membership ledger=present derived=2 barred=0 status=active epochRef=1.19ed1b9595e0352e69fafba0be3b88e0.1b4fd5b9e6f123e5` (A, the lower fingerprint, is the coordinator named inside the ref) |
+| Stability | one activation per side, no ends | **Observed** | one `tunnel activated, tunnels=1` per side, zero `tunnelEnded`, heartbeats both ways for the rest of the 150 s |
+
+**Timeline** (audit-stream clocks, both nodes on one host): B browses A 23:59:22.73; A browses B
+:23.18; the empty roster consulted on both :23.84; tunnel live :23.85; A drops B's early descriptor
+:24.03; B yields :24.22; A auto-grants :24.25; B bootstraps :24.26; B adopts `members=2` :24.32.
+**Browse to `derived=2`: 1.6 s.**
+
+One benign ordering artefact, self-healing and worth knowing: B logged `mesh.keyAgreement.rejected
+… reason=The record's signer was never admitted to this mesh.` → `mesh.keyAgreement.parked` →
+`mesh.keyAgreement.parkedReoffered count=1` — A's key-agreement record reached B before B's ledger
+held A's founder admission, was parked, and was re-offered once the ledger was adopted. The audit
+names each step; nothing was lost.
+
+#### Run 2 — the double-mint re-dial (`unseeded2-*`): the tunnel killed between the two commits
+
+The design's deadlock (§28.8; the stranger-admission design's third finding) was: both halves mint,
+the tunnel drops before `yieldsNewbornMesh` converges them, and the old unconditional meshID equality
+refuses every re-dial for the session. The lane produces "the tunnel drops between the two commits"
+by **freezing the joiner the instant the founder's driver commits** — a watcher on the founder's
+console (`grep -q "committing slot"` at 50 ms) sends `SIGSTOP` to the joiner's process — so the
+founder founds alone, then the founder's three missed beats end the tunnel, then `SIGCONT`. Kill by
+saved PID; the whole thing is `run2.sh` in the session scratch.
+
+**First attempt — a harness limitation, not the radio.** Freeze at 04:02:29Z; the founder held
+`ledger=present derived=1` alone; at 04:03:59Z (+90 s, exactly `intervalSeconds ×
+missedBeatsBeforeIdleReap`) the founder logged `tunnelEnded controlStreamEnded … live=true tunnels=0
+… NWError error 60` and `slots total=0`; thaw at 04:04:01Z; the joiner logged its own
+`tunnelEnded … NWError 61` and `heartbeat datagram refused, falling back … NWError 57`, then
+`slots total=0`. **Then both sides re-dialed and re-accepted** — `accepted fb795f343c2954da
+sid=655368BA-…` on A, `accepted 1b4fd5b9e6f123e5 sid=6D095D22-…` on B, the same `sid`s as before
+because both processes survived — with **A holding a real meshID and a derived roster of one in
+which B is a stranger, and B mesh-less (`unboundMeshID`)**. That is the tolerated arm of the meshID
+rule firing on both sides: before D-4.3 this exact shape is the matrix's row 4 "Ended" sub-case
+(`refused foreignMesh … mesh=00000000-…`). Both slots reached `awaitingProximityCommit` — and
+**neither driver committed them**: `PeerSlot.id` is the peer's id, so the re-dialed slot came back
+under the same `UUID` with a fresh coordinator, and `MeshFlowDriver`'s once-per-slot `asked:
+Set<UUID>` never asked again. Over the 180 s the pair sat there, the joiner dropped nine of the
+founder's coordinator beacons — `mesh.groupKey.droppedUncommittedSlot` ×9 — which is Option 1b's
+commit gate observed live on a provisional slot. On the product path a user re-commits by dwell or
+tap; the harness stood in for the first commit and not the second. **Fix:** the dedupe is keyed on
+the coordinator instance (`ObjectIdentifier`) and pruned to the live set each poll (committed with
+this section). Rebuilt, reinstalled, re-run.
+
+**Second attempt — PASS.**
+
+| Check | Required | Result | Evidence |
+| --- | --- | --- | --- |
+| The founder founds ALONE | `derived=1` with the joiner frozen at the gate | **Observed** | A at 04:09:40Z: `committing slot` → `committed=1` → `founder armed=false ledger=present derived=1`; B's last line before the freeze: `slots total=1 committed=0 states=[awaitingProximityCommit]` (its own commit ask had gone out in the same second and had not landed) |
+| The tunnel dies between the commits | the founder ends it by the heartbeat rule | **Observed** | A at 04:11:10Z (+90 s): `tunnelEnded controlStreamEnded fb795f343c2954da live=true tunnels=0 … NWError error 60`, `slots total=0` |
+| Both re-introduce under the tolerated meshID | `accepted` on both, A real-id vs B unbound | **Observed** | after the thaw at 04:11:12Z: B `tunnelEnded … NWError 60` + `heartbeat datagram refused … NWError 57` → `slots total=0`; then A `accepted fb795f343c2954da sid=DE68C433-…: tunnel activated, tunnels=1`, B `accepted 1b4fd5b9e6f123e5 sid=B4697812-…: tunnel activated, tunnels=1`; zero `refused` on either node in the whole run |
+| The second commit, the second mint, the convergence | both commit; the joiner mints and yields; auto-grant; `derived=2` | **Observed** | both: `committing slot gate=awaitingProximityCommit` (the fixed driver); B audit: `mesh.descriptor.yieldedNewbornMesh adopted=93C7EE35-…` 04:11:15.94 → `abandonedNotDurable` → `sessionCeiling.armedFromAdoptedMesh` → `membershipLedger.bootstrapped` :15.98 → `adopted members=2` :16.05; A audit: `mesh.admissionRequest.autoGrantedFoundingPair` :15.97, `membershipLedger.reGossiped frames=2` :16.03; both consoles: `membership ledger=present derived=2 barred=0 status=active epochRef=1.86a855f8abb18c57a44137320b47976f.1b4fd5b9e6f123e5` |
+| Timing | — | **thaw → `derived=2` in 4 s** | 04:11:12Z → 04:11:16.05Z |
+
+**What this shape is, precisely.** At the re-dial A held a real id and B held `unbound`: B's
+pre-freeze commit never landed, so B minted for the first time only at the re-dial commit and then
+yielded. The design's strongest deadlock — **both** halves holding different real ids at the
+re-dial — was not produced on the lane (it needs the second commit to land inside the sub-second
+window before the descriptors cross). It rides the **same arm**: `receive` reads
+`guard hello.meshID == localHello.meshID || isProvisionalStranger` and the value of either id plays
+no part, so real-vs-unbound and real-vs-real are one code path; the real-vs-real case stays pinned at
+tier 1 only (`MeshChannelIntroductionTests`' provisional-stranger cells). Also observed on the way:
+the re-dial reused both `sid`s (the processes survived) and both endpoints (the Bonjour instance
+names are per session, not per tunnel), so the re-propose budget was charged once per side.
+
+**What this lane still cannot say.** Nothing here ran on hardware — the unseeded first meeting
+between two phones is the device round's Lane D founder/joiner row, on this build. And the founder
+role is **inert on an unseeded run** (`armed=false`, no `admitting`, no `requesting admission`): the
+role exists for the seeded shape, and the unseeded shape needs it only to put the harness's fallback
+loops on the side that never yields.
+
+Raw logs: the session scratch `lanec/` — `harvest/`, `run1/`, `run2-first-attempt/`, `run2/`
+(`founder.log` / `joiner.log` are the `--console-pty` transcripts, `audit-*.log` the audit
+streams, `events.log` the freeze/end/thaw instants); the scripts `common.sh`, `harvest.sh`,
+`run1.sh`, `run2.sh` beside them.
 
 ### Lane D — device ↔ simulator, the PRODUCTION mesh over QUIC (specified 2026-09-01, **run 2026-09-21**)
 
