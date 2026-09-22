@@ -4,7 +4,7 @@
 salvaged from the superseded P7 branch. The launcher is
 [Next-Round-Prompt-Owner-Calls-2026-09-22.md](Next-Round-Prompt-Owner-Calls-2026-09-22.md); the round it follows is
 [Mesh-Migration-Loop-Ledger-Device-2026-09-22.md](Mesh-Migration-Loop-Ledger-Device-2026-09-22.md) (item 3, the five calls).
-**Started:** 2026-09-22 12:54 EDT. **Tree at seed:** `main` = `3397cc2`; HEAD's CODE byte-identical to `d88062c`
+**Started:** 2026-09-22 12:54 EDT. **Closed:** 2026-09-22, main = `dcc1925` (not pushed) — stop condition 1 as far as the day allows: items 1–3 built, verified three times, fixed and gated; item 4b/4c done; **item 0 NOT read out** (the soak runs tonight). **Tree at seed:** `main` = `3397cc2`; HEAD's CODE byte-identical to `d88062c`
 (`git diff --stat d88062c..HEAD -- . ':(exclude)Docs'` empty — every commit since touched `Docs/` only).
 **Worktree:** the primary checkout, `main` directly. The owner's held working copies were never staged or written:
 `App/Fernlet/Localizable.xcstrings`, the migration plan, `Docs/FernletSpecificationV3.md`, `Docs/ImplementationPlan.md`,
@@ -55,6 +55,8 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`.
 - Item 1: 51 tests in 6 suites green (both run-policy suites, the funnel, both P7 clauses, P7 honesty); power-of-10 0 violations; doc coverage 0.
 - Item 2: `ProximityCoordinatorTests` 41/41; 294 tests in 16 neighbouring suites; the four boundary walls green but for the held-xcstrings red below; `Scripts/spm-wall-check.sh` WALL CHECK PASSED (warnings are errors).
 - Item 3: 66 tests in 9 session/restore/store/wipe suites; with five boundary walls 166/167 across 14 of 14 named suites.
+- **The mesh-batteries CI line, measured three times in clean worktrees** (never inferred): `04b1d99` 1219/140 (two reds, both explained — a `/tmp` path artifact and a load flake, both green on a re-run); `65c9432` **1222/141, 0 failed** → floor 1216 → 1222 (`c97474d`); `316ae29` **1226/141, 0 failed** → floor 1222 → 1226 (`dcc1925`). The last measurement ran over the reconnect session's `31fafd6` too.
+- The re-verify fixes on the merged tree: `MeshNameWithholdingTests` 7/7; 256 tests in 13 suites; power-of-10 0; doc coverage 0; spm-wall-check WALL CHECK PASSED.
 - No full-suite run (the owner's standing rule).
 
 ## Pre-existing reds in the primary checkout — NOT caused by this round
@@ -64,8 +66,17 @@ States: `todo` / `in-flight` / `done` / `blocked` / `skipped (reason)`.
    4 535-line older copy (HEAD: 6 478 lines) that contains no `P9-3-A`, no §15/§27 sections.
 Both come from the owner's held working copies; a verification in a clean worktree reads the committed files.
 
+## Where the next session starts
+1. **Item 0 — the soak read-out**, on the phone's installed `d88062c`-code build: the runbook's *Lane B* row and plan §15.3 with dates, the degraded ladder chosen by its numbers. Only after that may a new build go on the phone.
+2. The owner decisions listed under *Residuals* above (joining before a name is known; the recipe radio's advertised name for lock users; the pre-existing presence-heart forger path; the P7 resume-offer card).
+3. Nothing here is pushed: `main` is `dcc1925`.
+
 ## Concurrent work seen
 `claude/mesh-reconnect-fixes-2026-09-22` (`f210db6`, one commit, its own worktree) also edits
 `FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift` (+146) and the runbook. Items 2 and 3 touch the same file in
 different functions; whichever merges second should expect a textual merge, not a semantic one. Its two booted Simulators
-(`Fernlet Reconnect A/B`) were left alone.
+(`Fernlet Reconnect A/B`) were left alone. At its request (the owner's instruction) this session PAUSED at
+`c97474d`, touching nothing in the primary, while it fast-forwarded `main` to `31fafd6` (re-seat of returning members,
+the pair's leave waiting for the partner's close, the island LED; `rosterDisplayName(for:)` keeps a known name over a
+withheld one on a re-commit — a real gap in item 2 it found and fixed). The nine held files came through byte-identical
+(its shasum check). The third verify's fixes landed on top of that merge.
