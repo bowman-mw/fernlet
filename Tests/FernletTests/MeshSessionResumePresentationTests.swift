@@ -147,6 +147,20 @@ struct MeshSessionResumePresentationTests {
         }
     }
 
+    /// A cold start: a FRESH manager over the same host, so nothing in memory carries across — the
+    /// ending, the bar and the mark can only come back off the sealed file (the verify's FIX: the
+    /// first pin ran both launches on one manager, whose bar from launch 1 was never cleared).
+    private static func relaunch(_ rig: MeshFoundingRig) -> MeshNetworkManager {
+        MeshNetworkManager(store: rig.nodes[0].store, transport: FakeMeshTransportSession(), identity: rig.identities[0])
+    }
+
+    /// What opening the Friends tab does BEFORE the card appears: the run policy's fresh-search
+    /// entry calls `startJoin()`, which resets the session state machine — and used to nil the very
+    /// context the acknowledgement keyed on (the verify's BLOCKER).
+    private static func openFriendsTab(_ manager: MeshNetworkManager) {
+        manager.startJoin()
+    }
+
     /// Seeds a sealed context this device LEFT, into a node's own store.
     private static func seedOwnDeparture(into store: FernletStore) throws -> UUID {
         let meshID = UUID()
@@ -160,30 +174,62 @@ struct MeshSessionResumePresentationTests {
         return meshID
     }
 
-    /// **The finding's pin.** Two cold starts over ONE sealed `ownDeparture` context, the card
-    /// appearing on the first: ONE presentation, not two — and the durable rejoin bar, which the
-    /// same file carries, still refuses the mesh at the second launch.
-    @Test func anEndingIsPresentedOnceAcrossTwoLaunchesAndTheRejoinBarSurvives() throws {
+    /// **The finding's pin, as a real app runs it.** Two cold starts — a FRESH manager each — over
+    /// ONE sealed `ownDeparture` context; on each, the Friends tab opens (`startJoin()`) BEFORE the
+    /// card appears and acknowledges. ONE presentation, not two, and each launch re-derives the
+    /// rejoin bar from the file itself. Red on the first build (keyed on `restoredSessionContext`,
+    /// which `startJoin()` nils): `[.youLeft, .youLeft]`, the nag.
+    @Test func anEndingIsPresentedOnceAcrossTwoColdStartsEvenAfterTheFriendsTabStartsASearch() throws {
         let rig = try MeshFoundingRig.build(1, label: "resume-once")
         defer { rig.teardown() }
-        let node = rig.nodes[0]
-        let meshID = try Self.seedOwnDeparture(into: node.store)
+        let meshID = try Self.seedOwnDeparture(into: rig.nodes[0].store)
         let now = MeshMembershipFixtures.base.addingTimeInterval(60)
         var presentations: [MeshSessionResumePresentation] = []
-        // R2: two launches, stated.
+        var barsFromTheFile: [MeshSessionTerminationReason?] = []
+        // R2: two cold starts, stated.
         for _ in 0..<2 {
-            let presented = Self.launch(node.manager, now: now)
+            let manager = Self.relaunch(rig)
+            let presented = Self.launch(manager, now: now)
+            barsFromTheFile.append(manager.rejoinRefusal(for: meshID))
             guard presented != .nothing else { continue }
             presentations.append(presented)
+            Self.openFriendsTab(manager)
             // What the card's appearance does.
             DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
-                node.manager.acknowledgeSessionEndingPresented()
+                manager.acknowledgeSessionEndingPresented()
             }
+            manager.stopJoin()
         }
         #expect(presentations == [.previousSessionEnded(.youLeft)],
                 "the ending is told once — the second cold start is silent, not a second 'You left'")
-        #expect(node.manager.rejoinRefusal(for: meshID) == .ownDeparture,
-                "and the mesh this device left is still barred: the mark silenced the card, not the bar")
+        #expect(barsFromTheFile == [.ownDeparture, .ownDeparture],
+                "and BOTH cold starts re-derive the bar from the file: the mark silenced the card, not the bar")
+    }
+
+    /// A new ending is news even over a stale mark: writing a termination clears `endingPresented`,
+    /// so the mark always describes the ending that was shown and never swallows a later one.
+    @Test func aNewlyWrittenEndingClearsAStaleMark() throws {
+        let rig = try MeshFoundingRig.build(1, label: "resume-stale-mark")
+        defer { rig.teardown() }
+        let store = MeshSessionStore(scope: rig.nodes[0].store.meshSessionStorage)
+        let base = MeshMembershipFixtures.base
+        let markedLive = MeshSessionContext(
+            meshID: UUID(), protocolVersion: 3, createdAt: base,
+            hardDeadline: base.addingTimeInterval(MeshSessionCeiling.ceilingSeconds),
+            endingPresented: true
+        )
+        try MeshSessionStoreFixtures.save(markedLive, into: store, install: Self.install)
+        let manager = Self.relaunch(rig)
+        _ = Self.launch(manager, now: base.addingTimeInterval(60))
+        let wrote = DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
+            manager.persistSessionContext(
+                addingEpochHead: nil,
+                terminating: MeshSessionLocalTermination(reason: .ownDeparture, at: base.addingTimeInterval(120))
+            )
+        }
+        #expect(wrote, "the fixture really wrote an ending")
+        let next = Self.launch(Self.relaunch(rig), now: base.addingTimeInterval(180))
+        #expect(next == .previousSessionEnded(.youLeft), "the new ending is told, despite the stale mark")
     }
 
     /// The mark is written by the card APPEARING, not by the restore: a launch whose Friends tab was
@@ -191,11 +237,10 @@ struct MeshSessionResumePresentationTests {
     @Test func anEndingNeverShownIsToldAgainAtTheNextLaunch() throws {
         let rig = try MeshFoundingRig.build(1, label: "resume-unseen")
         defer { rig.teardown() }
-        let node = rig.nodes[0]
-        _ = try Self.seedOwnDeparture(into: node.store)
+        _ = try Self.seedOwnDeparture(into: rig.nodes[0].store)
         let now = MeshMembershipFixtures.base.addingTimeInterval(60)
-        let first = Self.launch(node.manager, now: now)
-        let second = Self.launch(node.manager, now: now)
+        let first = Self.launch(Self.relaunch(rig), now: now)
+        let second = Self.launch(Self.relaunch(rig), now: now)
         #expect(first == .previousSessionEnded(.youLeft), "the first launch tells it")
         #expect(second == .previousSessionEnded(.youLeft), "and, never shown, so does the next — nothing was lost")
     }

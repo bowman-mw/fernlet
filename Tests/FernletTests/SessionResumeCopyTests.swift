@@ -65,5 +65,10 @@ import ProximityKit
                 "and so is its dismissal")
         #expect(!view.contains("lastSessionRestoreOutcome") && !view.contains("restoredSessionContext"),
                 "the app reads none of the manager's internal restore surfaces directly")
+        // Owner-calls item 3 (2026-09-22): the card's appearance is what marks an ending as told, so
+        // the next cold start is silent. Deleting this line left every other test green (the verify's
+        // FIX) — the nag would come back with nothing to say so.
+        let acknowledgements = view.components(separatedBy: ".onAppear { manager.acknowledgeSessionEndingPresented() }").count - 1
+        #expect(acknowledgements == 1, "the resume card acknowledges its ending exactly once, on appearing")
     }
 }
