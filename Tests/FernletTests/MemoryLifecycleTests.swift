@@ -29,7 +29,6 @@ import FernletDomainModel
 import FernletFoundation
 import FernletPersistence
 import Foundation
-import MultipeerConnectivity
 import Observation
 import Testing
 @testable import Fernlet

@@ -6,24 +6,22 @@ import FernletCrypto
 
 // MARK: - MeshTransportSelectionTests
 
-// P2 item 8: `MeshNetworkManager` takes its radio through a seam instead of owning a
-// `MeshMultipeerSession` outright. Three claims are worth a wall here, and each has an obvious way
-// to be quietly broken:
+// P2 item 8: `MeshNetworkManager` takes its radio through a seam instead of owning one outright.
+// Three claims are worth a wall here, and each has an obvious way to be quietly broken:
 //
-// 1. **QUIC is the default on every shipping path** — flipped from MultipeerConnectivity by the
-//    MC→QUIC cutover (2026-09-21). The seam that made QUIC reachable also made it accidentally
-//    reachable, and now the seam that keeps MC reachable for a DEBUG bisect could just as easily
-//    make IT accidentally reachable; the selection is pinned as a pure function in both
-//    directions, including against near-miss spellings of the opt-in.
+// 1. **QUIC is the radio, on every path** — flipped from MultipeerConnectivity by the MC→QUIC
+//    cutover (2026-09-21), and the only radio in the tree since the deletion round (2026-09-22)
+//    took `MeshTransportKind`, `MeshTransportFactory` and the DEBUG launch variable with the second
+//    conformer. What is left to pin is the initializer's one default, as a VALUE.
 // 2. **The QUIC radio gets a real `MeshIntroductionAuthority`.** Nil is not a degraded mode — the
 //    transport refuses every tunnel — so a manager that forgot to attach one would present as
 //    "QUIC connects to nobody", which is exactly the symptom nobody debugs quickly.
-// 3. **Nothing about the choice is stored.** No setting, no UI, no `UserDefaults` key: the
-//    selection lasts one launch and owes no row on the persisted-surface wipe ledger.
+// 3. **Nothing about the radio is stored.** No setting, no UI, no `UserDefaults` key: there is no
+//    selection any more, and nothing owes a row on the persisted-surface wipe ledger.
 //
-// The `.multipeer` cells below outlive the flip on purpose: the kind, the factory arm and the
-// `MeshMultipeerSession` conformance are all still there, as the bisect path across the cutover
-// boundary, and they retire in the DELETION round with the radio's two files.
+// The `.multipeer` cells that outlived the flip (the DEBUG opt-in, the per-kind factory, the MC
+// conformer ignoring the authority) retired with the radio in the deletion round; the suite keeps
+// its name so the CI mesh line and `CIGateSelectorBoundaryTests` are untouched by it.
 
 @Suite(.serialized) @MainActor
 struct MeshTransportSelectionTests {
@@ -31,76 +29,16 @@ struct MeshTransportSelectionTests {
 
     // MARK: - Selection
 
-    /// The default is QUIC, and an absent/unrecognized selection lands there too. A garbage value
-    /// must not leave a build with no radio at all.
-    ///
-    /// The junk list was re-chosen at the cutover. Before the flip the interesting near-miss was a
-    /// spelling of `quic` that let the opt-in through by accident; now the default IS quic, so a
-    /// fallback that happened to be right would prove nothing. The near-misses that matter now are
-    /// the ones that could silently put a shipping build back on the RETIRED radio, so every
-    /// variant of `multipeer` that is not the exact frozen token is in the list.
-    @Test func theShippingDefaultIsQUIC() {
-        #expect(MeshTransportFactory.shippingDefault == .quic)
-        #expect(MeshTransportFactory.resolvedKind(environment: [:]) == .quic)
-        for junk in ["", "QUIC", "quic ", "multipeer2", "Multipeer", "MULTIPEER", "multipeer ",
-                     " multipeer", "mc", "1", "true"] {
-            #expect(
-                MeshTransportFactory.resolvedKind(
-                    environment: [MeshTransportFactory.quicSelectionEnvironmentKey: junk]
-                ) == .quic,
-                """
-                an unrecognized selection (\(junk)) must fall back to the shipping default. A \
-                near-miss spelling of `multipeer` that resolved would put the build back on the \
-                radio the cutover retired, which is the failure this list exists for
-                """
-            )
-        }
-    }
-
     /// A manager built the way the app builds one runs on the QUIC radio — the assertion that would
-    /// fail the moment a default flipped anywhere in the factory or the initializer.
-    ///
-    /// Both directions, not one: the MC conformer still exists and is still constructible by the
-    /// factory (that is the bisect path), so "is a `NetworkMeshSession`" alone would go green on a
-    /// build that somehow held both. This is red-once #1 of the cutover — revert `shippingDefault`
-    /// on a scratch copy and it fails here first.
+    /// fail the moment the initializer's one default moved. Since the deletion round (2026-09-22)
+    /// retired the second conformer with the selection seam, there is nothing left for it to move
+    /// TO except a mistake; this is the cutover's red-once #1, kept as the VALUE half of
+    /// `MeshP9McRetirementAcceptanceTests`' source pin on `transport ?? NetworkMeshSession()`.
     @Test func theAppsInitializerRunsOnTheQUICRadio() {
         let manager = MeshNetworkManager(store: store)
 
         #expect(manager.transportForTesting as? NetworkMeshSession != nil,
                 "the public initializer must build the QUIC radio")
-        #expect(manager.transportForTesting as? MeshMultipeerSession == nil,
-                "and must never build the retired MultipeerConnectivity one")
-    }
-
-    /// The mirror of the cell above, and the other half of the cutover: MultipeerConnectivity is
-    /// still SELECTABLE — by injection, and by the DEBUG-only launch variable — and is never the
-    /// default. That is what makes a bisect across the cutover boundary possible, and it is exactly
-    /// the reachability that must not become an accident. Both are opt-in; neither is a stored
-    /// preference. The cell retires in the deletion round with the radio.
-    @Test func theMultipeerRadioIsSelectableAndOptInUnderDebug() {
-        #expect(
-            MeshTransportFactory.resolvedKind(
-                environment: [MeshTransportFactory.quicSelectionEnvironmentKey: MeshTransportKind.multipeer.rawValue]
-            ) == .multipeer,
-            "the DEBUG launch variable must still be able to select the retired radio for a bisect"
-        )
-        #expect(MeshTransportFactory.resolvedKind(environment: [:]) != .multipeer,
-                "and it must never be what a launch that selects nothing gets")
-        let manager = MeshNetworkManager(store: store, transport: MeshMultipeerSession())
-        #expect(manager.transportForTesting as? MeshMultipeerSession != nil,
-                "an injected MC radio must be the one the manager drives")
-    }
-
-    /// Every kind builds the radio it names, so a new case cannot be added without a factory arm.
-    @Test func everyTransportKindBuildsItsOwnRadio() {
-        for kind in MeshTransportKind.allCases {
-            let session = MeshTransportFactory.makeSession(kind)
-            switch kind {
-            case .multipeer: #expect(session as? MeshMultipeerSession != nil)
-            case .quic:      #expect(session as? NetworkMeshSession != nil)
-            }
-        }
     }
 
     // MARK: - The introduction authority
@@ -183,22 +121,6 @@ struct MeshTransportSelectionTests {
         #expect(throws: IdentityError.invalidKeyData) {
             try manager.signChannelIntroduction(Data("not a channel-introduction transcript".utf8))
         }
-    }
-
-    /// The MC radio is handed the authority too and ignores it by contract — it authenticates one
-    /// layer up, inside the slot coordinator's identity introduction. What matters is that giving it
-    /// one changes nothing observable, so the wiring can stay identical on both paths.
-    ///
-    /// The conformance survives the cutover deliberately: a bisect launch is a real launch, and a
-    /// DEBUG build put back on MC must still wire up exactly as it did before the flip. It dies with
-    /// the radio's file in the deletion round.
-    @Test func theMultipeerRadioIgnoresTheAuthorityWithoutIncident() {
-        let session = MeshMultipeerSession()
-        let manager = MeshNetworkManager(store: store, transport: session)
-
-        session.attachIntroductionAuthority(manager)
-
-        #expect((manager.transportForTesting as? MeshMultipeerSession) === session)
     }
 
     // MARK: - The wiring itself

@@ -29,10 +29,9 @@
 // fake through. A needle satisfied by a rename alone is named as such in `GATES.md` and is not one.
 //
 // **What this battery does NOT claim** is in clause (e), by name and not by omission: item 4 was
-// SPLIT, and although the MC->QUIC FLIP landed on 2026-09-21 the two MC files, the _fernlet-friend
-// plist pair and the permit list are held through it for the DEBUG bisect path, so clause (d) is
-// still an HONESTY row asserting the current truth rather than a zero-list — it becomes the
-// zero-list in the deletion round; the two lane rows (9.2.2, 9.3.2) are tier-2
+// SPLIT; the MC->QUIC FLIP landed on 2026-09-21 and the DELETION on 2026-09-22, so clause (d) is
+// now the zero-list it was always meant to become (the two MC files absent, the framework imported
+// nowhere, the _fernlet-friend pair retired); the two lane rows (9.2.2, 9.3.2) are tier-2
 // sim↔sim observations; item 0's rows need phones in the owner's hands; P9-3-A is a product
 // decision on P7's run-policy table. The two determinism digests keep their one home in
 // `MeshP5AcceptanceTests`, this file spells neither, and the gate that runs it re-runs the
@@ -84,7 +83,8 @@ enum MeshP9Acceptance {
     /// The workflow that gates this battery.
     static let workflowPath = ".github/workflows/s3-wall.yml"
 
-    /// The two files that still own MultipeerConnectivity, sorted (item 4's `[SPLIT: LATER]` half).
+    /// The two files that owned MultipeerConnectivity until the deletion round (2026-09-22), sorted —
+    /// pinned ABSENT now (item 4's `[SPLIT: LATER]` half, taken).
     static let multipeerFiles = [
         "FernletKit/Sources/ProximityKit/Transport/MCPeerIDStore.swift",
         "FernletKit/Sources/ProximityKit/Transport/MeshMultipeerSession.swift"
@@ -123,15 +123,15 @@ enum MeshP9Acceptance {
 
     // MARK: The Bonjour partition (clause (d)'s own expectation)
 
-    /// The four MultipeerConnectivity types P9 item 4's `[SPLIT: NOW]` half retired.
+    /// The six MultipeerConnectivity types retired: four by P9 item 4's `[SPLIT: NOW]` half, and the
+    /// friend pair by the deletion round (2026-09-22), in the same commit that removed the radio.
     static let retiredBonjour: Set<String> = [
-        "_fernlet-near._tcp", "_fernlet-near._udp", "_fernlet-recipe._tcp", "_fernlet-recipe._udp"
+        "_fernlet-near._tcp", "_fernlet-near._udp", "_fernlet-recipe._tcp", "_fernlet-recipe._udp",
+        "_fernlet-friend._tcp", "_fernlet-friend._udp"
     ]
 
-    /// The five a shipping radio advertises or browses today: the three QUIC radios, plus the friend
-    /// mesh's MultipeerConnectivity pair, which the cutover commit moves into ``retiredBonjour``.
+    /// The three a shipping radio advertises or browses: the three QUIC radios, and nothing else.
     static let liveBonjour: Set<String> = [
-        "_fernlet-friend._tcp", "_fernlet-friend._udp",
         "_fernlet-mesh2._udp", "_fernlet-near2._udp", "_fernlet-recipe2._udp"
     ]
 
@@ -875,95 +875,71 @@ struct MeshP9RecipeSwapAcceptanceTests {
 
 // MARK: - (d) The MultipeerConnectivity retirement — an HONESTY row, not a zero-list
 
-/// **Item 4, and the one clause of this battery that asserts a NON-zero.**
+/// **Item 4 — the zero-list, at last.**
 ///
-/// The launcher's row asked for "the MC retirement as a zero-list". It is still not zero, but the
-/// REASON changed on 2026-09-21 and so did half these cells. When this battery landed,
-/// `MeshTransportFactory.shippingDefault` was `.multipeer` and first-meeting stranger admission had
-/// no QUIC path, so both facts were pinned as the argument for keeping the files. The owner then
-/// took **D-4.3 (Option 1)** — provisional stranger admission while the join doors are open — and
-/// the **flip** landed: `shippingDefault` is `.quic`, the app's initializer builds a
-/// `NetworkMeshSession`, and no shipping launch constructs the MC radio at all.
+/// The launcher's row asked for "the MC retirement as a zero-list". When this battery landed it could
+/// not be one: `MeshTransportFactory.shippingDefault` was `.multipeer` and first-meeting stranger
+/// admission had no QUIC path, so both facts were pinned as the ARGUMENT for keeping the files. The
+/// owner then took **D-4.3 (Option 1)** and the **flip** landed (2026-09-21); the two files, the
+/// `_fernlet-friend` plist pair and `TransportNeutralityBoundaryTests.permittedFiles` were held one
+/// round longer as a DEBUG bisect path; the unseeded Lane C pair run then observed the provisional
+/// path founding a mesh on a real tunnel (2026-09-22, the deletion round's item 0); and the
+/// **deletion** landed the same day. Every cell below now asserts the zero it was written to become,
+/// in both directions: the files ABSENT, the framework imported NOWHERE, the friend pair RETIRED
+/// and the three QUIC types still declared, and the one default left — the initializer's
+/// `NetworkMeshSession()` — named in source.
 ///
-/// **What is left non-zero is a DELIBERATE HOLD, not a blocker.** The owner's third decision — "the
-/// series' split: flip, gate, then delete" — keeps `MeshMultipeerSession.swift`, `MCPeerIDStore.swift`,
-/// the `_fernlet-friend` plist pair and `TransportNeutralityBoundaryTests.permittedFiles` alive
-/// through the flip so a DEBUG build can be launched back onto MC (`FERNLET_MESH_TRANSPORT=multipeer`)
-/// to bisect a regression across the cutover boundary. They go in the **deletion round**, which is
-/// the commit that turns this suite into the zero-list it was always meant to become.
-///
-/// **So this suite still asserts the CURRENT truth, in both directions, and that is still the
-/// point.** A zero that is not zero cannot be written; a zero "for later" would be a wall that
-/// lies, which is worse than none — 9.4-NOW's own verify caught exactly that shape (a cell pinning
-/// four strings absent and forgetting the two a shipping radio still needs). Each cell below now
-/// says which of the two remaining commits moves it: the FLIP moved the values, the DELETION moves
-/// the files, the plist pair and the permit list.
+/// **Still not a wall that lies.** A zero that is not zero cannot be written, and 9.4-NOW's own
+/// verify caught exactly that shape (a cell pinning four strings absent and forgetting the two a
+/// shipping radio still needed) — so the presence half of the Bonjour cell is kept, over the three
+/// QUIC types, and the record-survival cell keeps the decision trail readable.
 @Suite(.serialized)
 struct MeshP9McRetirementAcceptanceTests {
 
-    /// **The friend mesh ships on QUIC, and both MultipeerConnectivity files are still here.**
+    /// **Both MultipeerConnectivity files are gone, and the selection seam went with them.**
     ///
-    /// The cell the cutover was always going to rewrite, rewritten. Before the flip the two facts
-    /// pinned here were the ARGUMENT for keeping the files; since the flip they are the argument
-    /// for keeping them a little longer, and the direction of every value assertion has turned
-    /// over. `shippingDefault` is `.quic`, an empty environment resolves to `.quic`, and the
-    /// resolver's body names no radio literally — the same invariant read the other way round,
-    /// because a test build takes the `#if DEBUG` arm and cannot execute the Release one at all, so
-    /// a `return .multipeer` planted in the `#else` would put a shipping build back on the retired
-    /// radio with every other cell of this suite green.
+    /// The zero-list half of item 4, in both directions. The two files are pinned ABSENT (a
+    /// re-created one reddens here with the deletion checklist in reverse); the selection seam that
+    /// existed only to choose between two radios — `MeshTransportKind`, `MeshTransportFactory`, the
+    /// `quicSelectionEnvironmentKey` read, the MC conformance — is pinned OUT of
+    /// `MeshTransportSelection.swift` by identifier; and the one default the deletion left is pinned
+    /// IN by its source text: `MeshNetworkManager.init`'s `transport ?? NetworkMeshSession()`, the
+    /// line the survey called "the cutover" (its VALUE is `MeshTransportSelectionTests`'
+    /// `theAppsInitializerRunsOnTheQUICRadio`).
     ///
-    /// **The file-existence half and the factory's `.multipeer` arm move in the DELETION round, not
-    /// here.** They are kept by the owner's "flip, gate, then delete" decision so a DEBUG build can
-    /// be launched back onto MC to bisect across the cutover boundary. A commit that deletes the
-    /// files reddens on the first line with the deletion checklist — which is the handoff this cell
-    /// exists to hand.
-    ///
-    /// The old second reason — "stranger admission has no QUIC path" — is discharged: D-4.3 landed
-    /// it, and the needle below is its successor, the refusal made CONDITIONAL rather than removed.
+    /// The stranger-admission needle stays, unchanged: D-4.3's refusal-made-CONDITIONAL is what let
+    /// the deletion ship without losing first-meeting founding, and the unseeded pair run of
+    /// 2026-09-22 is its tier-2 observation. Widening it further is a second decision, and it must
+    /// not land silently either.
     @MainActor
-    @Test func theShippingDefaultIsQUICAndTheMultipeerFilesAreHeldForTheDeletionRound() throws {
-        // R2: bounded by the two permitted files.
+    @Test func theMultipeerFilesAreGoneAndTheSelectionSeamWithThem() throws {
+        // R2: bounded by the two deleted files.
         for path in MeshP9Acceptance.multipeerFiles {
-            #expect(FileManager.default.fileExists(atPath: RepoRoot.url(path).path), """
-                \(path) is gone. This is the DELETION round (the owner's "flip, gate, then delete"; \
-                the flip landed 2026-09-21), and the same commit owes: _fernlet-friend._{tcp,udp} \
-                moved from the live Bonjour set to the retired one in BOTH this battery and \
-                NoTrackingBoundaryTests, TransportNeutralityBoundaryTests.permittedFiles emptied, \
-                MeshTransportKind's .multipeer case and the factory arm below removed with it, the \
-                DEBUG FERNLET_MESH_TRANSPORT=multipeer bisect path retired from the runbook \
-                recipes, and this cell rewritten to the zero-list it was always meant to become
+            #expect(!FileManager.default.fileExists(atPath: RepoRoot.url(path).path), """
+                \(path) is back in the tree. MultipeerConnectivity was deleted in the deletion round \
+                (2026-09-22) after the flip (2026-09-21) and the unseeded Lane C observation; \
+                re-adding the radio is a phase decision that owes the permit list, the plist pair, \
+                the CI name count and this cell in the same commit — it is not a fix for a red
                 """)
         }
-        // The VALUES, not their declaration text. FLIPPED 2026-09-21 by the cutover: these two read
-        // `.multipeer` from the day this battery landed until the day the owner took D-4.3.
-        #expect(MeshTransportFactory.shippingDefault == .quic, """
-            the mesh's shipping default is no longer QUIC. Since the cutover (2026-09-21) that is a \
-            REVERSION, not a cutover: the retired radio is reachable only as a DEBUG bisect path, \
-            and a commit that makes it the default again owes an argument the flip's commit does not
+        let manager = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"))
+        #expect(manager.contains("transport ?? NetworkMeshSession()"), """
+            MeshNetworkManager.init no longer defaults its radio to `NetworkMeshSession()` directly. \
+            There is no selection seam left to route through: a second radio, a factory or a launch \
+            variable here is the seam the deletion round removed coming back
             """)
-        #expect(MeshTransportFactory.resolvedKind(environment: [:]) == .quic, """
-            a launch that selects nothing no longer lands on QUIC. Every shipping launch takes this \
-            answer; see the line above
-            """)
-        let factory = MeshRoutedSourceScan.codeOnly(
+        let seam = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source(MeshP9Acceptance.transportSelectionPath))
-        let resolver = try #require(
-            MeshRoutedSourceScan.bracedBody(
-                after: "static func resolvedKind(environment: [String: String])", in: factory),
-            "the radio resolver is gone")
-        #expect(!resolver.contains(".multipeer") && !resolver.contains(".quic"), """
-            a branch of resolvedKind(environment:) names a radio literally. Every branch must \
-            resolve through `shippingDefault` or through MeshTransportKind(rawValue:) — the \
-            Release branch is compiled out of this test build, so a `return .multipeer` there would \
-            put the friend mesh back on the retired radio with every cell of this suite green. \
-            (Before the cutover this needle read the other way; the invariant never did.)
-            """)
-        #expect(factory.contains("case .multipeer: return MeshMultipeerSession()"), """
-            and the factory's MC construction site is gone. It is NOT on a shipping path any more — \
-            `shippingDefault` is `.quic` — but it is the one thing that still builds the retired \
-            radio for a DEBUG `FERNLET_MESH_TRANSPORT=multipeer` bisect launch, and it retires in \
-            the DELETION round with the file, not in the flip
-            """)
+        // R2: bounded by the four retired identifiers.
+        for retired in ["MeshTransportKind", "MeshTransportFactory", "quicSelectionEnvironmentKey",
+                        "MeshMultipeerSession"] {
+            #expect(!seam.contains(retired), """
+                `\(retired)` is back in MeshTransportSelection.swift. The selection seam retired with \
+                the second radio (Variant A of the survey's patch); `MeshTransportSession` and \
+                `MeshPeerChannel` are the whole surface now
+                """)
+        }
         // The second reason, at the line that enforces it rather than in the note that states it.
         //
         // **The needle MOVED on 2026-09-21, deliberately, and this is the argument.** It used to be
@@ -977,7 +953,8 @@ struct MeshP9McRetirementAcceptanceTests {
         // claims is that the QUIC radio is members-only before any app frame, because it is not:
         // see `MeshIntroductionRoster.admitsStrangersProvisionally` and the amendment to plan
         // §7.2's "non-roster member" bullet recorded on `MeshIntroductionAuthority`'s scope
-        // paragraph.
+        // paragraph. Observed on a real tunnel on 2026-09-22 (the runbook's "Lane C — the deletion
+        // round's item 0").
         let introduction = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/MeshChannelIntroduction.swift"))
         #expect(
@@ -991,90 +968,73 @@ struct MeshP9McRetirementAcceptanceTests {
         )
     }
 
-    /// **The framework import has exactly two homes, and they are those two files.**
+    /// **The framework import has no home, and no framework type is named anywhere in the package or
+    /// the app.**
     ///
     /// `TransportNeutralityBoundaryTests` makes the same claim through a permit list it scans
-    /// against; this is a second decomposition of it — the *claim* is re-spelled as a literal home
-    /// list here, the *walker* is `MeshP7Acceptance.sources(under:)` and is never forked. Both halves
-    /// are needed: the wall's list is the thing the DELETION round empties, and a battery that
-    /// called into it would go green the moment the list did.
-    ///
-    /// **This cell is untouched by the FLIP and flips with the DELETION.** The two homes are still
-    /// two after the cutover: `shippingDefault` moved, the files did not. When they go, this
-    /// expectation becomes `homes.isEmpty` in the same commit as `permittedFiles == []`.
+    /// against — empty since the deletion round; this is a second decomposition of it — the *claim*
+    /// is re-spelled as a literal empty home list here, the *walker* is
+    /// `MeshP7Acceptance.sources(under:)` and is never forked. Both halves are needed: the wall's
+    /// list went to `[]` in the same commit as the files, and a battery that called into it would
+    /// have gone green the moment the list did whatever the tree held.
     ///
     /// Note the walk is over comment-STRIPPED sources. Prose about MultipeerConnectivity is fine and
     /// deliberately so — "what the retired MC advertiser could not do" is the sentence that explains
     /// why the ephemeral posture exists at all.
-    @Test func theFrameworkImportHasExactlyTwoHomesAndTheyAreThoseTwo() throws {
+    @Test func theFrameworkImportHasNoHomeAndNoFrameworkTypeIsNamed() throws {
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         let app = try MeshP7Acceptance.sources(under: "App/Fernlet")
-        // MEASURED floors (NOTE 4): 143 and 179 files. See clause (b) for why not 100.
-        #expect(kit.count >= 120, "the ProximityKit scan lost its files (143 when this was measured)")
+        // MEASURED floors (NOTE 4): 141 and 179 files after the deletion. See clause (b) for why not 100.
+        #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
         #expect(app.count >= 140, "the app-target scan lost its files (179 when this was measured)")
         let homes = Set(MeshP7Acceptance.homes(of: "import MultipeerConnectivity", in: kit + app)).sorted()
-        let expected = MeshP9Acceptance.multipeerFiles.map { path in
-            String(path.split(separator: "/").last ?? "")
-        }.sorted()
-        #expect(homes == expected, """
-            MultipeerConnectivity is imported in \(homes), not in exactly \(expected). A THIRD home \
-            is a new dependency on the framework P9 is retiring; FEWER is the cutover, and \
-            TransportNeutralityBoundaryTests.permittedFiles must empty in the same commit — that \
-            suite asserts each permitted path EXISTS, so the deletion and the list move together or \
-            the tree is red
+        #expect(homes.isEmpty, """
+            MultipeerConnectivity is imported in \(homes). The framework left the tree in the \
+            deletion round (2026-09-22); a new import is a new dependency on a retired radio, and \
+            TransportNeutralityBoundaryTests.permittedFiles (empty) reddens on it in the same run
             """)
-        // The type check is deliberately narrower than the import check, and scoped to the PACKAGE.
-        // Real, benign occurrences would otherwise trip a substring walk and teach the next author
-        // to widen the wall rather than read it: the app's connection inspector renders the literal
-        // row label `"MCSession"`. (It was TWO until 2026-09-21 — `MeshNetworkManager` also called
-        // Fernlet's own `FileMCPeerIDStore()` in the delete-all sweep, until D-4.4's pure retire
-        // took that leg.) `TransportNeutralityBoundaryTests` is the
-        // wall that covers both correctly — it matches WHOLE IDENTIFIERS — which is exactly why
-        // this commit puts that suite on a CI line for the first time. These three names have no
-        // Fernlet-owned prefix collision anywhere, so a substring walk is sound for them.
+        // The type check is deliberately narrower than the import check: these three names have no
+        // Fernlet-owned prefix collision anywhere, so a substring walk is sound for them, and the
+        // WHOLE-identifier wall (`TransportNeutralityBoundaryTests`) covers the rest.
         // R2: bounded by the three unambiguous framework type names.
         for symbol in ["MCNearbyServiceAdvertiser", "MCNearbyServiceBrowser", "MCSessionState"] {
-            let elsewhere = Set(MeshP7Acceptance.homes(of: symbol, in: kit)).subtracting(expected).sorted()
-            #expect(elsewhere.isEmpty, "`\(symbol)` is named outside its one file, in \(elsewhere)")
+            let anywhere = Set(MeshP7Acceptance.homes(of: symbol, in: kit + app)).sorted()
+            #expect(anywhere.isEmpty, "`\(symbol)` is named in \(anywhere); the framework is gone")
         }
     }
 
-    /// **The four dead Bonjour strings are gone and the live friend pair is still declared.**
+    /// **The six retired Bonjour strings are gone and the three QUIC ones are still declared.**
     ///
     /// Pinned in BOTH directions, because the failure mode that actually ships is a deleted line,
     /// not a surviving one: a missing service type kills discovery silently on device — no log, no
     /// observable state, no other test — and 9.4-NOW's first cut pinned the four dead strings absent
-    /// while forgetting the two the shipping mesh still uses. `_fernlet-friend._{tcp,udp}` are LIVE,
-    /// not "neither" — but the REASON moved at the cutover (2026-09-21) and this is that argument.
-    /// `shippingDefault` is `.quic` now, so no SHIPPING launch advertises or browses
-    /// `_fernlet-friend`; a DEBUG `FERNLET_MESH_TRANSPORT=multipeer` bisect launch still does, and
-    /// deleting a declared type that a reachable radio still browses is the silent on-device death
-    /// this cell's presence half exists to catch. So the pair stays in ``MeshP9Acceptance/liveBonjour``,
-    /// pinned PRESENT, until the DELETION round moves it to `.retiredBonjour` in the same commit
-    /// that removes the radio — a deliberate act, never a side effect. `NoTrackingBoundaryTests`
-    /// carries the same pair, the same way, and moves in the same commit.
+    /// while forgetting the two the shipping mesh still used. `_fernlet-friend._{tcp,udp}` stayed in
+    /// ``MeshP9Acceptance/liveBonjour`` through the flip (a DEBUG bisect launch still browsed them)
+    /// and moved to ``MeshP9Acceptance/retiredBonjour`` in the deletion round (2026-09-22), in the
+    /// same commit that removed the radio and the plist entries — a deliberate act, never a side
+    /// effect. `NoTrackingBoundaryTests` carries the same partition, the same way, and moved in the
+    /// same commit.
     ///
     /// The three sets are this battery's OWN literals (`MeshP9Acceptance.retiredBonjour` /
     /// `.liveBonjour` / `.heldBonjour`); only the plist READER is shared with
     /// `NoTrackingBoundaryTests`, which is the right seam to share — parsing is mechanics, the
     /// partition is the claim.
-    @Test func theFourDeadBonjourStringsAreGoneAndTheLiveFriendPairIsStillDeclared() throws {
+    @Test func theSixRetiredBonjourStringsAreGoneAndTheThreeQUICOnesAreDeclared() throws {
         let declared = try NoTrackingBoundaryTests.declaredBonjourServiceTypes()
         #expect(!declared.isEmpty, "the plist declared no NSBonjourServices — the reader is broken, not the plist clean")
 
         let stale = MeshP9Acceptance.retiredBonjour.intersection(declared).sorted()
         #expect(stale.isEmpty, """
             \(stale) is still declared: a service type no radio has advertised or browsed since P9 \
-            items 2 and 3 crossed to QUIC. Removing one owes the matching §4c row in \
+            items 2 and 3 crossed to QUIC (near, recipe) or since the deletion round removed the \
+            MultipeerConnectivity mesh radio (friend). Removing one owes the matching §4c row in \
             Docs/No-Tracking-Wall.md in the same commit
             """)
         let missing = MeshP9Acceptance.liveBonjour.subtracting(declared).sorted()
         #expect(missing.isEmpty, """
             \(missing) is no longer declared — a type a reachable radio advertises or browses. \
-            Discovery dies silently on device. The flip did NOT move _fernlet-friend._{tcp,udp}: \
-            move them from MeshP9Acceptance.liveBonjour to .retiredBonjour in the DELETION round, \
-            in the same commit that removes MeshMultipeerSession.swift and the plist entries, and \
-            nowhere else
+            Discovery dies silently on device with no log, no observable state and no other \
+            failing test; this is the bug a retirement must not cause
             """)
         let unclassified = declared
             .subtracting(MeshP9Acceptance.liveBonjour)
@@ -1086,7 +1046,7 @@ struct MeshP9McRetirementAcceptanceTests {
             radio nobody reviewed, or a spelling that drifted
             """)
         #expect(declared.count == MeshP9Acceptance.liveBonjour.count + MeshP9Acceptance.heldBonjour.count,
-                "the plist declares exactly the live five and the held two: \(declared.sorted())")
+                "the plist declares exactly the live three and the held two: \(declared.sorted())")
     }
 
     /// **The cutover was the owner's decision, and the record of it — question AND answer — is

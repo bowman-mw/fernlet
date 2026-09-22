@@ -7,7 +7,6 @@
 import Foundation
 import Testing
 import CryptoKit
-import MultipeerConnectivity
 import FernletCrypto
 import FernletFoundation
 #if canImport(UIKit)

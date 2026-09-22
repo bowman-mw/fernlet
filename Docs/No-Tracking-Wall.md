@@ -223,7 +223,6 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 
 | Path | Where | Service types |
 |---|---|---|
-| **MultipeerConnectivity** — **no shipping radio is on it since the MC→QUIC cutover (2026-09-21)**: the friend mesh crossed to QUIC (`NetworkMeshSession`, below), presence crossed in P9 item 2 and recipe share in P9 item 3. What remains is a DEBUG-only bisect path — a build launched with `FERNLET_MESH_TRANSPORT=multipeer` still runs `MeshMultipeerSession` on `_fernlet-friend` — held deliberately, with the radio's two files and these plist strings, so a regression can be bisected across the cutover boundary. The coach channel is a declared service type with no radio behind it at all (plan §18 decision 4, the owner's). Both pairs, the files and the permit list go together in the **deletion round** | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-coach`, each `._tcp` and `._udp` |
 | **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | `ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
 | **Network.framework / QUIC** — **the friend mesh's transport**, since the cutover of 2026-09-21 flipped `MeshTransportFactory.shippingDefault` to `.quic`; migrated per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | `ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
 | **Network.framework / QUIC** — the standing presence radio, migrated off MultipeerConnectivity per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §17.1 | `ProximityKit/Transport/NetworkPresenceSession.swift` | `_fernlet-near2._udp` |
@@ -235,19 +234,18 @@ from that list fails discovery silently on device, which is why the list is exha
 grown as needed.
 
 `NoTrackingBoundaryTests.theRetiredRadiosBonjourTypesAreGoneFromThePlist` pins that list three ways.
-(1) The four retired MC types (`_fernlet-near`, `_fernlet-recipe`, each `._tcp` and `._udp`) must
-stay **absent**. (2) The five a reachable radio uses must stay **present**: the three QUIC types
-*and* `_fernlet-friend._tcp` / `._udp`. **The reason for that last pair moved at the cutover and the
-classification did not.** `MeshTransportFactory.shippingDefault` is `.quic` now, so no *shipping*
-launch advertises or browses `fernlet-friend` — but a DEBUG `FERNLET_MESH_TRANSPORT=multipeer`
-bisect launch still does, and the pair is held on purpose for exactly that. It moves from the live
-set to the retired set in the **deletion round**, in the same commit that removes
-`MeshMultipeerSession.swift` and the plist entries — deleting it before that kills friend-mesh
-discovery on a bisect build with no log, no observable state and no other failing test. (3) Every other
-declared type must be **classified**: `_fernlet-coach._tcp` / `._udp` are *held* — declared, no
-radio behind them (plan §18 decision 4, still the owner's), pinned in neither direction — and a
-declared type in none of the three sets fails the test until it is classified here and given a row
-in the table above.
+(1) The six retired MultipeerConnectivity types (`_fernlet-near`, `_fernlet-recipe`, and since the
+deletion round of 2026-09-22 `_fernlet-friend`, each `._tcp` and `._udp`) must stay **absent**. The
+friend pair moved from the live set to the retired set in the same commit that deleted
+`MeshMultipeerSession.swift` and the plist entries, as the rule recorded here since the cutover
+required — a deliberate act, not a side effect. (2) The three a reachable radio uses must stay
+**present**: `_fernlet-mesh2._udp`, `_fernlet-near2._udp`, `_fernlet-recipe2._udp` — every one of
+them QUIC. (3) Every other declared type must be **classified**: `_fernlet-coach._tcp` / `._udp` are
+*held* — declared, no radio behind them (plan §18 decision 4, still the owner's), pinned in neither
+direction; they are the one "declared but unused" pair the plist still carries, and they do not
+belong in the transport table above because no transport exists for them — and a declared type in
+none of the three sets fails the test until it is classified here and given a row in the table
+above.
 
 **Four Info.plist keys, and what each one now backs.** Two were added ahead of the code that uses
 them; that asymmetry is closing as the migration lands, so the state is stated plainly. P10 item 3
@@ -255,7 +253,7 @@ adds the fourth row (`UIBackgroundModes`) and closes the third's "still inert" n
 
 | Key | Value | What backs it today |
 |---|---|---|
-| `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the friend mesh's MC radio and the three QUIC radios already do. Not new with the QUIC work. |
+| `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the three QUIC radios do. Not new with the QUIC work. |
 | `NSBonjourServices` → `_fernlet-mesh2._udp`, `_fernlet-near2._udp`, `_fernlet-recipe2._udp` | Three added entries | All genuinely used: `NetworkMeshSession` advertises and browses the first in Release (the DEBUG probe uses the same one), `NetworkPresenceSession` the second and `NetworkRecipeShareSession` the third. A service type is a name, not a destination — declaring one grants no reach beyond the local link. |
 | `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) and, since P10 item 3, `MBO.Fernlet.companion-refresh` | **No longer inert.** The mesh's wildcard is still only exercised by the DEBUG probe and by the P8 host's runtime registration of the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. The companion identifier is a WHOLE identifier, not a prefix — there is exactly one companion refresh per process — and `CompanionRefreshCoordinator` registers it on every launch. A permitted identifier still grants nothing on its own: it widens what the app may ASK for, and iOS decides whether an opportunistic refresh ever runs. Neither task sends anything anywhere; the companion refresh makes no network request at all, which `BackgroundRefreshBoundaryTests` enforces by forbidding every networking module under `App/Fernlet/CompanionRefresh/`. |
 | `UIBackgroundModes` | `remote-notification`, and since P10 item 3 `fetch` | `fetch` is what lets iOS deliver a `BGAppRefreshTask` at all; without it the identifier is registered and the task is never launched. It buys the app an occasional short opportunistic wake to roll the day, recompute the companion and refresh the widget — all of it local. **It is not a networking permission and not a location one:** the handler may never reach the mesh, HealthKit, a CloudKit force-sync or Foundation Models, which is a repository gate (plan §16.4) rather than a promise. `remote-notification` is unchanged. No `processing` mode is declared; neither background task in this app is a `BGProcessingTask`. |

@@ -919,6 +919,10 @@ struct RecipeShareOverQUICTests {
     ///
     /// Pinned in both directions — a file that names neither has been renamed or emptied, not
     /// cleaned.
+    ///
+    /// Vacuous by design since the deletion round (2026-09-22): the framework is gone from the tree,
+    /// so these needles can no longer match anything. Kept anyway — they cost nothing and they are
+    /// the per-manager half of the tree-wide wall (`TransportNeutralityBoundaryTests`).
     @Test func theManagerNoLongerNamesTheRetiredRadio() throws {
         let source = try Self.managerSource()
         let code = MeshRoutedSourceScan.codeOnly(source)

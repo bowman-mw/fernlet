@@ -928,18 +928,13 @@ struct NoTrackingBoundaryTests {
     /// not a surviving one: a plist that lost every entry would satisfy the absence half alone, and
     /// a missing service type kills discovery silently on device — no log, no observable state.
     ///
-    /// `_fernlet-friend._tcp` / `._udp` are in the **live** set, not in neither (the fix round's F1)
-    /// — and the REASON moved at the MC→QUIC cutover (2026-09-21) while the classification did not.
-    /// `MeshTransportFactory.shippingDefault` is `.quic` now, so no SHIPPING launch builds
-    /// `MeshMultipeerSession` and no shipping launch advertises or browses `fernlet-friend`. A
-    /// **DEBUG `FERNLET_MESH_TRANSPORT=multipeer` bisect launch still does**, and that radio, its
-    /// two files and these two plist entries are held deliberately by the owner's "flip, gate, then
-    /// delete" decision so a regression can be bisected across the cutover boundary. The rule that
-    /// keeps them honest: **the DELETION round moves these two from ``liveBonjourServiceTypes`` to
-    /// ``retiredBonjourServiceTypes`` in the same commit that removes
-    /// `MeshMultipeerSession.swift` and the plist entries, and nowhere else.** Deleting them before
-    /// that is exactly the silent death this cell's presence half exists to catch — no log, no
-    /// observable state, no other test.
+    /// `_fernlet-friend._tcp` / `._udp` were in the **live** set through the flip (the fix round's
+    /// F1; a DEBUG bisect launch still browsed them) and moved to ``retiredBonjourServiceTypes`` in
+    /// the deletion round (2026-09-22), in the same commit that removed `MeshMultipeerSession.swift`
+    /// and the plist entries — the rule this docstring had carried since the cutover, kept to the
+    /// letter. The live set is now the three QUIC types and nothing else; deleting one of those is
+    /// exactly the silent death this cell's presence half exists to catch — no log, no observable
+    /// state, no other test.
     ///
     /// `_fernlet-coach._tcp` / `._udp` are ``heldBonjourServiceTypes``: declared, recorded in §4c,
     /// backed by no radio. Every shipping `ProximityCoordinator.begin` passes `mode: .friend`
@@ -977,23 +972,22 @@ struct NoTrackingBoundaryTests {
         )
     }
 
-    /// The MC Bonjour service types retired with the radios that used them. Frozen automation
-    /// tokens, never display strings.
+    /// The MC Bonjour service types retired with the radios that used them: near and recipe when P9
+    /// items 2 and 3 crossed to QUIC, friend when the deletion round (2026-09-22) removed the mesh's
+    /// MultipeerConnectivity radio. Frozen automation tokens, never display strings.
     private static let retiredBonjourServiceTypes: Set<String> = [
         "_fernlet-near._tcp",
         "_fernlet-near._udp",
         "_fernlet-recipe._tcp",
-        "_fernlet-recipe._udp"
+        "_fernlet-recipe._udp",
+        "_fernlet-friend._tcp",
+        "_fernlet-friend._udp"
     ]
 
     /// The service types that must stay declared: the three QUIC radios (mesh, presence, recipe
-    /// share) and the friend mesh's MultipeerConnectivity pair, which since the cutover is depended
-    /// on by the DEBUG bisect path rather than by a shipping one — held, not dead, and pinned
-    /// present until the deletion round takes the radio with it. Frozen automation tokens, never
-    /// display strings. The cell's docstring carries the rule that moves the friend pair out.
+    /// share), and nothing else since the deletion round. Frozen automation tokens, never display
+    /// strings.
     private static let liveBonjourServiceTypes: Set<String> = [
-        "_fernlet-friend._tcp",
-        "_fernlet-friend._udp",
         "_fernlet-mesh2._udp",
         "_fernlet-near2._udp",
         "_fernlet-recipe2._udp"

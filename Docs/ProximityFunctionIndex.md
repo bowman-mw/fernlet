@@ -37,7 +37,7 @@ types (which still have no production callers).
 | Verifying a human holds a key | `ProximityVerifyQR` + `ProximityVerifySignature.message(...)` — shared transcript, so the friend and coach ceremonies cannot diverge |
 | Coach-channel trust | `CoachSessionTrustPolicy` / `CoachSessionContract` — never `FriendSessionTrustPolicy`, whose `isTrustedProximityPeer` returns `true` unconditionally and reads the friend vault |
 | Proximity commit gates | `ProximityCommitDetector.ingest(distanceMeters:at:)`, `ProximityCoordinator.commitManualProximity()` |
-| Friend mesh lifecycle | `MeshNetworkManager.startJoin()`, `stopJoin()`, `leaveSession()`, `leaveSessionAfterNotifyingPeers()`. 2026-08 consolidation: the three duplicated pending-connection expiry idioms were consolidated into `MeshMultipeerSession.registerPendingConnection(_:)`, and the hand-rolled `withObservationTracking` re-arm loops in the mesh/recipe/presence managers were consolidated into `ObservationLoop.start(on:tracking:onChange:)` (ProximityKit/Engine/ObservationLoop.swift). Local advertised names come from `ProximityHost.resolvedProximityDisplayName` (ProximityKit/PeerDisplayNames.swift), which replaced the three identical private `displayName` vars. |
+| Friend mesh lifecycle | `MeshNetworkManager.startJoin()`, `stopJoin()`, `leaveSession()`, `leaveSessionAfterNotifyingPeers()`. 2026-08 consolidation: the three duplicated pending-connection expiry idioms were consolidated into one `registerPendingConnection(_:)` on the MultipeerConnectivity radio — that consolidation retired with the radio in the deletion round (2026-09-22); the QUIC radio's equivalent is `MeshLinkTable`'s dial bookings — and the hand-rolled `withObservationTracking` re-arm loops in the mesh/recipe/presence managers were consolidated into `ObservationLoop.start(on:tracking:onChange:)` (ProximityKit/Engine/ObservationLoop.swift). Local advertised names come from `ProximityHost.resolvedProximityDisplayName` (ProximityKit/PeerDisplayNames.swift), which replaced the three identical private `displayName` vars. |
 | Mesh membership/admission | `MeshNetworkManager.allowAdmission(_:)`, `declineAdmission(_:)`, `handleAdmissionRequest(_:)`, `handleAdmissionGrant(_:)`. 2026-08 consolidation: the twin mesh-admission and activity-join confirmation sheets were consolidated into the shared generic `JoinPromptSheet` (App/Fernlet/JoinPromptSheet.swift, app target), and receive-side peer-name moderation now goes through `ItemNameModeration.moderatedPeerDisplayName(_:)`. |
 | Mesh removal | Legacy two-party: `proposeRemoval(of:)`, `canSecondRemoval(_:)`, `secondRemoval(_:)`, `applyApprovedRemoval(_:)`. Signed quorum (P4 item 5, §10.4): `proposeSignedRemoval(of:now:)`, `voteOnSignedRemoval(_:now:)`, `evaluateRemovalQuorum(_:now:)`, `MeshRemovalQuorum` |
 | Friend photos | `MeshNetworkManager.addPhoto(_:)`, `cachePhoto(_:)`, `deletePhoto(_:)`, `shareRoutedPhoto(itemID:addedAt:imageData:session:)` → `originateRoutedItem(body:typeToken:itemID:now:)` (P5 item 13 replaced `syncPhotoManifest(to:)`'s pull protocol with the routed store), `PrivateMediaStore`. 2026-08 consolidation: the three duplicated photo-save catch-ladders and alert blocks were consolidated into `FriendPhotoLibrarySaver.userFacingFailure(for:photoCount:)` + the `photoSaveFailureAlert(_:failure:)` view extension (ProximityKit); the media stores' hand-rolled AES-GCM seal/open now routes through the shared extension on `PrivateMediaKeyProviding` (MediaAtRestCrypto.swift); JSON sidecar state — including the photo-wall preferences store — was consolidated into `JSONSidecarFile` (ProximityKit/Support/JSONSidecarFile.swift). |
@@ -352,38 +352,6 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `NetworkMeshFeasibilityProbe.stop()` | Idempotently closes discovery, QUIC connections, and the test continued task. |
 | `MeshProbeChannelIntroduction` | Signs a transcript bound to the active TLS exporter, mesh ID, epoch, identities, and nonces. |
 | `NetworkMeshFeasibilityProbeView` | DEBUG Settings UI for observing bounded probe events and validation results. |
-
-### `MeshMultipeerSession.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `PeerChannelTransport.init(peer:session:)` | Creates a per-peer adapter over the shared mesh MCSession. |
-| `PeerChannelTransport.startAdvertising(...)`, `startBrowsing(...)`, `invite(_:)`, `accept(_:)` | No-op lifecycle methods because the shared session owns advertising, browsing, inviting, and accepting. |
-| `PeerChannelTransport.send(_:to:mode:)` | Routes data through the shared `MeshMultipeerSession`. |
-| `PeerChannelTransport.disconnect()` | Marks the channel idle locally without tearing down the shared MCSession. |
-| `PeerChannelTransport.notifyConnected()` | Publishes connected state for the channel. |
-| `PeerChannelTransport.notifyDisconnected(reason:)` | Publishes disconnected state for the channel. |
-| `PeerChannelTransport.receive(_:)` | Emits an inbound message with byte count and timestamp. |
-| `MeshMultipeerSession.init(peerIDStore:)` | Loads or creates a persistent local `MCPeerID`. |
-| `start(serviceType:discoveryInfo:)` | Ensures MCSession exists, then starts advertiser and browser. |
-| `updateDiscoveryInfo(_:)` | Restarts advertiser with new discovery info. |
-| `stop()` | Stops advertiser/browser, disconnects session, and clears channels/caches/pending peers. |
-| `invite(_:)` | Invites a peer if not already pending/connected (and not while discovery is paused), opening the connecting window through `registerPendingConnection(_:)`. |
-| `send(_:to:mode:)` | Sends data through MCSession and maps failures to transport errors. |
-| `prepareChannel(for:)` | Returns or creates the channel adapter for an MC peer. |
-| `registerPendingConnection(_:)` | The one copy of the pending-connection expiry idiom: mints an invite token, records it in `pendingConnectionPeers`, and schedules the 31-second self-expiry that removes it unless a newer registration or a connect/disconnect transition already replaced it. Called by `invite(_:)`, the `.connecting` session transition (behind its own nil guard so the window is not refreshed), and the accepted-invitation path. |
-| `ensureSession()` | Creates the shared required-encryption MCSession. |
-| `startAdvertiser(info:)` | Starts `MCNearbyServiceAdvertiser`. |
-| `startBrowser()` | Starts `MCNearbyServiceBrowser`. |
-| `peer(for:discoveryInfo:)` | Maps `MCPeerID` to a `PeerHandle`, updating discovery info when it changes. **The `id` is NOT stable**: it is re-minted on every cache miss (a peer lost while holding no channel, or an inbound invitation from an untracked device). The `PeerEndpointKey` it carries *is* stable — that is what `isSameEndpoint(as:)` compares. |
-| `session(_:peer:didChange:)` | Routes MC connection state to channel readiness/disconnect callbacks. |
-| `session(_:didReceive:fromPeer:)` | Routes inbound bytes to the matching channel. |
-| Resource/stream delegate methods | Present but intentionally no-op because this transport only sends data messages. |
-| `advertiser(_:didReceiveInvitationFromPeer:withContext:invitationHandler:)` | Applies acceptance policy, prepares channel when accepted, and replies to invitation. |
-| `advertiser(_:didNotStartAdvertisingPeer:)` | No-op advertiser failure hook. |
-| `browser(_:foundPeer:withDiscoveryInfo:)` | Caches discovery info, maps peer, and notifies discovery callback. |
-| `browser(_:lostPeer:)` | Removes cached peer and notifies loss callback. |
-| `browser(_:didNotStartBrowsingForPeers:)` | No-op browser failure hook. |
 
 ### `MeshPayloads.swift`
 
@@ -1308,18 +1276,13 @@ write.
 
 ## Transport And Ranging
 
-### `PeerHandle.swift` / `MCPeerIDStore.swift`
+### `PeerHandle.swift`
 
 | Function | What It Does |
 | --- | --- |
 | `PeerHandle.==` | Treats peers as equal when their per-discovery UUIDs match. |
 | `PeerHandle.isSameEndpoint(as:)` | The "same device?" test: `id` OR endpoint key. Use this, never `==`, when matching a stored record (slot, heart connection, recipe pairing, device cap) against a transport event — `==` returns false for a device re-minted between the record being stored and the event arriving. |
-| `endpointKey(for:)` | Mints or reuses the stable `PeerEndpointKey` for an `MCPeerID`, bounded FIFO at 64. |
-| `mcPeerID(for:)` | Resolves a `PeerHandle` back to its framework peer — the single seam where the MC type is reached. |
 | `hash(into:)` | Hashes the generated peer UUID. |
-| `FileMCPeerIDStore.init(fileURL:)` | Chooses an explicit or default Application Support archive URL. |
-| `load()` | Reads and unarchives a persisted `MCPeerID`. |
-| `save(_:)` | Archives and atomically writes an `MCPeerID`. |
 
 ### `NetworkPresenceSession.swift`
 

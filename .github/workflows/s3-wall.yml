@@ -637,9 +637,28 @@ jobs:
         # bundle: "Test run with 1222 tests in 141 suites passed after 174.749 seconds", 0 failed,
         # 0 skipped, no `Restarting after unexpected exit` line. 1221 + 1 = 1222 is the ARITHMETIC
         # CHECK, never the number.
+        # LOWERED 1222 -> 1214 (2026-09-22, the deletion round - MultipeerConnectivity leaves the
+        # tree, one round after the flip and after the unseeded Lane C pair observed the provisional
+        # path founding a mesh on a real tunnel). ONE name LEFT this line, deliberately:
+        # MeshMultipeerSessionIdentityTests (4 cells) drove the retired radio's real delegate
+        # callbacks and cannot exist without it; its invariant - a stable PeerHandle.id for the life
+        # of a session - is carried on the QUIC radio by NetworkMeshSessionTests and
+        # MeshLinkTableTests, both still here. So the NAME count moves 141 -> 140 in
+        # CIGateSelectorBoundaryTests' `measuredSuiteNameCounts` in this same commit, with the
+        # retirement argued there (the one way that number may go down). Also on this line:
+        # MeshTransportSelectionTests lost its 4 `.multipeer` cells (the DEBUG opt-in, the per-kind
+        # factory, the MC conformer ignoring the authority, the env-key resolver) with the seam they
+        # pinned; NetworkMeshWireTests replaced bothTransportsShareOneInboundCeiling 1:1 with
+        # theInboundCeilingIsTheFramingsInflateCap (the cap-identity #expect ported from the deleted
+        # MeshTransportErrorSurfacingTests, which was on no CI line); MeshP9McRetirementAcceptanceTests
+        # turned its cells over to the zero-list (files ABSENT, homes.isEmpty, the friend pair
+        # RETIRED) and moved no count. MEASURED over this exact 140-name list on a Mac after a
+        # build-for-testing, read off the result bundle: "Test run with 1214 tests in 140 suites
+        # passed after 181.673 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit`
+        # line. 1222 - 4 - 4 = 1214 is the ARITHMETIC CHECK, never the number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1222 \
+          Scripts/run-gated-suites.sh mesh-batteries 1214 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -774,7 +793,6 @@ jobs:
             MeshRoutedParkedDropDoorTests \
             RoutedDeliveryHoldCopyTests \
             PeerHandleIdentityTests \
-            MeshMultipeerSessionIdentityTests \
             FakePeerTransportTests \
             MeshP10SchedulingSeamAcceptanceTests \
             MeshP10HandlerPipelineAcceptanceTests \

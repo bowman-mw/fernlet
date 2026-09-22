@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// Grep-wall for P1's whole point: **MultipeerConnectivity stops at two files.**
+/// Grep-wall for what P1 set up and the deletion round finished: **MultipeerConnectivity is gone.**
 ///
 /// Transport neutrality is only worth having if it stays true. Nothing in the compiler enforces it —
 /// `MultipeerConnectivity` is an SDK framework, so the S3 wall's
@@ -9,10 +9,11 @@ import Testing
 /// MultipeerConnectivity` to a manager compiles clean and passes every existing test. This scan is
 /// the only thing that would notice.
 ///
-/// It matters most in P2, when a second `PeerTransport` conformer lands over Network.framework QUIC.
-/// The value of that arrangement is that the managers cannot tell which transport they are on; a
-/// stray MC type in a manager quietly takes that away, and the symptom would not appear until P9
-/// tried to delete MultipeerConnectivity and found it load-bearing somewhere nobody expected.
+/// P1 narrowed the framework to two files so a later phase could delete them; P9 crossed the three
+/// radios to Network.framework QUIC behind that seam, the cutover round flipped the default, and the
+/// deletion round (2026-09-22) removed the two files. The wall stays because the risk it names never
+/// went away: a stray framework type in a manager would compile clean today exactly as it would
+/// have in P2, and this scan is still the only thing that would notice.
 struct TransportNeutralityBoundaryTests {
 
     /// Everything that must stay free of the framework. The three radio managers are the ones that
@@ -23,21 +24,28 @@ struct TransportNeutralityBoundaryTests {
         "App/Fernlet"
     ]
 
-    /// The two files allowed to name MultipeerConnectivity types, by repo-relative path.
+    /// The files allowed to name MultipeerConnectivity types, by repo-relative path. **Empty, and
+    /// that is the point.**
     ///
-    /// `MeshMultipeerSession.swift` owns the framework: the MCSession, the delegates, the one
-    /// `MCSessionSendDataMode` mapping, and the private `MCPeerID ↔ PeerEndpointKey` map.
-    /// `MCPeerIDStore.swift` persists the MC peer identity itself and is held for the DEBUG bisect
-    /// path; it retires with `MeshMultipeerSession.swift` in the deletion round rather than being
-    /// neutralized now. (Its privacy-wipe ledger row went with `wipeIdentityForDeleteAll`'s MC
-    /// archive leg in the cutover's pure retire, so the ledger is no longer what holds it here.)
-    private static let permittedFiles = [
-        "FernletKit/Sources/ProximityKit/Transport/MeshMultipeerSession.swift",
-        "FernletKit/Sources/ProximityKit/Transport/MCPeerIDStore.swift"
-    ]
+    /// P1 narrowed the framework to two files so a later phase could delete them; the deletion round
+    /// (2026-09-22) did. An empty permit list does not switch this wall off — both scans below still
+    /// walk every Swift file under ``scanRoots`` and now assert **zero** occurrences instead of two
+    /// exceptions, which is the strongest this wall has ever been. Do not prune the suite for looking
+    /// vacuous: it is the only thing standing between the tree and a re-added `import
+    /// MultipeerConnectivity`, which would compile clean (the framework is an SDK one, so the S3
+    /// wall cannot see it) and pass every other test.
+    ///
+    /// Re-adding an entry here is a phase decision, not a fix for a red.
+    private static let permittedFiles: [String] = []
 
-    /// Framework type prefixes. Deliberately matched as whole identifiers so `MCPeerIDStoring`,
-    /// `FileMCPeerIDStore` and `MeshMultipeerSession` — Fernlet's own names — do not trip the scan.
+    /// Framework type prefixes, matched as whole identifiers.
+    ///
+    /// The whole-identifier rule outlived the names it was written for (`MCPeerIDStoring`,
+    /// `FileMCPeerIDStore`, `MeshMultipeerSession` — Fernlet's own, all deleted in the deletion
+    /// round). It stays because the rule is the correct one: a future `MCSessionFoo` of Fernlet's
+    /// own would otherwise be reported under `MCSession`, and `MCSessionSendDataMode` must be
+    /// reported once, under its own entry. ``containsIdentifier(_:in:)`` is where it lives; its own
+    /// cells pin both edges.
     private static let frameworkSymbols = [
         "MCSession",
         "MCPeerID",
@@ -60,7 +68,7 @@ struct TransportNeutralityBoundaryTests {
         "FernletKit/Sources/ProximityKit/Transport/PeerHandle.swift"
     ]
 
-    @Test func multipeerConnectivityIsNotImportedOutsideItsTwoFiles() throws {
+    @Test func multipeerConnectivityIsNotImportedAnywhere() throws {
         var offenders: [String] = []
         for path in try Self.scannedSwiftFiles() where !Self.permittedFiles.contains(path) {
             let source = try String(contentsOf: RepoRoot.url.appendingPathComponent(path), encoding: .utf8)
@@ -80,7 +88,7 @@ struct TransportNeutralityBoundaryTests {
         )
     }
 
-    @Test func noFrameworkPeerTypeAppearsOutsideItsTwoFiles() throws {
+    @Test func noFrameworkPeerTypeAppearsAnywhere() throws {
         var offenders: [String] = []
         for path in try Self.scannedSwiftFiles() where !Self.permittedFiles.contains(path) {
             let source = try String(contentsOf: RepoRoot.url.appendingPathComponent(path), encoding: .utf8)

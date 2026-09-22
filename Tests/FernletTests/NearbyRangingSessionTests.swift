@@ -1,7 +1,6 @@
 import ProximityKit
 import Testing
 import Foundation
-import MultipeerConnectivity
 import Combine
 import FernletDomainModel
 @testable import Fernlet
@@ -109,13 +108,15 @@ struct NearbyRangingSessionTests {
 
     @Test func tokenArchiveRoundTrip() throws {
         // NIDiscoveryToken cannot be instantiated in unit tests (requires real UWB hardware).
-        // Verify the NSKeyedArchiver round-trip mechanism using MCPeerID as a stand-in
-        // (also NSSecureCoding), mirroring what NIRangingSession does with discovery tokens.
-        let original = MCPeerID(displayName: "TestDevice")
+        // Verify the NSKeyedArchiver round-trip mechanism using NSString as a stand-in (also
+        // NSSecureCoding), mirroring what NIRangingSession does with discovery tokens. It was
+        // `MCPeerID` until the deletion round (2026-09-22) took MultipeerConnectivity out of the
+        // tree; the subject is the archiver, so the swap is faithful.
+        let original = NSString(string: "TestDevice")
         let archived = try NSKeyedArchiver.archivedData(withRootObject: original, requiringSecureCoding: true)
         #expect(!archived.isEmpty)
-        let restored = try NSKeyedUnarchiver.unarchivedObject(ofClass: MCPeerID.self, from: archived)
-        #expect(restored?.displayName == original.displayName)
+        let restored = try NSKeyedUnarchiver.unarchivedObject(ofClass: NSString.self, from: archived)
+        #expect(restored == original)
     }
 
     @Test func fallbackToRSSIWhenHardwareUnsupported() {

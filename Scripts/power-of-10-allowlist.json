@@ -53,11 +53,6 @@
  },
  {
   "rule": "R9-UNSAFE",
-  "path": "FernletKit/Sources/ProximityKit/Transport/MeshMultipeerSession.swift",
-  "reason": "MultipeerConnectivity delegate bridging seam: MC delegate callbacks arrive on an arbitrary queue with non-Sendable MCPeerID / invitationHandler values, and MCPeerID is the dictionary key for channels and peerMap, so it must cross the @MainActor hop as the object. Invariant: MCPeerID is an immutable NSObject value and each transferred reference is read ONLY on the MainActor after the hop, never again on the delegate thread; the invitationHandler is invoked exactly once, on the MainActor after the hop, on both the accept and the reject path."
- },
- {
-  "rule": "R9-UNSAFE",
   "path": "FernletKit/Sources/ProximityKit/Ranging/NIRangingSession.swift",
   "reason": "NearbyInteraction delegate bridging seam. Invariant: the invalidated NISession is transferred solely to compare identity (===) against self.niSession on the MainActor; it is never called or mutated after the hop, and holding the strong reference until the comparison runs is precisely what prevents the address-reuse aliasing an ObjectIdentifier comparison would admit."
  },

@@ -11,7 +11,6 @@
 
 import Foundation
 import Testing
-import MultipeerConnectivity
 import ProximityKit
 import FernletFoundation
 import FernletDomainModel

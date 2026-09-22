@@ -61,9 +61,10 @@ struct TestHookBoundaryTests {
     /// `FERNLET_UI_TEST_`, the first token in this list, rather than to the mesh family.
     static let hookTokens = ["FERNLET_UI_TEST_", "FERNLET_SKIP_", "FERNLET_MESH", "FERNLET_PROBE"]
 
-    /// Per-family floors, each comfortably below today's real count (39 / 8 / 18 / 3, measured
-    /// 2026-09-12). The floors themselves do not move for an ADDED hook — only for a removed
-    /// family.
+    /// Per-family floors, each comfortably below today's real count (39 / 8 / 17 / 3 — the mesh
+    /// family measured 18 on 2026-09-12 and lost `FERNLET_MESH_TRANSPORT`'s declaration in the
+    /// deletion round, 2026-09-22). The floors themselves do not move for an ADDED hook — only for
+    /// a removed family.
     ///
     /// The global floor above cannot catch a matcher that loses one family: drop every mesh and
     /// probe read and 47 remain, comfortably past it. These are what make each family's membership

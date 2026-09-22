@@ -13,7 +13,6 @@
 import Foundation
 import Testing
 import CryptoKit
-import MultipeerConnectivity
 import FernletFoundation
 import FernletDomainModel
 @testable import Fernlet

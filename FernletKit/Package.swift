@@ -351,7 +351,7 @@ let package = Package(
             dependencies: ["FernletDomainModel", "AIProviders"]
         ),
         // Layer 6 — the Proximity peer-to-peer subsystem as ONE black-box shim ([S]): mesh
-        // transport (MultipeerConnectivity), identity/replay (CryptoKit Ed25519/X25519), trust
+        // transport (Network.framework/QUIC; MultipeerConnectivity until 2026-09-22), identity/replay (CryptoKit Ed25519/X25519), trust
         // vault, NI ranging, recipe-share + friend-photo managers, wire payloads, and the
         // ProximityHost seam protocol. "Outward edges only": the 6 files with backward edges to
         // the app (ConnectionInspector → FernletStore; the SwiftUI views on app Color/UI
@@ -389,8 +389,9 @@ let package = Package(
                 //   • Ranging/NIRangingSession.swift — `session(_:didUpdate:)` and
                 //     `session(_:didInvalidateWith:)` now extract the Sendable values
                 //     (distance/direction; `ObjectIdentifier(session)`) BEFORE the hop.
-                //   • Transport/MeshMultipeerSession.swift — the MCSession / advertiser / browser
-                //     callbacks transfer the non-Sendable `MCPeerID` (and the single-shot
+                //   • Transport/MeshMultipeerSession.swift (deleted 2026-09-22 with the
+                //     MultipeerConnectivity radio) — its MCSession / advertiser / browser callbacks
+                //     transferred the non-Sendable `MCPeerID` (and the single-shot
                 //     `invitationHandler`) across the hop via a `nonisolated(unsafe)` local.
                 //   • ForegroundAnchor/ProximityForegroundAnchor.swift — the non-Sendable
                 //     ActivityKit `Activity` (a class) is passed to its `nonisolated async` `end`

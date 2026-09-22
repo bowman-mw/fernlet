@@ -161,7 +161,10 @@ enum MeshMatrixDebugOptions {
     /// Frozen diagnostic English naming what the launch environment asked for, for the transcript.
     static var summary: String {
         let environment = ProcessInfo.processInfo.environment
-        return "label=\(label) transport=\(environment["FERNLET_MESH_TRANSPORT"] ?? "default(quic)") "
+        // `transport=quic` is a constant since the deletion round (2026-09-22): the selection seam
+        // and its `FERNLET_MESH_TRANSPORT` read went with the MultipeerConnectivity radio, so the
+        // token names the one radio the build contains rather than echoing a variable nothing reads.
+        return "label=\(label) transport=quic "
             + "chaos=\(environment["FERNLET_MESH_CHAOS"] ?? "off") "
             + "chaosBarred=\(environment["FERNLET_MESH_CHAOS_BARRED"] == nil ? "none" : "set") "
             + "flows=\(flows.isEmpty ? "none" : flows.map(\.rawValue).joined(separator: "+")) "

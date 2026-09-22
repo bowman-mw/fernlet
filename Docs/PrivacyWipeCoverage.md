@@ -206,8 +206,9 @@ repository purge takes it.)
 
 *The **MC peer-identity archive** row — `Application Support/FernletPeerID.archive`, the device name
 plus the stable `MCPeerID` the mesh and recipe-share radios advertised — was **retired on
-2026-09-21** with the MC→QUIC cutover, not merely unlisted. The MultipeerConnectivity radio is no
-longer constructed on any shipping path, so **no radio mints or archives a peer identity any more**:
+2026-09-21** with the MC→QUIC cutover, not merely unlisted. The MultipeerConnectivity radio was
+deleted from the tree in the deletion round (2026-09-22; `MCPeerIDStore.swift` went with it, so the
+type that wrote the archive no longer exists), so **no radio mints or archives a peer identity any more**:
 the three QUIC radios each mint a fresh TLS identity and a random instance name per epoch (mesh,
 presence) or per start (recipe share), and there is nothing stable left to wipe. The leg in
 `MeshNetworkManager.wipeIdentityForDeleteAll` retired with it — **decision D-4.4, the owner's, a

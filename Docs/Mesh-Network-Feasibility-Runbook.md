@@ -856,6 +856,12 @@ not "does a tunnel come up", but **"is the tunnel selective"**.
 > radio, so the same copy-paste drives a pre-cutover build and a post-cutover one, which is what
 > makes a bisect across this boundary work. Do not delete it from the recipes until the deletion
 > round retires the seam with `MeshMultipeerSession.swift`.
+>
+> **The seam is retired (the deletion round, 2026-09-22).** `MeshTransportKind`, `MeshTransportFactory` and the
+> `FERNLET_MESH_TRANSPORT` read went with `MeshMultipeerSession.swift`; `NetworkMeshSession` is the only mesh radio a
+> build can construct. The variable in the recipes below is now **inert on every build from this commit on** — a Simulator
+> ignores an unknown child variable — and it is left in the recipes so the same copy-paste still drives a pre-deletion
+> build for a bisect. Nothing reads it; `TestHookBoundaryTests`' `FERNLET_MESH` family lost that one declaration.
 
 Every named rejection in
 `MeshIntroductionRejection` that P2 can reach was produced deliberately and read out of a console

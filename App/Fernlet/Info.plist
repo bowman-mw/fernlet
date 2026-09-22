@@ -17,8 +17,6 @@
 	<array>
 		<string>_fernlet-coach._tcp</string>
 		<string>_fernlet-coach._udp</string>
-		<string>_fernlet-friend._tcp</string>
-		<string>_fernlet-friend._udp</string>
 		<string>_fernlet-mesh2._udp</string>
 		<string>_fernlet-near2._udp</string>
 		<string>_fernlet-recipe2._udp</string>

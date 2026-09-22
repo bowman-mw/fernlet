@@ -11,7 +11,6 @@ import Foundation
 import Testing
 import CryptoKit
 import FernletCrypto
-import MultipeerConnectivity
 @testable import ProximityKit
 import FernletDomainModel
 import FernletFoundation

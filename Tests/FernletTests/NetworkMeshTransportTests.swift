@@ -917,10 +917,15 @@ struct NetworkMeshWireTests {
         }
     }
 
-    /// Both transports refuse the same frame. A payload that rides one radio and is dropped by the
-    /// other is a bug that only appears once the fleet is mixed.
-    @Test func bothTransportsShareOneInboundCeiling() {
-        #expect(NetworkMeshSession.maxInboundWireBytes == MeshMultipeerSession.maxInboundWireBytes)
+    /// The inbound ceiling IS the framing's inflate cap. Until the deletion round this cell pinned
+    /// the QUIC radio's ceiling to the MultipeerConnectivity radio's (a payload that rode one radio
+    /// and was dropped by the other was a bug that only appeared once the fleet was mixed); with one
+    /// radio left, the invariant that outlives it is the one `MeshTransportErrorSurfacingTests`
+    /// pinned on the MC side and took with it — the transport floor stays pinned to the inflate
+    /// ceiling every sealed body obeys, so a frame the framing would refuse to inflate is never read.
+    @Test func theInboundCeilingIsTheFramingsInflateCap() {
+        #expect(NetworkMeshSession.maxInboundWireBytes == SealedPayloadFraming.maxInflatedByteCount,
+                "The transport floor must stay pinned to the inflate ceiling every sealed body obeys")
     }
 
     /// Every failure the transport can raise says something. This is the surface that makes a dead

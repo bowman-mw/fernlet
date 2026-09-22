@@ -103,6 +103,14 @@ import Testing
     /// provisional admission turns on. It is not a `MeshP<n>…AcceptanceTests`, so
     /// ``everyMeshAcceptanceBatteryIsGated`` demands it nowhere and this entry is again the only
     /// thing that would notice it leaving. Counted off the line, not added to the previous number.
+    ///
+    /// LOWERED, deliberately, at the deletion round (2026-09-22): `mesh-batteries` 141 → 140, for
+    /// `MeshMultipeerSessionIdentityTests` — the suite that drove the retired MultipeerConnectivity
+    /// radio's real delegate callbacks to pin the §6.5 endpoint→identity map. The radio left the
+    /// tree (`MeshMultipeerSession.swift`, `MCPeerIDStore.swift`), so the suite cannot exist; its
+    /// invariant — a stable `PeerHandle.id` for the life of a session — is carried on the QUIC
+    /// radio by `NetworkMeshSessionTests` and `MeshLinkTableTests`, both still on the line. This is
+    /// the retirement argued, which is the one way this number may go down. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 7,
         "no-tracking": 1,
@@ -110,7 +118,7 @@ import Testing
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
-        "mesh-batteries": 141
+        "mesh-batteries": 140
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and

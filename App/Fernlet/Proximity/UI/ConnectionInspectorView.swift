@@ -154,15 +154,17 @@ struct ConnectionInspectorLogDetailView: View {
     private var transportSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Transport")
-            // The label and the field are BOTH left spelled "MCSession" after the cutover, and this
-            // is the check that decided it: `ConnectionSessionLog.TransportInfo.mcSessionState` is a
+            // The label moved in the deletion round (2026-09-22); the FIELD did not, and this is
+            // the check that decided it: `ConnectionSessionLog.TransportInfo.mcSessionState` is a
             // persisted, `Codable` token — `ProximityRecordDecodeCompatTests` decodes the literal
             // JSON key `"mcSessionState"` from two stored fixtures, and `FernletSnapshotRoundTripTests`
-            // round-trips it. Renaming the field is a data-compat change, not cleanup. The label is
-            // renameable on its own, and is deliberately kept in step with the field it displays so
-            // a reader of the inspector and a reader of the record are not looking at two names for
-            // one value. Both move together in the deletion round, behind a decode-compat shim.
-            inspectorRow("MCSession", log.transport.mcSessionState)
+            // round-trips it. Renaming the field is a data-compat change (a decode shim for a
+            // frozen key, for no user-visible gain), not cleanup, so the field keeps its historical
+            // spelling and its doc says why. The label is the user-visible half and could not keep
+            // naming a radio the tree no longer contains: it names what the value is — the session
+            // state of whichever transport carried the session — as a bare `String` like its
+            // neighbours (the inspector's pre-existing localization gap, unchanged here).
+            inspectorRow("Session state", log.transport.mcSessionState)
             inspectorRow("Bytes sent", "\(log.transport.bytesSent)")
             inspectorRow("Bytes received", "\(log.transport.bytesReceived)")
             inspectorRow("Average RTT", log.transport.averageRttMs.map { String(format: "%.0f ms", $0) } ?? "--")

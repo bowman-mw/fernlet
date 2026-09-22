@@ -14,7 +14,6 @@
 @testable import ProximityKit
 import Foundation
 import Testing
-import MultipeerConnectivity
 import FernletFoundation
 import FernletDomainModel
 import FernletPersistence
