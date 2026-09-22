@@ -1769,8 +1769,9 @@ struct ContentView: View {
     ///
     /// P9-3-A's fix (2026-09-22) retired the app-lock fact from the policy, and the lock-state edge
     /// stays: a duress unlock moves the lock state and `isDuressSessionActive` together, so that
-    /// edge is this view's duress feed, and every edge is the gate's re-entry pass at a fresh
-    /// instant. What used to be three private guards here
+    /// edge is this view's duress feed (a belt — `FernletApp`'s duress observer feeds it too), and
+    /// every pass reconciles a listener whose radio no longer matches its verdict. It is not a gate
+    /// re-entry pass: an unchanged gate is a no-op push. What used to be three private guards here
     /// (`shouldListenForRecipeShares`, `shouldRunPresence`, the Friends three-way arm) is one table,
     /// `ProximityRunPolicy`, and what used to be six direct radio calls is one executor,
     /// `ProximityRunSeams.swift`; this view speaks no radio verb (`ProximityRunSeamsTests`).

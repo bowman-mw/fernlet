@@ -13,7 +13,7 @@
 // stops every radio, nothing outside the opt-in, the scene, the tab and the three hard stops parks a
 // listener, the three non-running continuation states are one row — and pins plan §13's load-bearing
 // rows by hand. A flat re-statement of every
-// radio's rule (`expectedMesh` and friends) is compared on all 23 040 rows as the named expectation
+// radio's rule (`expectedMesh` and friends) is compared on all 11 520 rows as the named expectation
 // per row; being a re-statement, its value is catching a guard-order slip, not proving the
 // semantics — the clauses do that.
 //

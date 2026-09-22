@@ -364,6 +364,14 @@ all five coordinator send sites read one `disclosedDisplayName` that is empty un
 (`adoptDisclosedDisplayName(from:)`, then `onPeerDisplayNameDisclosed` into the mesh roster and the
 recipe picker), not a new payload type, and the wire shape is unchanged (an empty name is a value).
 The receive side ignores any name on an introduction, so an OLDER peer that still names itself is
-shown by fingerprint too. The trust paragraph's disclosure is closed: a bystander with the doors open
-now learns a key and a fingerprint, not a name. Observed on two Simulators (runbook, *Lane C —
-Option 1b*): each side shows the other's fingerprint at the gate and the name after the commit.
+shown by fingerprint too. Observed on two Simulators (runbook, *Lane C — Option 1b*): each side shows
+the other's fingerprint at the gate and the name after the commit.
+**The first build did not close the disclosure; the blind verify found why** (BLOCKER): the mesh
+manager signs its own frames in `sendEnvelopeCore`, and six broadcasts (the 20 s coordinator beacon,
+the admission request with `requesterDisplayName` in its payload, rotation sync, key rotation and
+ack, the removal votes, departure/termination) plus the QR ceremony reached uncommitted slots
+carrying the name. The verify-fix commit gates that door per slot — an empty envelope name and a
+`MeshPeerNameRedactable` payload with every name blanked for a slot this device has not committed
+and seated — so the trust paragraph's disclosure is closed now: a bystander with the doors open
+learns a key and a fingerprint, not a name. Known cost, taken with the call: an OLDER build shows a
+new peer as "A friend" for the whole session (it reads the name from the introduction only).

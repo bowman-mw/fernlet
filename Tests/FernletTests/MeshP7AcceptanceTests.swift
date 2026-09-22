@@ -5,7 +5,8 @@
 // per clause, each promoting the named tier-1 claims of the item it speaks for and running its
 // clause END TO END on the shipping seams, so CI gating a clause fails on this battery's own
 // assertions. Where an exhaustive space already exists it is CITED and re-run whole rather than
-// sampled — the §11.4 idiom, and the reason the run-policy clause evaluates all 23 040 rows here.
+// sampled — the §11.4 idiom, and the reason the run-policy clause evaluates all 11 520 rows here
+// (23 040 until P9-3-A's fix retired `appLockEngaged`, 2026-09-22).
 //
 // **Six suites.** The run policy (item 1), the gate's single writer (item 2), the radios' seams
 // (item 3), the poller's three consumers each driven to a verdict (item 4), the resume decision

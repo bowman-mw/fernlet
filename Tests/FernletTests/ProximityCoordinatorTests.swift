@@ -1,4 +1,4 @@
-import ProximityKit
+@testable import ProximityKit
 import FernletCrypto
 import Testing
 import FernletFoundation
@@ -1047,7 +1047,25 @@ struct ProximityCoordinatorTests {
             Issue.record("Expected the proximity gate, got \(coordinator.state)")
             return
         }
-        #expect(identity.displayName.count <= 24, "PeerIdentity must carry the bounded name")
+        // Option 1b at the FRIEND-mode gate itself (the verify's coverage gap: the other pre-commit
+        // cells run in trainer mode): the identity carries no name, and nothing sent names us.
+        #expect(identity.isDisplayNameWithheld, "at the manual-commit gate the peer's name is withheld")
+        let sentBeforeCommit = try envelopesSent(on: transport)
+        #expect(!sentBeforeCommit.isEmpty && sentBeforeCommit.allSatisfy { $0.senderDisplayName.isEmpty },
+                "and every frame sent from the gate withholds ours")
+
+        // (c) …the name ADOPTED after the commit is the bounded form. Before Option 1b this read the
+        // introduction's name; that is withheld now, so the bound is pinned where a name enters.
+        await coordinator.commitManualProximity()
+        await waitUntil { if case .connected = coordinator.state { return true }; return false }
+        transport.simulateInboundData(try signedHeartbeat(from: remote, kind: "ping", displayName: hugeName), from: peer)
+        await waitUntil { if case .connected(let p) = coordinator.state { return !p.isDisplayNameWithheld }; return false }
+        guard case .connected(let named) = coordinator.state else {
+            Issue.record("Expected .connected, got \(coordinator.state)")
+            return
+        }
+        #expect(!named.isDisplayNameWithheld && named.displayName.count <= 24,
+                "the adopted name is the bounded, sanitized form — never the 100 000-character field")
     }
 
     // MARK: - Peer heartbeats must not substitute for local consent (H1)
@@ -1276,6 +1294,39 @@ struct ProximityCoordinatorTests {
         }
         #expect(identity.isDisplayNameWithheld,
                 "the peer's name on a pre-commit heartbeat is not adopted — this side has not committed")
+    }
+
+    /// A FORWARDED envelope cannot rename the peer: after the commit, a frame signed by a THIRD
+    /// identity — the realistic abuse is a peer relaying someone else's recipient-less frame to
+    /// rename itself — verifies (its own signature is valid) but is not adopted, because the name
+    /// is taken only from the signing key the handshake verified. The peer's own frame then is.
+    @Test func aForwardedEnvelopeFromAnotherSignerCannotNameThePeer() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let (mallory, malloryServiceID) = try makeIdentity()
+        defer { cleanup(malloryServiceID) }
+        let transport = MockMultipeerTransport()
+        let coordinator = makeCoordinator(identity: local, transport: transport)
+        var disclosures: [String] = []
+        coordinator.onPeerDisplayNameDisclosed = { disclosures.append($0.displayName) }
+        let peer = try await connectCoordinator(coordinator, transport: transport, local: local, remote: remote)
+
+        let framesBeforeForward = transport.sentData.count
+        transport.simulateInboundData(try signedHeartbeat(from: mallory, kind: "ping", displayName: "Mallory"), from: peer)
+        await waitUntil { transport.sentData.count > framesBeforeForward }
+        #expect(transport.sentData.count > framesBeforeForward, "the forwarded frame verified and was answered — it really arrived")
+        guard case .connected(let afterForward) = coordinator.state else {
+            Issue.record("Expected .connected, got \(coordinator.state)")
+            return
+        }
+        #expect(afterForward.isDisplayNameWithheld && disclosures.isEmpty,
+                "a frame signed by another key names nobody — not even while the name is still owed")
+
+        transport.simulateInboundData(try signedHeartbeat(from: remote, kind: "ping"), from: peer)
+        await waitUntil { disclosures.count == 1 }
+        #expect(disclosures == ["Remote Device"], "while the peer's own frame does — the check is the key, not the timing")
     }
 
     /// After the commit the name follows on the first verified frame that discloses it: the state

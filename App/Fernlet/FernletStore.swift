@@ -1901,7 +1901,7 @@ final class FernletStore {
 
     /// Toggle the nearby-friends presence layer (mirrors `setAllowNearbyRecipeShares`). Either way
     /// the run policy re-runs here (P7 item 3): OFF stops the presence radio immediately, as it
-    /// always did, and ON starts it if the scene, tab and lock allow — `ContentView` also observes
+    /// always did, and ON starts it if the scene and tab allow — `ContentView` also observes
     /// the value, for the synced-snapshot path that never runs this setter.
     func setAllowNearbyPresence(_ value: Bool) {
         settings.allowNearbyPresence = value
@@ -2022,7 +2022,7 @@ final class FernletStore {
     }
 
     /// A SCENE edge (network migration P7 item 2): `FernletApp`'s six — the launch mount, the two
-    /// scene legs, the two protected-data notifications and the duress observer. Retains the four
+    /// scene legs, the two protected-data notifications and the duress observer. Retains the three
     /// facts for the other two entries and runs the policy.
     ///
     /// `duressSessionActive` is a PARAMETER rather than a read of ``duressSessionActive``
@@ -2065,10 +2065,13 @@ final class FernletStore {
     /// the scene facts are the ones the last scene edge retained — a tab or lock change happens with
     /// no scene transition in flight — or, before the first scene edge, the most restrictive scene.
     ///
-    /// The lock-state edge survives P9-3-A's fix even though the app lock is no longer an input:
-    /// a duress UNLOCK moves `FernletLockService.state` and `isDuressSessionActive` together, so
-    /// this is the view's duress feed, and every edge is also the gate's re-entry pass at a fresh
-    /// instant (``runProximityPolicy(_:now:)`` pushes the gate on every pass, diff or no diff).
+    /// The lock-state edge survives P9-3-A's fix even though the app lock is no longer an input,
+    /// for two reasons: a duress UNLOCK moves `FernletLockService.state` and `isDuressSessionActive`
+    /// together, so it is the view's duress feed (a belt: `FernletApp`'s duress observer feeds the
+    /// same fact), and every pass reconciles a listener whose radio no longer matches its verdict
+    /// (`ProximityRunTransition.listenerNeedsReconciling`). It is NOT a gate re-entry pass:
+    /// `MeshNetworkManager.applyRoutedAccessGate(_:now:)` returns early for an unchanged gate, and a
+    /// lock change moves no gate leg (corrected by the item's blind verify).
     ///
     /// - Parameters:
     ///   - duressSessionActive: `FernletLockService.isDuressSessionActive`, read at the edge.

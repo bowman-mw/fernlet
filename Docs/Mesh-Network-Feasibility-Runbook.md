@@ -2215,10 +2215,15 @@ duplicate). **`dialRefused`, `browserFailed`, `registrationWithdrawn`, `transfer
   said "the app lock moves presence and recipe only" is replaced by its inverse stated positively
   (`noLockLegSurvivesAndAListenerRunsWheneverItsOwnRuleAllows`: on all 384 opted-in, foreground,
   hard-stop-free presence rows and all 288 recipe rows the listener RUNS). Shown red once against
-  the restored old table: the P7 clause failed on the count, on `agrees` and on `inactiveIsForeground`,
-  and the new cell failed five ways. The lock-state edge in `ContentView` deliberately SURVIVES —
+  the restored old table: the P7 clause failed on the count and on `agrees`, and the new cell failed
+  five ways. (The first draft of this record also listed `inactiveIsForeground`; the blind verify
+  showed the old table cannot fail it — that failure came from the temporary harness, whose `copy`
+  did not carry the restored lock bit.) The lock-state edge in `ContentView` deliberately SURVIVES:
   it is the view's duress feed (a duress unlock moves the lock state and `isDuressSessionActive`
-  together) and the gate's re-entry pass at that instant, so the view-edge count stays 7.
+  together — a belt, `FernletApp`'s duress observer feeds it too) and every pass reconciles a
+  listener whose radio no longer matches its verdict, so the view-edge count stays 7. It is NOT a
+  gate re-entry pass, as the first draft said: `applyRoutedAccessGate(_:now:)` returns early for an
+  unchanged gate, and a lock change moves no gate leg.
 * **P9-3-B — NOTE — the glare loser re-mints its posture mid-collapse.** A emitted `resumed` + a
   fresh `advertised` at `14:16:36.261535/.261551`, then `redundantTunnelClosed`, `connected` and
   `paused` again by `.261918`: the collapse evicts the connection record, which is the gate's resume
@@ -2407,7 +2412,16 @@ concurrent session's Fernlet process on `iPhone 17 Pro Max` (non-matrix) and its
 | The unseeded founding is unaffected | `derived=2`, one epoch head | **Observed** | both `membership ledger=present derived=2 barred=0 status=active epochRef=1.2c69b90da4da29f39abf9e340ec424fc.b8e515bb773c3239`; audit: `legacyRosterFallback members=0` on both at 14:51:28.78, A `autoGrantedFoundingPair` :29.92, B `yieldedNewbornMesh` :29.89 → `bootstrapped` :29.93 → `adopted members=2` :30.00 (introduction to `derived=2` ≈ 1.2 s) |
 | No refusal introduced | zero introduction/tunnel refusals | **Observed** | every audit `refused`/`rejected`/`error` line is a known Simulator or ordering artefact: `mesh.continuation.submitRefused … BGTaskSchedulerErrorDomain Code=1` (a Simulator refuses every submission, P10), `health.changeObservationUnavailable`, `brandedCatalog.odr.unavailable`, and B's `mesh.keyAgreement.rejected … never admitted` — the deletion round's benign park-and-reoffer |
 
-**What this run does not show.** The console lines are un-timestamped poll output, so the gap
+**What this run could not show, and what the blind verify then found.** A PAIR cannot exercise a
+frame sent to an UNCOMMITTED third slot, which is where the first build still leaked: the mesh
+manager's own signing door (`sendEnvelopeCore`) named this device on the coordinator beacon, the
+admission request (envelope and `requesterDisplayName`), rotation, removal votes and
+departure/termination frames to every slot. Fixed in the verify-fix commit and pinned at tier 1 by
+`MeshNameWithholdingTests` (two committed members and one uncommitted stranger on recording
+endpoints: the stranger receives no name at all, the members still do); a Lane C row for it needs a
+third node that never commits.
+
+The console lines are un-timestamped poll output, so the gap
 between the commit and the disclosure is bounded by the driver's poll (one `slots` line to the
 next), not measured; the unit cells pin the mechanism (`ProximityCoordinatorTests`: the name
 follows on the first post-commit frame, once, from the verified key). The Simulator's `NIRangingSession`

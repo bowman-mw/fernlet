@@ -206,6 +206,33 @@ struct HeartShareTests {
         #expect(ledger.pendingBubbleHeart?.id == record.id)
     }
 
+    /// Stranger-admission Option 1b (2026-09-22): a heart can land before this side's commit, while
+    /// the sender's name is still withheld. The sender is a KEPT friend, so the heart is filed under
+    /// the name this device already holds for them — never the fingerprint (the item's blind verify).
+    @Test func aHeartFromAFriendWhoseNameIsStillWithheldIsFiledUnderTheKeptName() throws {
+        let host = MockHeartProximityHost()
+        let friend = makePeerIdentity(displayName: "Aisha Bloom")
+        host.proximityTrustVault.trust(friend, mode: .friend)
+        let withheld = ProximityCoordinator.PeerIdentity(
+            id: friend.id,
+            displayName: "",
+            signingPublicKey: friend.signingPublicKey,
+            keyAgreementPublicKey: friend.keyAgreementPublicKey,
+            fingerprint: friend.fingerprint,
+            rangingMode: .none,
+            firstSeenAt: baseDate
+        )
+        #expect(withheld.isDisplayNameWithheld, "the fixture is a pre-commit identity")
+        let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
+        let manager = PresenceManager(store: host, ledger: ledger)
+
+        try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: withheld)
+
+        let record = try #require(ledger.receivedHearts.first, "the heart from a kept friend is accepted")
+        #expect(record.senderDisplayName == "Aisha Bloom", "and filed under the kept name, not the fingerprint")
+        #expect(record.senderFingerprint == friend.fingerprint)
+    }
+
     @Test func receivedHeartSanitizesPeerSuppliedDisplayName() throws {
         let host = MockHeartProximityHost()
         let hostileName = "Ai\u{202E}sha\u{0000}\u{200B} Bloom"

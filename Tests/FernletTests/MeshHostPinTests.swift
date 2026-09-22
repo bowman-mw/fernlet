@@ -78,12 +78,16 @@ final class MeshHostPinProbe {
         manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
     }
 
-    /// Seats one slot on the recording endpoint, so the beacon fan-out has somewhere to send.
+    /// Seats one COMMITTED slot on the recording endpoint, so the beacon fan-out has somewhere to send
+    /// and the frame carries the display name read off the host — the witness that the send read a
+    /// LIVE host. Committed on purpose since Option 1b (2026-09-22): an uncommitted slot now receives
+    /// no name at all (`MeshNameWithholdingTests`), so a nil fingerprint here would leave the cell's
+    /// second assertion with nothing to read.
     func seatSlot() {
         manager?.addSlotForTesting(
             coordinator: Self.throwawayCoordinator(),
             peer: peer,
-            fingerprint: nil,
+            fingerprint: "e5e5e5e5e5e5e5e5",
             channel: channel
         )
     }

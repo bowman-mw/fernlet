@@ -156,7 +156,11 @@ struct SealedIntroductionTests {
         let inner = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: opened)
         #expect(inner.payloadType == .identityIntroduction)
         #expect(inner.senderSigningPublicKey == local.localSigningPublicKey)
-        #expect(inner.senderDisplayName == "Aisha Bloom")
+        // Stranger-admission Option 1b (2026-09-22): the introduction carries NO name, sealed or not
+        // — the keys are the identity, and the name follows this side's commit on the first frame
+        // after it (`ProximityCoordinatorTests`). One rule at one gate; the friend loses nothing a
+        // heartbeat does not deliver a moment later.
+        #expect(inner.senderDisplayName.isEmpty, "even sealed to the friend, the introduction withholds the name")
     }
 
     // MARK: - (b2) An unopenable inbound wrapper (forger) fails with no identity emitted
