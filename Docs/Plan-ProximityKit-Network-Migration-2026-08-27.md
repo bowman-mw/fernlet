@@ -3537,9 +3537,9 @@ and each has a fake standing in for it at tier 1 today:
 
 | Row | What a device must show |
 |---|---|
-| Registration accepted | `BGTaskScheduler.register` for `MBO.Fernlet.mesh-continuation.<meshID>` returns true on a phone (it is the `Info.plist` wildcard's first real use). |
-| A `.fail` submission granted | a user-started request submitted on the first peer commit is **granted**, not refused — the Simulator returns error 1 for every submission, so nothing at tier 1 or 2 has ever seen a grant. |
-| The launch and expiration handlers firing | the real `SystemContinuationScheduler` / `SystemContinuationTaskHandle` conformer — **exercised by no test anywhere**; tier 1 drives fakes. |
+| Registration accepted | `BGTaskScheduler.register` for `MBO.Fernlet.mesh-continuation.<meshID>` returns true on a phone (it is the `Info.plist` wildcard's first real use). **OBSERVED 2026-09-21/22** (read back 2026-09-22): `mesh.continuation.registered id=MBO.Fernlet.mesh-continuation.<meshID>` on every Lane D run, the chain continuing past it (runbook *Lane D* § *The device round's item 1*, last paragraph) |
+| A `.fail` submission granted | a user-started request submitted on the first peer commit is **granted**, not refused — the Simulator returns error 1 for every submission, so nothing at tier 1 or 2 has ever seen a grant. **OBSERVED on the phone, six of six runs, 2026-09-21 and 2026-09-22** (read back 2026-09-22): `mesh.continuation.started event=taskStarted state=running` 4–7 ms after `submitted event=firstPeerCommitted`; no `refused` anywhere |
+| The launch and expiration handlers firing | the real `SystemContinuationScheduler` / `SystemContinuationTaskHandle` conformer — **exercised by no test anywhere**; tier 1 drives fakes. **The launch half OBSERVED 2026-09-21/22** (`started` is the delivered task adopted); the expiration half not — no task has run to its budget, every run was terminated from the Mac |
 | The tunnel surviving the whole task | the probe's defect inverted: the session, its links and its heartbeats are still up when the task ends. |
 | Slow progress across the soaks | the ratchet advancing across 3 h and 6 h without the system ending the task for a stalled bar. |
 | No proximity activity present | the unconditional `NoopProximityForegroundAnchor()` means **no** Live Activity appears for any mesh or 1:1 connection — confirm nothing is shown and nothing is orphaned. |
@@ -6166,7 +6166,11 @@ honesty suite; no production anchor below moves.*
 | **The device round** | Run it. | Three phases overdue and the only unpaid risk left; a Simulator answers no row. Lane D first (one phone), then §15.1, then the soak. |
 | **9.4-LATER, the MC→QUIC cutover** | **D-4.3 TAKEN by the owner (2026-09-21, later the same day as §28.8): Option 1 — cut over WITH provisional stranger admission while the join doors are open, plus Option 1b's frame-gating half; §15 still undated, knowingly. D-4.4 taken as PURE RETIRE (against the design's recommendation; cost in the ledger). The series is flip → gate → delete: the admission path and the default flip this round, the MC files, the `_fernlet-friend` plist strings, the permit list and the test sweep the round after. **The FLIP is BUILT (`5d88247`…`7d28cc4` + verify fixes `ad85cd7`…`4e70d0a`, mesh line 1222 / 141). The DELETION is DONE 2026-09-22 (`ec05b0c`, after the unseeded Lane C observation `3eb1768`; mesh line 1214 / 140).** | QUIC still has no first-meeting stranger admission (§8.7 finding 3) and §15 still has no dates. A cutover ships broken founding on hardware. D-4.3 needs the design first — the patches are already written. |
 | **D-4.4** (the `MCPeerIDStore` wipe row → a legacy `FileManager` sweep) | **TAKEN 2026-09-21 with D-4.3: PURE RETIRE** (the owner's call, against the sweep the design recommended). | `FernletPeerID.archive` survives on any pre-P9 install, so the cutover commit owes the sweep in the same breath. |
-| **P9-3-A** (a configured lock parks the 1:1 radios) | Leave the policy alone; surface **why** instead. | Changing a run-policy row is a P7 bug fix that re-runs the 23 040-row product. Unchanged from §27.3. |
+| **P9-3-A** (a configured lock parks the 1:1 radios) | ~~Leave the policy alone; surface **why** instead.~~ **TAKEN 2026-09-22: make it work** — drop the lock leg from the two 1:1 rows and retire the `appLockEngaged` input; re-pin the product (§28.9). | A scoped lock at rest protects the Private tab, the progress photos and the lock settings — not a radio; the mesh row never read the lock. The P7 bug fix the default declined is now the item. |
+| **Option 1b's name deferral** | — | **TAKEN 2026-09-22: withhold the display name until commit.** A build item (§28.9). |
+| **Option 2, the two-scan QR pre-admission** | Leave it. | **TAKEN 2026-09-22: leave it alone** — QR stays an in-session verification. |
+| **§18 decision 4, the coach strings** | Hold. | **TAKEN 2026-09-22: hold for Coach.** |
+| **The degraded ladder** | Decided by §15.3's soak. | **The 6 h soak is scheduled for the evening of 2026-09-22**; the ladder is chosen by its numbers, not before. |
 | **D-10.4.5** — the foreground after-hook still reloads unconditionally; only the handler's `publishIfContentChanged` diffs | **DEFERRED** here, and it is the owner's one-line call. Silent default: **narrow it**, one line plus a cell. | §17.2 scopes the diff to the refresh handler, so `WidgetSnapshotMirror.publish(_:)` is correct as scoped and every caller there is a persisted change; but the mirror makes the diff free for both paths now, and the difference will outlive the reason for it. |
 | **The three UI residuals** | Pin CI's Simulator device **first**; the three fall out of it. **PINNED 2026-09-21 (`97d1bd9` + verify fixes `18dd46a`); the three are now takeable.** | `s3-wall.yml` fell back to the newest available iPhone with a `::warning::` while the baselines are pinned four ways to an iPhone 17; it is a hard failure now, read by `CIGateSelectorBoundaryTests`. |
 | **New persisted surface** | **None.** | P6–P10 added none between them; the refresh's `pendingRequest` slot is deliberately in memory and nowhere else. A "last refreshed at" key would owe a `Docs/PrivacyWipeCoverage.md` row and delete-all wiring in the same commit. |
@@ -6452,6 +6456,23 @@ it settles:
   ladder (no numbers yet); and the three owed hardenings priced by the deletion round — `recordError(domain:)`'s
   unlocalized inspector labels, `MeshLinkTable.links` outside the cache eviction, the wipe wall pinning existence and not
   effect — priced again there, still not taken.
+- **Read back the same day, after the record: the continued-processing task is GRANTED on the phone at every first
+  commit** — six of six Lane D and unseeded runs across 2026-09-21/22 carry `mesh.continuation.started event=taskStarted
+  state=running` 4–7 ms after the submission, and the task stayed `running` across a re-dial. Three tier-3 rows of §15
+  moved (registration, the `.fail` grant, the launch handler); the expiration handler, the tunnel outliving the task and
+  the soak are still open. The two sentences that had said "no grant of any class" are corrected in place (the
+  companion-refresh class, §15.5, is still ungranted).
+- **The owner's five calls, TAKEN 2026-09-22:** (1) Option 1b's name deferral — **withhold the display name until
+  commit** (build it: the introduction without the name, the name on `.connected`, a coordinator state, the join screen
+  showing a fingerprint until the dwell or tap, a `ProximityCoordinatorTests` row); (2) Option 2 — **leave it alone**: QR
+  stays the in-session verification it is, not a pre-admission ceremony; (3) P9-3-A — **make it work** (the
+  recommendation taken: drop the `!input.appLockEngaged` leg from `presenceState` and `recipeShareState` — the mesh row
+  has no such leg — and retire `Input.appLockEngaged` with its projection, re-pinning the run-policy product and P7's
+  acceptance clause; a scoped lock at rest protects private surfaces, not radios); (4) `_fernlet-coach._{tcp,udp}` —
+  **hold for Coach** (§18 decision 4 taken as its default); (5) the degraded ladder — **the 6 h soak runs the evening of
+  2026-09-22**, one phone in the owner's normal use on the Mac's Wi-Fi, the Simulator holding the far end; the ladder is
+  chosen by its numbers. (1) and (3) are a build round after the soak is read (the soak runs on the observed build);
+  the launcher is `Docs/Next-Round-Prompt-Owner-Calls-2026-09-22.md`.
 - **State:** `origin/main` had caught up to `d88062c` by the time this round opened (the owner pushed); the round's
   commits sit on top, not pushed. The plan's phases remain spent; what is left is the owner's — a second phone for
-  §15, the §15.5 window, and the calls above.
+  §15.1/§15.2, the §15.5 window, the soak's read-out, and the two build items above.
