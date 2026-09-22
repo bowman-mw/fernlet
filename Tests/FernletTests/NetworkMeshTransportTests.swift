@@ -327,6 +327,83 @@ struct MeshLinkTableTests {
         #expect(table.cachedEndpoints.isEmpty)
     }
 
+    // MARK: Bounded link records (owner-calls item 4, 2026-09-22)
+
+    /// **The finding's first path.** An inbound tunnel from a peer this side never browsed is keyed
+    /// by a pending key the cache never holds and `forget` never reaches, so its closed record used
+    /// to stay for the session's life. Forty such tunnels now leave NONE — and every answer the
+    /// table gives about those keys is the one it gave before (idle, full budget, dialable).
+    @Test func aClosedLinkToAnUncachedEndpointKeepsNoRecord() {
+        let clock = VirtualClock()
+        var table = MeshLinkTable()
+        // R2: bounded by the stated count.
+        for index in 0..<40 {
+            let key = MeshLinkKey("inbound-\(index)")
+            #expect(table.admitInbound(from: key, preference: .unranked, now: clock.now) == .admit)
+            table.noteClosed(key)
+        }
+        #expect(table.linkRecordCount == 0, "forty closed inbound tunnels from never-browsed peers leave no record")
+        let key = MeshLinkKey("inbound-7")
+        #expect(table.phase(of: key) == .idle && table.dialAttempts(for: key) == 0,
+                "and the answers are the defaults an idle record would have given")
+        #expect(table.admitDial(to: key, now: clock.now) == .admit, "the endpoint is as dialable as before")
+
+        table.remember(Self.record(named: "alpha", at: clock.now))
+        table.noteReady(Self.alpha, now: clock.now)
+        table.noteClosed(Self.alpha)
+        #expect(table.linkRecordCount == 2, "a CACHED endpoint still keeps its idle record — the change is scoped (plus inbound-7's live dial)")
+    }
+
+    /// **The finding's second path**, the one the ledger named: the cache eviction reaped the
+    /// counters but never the link map, so a crowded room grew it for the session's life. Ninety-six
+    /// endpoints through a 32-entry cache, each connected and closed, now leave exactly the 32
+    /// the cache still holds.
+    @Test func aCrowdedRoomsLinkRecordsAreBoundedByTheCache() {
+        let clock = VirtualClock()
+        var table = MeshLinkTable()
+        let seen = MeshLinkTable.maxCachedEndpoints * 3
+        // R2: bounded by three cache-fulls.
+        for index in 0..<seen {
+            let key = MeshLinkKey("peer-\(index)")
+            table.remember(Self.record(named: "peer-\(index)", at: clock.now))
+            table.noteReady(key, now: clock.now)
+            table.noteClosed(key)
+        }
+        #expect(table.cachedEndpointCount == MeshLinkTable.maxCachedEndpoints, "the cache is at its bound")
+        #expect(table.linkRecordCount == MeshLinkTable.maxCachedEndpoints,
+                "and so are the link records — 32, not 96: each idle record left with its cache entry")
+        #expect(table.phase(of: MeshLinkKey("peer-0")) == .idle, "an evicted endpoint reads idle, as it always did")
+    }
+
+    /// The eviction is lossless by construction: only an IDLE record — identical to having none —
+    /// leaves with its cache entry. An exhausted endpoint keeps the state that stops this session
+    /// hammering a peer that never answered, until the browser loses it.
+    @Test func onlyAnIdleRecordLeavesWithItsCacheEntry() {
+        let clock = VirtualClock()
+        var table = MeshLinkTable()
+        let idle = MeshLinkKey("peer-0")
+        let spent = MeshLinkKey("peer-1")
+        table.remember(Self.record(named: "peer-0", at: clock.now))
+        table.remember(Self.record(named: "peer-1", at: clock.now))
+        table.noteReady(idle, now: clock.now)
+        table.noteClosed(idle)
+        // R2: bounded by the retry budget.
+        for _ in 0..<MeshLinkTable.maxDialAttempts {
+            _ = table.admitDial(to: spent, now: clock.now)
+            _ = table.noteDialFailed(spent, now: clock.now)
+            clock.advance(by: MeshLinkTable.dialRetryDelay)
+        }
+        #expect(table.phase(of: spent) == .exhausted, "the fixture really spent peer-1's budget")
+        #expect(table.linkRecordCount == 2)
+        // R2: bounded by one cache-full.
+        for index in 2..<(MeshLinkTable.maxCachedEndpoints + 2) {
+            table.remember(Self.record(named: "peer-\(index)", at: clock.now))
+        }
+        #expect(table.cachedEndpoint(idle) == nil && table.cachedEndpoint(spent) == nil, "both were evicted from the cache")
+        #expect(table.linkRecordCount == 1, "the idle record left with its entry")
+        #expect(table.phase(of: spent) == .exhausted, "and the spent one kept its state — no fresh campaign")
+    }
+
     /// Teardown leaves nothing — the privacy constraint, asserted directly rather than inferred.
     @Test func removeAllLeavesNothingBehind() {
         let clock = VirtualClock()
