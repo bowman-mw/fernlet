@@ -29,7 +29,7 @@ across `App/Fernlet/`, `FernletKit/`, and `App/FernletWidgets/` returned zero hi
 never referenced anywhere in the app.
 
 **Still owed after the ship** — both recorded in the P8 row of
-[`Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md), neither done:
+`e6a3b48:Docs/Plan-Security-Hardening-Runbook.md`, neither done:
 
 - The **§7 manual device matrix** has never been walked on real hardware. Every automated check that
   could run did (the cover and the pulse are both injectable precisely because neither real trigger
@@ -55,7 +55,7 @@ this for a security control and start reasoning about it as one.
 **Relationship to the security-hardening runbook.** The paragraph that follows argued this work must
 *not* be folded into the runbook's ledger. The argument still holds; the fact changed. On 2026-08-10
 the owner asked for it to be queued in
-[`Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md) as **P8** so the build
+`e6a3b48:Docs/Plan-Security-Hardening-Runbook.md` as **P8** so the build
 loop would pick it up, and that is where it was implemented, reviewed and merged from. The runbook
 answers the objection in its own words rather than by ignoring it — it carries a standing section
 saying the ledger is an **execution queue, not a strength ranking**, and that P8 sits last because it
@@ -512,7 +512,7 @@ test posting a screenshot to `.default` bumps every other test's live state: tha
   not be promoted out of.
 - [`Docs/No-Tracking-Wall.md`](No-Tracking-Wall.md), [`Docs/SPM-Module-Carveup-Plan.md`](SPM-Module-Carveup-Plan.md)
   — the two walls; neither changes (§5.5).
-- [`Docs/Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md) — the hardening
+- `e6a3b48:Docs/Plan-Security-Hardening-Runbook.md` — the hardening
   ledger this brief is deliberately **not** part of.
 - `App/Fernlet/ProgressPhotoTimeline.swift:64-65`, `:167`, `:209-222`, `:388`, `:497-516` — the existing
   hand-rolled snapshot cover, and the recorded lesson that a partial cover leaks.

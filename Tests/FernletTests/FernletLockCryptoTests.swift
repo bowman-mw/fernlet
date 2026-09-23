@@ -324,7 +324,7 @@ struct FernletLockCryptoTests {
     /// item, which would leave the two load-bearing assertions — the stored verifier must NOT
     /// unwrap the persisted item, the raw derived key MUST — running only on SE-less hosts. The
     /// at-rest FORMAT is unchanged by P4; only this fixture is (see
-    /// Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §9). The hard-bound state gets its own
+    /// e6a3b48:Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §9). The hard-bound state gets its own
     /// pin in `hardBoundConfigureLeavesNoPasscodeDerivedRowThatOpensTheKey`, so both states are
     /// pinned on every host instead of one state per host.
     @MainActor

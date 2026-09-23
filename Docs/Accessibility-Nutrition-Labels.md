@@ -106,7 +106,7 @@ the modifier bound (`fernletDarkModeEnabled`) is **not** the key the live settin
 The appearance migration's own doc comment (`FernletNavigation.swift:19-21`) describes removing this
 exact line, and `git log -S` shows the migration commit never touched `ContentView.swift` — so the
 removal was documented and not performed. And the line was demonstrably **live** before the
-migration: `Docs/UI-UX-Review-2026-08-16.md:1772` records, against a screenshot gallery, that with
+migration: `e6a3b48:Docs/UI-UX-Review-2026-08-16.md` (line 1772) records, against a screenshot gallery, that with
 the phone in Dark Mode every tab and sheet still rendered light. What could *not* be determined from
 source is which of the two writes wins today; that is why the line was deleted rather than reasoned
 about.
@@ -117,7 +117,7 @@ followed by a cold launch renders the Home tab dark — parchment background, in
 and the companion's ambience all on the dark palette — and `appearance light` followed by a cold
 launch renders the same screen light. Screenshots of both were taken and compared. That is the
 discriminator this row needed: it is exactly the check
-`Docs/UI-UX-Review-2026-08-16.md:1772` failed before the appearance migration, when the device was
+`e6a3b48:Docs/UI-UX-Review-2026-08-16.md` (line 1772) failed before the appearance migration, when the device was
 dark and every tab still came up light.
 
 **The one thing that used to make this row dishonest is fixed.** `Assets.xcassets/LaunchParchment.colorset`

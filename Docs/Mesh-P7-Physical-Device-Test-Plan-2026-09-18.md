@@ -6,7 +6,7 @@ results table. Written 2026-09-18 at the P7 boundary.
 
 > **Status: this plan cannot be run yet.** Every P7 file was written in a session with **no Swift
 > toolchain**; nothing in P7 has compiled, and no P7 test has run. Before any row below is attempted,
-> the Mac gauntlet in `Docs/Mesh-Migration-Loop-Ledger-P7.md` § "Owed to a Mac" must be green
+> the Mac gauntlet in `e6a3b48:Docs/Mesh-Migration-Loop-Ledger-P7.md` § "Owed to a Mac" must be green
 > (the P8 launcher's item 0). A row observed on a build that has not passed that gauntlet is an
 > observation of an unknown binary. **No run of this checklist has been recorded.** When one happens,
 > fill the **Result** and **Date** columns at the bottom, with the device models and iOS versions,
@@ -59,7 +59,7 @@ acceptance; it is here so the phone drawer is opened once, not twice.
    and check afterwards that no ready line names `en8`/`en9`/`anpi0`.
 4. Onboarding completed; **Nearby friends → Presence** on; hearts opted in on both if E3 is run.
 5. **App lock configured** (a Fernlet PIN) on one device for B1; **a duress PIN** for B2 — see
-   `Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md` for both.
+   `e6a3b48:Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md` for both.
 6. Console.app open on the Mac with each device selected in turn, filter `subsystem:com.fernlet`;
    in the app, **Settings → Advanced → Connection log** (the Advanced section exists in DEBUG builds
    only) for the live session log where the row says so.

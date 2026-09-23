@@ -497,7 +497,7 @@ needs:
   trigger for the `AIDestination` brick-vector. `AIContext` depends only on `FernletDomainModel`, so the
   log has no wall-safe *synced* home anyway. A user cannot meaningfully review "what left my device"
   from a log that dies with the process — this is already tracked as a gap in
-  [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md). Any `AIDestination` case additions ride
+  `e6a3b48:Docs/RemainingWork-2026-07-19.md`. Any `AIDestination` case additions ride
   the `EnumDecodeCompat` freeze/park pattern **and** need a clean build (`FernletDomainModel` layout
   hazard).
   > **As shipped (2026-07-24, commit `14c7adb` + audit-log review fixes):** the injectable

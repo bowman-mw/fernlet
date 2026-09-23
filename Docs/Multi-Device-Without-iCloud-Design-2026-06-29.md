@@ -10,7 +10,7 @@ split (`CloudKitSync/DayRecordRepository.swift`, migration gate `daysMigratedToR
 Still open: Phase 2 (owned-device pairing — no `relationshipType`/`ownedDevice` exists — plus mesh
 backup transfer and truly-offline escrow) and Phase 3 (mesh live-merge + a settings field-merge
 policy; settings remain a last-writer-wins blob). Tracked in
-[RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md).
+`e6a3b48:Docs/RemainingWork-2026-07-19.md`.
 
 ## Problem
 

@@ -5204,7 +5204,7 @@ final class FernletStore {
     @ObservationIgnored var pendingNarrativeBufferPurgeHook: (() -> Bool)?
     /// Destroys and re-creates the sealed `FernletPrivate` store FILE after the row hooks above have
     /// emptied it — the physical half of the crypto-erasure baseline (Option B,
-    /// Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §6).
+    /// e6a3b48:Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §6).
     ///
     /// Row-delete is not erasure: SQLite frees the pages, the history prune clears the shadow
     /// tables, and neither checkpoints the WAL or vacuums the freelist — so the just-deleted

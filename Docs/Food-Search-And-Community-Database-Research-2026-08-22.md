@@ -1601,9 +1601,9 @@ hazard §29 demonstrates.
 [`Docs/AI-Feature-Expansion-2026-07-23.md`](AI-Feature-Expansion-2026-07-23.md),
 [`Docs/AI-Provider-Ladder-2026-07-23.md`](AI-Provider-Ladder-2026-07-23.md),
 [`Docs/Localization-Plan-2026-07-19.md`](Localization-Plan-2026-07-19.md),
-[`Docs/RemainingWork-2026-07-19.md`](RemainingWork-2026-07-19.md),
-[`Docs/RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md),
-[`Docs/UI-UX-Review-2026-08-16.md`](UI-UX-Review-2026-08-16.md),
+`e6a3b48:Docs/RemainingWork-2026-07-19.md`,
+`e6a3b48:Docs/RemainingWork-2026-08-20.md`,
+`e6a3b48:Docs/UI-UX-Review-2026-08-16.md`,
 `Docs/design-refs/ux-review-2026-08-16/design-spec-2026-08-21.md`,
 [`Docs/PrivacyWipeCoverage.md`](PrivacyWipeCoverage.md),
 [`Docs/CloudKit-Schema-Deploy.md`](CloudKit-Schema-Deploy.md),
@@ -1721,7 +1721,7 @@ Decisions this memo cannot make.
    page, `Docs/FileIndex.md:345` and the No-Tracking-Wall entry all describe a capability the shipped
    binary does not have.
 4. **Is the 2026-07-19 OpenFoodFacts barcode decision still live?**
-   (`Docs/RemainingWork-2026-07-19.md:105-114`, with a 2026-08-09 note that it adds two outbound
+   (`e6a3b48:Docs/RemainingWork-2026-07-19.md`, lines 105-114, with a 2026-08-09 note that it adds two outbound
    destinations.) The offline ODR catalog it calls "the roadmap endgame" shipped three weeks *before*
    the decision was annotated.
 5. **Turn on the web lane by prompt rather than by toggle?** A consent prompt at the moment of first
@@ -1745,7 +1745,7 @@ Decisions this memo cannot make.
    form asks for name, company, phone and business email — a sales-contact action, so it needs the
    owner's own go-ahead rather than an agent's.
 10. **Should this memo's baseline be `main` or `claude/design-impl-2026-08-21`?** FOOD-22 is still
-   listed open in `Docs/RemainingWork-2026-08-20.md:103-106` but is implemented on the branch
+   listed open in `e6a3b48:Docs/RemainingWork-2026-08-20.md` (lines 103-106) but is implemented on the branch
    (`ff176c7` / `eacaaa6`).
 
 **Added in the second revision (2026-08-22), from Part VII.**

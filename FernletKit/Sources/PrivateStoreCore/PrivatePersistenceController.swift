@@ -217,7 +217,8 @@ public final class PrivatePersistenceController {
     }
 
     /// Destroys the sealed store file and re-creates it empty — the physical half of Fernlet's
-    /// crypto-erasure baseline ("Option B", Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §6).
+    /// crypto-erasure baseline ("Option B",
+    /// e6a3b48:Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §6).
     ///
     /// ``purgeEncryptedEntities()`` (and the repositories' keyless `deleteAll()`) remove the ROWS,
     /// but leave the pages they lived on in the `-wal` frames and the freelist until SQLite reuses

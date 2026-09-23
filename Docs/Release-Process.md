@@ -102,7 +102,7 @@ have landed:
    <https://fernlet.com/privacy/> carries the policy at the effective date in
    [`Privacy-Policy.md`](Privacy-Policy.md). That is the public URL App Store Connect requires;
    entering it in ASC is a remaining owner step, tracked in
-   [`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md) §1.
+   `e6a3b48:Docs/RemainingWork-2026-08-20.md` §1.
 
 ## 6. Related
 

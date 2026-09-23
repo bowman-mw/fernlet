@@ -2,7 +2,7 @@
 
 **Status:** determination 2026-08-13, **materially revised 2026-08-19 and 2026-08-23**. Supersedes the one-paragraph
 "Encryption" section in [App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md) and the
-compliance bullet in [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md) §1.
+compliance bullet in `e6a3b48:Docs/RemainingWork-2026-07-19.md` §1.
 
 > **2026-08-19 revision.** The determination below — mass market, ECCN 5D992.c, self-classify, no
 > CCATS — was independently re-checked against the current eCFR text and **holds**. Its *filing

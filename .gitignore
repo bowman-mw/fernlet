@@ -38,7 +38,14 @@ xcuserdata/
 
 # UX-review screenshot sweeps: development-time reference only, regenerable from the app, and large
 # (the 2026-08-16 sweep alone is ~92 MB of PNGs). They go stale the moment the UI changes, so they are
-# kept locally and never committed. Consequence: the browsable index at
-# Docs/design-refs/<review>/review.html renders broken images unless you have the local sweep — the
-# ranked findings in Docs/UI-UX-Review-*.md are the durable record.
+# kept locally and never committed — and neither is a browsable review.html index over a sweep, which
+# renders broken images without it. The 2026-08-16 sweep, its index and its findings report live in
+# Docs/Handoff/ (below); the report is in history at e6a3b48:Docs/UI-UX-Review-2026-08-16.md.
 Docs/design-refs/*/shots/
+
+# Session handoff material: launcher and /loop prompts, loop ledgers, progress logs, work trackers and
+# agent scratch are written for the next working session on this machine, not for this public
+# repository. They live here and are never committed. The ones that had been committed left the tree on
+# 2026-09-22 (e6a3b48 is the last commit holding them). Two ledgers stay tracked on purpose, because
+# MeshP9AcceptanceTests reads them from disk — see the ledger row in Docs/FileIndex.md.
+/Docs/Handoff/

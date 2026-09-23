@@ -18,7 +18,7 @@ Two enforcement layers, mirroring the S3 and no-tracking walls:
 - **Review** — the rules a tokenizer cannot decide (indirect recursion, loop bounds, input-driven
   growth, parameter validation, side-effect-free assertions). Every code review checks the review
   column of the table below; the audit that established this baseline is
-  `Docs/CODE_REVIEW_Power-of-10-2026-08-16.md`.
+  `e6a3b48:Docs/CODE_REVIEW_Power-of-10-2026-08-16.md` (retired from the tree 2026-09-22).
 
 Scope: the five shipping roots — `FernletKit/Sources`, `App/Fernlet`, `App/FernletWidgets`,
 `App/FernletShareExtension`, `App/FernletMessagesExtension`. (The scanner's `SHIPPING_ROOTS` has

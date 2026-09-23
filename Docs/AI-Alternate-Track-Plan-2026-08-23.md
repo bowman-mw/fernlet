@@ -4,7 +4,7 @@ Owner-directed plan for (1) making the on-device AI a real, visible alternate tr
 creation, natural-language meal logging with portions, and workout suggestions, and (2) beginning
 the third-party (BYOK) integration as pre-GA groundwork. Written at the wind-down of the
 2026-08-22 two-track round; **executes AFTER that round's remaining work**
-([Next-Round-Prompt-Continuation-2026-08-24.md](Next-Round-Prompt-Continuation-2026-08-24.md)),
+(`e6a3b48:Docs/Next-Round-Prompt-Continuation-2026-08-24.md`),
 except for the overlap items listed in §5, which ride the existing increments.
 
 **This plan builds on, and does not reopen, the decided architecture** in

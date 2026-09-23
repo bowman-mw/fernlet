@@ -1832,7 +1832,7 @@ public final class HealthKitService: HealthKitServicing {
     /// first-run backfill therefore needs a different shape: paginate the initial results with
     /// limited one-shot anchored queries (no update handler) until a page comes back short, then
     /// attach the unlimited update query from the final anchor. That is tracked as a Power-of-10
-    /// follow-up (Docs/CODE_REVIEW_Power-of-10-2026-08-16.md, "Residuals"); until then the peak is
+    /// follow-up (e6a3b48:Docs/CODE_REVIEW_Power-of-10-2026-08-16.md, "Residuals"); until then the peak is
     /// one type's windowed history, and the anchor still advances per delivery.
     ///
     private func startAnchoredQuery(for type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) {

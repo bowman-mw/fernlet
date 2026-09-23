@@ -33,10 +33,11 @@
 // deferred).
 //
 // **Why no ledger read.** P8's and P9's honesty suites read their phase ledger, which was committed
-// early in each phase. `Docs/Mesh-Migration-Loop-Ledger-P10.md` is not committed until this phase's
-// close-out, so a cell that read it would pass in the worktree that wrote it and throw in every
-// clean checkout and on CI — an acceptance battery that can only pass where it was authored. Every
-// row below reads a TRACKED record instead: the plan, the runbook, the workflow and the tree itself.
+// early in each phase. P10's ledger was not committed until this phase's close-out (and has been out
+// of the tree since 2026-09-22 — `e6a3b48:Docs/Mesh-Migration-Loop-Ledger-P10.md`), so a cell that
+// read it would pass in the worktree that wrote it and throw in every clean checkout and on CI — an
+// acceptance battery that can only pass where it was authored. Every row below reads a TRACKED
+// record instead: the plan, the runbook, the workflow and the tree itself.
 // P10's own deferred decision was homed on `Docs/FileIndex.md` when this suite was written, because
 // nothing in the plan carried it; the close-out gave it a real home — §28.3's decision table — and
 // this suite reads the plan for it, so the assertion is no longer circular with the file catalogue.

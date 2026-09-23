@@ -37,8 +37,8 @@ which need a downward inversion before they can move behind the wall (§12 "Defe
 **S3 compile-time privacy walls** and the **cross-platform shared core**. The Proximity *internal*
 refactor is explicitly **out of scope** — Proximity is treated here as one black-box module boundary.
 (The two companion documents cited in the original header, `RemainingWork-2026-06-23.md` and
-`Canonical-Signing-Encoding-Fix.md`, are no longer in the tree; the live successors are
-[`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md) and CLAUDE.md's wall sections.)
+`Canonical-Signing-Encoding-Fix.md`, are no longer in the tree; nor is their successor tracker,
+`e6a3b48:Docs/RemainingWork-2026-08-20.md` — the wall rules live on in CLAUDE.md's wall sections.)
 
 ---
 

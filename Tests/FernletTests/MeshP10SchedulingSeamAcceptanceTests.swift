@@ -48,10 +48,11 @@ import Testing
 /// `MeshContinuationRaiseWallTests` refused to write.
 ///
 /// **No ledger path.** P8's and P9's honesty suites read their phase ledger; P10's is deliberately
-/// absent here, because `Docs/Mesh-Migration-Loop-Ledger-P10.md` is not committed until the phase's
-/// close-out. A cell that read it would be green in the worktree that wrote it and red in every
-/// clean checkout and on CI — a battery that can only pass where it was authored. Clause (5) reads
-/// the TRACKED records instead, and names that substitution out loud.
+/// absent here, because P10's ledger was not committed until the phase's close-out (and has been out
+/// of the tree since 2026-09-22 — `e6a3b48:Docs/Mesh-Migration-Loop-Ledger-P10.md`). A cell that
+/// read it would be green in the worktree that wrote it and red in every clean checkout and on CI —
+/// a battery that can only pass where it was authored. Clause (5) reads the TRACKED records instead,
+/// and names that substitution out loud.
 ///
 /// ## Concurrency
 ///
