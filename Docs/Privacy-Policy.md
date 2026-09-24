@@ -45,7 +45,15 @@
      2026-07-16 — "hidden and off by default" was wrong — and onboarding now offers to turn it off.
      The behaviour changes tighten protection and the new features send only what the user
      chooses, on a tap, so none of this weakens an existing promise under §13; anyone who read the
-     old text deserves to be told). Before
+     old text deserves to be told), and again 2026-09-24, a second revision the same day (the
+     2026-09-24 round: §3 your companion's feelings — worked out on the device, moment to moment,
+     from what the app already holds, and never saved, synced, shown to friends or exported; six of
+     them can appear on the Home Screen widget through a short list in the file the app shares with
+     it, which Delete Everything removes; Lock Screen widgets never show one; the hunger-and-thirst
+     switch and the bedtime are device-only settings. §6 a recipe made in parts carries the name of
+     each part in a Messages card. Both are new disclosures — of processing that stays on the
+     device, and of recipe content the user chooses to send — so nothing new leaves the device and
+     no existing promise is weakened under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
@@ -190,6 +198,19 @@ out partly from these readings; if you use iCloud sync they sync with the rest o
 while the readings themselves never do. Deleting Fernlet does not delete samples Fernlet wrote to
 Apple Health — remove those in the Health app if you wish.
 
+**Your companion's feelings.** Your companion also shows how it feels right now — happy, sad, tired,
+sleepy, hungry, thirsty and a few more. Fernlet works each feeling out on your device, moment to
+moment, from things the app already holds: the mood tag on today's journal entry or check-in, how
+long it has been since you logged a meal or some water, the bedtime you set, a friend's heart, a
+recent pet, and — only if you turned on "Notice body tension" — that reading. A feeling is never
+saved to your records, never synced to iCloud, never shown to friends (they still see only thriving,
+okay or struggling), and never included in an export. The Home Screen widget can show six of these
+feelings (happy, sad, tired, sleepy, hungry and thirsty); to do that, the app keeps a short list of
+today's feelings in the file it shares with the widget on your device, which **Delete Everything**
+removes. Lock Screen widgets show only your companion's daily state, never a feeling. You can turn
+the hunger and thirst cues off, and set your companion's bedtime, in Settings → Appearance →
+Companion feelings; those settings are kept on this device and never synced.
+
 ## 4. iCloud sync and encrypted backup (optional, you choose)
 
 During setup you choose whether to keep your data **only on this device** or **sync it to iCloud**.
@@ -292,8 +313,9 @@ your phone that only Fernlet and its extensions can read, and which never contai
 cycle or intimate data, health readings, photos, friends, or location. When you pick one and send
 the message, the card carries that item to everyone in the conversation
 through Apple's Messages service, under Apple's privacy terms and not through any server of ours:
-for a recipe, its name, servings, ingredients with their amounts and macros, steps, and any notes
-you wrote on it; for a workout, its name, planned day, exercises, and notes. Anyone in the
+for a recipe, its name, servings, ingredients with their amounts and macros, steps, any notes you
+wrote on it, and — if you made it in parts, like a salad and its homemade dressing — the name of
+each part; for a workout, its name, planned day, exercises, and notes. Anyone in the
 conversation, and anyone they forward it to, can read what the card carries; we never see it, and
 Fernlet cannot take it back once sent. A card you receive is only a suggestion: nothing is saved
 until you open it in Fernlet, review it, and confirm.

@@ -75,6 +75,12 @@ struct PrivacyPolicyParityTests {
     /// - `right after the age check` — intimacy tracking is on by default for users 16+ ("hidden and
     ///   off by default" was wrong), with the onboarding choice;
     /// - `how long is left` — the shop pause, whose record survives Delete Everything.
+    ///
+    /// The two markers added in the 2026-09-24 round pin its two disclosures:
+    /// - `never synced to iCloud, never shown to friends` — the companion's feelings, worked out on the
+    ///   device and never saved, synced, shown to friends or exported (six of them reach the Home Screen
+    ///   widget through the file it shares with the app, which Delete Everything removes);
+    /// - `if you made it in parts` — a recipe made in parts carries the name of each part in a Messages card.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -95,7 +101,9 @@ struct PrivacyPolicyParityTests {
         "through Apple's Messages service",
         "Data from Open Food Facts (ODbL)",
         "right after the age check",
-        "how long is left"
+        "how long is left",
+        "never synced to iCloud, never shown to friends",
+        "if you made it in parts"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.
