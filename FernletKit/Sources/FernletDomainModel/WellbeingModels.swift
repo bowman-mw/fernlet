@@ -1002,6 +1002,11 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
     /// it. Keep the two in step: strength/sportsPrep eat a little more with more protein, weight
     /// management runs a gentle deficit with higher protein, recovery sits near maintenance, and the
     /// gentler goals hold at balanced maintenance.
+    ///
+    /// The weight-management line reads its percentage from
+    /// `NutritionTargetCalculator.weightManagementDeficitFraction` rather than restating it, and says
+    /// "up to" because the calculator's floor shrinks the cut for small, older, or sedentary bodies.
+    /// It makes no health claim and promises no rate of loss.
     public var nutritionSummary: String {
         switch self {
         case .strength:
@@ -1009,12 +1014,17 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
         case .sportsPrep:
             "Fuelled for training · high protein (~1.6 g/kg)"
         case .weightManagement:
-            "A gentle calorie deficit · higher protein"
+            "A gentle calorie deficit (up to \(Self.weightManagementDeficitPercent)%) · higher protein"
         case .recovery:
             "Maintenance calories · easy on the body"
         case .wellness, .mentalHealth, .exploring:
             "Balanced maintenance · steady protein"
         }
+    }
+
+    /// The weight-management deficit as a whole percentage for the goal card (10 for 0.10).
+    private static var weightManagementDeficitPercent: Int {
+        Int((NutritionTargetCalculator.weightManagementDeficitFraction * 100).rounded())
     }
 
     /// One-line description of the training split this goal recommends, for the goal preset cards and the

@@ -2620,7 +2620,53 @@ public nonisolated struct NutritionTargets: Equatable {
 /// User overrides pin calories/protein/fat individually and the plan re-solves around them — carbs
 /// is always the residual, floored so pinning protein+fat high pushes the totals slightly above
 /// the stated calories rather than going negative (see the inline note in `targets(for:)`).
+///
+/// The Weight Management goal is the only one that cuts calories meaningfully, and it is fenced:
+/// ``weightManagementDeficitFraction`` below maintenance, never under
+/// ``deficitFloorKilocalories(for:)``, and never above maintenance (so a body whose maintenance is
+/// already under the floor gets no deficit at all). See `Docs/Calorie-Deficit-Research-2026-09-23.md`.
 public nonisolated enum NutritionTargetCalculator {
+    /// The Weight Management goal's gentle starting deficit: 10% below estimated maintenance.
+    ///
+    /// OWNER SIGN-OFF NEEDED on this value — the evidence, the options (8%, a fixed 100–200 kcal
+    /// "small change", maintenance-only) and the worked examples are in
+    /// `Docs/Calorie-Deficit-Research-2026-09-23.md`. It was 12% (× 0.88, no floor) until
+    /// 2026-09-23, which the owner found "a tad bit aggressive" and which put small, older, sedentary
+    /// profiles under the unsupervised 1,200/1,500 kcal floor. A percentage rather than a fixed kcal
+    /// cut, because a fixed cut is proportionally harshest exactly where bodies are smallest.
+    /// `GoalType.nutritionSummary` interpolates this value, so the goal card's "up to 10%" cannot
+    /// drift from the math.
+    public static let weightManagementDeficitFraction: Double = 0.10
+
+    /// The unsupervised intake floor for a female profile (kcal/day) — the commonly cited
+    /// "not below 1,200 a day in women … except under the supervision of a health professional".
+    static let femaleDeficitFloorKilocalories: Double = 1_200
+
+    /// The unsupervised intake floor for a male profile (kcal/day) — "… or 1,500 a day in men".
+    static let maleDeficitFloorKilocalories: Double = 1_500
+
+    /// The lowest daily target a deficit may produce for `profile`: the sex floor
+    /// (`femaleDeficitFloorKilocalories` / `maleDeficitFloorKilocalories`), and never below the
+    /// profile's estimated resting metabolic rate.
+    ///
+    /// The RMR half cannot bind at today's 10% (the lowest activity multiplier, 1.2, keeps a 10% cut
+    /// at ≥ 1.08 × RMR); it is kept so a future multiplier or percentage change cannot slip under it.
+    public static func deficitFloorKilocalories(for profile: UserNutritionProfile) -> Double {
+        let sexFloor = profile.sex == .male ? maleDeficitFloorKilocalories : femaleDeficitFloorKilocalories
+        return max(sexFloor, restingMetabolicRate(for: profile))
+    }
+
+    /// The Weight Management goal's unrounded daily target for a body whose estimated maintenance is
+    /// `maintenance`: ``weightManagementDeficitFraction`` below it, but never under the deficit floor
+    /// — and never ABOVE maintenance, so a maintenance already under the floor means no deficit
+    /// rather than a surplus.
+    static func gentleDeficitTarget(maintenance: Double, profile: UserNutritionProfile) -> Double {
+        guard maintenance.isFinite, maintenance > 0 else { return maintenance }
+        assert((0..<0.5).contains(weightManagementDeficitFraction), "a starting deficit must stay small")
+        let reduced = maintenance * (1 - weightManagementDeficitFraction)
+        return max(reduced, min(maintenance, deficitFloorKilocalories(for: profile)))
+    }
+
     public static func targets(for settings: FernletSettings) -> NutritionTargets {
         let profile = settings.userProfile
         // A non-nil override pins the target; nil falls through to the derived value. `fat` derives from
@@ -2657,7 +2703,7 @@ public nonisolated enum NutritionTargetCalculator {
         let adjusted: Double
         switch settings.selectedGoal {
         case .weightManagement:
-            adjusted = base * 0.88
+            adjusted = gentleDeficitTarget(maintenance: base, profile: profile)
         case .strength:
             adjusted = base * 1.08
         case .sportsPrep:

@@ -135,6 +135,12 @@ non-exhaustive switches and ship corrupted binaries.
 
 ### Nutrition profile and targets
 
+``NutritionTargetCalculator`` is Mifflin–St Jeor × activity, goal-adjusted. Weight Management is
+the one goal with a real calorie cut, and it is fenced (2026-09-23): 10% below maintenance
+(`weightManagementDeficitFraction`, pending owner sign-off), never under
+`deficitFloorKilocalories(for:)` (1,200 kcal female / 1,500 kcal male, and never under estimated
+RMR), and never above maintenance. Evidence and options: `Docs/Calorie-Deficit-Research-2026-09-23.md`.
+
 - ``UserNutritionProfile``
 - ``UserNutritionPreferences``
 - ``BiologicalSex``
