@@ -166,6 +166,29 @@ struct CompanionEmotionPresentationTests {
         #expect(first.contentEquals(second))
     }
 
+    /// The widget's half, read off disk because the extension links no FernletKit product and has no
+    /// test target: the provider adds a timeline entry at every emotion transition, its lookup is the
+    /// app's day-scoped rule character for character, and the Lock Screen keeps the state face (the
+    /// owner's answer, 2026-09-24: "State face only").
+    @Test func theWidgetFollowsTheAppsTimelineRulesAndTheLockScreenDecision() throws {
+        let bundle = try RepoRoot.source("App/FernletWidgets/FernletWidgetsBundle.swift")
+        let models = try RepoRoot.source("App/FernletWidgets/WidgetSharedModels.swift")
+        let engine = try RepoRoot.source("FernletKit/Sources/FernletScoring/CompanionEmotionEngine.swift")
+        let provider = try #require(CompanionEmotionPrivacyTests.body(of: "func getTimeline(", in: bundle), "getTimeline is gone")
+        #expect(provider.contains("WidgetEmotionTimeline.transitionDates(in: snapshot?.companionEmotionTimeline"),
+                "the provider no longer asks for the emotion transitions — a sleepy face would wait for the next reload")
+        #expect(provider.contains("entries += transitions.map"), "the transitions no longer become timeline entries")
+        let rule = "$0.at <= date && calendar.startOfDay(for: $0.at) == day"
+        let widgetLookup = try #require(CompanionEmotionPrivacyTests.body(of: "static func emotion(in moments:", in: models))
+        let appLookup = try #require(CompanionEmotionPrivacyTests.body(of: "public static func emotion(in timeline:", in: engine))
+        #expect(widgetLookup.contains(rule) && appLookup.contains(rule),
+                "the widget's lookup and the app's twin no longer scope a moment to its own day the same way")
+        #expect(bundle.contains("static let lockScreenShowsEmotion = false"),
+                "the Lock Screen now draws feelings — the owner chose the state face only (2026-09-24)")
+        #expect(bundle.components(separatedBy: "FernletWidgetEmotionPolicy.lockScreenShowsEmotion ? entry.currentCompanionEmotion : nil").count == 3,
+                "both Lock Screen families must route their emotion through the policy")
+    }
+
     /// An older file with no emotion key decodes, and draws no emotion.
     @Test func aSnapshotWithoutTheEmotionKeyStillDecodes() throws {
         let legacy = """
