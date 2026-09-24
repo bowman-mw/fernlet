@@ -347,4 +347,8 @@ private final class StubCoinLedgerRepository: CoinLedgerRepositoring {
         return true
     }
     @discardableResult func deleteAll() -> Bool { rows = []; return true }
+    // No device-local sidecar: nothing is ever pending and every write "lands". These suites pin the
+    // in-process retry path; the durable sidecar has its own (LedgerResetBoundaryDurabilityTests).
+    func pendingResetBoundaries() -> [CoinLedgerEntry] { [] }
+    func savePendingResetBoundaries(_ markers: [CoinLedgerEntry]) -> Bool { true }
 }

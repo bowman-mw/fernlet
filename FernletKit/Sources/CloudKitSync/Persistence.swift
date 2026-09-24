@@ -115,6 +115,13 @@ nonisolated public final class PersistenceController {
     /// Fires when iCloud pushes a remote change to the local store, and once after each
     /// successful `reload(with:)` so subscribers re-read from the new container.
     @ObservationIgnored public let remoteChangePublisher: AnyPublisher<Notification, Never>
+    /// The device-local, NEVER-synced key/value surface this store keeps its own bookkeeping in —
+    /// the ledgers' pending reset boundaries (``StoreLocalDefaults``, tracker §3.6).
+    /// `UserDefaults.standard` for the default on-disk store, the one the app runs on; a private
+    /// ``InMemoryStoreLocalDefaults`` for every in-memory or explicit-URL controller, so a preview or
+    /// test store can never write production defaults or read another store's records. Survives
+    /// `reload(with:)`: the store file keeps its identity across a container swap, and so does this.
+    @ObservationIgnored public let localDefaults: any StoreLocalDefaults
     #if DEBUG
     /// Test hook: overrides the store URL used by the next `reload(with:)`. DEBUG-only (R6) — a
     /// shipping build must not expose a way to redirect the next store load.
@@ -172,6 +179,7 @@ nonisolated public final class PersistenceController {
         self.storeURL = storeURL
         self.iCloudAvailabilityOverride = iCloudAvailable
         self.remoteChangePublisher = remoteChangeSubject.eraseToAnyPublisher()
+        self.localDefaults = Self.makeLocalDefaults(inMemory: inMemory, storeURL: storeURL)
 
         let configuration = Self.makeContainer(inMemory: inMemory, preferences: preferences, storeURL: storeURL, iCloudAvailabilityOverride: iCloudAvailable)
         self.container = configuration.container
@@ -188,6 +196,13 @@ nonisolated public final class PersistenceController {
         // Docs/CloudKit-Schema-Deploy.md). Compiled out of Release builds entirely.
         Self.initializeCloudKitSchemaIfRequested(inMemory: inMemory)
         #endif
+    }
+
+    /// ``localDefaults`` for a controller built with these arguments: the real `UserDefaults.standard`
+    /// only for the default on-disk store, a private in-memory surface for everything else.
+    private static func makeLocalDefaults(inMemory: Bool, storeURL: URL?) -> any StoreLocalDefaults {
+        guard !inMemory, storeURL == nil else { return InMemoryStoreLocalDefaults() }
+        return UserDefaults.standard
     }
 
     /// The ordinary reload — every caller outside the wipe funnel. Forwards without compaction.

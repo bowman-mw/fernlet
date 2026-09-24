@@ -5,7 +5,10 @@
 // MilestoneLedgerService (append-only rows) used to carry four byte-identical copies of the same
 // queue-then-debounce-then-flush mechanics — including the same hard-won bug-fix comments. The two
 // classes here are those mechanics factored out verbatim; everything service-specific (what a row
-// means, dedup on load, reset semantics, idempotent minting) stays in the owning service.
+// means, dedup on load, reset semantics, idempotent minting) stays in the owning service. The third
+// type, `PendingResetBoundaries` (2026-09-24), is the durable reset-boundary half the two ledgers
+// share: the marker a wipe appends is remembered device-locally before the rows go, so a failed
+// append no longer lives only in the in-memory queue.
 
 import Foundation
 import FernletFoundation
@@ -24,6 +27,13 @@ public enum PendingWriteLimits {
     /// without bound" is not, so the oldest entry is evicted and audit-logged rather than dropped
     /// silently.
     public static let maxPendingItems = 2_000
+
+    /// Hard cap on the reset-boundary markers one ledger's device-local sidecar holds while their
+    /// synced append is outstanding (`PendingResetBoundaries`). One wipe mints one marker and a
+    /// landed marker is retired, so this is only ever reached by repeated wipes on a store that
+    /// keeps refusing writes; the oldest goes first, because on any sane clock a newer boundary voids
+    /// everything an older one does.
+    public static let maxPendingResetBoundaries = 8
 }
 
 /// The debounced per-row pending-write buffer shared by ``SavedRecipeService`` and
@@ -252,5 +262,68 @@ public final class DebouncedAppendBuffer<Entry> {
                 self.flush()
             }
         }
+    }
+}
+
+/// The DURABLE half of an append-only ledger's reset boundary, shared by ``CoinLedgerService`` and
+/// ``MilestoneLedgerService`` (tracker §3.6, 2026-09-24).
+///
+/// A ledger reset deletes the rows and appends a boundary marker to the SYNCED store; the marker is
+/// what keeps rows another signed-in device still holds from counting again when they sync back. A
+/// marker that never lands is a wipe that device can undo. Before this type, a failed marker append
+/// lived only in the in-memory ``DebouncedAppendBuffer``, so a process death before the retry lost
+/// the boundary silently — `loadSync()` on the next launch had nothing to re-merge.
+///
+/// The contract, in the order a reset uses it:
+/// 1. ``remember(_:)`` writes the marker to the store's device-local, never-synced sidecar
+///    (`pendingResetBoundaries()` on the repository contract) BEFORE a single row is deleted.
+/// 2. ``landPending()`` appends every remembered marker to the synced store and retires the sidecar
+///    once they land, returning the markers that are STILL pending.
+/// 3. Every load calls ``landPending()`` again and MERGES what it returns into the in-memory
+///    ledger, so the aggregation voids pre-boundary rows even while the synced marker is missing —
+///    and the append is retried on every launch until it lands. The append is an upsert by id, so a
+///    retry of a marker that did land is a no-op.
+///
+/// Bounded (R3) at ``PendingWriteLimits/maxPendingResetBoundaries`` markers, oldest dropped. The
+/// three closures capture the owning service's repository, never the service — the same no-cycle
+/// rule as the buffers above. `@MainActor`, like the repository contracts they call.
+@MainActor
+struct PendingResetBoundaries<Entry: Identifiable> {
+    /// Reads the sidecar.
+    let load: @MainActor () -> [Entry]
+    /// Replaces the sidecar (empty = retired); false when the write did not land.
+    let save: @MainActor ([Entry]) -> Bool
+    /// The synced store's append (an upsert by id).
+    let append: @MainActor ([Entry]) -> Bool
+    /// The frozen audit token prefix naming the ledger (`coinLedger`, `milestoneLedger`).
+    let store: String
+
+    /// Records `marker` as pending, durably, ahead of the row delete. A failed write is audited and
+    /// the reset carries on — the user's delete must still happen — so the only cost is the
+    /// pre-2026-09-24 behaviour for this one wipe.
+    func remember(_ marker: Entry) {
+        let pending = load().filter { $0.id != marker.id } + [marker]
+        if !save(Array(pending.suffix(PendingWriteLimits.maxPendingResetBoundaries))) {
+            FernletAuditLog.log("resetBoundary.notDurable", context: ["store": store])
+        }
+    }
+
+    /// Appends every pending marker — plus `extra`, the marker a reset just minted, so it is appended
+    /// even when ``remember(_:)`` could not reach the sidecar — to the synced store, and retires the
+    /// sidecar once they land. Returns the markers still pending: empty once they have landed, or
+    /// when nothing was.
+    func landPending(including extra: [Entry] = []) -> [Entry] {
+        var seen = Set<Entry.ID>()
+        let pending = (load() + extra).filter { seen.insert($0.id).inserted }
+        guard !pending.isEmpty else { return [] }
+        guard append(pending) else {
+            FernletAuditLog.log("resetBoundary.stillPending", context: ["store": store, "count": "\(pending.count)"])
+            return pending
+        }
+        if !save([]) {
+            // Landed but not retired: the next load re-appends (an idempotent upsert) and retires.
+            FernletAuditLog.log("resetBoundary.retireFailed", context: ["store": store])
+        }
+        return []
     }
 }

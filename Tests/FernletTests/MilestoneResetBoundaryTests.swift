@@ -405,4 +405,8 @@ private final class StubMilestoneRepository: MilestoneLedgerRepositoring {
         rows += entries
         return true
     }
+    // No device-local sidecar: nothing is ever pending and every write "lands". This suite pins the
+    // in-process retry path; the durable sidecar has its own (LedgerResetBoundaryDurabilityTests).
+    func pendingResetBoundaries() -> [MilestoneLedgerEntry] { [] }
+    func savePendingResetBoundaries(_ markers: [MilestoneLedgerEntry]) -> Bool { true }
 }

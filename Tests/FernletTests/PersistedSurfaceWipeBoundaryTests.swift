@@ -275,6 +275,15 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.breathing.haptics": .kept(
             reason: "Breathing-timer configuration, not a record: whether the timer buzzes. Same class as the preset id and minutes beside it — app chrome, no content, nothing about any day."
         ),
+        // The two append-only ledgers' durable reset boundaries (tracker §3.6, 2026-09-24). Written BY
+        // the wipe, before it deletes the rows, and retired by the ledger itself once the synced
+        // marker lands — so a funnel clear would erase the one copy that outlives a process death.
+        "fernlet.coinLedger.pendingResetBoundaries": .kept(
+            reason: "The coin ledger's durable reset boundary: the wipe's own marker (a day and an instant, no content), written by the wipe before it deletes the rows and retired by the ledger once the synced marker lands. Clearing it would let a process death undo the wipe."
+        ),
+        "fernlet.milestoneLedger.pendingResetBoundaries": .kept(
+            reason: "The milestone ledger's durable reset boundary: the wipe's own marker (a day and an instant, no content), written by the wipe before it deletes the rows and retired by the ledger once the synced marker lands. Clearing it would let a process death undo the wipe."
+        ),
         "fernlet.healthkit.workoutBackfillCompleted": .kept(
             reason: "The one-time workout backfill latch. Clearing it makes the next launch re-import the trailing 30 days of Health workouts straight back into the just-emptied day store, and re-upload them when sync is on."
         ),

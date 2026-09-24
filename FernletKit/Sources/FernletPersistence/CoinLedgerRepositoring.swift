@@ -29,4 +29,17 @@ public protocol CoinLedgerRepositoring {
     func append(_ entries: [CoinLedgerEntry]) -> Bool
     /// Removes every ledger row (used only by a full account reset).
     func deleteAll() -> Bool
+    /// The reset-boundary markers minted on THIS device whose append to the synced store is not yet
+    /// confirmed, read from the store's device-local, never-synced sidecar — oldest first, empty once
+    /// every boundary has landed.
+    ///
+    /// The sidecar is what makes a wipe's boundary survive a process death between a failed marker
+    /// append and its retry (tracker §3.6): `CoinLedgerService.reset()` records the marker here BEFORE
+    /// a single row is deleted, every load merges these markers into the in-memory ledger — so rows
+    /// another device syncs back stay void even while the synced marker is missing — and retries
+    /// their append, and the sidecar is retired once the append lands.
+    func pendingResetBoundaries() -> [CoinLedgerEntry]
+    /// Durably replaces the pending set; an empty set retires the sidecar. Returns `false` when the
+    /// markers did not reach durable storage.
+    func savePendingResetBoundaries(_ markers: [CoinLedgerEntry]) -> Bool
 }

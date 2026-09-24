@@ -62,6 +62,17 @@ delete-everything wipe path (added 2026-08-20, when the wipe stopped keeping the
 reversing the earlier survive-a-reset rule); its protocol still exposes no delete, so only the
 app's deletion funnel, which narrows to the concrete type, can reach it.
 
+The two ledger repositories also carry each ledger's **pending reset boundary** (2026-09-24,
+tracker §3.6): the wipe's marker, held from before the rows are deleted until its append to the
+synced store lands, so a process death cannot lose the boundary. It lives in
+``PersistenceController/localDefaults`` — a ``StoreLocalDefaults`` that is `UserDefaults.standard`
+for the default on-disk store and a per-controller ``InMemoryStoreLocalDefaults`` for every
+in-memory or explicit-URL one — so it is device-local, never mirrored, and scoped exactly like the
+store it protects: a test or preview store can neither write production defaults nor read another
+store's boundary. Each repository spells its own key as a literal at its call sites
+(`fernlet.coinLedger.pendingResetBoundaries`, `fernlet.milestoneLedger.pendingResetBoundaries`),
+which is what lets the persisted-surface wipe wall see them; the encoding is shared.
+
 The third tier is direct CloudKit, bypassing the Core Data mirror. ``CloudKitDataService`` handles
 what `NSPersistentCloudKitContainer` cannot: counting the data already in an iCloud account (feeding
 ``MultiDeviceSyncWarning``'s pure three-way classification of the "your devices will drift" banner),
@@ -85,6 +96,8 @@ invalidation up to the store layer.
 - ``PersistenceController``
 - ``PersistenceStoreLoadError``
 - ``CoreDataFernletRepository``
+- ``StoreLocalDefaults``
+- ``InMemoryStoreLocalDefaults``
 
 ### Per-row synced stores
 

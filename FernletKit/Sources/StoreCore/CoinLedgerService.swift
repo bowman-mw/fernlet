@@ -22,7 +22,10 @@ import FernletFoundation
 /// spends), which is what makes every write path idempotent; pending rows are the sole un-persisted
 /// copy of a mutation, so ``flushPendingSave()`` clears them only after a confirmed append and
 /// ``reloadFromStore()`` re-merges them after a failed one — an earned day or a spend is never
-/// silently dropped. `@MainActor` and `@Observable`; the injected `now` clock keeps row timestamps
+/// silently dropped. The one row that must outlive even a process death, the reset-boundary marker,
+/// is also remembered in the store's device-local sidecar before ``reset()`` deletes anything, and
+/// every load re-merges it and retries its append until it lands (`PendingResetBoundaries`,
+/// tracker §3.6). `@MainActor` and `@Observable`; the injected `now` clock keeps row timestamps
 /// testable.
 @MainActor
 @Observable
@@ -35,12 +38,21 @@ public final class CoinLedgerService {
     /// appended surgically per-row so the persisted store never re-writes (or deletes) the rest of
     /// the ledger (see ``DebouncedAppendBuffer``). Its append closure captures `repository`, never `self`.
     @ObservationIgnored private let buffer: DebouncedAppendBuffer<CoinLedgerEntry>
+    /// The durable half of the reset boundary: the device-local sidecar a reset's marker is
+    /// remembered in until its synced append lands (`PendingResetBoundaries`). Its closures
+    /// capture `repository`, never `self`.
+    @ObservationIgnored private let boundaries: PendingResetBoundaries<CoinLedgerEntry>
     @ObservationIgnored private let now: () -> Date
 
     /// Creates the service over its per-row store; `initialEntries` seeds the ledger before the first load.
     public init(repository: any CoinLedgerRepositoring, initialEntries: [CoinLedgerEntry] = [], now: @escaping () -> Date = Date.init) {
         self.repository = repository
         self.buffer = DebouncedAppendBuffer(append: { repository.append($0) })
+        self.boundaries = PendingResetBoundaries(
+            load: { repository.pendingResetBoundaries() },
+            save: { repository.savePendingResetBoundaries($0) },
+            append: { repository.append($0) },
+            store: "coinLedger")
         self.entries = initialEntries
         self.now = now
     }
@@ -56,14 +68,19 @@ public final class CoinLedgerService {
 
     // MARK: - Loading
 
-    /// Replaces the in-memory ledger with the store's rows, union-merged by id.
+    /// Replaces the in-memory ledger with the store's rows, union-merged by id — plus any reset
+    /// boundary still pending in the device-local sidecar, whose synced append is retried here first
+    /// (tracker §3.6). The merge is what keeps a wipe standing across a process death that beat the
+    /// marker's append: the aggregation voids pre-boundary rows whether or not the marker ever landed.
     public func loadSync() {
-        entries = CoinEconomy.deduplicatedByID(repository.load())
+        let unlanded = boundaries.landPending()
+        entries = CoinEconomy.deduplicatedByID(repository.load() + unlanded)
     }
 
-    /// Async variant of ``loadSync()`` for the off-main initial load.
+    /// Async variant of ``loadSync()`` for the off-main initial load — same boundary retry and merge.
     public func loadAsync() async {
-        entries = CoinEconomy.deduplicatedByID(await repository.loadAsync())
+        let unlanded = boundaries.landPending()
+        entries = CoinEconomy.deduplicatedByID(await repository.loadAsync() + unlanded)
     }
 
     /// Re-reads the store (flushing any unsaved rows first), picking up earn/spend rows that synced in
@@ -126,19 +143,26 @@ public final class CoinLedgerService {
     /// Returns whether the persisted rows were actually deleted. Threaded back so "delete everything" can
     /// report a failed per-row CloudKit delete (coins left on disk to re-sync) instead of the funnel
     /// discarding it and claiming a complete wipe. The returned value reflects only the row DELETE — the
-    /// reset-boundary marker below is a new row whose write has its own retry, not data left behind.
+    /// reset-boundary marker below is a new row whose write has its own durable retry, not data left behind.
     public func reset() -> Bool {
         // Delete every row (honoring the user's "delete all data" intent — the deletes propagate to their
         // other devices via CloudKit), THEN append a reset-boundary marker. The marker makes reconcile refuse
         // to re-mint earns for pre-reset days and makes the balance void any pre-reset row that lingers or
         // re-syncs from an offline device, so a reset can't be undone by another device deterministically
         // re-minting earns for pre-reset days. This is the append-only economy's "zero the balance".
-        let deleted = repository.deleteAll()
         let at = now()
         let marker = CoinLedgerEntry.reset(dayKey: FernletDate.dayKey(for: at), at: at)
-        entries = [marker]
+        // The durable half FIRST (tracker §3.6): the marker reaches the device-local sidecar before a
+        // single row is deleted, so a failed append below cannot be lost to a process death — every
+        // load re-merges it and retries the append until it lands.
+        boundaries.remember(marker)
+        let deleted = repository.deleteAll()
         buffer.clear()
-        if !repository.append([marker]) {
+        let unlanded = boundaries.landPending(including: [marker])
+        entries = CoinEconomy.deduplicatedByID([marker] + unlanded)
+        if !unlanded.isEmpty {
+            // Also the in-process retry, so a marker that lands on the next debounced flush does not
+            // wait for a relaunch; the sidecar is retired at the next load either way.
             buffer.enqueue(marker)
             buffer.scheduleSave()
         }

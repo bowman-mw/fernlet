@@ -79,6 +79,29 @@ public struct MilestoneLedgerRepository: MilestoneLedgerRepositoring {
         store.append(entries)
     }
 
+    /// The key the pending reset boundaries live under in the store's device-local, never-synced
+    /// ``PersistenceController/localDefaults`` (tracker §3.6). Frozen: a renamed key would strand a
+    /// boundary written by the previous build — the exact loss the sidecar exists to prevent.
+    private static let pendingResetBoundariesKey = "fernlet.milestoneLedger.pendingResetBoundaries"
+
+    /// The reset markers minted here whose synced append is not yet confirmed (see the protocol).
+    public func pendingResetBoundaries() -> [MilestoneLedgerEntry] {
+        PendingResetBoundaryCoding.decode(
+            controller.localDefaults.data(forKey: Self.pendingResetBoundariesKey),
+            as: MilestoneLedgerEntry.self, store: "milestoneLedger")
+    }
+
+    /// Replaces the pending set in the device-local sidecar; an empty set removes the key.
+    public func savePendingResetBoundaries(_ markers: [MilestoneLedgerEntry]) -> Bool {
+        guard !markers.isEmpty else {
+            controller.localDefaults.removeObject(forKey: Self.pendingResetBoundariesKey)
+            return true
+        }
+        guard let data = PendingResetBoundaryCoding.encode(markers, store: "milestoneLedger") else { return false }
+        controller.localDefaults.set(data, forKey: Self.pendingResetBoundariesKey)
+        return true
+    }
+
     /// Removes every milestone row — the delete-all/reset path only (normal operation never deletes).
     ///
     /// Object-by-object through the view context, so the deletes reach the CloudKit mirror and the

@@ -21,15 +21,13 @@ import FernletFoundation
 /// marker's day AND created strictly after its instant), so they raise no count and re-mint no coin
 /// award. In-memory state after a reset is therefore `[marker]`, never `[]`.
 ///
-/// **Known durability ceiling, shared verbatim with ``CoinLedgerService`` and written down in
-/// Docs/PrivacyWipeCoverage.md.** If the marker's own append fails, the marker survives only in the
-/// pending queue — process memory. ``loadSync()`` does not re-merge pending rows (only
-/// ``reloadFromStore()`` does, within the same process), so a process death before a successful
-/// flush loses the boundary silently. The delete itself already happened, so nothing on THIS device
-/// returns; the exposure is that rows re-synced from another device would no longer be voided. The
-/// reset's returned verdict deliberately covers the row DELETE only — widening it would report an
-/// incomplete wipe when the user's data really is gone. Deliberately not fixed here: any fix belongs
-/// to both ledgers at once.
+/// **The boundary is durable (tracker §3.6, 2026-09-24), shared with ``CoinLedgerService``.** Until
+/// then a failed marker append lived only in the in-memory pending queue, so a process death before
+/// the retry lost the boundary silently and rows re-synced from another device stopped being voided.
+/// Now the marker is remembered in the store's device-local, never-synced sidecar BEFORE the rows are
+/// deleted (`PendingResetBoundaries`); every load merges it into the in-memory ledger and retries
+/// its append, and the sidecar is retired once the append lands. The reset's returned verdict still
+/// covers the row DELETE only — a boundary is not data left behind.
 ///
 /// Collaborators: the injected `MilestoneLedgerRepositoring` store (concretely CloudKitSync's
 /// `MilestoneLedgerRepository`, behind the FernletPersistence protocol) and `FernletStore`, which
@@ -49,6 +47,9 @@ public final class MilestoneLedgerService {
     /// appended surgically per-row so the persisted store never re-writes the rest of the ledger
     /// (see ``DebouncedAppendBuffer``). Its append closure captures `repository`, never `self`.
     @ObservationIgnored private let buffer: DebouncedAppendBuffer<MilestoneLedgerEntry>
+    /// The durable half of the reset boundary (`PendingResetBoundaries`) — the device-local
+    /// sidecar the marker waits in until its synced append lands. Captures `repository`, never `self`.
+    @ObservationIgnored private let boundaries: PendingResetBoundaries<MilestoneLedgerEntry>
     /// The clock the reset-boundary marker is stamped with — injected exactly like
     /// ``CoinLedgerService``'s, so a test can place the boundary relative to its own rows.
     @ObservationIgnored private let now: () -> Date
@@ -61,6 +62,11 @@ public final class MilestoneLedgerService {
     ) {
         self.repository = repository
         self.buffer = DebouncedAppendBuffer(append: { repository.append($0) })
+        self.boundaries = PendingResetBoundaries(
+            load: { repository.pendingResetBoundaries() },
+            save: { repository.savePendingResetBoundaries($0) },
+            append: { repository.append($0) },
+            store: "milestoneLedger")
         self.entries = initialEntries
         self.now = now
     }
@@ -83,14 +89,18 @@ public final class MilestoneLedgerService {
 
     // MARK: - Loading
 
-    /// Replaces the in-memory ledger with the store's rows, union-merged by id.
+    /// Replaces the in-memory ledger with the store's rows, union-merged by id — plus any reset
+    /// boundary still pending in the device-local sidecar, whose synced append is retried here first
+    /// (tracker §3.6), so the counts void pre-boundary rows whether or not the marker ever landed.
     public func loadSync() {
-        entries = MilestoneEconomy.deduplicatedByID(repository.load())
+        let unlanded = boundaries.landPending()
+        entries = MilestoneEconomy.deduplicatedByID(repository.load() + unlanded)
     }
 
-    /// Async variant of ``loadSync()`` for the off-main initial load.
+    /// Async variant of ``loadSync()`` for the off-main initial load — same boundary retry and merge.
     public func loadAsync() async {
-        entries = MilestoneEconomy.deduplicatedByID(await repository.loadAsync())
+        let unlanded = boundaries.landPending()
+        entries = MilestoneEconomy.deduplicatedByID(await repository.loadAsync() + unlanded)
     }
 
     /// Re-reads the store (flushing any unsaved rows first), picking up event rows that synced in
@@ -141,13 +151,15 @@ public final class MilestoneLedgerService {
     ///
     /// Ordering is why this is one method and not three calls, and every step of it is load-bearing:
     /// the pending queue is dropped BEFORE the stored rows (a queued row flushed back onto a
-    /// just-emptied store is a resurrection), and the marker is appended AFTER the delete (a marker
-    /// written first would be deleted by the very sweep it exists to survive). The marker is written
-    /// through the repository directly, exactly like `CoinLedgerService.reset()`, and a failed append
-    /// is re-queued for the debounced retry rather than dropped — a wipe whose boundary never
-    /// persists is a wipe another device can undo.
+    /// just-emptied store is a resurrection); the marker is remembered in the device-local sidecar
+    /// BEFORE the delete too (tracker §3.6 — from that moment a process death cannot lose it); and it
+    /// is appended to the synced store AFTER the delete (a marker written there first would be deleted
+    /// by the very sweep it exists to survive). A failed append stays in the sidecar, which every
+    /// load merges and retries until it lands, and is also re-queued for the in-process debounced
+    /// retry — a wipe whose boundary never persists is a wipe another device can undo.
     ///
-    /// The in-memory ledger afterwards is `[marker]`, not `[]`; `MilestoneEconomy` never counts,
+    /// The in-memory ledger afterwards is `[marker]` (plus any older boundary still waiting to land),
+    /// never `[]`; `MilestoneEconomy` never counts,
     /// awards or displays a marker row, so every lifetime count still reads 0.
     ///
     /// - Returns: whether the persisted rows were confirmed deleted. Threaded back (R7, exactly like
@@ -158,11 +170,13 @@ public final class MilestoneLedgerService {
     ///   screen.
     public func reset(deletingRowsWith deleteRows: @MainActor () -> Bool) -> Bool {
         buffer.clear()
-        let deleted = deleteRows()
         let at = now()
         let marker = MilestoneLedgerEntry.resetBoundary(dayKey: FernletDate.dayKey(for: at), at: at)
-        entries = [marker]
-        if !repository.append([marker]) {
+        boundaries.remember(marker)
+        let deleted = deleteRows()
+        let unlanded = boundaries.landPending(including: [marker])
+        entries = MilestoneEconomy.deduplicatedByID([marker] + unlanded)
+        if !unlanded.isEmpty {
             buffer.enqueue(marker)
             buffer.scheduleSave()
         }

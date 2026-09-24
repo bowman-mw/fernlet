@@ -337,6 +337,7 @@ The journal-sealing rows above (`activateNoLockJournals()` through `migrateExist
 | `configureViewContext(for:)` | Sets merge policy and automatic parent-change merging. |
 | `bindRemoteChanges(to:)` | Bridges Core Data remote-change notifications into `remoteChangePublisher`. |
 | `saveAndLockViewContext(_:)` | Saves pending changes and resets the old view context before reload. |
+| `localDefaults` / `makeLocalDefaults(inMemory:storeURL:)` | The store's device-local, never-synced key/value surface (`StoreLocalDefaults`, 2026-09-24): `UserDefaults.standard` for the default on-disk store, a private per-controller `InMemoryStoreLocalDefaults` for every in-memory or explicit-URL controller. Holds the two ledgers' pending reset boundaries (`CoinLedgerRepository` / `MilestoneLedgerRepository` `pendingResetBoundaries()` + `savePendingResetBoundaries(_:)`, literal keys at their call sites), scoped exactly like the store so a test store never touches production defaults. |
 | `removePersistentStores(from:)` | Removes all persistent stores from a coordinator during reload. |
 | `makeManagedObjectModel()` | Builds the main cloud-safe model entities in code. |
 | `makeFernletDatabaseRecordEntity()` | Defines the single blob record entity for `LocalFernletDatabase` payload data. |
@@ -528,18 +529,18 @@ The debounce/queue mechanics this service used to own now live in `PendingWriteB
 
 | Function | What It Does |
 | --- | --- |
-| `loadSync()` / `loadAsync()` / `reloadFromStore()` | Hydrate the append-only coin ledger from its per-row store (the design that replaced the unsound "derive earned from day history" model — day history shrinks). |
+| `loadSync()` / `loadAsync()` / `reloadFromStore()` | Hydrate the append-only coin ledger from its per-row store (the design that replaced the unsound "derive earned from day history" model — day history shrinks). Since 2026-09-24 every load first retries the append of any reset boundary still pending in the device-local sidecar, then MERGES whatever is still pending into the ledger, so pre-boundary rows stay void across a process death (tracker §3.6). |
 | `reconcile(activeDayKeys:)` | Mints any missing earn rows for active days, capped so future-day minting cannot run away. |
 | `grantEarns(_:)` / `spend(amount:ref:)` | Append earns; `spend` returns `false` rather than going negative. |
-| `reset()` / `flushPendingSave()` | Wipe path and the debounce flush. |
+| `reset()` / `flushPendingSave()` | Wipe path and the debounce flush. `reset()` remembers its marker in the device-local sidecar BEFORE `deleteAll()`, then lands it (retiring the sidecar) or leaves it pending for the next load plus the in-process retry. |
 
 ### `MilestoneLedgerService.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `loadSync()` / `loadAsync()` / `reloadFromStore()` | Hydrate the append-only milestone ledger. |
+| `loadSync()` / `loadAsync()` / `reloadFromStore()` | Hydrate the append-only milestone ledger — with the same pending-boundary retry and merge as the coin ledger (2026-09-24). |
 | `record(_:)` | Appends milestone rows, idempotently by deterministic id. |
-| `reset(deletingRowsWith:)` | Wipe path (added 2026-08-20, reversing the earlier survive-a-reset rule): drops the pending queue, runs the injected row delete (`MilestoneLedgerRepository.deleteAll()`, narrowed by the deletion funnel), then — since 2026-08-21 — appends a `resetBoundary` marker (with the coin service's failed-append retry), so re-synced pre-wipe rows are voided by aggregation; in-memory state afterwards is `[marker]`. `CloudKitDataService.allRecordTypes` sweeps the milestone record types too. |
+| `reset(deletingRowsWith:)` | Wipe path (added 2026-08-20, reversing the earlier survive-a-reset rule): drops the pending queue, runs the injected row delete (`MilestoneLedgerRepository.deleteAll()`, narrowed by the deletion funnel), then — since 2026-08-21 — appends a `resetBoundary` marker (with the coin service's failed-append retry), so re-synced pre-wipe rows are voided by aggregation; in-memory state afterwards is `[marker]`. Since 2026-09-24 the marker is remembered in the device-local sidecar before the row delete runs, so a failed append survives a process death. `CloudKitDataService.allRecordTypes` sweeps the milestone record types too. |
 | `flushPendingSave()` | Debounce flush. |
 
 ### `CustomItemService.swift`
@@ -563,6 +564,7 @@ The debounce/queue mechanics this service used to own now live in `PendingWriteB
 | `DebouncedAppendBuffer<Entry>` | The append-only variant shared by `CoinLedgerService` and `MilestoneLedgerService`; `enqueue(_:)` deliberately schedules nothing so callers batch N rows and call `scheduleSave()` once per burst. |
 | `DebouncedAppendBuffer.flush()` / `pending` / `clear()` | Same durability contract as the row buffer: `pending` is the sole un-persisted copy, cleared only after a confirmed append. |
 | `scheduleSave()` | Coalesces mutations into one debounced main-actor flush per burst; the task's weak self-capture keeps "owner gone → flush skipped" semantics. Private on `DebouncedRowBuffer` (the enqueues call it), public on `DebouncedAppendBuffer` (the ledger services call it once per batch). |
+| `PendingResetBoundaries<Entry>` (internal) | The durable half of both ledgers' reset boundary (2026-09-24, tracker §3.6). `remember(_:)` writes the marker to the repository's device-local sidecar before the rows are deleted; `landPending(including:)` appends every pending marker (deduped by id — the engine's intra-batch duplicate limitation) and retires the sidecar once they land, returning what is still pending for the caller to merge. Bounded by `PendingWriteLimits.maxPendingResetBoundaries` (8). |
 
 ### `LaunchPreparationService.swift`
 

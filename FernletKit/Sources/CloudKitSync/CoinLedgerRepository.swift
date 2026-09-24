@@ -71,6 +71,29 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
         store.append(entries)
     }
 
+    /// The key the pending reset boundaries live under in the store's device-local, never-synced
+    /// ``PersistenceController/localDefaults`` (tracker §3.6). Frozen: a renamed key would strand a
+    /// boundary written by the previous build — the exact loss the sidecar exists to prevent.
+    private static let pendingResetBoundariesKey = "fernlet.coinLedger.pendingResetBoundaries"
+
+    /// The reset markers minted here whose synced append is not yet confirmed (see the protocol).
+    public func pendingResetBoundaries() -> [CoinLedgerEntry] {
+        PendingResetBoundaryCoding.decode(
+            controller.localDefaults.data(forKey: Self.pendingResetBoundariesKey),
+            as: CoinLedgerEntry.self, store: "coinLedger")
+    }
+
+    /// Replaces the pending set in the device-local sidecar; an empty set removes the key.
+    public func savePendingResetBoundaries(_ markers: [CoinLedgerEntry]) -> Bool {
+        guard !markers.isEmpty else {
+            controller.localDefaults.removeObject(forKey: Self.pendingResetBoundariesKey)
+            return true
+        }
+        guard let data = PendingResetBoundaryCoding.encode(markers, store: "coinLedger") else { return false }
+        controller.localDefaults.set(data, forKey: Self.pendingResetBoundariesKey)
+        return true
+    }
+
     /// Removes every ledger row — the delete-all/reset path only (normal operation never deletes).
     public func deleteAll() -> Bool {
         let context = controller.container.viewContext

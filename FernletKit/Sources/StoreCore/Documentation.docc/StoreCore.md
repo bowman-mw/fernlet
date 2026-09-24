@@ -45,7 +45,19 @@ marker that voids pre-reset rows sync-safely and deletes nothing, while the mile
 signed-in device raise no count and re-mint no award when they sync back into the emptied store
 (`MilestoneEconomy` counts only rows whose day is at or after the marker's day AND whose
 `createdAt` is strictly after its instant — the day half also voids rows re-derived from
-re-synced day records, which carry fresh reconcile-time timestamps).
+re-synced day records, which carry fresh reconcile-time timestamps). (The coin `reset()` deletes
+its rows too; the marker is what makes either delete stick.)
+
+**Both reset boundaries are durable (2026-09-24, tracker §3.6).** A marker whose synced append
+failed used to live only in the append buffer, so a process death before the retry lost it and
+rows another device synced back counted again. The two ledgers now share an internal
+`PendingResetBoundaries` helper (beside the buffers in `PendingWriteBuffer.swift`): the reset
+remembers its marker in the store's device-local, never-synced sidecar (the
+`pendingResetBoundaries()` / `savePendingResetBoundaries(_:)` pair on each ledger's repository
+contract) BEFORE a single row is deleted; every `loadSync()` / `loadAsync()` retries the append and
+merges whatever is still pending into the in-memory ledger, so the aggregation and both reconciles
+void pre-boundary rows even while the synced marker is missing; and the sidecar is retired once the
+append lands. The in-process debounced retry still runs alongside it.
 
 ``DerivedSignalsService`` and the pure ``DerivedSignalsRebuilder`` cover Tier-2 derived data:
 signals recomputed deterministically from raw day history (via LocalPersistence's

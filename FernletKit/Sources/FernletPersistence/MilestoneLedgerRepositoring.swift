@@ -35,4 +35,13 @@ public protocol MilestoneLedgerRepositoring {
     func loadAsync() async -> [MilestoneLedgerEntry]
     /// Inserts or replaces (by `id`) each entry. Rows not in `entries` are left untouched — never deleted.
     func append(_ entries: [MilestoneLedgerEntry]) -> Bool
+    /// The `resetBoundary` markers minted on THIS device whose append to the synced store is not yet
+    /// confirmed, read from the store's device-local, never-synced sidecar — oldest first, empty once
+    /// every boundary has landed. Same contract as `CoinLedgerRepositoring.pendingResetBoundaries()`:
+    /// written before the wipe deletes a row, merged into every load, retried until it lands, then
+    /// retired (tracker §3.6). A sidecar is not a row delete, so this contract still carries none.
+    func pendingResetBoundaries() -> [MilestoneLedgerEntry]
+    /// Durably replaces the pending set; an empty set retires the sidecar. Returns `false` when the
+    /// markers did not reach durable storage.
+    func savePendingResetBoundaries(_ markers: [MilestoneLedgerEntry]) -> Bool
 }
