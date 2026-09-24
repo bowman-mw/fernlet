@@ -21,7 +21,8 @@ import FernletPersistence
 /// Key invariants:
 /// - **Sanitize-before-sync (S3)**: day writes accept only `SanitizedDay`/`SanitizedSnapshot`,
 ///   and the one-time blob→row migration re-strips every legacy day through the same barrier, so
-///   cycle/intimate content never lands in a synced row.
+///   sealed journal text and HealthKit-derived values (cycle/intimate included) never land in a
+///   synced row.
 /// - **No empty rows**: a day with no logged content writes no row (and deletes a stale one), so
 ///   a device that merely launched the app can't make other devices read "existing cloud data".
 /// - **Read-only recovery**: a failed record fetch or blob decode latches all saves off
@@ -83,6 +84,12 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     public var remoteChangePublisher: AnyPublisher<Void, Never> {
         remoteChangeSubject.eraseToAnyPublisher()
     }
+
+    /// The Core Data stack this repository persists through. For app-side maintenance passes that
+    /// must operate on the SAME store the repository reads — the one-time scrub of HealthKit values
+    /// out of rows written before the storage strip existed — rather than on
+    /// `PersistenceController.shared` by assumption (a test store is in memory).
+    public var persistenceController: PersistenceController { controller }
 
     /// Creates the repository, defaulting to the shared ``PersistenceController``, the standard
     /// legacy JSON store, and a ``DayRecordRepository`` on the same controller; all three are

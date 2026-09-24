@@ -150,6 +150,9 @@ struct PrivacyWipeCoverageTests {
         "milestoneLedgerService.reset",
         "aiRetryQueueService.reset",
         "scrubStressLocalState",
+        // This device's HealthKit residue cache (2026-09-23): the steps, sleep, heart-rate readings and
+        // Apple Health workouts per day that the storage strip keeps out of every synced write.
+        "deviceHealthResidueStore.clearAll",
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
         "RecentActivityTypeMemory.clearAll",

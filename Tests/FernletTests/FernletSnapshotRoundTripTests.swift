@@ -32,31 +32,49 @@ struct FernletSnapshotRoundTripTests {
         let reloadedSnapshot = repository.loadSnapshot(todayKey: todayKey)
         assertSnapshot(reloadedSnapshot, equals: snapshot)
 
-        let reloadedStore = try await FernletStore.load(date: date, repository: repository, savedRecipeRepository: savedRecipeRepository)
+        // An in-memory HealthKit residue cache: `load`'s nil default is the PRODUCTION file, which this
+        // hermetic round trip must neither read nor write. Empty, so the overlay adds nothing and the
+        // (raw, pre-strip) healthContext round-trips exactly.
+        let reloadedStore = try await FernletStore.load(
+            date: date, repository: repository, savedRecipeRepository: savedRecipeRepository,
+            deviceHealthResidueStore: InMemoryDeviceHealthResidueStore()
+        )
         assertStore(reloadedStore, equals: snapshot)
         #expect(reloadedStore.savedRecipes.sorted(by: sortSavedRecipes) == savedRecipes.sorted(by: sortSavedRecipes))
     }
 
     /// The `SanitizedSnapshot.sanitizing` strip (the type-enforced storage boundary) must remove
-    /// cycle/intimate health context and cycle-derived `periodPhase` before they can reach the blob,
-    /// while non-sensitive health fields survive.
-    @Test func sanitizingSnapshotStripsCycleIntimateAndPeriodPhase() throws {
+    /// EVERY HealthKit-derived value — the whole health context, HealthKit's sleep hours, the scores'
+    /// HealthKit contexts — and cycle-derived `periodPhase` before they can reach the blob.
+    ///
+    /// Until 2026-09-23 this cell pinned the opposite for the non-sensitive groups ("activity still
+    /// round-trips"); the owner decided no HealthKit information is stored in iCloud, so the whole
+    /// context now stays on the device that read it (see `HealthKitCloudBoundaryTests`).
+    @Test func sanitizingSnapshotStripsEveryHealthKitValueAndPeriodPhase() throws {
         let todayKey = "2026-05-19"
         let repository = LocalFernletRepository(fileURL: temporaryDatabaseURL("sanitize-strip"))
         var snapshot = try baselineSnapshot(todayKey: todayKey)
         snapshot.dailyScores[0].periodPhase = "luteal"
-        // Precondition: the baseline fixture carries the sensitive fields we expect to be stripped.
+        snapshot.dailyScores[0].healthActivityContext = snapshot.day.healthContext?.activity
+        snapshot.dailyScores[0].healthBodyContext = snapshot.day.healthContext?.body
+        // Precondition: the baseline fixture carries the fields we expect to be stripped.
         #expect(snapshot.day.healthContext?.cycle != nil)
-        #expect(snapshot.day.healthContext?.intimate != nil)
+        #expect(snapshot.day.healthContext?.activity != nil)
+        #expect(snapshot.day.sleep?.hours == snapshot.day.healthContext?.body?.sleepHours)
 
         #expect(repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot, sealedJournalIDs: [])))
         let reloaded = repository.loadSnapshot(todayKey: todayKey)
 
-        #expect(reloaded.day.healthContext?.cycle == nil)
-        #expect(reloaded.day.healthContext?.intimate == nil)
-        #expect(reloaded.dailyScores.allSatisfy { $0.periodPhase == nil })
-        // Non-sensitive health context still round-trips.
-        #expect(reloaded.day.healthContext?.activity != nil)
+        #expect(reloaded.day.healthContext == nil)
+        #expect(reloaded.dailyScores.allSatisfy {
+            $0.periodPhase == nil && $0.healthActivityContext == nil && $0.healthBodyContext == nil
+        })
+        // The baseline's sleep hours equal HealthKit's reading, so they go; the user's rating and
+        // note on the same log are theirs and stay.
+        #expect(reloaded.day.sleep?.hours == nil)
+        #expect(reloaded.day.sleep?.quality == .great)
+        #expect(reloaded.day.sleep?.note == "Slept through")
+        #expect(reloaded.day.workouts == snapshot.day.workouts)   // Fernlet-logged workouts sync
     }
 
     /// The strip blanks sealed-journal text (today + previousJournals) while leaving unsealed entries

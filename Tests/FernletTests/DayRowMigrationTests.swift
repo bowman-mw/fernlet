@@ -260,11 +260,12 @@ struct DayRowMigrationTests {
         #expect(flaky.store["2026-05-10"] == nil)
     }
 
-    @Test func migrationStripsCycleAndIntimateHealthContextFromRows() {
+    @Test func migrationStripsEveryHealthKitValueFromRows() {
         // Item E (migration copies legacy PLAINTEXT into synced rows): legacy blob days from pre-hardening
-        // builds may carry cycle/intimate healthContext. Migration must route through the SAME SanitizedDay
-        // strip as saveSnapshot/updateDay so no sensitive content lands in the uncapped, CloudKit-synced
-        // DayRecord rows.
+        // builds may carry healthContext. Migration must route through the SAME SanitizedDay strip as
+        // saveSnapshot/updateDay so no HealthKit value lands in the uncapped, CloudKit-synced DayRecord
+        // rows — since 2026-09-23 that is the WHOLE context, not only its cycle/intimate groups (HealthKit
+        // information is not stored in iCloud).
         let controller = PersistenceController(inMemory: true)
         var blob = LocalFernletDatabase()
         blob.days = [
@@ -284,9 +285,9 @@ struct DayRowMigrationTests {
 
         let repo = CoreDataFernletRepository(controller: controller)
         let day = repo.loadAllDays()["2026-05-01"]
-        #expect(day?.healthContext?.cycle == nil)     // stripped
-        #expect(day?.healthContext?.intimate == nil)  // stripped
-        #expect(day?.healthContext?.activity != nil)  // non-sensitive context survives
+        #expect(day != nil)                  // the day (it has a logged bottle) still migrates
+        #expect(day?.bottleCount == 1)
+        #expect(day?.healthContext == nil)   // cycle, intimate AND activity: none of it syncs
     }
 
     @Test func normalSaveDoesNotReDecodeWholeHistory() {

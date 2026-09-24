@@ -20,8 +20,12 @@ here**. The raw cycle types (`CyclePhase`, cycle day entries) deliberately live 
 `PrivateHealthStore`, sealed journal text is stripped before the synced blob by
 ``JournalEntry/strippedIfSealed(in:)`` (a fail-closed memberwise allowlist), friends receive only
 the 3-way ``FriendFuzzyState`` fold of ``CompanionState`` (never a number), and the heart
-dead-drop seam (``HeartDropTransporting``) sees only pseudonymous tags and ciphertext. When adding
-a type here, assume AI and iCloud code can read it.
+dead-drop seam (``HeartDropTransporting``) sees only pseudonymous tags and ciphertext. The
+HealthKit day-context types are nameable here but never persisted to iCloud: since 2026-09-23 the
+storage strip in `FernletPersistence` drops the whole ``HealthDailyContext``, HealthKit's sleep hours
+(``HealthDailyContext/healthKitSleepLogHours`` is the provenance marker it reads) and Apple Health
+workout imports before any synced write, and this device keeps its copy in a device-local cache.
+When adding a type here, assume AI and iCloud code can read it.
 
 Second, forward-compatible serialization. Most of these types ride the CloudKit-synced snapshot
 blob or per-day `DayRecord` rows across devices on *different app versions*, and a strict enum

@@ -218,7 +218,8 @@ func makeTestStore(
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
     foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
-    sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL()
+    sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
+    deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
@@ -231,7 +232,8 @@ func makeTestStore(
         aiQuotaDefaults: aiQuotaDefaults,
         sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
         foodSearchCorrectionDefaults: foodSearchCorrectionDefaults,
-        sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL
+        sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL,
+        deviceHealthResidueStore: deviceHealthResidueStore
     ).store
 }
 
@@ -255,6 +257,7 @@ func makeTestStoreWithRepositories(
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
     foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
+    deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     precondition(
@@ -319,7 +322,10 @@ func makeTestStoreWithRepositories(
         aiQuotaDefaults: aiQuotaDefaults,
         // The food-search correction memory, READ AT INIT — see
         // `uniqueFoodSearchCorrectionDefaults()`.
-        foodSearchCorrectionDefaults: foodSearchCorrectionDefaults
+        foodSearchCorrectionDefaults: foodSearchCorrectionDefaults,
+        // This device's HealthKit residue cache. Nil = the store's own fresh in-memory cache (the
+        // sync initializer's hermetic default); pass one to share it across a simulated relaunch.
+        deviceHealthResidueStore: deviceHealthResidueStore
     )
     return (store, repository, journalNarrativeRepository)
 }
@@ -347,7 +353,8 @@ func makeStoreSharingStores(
     appGroupDirectory: URL = uniqueAppGroupDirectory(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
-    sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL()
+    sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
+    deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil
 ) -> FernletStore {
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -374,7 +381,8 @@ func makeStoreSharingStores(
         photoDocumentsDirectory: photoDocumentsDirectory,
         proximitySupportDirectory: proximitySupportDirectory,
         heartDropKeychainService: heartDropKeychainService,
-        aiQuotaDefaults: aiQuotaDefaults
+        aiQuotaDefaults: aiQuotaDefaults,
+        deviceHealthResidueStore: deviceHealthResidueStore
     )
 }
 

@@ -130,14 +130,29 @@ final class HealthSyncCoordinator {
     private func applyHealthSleepHours(_ hours: Double) -> Bool {
         guard hours.isFinite, hours > 0, hours <= Self.maxSleepHours else { return false }
         let roundedHours = (hours * 10).rounded() / 10
+        let markerChanged = markHealthKitSleepLogHours(roundedHours)
         let current = host.day.sleep
         let updated = SleepLog(
             hours: roundedHours,
             quality: current?.quality ?? .ok,
             note: current?.note ?? ""
         )
-        guard updated != current else { return false }
+        guard updated != current else { return markerChanged }
         host.day.sleep = updated
+        return true
+    }
+
+    /// Records on today's context that `hours` in the sleep log are HealthKit's — the provenance
+    /// the storage strip needs to keep them out of iCloud (see
+    /// `HealthDailyContext.healthKitSleepLogHours`, and why `body.sleepHours` alone is not enough
+    /// after 18:00). Creates the context when HealthKit wrote sleep before any other reading.
+    ///
+    /// - Returns: Whether the marker changed (and so the day needs saving).
+    private func markHealthKitSleepLogHours(_ hours: Double) -> Bool {
+        var context = host.day.healthContext ?? HealthDailyContext()
+        guard context.healthKitSleepLogHours != hours else { return false }
+        context.healthKitSleepLogHours = hours
+        host.day.healthContext = context
         return true
     }
 

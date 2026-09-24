@@ -67,6 +67,8 @@ public nonisolated struct FernletDay: Codable {
     /// that knows a parked token re-adopts it on decode (`EnumDecodeCompat`).
     public var unknownHygieneTokens: [String] = []
     public var completedPersonalCareTaskIDs: Set<String>
+    /// The day's HealthKit readings. In memory and in this device's HealthKit residue cache only —
+    /// the storage strip nils it before any synced write (see ``HealthDailyContext``).
     public var healthContext: HealthDailyContext?
     /// Recipe ids the user assigned to this day in the F3 weekly shopping-list planner. Mirrors the
     /// `plannedWorkouts` precedent EXACTLY: it is a per-day-row field that rides `DayRecord.payloadData`
@@ -191,15 +193,22 @@ public nonisolated struct FernletDay: Codable {
 ///
 /// `merge` keeps the freshest non-nil group per sync; ``hasContent`` distinguishes real data from
 /// the bare `syncedAt` stamp HealthKit sync writes whenever integration is merely enabled.
+///
+/// **Device-local only.** Every value in here was READ from HealthKit, and App Review 5.1.3(ii)
+/// (plus the owner's 2026-09-23 decision) keeps HealthKit information out of iCloud: the storage
+/// strip in `FernletPersistence` drops the whole context before a day reaches a synced row, and this
+/// device keeps its own copy in the device-local HealthKit residue cache instead. Another device
+/// derives its own context from its own HealthKit store.
 public nonisolated struct HealthDailyContext: Codable, Equatable {
 
-    public init(syncedAt: Date = Date(), activity: HealthActivitySummary? = nil, body: HealthBodyContext? = nil, cycle: HealthCycleContext? = nil, mindfulness: HealthMindfulnessContext? = nil, intimate: HealthIntimateContext? = nil) {
+    public init(syncedAt: Date = Date(), activity: HealthActivitySummary? = nil, body: HealthBodyContext? = nil, cycle: HealthCycleContext? = nil, mindfulness: HealthMindfulnessContext? = nil, intimate: HealthIntimateContext? = nil, healthKitSleepLogHours: Double? = nil) {
         self.syncedAt = syncedAt
         self.activity = activity
         self.body = body
         self.cycle = cycle
         self.mindfulness = mindfulness
         self.intimate = intimate
+        self.healthKitSleepLogHours = healthKitSleepLogHours
     }
     public var syncedAt = Date()
     public var activity: HealthActivitySummary?
@@ -207,6 +216,17 @@ public nonisolated struct HealthDailyContext: Codable, Equatable {
     public var cycle: HealthCycleContext?
     public var mindfulness: HealthMindfulnessContext?
     public var intimate: HealthIntimateContext?
+    /// The HealthKit sleep total (hours, rounded to 0.1) this device last wrote into the day's
+    /// ``SleepLog/hours`` — the provenance marker the storage strip reads to tell HealthKit hours
+    /// from hours the user typed.
+    ///
+    /// It has to outlive ``body``: after 18:00 a refresh reads TONIGHT's sleep window, gets no
+    /// sleep yet, and `merge` replaces `body` with one whose `sleepHours` is nil — while the log
+    /// still carries last night's HealthKit value. Comparing against `body` alone would then pass
+    /// that value off as typed and sync it. Kept here rather than on `SleepLog` because the whole
+    /// context is device-local: the marker can never reach a synced row, and a synced-in row can
+    /// never forge one. Additive-optional (absent on every context written before 2026-09-23).
+    public var healthKitSleepLogHours: Double?
 
     public mutating func merge(_ other: HealthDailyContext) {
         syncedAt = other.syncedAt
@@ -215,6 +235,7 @@ public nonisolated struct HealthDailyContext: Codable, Equatable {
         cycle = other.cycle ?? cycle
         mindfulness = other.mindfulness ?? mindfulness
         intimate = other.intimate ?? intimate
+        healthKitSleepLogHours = other.healthKitSleepLogHours ?? healthKitSleepLogHours
     }
 
     /// True when the context holds at least one real metric — i.e. it is more than the bare `syncedAt`
@@ -357,10 +378,13 @@ public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
     /// Optional menstrual-cycle phase label for this day (populated once the period bridge lands).
     public var periodPhase: String?
     /// The HealthKit activity context (steps/active-energy/exercise-minutes) that fed scoring this
-    /// day, retained for audit/inspection. Nil when HealthKit was unavailable or disabled.
+    /// day, retained for audit/inspection on THIS device. Nil when HealthKit was unavailable or
+    /// disabled — and always nil in the synced blob: `FernletSnapshot.storedDailyScores` strips it
+    /// with `periodPhase` before every persist (HealthKit information stays out of iCloud).
     public var healthActivityContext: HealthActivitySummary?
     /// The HealthKit body context (sleep hours/stages, resting HR, HRV) that fed scoring this day,
-    /// retained for audit/inspection. Nil when HealthKit was unavailable or disabled.
+    /// retained for audit/inspection on THIS device. Stripped before every persist exactly like
+    /// ``healthActivityContext``.
     public var healthBodyContext: HealthBodyContext?
 
     public init(id: UUID = UUID(), dateKey: String, score: Double, companionState: CompanionState, daySummaryText: String? = nil, computedAt: Date, componentScores: [String: Double]? = nil, weightVector: ScoringWeights? = nil, sicknessOverride: Bool? = nil, periodPhase: String? = nil, healthActivityContext: HealthActivitySummary? = nil, healthBodyContext: HealthBodyContext? = nil) {
@@ -508,6 +532,12 @@ public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable,
 ///
 /// Distinct from HealthKit sleep (``HealthBodyContext``) — this is the deliberate log. `quality`
 /// decodes tolerantly; re-logging constructs a fresh record, which drops any parked token.
+///
+/// One field is shared: HealthKit sync also writes its sleep total into `hours` (keeping the
+/// user's quality and note), and records that it did in
+/// ``HealthDailyContext/healthKitSleepLogHours``. Hours equal to that marker (or to the context's
+/// own `body.sleepHours`) are HealthKit's, so the storage strip removes them before a synced write;
+/// hours the user typed differently survive.
 public nonisolated struct SleepLog: Codable, Equatable {
     public var hours: Double?
     public var quality: SleepQuality {

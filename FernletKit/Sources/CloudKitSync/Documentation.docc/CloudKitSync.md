@@ -29,9 +29,14 @@ load, best-effort on a background context; a mirrored store is never pruned by t
 memories, recipes, derived tables) and the per-row `DayRecord` store — one CloudKit record per day,
 which is what removed the old 370-day cap and lets different-day edits from different devices merge
 per record. It also owns the one-time legacy-JSON migration, the blob→row day backfill (which
-re-sanitizes every legacy day so cycle/intimate content never reaches a synced row), and a
+re-sanitizes every legacy day so neither sealed journal text nor any HealthKit-derived value — the
+health context, HealthKit's sleep hours, Apple Health workout imports — reaches a synced row;
+since 2026-09-23 HealthKit information is not stored in iCloud at all), and a
 read-only-recovery latch that refuses all saves after a failed fetch/decode so a transient error
-can never be persisted over real data.
+can never be persisted over real data. It exposes its `persistenceController` so the app's
+one-time scrub of HealthKit values out of rows written by older builds (and the HealthKit opt-out
+cleaner) operate on the SAME store it reads, never on `PersistenceController.shared` by
+assumption.
 
 Beside the day store sit the sibling per-row repositories — ``CoinLedgerRepository``,
 ``MilestoneLedgerRepository``, ``CustomItemRepository``, and ``SavedRecipeRepository`` — all

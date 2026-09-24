@@ -49,7 +49,8 @@ public struct FernletSnapshot: Codable {
     public var foodItems: [FoodItem] = []
     /// Recipe definitions carried in the blob. Added after the initial shape; decodes to empty when absent.
     public var recipes: [RecipeDefinition] = []
-    /// Per-day health score history (cycle-derived `periodPhase` is stripped before storage).
+    /// Per-day health score history (cycle-derived `periodPhase` and the HealthKit scoring contexts
+    /// are stripped before storage).
     public var dailyScores: [DailyHealthScore] = []
     /// Pending AI meal-analysis retry records.
     public var retryQueue: [AIAnalysisRetryRecord] = []
@@ -120,17 +121,14 @@ public struct FernletSnapshot: Codable {
 // MARK: - Storage sanitization (privacy wall)
 
 private extension FernletDay {
-    /// The shared per-day storage strip: blanks sealed-journal text and nils sensitive health fields
-    /// (cycle/intimate). Factored out so `SanitizedSnapshot` (today's day) and `SanitizedDay` (a past
-    /// day) apply byte-identical privacy-wall behavior and cannot drift.
+    /// The shared per-day storage strip: blanks sealed-journal text and removes every value READ
+    /// from HealthKit (the whole `healthContext` — cycle and intimate included — HealthKit-written
+    /// sleep hours, and workouts imported from Apple Health; see
+    /// `strippingHealthKitValues()`). Factored out so `SanitizedSnapshot` (today's day) and
+    /// `SanitizedDay` (a past day) apply byte-identical privacy-wall behavior and cannot drift.
     func stripped(sealedJournalIDs: Set<UUID>) -> FernletDay {
-        var stripped = self
+        var stripped = strippingHealthKitValues()
         stripped.journals = journals.map { $0.strippedIfSealed(in: sealedJournalIDs) }
-        if var context = stripped.healthContext {
-            context.cycle = nil
-            context.intimate = nil
-            stripped.healthContext = context
-        }
         return stripped
     }
 }
@@ -147,9 +145,9 @@ public struct SanitizedSnapshot {
     private init(_ snapshot: FernletSnapshot) { self.snapshot = snapshot }
 
     /// Applies the storage strip and wraps the result: blanks sealed-journal text (today + previous
-    /// journals), nils sensitive health fields (cycle/intimate), and strips cycle-derived `periodPhase`
-    /// from daily scores. `sealedJournalIDs` is the set of sealed journal entry ids (sealing state lives
-    /// in the app, passed in as pure data).
+    /// journals), removes every HealthKit-derived value from today's day, and strips cycle-derived
+    /// `periodPhase` and the HealthKit scoring contexts from daily scores. `sealedJournalIDs` is the
+    /// set of sealed journal entry ids (sealing state lives in the app, passed in as pure data).
     public static func sanitizing(_ snapshot: FernletSnapshot, sealedJournalIDs: Set<UUID>) -> SanitizedSnapshot {
         var stripped = snapshot
         stripped.day = snapshot.day.stripped(sealedJournalIDs: sealedJournalIDs)
@@ -173,17 +171,16 @@ public struct SanitizedSnapshot {
 }
 
 /// A `FernletDay` that has passed the past-day storage strip — required by `FernletRepository.updateDay`
-/// so a raw past-day write cannot leak sealed-journal text or sensitive health fields into the synced
-/// blob. The only way to mint one is `sanitizing(_:sealedJournalIDs:)`.
+/// so a raw past-day write cannot leak sealed-journal text or any HealthKit-derived value into the
+/// synced blob or a synced row. The only way to mint one is `sanitizing(_:sealedJournalIDs:)`.
 public struct SanitizedDay {
     /// The wrapped, already-stripped day — safe to write to a synced row.
     public let day: FernletDay
     /// Private by design: only the sanitizing mints (and the internal wrappers below) may wrap.
     private init(_ day: FernletDay) { self.day = day }
 
-    /// Blanks sealed-journal text and nils sensitive health fields (cycle/intimate) on a single day.
-    /// Hardens the former journal-text-only past-day strip to also drop cycle/intimate, matching
-    /// `SanitizedSnapshot`.
+    /// Blanks sealed-journal text and removes every HealthKit-derived value on a single day (the
+    /// same strip as `SanitizedSnapshot`, so the two write paths cannot drift).
     public static func sanitizing(_ day: FernletDay, sealedJournalIDs: Set<UUID>) -> SanitizedDay {
         SanitizedDay(day.stripped(sealedJournalIDs: sealedJournalIDs))
     }
@@ -226,11 +223,18 @@ public extension FernletSnapshot {
         return SanitizedSnapshot.sanitizing(raw, sealedJournalIDs: sealedJournalIDs)
     }
 
-    /// Strips `DailyHealthScore.periodPhase` (cycle-derived) from every score. Pure.
+    /// Strips `DailyHealthScore.periodPhase` (cycle-derived) and the two HealthKit scoring contexts
+    /// (`healthActivityContext`, `healthBodyContext` — values read from HealthKit) from every score.
+    /// The in-memory rows keep them as this device's audit; only the persisted copy loses them. Pure.
     static func storedDailyScores(_ scores: [DailyHealthScore]) -> [DailyHealthScore] {
         scores.map { score in
-            guard score.periodPhase != nil else { return score }
-            var s = score; s.periodPhase = nil; return s
+            guard score.periodPhase != nil || score.healthActivityContext != nil
+                    || score.healthBodyContext != nil else { return score }
+            var s = score
+            s.periodPhase = nil
+            s.healthActivityContext = nil
+            s.healthBodyContext = nil
+            return s
         }
     }
 }

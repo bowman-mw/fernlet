@@ -624,6 +624,19 @@ final class FernletStore {
     /// `uniqueFoodSearchCorrectionDefaults()`; the launch path passes `.standard`, which is the real
     /// device memory.
     @ObservationIgnored let foodSearchCorrectionDefaults: UserDefaults
+    /// This device's HealthKit residue cache — where the HealthKit readings live now that the
+    /// storage strip keeps every one of them out of the synced rows and blob (owner decision
+    /// 2026-09-23). The diary overlays it on every day it hands out; today's residue is recorded at
+    /// the HealthKit ingestion points (`updateHealthContext`, the workout-sync upsert/removal), a
+    /// past day's by the diary's past-day write. See `FernletStore+HealthKitResidue.swift`.
+    ///
+    /// An INIT PARAMETER, like `foodSearchCorrectionDefaults`, because the wiring reads it at once
+    /// (today's day is overlaid in `completeDiaryWiring`). Unlike every other isolation seam, nil is
+    /// NOT production here: the synchronous initializer (tests, previews) defaults to a fresh
+    /// in-memory cache, so a store that is not handed one can never share or wipe another's — which is
+    /// why no grep-wall pins direct constructions. The launch path (`FernletStore.load`) always
+    /// passes `FileDeviceHealthResidueStore.production`.
+    @ObservationIgnored let deviceHealthResidueStore: any DeviceHealthResidueStoring
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -760,10 +773,13 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard, deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
+        // Nil = a fresh IN-MEMORY cache, not production (see the property): this initializer is the
+        // tests' and previews' path; the launch path hands in the production file.
+        self.deviceHealthResidueStore = deviceHealthResidueStore ?? InMemoryDeviceHealthResidueStore()
         self.proximitySupportRoot = proximitySupportDirectory ?? ProximitySupportLayout.defaultDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.appGroupDirectory = appGroupDirectory
@@ -857,6 +873,9 @@ final class FernletStore {
             stressModifier: { [weak self] key in self?.stressModifier(for: key) ?? 0 },
             sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
+        // This device's HealthKit readings, before anything reads a day: the snapshot's today came
+        // from a row, which never carries them.
+        self.diary.attachHealthKitResidueStore(deviceHealthResidueStore)
         // Mint the anonymous designer id now (not lazily from a view body) so the first Wardrobe/Studio
         // render is a pure read and never mutates @Observable state mid-update.
         // The 16+ intimacy gate. A closure rather than a cached `Bool` so it re-reads the observable
@@ -902,11 +921,14 @@ final class FernletStore {
         coinLedgerService: CoinLedgerService,
         milestoneLedgerService: MilestoneLedgerService,
         healthKitService: (any HealthKitServicing)? = nil,
-        foodCatalog: FoodCatalog = .bundled()
+        foodCatalog: FoodCatalog = .bundled(),
+        deviceHealthResidueStore: any DeviceHealthResidueStoring
     ) {
         // Launch path: always the real container roots and the real keychain service (only tests
         // redirect them).
         self.photoDocumentsDirectory = Self.defaultPhotoDocumentsDirectory
+        // `FernletStore.load` passes the production file unless a test hands one in.
+        self.deviceHealthResidueStore = deviceHealthResidueStore
         self.proximitySupportRoot = ProximitySupportLayout.defaultDirectory
         self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
         // nil / `.standard` = the REAL app-group container and the real defaults. Never a unique
@@ -3291,9 +3313,11 @@ final class FernletStore {
     }
 
     /// Merges a HealthKit daily context (and any HealthKit-derived sleep) into today.
-    /// Delegates to `HealthSyncCoordinator`.
+    /// Delegates to `HealthSyncCoordinator`, then records today's HealthKit residue on this device
+    /// (the synced save strips it — see `captureTodayHealthKitResidue()`).
     func updateHealthContext(_ context: HealthDailyContext) {
         healthSyncCoordinator.updateHealthContext(context)
+        captureTodayHealthKitResidue()
     }
 
     func addBottle() {
@@ -5899,6 +5923,13 @@ final class FernletStore {
         if stressScoringContext?.scrubStressLocalState() != true {
             incompleteStores.append("your body-signals baseline")
         }
+        // This device's HealthKit residue cache (steps, sleep, heart-rate readings and Apple Health
+        // workouts per day — device-local since no synced write may carry them). Same class as the
+        // stress sidecar above: HealthKit-derived values must not outlive the reset. The cache stops
+        // serving them at once even when the file removal fails, which is reported.
+        if !deviceHealthResidueStore.clearAll() {
+            incompleteStores.append("your cached Apple Health readings")
+        }
         // Worry Box notes are the app's most sensitive free-text data and a no-lock user has no
         // other bulk-wipe path — purge the sealed rows + the device-local let-go count. `!= true`
         // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,
@@ -6723,6 +6754,9 @@ extension FernletStore: WorkoutSyncContext {
     /// calling the pure append directly preserves that semantics without depending on the guard.
     func upsertWorkout(_ workout: Workout, date: String) {
         diary.appendWorkout(workout, date: date)
+        // An Apple Health import is device-local: record today's (a past day's is recorded by the
+        // diary's past-day write).
+        if date == todayKey { captureTodayHealthKitResidue() }
     }
 
     func isWorkoutTombstoned(fernletWorkoutID id: UUID) -> Bool {
@@ -6745,6 +6779,9 @@ extension FernletStore: WorkoutSyncContext {
                 if !diary.removeWorkout(id: row.id, date: dateKey) {
                     FernletAuditLog.log("workout.removeByHealthKitUUID.failed", context: ["date": dateKey])
                 }
+                // An imported row lives in the device cache: drop it there too (past days are
+                // handled by the diary's past-day write).
+                if dateKey == todayKey { captureTodayHealthKitResidue() }
                 return
             }
         }
@@ -6758,6 +6795,7 @@ extension FernletStore {
         savedRecipeRepository: SavedRecipeRepository? = nil,
         persistenceController: PersistenceController? = nil,
         healthKitService: (any HealthKitServicing)? = nil,
+        deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
         statusUpdate: @MainActor @escaping (String) -> Void = { _ in }
     ) async throws -> FernletStore {
         let loadSignpostID = StartupTiming.begin("FernletStore.load")
@@ -6820,7 +6858,10 @@ extension FernletStore {
             customItemService: customItemService,
             coinLedgerService: coinLedgerService,
             milestoneLedgerService: milestoneLedgerService,
-            healthKitService: healthKitService
+            healthKitService: healthKitService,
+            // The launch path's HealthKit readings live in the ONE production file, the same
+            // instance the HealthKit opt-out cleaner empties. Nil means that, here only.
+            deviceHealthResidueStore: deviceHealthResidueStore ?? FileDeviceHealthResidueStore.production
         )
     }
 }

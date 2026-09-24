@@ -4,6 +4,7 @@ import AIContext
 import AIProviders
 import LocalPersistence
 import FernletFoundation
+import FernletPersistence
 import Observation
 
 #if canImport(FoundationModels)
@@ -256,6 +257,13 @@ final class LaunchPreparationService {
             FernletAuditLog.log("privacy.export.purgeFailed", context: ["site": "launch"])
         }
 
+        // HealthKit values an older build left in synced rows leave iCloud now (once per device),
+        // BEFORE the summary backfill and the workout backfill below read or write any day. Kept on
+        // this device only while HealthKit is enabled — a user who opted out keeps them nowhere.
+        store.scrubLegacySyncedHealthKitValuesIfNeeded(
+            captureEnabled: StoragePreferencesStore.currentPreferences().healthKitMasterEnabled
+        )
+
         // Keep launch work deterministic and cheap so the first screen can animate.
         store.photowallSeeds = buildPhotowallSeeds(store: store)
         statusMessage = "Reading your recent patterns..."
@@ -347,7 +355,10 @@ final class LaunchPreparationService {
         for key in dayKeys {
             if let existing = store.dailyScores.first(where: { $0.dateKey == key })?.daySummaryText,
                !existing.isEmpty { continue }
-            let day = store.loadDay(for: key)
+            // The summary is stored in the synced score history, so the prompt must not see a value
+            // read from HealthKit (sleep hours, imported workout names) that the model could echo
+            // into iCloud. The day's own logs are enough for a warm observation.
+            let day = store.loadDay(for: key).strippingHealthKitValues()
             guard !day.meals.isEmpty || !day.workouts.isEmpty else { continue }
             if generated >= Self.daySummaryBackfillPerRunCap { break }
             if let summary = await makeDaySummaryText(for: day, store: store), !summary.isEmpty {

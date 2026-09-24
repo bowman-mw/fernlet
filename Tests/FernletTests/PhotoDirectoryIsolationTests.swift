@@ -449,10 +449,16 @@ struct PhotoDirectoryIsolationTests {
     /// Every isolation seam `FernletStore.init` takes, in the order the initializer declares them.
     ///
     /// Adding a seam means adding it here — this list is what the helper-forwarding wall below walks.
+    ///
+    /// `deviceHealthResidueStore` (2026-09-23) is on the list for the forwarding wall only: unlike the
+    /// seven above, its nil default is a fresh IN-MEMORY cache per store rather than a process-wide
+    /// production root, so a direct construction that omits it is isolated by construction and no
+    /// per-construction grep-wall is needed. What can still go wrong is a helper that accepts a shared
+    /// cache for a simulated relaunch and drops it — which this list is what catches.
     private static let isolationSeams = [
         "appGroupDirectory", "sharedRecipeImportQueueFileURL", "photoDocumentsDirectory",
         "proximitySupportDirectory", "heartDropKeychainService", "aiQuotaDefaults",
-        "sensitiveVisibilityDefaults",
+        "sensitiveVisibilityDefaults", "deviceHealthResidueStore",
     ]
 
     /// The blind spot the seven walls above share: they only look at DIRECT `FernletStore(...)`

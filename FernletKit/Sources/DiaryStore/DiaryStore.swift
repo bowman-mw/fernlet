@@ -38,8 +38,12 @@ import StoreCore
 ///   coordinator, so this store never writes the snapshot itself.
 /// - "Today" lives in memory (``day``, keyed by ``todayKey``); every other date round-trips
 ///   through the repository via ``mutateDay(date:_:)``, and every past-day write is stripped
-///   through `SanitizedDay` so sealed journal text and hidden cycle/intimate health context
-///   can never reach the (potentially iCloud-synced) blob.
+///   through `SanitizedDay` so sealed journal text and every HealthKit-derived value can never
+///   reach the (potentially iCloud-synced) blob or a synced row.
+/// - HealthKit readings live on this device only: every day this store hands out (today included)
+///   has the device-local HealthKit residue overlaid by
+///   ``attachHealthKitResidueStore(_:)``'s store, and a past-day write records the edited day's
+///   residue back into it BEFORE the strip — so the strip loses nothing on this device.
 /// - ``foodItems`` never contains USDA catalog rows (filtered at init and on snapshot apply);
 ///   the bundled catalog is served read-only by `FoodCatalog`.
 /// - ``isAdultVerified`` defaults to refusal — and is read-only, installed only through
@@ -413,6 +417,30 @@ public final class DiaryStore {
     /// - Parameter gate: The device-local verdict, re-evaluated on every read.
     public func attachAdultVerification(_ gate: @escaping () -> Bool) {
         adultVerificationGate = gate
+    }
+
+    // MARK: - Device-local HealthKit residue
+
+    /// This device's HealthKit residue cache (never synced). Nil until the facade attaches it; a
+    /// store without one still strips every HealthKit value from its writes, it just cannot give
+    /// them back on read.
+    @ObservationIgnored private var healthKitResidueStore: (any DeviceHealthResidueStoring)?
+
+    /// Installs the device-local HealthKit residue cache and overlays it onto the in-memory
+    /// ``day`` at once (the day was loaded from a row, which never carries HealthKit values).
+    /// Called once by the app-side facade during startup wiring, before any read.
+    ///
+    /// - Parameter store: The cache every day this store hands out is overlaid from, and every
+    ///   past-day write records its residue into.
+    public func attachHealthKitResidueStore(_ store: any DeviceHealthResidueStoring) {
+        healthKitResidueStore = store
+        day = withDeviceHealthKitValues(day)
+    }
+
+    /// `day` with this device's HealthKit residue for its date put back (identity with no cache).
+    private func withDeviceHealthKitValues(_ day: FernletDay) -> FernletDay {
+        guard let store = healthKitResidueStore else { return day }
+        return day.overlayingHealthKitResidue(store.residue(for: day.date))
     }
 
     /// Whether intimate-activity logging is available — a direct read of the fail-closed
@@ -1519,27 +1547,37 @@ public final class DiaryStore {
         }
     }
 
-    /// Every persisted day keyed by date, straight from the repository WITHOUT overlaying the
-    /// in-memory today. Prefer ``loadDays()`` unless the raw persisted view is the point.
+    /// Every persisted day keyed by date WITHOUT overlaying the in-memory today — but with this
+    /// device's HealthKit residue put back, including the days that exist on this device only
+    /// because of what it read from HealthKit (their rows were never written: a day whose only
+    /// content is HealthKit's strips to empty). Before the strip existed those days were rows, so
+    /// "the persisted history on this device" still means them. Prefer ``loadDays()`` unless the
+    /// persisted view is the point.
     public func loadAllDaysFromRepository() -> [String: FernletDay] {
-        repository.loadAllDays()
+        var days = repository.loadAllDays()
+        guard let store = healthKitResidueStore else { return days }
+        for (dateKey, residue) in store.allResidues() {
+            days[dateKey] = (days[dateKey] ?? FernletDay(date: dateKey)).overlayingHealthKitResidue(residue)
+        }
+        return days
     }
 
     // MARK: - Past-date access (repository-backed)
 
     /// Every day keyed by date, with the in-memory ``day`` overlaid on ``todayKey`` — the
-    /// consistent full-history read.
+    /// consistent full-history read (HealthKit residue included, see
+    /// ``loadAllDaysFromRepository()``).
     public func loadDays() -> [String: FernletDay] {
-        var days = repository.loadAllDays()
+        var days = loadAllDaysFromRepository()
         days[todayKey] = day
         return days
     }
 
     /// The day for `dateKey`: the live in-memory ``day`` when it is today, else the
-    /// repository's persisted row.
+    /// repository's persisted row with this device's HealthKit residue put back.
     public func loadDay(for dateKey: String) -> FernletDay {
         if dateKey == todayKey { return day }
-        return repository.loadDay(for: dateKey, todayKey: todayKey)
+        return withDeviceHealthKitValues(repository.loadDay(for: dateKey, todayKey: todayKey))
     }
 
     // MARK: - Day rollover
@@ -1559,7 +1597,7 @@ public final class DiaryStore {
         guard newKey != todayKey else { return false }
         // Load the new day's persisted content keyed as its own today (a brand-new day resolves to an
         // empty FernletDay). Read it BEFORE re-keying so `day.date` stays consistent with `todayKey`.
-        let freshDay = repository.loadDay(for: newKey, todayKey: newKey)
+        let freshDay = withDeviceHealthKitValues(repository.loadDay(for: newKey, todayKey: newKey))
         todayKey = newKey
         day = freshDay
         return true
@@ -1672,19 +1710,30 @@ public final class DiaryStore {
     }
 
     /// Loads, mutates, and re-saves a past day's repository row. Every past-day write passes
-    /// through `SanitizedDay` first, so sealed journal text and hidden cycle/intimate context
-    /// can never leak into the (potentially iCloud-synced) blob — see the inline note.
+    /// through `SanitizedDay` first, so sealed journal text and every HealthKit-derived value
+    /// can never leak into the (potentially iCloud-synced) blob or row — see the inline note.
+    ///
+    /// The mutation runs on the day WITH this device's HealthKit residue overlaid, for two reasons:
+    /// the strip can only recognize HealthKit's sleep hours against the context's marker (a
+    /// re-submitted prefilled value would otherwise sync as "typed"), and an Apple Health workout
+    /// import or deletion on a past day IS a residue change. The edited day's residue is recorded
+    /// back into the cache before the strip, so nothing the strip removes is lost on this device.
     private func mutatePastDay(_ dateKey: String, _ mutate: (inout FernletDay) -> Void) -> Bool {
         guard !dateKey.isEmpty else {
             assertionFailure("date key required")
             FernletAuditLog.log("diary.mutatePastDay.rejected", context: ["reason": "emptyDateKey"])
             return false
         }
-        var targetDay = repository.loadDay(for: dateKey, todayKey: todayKey)
+        var targetDay = withDeviceHealthKitValues(repository.loadDay(for: dateKey, todayKey: todayKey))
         mutate(&targetDay)
+        if let store = healthKitResidueStore, !store.record(targetDay.healthKitResidue, for: dateKey) {
+            // Device-local only: the synced write below still strips, so nothing leaks; the cost is
+            // this day's HealthKit readings going missing on this device after a relaunch.
+            PersistenceFailureAudit.record("diary.healthKitResidue.recordFailed")
+        }
         // S3 privacy wall: a past-day write goes straight to the repository with NO forStorage pass.
-        // SanitizedDay applies the same strip as the snapshot path — sealed journal text PLUS sensitive
-        // health fields (cycle/intimate) — so a past-day mutation can never leak them into the
+        // SanitizedDay applies the same strip as the snapshot path — sealed journal text PLUS every
+        // HealthKit-derived value — so a past-day mutation can never leak them into the
         // (iCloud-synced) blob, and updateDay structurally requires the sanitized type. This covers EVERY
         // past-day mutation (journal add/edit and any unrelated edit to a day that holds a sealed journal)
         // and self-heals legacy plaintext as past days are touched. Past-day reads re-hydrate via
@@ -1744,7 +1793,9 @@ public final class DiaryStore {
     /// app-only collaborators (retry queue, trust vault, journal sealing, derived signals).
     public func applyDiarySlice(_ snapshot: FernletSnapshot) {
         let existingOwnedDesignerIDs = settings.ownedDesignerIDs
-        day = snapshot.day
+        // The snapshot's day came from a row, which never carries HealthKit values; put this
+        // device's back (a remote reload must not blank today's steps and sleep).
+        day = withDeviceHealthKitValues(snapshot.day)
         settings = snapshot.settings
         // UNION the owned-designer-id set rather than letting the last-writer-wins synced blob overwrite it:
         // the set is monotonic, so union-on-apply gives every device the full history of the user's ids

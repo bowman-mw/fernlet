@@ -15,7 +15,8 @@ import FernletDomainModel
 ///
 /// A `DayRecord` row is CloudKit-synced and uncapped, so — exactly like the aggregate-blob write boundary
 /// (`SanitizedSnapshot`/`SanitizedDay`) — no *unstripped* day may reach it: a raw `FernletDay` can still
-/// carry sealed-journal plaintext or cycle/intimate `healthContext`. The preferred production mint is
+/// carry sealed-journal plaintext or HealthKit-derived values (its `healthContext`, HealthKit's sleep
+/// hours, Apple Health workout imports). The preferred production mint is
 /// `init(sanitized:updatedAt:)`, which takes a `SanitizedDay` that has already passed the same privacy
 /// strip the blob path enforces. The raw `init(day:updatedAt:)` is retained for two callers only:
 /// (1) `saveSnapshot`/`updateDay`, which pass a day sourced from an already-minted
@@ -36,7 +37,8 @@ public nonisolated struct DayRecordUpsert {
     }
 
     /// The sanitize-barrier mint: the only way a synced day row should be built from app-sourced data. The
-    /// wrapped `SanitizedDay.day` has already had sealed-journal text blanked and cycle/intimate nil'd.
+    /// wrapped `SanitizedDay.day` has already had sealed-journal text blanked and every HealthKit-derived
+    /// value removed.
     public init(sanitized: SanitizedDay, updatedAt: Date) {
         self.day = sanitized.day
         self.updatedAt = updatedAt

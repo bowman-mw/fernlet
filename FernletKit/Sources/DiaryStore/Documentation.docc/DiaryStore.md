@@ -24,11 +24,25 @@ this module depends only on portable layers: `StoreCore`, `FernletPersistence`,
 privacy wall, `DiaryStore` is therefore neither a sealed store nor a walled consumer — it sits
 on the portable side, and sealed data reaches it only in stripped or gated form. Two mechanisms
 carry that stance in code: every past-day write funnels through the private `mutatePastDay`,
-which passes the day through `SanitizedDay` so sealed journal text and hidden cycle/intimate
-health context can never enter the (potentially iCloud-synced) repository blob; and the
+which passes the day through `SanitizedDay` so sealed journal text and every HealthKit-derived
+value can never enter the (potentially iCloud-synced) repository blob or a synced row; and the
 sensitive gates (`isAdultVerified`, the period/stress scoring adjustments, the sealed-journal id
 set) are injected closures whose defaults fail closed — refusal, `.none`, `0`, and empty,
 respectively.
+
+HealthKit readings stay on the device that read them (owner decision 2026-09-23 — HealthKit
+information is not stored in iCloud). Because the strip removes them from every row, the facade
+attaches this device's HealthKit residue cache with `attachHealthKitResidueStore(_:)` (a
+`DeviceHealthResidueStoring` from `FernletPersistence`; the file-backed conformer lives in the app
+target), and every day this store hands out — the in-memory `day` at attach, on `applyDiarySlice`
+and on `advanceCurrentDay`, and `loadDay`/`loadDays`/`loadAllDaysFromRepository` — has that
+residue overlaid. The full-history reads also include the days that exist here only because of what
+HealthKit reported (their stripped rows are empty, so none is written), which keeps coin accrual,
+trends and the sealed-backup fresh-install gate seeing what they saw before. `mutatePastDay` edits
+the overlaid day (so the strip still recognizes HealthKit's sleep hours against the context's
+marker, and an Apple Health workout import or deletion on a past day is a residue change) and
+records the edited day's residue back into the cache before the strip. With no cache attached the
+strip still applies — the values are simply not given back.
 
 Construction is two-phase. The facade builds the store with `init` (which filters USDA rows out
 of the snapshot's food items and seeds the injected `FoodCatalog`'s user-item index), then calls
