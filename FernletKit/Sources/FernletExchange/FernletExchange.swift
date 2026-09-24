@@ -7,8 +7,21 @@ import Foundation
 public nonisolated enum ExchangeLimits {
     public static let maxRecipePacketBytes = 64 * 1024
     public static let maxWorkoutPlanPacketBytes = CoachPlanLimits.maxPastedBytes
-    public static let maxMessageEnvelopeBytes = 16 * 1024
-    public static let maxMessageURLCharacters = 22 * 1024
+    /// The largest envelope whose data URL still fits ``maxMessageURLCharacters``.
+    ///
+    /// Derived, not chosen: the URL is a 50-character `data:` prefix followed by the envelope in
+    /// base64, which spends 4 characters on every 3 bytes, so (5,000 − 50) / 4 × 3 = 3,711.
+    /// `FernletExchangeTests` pins that the bound is tight. It was 16 KiB until 2026-09-23 — over
+    /// four times what Apple documents — so a large recipe passed every check here and then failed
+    /// inside `MSConversation.insert` as an unexplained "couldn't insert", instead of meeting the
+    /// "too large for Messages, export a file" answer this bound exists to give.
+    public static let maxMessageEnvelopeBytes = 3_711
+    /// Apple's documented ceiling on `MSMessage.url`: "the URL cannot be longer than 5,000
+    /// characters" (Messages framework, `MSMessage.url`, checked 2026-09-23). A longer URL fails
+    /// with `MSMessageErrorCode.urlExceedsMaxSize`. Raise this only against a measurement on the
+    /// current iOS release (`Docs/MessagesExtensionReleaseChecklist.md`, first item), never against
+    /// the file limits above.
+    public static let maxMessageURLCharacters = 5_000
     public static let maxCardTitleCharacters = 120
     public static let maxCardSenderCharacters = 80
 }

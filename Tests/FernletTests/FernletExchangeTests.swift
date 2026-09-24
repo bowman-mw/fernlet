@@ -161,6 +161,40 @@ struct FernletExchangeTests {
         }
     }
 
+    /// The envelope bound is exactly the largest that keeps the `MSMessage.url` within Apple's
+    /// documented 5,000 characters — safe, and tight.
+    ///
+    /// The prefix length is MEASURED from a real envelope's URL rather than restated, so a change to
+    /// the wire prefix moves the arithmetic with it. Until 2026-09-23 the bound was 16 KiB and the
+    /// URL cap 22 KiB, which let a URL four times Apple's limit through every check here.
+    @Test func theEnvelopeBoundIsTheLargestThatFitsApplesMessageURLLimit() throws {
+        let envelope = try ExchangeMessageEnvelope(recipe: recipePacket())
+        let prefixLength = try envelope.messageURL().absoluteString.count
+            - envelope.encodedData().base64EncodedString().count
+        let urlLength = { (envelopeBytes: Int) in prefixLength + (envelopeBytes + 2) / 3 * 4 }
+
+        #expect(ExchangeLimits.maxMessageURLCharacters <= 5_000,
+                "Apple documents that an MSMessage URL \"cannot be longer than 5,000 characters\"")
+        #expect(urlLength(ExchangeLimits.maxMessageEnvelopeBytes) <= ExchangeLimits.maxMessageURLCharacters,
+                "an envelope at the byte bound must still produce a URL Messages accepts")
+        #expect(urlLength(ExchangeLimits.maxMessageEnvelopeBytes + 1) > ExchangeLimits.maxMessageURLCharacters,
+                "the bound must be tight, not merely safe — one more byte crosses the URL limit")
+    }
+
+    /// A recipe that is a perfectly legal FILE but too large for a Messages URL is refused by the
+    /// envelope itself, so the composer can answer "too large — export a file instead" rather than
+    /// handing Messages a URL it rejects with an unexplained insert failure.
+    @Test func aRecipeFileTooLargeForMessagesIsRefusedBeforeItReachesMessages() throws {
+        let packet = try recipePacket(stepCount: 12)
+        let fileBytes = try packet.encodedData().count
+
+        #expect(fileBytes <= ExchangeLimits.maxRecipePacketBytes, "precondition: a legal .fernletrecipe file")
+        #expect(fileBytes > ExchangeLimits.maxMessageEnvelopeBytes, "precondition: larger than a Messages envelope")
+        #expect(throws: ExchangePacketError.self) {
+            _ = try ExchangeMessageEnvelope(recipe: packet).messageURL()
+        }
+    }
+
     @Test func messagesRejectUnsupportedVersionsAndMismatchedCardMetadata() throws {
         let envelope = try ExchangeMessageEnvelope(recipe: recipePacket())
         var unsupported = envelope
@@ -363,7 +397,9 @@ struct FernletExchangeTests {
         )
     }
 
-    private func recipePacket(name: String = "Training oats", includesNotes: Bool = false) throws -> RecipeExchangePacket {
+    private func recipePacket(
+        name: String = "Training oats", includesNotes: Bool = false, stepCount: Int = 1
+    ) throws -> RecipeExchangePacket {
         let foodID = UUID()
         let recipeID = UUID()
         let food = FoodItem(
@@ -386,9 +422,17 @@ struct FernletExchangeTests {
             source: "manual",
             createdAt: Date(timeIntervalSince1970: 1_779_664_800),
             updatedAt: Date(timeIntervalSince1970: 1_779_664_800),
-            steps: [RecipeStep(text: "Warm the oats.")]
+            steps: stepCount == 1 ? [RecipeStep(text: "Warm the oats.")] : Self.longSteps(count: stepCount)
         )
         return try RecipeExchangePacket(recipe: recipe, foodItems: [food], includesNotes: includesNotes)
+    }
+
+    /// `count` ordinary-length method steps — about 300 characters each, the size of a real recipe's
+    /// "fold in, then bake until…" paragraph, so twelve of them make a normal recipe file.
+    static func longSteps(count: Int) -> [RecipeStep] {
+        (1...max(1, count)).map { index in
+            RecipeStep(text: "Step \(index): " + String(repeating: "Stir gently over a low heat until it thickens. ", count: 6))
+        }
     }
 
     private func workoutPacket() throws -> WorkoutPlanExchangePacket {

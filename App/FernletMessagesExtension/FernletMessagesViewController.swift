@@ -285,6 +285,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         setPreviewText(recipePreviewText(for: selectedRecipeEntry()))
         insertButton.isEnabled = selectedRecipeEntry() != nil
         renderButtons(entries.map(recipeButton(for:)))
+        explainIfEmpty(catalog.recipes.isEmpty)
     }
 
     private func renderWorkouts(in catalog: FernletMessagesCatalog) {
@@ -293,6 +294,15 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         setPreviewText(workoutPreviewText(for: selectedWorkoutEntry()))
         insertButton.isEnabled = selectedWorkoutEntry() != nil
         renderButtons(entries.map(workoutButton(for:)))
+        explainIfEmpty(catalog.workouts.isEmpty)
+    }
+
+    /// A catalog that decoded fine but holds nothing of the selected kind used to render a title, a
+    /// disabled Share button and no cards — a blank panel with no reason given. It gets the same
+    /// sentence as a missing catalog, since the remedy (the app publishes what it has) is the same.
+    private func explainIfEmpty(_ isEmpty: Bool) {
+        guard isEmpty else { return }
+        showComposerStatus(FernletMessagesCopy.emptyCatalog)
     }
 
     private var composerTitle: String {
@@ -429,7 +439,11 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             subtitleLabel.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -12),
             titleLabel.leadingAnchor.constraint(equalTo: subtitleLabel.leadingAnchor),
             titleLabel.trailingAnchor.constraint(equalTo: subtitleLabel.trailingAnchor),
-            titleLabel.bottomAnchor.constraint(equalTo: subtitleLabel.topAnchor, constant: -4)
+            titleLabel.bottomAnchor.constraint(equalTo: subtitleLabel.topAnchor, constant: -4),
+            // Closes the vertical chain. Without it the labels grew UPWARD from the bottom edge, so
+            // at accessibility text sizes a two-line title slid under the symbol instead of making
+            // the card taller than its 138-point floor.
+            titleLabel.topAnchor.constraint(greaterThanOrEqualTo: imageView.bottomAnchor, constant: 8)
         ]
     }
 
@@ -524,9 +538,17 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         return message
     }
 
+    /// Messages documents no queue for this completion, and the label it updates is UIKit state, so
+    /// the update hops to the main queue explicitly rather than trusting whichever thread calls back.
+    /// The block is `@Sendable` on purpose: the header does not annotate it, so without the mark it
+    /// would silently inherit this controller's main-actor isolation — the shape that traps on
+    /// device when a framework calls back off-main.
     private func insert(message: MSMessage, into conversation: MSConversation, success: String) {
-        conversation.insert(message) { [weak self] error in
-            self?.showComposerStatus(error == nil ? success : FernletMessagesCopy.insertFailed)
+        conversation.insert(message) { @Sendable [weak self] error in
+            let succeeded = error == nil
+            DispatchQueue.main.async {
+                self?.showComposerStatus(succeeded ? success : FernletMessagesCopy.insertFailed)
+            }
         }
     }
 
@@ -705,10 +727,14 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             statusLabel.text = failure
             return
         }
+        // `open(_:completionHandler:)`'s block is `@Sendable` and runs on no documented queue, so the
+        // label is written on main — see `insert(message:into:success:)`.
         extensionContext?.open(url) { [weak self] didOpen in
-            self?.statusLabel.text = didOpen
-                ? FernletMessagesCopy.openingFernlet
-                : FernletMessagesCopy.openFernletToReview
+            DispatchQueue.main.async {
+                self?.statusLabel.text = didOpen
+                    ? FernletMessagesCopy.openingFernlet
+                    : FernletMessagesCopy.openFernletToReview
+            }
         }
     }
 }

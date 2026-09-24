@@ -5878,8 +5878,13 @@ final class FernletStore {
             outcome.incompleteStores.append("widget data")
         }
         // The Messages catalog carries recipe and planned-workout metadata in the same App Group.
-        // It is activated by the loaded app, so clear it only when this store has opened it.
-        if let messagesCatalogPublisher, !messagesCatalogPublisher.clear() {
+        // Cleared whether or not THIS launch activated the publisher: the file on disk is whatever a
+        // previous launch published, and a duress wipe fired at the lock screen can run before
+        // `activateMessagesCatalog()` has — which used to leave the catalog readable by the Messages
+        // extension after a wipe that reported itself complete.
+        let messagesCatalogPublisher = self.messagesCatalogPublisher
+            ?? FernletMessagesCatalogPublisher(directory: messagesCatalogDirectory)
+        if !messagesCatalogPublisher.clear() {
             outcome.incompleteStores.append("Messages catalog")
         }
         // The pending widget-action queue (a "+1 cup" tapped from the widget/Siri before the wipe)

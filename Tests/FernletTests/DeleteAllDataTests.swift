@@ -6,6 +6,7 @@ import Testing
 @testable import AppServices
 import CloudKitSync
 import FernletDomainModel
+import FernletExchange
 import FernletFoundation
 import FernletLock
 import FernletPersistence
@@ -430,6 +431,45 @@ struct DeleteAllDataTests {
         let relaunched = makeTestStore(sharedRecipeImportQueueFileURL: mineQueueURL)
         #expect(relaunched.sharedRecipeImportQueue.records().map(\.id) == [queued.id],
                 "the queued import did not survive on disk — the other store's wipe reached our file")
+    }
+
+    /// The Messages catalog is wiped even when THIS launch never activated its publisher.
+    ///
+    /// The file in the App Group is whatever a PREVIOUS launch published — up to 100 recipes and
+    /// 100 planned workouts, readable by the Messages extension — and a duress wipe fired at the
+    /// lock screen can run before launch wiring reaches `activateMessagesCatalog()`. The funnel
+    /// cleared it only `if let messagesCatalogPublisher`, so exactly that wipe left it behind while
+    /// reporting itself complete (found 2026-09-23).
+    @Test func messagesCatalogIsClearedEvenWhenThisLaunchNeverActivatedIt() async throws {
+        let catalogDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-all-messages-catalog-\(UUID().uuidString)", isDirectory: true)
+        let catalogStore = FernletMessagesCatalogFileStore(directory: catalogDirectory)
+        let plan = CoachPlan(
+            title: "Tuesday intervals",
+            coachDisplayName: "Fernlet",
+            days: [CoachPlanDay(dayIndex: 1, title: "Tuesday", sessions: [CoachSession(title: "Intervals")])]
+        )
+        let entry = try FernletMessagesWorkoutCatalogEntry(dayKey: "2026-09-22", packet: WorkoutPlanExchangePacket(plan: plan))
+        try catalogStore.write(FernletMessagesCatalog(recipes: [], workouts: [entry]))
+        #expect(try catalogStore.read() != nil, "precondition: the published catalog did not land")
+
+        let store = FernletStore(
+            repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-messages-catalog")),
+            sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(),
+            appGroupDirectory: uniqueAppGroupDirectory(),
+            messagesCatalogDirectory: catalogDirectory,
+            sharedRecipeImportQueueFileURL: uniqueSharedRecipeImportQueueURL(),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory(),
+            heartDropKeychainService: uniqueHeartDropKeychainService(),
+            aiQuotaDefaults: uniqueAIQuotaDefaults()
+        )
+        #expect(store.messagesCatalogPublisher == nil, "precondition: this launch never activated the catalog")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(try catalogStore.read() == nil,
+                "the catalog a previous launch published survived the wipe — the Messages extension can still list its recipes and plans")
     }
 
     /// A wipe reports what it could not finish. Every layer is best-effort, and the dialog promises
