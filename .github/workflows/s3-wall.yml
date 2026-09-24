@@ -692,6 +692,48 @@ jobs:
         # read off the result bundle: "Test run with 1226 tests in 141 suites passed after 178.883
         # seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit` line. 1222 + 4 = 1226
         # is the ARITHMETIC CHECK, never the number.
+        # GATED 2026-09-24 (the CI-breadth round): THIRTEEN names join the line — the
+        # newest mesh security suites, which ran on no CI line, and the wire goldens nothing demanded.
+        # Per suite, counted over `@Test` functions inside each DECLARATION:
+        #   + 13  MeshSeatTransportProofTests — every seat answers to the tunnel's proven key, the
+        #         payload door credits no frame against the link's proofs (0258ba3)
+        #   +  7  MeshSessionIDClaimTests — a claimed `sid` cannot squat an absent member's link
+        #   + 23  MeshReturningMemberReseatTests — a returning member re-seats without the gesture,
+        #         and a final pair's leave waits (bounded) for the partner's close (31fafd6)
+        #   +  3  SessionResumeCopyTests  + 12  MeshSessionResumePresentationTests — the resume
+        #         card's copy table and the presentation table over every restore outcome
+        #   +  3  PrivacyWipeIdentityEffectTests — the wipe's EFFECT on each of the three proximity
+        #         identities, the value half the wipe wall's source needles cannot see
+        #   +  1  MeshHostPinTests — the host pin, staged: an in-flight send outlives the rig's host
+        #   + 13  MeshChunkGoldenTests  + 14  MeshCustodyReceiptGoldenTests
+        #   + 11  MeshRecipientReceiptGoldenTests  +  9  MeshRoutedDrainAnswerGoldenTests
+        #   + 10  MeshRoutedInventoryGoldenTests  +  6  PeerHandleWireGoldenTests — the routed wire
+        #         vectors (never re-pinned from Swift's output) and P1's "no wire byte moved" gate.
+        #         Nothing demanded a golden anywhere; CIGateSelectorBoundaryTests'
+        #         `everyWireGoldenSuiteIsGated` does now, over every declared `…GoldenTests`.
+        #   = 125 cells by declaration count (the ARITHMETIC CHECK; the floor is what the bundle counts).
+        # Deterministic, each checked for it: the five goldens and PeerHandleWireGoldenTests are pure
+        # value pins; MeshSessionIDClaimTests drives a value-type table and opens no socket; the copy,
+        # presentation and wipe-effect suites wait on nothing (the wipe cells use a keychain service
+        # of their own and a `makeTestStore()` host). MeshSeatTransportProofTests and
+        # MeshReturningMemberReseatTests are tier-1 fakes that wait the way this repository requires
+        # — `waitUntil` gives up only after a 2 s deadline AND a 400-poll floor, the FakePeerTransport
+        # precedent above — and the reseat suite's one 100 ms sleep only lets an already-enqueued
+        # main-actor task start first: `awaitRemoteClose` captures what it watches before its first
+        # suspension and decides its outcome from tunnel state after its loop, never from which bound
+        # ended it, and the one elapsed-time cell asserts only a LOWER bound, which load can lengthen
+        # but never break. MeshHostPinTests' drain is sixteen yields over a send path that never
+        # leaves the main actor (spawn, sign, and the fake channel's send), so the spawned task runs
+        # before the cell resumes. NOT gated, deliberately — named here as de-flake follow-ups, since
+        # each still waits on wall-clock sleeps a floor cannot price: SealedIntroductionTests,
+        # HeartShareTests, ProximityCoordinatorTests. Gating the five goldens does not gate their
+        # FILES: twelve sibling suites (75 cells) stay off the line — the Shape / Signing / Verifier
+        # suites of MeshChunkTests.swift, MeshCustodyReceiptTests.swift, MeshRecipientReceiptTests.swift,
+        # MeshRoutedDrainAnswerTests.swift and MeshRoutedInventoryTests.swift.
+        # The NAME count moves 141 -> 154 in CIGateSelectorBoundaryTests' `measuredSuiteNameCounts` in
+        # this same commit. The FLOOR stays 1226 here — still a true lower bound, since names only
+        # joined — and is RAISED to the measured bundle count, on a clean build of the integration
+        # head, in the commit that measures it.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1226 \
@@ -835,4 +877,17 @@ jobs:
             MeshP10DiffRuleAcceptanceTests \
             MeshP10ImportWallAcceptanceTests \
             MeshP10HonestyAcceptanceTests \
-            MeshNameWithholdingTests
+            MeshNameWithholdingTests \
+            MeshSeatTransportProofTests \
+            MeshSessionIDClaimTests \
+            MeshReturningMemberReseatTests \
+            SessionResumeCopyTests \
+            MeshSessionResumePresentationTests \
+            PrivacyWipeIdentityEffectTests \
+            MeshHostPinTests \
+            MeshChunkGoldenTests \
+            MeshCustodyReceiptGoldenTests \
+            MeshRecipientReceiptGoldenTests \
+            MeshRoutedDrainAnswerGoldenTests \
+            MeshRoutedInventoryGoldenTests \
+            PeerHandleWireGoldenTests

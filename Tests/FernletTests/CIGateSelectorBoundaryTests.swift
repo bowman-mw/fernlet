@@ -119,6 +119,14 @@ import Testing
     /// exactly there and the round's blind verify found it (BLOCKER); the same verify found a sibling
     /// privacy suite red on no CI line at all. Not a `MeshP<n>…AcceptanceTests`, so this entry is the
     /// only thing that would notice it leaving. Counted off the line.
+    ///
+    /// RE-MEASURED at the CI-breadth round (2026-09-24): `mesh-batteries` 141 → 154, for the newest
+    /// mesh security suites (`MeshSeatTransportProofTests`, `MeshSessionIDClaimTests`,
+    /// `MeshReturningMemberReseatTests`), the resume copy and presentation tables, the wipe's
+    /// identity effect, the host pin, and the six wire goldens nothing demanded (five routed families
+    /// and `PeerHandleWireGoldenTests`). Only the goldens are demanded, by shape, in
+    /// ``everyWireGoldenSuiteIsGated()`` — so this entry is what notices any of the other seven
+    /// leaving. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 7,
         "no-tracking": 1,
@@ -126,7 +134,7 @@ import Testing
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
-        "mesh-batteries": 141
+        "mesh-batteries": 154
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -262,6 +270,29 @@ import Testing
             Mesh acceptance batteries declared in Tests/FernletTests but not named in \
             \(Self.workflowPath) — add each to the mesh step's Scripts/run-gated-suites.sh line and \
             raise that step's floor by its test count:
+            \(ungated.joined(separator: "\n"))
+            """)
+    }
+
+    /// Every wire-golden suite declared in the tree runs on some line.
+    ///
+    /// A golden pins bytes that shipped peers already sign and verify — a failing one is a WIRE
+    /// decision, never re-pinned from Swift's output — and no compiler notices one going unrun.
+    /// Until 2026-09-24 nothing here demanded them either: five routed goldens and P1's
+    /// `PeerHandleWireGoldenTests` ran on no line while three sibling goldens did, and only a hand
+    /// survey found it. Any top-level suite whose name ends `GoldenTests` is demanded now, wherever
+    /// it is declared — the ``isMeshBattery(_:)`` rule, applied to vectors.
+    @Test func everyWireGoldenSuiteIsGated() throws {
+        let gated = Set(Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath)).flatMap(\.suites))
+        let goldens = try Self.declaredTopLevelTypes().filter { $0.hasSuffix("GoldenTests") }
+        // MEASURED at 2026-09-24 by reading the tree: nine declarations.
+        #expect(goldens.count >= 9, "the golden suites shrank: \(goldens.count) declared")
+        let ungated = goldens.subtracting(gated).sorted()
+        #expect(ungated.isEmpty, """
+            Golden suites declared in Tests/FernletTests but named on no line of \
+            \(Self.workflowPath) — add each to its family's line (the mesh step for a mesh wire \
+            vector, crypto-goldens for a signature framing) and raise that step's floor by its \
+            test count:
             \(ungated.joined(separator: "\n"))
             """)
     }
