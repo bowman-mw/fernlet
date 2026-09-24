@@ -52,6 +52,13 @@ decoded, and signed across builds, devices, and processes; or **display**, which
 that localizes. Where one string was doing both jobs it has been forked, the raw value frozen
 byte-identical to what already shipped and a separate reader-facing property added beside it:
 
+- ``CompanionEmotion/displayName`` and ``CompanionEmotion/feelingPhrase`` (2026-09-24) — the
+  companion's momentary feeling, a presentation layer over the state. Its lower-case raw values look
+  even less like copy than the state's, and are exactly as frozen: the widget-publishable six cross
+  into the widget process as each moment's `emotionRaw` in the snapshot's emotion timeline, where the
+  hand-copied `WidgetCompanionEmotion` re-parses them. The enum is deliberately NOT `Codable`, so no
+  persisted or synced model can carry it; see ``CompanionEmotion/isWidgetPublishable`` for which
+  five feelings never leave the app and why.
 - ``CompanionState/displayName`` — the raw value is re-parsed by `WidgetCompanionState` in the
   widget extension, a SEPARATE PROCESS reading the app-group snapshot, and is a field of the Coach
   export schema. A translated raw value makes every widget fail that parse and render its no-state
@@ -343,6 +350,7 @@ what actually happened.
 ### Companion and appearance
 
 - ``CompanionState``
+- ``CompanionEmotion``
 - ``CompanionAppearance``
 - ``CompanionBodyStyle``
 - ``CompanionPalette``
