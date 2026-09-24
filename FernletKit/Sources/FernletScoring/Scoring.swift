@@ -98,13 +98,18 @@ public enum GoalWeights {
 ///
 /// Produced by ``FernletScoring/FernletScoring``'s `computeBreakdown` and consumed wherever a score
 /// needs to be explained rather than merely displayed: `DiaryStore` persists it into each day's
-/// `DailyHealthScore`, and the trainer export renders the component columns. Because
+/// `DailyHealthScore`, and the app's period bridge reads the stored `sleep`/`mood`/`workout`/`meal`
+/// entries back out to learn which cycle phases are personally harder (the trainer export ships the
+/// overall score only, never the components). Because
 /// ``appliedWeights`` records the post-adjustment vector actually applied, a historical score can
 /// be audited without re-deriving the day's adjustments.
 public struct ScoreBreakdown: Equatable {
     /// The final 0–1 daily score (weighted component sum plus the capped stress nudge).
     public var overall: Double
-    /// Per-component 0–1 sub-scores, keyed `journal`/`meal`/`workout`/`sleep`/`hydration`/`hygiene`.
+    /// Per-component 0–1 sub-scores, keyed `journal`/`meal`/`workout`/`sleep`/`hydration`/`hygiene`,
+    /// plus one UNWEIGHTED reading, `mood` (the journal tag on the retired tag scale — see
+    /// ``FernletScoring/journalMoodScore(for:)``), which never enters ``overall``. Rows persisted
+    /// before 2026-09-23 have no `mood` key; their `journal` value was that same mood reading.
     public var components: [String: Double]
     /// The exact weight vector applied — after the sickness and period adjustments.
     public var appliedWeights: ScoringWeights
@@ -120,8 +125,9 @@ public struct ScoreBreakdown: Equatable {
 /// wellbeing score (and companion state) at the heart of Fernlet.
 ///
 /// A namespace enum that deliberately shares the module's name. `computeBreakdown` is the single
-/// entry point the stores use: it blends six 0–1 component scores — journal feeling, meals,
-/// movement, sleep, hydration, personal care — under a goal-derived `ScoringWeights` vector, then
+/// entry point the stores use: it blends six 0–1 component scores — journaling (any entry earns the
+/// same credit, whatever its feeling tag), meals, movement, sleep, hydration, personal care — under
+/// a goal-derived `ScoringWeights` vector, then
 /// layers the gentle modifiers on top: sickness reweighting, the ``PeriodScoringAdjustment``
 /// leniencies, the capped micronutrient nudge, and the capped ``StressEngine`` nudge. `DiaryStore`
 /// (and the app's `FernletStore` facade) call it for every day's `DailyHealthScore`;
@@ -134,8 +140,39 @@ public struct ScoreBreakdown: Equatable {
 /// byte-for-byte; and the additive nudges are capped so no modifier can dominate the weighted sum.
 /// All members are stateless nonisolated statics, callable from any isolation context.
 public enum FernletScoring {
-    /// Maps a journal feeling tag to its 0–1 journal-component score (nil reads as a quiet 0.55).
-    public static func tagScore(_ tag: FeelingTag?) -> Double {
+    /// The journal component for a day with at least one journal entry — ANY entry, whatever its
+    /// ``FeelingTag``.
+    ///
+    /// Owner decision, 2026-09-23: "journaling, no matter the type of day, should score the same
+    /// amount of points. The point is to encourage these habits." The component used to be weighted
+    /// by the tag (hard 0.30 … bright 1.0), so writing about a hard day scored BELOW not writing at
+    /// all (``noJournalEntryScore``). It is now the top of that retired scale, so no entry of any
+    /// tag earns less than it did before the change, and writing always beats not writing.
+    public static let journalEntryScore: Double = 1.0
+
+    /// The journal component for a day with no journal entry. Deliberately unchanged (0.55) by the
+    /// flattening: not writing costs nothing it did not already cost, and an entry still clears it
+    /// by 0.45.
+    public static let noJournalEntryScore: Double = 0.55
+
+    /// Maps a day's latest journal tag to its 0–1 journal-component score:
+    /// ``journalEntryScore`` for any entry, ``noJournalEntryScore`` for none. The tag decides only
+    /// WHETHER there is an entry — how the day felt never costs points (see
+    /// ``journalMoodScore(for:)`` for where the feeling still goes).
+    public static func journalComponentScore(for tag: FeelingTag?) -> Double {
+        tag == nil ? noJournalEntryScore : journalEntryScore
+    }
+
+    /// How the day felt, on the retired tag-weighted scale (hard 0.3 … bright 1.0; no entry reads as
+    /// a quiet 0.55).
+    ///
+    /// No longer scored. `computeBreakdown` carries it as the UNWEIGHTED `"mood"` breakdown entry,
+    /// because the app's period bridge reads a per-day mood from the stored breakdown to learn which
+    /// cycle phases are personally harder — and before the flattening that mood WAS the `"journal"`
+    /// component. Reading the flat credit instead would turn "mood tends to be tender in this phase"
+    /// into "you journal less in this phase". The values are the retired journal values exactly, so
+    /// the bridge's inputs are byte-identical to what it read before.
+    public static func journalMoodScore(for tag: FeelingTag?) -> Double {
         switch tag {
         case .bright: 1
         case .good: 0.85
@@ -357,7 +394,7 @@ public enum FernletScoring {
         let adjustedWeights = weights.adjustedForSickness(isSick).adjustedForPeriod(periodAdjustment.leniency)
         let careCompletedCount = completedPersonalCareTaskCount ?? hygiene.count
         let careScore = hygieneScore(completedCount: careCompletedCount, taskCount: hygieneTaskCount)
-        let journalScore = tagScore(journalTag)
+        let journalScore = journalComponentScore(for: journalTag)
         let sleepScoreValue = sleepScore(sleepQuality, sleepHours: sleepHours, stages: sleepStages)
         let baseOverall = min(
             journalScore * adjustedWeights.journalWeight +
@@ -380,6 +417,8 @@ public enum FernletScoring {
             overall: overall,
             components: [
                 "journal": journalScore,
+                // Unweighted: never enters `overall`. The period bridge's mood reading.
+                "mood": journalMoodScore(for: journalTag),
                 "meal": mealScore,
                 "workout": workoutScore,
                 "sleep": sleepScoreValue,

@@ -1434,13 +1434,18 @@ final class FernletStore {
     /// Non-sensitive per-day wellbeing component scores (sleep/mood/exercise/nutrition) fed into the period
     /// bridge so its trend engine can correlate them against cycle phase. Sourced from already-computed
     /// `dailyScores`; nothing sensitive flows out.
+    ///
+    /// Mood is the breakdown's unweighted `"mood"` reading, NOT the `"journal"` component: since
+    /// 2026-09-23 every journal entry earns the same journal credit whatever its tag, so `"journal"`
+    /// now says only WHETHER the day was written about. A row stored before that change has no
+    /// `"mood"` key — and its `"journal"` value was the tag-weighted mood — so it falls back to it.
     var periodWellbeingByDay: [String: PeriodWellbeingSample] {
         var result: [String: PeriodWellbeingSample] = [:]
         for score in dailyScores {
             guard let components = score.componentScores else { continue }
             result[score.dateKey] = PeriodWellbeingSample(
                 sleep: components["sleep"],
-                mood: components["journal"],
+                mood: components["mood"] ?? components["journal"],
                 exercise: components["workout"],
                 nutrition: components["meal"]
             )

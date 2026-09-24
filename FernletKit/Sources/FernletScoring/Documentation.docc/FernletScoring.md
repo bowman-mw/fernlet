@@ -5,7 +5,7 @@ The deterministic engines that turn a day's logs into Fernlet's gentle 0–1 wel
 ## Overview
 
 FernletScoring is the numeric heart of Fernlet: pure, stateless functions that map a day's
-logged signals — journal feeling, meals, movement, sleep, hydration, personal care — to the
+logged signals — journaling, meals, movement, sleep, hydration, personal care — to the
 0–1 daily score that drives the companion. The namespace enum ``FernletScoring/FernletScoring``
 (it deliberately shares the module's name) exposes `computeBreakdown` as the single scoring
 entry point: it blends six 0–1 component scores under a goal-derived `ScoringWeights` vector
@@ -14,6 +14,14 @@ entry point: it blends six 0–1 component scores under a goal-derived `ScoringW
 ``StressEngine`` nudge — and returns a ``ScoreBreakdown`` that `DiaryStore` persists into each
 day's `DailyHealthScore`. `state(for:)` finally bands the score into the companion's
 presentation state.
+
+**Journaling is scored by habit, not by feeling** (owner decision, 2026-09-23). Any journal entry
+earns the same journal component — `journalEntryScore`, the top of the retired tag scale — whatever
+its feeling tag, and a day with no entry keeps `noJournalEntryScore` (0.55), so writing about a hard
+day can never score below not writing. The tag survives only as the breakdown's unweighted `mood`
+reading (`journalMoodScore(for:)`, the retired values exactly), which the app's period bridge reads
+to learn which cycle phases are personally harder; it never enters the overall score. Pinned by
+`JournalScoringParityTests`.
 
 The module's governing invariant is **identity-preserving determinism**: every optional
 refinement (HealthKit sleep stages and activity, nutrient gaps, period adjustment, stress
