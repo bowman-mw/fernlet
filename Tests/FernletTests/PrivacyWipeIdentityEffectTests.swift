@@ -22,7 +22,6 @@
 import Foundation
 import Testing
 import FernletFoundation
-import LocalPersistence
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -31,19 +30,20 @@ import LocalPersistence
 @Suite(.serialized)
 struct PrivacyWipeIdentityEffectTests {
 
-    /// A real store to host the managers, on directories and a keychain service of its own.
-    private func makeStore(_ name: String) -> FernletStore {
-        FernletStore(
-            repository: LocalFernletRepository(
-                fileURL: FileManager.default.temporaryDirectory
-                    .appendingPathComponent("\(name)-\(UUID().uuidString).json")
-            ),
-            sensitiveVisibilityDefaults: UserDefaults(suiteName: "\(name)-\(UUID().uuidString)") ?? .standard,
-            appGroupDirectory: uniqueAppGroupDirectory(),
-            photoDocumentsDirectory: uniquePhotoDirectory(),
-            proximitySupportDirectory: uniqueProximityDirectory(),
-            heartDropKeychainService: uniqueHeartDropKeychainService()
-        )
+    /// A real store to host the managers, built through the house helper so it owns EVERY
+    /// per-instance isolation seam and every repository is in-memory.
+    ///
+    /// Until 2026-09-24 this was a direct store construction that passed five of the seams and left
+    /// the AI-call quota on `.standard` and the share-extension recipe inbox on the real app-group
+    /// file — both of which any concurrent `deleteAllData` in the process resets. Because this file
+    /// names that funnel, `PhotoDirectoryIsolationTests` demanded both arguments and failed two of
+    /// its cells on main. Its walls cannot see the rest of what the direct form defaulted — the
+    /// saved-recipe, custom-item, coin and milestone repositories on the shared on-disk Core Data
+    /// store, the food-search correction memory on `.standard`, the bundled food catalog.
+    /// `makeTestStore()` isolates all of it, and a seam added later reaches this file through the
+    /// helper rather than through a new wall.
+    private func makeStore() -> FernletStore {
+        makeTestStore()
     }
 
     /// A provisioned identity on a keychain service nobody else uses, and that service's name.
@@ -74,7 +74,7 @@ struct PrivacyWipeIdentityEffectTests {
     @Test func theMeshManagersWipeDestroysItsIdentity() throws {
         let (identity, service) = try mintIdentity("mesh")
         defer { KeychainItem.deleteAll(service: service) }
-        let store = makeStore("wipe-effect-mesh")
+        let store = makeStore()
         let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession(), identity: identity)
         let before = identity.localFingerprint
         try manager.wipeIdentityForDeleteAll()
@@ -85,7 +85,7 @@ struct PrivacyWipeIdentityEffectTests {
     @Test func thePresenceManagersWipeDestroysItsIdentity() throws {
         let (identity, service) = try mintIdentity("presence")
         defer { KeychainItem.deleteAll(service: service) }
-        let store = makeStore("wipe-effect-presence")
+        let store = makeStore()
         let ledger = ProximityHeartLedger(
             fileURL: FileManager.default.temporaryDirectory
                 .appendingPathComponent("wipe-effect-ledger-\(UUID().uuidString).json")
@@ -101,7 +101,7 @@ struct PrivacyWipeIdentityEffectTests {
     @Test func theRecipeShareManagersWipeDestroysItsIdentity() throws {
         let (identity, service) = try mintIdentity("recipe")
         defer { KeychainItem.deleteAll(service: service) }
-        let store = makeStore("wipe-effect-recipe")
+        let store = makeStore()
         let radio = FakeRecipeShareRadioSession()
         let manager = ProximityRecipeShareManager(store: store, makeSession: { radio }, identity: identity)
         let before = identity.localFingerprint
