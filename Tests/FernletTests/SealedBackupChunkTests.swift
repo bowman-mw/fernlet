@@ -169,18 +169,21 @@ struct SealedBackupChunkTests {
         }
     }
 
+    /// The retired sensitive-notes payload (owner decision 2026-09-23 — the Tier-2 memories never
+    /// leave the device) is refused at the chunk write point too: however many chunks arrive, none is
+    /// decoded and nothing reaches the Tier-2 store.
     @MainActor
-    @Test func applyRestoredChunksConcatenatesSensitiveNotes() throws {
+    @Test func applyRestoredChunksNeverWritesTheRetiredSensitiveNotes() throws {
         let store = makeTestStore()
         let chunkA = try JSONEncoder().encode([
-            TierTwoMemoryRecord(category: "consistency", text: "Steady.", state: "steady")
+            TierTwoMemoryRecord(category: "consistency_profile", text: "Steady.", state: "consistent")
         ])
         let chunkB = try JSONEncoder().encode([
-            TierTwoMemoryRecord(category: "recovery", text: "Gentle.", state: "present")
+            TierTwoMemoryRecord(category: "workout_mood_correlation", text: "Gentle.", state: "neutral")
         ])
 
         let count = try store.applyRestoredChunks([chunkA, chunkB], payloadType: .sensitiveNotes)
-        #expect(count == 2)
-        #expect(Set(store.tierTwoMemories.map(\.category)) == ["consistency", "recovery"])
+        #expect(count == 0)
+        #expect(store.tierTwoMemories.isEmpty)
     }
 }

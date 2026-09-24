@@ -271,8 +271,11 @@ final class SealedBackupService {
         self.generationStore = generationStore ?? SealedBackupGenerationStore()
     }
 
-    /// Single-record reconcile for payloads that fit one sealed blob (sensitive notes; period-disable).
-    /// Disabling deletes the whole chunk set, so it also tears down any multi-record period backup.
+    /// Single-record reconcile. Disabling deletes the whole chunk set, so it also tears down any
+    /// multi-record backup — the coordinator's disable path for every payload, and the retirement
+    /// sweep's delete of the retired sensitive-notes copy. The enable (seal-one-record) arm was only
+    /// ever driven by that payload, so production no longer reaches it; it stays as mechanism, and
+    /// for the format/round-trip tests that pin how such a record was written.
     func reconcile(_ plaintext: Data, payloadType: SealedBackupPayloadType, enabled: Bool) async throws {
         if enabled {
             let record = try SealedBackupCrypto.seal(

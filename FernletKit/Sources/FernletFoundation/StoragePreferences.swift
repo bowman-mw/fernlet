@@ -47,17 +47,24 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     /// Per-capability HealthKit toggles, keyed by `HealthCapability` raw values (defined in
     /// HealthKitGateway, above this layer — hence the string keys).
     public var healthKitCapabilityEnabled: [String: Bool]
-    /// Whether the sealed (encrypted) backup of sensitive notes (journal/worry narratives) is
-    /// uploaded to iCloud.
+    /// RETIRED as a consent flag; kept as a "delete owed" marker (owner decision 2026-09-23: "Tier 2
+    /// sensitive notes shouldn't be backed up to iCloud at all").
+    ///
+    /// It used to mean "upload the sealed backup of the Tier-2 behavioral memories". That payload is
+    /// never sealed or restored again and has no switch. The field now means only "this install
+    /// uploaded one whose deletion is not yet confirmed": the sealed-backup launch pass deletes the
+    /// surviving copy and clears it, and until then ``hasSealedBackup`` and "delete everything" still
+    /// treat the copy as present. The key is a persisted token — never rename it — and nothing may
+    /// set it to `true` again.
     public var sealedBackupSensitiveNotesEnabled: Bool
     /// Whether the sealed (encrypted) backup of period/intimacy data is uploaded to iCloud.
     public var sealedBackupPeriodEnabled: Bool
     /// Whether the sealed (encrypted) backup of JOURNAL narratives is uploaded to iCloud.
     ///
-    /// Its own toggle rather than a rider on ``sealedBackupSensitiveNotesEnabled``: that payload is the
-    /// Tier-2 behavioral memories, which are derived summaries, while this is the user's own journal
-    /// text — a different consent question, and the per-type opt-in is the promise the Privacy & Data
-    /// screen makes.
+    /// Its own toggle rather than a rider on ``sealedBackupSensitiveNotesEnabled``: that (now retired)
+    /// payload was the Tier-2 behavioral memories, which are derived summaries, while this is the
+    /// user's own journal text — a different consent question, and the per-type opt-in is the promise
+    /// the Privacy & Data screen makes.
     public var sealedBackupJournalEnabled: Bool
     /// Whether the sealed (encrypted) backup of INTIMACY logs is uploaded to iCloud.
     ///

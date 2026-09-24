@@ -13,8 +13,9 @@
 
 import Foundation
 
-/// Which sealed dataset a backup record carries: sensitive notes, period data, journal narratives,
-/// or intimacy logs.
+/// Which sealed dataset a backup record carries: period data, journal narratives, or intimacy logs
+/// — plus the RETIRED sensitive-notes payload, which only ever appears here so its surviving
+/// records can still be found and deleted.
 ///
 /// The raw value keys the deterministic CloudKit record name (`sealed-backup.<type>`), so each
 /// payload type has exactly one backup — a head record plus optional chunks — per account. It is
@@ -23,12 +24,18 @@ import Foundation
 ///
 /// - Important: These raw values are **at-rest format**. Renaming one orphans every backup already
 ///   in users' CloudKit databases (the record name no longer resolves) *and* breaks the AAD of any
-///   record that is still fetched, so they must never change once shipped.
+///   record that is still fetched, so they must never change once shipped — and a RETIRED case is
+///   kept, never deleted, for the same reason.
 ///
 /// - Note: The Worry Box is deliberately absent. "Let it go" notes are device-only by design (see
 ///   `PrivatePersistenceController.makeWorryNarrativeEntity`), so they are not backed up and do not
 ///   survive a device reset — an accepted property, not an oversight.
 public enum SealedBackupPayloadType: String, Codable, CaseIterable {
+    /// RETIRED 2026-09-23 (owner decision: "Tier 2 sensitive notes shouldn't be backed up to iCloud at
+    /// all"). This payload sealed the Tier-2 behavioral memories; the app never seals, uploads or
+    /// restores it again, and its launch pass deletes a copy an earlier build left behind. The case —
+    /// and its frozen rawValue, which is both the record name and part of the AAD — stays so that copy
+    /// can still be addressed.
     case sensitiveNotes
     case periodData
     /// Sealed journal narratives (`JournalNarrative` rows). Added 2026-08-10 so journal text survives

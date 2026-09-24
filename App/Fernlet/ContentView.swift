@@ -1539,6 +1539,9 @@ struct ContentView: View {
         store.sealedBackupDeferralPersistHook = { [storagePreferencesStore] deferred, payloadType in
             Self.persistSealedBackupDeferral(deferred, payloadType: payloadType, in: storagePreferencesStore)
         }
+        store.retiredSealedBackupClearedHook = { [storagePreferencesStore] payloadType in
+            Self.clearRetiredSealedBackupMarker(payloadType, in: storagePreferencesStore)
+        }
         store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags, keepCloudCopyFlag in
             Self.resetStoragePreferencesAfterWipe(
                 keepSealedBackupFlags: keepSealedBackupFlags,
@@ -1615,10 +1618,24 @@ struct ContentView: View {
             guard current.sealedBackupIntimacyReuploadDeferred != deferred else { return }
             preferencesStore.update { $0.sealedBackupIntimacyReuploadDeferred = deferred }
         case .sensitiveNotes:
-            // No deferral exists for the whole-store overwrite payload — the store never records
-            // one, so this arm is unreachable and deliberately writes nothing.
+            // The retired payload never seals, so the store never records a deferral for it — this
+            // arm is unreachable and deliberately writes nothing.
             return
         }
+    }
+
+    /// Clears the persisted "a retired payload's copy may still be in iCloud" marker after the
+    /// sealed-backup launch pass has deleted that copy. Only `.sensitiveNotes` is retired; for every
+    /// other payload the enable flag is the user's live consent, changed only by the Privacy & Data
+    /// toggles and "delete everything", so this writes nothing for them. A static helper for the same
+    /// single-writer reason as ``persistSealedBackupDeferral(_:payloadType:in:)``.
+    private static func clearRetiredSealedBackupMarker(
+        _ payloadType: SealedBackupPayloadType,
+        in preferencesStore: StoragePreferencesStore
+    ) {
+        guard payloadType == .sensitiveNotes,
+              preferencesStore.preferences.sealedBackupSensitiveNotesEnabled else { return }
+        preferencesStore.update { $0.sealedBackupSensitiveNotesEnabled = false }
     }
 
     /// Resets storage preferences to first-launch defaults after a wipe, preserving exactly the two

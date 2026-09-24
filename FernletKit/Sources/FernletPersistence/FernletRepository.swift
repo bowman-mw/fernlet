@@ -48,11 +48,9 @@ public protocol FernletRepository {
     /// Tier-2 is DEVICE-LOCAL (owner decision 2026-09-23): conformers keep it out of the snapshot blob
     /// entirely — both real conformers read a never-synced, backup-excluded sidecar — so an
     /// implementation must never source these records from, or write them into, anything that syncs.
+    /// There is deliberately no replace/restore requirement: the retired sensitive-notes sealed backup
+    /// was the only outside writer, and a conformer's own save path is now the only one.
     func loadTierTwoMemories() -> [TierTwoMemoryRecord]
-    /// Overwrites the persisted Tier-2 behavioral memories in their device-local home. Used by
-    /// sealed-backup restore on a fresh install to seed the inference base from an encrypted iCloud
-    /// backup. Returns whether the write succeeded.
-    func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool
     /// Loads a single persisted day by its date key (defaulted below in terms of ``loadSnapshot(todayKey:)``).
     func loadDay(for dateKey: String, todayKey: String) -> FernletDay
     /// Erases every persisted day and the snapshot blob. Distinct from resetting the in-memory diary:
@@ -67,13 +65,10 @@ public extension FernletRepository {
         loadSnapshot(todayKey: dateKey).day
     }
 
-    // INVARIANT for both defaults below: a conformer with ANY persistent state MUST override them.
-    // These defaults are correct ONLY for doubles that hold none — for such a double,
-    // "no memories were written" is `false` (nothing was persisted) and "everything was purged" is
-    // `true` (there was nothing to purge), which is why the two differ. A real store that inherits
+    // INVARIANT for the default below: a conformer with ANY persistent state MUST override it.
+    // The default is correct ONLY for doubles that hold none — for such a double "everything was
+    // purged" is `true` (there was nothing to purge). A real store that inherits
     // `purgeAllPersistedData` would report a complete wipe of data it never touched, in the one
     // flow where a false success is directly user-visible.
-    func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool { false }
-
     func purgeAllPersistedData() -> Bool { true }
 }

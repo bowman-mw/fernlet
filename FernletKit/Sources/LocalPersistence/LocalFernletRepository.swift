@@ -345,17 +345,10 @@ public struct LocalFernletRepository: FernletRepository {
     }
 
     /// The persisted Tier-2 behavioral memories that seed the inference base — read from the
-    /// device-local ``tierTwoMemoryStore`` sidecar, never from the database file.
+    /// device-local ``tierTwoMemoryStore`` sidecar, never from the database file. Read-only here:
+    /// the save path is the sidecar's only writer (no backup restores it, by owner decision).
     public func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
         tierTwoMemoryStore.load()
-    }
-
-    /// Overwrites the device-local Tier-2 memories wholesale (sealed-backup restore on a fresh
-    /// install). Writes only the sidecar; the database file is untouched.
-    ///
-    /// - Returns: Whether the sidecar write succeeded.
-    public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
-        tierTwoMemoryStore.replace(records)
     }
 
     /// Exposes the raw decoded database so `CoreDataFernletRepository` can hydrate the Core Data

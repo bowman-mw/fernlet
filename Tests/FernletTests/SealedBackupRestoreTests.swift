@@ -4,8 +4,9 @@
 //
 //  Covers Item 4 (Remaining-work doc): the sealed-backup *restore-into-stores* path. The CloudKit
 //  fetch + identity crypto are exercised by SealedBackupTests; these tests cover everything around
-//  it that is unit-testable without iCloud — the empty-store guard, the Tier-2 writeback, its
-//  survival across a normal snapshot save, and the period-narrative Core Data writeback (incl. the
+//  it that is unit-testable without iCloud — the empty-store guard, the refusal to write back the
+//  RETIRED Tier-2 (sensitive notes) payload (owner decision 2026-09-23; the rest of its retirement is
+//  in SensitiveNotesRetirementTests), and the period-narrative Core Data writeback (incl. the
 //  locked-key path). Full end-to-end with live CloudKit remains device-runtime verification.
 //
 
@@ -35,28 +36,29 @@ struct SealedBackupRestoreTests {
 
     // MARK: - Empty-store guard
 
+    /// The whole-device freshness gate refuses a device that already holds logged data. Journal is the
+    /// probe (the retired sensitive-notes payload used to be): the gate answers before the payload's own
+    /// store is ever read, so this never hits the network or the shared sealed store.
     @MainActor
     @Test func restoreSkippedWhenStoreHasLoggedData() async {
         let store = makePopulatedTestStore()
-        let before = store.tierTwoMemories
-        // Guard short-circuits before any CloudKit/identity work, so this never hits the network.
-        let restored = await store.restoreSealedBackup(payloadType: .sensitiveNotes)
+        let restored = await store.restoreSealedBackup(payloadType: .journalNarratives)
         #expect(restored == false)
-        #expect(store.tierTwoMemories == before)
+        #expect(await store.restoreSealedBackupOutcome(payloadType: .journalNarratives) == .skippedStoreNotEmpty)
     }
 
+    // MARK: - The retired Tier-2 (sensitive notes) payload is never written back
+
+    /// Owner decision 2026-09-23: the sensitive-notes payload — the Tier-2 memories — is retired. Even
+    /// called directly at the write point, over a populated store, it writes nothing and does not throw.
     @MainActor
-    @Test func applyRestoredSensitiveNotesRefusesToClobberPopulatedStore() throws {
-        // Defense in depth: even called directly (bypassing restoreSealedBackup's guard),
-        // applyRestoredPayload must not overwrite an existing store.
+    @Test func applyRestoredSensitiveNotesNeverWritesTierTwo() throws {
         let store = makePopulatedTestStore()
         let before = store.tierTwoMemories
         let data = try JSONEncoder().encode([
-            TierTwoMemoryRecord(category: "consistency", text: "Should not be written.", state: "steady")
+            TierTwoMemoryRecord(category: "consistency_profile", text: "Should not be written.", state: "consistent")
         ])
-        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
-            try store.applyRestoredPayload(data, payloadType: .sensitiveNotes)
-        }
+        #expect(try store.applyRestoredPayload(data, payloadType: .sensitiveNotes) == 0)
         #expect(store.tierTwoMemories == before)
     }
 
@@ -73,58 +75,17 @@ struct SealedBackupRestoreTests {
         }
     }
 
-    // MARK: - Tier-2 (sensitive notes) writeback
-
+    /// The blank-device half of the same refusal: the case the retired payload used to "restore" into —
+    /// a fresh install with an empty Tier-2 store — now stays empty. (Survival of records that already
+    /// live in the device-local store across a save is pinned in `TierTwoDeviceLocalTests`.)
     @MainActor
-    @Test func applyRestoredSensitiveNotesWritesTierTwoMemories() throws {
+    @Test func applyRestoredSensitiveNotesWritesNothingOnABlankDevice() throws {
         let store = makeTestStore()
-        let records = [
-            TierTwoMemoryRecord(category: "consistency", text: "Logs steadily on weekdays.", state: "steady"),
-            TierTwoMemoryRecord(category: "recovery", text: "Prefers gentle evenings after hard days.", state: "present")
-        ]
-        let data = try JSONEncoder().encode(records)
-
-        let count = try store.applyRestoredPayload(data, payloadType: .sensitiveNotes)
-        #expect(count == 2)
-
-        let loaded = store.tierTwoMemories
-        #expect(loaded.count == 2)
-        #expect(Set(loaded.map(\.category)) == ["consistency", "recovery"])
-    }
-
-    @Test func replacedTierTwoMemoriesSurviveSnapshotSave() {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("fernlet-restore-survive-\(UUID().uuidString).json")
-        let repository = LocalFernletRepository(fileURL: url)
-        let records = [TierTwoMemoryRecord(category: "consistency", text: "Steady weekday logger.", state: "steady")]
-        #expect(repository.replaceTierTwoMemories(records))
-
-        // A normal app save rebuilds derived tables; on a fresh install (no day history) the
-        // inference engine must preserve the restored records rather than wipe them.
-        let today = FernletDate.dayKey(for: .now)
-        let snapshot = FernletSnapshot(
-            todayKey: today,
-            day: FernletDay(date: today),
-            settings: FernletSettings(),
-            recentMeals: [],
-            previousJournals: [],
-            memories: [],
-            goals: [],
-            workshop: WorkshopData()
-        )
-        #expect(repository.saveSnapshot(snapshot))
-
-        let loaded = repository.loadTierTwoMemories()
-        #expect(loaded.count == 1)
-        #expect(loaded.first?.category == "consistency")
-    }
-
-    @MainActor
-    @Test func applyRestoredSensitiveNotesIgnoresEmptyPayload() throws {
-        let store = makeTestStore()
-        let data = try JSONEncoder().encode([TierTwoMemoryRecord]())
-        let count = try store.applyRestoredPayload(data, payloadType: .sensitiveNotes)
-        #expect(count == 0)
+        let data = try JSONEncoder().encode([
+            TierTwoMemoryRecord(category: "consistency_profile", text: "Logs steadily on weekdays.", state: "consistent"),
+            TierTwoMemoryRecord(category: "workout_mood_correlation", text: "Gentle evenings.", state: "neutral")
+        ])
+        #expect(try store.applyRestoredPayload(data, payloadType: .sensitiveNotes) == 0)
         #expect(store.tierTwoMemories.isEmpty)
     }
 
@@ -269,19 +230,30 @@ struct SealedBackupRestoreTests {
         )
 
         // The device is now "in use" for the restore gate → auto-restore must refuse (never clobbers).
-        let outcome = await store.restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
+        // Journal is the probe: the freshness verdict answers before its own store is ever read.
+        let outcome = await store.restoreSealedBackupOutcome(payloadType: .journalNarratives)
         #expect(outcome == .skippedStoreNotEmpty)
     }
 
     /// Positive control: the stricter gate must NOT wrongly block a legitimately blank device. With zero
-    /// day rows and empty caches, `isFreshInstallForRestore` still returns true, so restore is NOT
-    /// short-circuited as "store not empty" — it proceeds past the gate (and, with no CloudKit/escrow
-    /// wired in a unit test, lands on a deferred/nothing outcome rather than `.skippedStoreNotEmpty`).
+    /// day rows and empty caches, `isFreshInstallForRestore` still returns true, so the restore is NOT
+    /// refused as "store not empty" — it gets past the gate to the next precondition, which with no
+    /// content key active is the locked-key refusal. Driven at the write point over an ISOLATED empty
+    /// narrative store (the retired sensitive-notes payload used to be this probe; every live payload's
+    /// default store is the shared on-device one, which other suites can populate).
     @MainActor
-    @Test func restoreNotSkippedOnGenuinelyBlankDevice() async {
+    @Test func restoreNotSkippedOnGenuinelyBlankDevice() throws {
         let store = makeTestStore()
-        let outcome = await store.restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
-        #expect(outcome != .skippedStoreNotEmpty)
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
+        )
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "x", symptomFlags: [])
+        ])
+        #expect(throws: FernletStore.SealedBackupWiringError.locked) {
+            try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
+        }
     }
 
     // MARK: - Un-hide restore path (pre-merge review 2026-07-19, finding #2)

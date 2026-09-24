@@ -99,13 +99,6 @@ public struct TierTwoMemoryStore: Sendable {
         }
     }
 
-    /// Overwrites the persisted records wholesale.
-    ///
-    /// - Returns: whether the write landed. Not discardable (R7).
-    public func replace(_ records: [TierTwoMemoryRecord]) -> Bool {
-        write(records)
-    }
-
     /// Deletes the sidecar. Removing the file (rather than writing an empty list) leaves nothing on
     /// disk, and an absent file already reads as "no records".
     ///

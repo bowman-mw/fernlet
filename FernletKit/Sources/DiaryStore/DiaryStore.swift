@@ -1579,17 +1579,11 @@ public final class DiaryStore {
     // MARK: - Tier-two memories (repository-backed)
 
     /// The repository-backed tier-two (long-horizon) memory records — read live from the
-    /// repository, never cached on the store.
+    /// repository's device-local store, never cached on the store. Read-only by design: the
+    /// repositories' save path is their only writer, and nothing restores them from a backup
+    /// (owner decision 2026-09-23 — Tier-2 never leaves the device).
     public var tierTwoMemories: [TierTwoMemoryRecord] {
         repository.loadTierTwoMemories()
-    }
-
-    /// Replaces the tier-two memory records wholesale in the repository. A failed write (the
-    /// sealed-backup restore path is the caller that matters) is audit-logged rather than dropped.
-    public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) {
-        if !repository.replaceTierTwoMemories(records) {
-            FernletAuditLog.log("diary.tierTwoRestore.failed", context: ["count": "\(records.count)"])
-        }
     }
 
     /// Every persisted day keyed by date WITHOUT overlaying the in-memory today — but with this

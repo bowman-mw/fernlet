@@ -510,15 +510,9 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     }
 
     /// Reads the Tier-2 memory records from the device-local sidecar — never the mirrored blob, which
-    /// has carried none since 2026-09-23.
+    /// has carried none since 2026-09-23. Read-only here: the save path is the sidecar's only writer.
     public func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
         tierTwoMemoryStore.load()
-    }
-
-    /// Replaces the device-local Tier-2 memory records wholesale. Touches only the sidecar: the
-    /// mirrored blob is neither read nor re-saved, so this can never push Tier-2 toward iCloud.
-    public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
-        tierTwoMemoryStore.replace(records)
     }
 
     /// The synchronous blob load: serves the memo, or fetches/decodes the primary record —

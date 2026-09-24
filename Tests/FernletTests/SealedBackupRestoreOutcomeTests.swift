@@ -64,13 +64,27 @@ struct SealedBackupRestoreOutcomeTests {
 
     /// A populated store short-circuits restore at the no-clobber gate (before any CloudKit/identity
     /// work) — and the rich outcome is RECORDED on the observable status, not silently dropped.
+    /// Journal is the probe (the retired sensitive-notes payload used to be): the whole-device
+    /// freshness verdict answers before its own store is read.
     @Test func restoreOutcomeRecordsSkippedOnPopulatedStore() async {
         let store = makePopulatedTestStore()
-        #expect(store.sealedBackupRestoreStatus[.sensitiveNotes] == nil)
+        #expect(store.sealedBackupRestoreStatus[.journalNarratives] == nil)
+
+        let outcome = await store.restoreSealedBackupOutcome(payloadType: .journalNarratives)
+
+        #expect(outcome == .skippedStoreNotEmpty)
+        #expect(store.sealedBackupRestoreStatus[.journalNarratives] == .skippedStoreNotEmpty)
+    }
+
+    /// The retired sensitive-notes payload is never restored: the outcome is the benign
+    /// `.nothingToRestore` — no banner, no Retry — even on a populated store, and it is still recorded.
+    @Test func retiredSensitiveNotesRestoresNothingAndNeedsNoAttention() async {
+        let store = makePopulatedTestStore()
 
         let outcome = await store.restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
 
-        #expect(outcome == .skippedStoreNotEmpty)
-        #expect(store.sealedBackupRestoreStatus[.sensitiveNotes] == .skippedStoreNotEmpty)
+        #expect(outcome == .nothingToRestore)
+        #expect(outcome.needsAttention == false)
+        #expect(store.sealedBackupRestoreStatus[.sensitiveNotes] == .nothingToRestore)
     }
 }

@@ -33,7 +33,6 @@ import PrivateStoreCore
 /// gates) instead of inferring them from a 5,000-line store.
 @MainActor
 final class FakeSealedBackupHost: SealedBackupContext {
-    var tierTwoMemories: [TierTwoMemoryRecord] = []
     var sealedBackupContentKey: SymmetricKey?
     var isPeriodTrackingVisible = true
     var isIntimacyTrackingVisible = true
@@ -48,8 +47,10 @@ final class FakeSealedBackupHost: SealedBackupContext {
     private(set) var recordedOutcomes: [SealedBackupPayloadType: SealedBackupRestoreOutcome] = [:]
     /// Per-payload re-upload deferrals, as the coordinator recorded them.
     private(set) var reuploadDeferrals: [SealedBackupPayloadType: Bool] = [:]
+    /// Retired payloads whose surviving iCloud copy the retirement sweep reported DELETED, in call
+    /// order — the signal production turns into clearing the persisted marker.
+    private(set) var retiredBackupsDeleted: [SealedBackupPayloadType] = []
 
-    func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) { tierTwoMemories = records }
     func loadAllDaysFromRepository() -> [String: FernletDay] { days }
     func recordSealedBackupReuploadDeferred(_ deferred: Bool, payloadType: SealedBackupPayloadType) {
         reuploadDeferrals[payloadType] = deferred
@@ -58,6 +59,9 @@ final class FakeSealedBackupHost: SealedBackupContext {
         recordedOutcomes[payloadType] = outcome
     }
     func recordSealedBackupEscrowConflict(_ inConflict: Bool) {}
+    func recordRetiredSealedBackupDeleted(_ payloadType: SealedBackupPayloadType) {
+        retiredBackupsDeleted.append(payloadType)
+    }
 
     /// Mirrors `FernletStore.reinstateJournalEntries(from:)`'s load-bearing SIDE EFFECT: it writes day
     /// rows. Without that here, the pass-level freshness interaction (the journal arm's writeback

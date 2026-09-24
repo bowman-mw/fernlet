@@ -434,9 +434,11 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "Privacy & Data › iCloud",
             route: .privacyData
         ),
+        // Takes over the generic "encrypted backup" synonyms from the retired sensitive-notes entry
+        // (removed 2026-09-23 with its switch), so those searches still land on a live backup switch.
         SettingsSearchEntry(
-            title: "Sealed backup for sensitive notes",
-            keywords: ["sealed backup", "encrypted backup", "backup", "sensitive notes", "journal backup", "encryption", "encrypted"],
+            title: "Sealed backup for journal entries",
+            keywords: ["sealed backup", "encrypted backup", "backup", "journal backup", "encryption", "encrypted"],
             breadcrumb: "Privacy & Data › iCloud",
             route: .privacyData
         ),

@@ -718,8 +718,9 @@ struct PrivacyDataSettingsView: View {
             .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             .accessibilityIdentifier("privacy.icloud.toggle")
 
-            Toggle("Sealed backup for sensitive notes", isOn: sealedSensitiveNotesBinding)
-                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+            // No switch for the retired sensitive-notes backup (owner decision 2026-09-23: Tier-2
+            // memories never leave the device). A copy an earlier build uploaded is deleted quietly by
+            // the sealed-backup launch pass — there is nothing left for the user to turn off.
             // Withheld while cycle tracking is hidden. The backup reconcile honors the visibility gate
             // by design (skipping rather than disabling the pref, since disabling DELETES the iCloud
             // backup) — but that skip is silent, so leaving this toggle live would let the user switch
@@ -1655,13 +1656,6 @@ struct PrivacyDataSettingsView: View {
         )
     }
 
-    private var sealedSensitiveNotesBinding: Binding<Bool> {
-        Binding(
-            get: { storagePreferencesStore.preferences.sealedBackupSensitiveNotesEnabled },
-            set: { newValue in handleSealedBackupToggle(.sensitiveNotes, enabled: newValue) }
-        )
-    }
-
     private var sealedPeriodBinding: Binding<Bool> {
         Binding(
             get: { storagePreferencesStore.preferences.sealedBackupPeriodEnabled },
@@ -1830,6 +1824,8 @@ struct PrivacyDataSettingsView: View {
         storagePreferencesStore.update {
             switch payload {
             case .periodData: $0.sealedBackupPeriodEnabled = value
+            // Retired payload: no toggle reaches this arm any more; the flag is cleared by the launch
+            // pass's retirement sweep, never set by the UI.
             case .sensitiveNotes: $0.sealedBackupSensitiveNotesEnabled = value
             case .journalNarratives: $0.sealedBackupJournalEnabled = value
             case .intimacyLogs: $0.sealedBackupIntimacyEnabled = value

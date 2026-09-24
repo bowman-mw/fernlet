@@ -5373,6 +5373,13 @@ final class FernletStore {
     /// stays session-only, as before.
     @ObservationIgnored var sealedBackupDeferralPersistHook: ((Bool, SealedBackupPayloadType) -> Void)?
 
+    /// Clears the persisted "a retired payload's copy may still be in iCloud" marker once the
+    /// retirement sweep has deleted that copy (`StoragePreferences.sealedBackupSensitiveNotesEnabled`
+    /// for the retired `.sensitiveNotes`). A hook for the same reason as
+    /// `sealedBackupDeferralPersistHook`: the preferences store is app-scoped. Unwired (tests), the
+    /// marker simply stays set and the next pass re-runs an idempotent delete.
+    @ObservationIgnored var retiredSealedBackupClearedHook: ((SealedBackupPayloadType) -> Void)?
+
     /// Whether a sealed backup of this payload may be uploaded — i.e. whether "delete everything" has
     /// anything to remove. Lives here rather than on `StoragePreferences` because that type is Layer 0
     /// and cannot see `SealedBackupPayloadType`, which is defined above it in `CloudKitSync`.
@@ -5384,6 +5391,7 @@ final class FernletStore {
     /// a deletion that never ran.
     private static func hasSealedBackup(_ payloadType: SealedBackupPayloadType, _ preferences: StoragePreferences) -> Bool {
         switch payloadType {
+        // Retired: the flag now means "a copy may still be up there" until the launch sweep deletes it.
         case .sensitiveNotes: return preferences.sealedBackupSensitiveNotesEnabled
         case .periodData: return preferences.sealedBackupPeriodEnabled
         case .journalNarratives: return preferences.sealedBackupJournalEnabled
@@ -5486,8 +5494,8 @@ final class FernletStore {
         // exactly what "Reset everything" did before.
         //
         // Tier-two memories live in the repository's device-local sidecar (never the blob, since the
-        // 2026-09-23 owner decision), and this same purge removes it. Do not add a separate
-        // `replaceTierTwoMemories([])` here: that writes an empty sidecar back instead of removing it.
+        // 2026-09-23 owner decision), and this same purge removes the file. Do not add a separate
+        // "write an empty list" step here: that would leave a file behind instead of removing it.
         if !repository.purgeAllPersistedData() {
             outcome.incompleteStores.append("your day history")
         }
@@ -6958,8 +6966,8 @@ extension FernletStore: SealedBackupContext {
     /// ONE SealedBackupContext member the facade does NOT forward to DiaryStore — the key lives in
     /// the facade-owned `journalSealingCoordinator` and never enters DiaryStore.
     var sealedBackupContentKey: SymmetricKey? { journalSealingCoordinator.contentKey }
-    func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) {
-        diary.replaceTierTwoMemories(records)
+    func recordRetiredSealedBackupDeleted(_ payloadType: SealedBackupPayloadType) {
+        retiredSealedBackupClearedHook?(payloadType)
     }
     func loadAllDaysFromRepository() -> [String: FernletDay] {
         diary.loadAllDaysFromRepository()
@@ -6975,8 +6983,7 @@ extension FernletStore: SealedBackupContext {
         case .periodData: sealedBackupPeriodReuploadDeferred = deferred
         case .journalNarratives: sealedBackupJournalReuploadDeferred = deferred
         case .intimacyLogs: sealedBackupIntimacyReuploadDeferred = deferred
-        // The whole-store overwrite payload needs neither a content key nor a visible surface, so its
-        // reconcile can never be postponed and there is no obligation to record.
+        // The retired payload never seals, so it can never owe a re-upload.
         case .sensitiveNotes: return
         }
         sealedBackupDeferralPersistHook?(deferred, payloadType)
