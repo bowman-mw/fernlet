@@ -1459,7 +1459,7 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 | Function | What It Does |
 | --- | --- |
 | `ProximityRecipeSharePayload.hasShareNotes` | Checks local notes or saved summary for nonblank share notes. |
-| `omittingShareNotes()` | Returns a copy with local notes or saved summary removed. |
+| `omittingShareNotes()` | Returns a copy with local notes or saved summary removed (a local recipe's steps too). A multipart local recipe's `components` partition is rewritten through `SharedRecipePayload.withoutSteps()` (step counts to zero, steps-only parts dropped), so the stripped share still passes the receiver's strict partition decode. |
 | `ProximitySharedRecipe.title` | Returns local or saved recipe title fallback. |
 | `ProximitySharedRecipe.servings` | Returns local or saved servings fallback. |
 | `ProximitySharedRecipe.ingredientCount` | Returns local or saved ingredient count. |

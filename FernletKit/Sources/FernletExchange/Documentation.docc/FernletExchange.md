@@ -44,7 +44,14 @@ coding keys, because the whole plan is inside the digest.
 ``ExchangeRecipePayloadBuilder`` and ``ExchangeWorkoutPlanBuilder`` build the payloads from domain
 values only (a `RecipeDefinition` plus its `FoodItem`s; one day's `PlannedWorkout`), and
 ``ExchangeRecipePayloadValidator`` holds the recipe bounds the app-side share codec historically
-enforced (servings, name and note length, ingredient and step counts). A web-imported recipe
+enforced (servings, name and note length, ingredient and step counts), plus the shape of a multipart
+recipe's `components` partition when a payload carries one. The recipe builder has two forms (multipart
+recipes, 2026-09-24). ``ExchangeRecipePayloadBuilder/payload(for:foodItems:)`` is what EVERY build can
+read: byte-identical to earlier builds for a one-part recipe, and a multipart recipe comes out flattened
+(whole recipe, section-labelled steps, no `components` key). The version-1 ``RecipeExchangePacket``
+carries this form because an older reader re-hashes the decoded recipe, and an unknown key would fail
+its hash. ``ExchangeRecipePayloadBuilder/componentPayload(for:foodItems:)`` adds the partition. It is
+the form for the paste text, the mesh, and any packet format that versions its own hash. A web-imported recipe
 currently exchanges with **no ingredients** — its ingredient lines live in `webImport`, which the
 builder does not read — and `FernletExchangeTests.webImportedRecipesShareWithNoIngredientsAPinnedDefect`
 pins that as a known defect awaiting an owner decision, not a specification.

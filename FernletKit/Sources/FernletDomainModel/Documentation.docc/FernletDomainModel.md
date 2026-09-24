@@ -249,10 +249,31 @@ user-created food records.
 
 ### Recipes
 
+A recipe may be made in parts (2026-09-24): a dressing first, then the salad. ``RecipeComponent`` is
+an id PARTITION over the recipe's flat `ingredients` and `steps`, never a copy of them. Nutrition,
+scaling, grocery aggregation, logging and every older reader keep working on the flat arrays, and
+each row counts exactly once. Read parts only through ``RecipeDefinition/resolvedComponents``, the one
+resolution rule: a row no part claims joins the last part, empty parts drop, fewer than two collapse
+to a one-part recipe, and at most ``RecipeComponentLimits/maxComponents`` parts are honoured. A one-part
+recipe has no `components` key, so its blob and wire bytes are unchanged. On the `fernlet.recipe` wire
+the version stays 1. A multipart payload carries the whole recipe in its flat arrays, in part order,
+with steps labelled by part (``RecipeComponentWire``), plus an optional count partition
+(``SharedRecipeComponent``). An older build reads a flat recipe with section-labelled steps, and a
+newer one rebuilds the parts (``RecipeComponentImport``). The labelling separator and every JSON key
+are tokens and never localize. Part names are user content (``RecipeComponentNaming`` normalizes
+them).
+
 - ``RecipeDefinition``
 - ``RecipeIngredient``
 - ``RecipeStep``
 - ``RecipeStepSanitizer``
+- ``RecipeComponent``
+- ``ResolvedRecipeComponent``
+- ``RecipeComponentLimits``
+- ``RecipeComponentNaming``
+- ``RecipeComponentInput``
+- ``RecipeComponentAssembly``
+- ``RecipeCookingStep``
 - ``RecipeUnit``
 - ``RecipeWebImport``
 - ``RecipeSourceURLMatcher``
@@ -262,6 +283,11 @@ user-created food records.
 - ``ManualRecipeIngredientInput``
 - ``SharedRecipePayload``
 - ``SharedRecipeIngredient``
+- ``SharedRecipeComponent``
+- ``SharedRecipeComponentContent``
+- ``SharedRecipeComponentSlice``
+- ``RecipeComponentWire``
+- ``RecipeComponentImport``
 - ``RecipeImportError``
 - ``GroceryAggregation``
 

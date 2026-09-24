@@ -66,6 +66,11 @@ Two rendering rules recur throughout: countdowns are always drawn from a fixed, 
 
 ### Cooking-mode Live Activity
 
+A multipart recipe (a dressing made first, then the salad) walks part by part. Each run step may carry
+its part's name (``CookingRunState``'s optional `partName` key, absent on runs persisted before parts
+existed), and the content state's step text leads with it ("Lemon dressing · Whisk the oil…"). That
+puts the part on the Lock Screen without a new content-state field or a widget-view change.
+
 - ``CookingActivityAttributes``
 - ``CookingLiveActivity``
 - ``CookingRunState``
