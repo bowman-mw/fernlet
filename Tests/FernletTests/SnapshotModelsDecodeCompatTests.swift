@@ -166,6 +166,9 @@ struct SnapshotModelsDecodeCompatTests {
     // MARK: - FoodItem (blob foodItems)
 
     @Test func unknownFoodItemTokensFreezeAndPark() throws {
+        // The unknown source is a token no build knows. This fixture used "openFoodFacts" until that
+        // became a real `FoodItemSource` case (2026-09-24, the Open Food Facts barcode lookup) —
+        // which is exactly how an older build still reads such a row, and is pinned at the end.
         let item = try decode(FoodItem.self, """
         {
           "name": "Mystery bar",
@@ -173,19 +176,19 @@ struct SnapshotModelsDecodeCompatTests {
           "servingUnit": "bar",
           "macros": {"protein": 10, "carbs": 20, "fat": 5},
           "category": "Snacks",
-          "source": "openFoodFacts",
+          "source": "futureSource",
           "dataType": "fortified",
           "tags": []
         }
         """)
         // Unknown source must not falsely claim USDA or AI provenance.
         #expect(item.source == .manual)
-        #expect(item.unknownSourceToken == "openFoodFacts")
+        #expect(item.unknownSourceToken == "futureSource")
         #expect(item.dataType == .srLegacy)
         #expect(item.unknownDataTypeToken == "fortified")
 
         let second = try decode(FoodItem.self, JSONEncoder().encode(item))
-        #expect(second.unknownSourceToken == "openFoodFacts")
+        #expect(second.unknownSourceToken == "futureSource")
         #expect(second.unknownDataTypeToken == "fortified")
 
         let readopted = try decode(FoodItem.self, """
@@ -197,6 +200,17 @@ struct SnapshotModelsDecodeCompatTests {
         """)
         #expect(readopted.source == .usda)
         #expect(readopted.unknownSourceToken == nil)
+
+        // The once-unknown token is a known one now: it decodes as its case and parks nothing.
+        let openFoodFacts = try decode(FoodItem.self, """
+        {
+          "name": "Oat bar", "servingSize": 1, "servingUnit": "bar",
+          "macros": {"protein": 4, "carbs": 30, "fat": 6}, "category": "Snacks",
+          "source": "openFoodFacts", "tags": []
+        }
+        """)
+        #expect(openFoodFacts.source == .openFoodFacts)
+        #expect(openFoodFacts.unknownSourceToken == nil)
     }
 
     // MARK: - DailyHealthScore (blob dailyScores; recomputable)
