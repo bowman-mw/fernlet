@@ -557,6 +557,9 @@ struct FernletApp: App {
             }
             if old.healthKitMasterEnabled && !new.healthKitMasterEnabled {
                 store.stopHealthKitWorkoutObservation()
+                // The opt-out emptied the device cache; stop laying Health's body profile over the
+                // typed one now rather than at the next launch.
+                store.reloadHealthImportedBodyProfile()
             }
         }
         .task {

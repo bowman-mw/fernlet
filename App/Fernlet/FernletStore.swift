@@ -1084,7 +1084,11 @@ final class FernletStore {
     /// surfaces come straight back when the real passcode clears the flag.
     var isPeriodTrackingVisible: Bool {
         guard !duressSessionActive else { return false }
-        return settings.periodTrackingVisible ?? (settings.userProfile.sex == .female)
+        // The EFFECTIVE sex (typed, with this device's HealthKit import laid over it — 2026-09-23):
+        // an import used to reach this default by overwriting the synced profile; it now reaches it
+        // device-locally, and `diary.healthImportedBodyProfile` is observable, so a derived-value
+        // `.onChange` still sees the flip.
+        return settings.periodTrackingVisible ?? (diary.effectiveUserProfile.sex == .female)
     }
 
     /// Whether intimate-activity surfaces are visible. Age is a separate, non-overridable floor —

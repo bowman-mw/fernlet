@@ -18,6 +18,9 @@ import FernletPersistence
 ///   the same values used to live in.
 /// - Bounded (R3): at most ``maxDays`` day keys; the oldest are evicted past it, and each day's
 ///   imported workouts are capped by `DeviceHealthResidue`.
+/// - Since 2026-09-23 (the body-profile follow-up) it also holds the ONE `DeviceHealthBodyProfile`
+///   this device imported from HealthKit — the age, sex, height and weight a Health import used to
+///   write into the synced `settings.userProfile`.
 ///
 /// Cleared by "Reset everything" / "Delete everything" (`FernletStore.resetAll`) and by the
 /// HealthKit opt-out (`CoreDataHealthKitCacheCleaner`). Both reach the SAME instance in production
@@ -39,10 +42,12 @@ final class FileDeviceHealthResidueStore: DeviceHealthResidueStoring {
     /// The cache file's name inside its directory.
     static let fileName = "health-residue.json"
 
-    /// On-disk shape: the residues plus the one-time scrub marker.
+    /// On-disk shape: the residues, this device's HealthKit body-profile import, and the one-time
+    /// scrub marker. `bodyProfile` is optional, so a file written before it existed decodes unchanged.
     private struct Payload: Codable, Equatable {
         var legacySyncedRowsScrubbed = false
         var days: [String: DeviceHealthResidue] = [:]
+        var bodyProfile: DeviceHealthBodyProfile?
     }
 
     private let directory: URL
@@ -81,6 +86,19 @@ final class FileDeviceHealthResidueStore: DeviceHealthResidueStoring {
         guard next.days[dateKey] != normalized else { return true }
         next.days[dateKey] = normalized
         Self.evictOldest(&next.days)
+        return persist(next)
+    }
+
+    var importedBodyProfile: DeviceHealthBodyProfile? {
+        loadedPayload()?.bodyProfile
+    }
+
+    func recordImportedBodyProfile(_ profile: DeviceHealthBodyProfile?) -> Bool {
+        // Unreadable right now: refuse rather than overwrite a file holding every day's residue.
+        guard var next = loadedPayload() else { return false }
+        let normalized = (profile?.isEmpty ?? true) ? nil : profile
+        guard next.bodyProfile != normalized else { return true }
+        next.bodyProfile = normalized
         return persist(next)
     }
 
@@ -173,6 +191,7 @@ final class FileDeviceHealthResidueStore: DeviceHealthResidueStoring {
 final class InMemoryDeviceHealthResidueStore: DeviceHealthResidueStoring {
     private var days: [String: DeviceHealthResidue] = [:]
     private(set) var legacySyncedRowsScrubbed = false
+    private(set) var importedBodyProfile: DeviceHealthBodyProfile?
 
     init() {}
 
@@ -187,8 +206,14 @@ final class InMemoryDeviceHealthResidueStore: DeviceHealthResidueStoring {
         return true
     }
 
+    func recordImportedBodyProfile(_ profile: DeviceHealthBodyProfile?) -> Bool {
+        importedBodyProfile = (profile?.isEmpty ?? true) ? nil : profile
+        return true
+    }
+
     func clearAll() -> Bool {
         days = [:]
+        importedBodyProfile = nil
         legacySyncedRowsScrubbed = false
         return true
     }

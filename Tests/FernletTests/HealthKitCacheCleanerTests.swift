@@ -290,6 +290,8 @@ private final class StuckResidueStore: DeviceHealthResidueStoring {
     func residue(for dateKey: String) -> DeviceHealthResidue? { nil }
     func allResidues() -> [String: DeviceHealthResidue] { [:] }
     func record(_ residue: DeviceHealthResidue?, for dateKey: String) -> Bool { true }
+    var importedBodyProfile: DeviceHealthBodyProfile? { nil }
+    func recordImportedBodyProfile(_ profile: DeviceHealthBodyProfile?) -> Bool { true }
     func clearAll() -> Bool { false }
     var legacySyncedRowsScrubbed: Bool { false }
     func markLegacySyncedRowsScrubbed() -> Bool { true }

@@ -480,10 +480,10 @@ struct HealthAccessSettingsView: View {
     private func requestAndPull(_ card: HealthAccessCard) async {
         for capability in card.capabilities {
             if capability == .bodyProfile {
-                if let store,
-                   let profile = await healthKit.importBodyProfile(current: store.settings.userProfile) {
-                    store.settings.userProfile = profile
-                    store.scheduleSnapshotSave()
+                // Device-local, laid over the typed profile — never written into the synced
+                // settings (HealthKit information is not stored in iCloud, 2026-09-23).
+                if let store, let profile = await healthKit.importBodyProfile() {
+                    store.recordHealthImportedBodyProfile(profile)
                 }
             } else {
                 await healthKit.request(capability)
@@ -500,10 +500,8 @@ struct HealthAccessSettingsView: View {
         Task {
             for capability in card.capabilities {
                 if capability == .bodyProfile {
-                    if let store,
-                       let profile = await healthKit.updateBodyProfile(current: store.settings.userProfile) {
-                        store.settings.userProfile = profile
-                        store.scheduleSnapshotSave()
+                    if let store, let profile = await healthKit.updateBodyProfile() {
+                        store.recordHealthImportedBodyProfile(profile)
                     }
                 } else if let store, let context = await healthKit.updateHealthContext(for: capability) {
                     store.updateHealthContext(context)

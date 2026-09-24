@@ -44,6 +44,15 @@ marker, and an Apple Health workout import or deletion on a past day is a residu
 records the edited day's residue back into the cache before the strip. With no cache attached the
 strip still applies — the values are simply not given back.
 
+The body profile follows the same rule (2026-09-23, the follow-up to the day strip): a HealthKit
+import of age, sex, height and weight no longer overwrites `settings.userProfile`, which syncs.
+`recordHealthImportedBodyProfile(_:)` keeps it in the same device cache and publishes it as the
+observable `healthImportedBodyProfile`; `effectiveUserProfile` lays it over the typed profile and
+`effectiveSettings` carries that into whole-settings computations — `nutritionTargets` reads it, and
+so does the facade's period-visibility default, which stays observation-tracked because the import is
+a stored property here. `resetDiary()` drops it and `reloadHealthImportedBodyProfile()` re-reads it
+after the HealthKit opt-out emptied the cache.
+
 Construction is two-phase. The facade builds the store with `init` (which filters USDA rows out
 of the snapshot's food items and seeds the injected `FoodCatalog`'s user-item index), then calls
 `rewireHooks(scheduleSnapshotSave:periodAdjustment:stressModifier:sealedJournalIDs:)` to swap

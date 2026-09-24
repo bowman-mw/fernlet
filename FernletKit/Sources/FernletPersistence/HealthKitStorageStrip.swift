@@ -82,8 +82,16 @@ public protocol DeviceHealthResidueStoring: AnyObject {
     /// - Returns: `false` when the change could not be persisted; the in-memory view may still
     ///   hold it. A success/failure signal, so not discardable (R7).
     func record(_ residue: DeviceHealthResidue?, for dateKey: String) -> Bool
-    /// Removes every recorded residue and the migration marker below — the wipe and the HealthKit
-    /// opt-out. Returns `false` when something could not be removed.
+    /// The body-profile fields this device imported from HealthKit, or nil when there are none
+    /// (2026-09-23 — they used to overwrite the synced `settings.userProfile`).
+    var importedBodyProfile: DeviceHealthBodyProfile? { get }
+    /// Records (or, for nil / an empty profile, removes) this device's HealthKit body-profile import.
+    ///
+    /// - Returns: `false` when the change could not be persisted; the in-memory view may still hold
+    ///   it. A success/failure signal, so not discardable (R7).
+    func recordImportedBodyProfile(_ profile: DeviceHealthBodyProfile?) -> Bool
+    /// Removes every recorded residue, the imported body profile, and the migration marker below —
+    /// the wipe and the HealthKit opt-out. Returns `false` when something could not be removed.
     func clearAll() -> Bool
     /// Whether this device has run the one-time scrub of HealthKit values out of the rows written
     /// before the strip existed.

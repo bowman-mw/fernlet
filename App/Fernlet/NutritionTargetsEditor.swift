@@ -42,7 +42,9 @@ struct NutritionTargetsEditor: View {
     /// The plan Fernlet would derive with every override cleared — the "back to automatic" values, so a
     /// very low manual target can be disclosed against what the app would otherwise pick.
     private var derivedTargets: NutritionTargets {
-        var settings = store.settings
+        // The EFFECTIVE settings: the same body profile the rings use (this device's HealthKit
+        // import included), or "automatic" would be computed from a different body than "applied".
+        var settings = store.effectiveSettings
         settings.calorieTargetOverride = nil
         settings.proteinTargetOverride = nil
         settings.fatTargetOverride = nil

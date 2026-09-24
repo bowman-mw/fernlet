@@ -1145,7 +1145,8 @@ struct ContentView: View {
             let healthProfile = try await healthKitService.loadBodyProfile()
             try Task.checkCancellation()
             guard healthProfile.appliedFieldCount > 0 else { return }
-            store.settings.userProfile = healthProfile.applying(to: store.settings.userProfile)
+            // Device-local, laid over the typed profile — never written into the synced settings.
+            store.recordHealthImportedBodyProfile(healthProfile)
         } catch {
             // Health profile import is optional; manual settings remain the fallback. Event name plus
             // the error only — never a health value.
@@ -1242,7 +1243,8 @@ struct ContentView: View {
             let profile = try await healthKitService.loadBodyProfile()
             try Task.checkCancellation()
             guard profile.appliedFieldCount > 0 else { return }
-            store.settings.userProfile = profile.applying(to: store.settings.userProfile)
+            // Device-local, laid over the typed profile — never written into the synced settings.
+            store.recordHealthImportedBodyProfile(profile)
         } catch is CancellationError {
             return
         } catch {

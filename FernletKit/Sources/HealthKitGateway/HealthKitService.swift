@@ -219,8 +219,10 @@ public struct AuthorizationOutcome {
 /// The body-profile fields Fernlet can import from Apple Health (age, sex, height, weight), each
 /// optional because Health may hold any subset.
 ///
-/// Returned by ``HealthKitServicing/loadBodyProfile()`` and applied onto the user's
-/// `UserNutritionProfile` via ``applying(to:)``; the field-count helpers drive the settings
+/// Returned by ``HealthKitServicing/loadBodyProfile()`` (and, raw, by
+/// ``HealthKitAuthorizationViewModel/importBodyProfile()``). Since 2026-09-23 the app keeps it
+/// DEVICE-LOCAL and lays it over the profile the user typed — it is never written into the synced
+/// settings; ``applying(to:)`` supplies the bounds; the field-count helpers drive the settings
 /// messaging about what was imported versus what stays manual.
 public struct HealthBodyProfile {
     public var age: Int?
@@ -2609,15 +2611,18 @@ public final class HealthKitAuthorizationViewModel {
         statusMessage = "Intimate logging is available at 16 and older. Fernlet checks your age range with Apple — see Settings › Intimacy."
     }
 
-    /// First-time body-profile import: prompts for authorization, then overlays Health's fields
-    /// onto the profile. Returns nil when Health supplied nothing (message explains the fallback).
-    public func importBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {
-        await loadBodyProfile(current: profile, requestsAuthorization: true)
+    /// First-time body-profile import: prompts for authorization, then returns the fields Health
+    /// supplied — raw, for the caller to keep DEVICE-LOCAL (2026-09-23: it used to return them already
+    /// merged into the user's profile, which the caller then wrote into the synced settings). Nil when
+    /// Health supplied nothing (the message explains the fallback).
+    public func importBodyProfile() async -> HealthBodyProfile? {
+        await loadBodyProfile(requestsAuthorization: true)
     }
 
-    /// Re-pulls the body profile without prompting (for already-authorized refreshes).
-    public func updateBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {
-        await loadBodyProfile(current: profile, requestsAuthorization: false)
+    /// Re-pulls the body profile without prompting (for already-authorized refreshes); same contract
+    /// as ``importBodyProfile()``.
+    public func updateBodyProfile() async -> HealthBodyProfile? {
+        await loadBodyProfile(requestsAuthorization: false)
     }
 
     /// Writes the profile's height/weight back to Health, but only when Fernlet's sharing for body
@@ -2654,7 +2659,7 @@ public final class HealthKitAuthorizationViewModel {
         }
     }
 
-    private func loadBodyProfile(current profile: UserNutritionProfile, requestsAuthorization: Bool) async -> UserNutritionProfile? {
+    private func loadBodyProfile(requestsAuthorization: Bool) async -> HealthBodyProfile? {
         isRequesting = true
         statusMessage = ""
         defer { isRequesting = false }
@@ -2674,7 +2679,7 @@ public final class HealthKitAuthorizationViewModel {
             } else {
                 statusMessage = "Updated \(healthProfile.appliedFieldCount) fields from Health. Manual settings remain for \(healthProfile.missingFieldNames.joined(separator: ", "))."
             }
-            return healthProfile.applying(to: profile)
+            return healthProfile
         } catch {
             statusMessage = "Health profile update was unavailable. Manual settings will be used. \(error.localizedDescription)"
             return nil

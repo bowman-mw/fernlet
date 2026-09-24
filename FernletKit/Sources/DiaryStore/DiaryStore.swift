@@ -257,10 +257,19 @@ public final class DiaryStore {
         }
     }
 
-    /// The daily nutrition targets derived from the current profile/settings via
-    /// `NutritionTargetCalculator`.
+    /// The daily nutrition targets derived from the current settings and ``effectiveUserProfile`` —
+    /// this device's HealthKit body-profile import included — via `NutritionTargetCalculator`.
     public var nutritionTargets: NutritionTargets {
-        NutritionTargetCalculator.targets(for: settings)
+        NutritionTargetCalculator.targets(for: effectiveSettings)
+    }
+
+    /// `settings` with ``effectiveUserProfile`` in place of the typed profile — what every
+    /// computation from the user's body reads (the targets, and the settings-based target editor).
+    /// Never persisted: `settings` itself keeps only what the user typed.
+    public var effectiveSettings: FernletSettings {
+        var effective = settings
+        effective.userProfile = effectiveUserProfile
+        return effective
     }
 
     /// Computes the full per-component score breakdown for a day — the pure seam over
@@ -435,6 +444,42 @@ public final class DiaryStore {
     public func attachHealthKitResidueStore(_ store: any DeviceHealthResidueStoring) {
         healthKitResidueStore = store
         day = withDeviceHealthKitValues(day)
+        healthImportedBodyProfile = store.importedBodyProfile
+    }
+
+    /// The body-profile fields THIS device imported from HealthKit — device-local, never written to
+    /// `settings` (which syncs; owner decision 2026-09-23: "Healthkit information shouldn't be stored
+    /// in iCloud"). Observable, so every derived read — the targets, the profile screen, the
+    /// period-visibility default — re-renders when an import lands. Loaded from the residue cache on
+    /// attach; ``resetDiary()`` drops it (the wipe empties the cache it came from).
+    public private(set) var healthImportedBodyProfile: DeviceHealthBodyProfile?
+
+    /// The body profile in effect on THIS device: the one the user typed (in `settings`, synced) with
+    /// this device's HealthKit import laid over it. Read this — never `settings.userProfile` — for
+    /// anything computed from the user's body.
+    public var effectiveUserProfile: UserNutritionProfile {
+        healthImportedBodyProfile?.applied(to: settings.userProfile) ?? settings.userProfile
+    }
+
+    /// Records this device's HealthKit body-profile import in the device-local cache — never in
+    /// `settings` — and publishes it. The import applies for this session either way.
+    ///
+    /// - Returns: `false` when no cache is attached or it refused the write (the import then lasts
+    ///   until relaunch, and the next launch's auto-import records it again).
+    public func recordHealthImportedBodyProfile(_ profile: DeviceHealthBodyProfile?) -> Bool {
+        let normalized = (profile?.isEmpty ?? true) ? nil : profile
+        if healthImportedBodyProfile != normalized {
+            healthImportedBodyProfile = normalized
+        }
+        guard let store = healthKitResidueStore else { return false }
+        return store.recordImportedBodyProfile(normalized)
+    }
+
+    /// Re-reads this device's HealthKit body-profile import from the cache — after the HealthKit
+    /// opt-out emptied it, so this session stops laying Health's values over the typed profile at
+    /// once instead of at the next launch.
+    public func reloadHealthImportedBodyProfile() {
+        healthImportedBodyProfile = healthKitResidueStore?.importedBodyProfile
     }
 
     /// `day` with this device's HealthKit residue for its date put back (identity with no cache).
@@ -1783,6 +1828,9 @@ public final class DiaryStore {
         foodItems = []
         recipes = []
         dailyScores = []
+        // This device's HealthKit body-profile import goes with the rest; the facade's wipe empties
+        // the device-local cache it was loaded from.
+        healthImportedBodyProfile = nil
         // Re-mint the device designer id: `resetDiary()` nulled it via the fresh `FernletSettings()`, and the
         // `localDesignerID` getter would otherwise lazily mint it (mutating observed state) the next time a
         // view body reads it — a "modifying state during view update" hazard.

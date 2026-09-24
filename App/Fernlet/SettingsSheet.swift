@@ -1086,11 +1086,15 @@ struct SettingsSheet: View {
         )
     }
 
+    /// The profile screen shows the EFFECTIVE profile (typed, with this device's HealthKit import laid
+    /// over it) and hands edits to `applyEditedBodyProfile`, which writes only the fields the user
+    /// changed into the synced settings — a Health value merely shown here never lands there
+    /// (2026-09-23).
     private var healthSyncedProfileBinding: Binding<UserNutritionProfile> {
         Binding(
-            get: { store.settings.userProfile },
+            get: { store.effectiveUserProfile },
             set: { profile in
-                store.settings.userProfile = profile
+                store.applyEditedBodyProfile(profile)
                 store.scheduleSnapshotSave()
                 syncBodyProfileToHealth(profile)
             }
