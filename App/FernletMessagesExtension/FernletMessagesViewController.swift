@@ -511,8 +511,11 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             let envelope = try ExchangeMessageEnvelope(recipe: entry.packet)
             insert(message: try message(for: envelope, layout: recipeLayout(for: entry.packet)),
                    into: conversation, success: FernletMessagesCopy.recipeInserted)
-        } catch {
+        } catch ExchangePacketError.tooLarge {
             showComposerStatus(FernletMessagesCopy.recipeTooLarge)
+        } catch {
+            // Only a size refusal means "use a file instead"; anything else is a failure to say so.
+            showComposerStatus(FernletMessagesCopy.insertFailed)
         }
     }
 
@@ -525,8 +528,10 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             let envelope = try ExchangeMessageEnvelope(workoutPlan: entry.packet, scheduledStartDayKey: entry.dayKey)
             insert(message: try message(for: envelope, layout: workoutLayout(for: entry)),
                    into: conversation, success: FernletMessagesCopy.workoutInserted)
-        } catch {
+        } catch ExchangePacketError.tooLarge {
             showComposerStatus(FernletMessagesCopy.workoutTooLarge)
+        } catch {
+            showComposerStatus(FernletMessagesCopy.insertFailed)
         }
     }
 

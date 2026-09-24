@@ -237,7 +237,7 @@ enum FernletMessagesCopy {
 
     static var insertFailed: String {
         String(localized: "messages.status.insertFailed", defaultValue: "Fernlet couldn't insert this item.",
-               comment: "Shown when Messages itself refused the prepared card. Nothing was added to the conversation.")
+               comment: "Shown when the card could not be prepared for a reason other than its size, or Messages itself refused it. Nothing was added to the conversation.")
     }
 
     static func messageSummary(title: String) -> String {
