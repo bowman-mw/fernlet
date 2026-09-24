@@ -3,6 +3,7 @@ import SwiftUI
 import CloudKitSync
 import FernletDomainModel
 import FernletFoundation
+import FernletLock
 import FernletScoring
 import FernletUI
 
@@ -40,10 +41,91 @@ private struct MockExistingCloudDataDetector: ExistingCloudDataDetecting {
 ///
 /// `FernletApp` keys the onboarding-vs-main-UI decision off `hasCompletedOnboardingKey`;
 /// `lockSetupDeferredKey` records that the lock step was skipped so lockable features can prompt
-/// for setup at first use instead of assuming a lock exists.
+/// for setup at first use instead of assuming a lock exists. ``DeferredLockSetupNudge`` is that
+/// first-use prompt, and `progressPhotoLockNudgeAnsweredKey` is its one bit of memory.
 enum OnboardingDefaults {
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
     static let lockSetupDeferredKey = "lockSetupDeferred"
+    /// `true` once the progress-photo lock-setup nudge has been answered — "Not now", or a lock set
+    /// up from it — so it never shows again. Device-local UI memory: no content, no timestamps.
+    static let progressPhotoLockNudgeAnsweredKey = "fernlet.progressPhotos.lockNudgeAnswered"
+}
+
+/// The first-use prompt a deferred onboarding lock step promises, on the one lockable surface that
+/// keeps working without a lock: the progress-photo strip under Move.
+///
+/// `OnboardingDefaults.lockSetupDeferredKey` has said since it was written that lockable features
+/// "can prompt for setup at first use" — and until this type nothing read it. The Private hub owes
+/// no nudge (its gate will not open at all without a lock). The photo strip does, because it
+/// deliberately keeps capture working with no lock: a user who tapped "Skip for now" could fill it
+/// with body photos without ever hearing that the lock could cover them.
+///
+/// **When it is offered** — all three must hold: no lock is configured; the user DEFERRED the
+/// onboarding lock step (`lockSetupDeferred == true` — a user who chose a lock there and later
+/// removed it made that call deliberately, and nobody is assumed to have skipped a step they never
+/// saw); and it has not been answered yet.
+///
+/// **How it is answered** — "Not now", or a lock actually set up from it; either way it never
+/// returns. A setup sheet backed out of configures nothing and so answers nothing: the card stays.
+/// A lock set up from it also clears the deferral — the same write the onboarding lock step makes
+/// when a lock is chosen there — so the bit stays true to its name.
+///
+/// **What it never does** — gate, delay or intercept capture. It is an inline card ABOVE the
+/// capture control (``ProgressPhotoSectionContent``), never a modal in front of it.
+///
+/// Lives beside ``OnboardingDefaults`` on purpose: both keys it touches are literals declared in
+/// this file, which is what lets `PersistedSurfaceWipeBoundaryTests` resolve them to their rows
+/// rather than record a symbolic seam. `@MainActor` + `@Observable` because a SwiftUI view owns it
+/// as `@State` and must re-render the moment it is answered — `UserDefaults` is not observable.
+@MainActor
+@Observable
+final class DeferredLockSetupNudge {
+    /// The one surface a lock set up from the nudge opens: the strip the user is standing on, so
+    /// they land back on their photos rather than behind a prompt. The Private hub still asks for
+    /// the new passcode the first time it opens (`FernletLockService.configure(credential:grantingScope:)`).
+    static let grantingScope: FernletLockScope = .progressPhotos
+
+    /// Drives the lock-setup sheet. Raised only by ``setUpLock()``; SwiftUI lowers it on dismissal.
+    var isPresentingLockSetup = false
+    /// Mirrors the persisted answer so the card disappears the moment it is answered.
+    private(set) var isAnswered: Bool
+    @ObservationIgnored private let defaults: UserDefaults
+
+    /// - Parameter defaults: Where the answer and the deferral live. Production uses `.standard`,
+    ///   which the onboarding lock step writes; tests pass a throwaway suite.
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.isAnswered = defaults.bool(forKey: OnboardingDefaults.progressPhotoLockNudgeAnsweredKey)
+    }
+
+    /// Whether the card shows right now — the three conditions in the type's documentation.
+    func isOffered(isLockConfigured: Bool) -> Bool {
+        guard !isLockConfigured, !isAnswered else { return false }
+        return defaults.bool(forKey: OnboardingDefaults.lockSetupDeferredKey)
+    }
+
+    /// "Set up lock": presents `FernletLockSetupView` granting ``grantingScope``.
+    func setUpLock() {
+        isPresentingLockSetup = true
+    }
+
+    /// "Not now": answered for good. The deferral itself stands — no lock was set up.
+    func notNow() {
+        recordAnswered()
+    }
+
+    /// The setup sheet's `onDismiss`. Only a lock that now EXISTS answers the nudge; a sheet the user
+    /// cancelled configured nothing, so the card stays for them.
+    func lockSetupDismissed(isLockConfigured: Bool) {
+        guard isLockConfigured else { return }
+        recordAnswered()
+        defaults.set(false, forKey: OnboardingDefaults.lockSetupDeferredKey)
+    }
+
+    private func recordAnswered() {
+        defaults.set(true, forKey: OnboardingDefaults.progressPhotoLockNudgeAnsweredKey)
+        isAnswered = true
+    }
 }
 
 /// Chooses the ``ExistingCloudDataDetecting`` implementation for this launch.

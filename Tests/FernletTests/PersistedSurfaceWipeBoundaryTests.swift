@@ -305,6 +305,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "lockSetupDeferred": .kept(
             reason: "Records that the user skipped app-lock setup during onboarding. The app lock itself survives this funnel by design, so clearing this bit would re-nag about setting up a lock the device may already have."
         ),
+        "fernlet.progressPhotos.lockNudgeAnswered": .kept(
+            reason: "Records that the user answered the progress-photo lock-setup nudge (DeferredLockSetupNudge) with 'Not now' or by setting a lock up from it. A UI decision in the same class as lockSetupDeferred beside it: one boolean, no content, no timestamps. The app lock and the deferral both survive this funnel by design, so clearing it would only re-ask a question the user already answered."
+        ),
 
         // ── Symbolic seams: kept keys this wall cannot resolve to a literal ──────────────────────
         // Each is a real binding whose key constant lives in ANOTHER file, so rule (c) — resolve the

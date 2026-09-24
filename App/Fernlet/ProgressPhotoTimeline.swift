@@ -27,11 +27,15 @@ struct ProgressPhotoSection: View {
     // the timeline reveals behind the Fernlet lock (fail-closed at the reveal seam: no thumbnail
     // decodes until unlocked). It is the SAME passcode as the Private Hub but its OWN unlock session
     // (`.progressPhotos`): unlocking here reveals only this strip and its photo detail, and the hub
-    // stays locked. With no lock configured the section behaves exactly as before, keeping the
-    // capture affordance discoverable.
+    // stays locked. With no lock configured the strip stays open and capture stays one tap away —
+    // and a user who deferred the onboarding lock step also gets `DeferredLockSetupNudge`'s card
+    // above it, once, offering to set the lock up (granting THIS surface) or not. The card sits
+    // beside capture and never in front of it (`ProgressPhotoSectionContent`).
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingUnlock = false
+    /// The first-use lock-setup prompt the onboarding "Skip for now" promised.
+    @State private var lockNudge = DeferredLockSetupNudge()
     // Set just before pushing the detail so the re-lock-on-disappear doesn't fire during the push (which
     // would make the also-gated detail re-prompt). Reset on re-appear.
     @State private var isOpeningDetail = false
@@ -57,19 +61,32 @@ struct ProgressPhotoSection: View {
         lockService.isUnlocked(for: .progressPhotos)
     }
 
-    /// Whether the real photos may be shown. Gated behind THIS surface's own unlock when configured —
-    /// an unlock held by the Private Hub or App-lock settings reveals nothing here.
-    private var isRevealed: Bool { !gateActive || isUnlocked }
+    /// What the section shows: the unlock placeholder, or the strip with its capture control (plus
+    /// the lock-setup nudge above it when offered). Gated behind THIS surface's own unlock when a lock
+    /// is configured — an unlock held by the Private Hub or App-lock settings reveals nothing here.
+    private var content: ProgressPhotoSectionContent {
+        ProgressPhotoSectionContent.resolve(
+            gateActive: gateActive,
+            isUnlocked: isUnlocked,
+            offersLockNudge: lockNudge.isOffered(isLockConfigured: lockService.isLockConfigured)
+        )
+    }
 
     /// Hide the app-switcher snapshot of body photos while the app isn't frontmost.
     private var redactForSnapshot: Bool { scenePhase != .active }
 
     var body: some View {
         FernletScrollSection("Progress photos") {
-            if isRevealed {
-                revealedContent
-            } else {
+            switch content {
+            case .locked:
                 lockedPlaceholder
+            case .revealed(let offersLockNudge):
+                VStack(alignment: .leading, spacing: 14) {
+                    if offersLockNudge {
+                        ProgressPhotoLockNudgeCard(onSetUpLock: lockNudge.setUpLock, onNotNow: lockNudge.notNow)
+                    }
+                    revealedContent
+                }
             }
         }
         .onAppear {
@@ -85,42 +102,58 @@ struct ProgressPhotoSection: View {
             sectionIsVisible = false
             reLockOnDisappear()
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            switch newPhase {
-            case .inactive:
-                suppressRelockTask?.cancel()
-                suppressRelock = true
-            case .active:
-                // Keep suppression briefly after returning to foreground so any spurious
-                // onDisappear/onAppear lifecycle events from the transition settle (same window as
-                // FernletLockGateModifier).
-                suppressRelockTask?.cancel()
-                suppressRelockTask = Task { @MainActor in
-                    do {
-                        try await Task.sleep(for: .milliseconds(1500))
-                    } catch {
-                        // Cancelled: a newer scene transition superseded this task and now owns
-                        // `suppressRelock`/`pendingRelock` — touch neither, or we would clear the
-                        // newer task's suppression early and run its deferred lock.
-                        return
-                    }
-                    suppressRelock = false
-                    // Execute a deferred genuine-departure lock if the section hasn't re-appeared.
-                    if pendingRelock && !sectionIsVisible && !isCapturing {
-                        pendingRelock = false
-                        // Only our own unlock — if another surface has since claimed one, locking
-                        // here would yank it out from under whoever is on screen now.
-                        if lockService.isUnlocked(for: .progressPhotos) {
-                            lockService.lock(reason: .viewDisappeared)
-                        }
-                    }
-                }
-            default:
-                break
-            }
-        }
+        .onChange(of: scenePhase) { _, newPhase in handleScenePhaseChange(newPhase) }
         .sheet(isPresented: $showingUnlock) {
             ProgressPhotoUnlockSheet(lockService: lockService)
+        }
+        // The nudge's "Set up lock". Hung on the section, not on the card: the card disappears the
+        // instant the lock exists, and a sheet whose presenter vanished would be torn down mid-way
+        // through the setup's own success state. Granting `.progressPhotos` means the user lands
+        // back on their photos, unlocked for this surface only; the lock service is passed in
+        // because sheets do not reliably inherit it.
+        .sheet(isPresented: $lockNudge.isPresentingLockSetup, onDismiss: {
+            lockNudge.lockSetupDismissed(isLockConfigured: lockService.isLockConfigured)
+        }) {
+            FernletLockSetupView(grantingScope: DeferredLockSetupNudge.grantingScope)
+                .environment(lockService)
+        }
+    }
+
+    /// Scene-phase half of the re-lock machinery: suppresses the disappear re-lock while the scene is
+    /// inactive (Face ID's system dialog bounces it), and for 1.5 s after it returns to active, then
+    /// runs any genuine-departure lock that was deferred inside that window.
+    private func handleScenePhaseChange(_ newPhase: ScenePhase) {
+        switch newPhase {
+        case .inactive:
+            suppressRelockTask?.cancel()
+            suppressRelock = true
+        case .active:
+            // Keep suppression briefly after returning to foreground so any spurious
+            // onDisappear/onAppear lifecycle events from the transition settle (same window as
+            // FernletLockGateModifier).
+            suppressRelockTask?.cancel()
+            suppressRelockTask = Task { @MainActor in
+                do {
+                    try await Task.sleep(for: .milliseconds(1500))
+                } catch {
+                    // Cancelled: a newer scene transition superseded this task and now owns
+                    // `suppressRelock`/`pendingRelock` — touch neither, or we would clear the
+                    // newer task's suppression early and run its deferred lock.
+                    return
+                }
+                suppressRelock = false
+                // Execute a deferred genuine-departure lock if the section hasn't re-appeared.
+                if pendingRelock && !sectionIsVisible && !isCapturing {
+                    pendingRelock = false
+                    // Only our own unlock — if another surface has since claimed one, locking
+                    // here would yank it out from under whoever is on screen now.
+                    if lockService.isUnlocked(for: .progressPhotos) {
+                        lockService.lock(reason: .viewDisappeared)
+                    }
+                }
+            }
+        default:
+            break
         }
     }
 
@@ -279,6 +312,86 @@ struct ProgressPhotoSection: View {
                 .font(.fernlet(.labelSmall))
                 .hidden()
         }
+    }
+}
+
+/// What the progress-photo section shows, decided in ONE place so the lock-setup nudge can never take
+/// the place of capture.
+///
+/// `.locked` is the tap-to-unlock placeholder: a lock is configured and this surface does not hold
+/// the unlock. `.revealed` is the strip (or its empty state) WITH its capture control, and its
+/// `offersLockNudge` puts ``DeferredLockSetupNudge``'s card ABOVE that control — never instead of
+/// it. The nudge needs "no lock configured" and the placeholder needs a configured one, so the two
+/// never meet; `ProgressPhotoLockNudgeTests` pins that over every input.
+enum ProgressPhotoSectionContent: Equatable {
+    /// Behind a configured lock this surface has not unlocked.
+    case locked
+    /// The photos and the capture control, with the lock-setup nudge above them when offered.
+    case revealed(offersLockNudge: Bool)
+
+    /// - Parameters:
+    ///   - gateActive: A lock is configured (and the UI-test bypass is off).
+    ///   - isUnlocked: `.progressPhotos` holds the unlock in force.
+    ///   - offersLockNudge: ``DeferredLockSetupNudge/isOffered(isLockConfigured:)``.
+    static func resolve(gateActive: Bool, isUnlocked: Bool, offersLockNudge: Bool) -> Self {
+        guard !gateActive || isUnlocked else { return .locked }
+        return .revealed(offersLockNudge: offersLockNudge)
+    }
+}
+
+/// The gentle, one-time card above the progress-photo strip for a user who skipped the onboarding
+/// lock step: progress photos can sit behind the app lock — "Set up lock" or "Not now".
+///
+/// Purely presentational; ``DeferredLockSetupNudge`` decides when it shows and records the answer.
+/// Inline rather than modal, so it never blocks or delays capture — the copy says photos can keep
+/// being added either way. Buttons stack at accessibility text sizes (``AdaptiveStack``), and each
+/// carries a hint for what happens next, since "Not now" retires the card for good.
+struct ProgressPhotoLockNudgeCard: View {
+    /// Opens lock setup granting `.progressPhotos`.
+    let onSetUpLock: () -> Void
+    /// Answers the nudge without a lock; the card does not come back.
+    let onNotNow: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "lock.shield")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                    // Decorative: the heading says what the card is about.
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Protect your progress photos")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Progress photos can sit behind Fernlet's app lock, so nobody holding your unlocked phone can scroll through them. You can keep adding photos either way, and set the lock up any time in Settings.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+            }
+            AdaptiveStack(horizontalAlignment: .leading) {
+                Button("Set up lock", action: onSetUpLock)
+                    .buttonStyle(ActionPillButtonStyle(.primary))
+                    .accessibilityHint("Creates a passcode for Fernlet's app lock.")
+                    .accessibilityIdentifier("move.progressPhotos.lockNudge.setUp")
+                Button("Not now", action: onNotNow)
+                    .buttonStyle(ActionPillButtonStyle(.secondary))
+                    .accessibilityHint("Hides this suggestion. You can set up the lock later in Settings.")
+                    .accessibilityIdentifier("move.progressPhotos.lockNudge.notNow")
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.moss.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.moss.opacity(0.3), lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("move.progressPhotos.lockNudge")
     }
 }
 
