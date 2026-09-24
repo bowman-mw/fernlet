@@ -2253,7 +2253,7 @@ private struct LockedMacroSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label(foodItem.source == .manual ? "Saved macros" : "USDA macros", systemImage: foodItem.source == .manual ? "checkmark.circle.fill" : "lock.fill")
+                Label(macroSourceTitle, systemImage: foodItem.source == .manual ? "checkmark.circle.fill" : "lock.fill")
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.moss)
                 Spacer()
@@ -2265,12 +2265,28 @@ private struct LockedMacroSummary: View {
             Text("P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
+            // The licence notice for an attributed source (Open Food Facts, ODbL).
+            if let attribution = foodItem.source.attributionLine {
+                Text(verbatim: attribution)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+            }
             Text("\(foodItem.category) · \(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) reference")
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
         }
         .padding(12)
         .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// Where the locked macros came from. An Open Food Facts import must not be labelled USDA; the
+    /// other sources keep the wording they always had.
+    private var macroSourceTitle: LocalizedStringKey {
+        switch foodItem.source {
+        case .manual: "Saved macros"
+        case .openFoodFacts: "Open Food Facts macros"
+        case .usda, .aiResolved: "USDA macros"
+        }
     }
 }
 

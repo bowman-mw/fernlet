@@ -100,6 +100,31 @@ public struct WebNutritionLookupPayload: AIContextPayload {
     }
 }
 
+// MARK: - Barcode lookup payload
+
+/// Fields allowed for an online barcode lookup (Open Food Facts).
+///
+/// The second payload whose destination LEAVES the device: when a scanned barcode misses every local
+/// catalog and the user taps to look it up, the barcode digits go to Open Food Facts. Like
+/// ``WebNutritionLookupPayload`` it rides the web-nutrition-lookup consent and is audited at
+/// DISPATCH (see ``AIAuditLog``'s dispatch-then-update contract), under the same
+/// `AIDestination.webNutritionLookup` rung. The digits are a product code, not a user identifier —
+/// nothing else about the person, their day or their device is carried. Built by the app's
+/// barcode not-found flow; no model ever sees it.
+public struct BarcodeLookupPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
+    public let payloadKind = "barcode-lookup"
+    /// The canonical product code sent in the request path.
+    public let barcode: String
+
+    public var includedFieldNames: [String] { ["barcode"] }
+
+    public init(barcode: String) {
+        self.barcode = barcode
+    }
+}
+
 // MARK: - Day summary payload
 
 /// Fields allowed for day-summary generation.

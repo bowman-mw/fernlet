@@ -610,9 +610,14 @@ struct BarcodeDataScannerView: UIViewControllerRepresentable {
 /// nutrition label (the existing `NutritionLabelScanner` flow), and it becomes a user `FoodItem`
 /// with the barcode remembered — the next scan resolves instantly via `FoodCatalog.item(forBarcode:)`.
 ///
-/// TODO (future opt-in): resolve unknown barcodes via a web UPC lookup behind the existing
-/// `webNutritionLookupEnabled` setting (`FoodProductWebImporter` pattern). Deliberately NOT wired
-/// this pass — barcode scanning stays fully offline.
+/// **Optional online lookup (tracker §3.3).** For a valid barcode the screen also offers
+/// ``OpenFoodFactsLookupCard``: one explicit tap per lookup, only behind the web-nutrition-lookup
+/// consent, sending only the barcode digits to Open Food Facts. Scanning itself stays offline. A
+/// found product PREFILLS this screen (`applyOnlineImport(_:)`) rather than saving anything, so the
+/// screen's own review gate — the fix-1.14 plausibility and completeness nudges on "Remember this
+/// food" — runs over Open Food Facts' values exactly as over a scanned label. Remembering then saves
+/// a `.openFoodFacts` user food (`rememberOnlineImport(_:)`); rescanning the label first hands the
+/// numbers back to the user, and the save is an ordinary `.manual` food.
 struct BarcodeNotFoundView: View {
     var store: FernletStore
     let barcode: String
@@ -658,6 +663,9 @@ struct BarcodeNotFoundView: View {
     /// Set when the save comes back empty, so a failed "Remember this food" tap says something instead
     /// of leaving the screen unchanged.
     @State private var saveNotice: String?
+    /// The Open Food Facts product this screen was prefilled from, if the user looked the barcode up.
+    /// Cleared when they rescan the label, because the numbers are then their own.
+    @State private var onlineImport: OpenFoodFactsProduct?
 
     var body: some View {
         Group {
@@ -690,6 +698,10 @@ struct BarcodeNotFoundView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 namingHeader
+
+                if let lookupBarcode = OpenFoodFactsBarcode(scanned: barcode) {
+                    OpenFoodFactsLookupCard(store: store, barcode: lookupBarcode, onFound: applyOnlineImport)
+                }
 
                 Text("Give it a name and it'll be here next time you scan.")
                     .font(.fernlet(.body))
@@ -773,6 +785,8 @@ struct BarcodeNotFoundView: View {
         .navigationDestination(isPresented: $showingLabelScanner) {
             NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { result in
                 scanResult = result
+                // The user's own scan replaces Open Food Facts' numbers, so the save is theirs.
+                onlineImport = nil
                 if trimmedName.isEmpty, let servingSize = result.servingSize, servingSize.isEmpty == false {
                     name = "Scanned item (\(servingSize))"
                 }
@@ -993,6 +1007,12 @@ struct BarcodeNotFoundView: View {
     /// (whose "Done" fires `onCreated`, logging the meal). Shared by the save bar and the empty-macro
     /// "Remember it anyway" path so the create logic stays in one place.
     private func rememberFood() {
+        // Open Food Facts' numbers, still unchanged since the lookup, are saved with their provenance
+        // (and their licence notice) rather than as a hand-entered food.
+        if let onlineImport, Self.savesAsOnlineImport(scan: scanResult, imported: onlineImport) {
+            rememberOnlineImport(onlineImport)
+            return
+        }
         // The `?? 0`s below are the collapse the gate exists to warn about — and they stay, because
         // `ManualRecipeIngredientInput` and `Macros` store the macros as non-optional `Int` and this
         // round does not change that schema. What the gate buys is that the collapse is no longer
@@ -1022,6 +1042,47 @@ struct BarcodeNotFoundView: View {
         }
         saveNotice = nil
         rememberedItem = item
+    }
+
+    // MARK: Optional online lookup (tracker §3.3)
+
+    /// Prefills the screen from a product Open Food Facts knows: its name when the user has not typed
+    /// one, and its values as this screen's scan model so the review gate runs over them. Nothing is
+    /// saved here — the user still has to tap "Remember this food".
+    private func applyOnlineImport(_ product: OpenFoodFactsProduct) {
+        onlineImport = product
+        if trimmedName.isEmpty, let suggested = product.suggestedName {
+            name = suggested
+        }
+        if let imported = product.labelResult() {
+            scanResult = imported
+        }
+    }
+
+    /// Saves the reviewed Open Food Facts product under the name on screen, as a `.openFoodFacts`
+    /// user food, and hands off to the "Remembered" confirmation (whose "Done" leads to the serving
+    /// step — the meal is logged only there).
+    private func rememberOnlineImport(_ product: OpenFoodFactsProduct) {
+        guard let item = store.saveOpenFoodFactsFood(product, named: trimmedName) else {
+            saveNotice = String(localized: "barcode.onlineImport.saveFailed",
+                                defaultValue: "Fernlet couldn't save that food — give it a name and try again.",
+                                comment: "Shown under the barcode naming screen when saving a product found on Open Food Facts failed.")
+            FernletAuditLog.log(
+                "barcode.rememberOnlineImport.failed",
+                context: ["reason": "saveOpenFoodFactsFood returned nil"]
+            )
+            return
+        }
+        saveNotice = nil
+        rememberedItem = item
+    }
+
+    /// Whether a save should keep Open Food Facts provenance: only while the values on screen are
+    /// still exactly the ones the lookup produced. A label the user scanned since then makes the
+    /// numbers theirs; a product that had no usable nutrition never carries OFF provenance.
+    static func savesAsOnlineImport(scan: NutritionLabelResult?, imported: OpenFoodFactsProduct) -> Bool {
+        guard let scan, let importedScan = imported.labelResult() else { return false }
+        return scan == importedScan
     }
 }
 
@@ -1098,6 +1159,15 @@ private struct RememberedConfirmationView: View {
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
                 .frame(maxWidth: 300)
+
+            // The licence notice for a food whose numbers came from an attributed source (Open Food
+            // Facts, ODbL) — already localized by the domain model.
+            if let attribution = item.source.attributionLine {
+                Text(verbatim: attribution)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+            }
         }
     }
 

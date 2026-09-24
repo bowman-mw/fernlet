@@ -1120,15 +1120,48 @@ public nonisolated enum FoodDataType: String, Codable, Sendable {
     case restaurant   // Restaurant chain item
 }
 
-/// Who authored a food row: USDA data, an AI resolution, or the user.
+/// Who authored a food row: USDA data, an AI resolution, the user, or Open Food Facts contributors.
 ///
-/// Ranked manual > usda > aiResolved in search so the user's own foods always outrank lookalikes;
-/// decoded tolerantly on ``FoodItem`` (an unknown source freezes to `.manual`, never falsely
-/// claiming USDA or AI provenance).
+/// Ranked manual > openFoodFacts > usda > aiResolved in search so the user's own foods always
+/// outrank lookalikes; decoded tolerantly on ``FoodItem`` (an unknown source freezes to `.manual`,
+/// never falsely claiming USDA or AI provenance — which is also how a build that predates
+/// ``openFoodFacts`` reads such a row, parking the token and re-emitting it on save).
+///
+/// **The raw values are frozen persisted tokens** — they ride the synced `foodItems` blob — so they
+/// stay English forever. What a screen shows is ``FoodItem/dataSourceLabel`` and
+/// ``attributionLine``, never the raw value.
 public nonisolated enum FoodItemSource: String, Codable, Sendable {
     case usda
     case aiResolved
     case manual
+    /// A barcode product looked up on Open Food Facts at the user's explicit request (behind the
+    /// web-nutrition-lookup consent) and saved as a local user food only after they reviewed it.
+    /// The values are OFF contributors' (ODbL-licensed database), not the user's own entry, so the
+    /// row carries this token rather than `.manual` — and every surface that names the row's source
+    /// shows ``attributionLine``.
+    case openFoodFacts
+
+    /// The data-licence attribution a surface must show wherever it names this source, or `nil`
+    /// for a source that carries no attribution obligation.
+    public var attributionLine: String? {
+        switch self {
+        case .openFoodFacts: Self.openFoodFactsAttribution
+        case .usda, .aiResolved, .manual: nil
+        }
+    }
+
+    /// The Open Food Facts attribution notice: "Data from Open Food Facts (ODbL)".
+    ///
+    /// Open Food Facts publishes its database under the Open Database License (ODbL); this line is
+    /// the attribution for a product imported from it, shown on the lookup result, the saved-food
+    /// confirmation, and every search row or macro summary naming such a food. Localized display
+    /// copy — the frozen token is the raw value ``openFoodFacts``, never this string.
+    public static var openFoodFactsAttribution: String {
+        String(localized: "foodItemSource.openFoodFacts.attribution",
+               defaultValue: "Data from Open Food Facts (ODbL)",
+               bundle: .module,
+               comment: "Attribution shown wherever a food imported from the Open Food Facts database is displayed. 'Open Food Facts' is the database's name and 'ODbL' (Open Database License) is its licence — keep both untranslated.")
+    }
 }
 
 /// The free-string provenance tokens stamped into `Meal.source` (manual, label-scan, web-import, …).
@@ -1203,11 +1236,15 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
 
     /// Short, human-readable provenance shown on ingredient-search rows so the user can tell where a
     /// match came from (Item 3 ingredient-search UX). Branded/restaurant items prefer their brand
-    /// name; reference USDA foods read "USDA"; user and AI-derived foods are labelled distinctly.
+    /// name; reference USDA foods read "USDA"; user and AI-derived foods are labelled distinctly; an
+    /// Open Food Facts import reads as its ODbL attribution line, so the licence notice appears on
+    /// every row that names where the numbers came from.
     public var dataSourceLabel: String {
         switch source {
         case .manual:
             return "Your foods"
+        case .openFoodFacts:
+            return FoodItemSource.openFoodFactsAttribution
         case .aiResolved:
             return "AI estimate"
         case .usda:

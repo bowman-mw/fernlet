@@ -59,7 +59,8 @@ Concurrency is simple by design: the target has no `MainActor` default isolation
 records arriving from arbitrary tasks. Nothing here does I/O of its own beyond the injected seams,
 so gate resolution is safe to run on the main thread immediately before an `await` on a model
 session. Today only the on-device Foundation-model rung (and the distinct, settings-gated
-web-nutrition search path) is reachable; the PCC and BYOK rungs are encoded in the ladders but
+web-nutrition lane — the typed product search and, since 2026-09-24, the tap-per-lookup Open Food
+Facts barcode lookup, audited as ``BarcodeLookupPayload``) is reachable; the PCC and BYOK rungs are encoded in the ladders but
 report unavailable on the installed SDK, so the router lands on-device or deterministic everywhere.
 
 ### Localization: every string in this module is a token
@@ -83,6 +84,7 @@ separate display property in the UI layer and leave the token alone.
 - ``FoodSelectionPayload``
 - ``MealDecompositionPayload``
 - ``WebNutritionLookupPayload``
+- ``BarcodeLookupPayload``
 - ``DaySummaryPayload``
 - ``CompanionThoughtPayload``
 - ``AISignalSummary``

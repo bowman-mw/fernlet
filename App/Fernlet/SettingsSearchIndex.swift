@@ -289,7 +289,7 @@ nonisolated enum SettingsSearchIndex {
         ),
         SettingsSearchEntry(
             title: "Web nutrition lookup",
-            keywords: ["web nutrition", "web lookup", "internet", "online", "search provider", "packaged food", "chain food", "web"],
+            keywords: ["web nutrition", "web lookup", "internet", "online", "search provider", "packaged food", "chain food", "web", "barcode", "open food facts", "upc"],
             breadcrumb: "AI & data sources",
             route: .aiDataSources
         ),

@@ -307,7 +307,8 @@ enum FoodProductWebImportError: LocalizedError {
 /// structured sources: schema.org JSON-LD → visible nutrition-facts text → OCR over candidate label
 /// images → a last-resort on-device Foundation Models extraction over the cleaned body text.
 ///
-/// The workhorse behind the "Import product" flow (and the barcode TODO's future opt-in). Runs only
+/// The workhorse behind the "Import product" flow (an unknown BARCODE is looked up on Open Food Facts
+/// instead — `OpenFoodFactsClient`, one fixed host, no page scraping). Runs only
 /// behind the web-nutrition-lookup opt-in; fetches are https-only, size-capped (3 MB HTML, 12 MB
 /// images), and 15-second-bounded. Only the model tier touches AI — it routes through `FernletAIGate`,
 /// is audited in `AIAuditLog`, and its output must pass per-field bounds plus a macro-calorie

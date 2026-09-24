@@ -199,9 +199,24 @@ struct NoTrackingBoundaryTests {
         PermittedDestination(
             host: "html.duckduckgo.com",
             reason: """
-            The ONLY host the app itself chooses to contact. DuckDuckGo's no-JS HTML search endpoint, \
-            behind the web-nutrition-lookup opt-in: it receives the typed product query and nothing \
-            else — no account, no identifier, no health data (Fernlet/FoodProductWebImporter.swift).
+            One of the two hosts the app itself chooses to contact. DuckDuckGo's no-JS HTML search \
+            endpoint, behind the web-nutrition-lookup opt-in: it receives the typed product query and \
+            nothing else — no account, no identifier, no health data (Fernlet/FoodProductWebImporter.swift).
+            """
+        ),
+        PermittedDestination(
+            host: "world.openfoodfacts.org",
+            reason: """
+            The other host the app itself chooses to contact: Open Food Facts' read-only product API \
+            (v3.4), for the optional online UPC lookup when a scanned barcode misses every local catalog. \
+            Behind the SAME web-nutrition-lookup consent (webNutritionLookupEnabled + the recorded \
+            .accepted decision), and only on an explicit tap per lookup. It receives the barcode digits \
+            in the path, a fixed field list, Accept, Accept-Language: en, and a User-Agent naming the \
+            app, its version and the project site — no account, no email, no identifier, no health data; \
+            plus the IP address and TLS metadata any HTTPS request carries. Fetched through \
+            EphemeralWebSession with redirects refused, a 128 KB cap and a 20 s deadline \
+            (Fernlet/OpenFoodFactsClient.swift). Data is ODbL; every surface showing it carries the \
+            attribution line.
             """
         ),
         PermittedDestination(
@@ -237,16 +252,29 @@ struct NoTrackingBoundaryTests {
         )
     ]
 
-    /// The two files in shipping code that may PERFORM an outbound fetch.
+    /// The three files in shipping code that may PERFORM an outbound fetch.
     ///
     /// This closes the gap the host allowlist cannot: a host assembled at runtime from string pieces
     /// (`"api." + "tracker.io"`) has no `https://` literal to find. Pinning WHERE an HTTP client may
-    /// exist means such a call site has to live in one of these two reviewed files — both of which are
-    /// user-initiated web importers whose destinations are either the allowlisted search endpoint or a
-    /// URL the user supplied, and both of which are already SSRF-guarded and consent-gated.
+    /// exist means such a call site has to live in one of these reviewed files — each a
+    /// user-initiated lookup whose destinations are an allowlisted host or a URL the user supplied:
+    /// the two web importers are SSRF-guarded and consent-gated, and the Open Food Facts client
+    /// talks to exactly one fixed host with every redirect refused, behind the same consent.
     private static let pinnedWebImporterFiles: Set<String> = [
         "FoodProductWebImporter.swift",  // product-page lookup (opt-in web nutrition lookup)
-        "RecipeWebImporter.swift"        // recipe import from a URL the user pasted/shared
+        "RecipeWebImporter.swift",       // recipe import from a URL the user pasted/shared
+        "OpenFoodFactsClient.swift"      // barcode lookup on Open Food Facts (same opt-in, one tap each)
+    ]
+
+    /// The hosts each HTTP-client file may hardcode — an exact set PER FILE, so a destination
+    /// allowlisted for one client cannot quietly move into another (the global allowlist alone would
+    /// accept, say, the Open Food Facts host turning up inside the recipe importer). The keys must be
+    /// exactly ``permittedHTTPClientFiles``.
+    private static let expectedHostsPerClientFile: [String: Set<String>] = [
+        "FoodProductWebImporter.swift": ["duckduckgo.com", "html.duckduckgo.com"],
+        "RecipeWebImporter.swift": [],
+        "OpenFoodFactsClient.swift": ["world.openfoodfacts.org"],
+        "EphemeralWebSession.swift": []
     ]
 
     /// The one file that may CONSTRUCT a `URLSession` — `WebScrapingKit`'s private-browsing factory.
@@ -257,7 +285,7 @@ struct NoTrackingBoundaryTests {
     /// say "exactly one file constructs a session, and it is the ephemeral one".
     private static let ephemeralSessionFactoryFile = "EphemeralWebSession.swift"
 
-    /// Every file allowed to name a raw HTTP-client API: the two importers plus the session factory.
+    /// Every file allowed to name a raw HTTP-client API: the pinned fetchers plus the session factory.
     private static let permittedHTTPClientFiles: Set<String> =
         pinnedWebImporterFiles.union([ephemeralSessionFactoryFile])
 
@@ -541,9 +569,10 @@ struct NoTrackingBoundaryTests {
         )
     }
 
-    /// A raw HTTP client may exist only in the two pinned web importers and the session factory they
-    /// share, and the only hosts hardcoded inside them are the DuckDuckGo search endpoint and its
-    /// redirect base.
+    /// A raw HTTP client may exist only in the pinned fetchers (the two web importers and the Open
+    /// Food Facts client) and the session factory they share, and each of those files may hardcode
+    /// exactly its own hosts: the DuckDuckGo search endpoint and its redirect base in the product
+    /// importer, `world.openfoodfacts.org` in the Open Food Facts client, and none in the others.
     ///
     /// The host allowlist alone can be evaded by assembling a hostname at runtime; this cannot. A new
     /// `URLSession` anywhere else in shipping code — a "telemetry uploader", a "config fetcher" — fails
@@ -555,7 +584,7 @@ struct NoTrackingBoundaryTests {
         let repoRoot = Self.repoRoot()
 
         var clients: Set<String> = []
-        var hostsInClients: Set<String> = []
+        var hostsByClient: [String: Set<String>] = [:]
         var scanned = 0
         for root in Self.shippingSwiftRoots {
             for url in Self.swiftFiles(under: root, repoRoot: repoRoot) {
@@ -563,7 +592,7 @@ struct NoTrackingBoundaryTests {
                 scanned += 1
                 guard Self.namesHTTPClientAPI(in: source) else { continue }
                 clients.insert(url.lastPathComponent)
-                hostsInClients.formUnion(Self.hardcodedHosts(in: source))
+                hostsByClient[url.lastPathComponent, default: []].formUnion(Self.hardcodedHosts(in: source))
             }
         }
         #expect(scanned >= Self.minimumShippingFilesScanned, "Scanned only \(scanned) shipping Swift files (floor \(Self.minimumShippingFilesScanned)) — discovery is broken.")
@@ -580,9 +609,17 @@ struct NoTrackingBoundaryTests {
         )
 
         #expect(
-            hostsInClients == ["duckduckgo.com", "html.duckduckgo.com"],
-            "The hosts hardcoded inside the web importers are \(hostsInClients.sorted()), expected the DuckDuckGo search endpoint and its redirect base only."
+            Set(Self.expectedHostsPerClientFile.keys) == Self.permittedHTTPClientFiles,
+            "expectedHostsPerClientFile covers \(Self.expectedHostsPerClientFile.keys.sorted()), but the permitted HTTP-client files are \(Self.permittedHTTPClientFiles.sorted()) — every pinned client needs its exact host set."
         )
+        for file in Self.permittedHTTPClientFiles.sorted() {
+            let found = hostsByClient[file, default: []]
+            let expected = Self.expectedHostsPerClientFile[file, default: []]
+            #expect(
+                found == expected,
+                "\(file) hardcodes \(found.sorted()), expected exactly \(expected.sorted()). A client's destinations are pinned per file — adding one is a new PermittedDestination AND an entry here AND a row in Docs/No-Tracking-Wall.md §3, in the same commit."
+            )
+        }
     }
 
     /// Network.framework's local-link API lives in exactly the three proximity radio files, and
@@ -668,12 +705,13 @@ struct NoTrackingBoundaryTests {
     ///    trivially satisfied by `URLSession(configuration: someConfigVariable)`.
     /// 3. **The factory still sets every privacy knob.** Otherwise `.ephemeral` alone would pass while
     ///    quietly keeping an in-memory cookie jar and credential store for the process lifetime.
-    /// 4. **Both importers actually reference the factory.** Otherwise deleting the call site and
+    /// 4. **Every pinned fetcher actually references the factory** (both web importers and the Open
+    ///    Food Facts client). Otherwise deleting the call site and
     ///    reverting to `URLSession.shared` would fail rule 1 — but deleting the fetch and reintroducing
     ///    it as, say, an `NWConnection` would not, and coverage would silently drop to zero.
     ///
     /// What this deliberately does NOT check: timeouts, `User-Agent`, `Accept`, redirect delegates,
-    /// content-type checks, and body caps. Those differ between the two importers on purpose (see
+    /// content-type checks, and body caps. Those differ between the fetchers on purpose (see
     /// Docs/No-Tracking-Wall.md §2a) and flattening them would be a behaviour change dressed as a
     /// privacy rule.
     @Test func everyOutboundFetchUsesTheEphemeralPrivateTabSession() throws {
@@ -746,7 +784,7 @@ struct NoTrackingBoundaryTests {
             Issue.record("Could not find \(Self.ephemeralSessionFactoryFile) under \(Self.shippingSwiftRoots) — the private-browsing session factory was renamed or deleted, and this whole rule is unenforced.")
         }
 
-        // 4) Both importers actually route through it (coverage cannot silently drop to zero).
+        // 4) Every pinned fetcher actually routes through it (coverage cannot silently drop to zero).
         let importersMissingFactory = Self.pinnedWebImporterFiles.subtracting(factoryReferences).sorted()
         #expect(
             importersMissingFactory.isEmpty,

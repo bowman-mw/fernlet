@@ -11,6 +11,12 @@ page, both flatten a page to plain text for on-device extraction, and both had g
 of the same regex, entity-decoding, and JSON-LD-walking helpers. WebScrapingKit is where that shared
 half now lives, plus one thing neither had: a deliberately amnesiac ``EphemeralWebSession``.
 
+A third caller uses the session but none of the scraping helpers: the optional online UPC lookup's
+Open Food Facts client (`App/Fernlet/OpenFoodFactsClient.swift`, 2026-09-24), which fetches one
+field-trimmed JSON product record from a single fixed host. It keeps its own request policy — an
+honest `User-Agent`, a JSON content type, every redirect refused, a 128 KB cap and a 20 s deadline —
+exactly as the two importers keep theirs.
+
 **Why this is its own module, and why it has no dependencies.** The obvious home for shared string
 helpers would be `FernletFoundation`, but `AIProviders` is a *walled* target on the S3 privacy wall —
 its dependency list is the enforcement mechanism, and every edge added to it widens what walled AI
@@ -84,10 +90,11 @@ not own. Per-request idle timeouts still belong to each caller and still apply.
 
 **Position relative to the walls.** On the S3 wall: Layer 0, no dependencies, imported by
 `AIProviders` and by the app target through the `FernletKit` umbrella product. On the no-tracking
-wall: `EphemeralWebSession.swift` is one of the three files permitted to hold an HTTP client, and
-`Tests/FernletTests/NoTrackingBoundaryTests` asserts that no shipping file uses `URLSession.shared` or a
-`.default` configuration, that any `URLSession(configuration:)` is the ephemeral one, and that both
-importers route through this type. See `Docs/No-Tracking-Wall.md` §2a.
+wall: `EphemeralWebSession.swift` is one of the four files permitted to hold an HTTP client (with the
+two importers and the Open Food Facts client), and `Tests/FernletTests/NoTrackingBoundaryTests` asserts
+that no shipping file uses `URLSession.shared` or a `.default` configuration, that any
+`URLSession(configuration:)` is the ephemeral one, and that every pinned fetcher routes through this
+type. See `Docs/No-Tracking-Wall.md` §2a.
 
 **Concurrency.** The target sets no `defaultIsolation(MainActor.self)`, so everything is nonisolated —
 these are pure statics called from a MainActor-default app target and a MainActor-default

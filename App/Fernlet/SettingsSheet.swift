@@ -1300,7 +1300,7 @@ struct SettingsSheet: View {
             Divider().overlay(Color.bark.opacity(0.08))
             Toggle("Web nutrition lookup", isOn: webNutritionLookupBinding)
                 .disabled(store.settings.aiStatus == .off)
-            Text("When you first use this, Fernlet will ask before sending your typed product search to DuckDuckGo. Turn it off here at any time to revoke permission.")
+            Text("When you first use this, Fernlet will ask before sending your typed product search to DuckDuckGo. Once allowed, you can also tap to look up an unknown scanned barcode on Open Food Facts — only the barcode's number is sent. Turn it off here at any time to revoke permission.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()

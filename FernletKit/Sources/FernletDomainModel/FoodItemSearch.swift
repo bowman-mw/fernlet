@@ -123,7 +123,8 @@ public nonisolated enum FoodBrandLexicon {
 ///    history weight can never present a row the cold pipeline refused. `history` defaults to
 ///    ``FoodSearchHistory/empty`` on every entry point, and ``scoredResults(for:in:limit:stripsStopwords:)``
 ///    has no parameter for it at all — so every confidence gate is cold by construction;
-/// 2. `sourcePriority` (manual > USDA > AI), then brand-aware `dataTypePriority`, ABOVE the score.
+/// 2. `sourcePriority` (manual > Open Food Facts > USDA > AI), then brand-aware `dataTypePriority`,
+///    ABOVE the score.
 ///    A plain ingredient query therefore keeps generic USDA rows above commercial titles whose
 ///    supplier is only stored in `brandSource`; an explicit recognized restaurant cue is the exception;
 /// 3. the relevance score (exact/prefix/substring name hits, per-token coverage, length penalty,
@@ -681,9 +682,19 @@ public nonisolated enum FoodItemSearch {
     nonisolated private static let cannedImpliedTokens: Set<String>  = ["canned", "tinned"]
     nonisolated private static let driedImpliedTokens: Set<String>   = ["dried", "jerky", "dehydrated"]
 
+    /// Step 2's source key. Every source carries a DISTINCT priority on purpose: the comparators
+    /// (`ranksAhead`, `Index.exactNameMatch`) return as soon as two rows' sources differ, so two
+    /// sources sharing a number would compare equal there and skip the data-type and score keys —
+    /// an inconsistent sort order, not merely a tie.
+    ///
+    /// `.openFoodFacts` sits just below `.manual`: a barcode product the user looked up, reviewed and
+    /// chose to keep has the standing of the products they remember by hand (which is what the same
+    /// screen saves without the lookup), minus the authorship — so it outranks reference and
+    /// AI-estimated lookalikes, and never the user's own entry.
     private static func sourcePriority(_ source: FoodItemSource) -> Int {
         switch source {
-        case .manual: 3
+        case .manual: 4
+        case .openFoodFacts: 3
         case .usda: 2
         case .aiResolved: 1
         }

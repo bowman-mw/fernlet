@@ -355,9 +355,9 @@ public enum RecipeWebImporter {
     /// **Public because the product importer needs the same delegate** (2026-08-18). Reused, not
     /// relocated: `App/Fernlet/FoodProductWebImporter.swift` passes one of these to its own page
     /// fetch so both egress seams re-validate every hop with one implementation. Moving it into
-    /// `WebScrapingKit` instead would drag ``isSafePublicHTTPSURL(_:)`` below the wall and add a
-    /// third shipping file naming `URLSession` — which the no-tracking wall's
-    /// `onlyThePinnedWebImportersMayHoldAnHTTPClient` pins to exactly three.
+    /// `WebScrapingKit` instead would drag ``isSafePublicHTTPSURL(_:)`` below the wall and add
+    /// another shipping file naming `URLSession` — which the no-tracking wall's
+    /// `onlyThePinnedWebImportersMayHoldAnHTTPClient` pins to an exact, reviewed set of files.
     ///
     /// Explicitly `nonisolated`: this module is built with `.defaultIsolation(MainActor.self)`
     /// (see `Package.swift`), and URLSession invokes the delegate off the main actor.

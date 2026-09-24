@@ -162,6 +162,7 @@ struct AIAuditRow: Identifiable, Equatable {
         case "food-selection": return .known("Food match")
         case "meal-decomposition": return .known("Meal breakdown")
         case "web-nutrition": return .known("Nutrition web search")
+        case "barcode-lookup": return .known("Barcode lookup on Open Food Facts")
         case "web-nutrition-extraction": return .known("Reading a nutrition page")
         case "day-summary": return .known("Day summary")
         case "companion-thought": return .known("Companion thought")

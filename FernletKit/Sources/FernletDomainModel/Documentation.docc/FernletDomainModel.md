@@ -190,6 +190,18 @@ RMR), and never above maintenance. Evidence and options: `Docs/Calorie-Deficit-R
 - ``FoodDataType``
 - ``FoodItemSource``
 - ``FoodBarcode``
+
+``FoodItemSource`` gained its fourth frozen token, `openFoodFacts`, on 2026-09-24: a barcode product
+the user looked up on Open Food Facts (behind the web-nutrition-lookup consent, one explicit tap per
+lookup) and kept after reviewing it. It is a user food row — synced with the rest of `foodItems`,
+never merged into the bundled catalog — whose values are Open Food Facts contributors', so it is
+not `.manual`. Two invariants ride on it: every surface that names such a row's source shows
+``FoodItemSource/attributionLine`` (the ODbL notice), which ``FoodItem/dataSourceLabel`` does for
+the search rows; and search ranks it manual > openFoodFacts > usda > aiResolved, each source on a
+distinct priority because the comparators stop at the first differing source. A build that predates
+the token reads the row as `.manual` and parks the token (`EnumDecodeCompat`), so a round trip
+through an older device loses nothing.
+
 ``FoodItemSearch``'s comparator has one per-user input, research §26 fix 1.9's
 ``FoodSearchHistory``: the foods this person has logged, weighted by frequency and recency, read as
 its TOP ranking key. It defaults to ``FoodSearchHistory/empty`` on every entry point and

@@ -53,8 +53,9 @@ Three concrete commitments follow from it:
    crypto library. The app has never shown an ATT prompt and structurally cannot.
 3. **Everything the app sends leaves for a reason the user chose.** The complete outbound surface is
    enumerated in §4 and is either Apple-operated infrastructure the user opted into (iCloud sync,
-   WeatherKit), a single search endpoint behind an explicit off-by-default toggle, a URL the *user*
-   pasted, or a link-local peer in the same room.
+   WeatherKit), one of two fixed lookup endpoints behind a single explicit off-by-default toggle (a
+   search endpoint for typed product searches, and Open Food Facts' product database for a scanned
+   barcode, one tap per lookup), a URL the *user* pasted, or a link-local peer in the same room.
 
 The point of writing this down mechanically is not that the current code is clean — it is, and the
 numbers in §7 prove it. The point is the **next** commit. A well-meaning contributor adding Firebase
@@ -76,10 +77,10 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 | `noAdvertisingOrTrackingSDKIsReferencedAnywhere` | 45 banned SDK/framework module names and 11 banned tracking symbols, in **every** Swift file of **every** target — app, all 25 package modules, all three extensions, and both test targets. | `import FirebaseAnalytics`, `#if canImport(AppTrackingTransparency)`, `ASIdentifierManager.shared().advertisingIdentifier`, `identifierForVendor`. |
 | `thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage` | Any package dependency other than CryptoSwift, in `FernletKit/Package.swift` **or** the pbxproj's `XCRemoteSwiftPackageReference` / `packageProductDependencies`. | Adding *any* new SPM dependency, named or not — the rule is an exact-set match, not a blocklist. |
 | `hardcodedNetworkDestinationsAreExactlyTheAllowlist` | Any hardcoded host in shipping code outside the §3 allowlist — **and** any stale allowlist entry the code no longer uses. | `URL(string: "https://telemetry.fernlet.com/v1/events")`. |
-| `onlyThePinnedWebImportersMayHoldAnHTTPClient` | A raw HTTP/socket client (`URLSession`, `URLRequest`, `NWConnection`, `WKWebView`, …) anywhere in shipping code except the two pinned web importers and the session factory they share. | A new `URLSession` in a "TelemetryUploader.swift" — *even if its hostname is assembled at runtime*, which is the gap the host allowlist alone cannot close. |
+| `onlyThePinnedWebImportersMayHoldAnHTTPClient` | A raw HTTP/socket client (`URLSession`, `URLRequest`, `NWConnection`, `WKWebView`, …) anywhere in shipping code except the three pinned fetchers (the two web importers and the Open Food Facts client) and the session factory they share — and, per file, any hardcoded host other than that file's own exact set (DuckDuckGo's two hosts in the product importer, `world.openfoodfacts.org` in the Open Food Facts client, none elsewhere). | A new `URLSession` in a "TelemetryUploader.swift" — *even if its hostname is assembled at runtime*, which is the gap the host allowlist alone cannot close; or an allowlisted host drifting into a client it was never reviewed for. |
 | `onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI` | Network.framework's **local-link** surface (`NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord`) anywhere in shipping code except the three QUIC radios and the DEBUG feasibility probe. A **second marker family with its own permit set** — see §4c. | A new `NetworkListener` in a feature that "just needs to see nearby devices" — a new local-network capability nobody reviewed. |
 | `theTwoNetworkPermitSetsAreDisjoint` | Any file holding **both** network permissions, and any marker on both families' lists. | Fixing the marker gap by appending the TN3213 names to `httpClientMarkers`, which would have handed the mesh transport a `URLSession` too. |
-| `everyOutboundFetchUsesTheEphemeralPrivateTabSession` | `URLSession.shared`, `URLSessionConfiguration.default`, or `.background` **anywhere** in shipping code; a `URLSession(configuration:)` built outside the one reviewed factory or without `.ephemeral`; a factory that has quietly stopped setting one of its seven privacy knobs; an importer that no longer routes through it. See §2a. | Someone "just quickly" fetching something with `URLSession.shared`, which silently re-attaches the process-wide cookie jar. |
+| `everyOutboundFetchUsesTheEphemeralPrivateTabSession` | `URLSession.shared`, `URLSessionConfiguration.default`, or `.background` **anywhere** in shipping code; a `URLSession(configuration:)` built outside the one reviewed factory or without `.ephemeral`; a factory that has quietly stopped setting one of its seven privacy knobs; a pinned fetcher that no longer routes through it. See §2a. | Someone "just quickly" fetching something with `URLSession.shared`, which silently re-attaches the process-wide cookie jar. |
 | `noPersistentWebViewExistsAndInAppBrowsersArePinned` | Any `WKWebView` / `WKWebViewConfiguration` / `WKProcessPool` / `WKHTTPCookieStore` in shipping code (there are none), and, forward-compatibly, any that appears without `WKWebsiteDataStore.nonPersistent()`. Plus an exact-set pin on which file may present an out-of-process browser. | Adding a `WKWebView` for an OAuth flow or a help page — its default data store is an on-disk cookie/localStorage jar shared app-wide. |
 | `privacyManifestsDeclareNoTrackingOrAdvertising` | `NSPrivacyTracking: true`, a non-empty `NSPrivacyTrackingDomains`, or a collected data type flagged for tracking / third-party advertising / developer advertising / analytics, in any of the four `PrivacyInfo.xcprivacy` files (the Messages extension's joined the pin on 2026-09-23). | Flipping the manifest to match a newly added SDK — which is what an SDK's own integration guide tells you to do. |
 | `plistFamilyFilesDeclareNoTrackingPermissionOrForeignContainer` | `NSUserTrackingUsageDescription`, `SKAdNetworkItems`, or `NSAdvertisingAttributionReportEndpoint` in any Info.plist/entitlements, plus any iCloud container other than the user's own `iCloud.MBO.Fernlet`. | Adding the ATT usage string, or repointing sync at somebody else's CloudKit container. |
@@ -115,7 +116,8 @@ hand it straight back. Nothing in that code looked like tracking; the tracking w
 
 **The fix.** One shared session, built once, in
 [`FernletKit/Sources/WebScrapingKit/EphemeralWebSession.swift`](../FernletKit/Sources/WebScrapingKit/EphemeralWebSession.swift).
-Both importers fetch through `EphemeralWebSession.shared` and nothing else builds a session:
+Both importers — and, since 2026-09-24, the Open Food Facts barcode client — fetch through
+`EphemeralWebSession.shared`, and nothing else builds a session:
 
 | Setting | Value | Redundant under `.ephemeral`? |
 |---|---|---|
@@ -139,7 +141,11 @@ checks the raw `Content-Type` header, and **throws** on an oversized body. The r
 identifies itself honestly as `App/Fernlet/1.0`, checks `httpResponse.mimeType`, **truncates** at the cap,
 and attaches a per-task `RedirectValidator` delegate that re-runs its SSRF guard on every redirect hop.
 That delegate is a *task* delegate, so it works identically on the custom session — the SSRF guards
-were not touched by this change.
+were not touched by this change. The Open Food Facts client (`App/Fernlet/OpenFoodFactsClient.swift`,
+2026-09-24) identifies itself honestly as `Fernlet/<version> (fernlet.com)` — the form Open Food Facts'
+API policy asks for, with the project site as the contact and never an email — requires a JSON content
+type, **throws** at its 128 KB cap, and attaches its own per-task delegate that refuses **every**
+redirect, so it can never reach a second host.
 
 **Web views.** There is **no** `WKWebView`, `WKWebViewConfiguration`, or `WKProcessPool` anywhere in
 the app — verified by scan, not memory. That matters because a web view carries a second, completely
@@ -162,13 +168,17 @@ the private-tab guarantee above, and this document does not pretend otherwise.
 
 ## 3. The permitted-destination allowlist
 
-Five hosts. Each has to earn its row, and the test fails in **both** directions — an unlisted host is
-a breach, and a listed host the code no longer uses is a stale claim that must be pruned.
+Six hosts. Each has to earn its row, and the test fails in **both** directions — an unlisted host is
+a breach, and a listed host the code no longer uses is a stale claim that must be pruned. Since
+2026-09-24 each HTTP-client file is also pinned to its **own** exact host set
+(`expectedHostsPerClientFile`), so an allowlisted host cannot drift into a client it was not reviewed
+for.
 
 | Host | Why it exists |
 |---|---|
-| `html.duckduckgo.com` | **The only host the app itself chooses to contact.** DuckDuckGo's no-JS HTML search endpoint, used by the packaged/branded food lookup. It receives the typed product query ("costco chicken melts nutrition facts") and nothing else: no account, no identifier, no cookies, no health data. The first eligible lookup presents an explicit disclosure naming DuckDuckGo and the result-page follow-up; `webNutritionLookupEnabled` plus the recorded `.accepted` consent are both required, and Settings revocation closes the gate. Call site: `App/Fernlet/FoodProductWebImporter.swift:65`. |
+| `html.duckduckgo.com` | **One of the two hosts the app itself chooses to contact.** DuckDuckGo's no-JS HTML search endpoint, used by the packaged/branded food lookup. It receives the typed product query ("costco chicken melts nutrition facts") and nothing else: no account, no identifier, no cookies, no health data. The first eligible lookup presents an explicit disclosure naming DuckDuckGo and the result-page follow-up; `webNutritionLookupEnabled` plus the recorded `.accepted` consent are both required, and Settings revocation closes the gate. Call site: `App/Fernlet/FoodProductWebImporter.swift:65`. |
 | `duckduckgo.com` | **Not fetched.** Used only as the relative-URL base that unwraps `uddg=` redirect links out of that search page's HTML, so the real product page is opened directly rather than through DuckDuckGo's redirector. `App/Fernlet/FoodProductWebImporter.swift:109`. |
+| `world.openfoodfacts.org` | **The other host the app itself chooses to contact** (added 2026-09-24, tracker §3.3 — the owner's 2026-07-19 barcode decision, provider confirmed by the coordinator; see `e6a3b48:Docs/RemainingWork-2026-07-19.md`). Open Food Facts' read-only product API, pinned to v3.4, used by the optional online UPC lookup: when a scanned barcode misses every local catalog, the not-found screen offers **one explicit tap per lookup**. **Purpose:** the product's name, brand, serving and nutrition, so the user can review them and keep the product as their own food. **Data sent:** one `GET /api/v3.4/product/<barcode digits>?fields=…&product_type=food` — the barcode digits (validated: ASCII digits, GTIN length, GS1 check digit, OFF's own leading-zero normalization), a fixed field list, `Accept: application/json`, `Accept-Language: en` (fixed, so the device's language list is not sent) and `User-Agent: Fernlet/<version> (fernlet.com)`; plus what any HTTPS request carries — the device's IP address and TLS metadata. No account, email, device identifier, cookie, health data or anything else about the user. **Consent gate:** the same web-nutrition-lookup gate as the search row above (`webNutritionLookupEnabled` plus the recorded `.accepted` consent; AI features on) — re-checked inside the client, not only in the view; while no decision exists, a tap asks first (naming Open Food Facts, what is sent, and that allowing also opens the typed-search lane); declined or revoked, the card explains and has no button. **Session:** `EphemeralWebSession` (§2a) with every redirect refused, a 10 s idle timeout, a 20 s whole-lookup deadline, a 128 KB response cap, and no retries (at most three manual taps per visit to the screen). Each lookup is recorded at dispatch in the device-local AI activity log (`BarcodeLookupPayload`, field name `barcode`). **Licence:** the data is ODbL; every surface that shows an imported food's source carries "Data from Open Food Facts (ODbL)". Call site: `App/Fernlet/OpenFoodFactsClient.swift` (`productEndpoint`). |
 | `example.com` | RFC 2606 reserved documentation domain. Appears as UI **placeholder text** in the product-import field (`App/Fernlet/FoodView.swift`) and as fixture URLs in the DEBUG-only LinkPresentation prototype. Never a live destination. |
 | `www.apple.com` | Apple-operated. A DEBUG-only fixture in `App/Fernlet/LinkMetadataPrototypeView.swift` — the D11 test matrix needs one real page with rich Open Graph tags. |
 | `fernlet-prototype.invalid` | RFC 2606 `.invalid` TLD, guaranteed never to resolve. The DEBUG-only "unfetchable domain" row of the same prototype. |
@@ -266,15 +276,16 @@ it: a Bonjour service type is not a destination, and a background mode is not a 
 banned the marker names `NWConnection` and `NWBrowser`; TN3213 renamed the API to `NetworkConnection` /
 `NetworkListener` / `NetworkBrowser`, so every line of the new one passed straight through the wall.
 The obvious fix — appending the new names to `httpClientMarkers` — would have been the wrong one:
-that list's permit set is the three internet-egress files, so permitting a ProximityKit transport
-there would have silently permitted it a `URLSession` in the same breath.
+that list's permit set is the internet-egress files (three at the time, four since the Open Food
+Facts client joined on 2026-09-24), so permitting a ProximityKit transport there would have silently
+permitted it a `URLSession` in the same breath.
 
 So the wall now carries **two independent network marker families, each with its own permit set**,
 and a test (`theTwoNetworkPermitSetsAreDisjoint`) asserting that no file and no marker is on both:
 
 | Family | Markers | Permitted files | Capability granted |
 |---|---|---|---|
-| `httpClientMarkers` | `URLSession`, `URLRequest`, `NSURLConnection`, `NWConnection`, `NWBrowser`, `CFURLRequest`, `WKWebView` | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `EphemeralWebSession.swift` | Outbound HTTP to the internet, under §3's host allowlist and §2a's private-tab rule |
+| `httpClientMarkers` | `URLSession`, `URLRequest`, `NSURLConnection`, `NWConnection`, `NWBrowser`, `CFURLRequest`, `WKWebView` | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `OpenFoodFactsClient.swift`, `EphemeralWebSession.swift` | Outbound HTTP to the internet, under §3's host allowlist (pinned per file) and §2a's private-tab rule |
 | `localLinkMarkers` | `NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord` | `NetworkMeshSession.swift`, `NetworkPresenceSession.swift`, `NetworkMeshFeasibilityProbe.swift` | Bonjour advertise/browse and QUIC tunnels **on the local link only** |
 
 The legacy `NWConnection` / `NWBrowser` spellings deliberately stay on the *first* list: nothing in
@@ -375,7 +386,8 @@ A privacy claim that overstates itself is worse than none. Specifically:
   linked binary. A sufficiently indirect construction — reflection, a hostname decoded from base64 at
   runtime, an endpoint fetched from a permitted destination — would not be caught by grep. The
   HTTP-client pin (§2) is the answer to the realistic version of this: however the URL is built, the
-  *client* has to live somewhere, and there are exactly two places it may live.
+  *client* has to live somewhere, and there are exactly three places it may live (plus the session
+  factory, which builds the one session and fetches nothing).
 - **Apple frameworks are trusted, not audited.** CloudKit, WeatherKit, and APNs make network calls we
   do not see. The wall asserts we use the user's own iCloud container and nothing else; it cannot
   audit Apple's own telemetry, which is governed by the user's system-level Apple settings. Note the
@@ -389,6 +401,13 @@ A privacy claim that overstates itself is worse than none. Specifically:
   correlate two fetches that reuse one live connection within the process lifetime, and can always
   correlate by IP. A user who needs network-layer unlinkability needs a VPN or Private Relay; this
   guarantee is about Fernlet not being the one doing the linking.
+- **An Open Food Facts lookup tells Open Food Facts what you are holding.** The request carries only
+  the barcode digits, but a barcode names a product, and some products are health-adjacent (an infant
+  formula, a medical nutrition drink, a pregnancy supplement). Open Food Facts sees that product code
+  next to the device's IP address, under its own privacy policy, not ours. That is why the lookup is
+  never automatic: it runs only behind the web-nutrition-lookup consent and only on an explicit tap
+  per barcode, the card says exactly what is sent, and a barcode already saved resolves locally with
+  no request at all. The app keeps no record of lookups beyond the device-local AI activity log entry.
 - **`SFSafariViewController` is outside the private-tab guarantee.** The one in-app browser
   presentation (`App/Fernlet/FoodView.swift`) runs out of process against Safari's own storage. The app
   cannot read it, cannot write it, and cannot make it ephemeral — there is no API. The wall pins
@@ -421,8 +440,8 @@ Coverage at the time of writing (2026-08-09; the manifest and plist-family rows 
 | Scan | Files seen | Floor | Result |
 |---|---|---|---|
 | All Swift, all targets | 536 | 400 | 0 banned SDKs, 0 banned symbols |
-| Shipping Swift (app + package + extensions) | 345 | 250 | 5 hardcoded hosts, all allowlisted |
-| Raw HTTP clients in shipping code | 3 | pinned by name | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `EphemeralWebSession.swift` |
+| Shipping Swift (app + package + extensions) | 345 | 250 | 5 hardcoded hosts, all allowlisted (6 since 2026-09-24: `world.openfoodfacts.org`) |
+| Raw HTTP clients in shipping code | 3 (4 since 2026-09-24) | pinned by name, hosts pinned per file | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `EphemeralWebSession.swift`, and `OpenFoodFactsClient.swift` |
 | Local-link Network.framework APIs in shipping code | 2 | pinned by name | `NetworkMeshSession.swift`, `NetworkMeshFeasibilityProbe.swift` — disjoint from the row above |
 | `URLSession.shared` / `.default` / `.background` in shipping code | 0 | banned outright | every fetch goes through `EphemeralWebSession.shared` |
 | Files constructing a `URLSession` | 1 | exact set | `EphemeralWebSession.swift`, on `.ephemeral`, with all 7 privacy settings present |
