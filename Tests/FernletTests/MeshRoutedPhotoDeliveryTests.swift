@@ -1353,21 +1353,77 @@ struct MeshRoutedPhotoDeliveryTests {
 
 // MARK: - The addressing family (network migration P6 item 1)
 
-/// What `twoDoorsFiringForOnePeerInOneTurnWriteOneFrame` observed about the interleaving it needs.
+/// The gate `twoDoorsFiringForOnePeerInOneTurnWriteOneFrame` holds the first door's write on, so
+/// the second door runs while the first is in flight by CONSTRUCTION.
 ///
 /// A one-frame count is true both when the second door ran *inside* the first door's suspension —
 /// the state the in-flight claim exists for — and when it ran after the first had completed and
-/// latched the peer. Only the first of those is the property, so the second door records its own
-/// return and the suspension records whether that had already happened. `@MainActor`, like every
-/// other value the cell touches, so nothing here crosses an isolation boundary.
+/// latched the peer. Only the first of those is the property. The cell used to reach it by racing
+/// two `async let` children to the main actor and giving the second eight `Task.yield()`s, which
+/// is a hope about the scheduler: whenever the second child reached the main actor FIRST it became
+/// the parked writer, and under load it could arrive after the yields ran out — either way the
+/// cell went red with the property intact (the owner-calls ledger, 2026-09-22). Here the first
+/// door's write parks until the cell releases it, the cell runs the second door to completion in
+/// between, and nothing depends on which task the scheduler picks or how long it takes.
+///
+/// Only the FIRST write parks. A second write — the one the claim exists to prevent — passes
+/// straight through, so a regression is a clean red (a frame written while the first is parked,
+/// two in all), never a deadlock. And a first door that never reaches its write releases the
+/// cell's wait as it returns, so that regression is a red too, not a hang. `@MainActor`, like
+/// every other value the cell touches, so nothing here crosses an isolation boundary.
 @MainActor
 final class MeshDoubleDoorProbe {
 
-    /// Set by the second door as its last act.
-    var secondDoorReturned = false
+    /// Set when the first write reached the channel and parked there.
+    private(set) var firstWriteParked = false
 
-    /// What ``secondDoorReturned`` held while the first door was still parked inside its write.
-    var secondDoorReturnedInsideTheSuspension = false
+    /// Set when the cell released the parked write (or never needed to).
+    private(set) var released = false
+
+    /// Set when the first door returned, having written or not.
+    private(set) var firstDoorReturned = false
+
+    /// The cell, waiting for the first door to park or to return.
+    private var parkWaiter: CheckedContinuation<Void, Never>?
+
+    /// The first door, parked inside its write until ``releaseFirstWrite()``.
+    private var releaseWaiter: CheckedContinuation<Void, Never>?
+
+    /// The channel's suspension: the first write parks until ``releaseFirstWrite()``; every later
+    /// write — and any write once the first door has returned — passes straight through, so the
+    /// cell's own second door can never be the one left parked.
+    func parkFirstWrite() async {
+        guard !firstWriteParked, !firstDoorReturned else { return }
+        firstWriteParked = true
+        wakeTheCell()
+        guard !released else { return }
+        await withCheckedContinuation { releaseWaiter = $0 }
+    }
+
+    /// The first door's own last act, so a door that never writes cannot leave the cell waiting.
+    func firstDoorDidReturn() {
+        firstDoorReturned = true
+        wakeTheCell()
+    }
+
+    /// Returns once the first write is parked, or once the first door has returned without one.
+    func untilTheFirstWriteParksOrTheDoorReturns() async {
+        guard !firstWriteParked, !firstDoorReturned else { return }
+        await withCheckedContinuation { parkWaiter = $0 }
+    }
+
+    /// Lets the parked write go on. Idempotent, so a `defer` can always call it.
+    func releaseFirstWrite() {
+        released = true
+        releaseWaiter?.resume()
+        releaseWaiter = nil
+    }
+
+    /// Resumes the cell's wait, once.
+    private func wakeTheCell() {
+        parkWaiter?.resume()
+        parkWaiter = nil
+    }
 }
 
 /// What the key advertisement buys the mint, and what it deliberately does not.
@@ -1877,48 +1933,45 @@ struct MeshKeyAdvertisementDeliveryTests {
     /// the receiver's per-sender budget. The suspension is installed in the fake channel because
     /// this fabric's `send` has no suspension point of its own — see `sendSuspension`.
     ///
-    /// **The interleaving is observed, not assumed** (third review P3 8). `sentFrames.count == 1`
-    /// alone passes for the wrong reason whenever the second door runs *after* the first completed:
-    /// the peer is then latched by a successful write, `owed` is empty and the count is one anyway.
-    /// Eight `Task.yield()`s is the only lever, so on another scheduler the cell could go on
-    /// passing with the property gone. The probe records, from inside the suspension, whether the
-    /// second door had already returned — which it can only have done by evaluating `owed` against
-    /// a latch the first door claimed and has not yet released.
+    /// **The interleaving is constructed, and then observed** (third review P3 8; de-flaked
+    /// 2026-09-24). `sentFrames.count == 1` alone passes for the wrong reason whenever the second
+    /// door runs *after* the first completed: the peer is then latched by a successful write,
+    /// `owed` is empty and the count is one anyway. So the first door runs as its own task, as the
+    /// production doors do, and its write is PARKED by ``MeshDoubleDoorProbe`` until the cell lets
+    /// it go; the second door runs to completion in between. What the cell reads while the first is
+    /// parked — nothing written — can only come from the second door evaluating `owed` against a
+    /// latch the first claimed and has not released. No `Task.yield()` count, no `async let` race,
+    /// no clock: the order is the cell's, so load cannot reorder it.
     @Test func twoDoorsFiringForOnePeerInOneTurnWriteOneFrame() async throws {
         let rig = try MeshRoutedDrainRig.build(2, label: "advert-double-door")
         defer { rig.teardown() }
         rig.armKeyAdvertisements()
         rig.link(0, 1)
         #expect(rig.nodes[0].channel.sentFrames.isEmpty, "nothing has been written yet")
+        let manager = rig.nodes[0].manager
+        let peer = rig.nodes[1].fingerprint
         let probe = MeshDoubleDoorProbe()
-        rig.nodes[0].channel.sendSuspension = { index in
-            guard index == 0 else { return }
-            // R2: a fixed number of yields — enough for the queued door to run to completion.
-            for _ in 0..<8 { await Task.yield() }
-            probe.secondDoorReturnedInsideTheSuspension = probe.secondDoorReturned
+        rig.nodes[0].channel.sendSuspension = { _ in await probe.parkFirstWrite() }
+        defer { rig.nodes[0].channel.sendSuspension = nil }
+        defer { probe.releaseFirstWrite() }
+
+        let firstDoor = Task { @MainActor in
+            await manager.sendKeyAdvertisements(to: [peer])
+            probe.firstDoorDidReturn()
         }
+        await probe.untilTheFirstWriteParksOrTheDoorReturns()
+        let firstDoorWasInFlight = probe.firstWriteParked && !probe.firstDoorReturned
+        await manager.sendKeyAdvertisements(to: [peer])
+        let writtenWhileTheFirstWasParked = rig.nodes[0].channel.sentFrames.count
+        probe.releaseFirstWrite()
+        await firstDoor.value
 
-        async let first: Void = rig.nodes[0].manager
-            .sendKeyAdvertisements(to: [rig.nodes[1].fingerprint])
-        async let second: Void = Self.sendRecordingReturn(
-            from: rig.nodes[0].manager, to: rig.nodes[1].fingerprint, recordingOn: probe
-        )
-        _ = await (first, second)
-        rig.nodes[0].channel.sendSuspension = nil
-
-        #expect(probe.secondDoorReturnedInsideTheSuspension,
-                "the second door must have run its owed computation while the first was in flight")
+        #expect(firstDoorWasInFlight,
+                "the first door must reach its write and park there — the interleaving the claim is about")
+        #expect(writtenWhileTheFirstWasParked == 0,
+                "the second door ran its owed computation while the first was in flight, and wrote nothing")
         #expect(rig.nodes[0].channel.sentFrames.count == 1,
                 "the second door saw the claim and wrote nothing")
-    }
-
-    /// The second door of the cell above, with its return recorded so the interleaving is a fact
-    /// the assertion can read rather than a hope about the scheduler.
-    private static func sendRecordingReturn(
-        from manager: MeshNetworkManager, to peer: String, recordingOn probe: MeshDoubleDoorProbe
-    ) async {
-        await manager.sendKeyAdvertisements(to: [peer])
-        probe.secondDoorReturned = true
     }
 
     /// A fold the store refused is **rolled back**, with its conflict marks, and named.
