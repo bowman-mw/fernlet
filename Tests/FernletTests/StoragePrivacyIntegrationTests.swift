@@ -352,6 +352,7 @@ private final class MockHKStoreController: HealthKitStoreControlling {
     func stop(_ query: HKQuery) { stoppedQueries.append(query) }
     func save(_ samples: [HKObject]) async throws {}
     func saveWorkout(configuration: HKWorkoutConfiguration, start: Date, end: Date, samples: [HKSample], metadata: [String: Any]) async throws -> UUID { UUID() }
+    func authorizationRequestStatus(toShare: Set<HKSampleType>, read: Set<HKObjectType>) async -> HKAuthorizationRequestStatus { .unknown }
     func delete(_ samples: [HKSample]) async throws { deleteCallCount += 1 }
     var deletedObjectTypeIdentifiers: [String] = []
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {

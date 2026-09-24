@@ -260,6 +260,9 @@ struct HealthAccessSettingsView: View {
                     preferences.healthKitMasterEnabled = false
                     preferences.healthKitCapabilityEnabled = StoragePreferences.defaultHealthKitCapabilityEnabled
                 }
+                // An explicit "off" is an answer: the first-workout Health offer must never ask this
+                // user. (The disable just cleared the capability ledger, so the ledger cannot say it.)
+                store?.recordWorkoutHealthOfferResolvedBySettings()
             }
             healthKit.refresh()
         } catch {
@@ -457,6 +460,10 @@ struct HealthAccessSettingsView: View {
     /// (the gateway's write gate reads these keys live); the samples stay in Apple Health under its
     /// protections.
     private func stopSharing(_ card: HealthAccessCard) {
+        if card.capabilities.contains(.workoutLogging) {
+            // Stopping workout sharing is an answer too — never auto-ask this user at a workout log.
+            store?.recordWorkoutHealthOfferResolvedBySettings()
+        }
         for capability in card.capabilities {
             FernletAuditLog.log(
                 "privacy.healthKit.capabilityDisabled",

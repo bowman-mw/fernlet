@@ -172,6 +172,10 @@ struct PrivacyWipeCoverageTests {
         "guidedRunStateStore.clear",
         "cookingRunStateStore.clear",
         "clearSensitiveVisibilityResolution",
+        // The first-workout Health-offer fact (`fernlet.healthkit.workoutAccessOfferResolved`) in the
+        // same device-local suite. Cleared so a fresh start may be asked once more — safe, because the
+        // offer only presents when HealthKit would really show a sheet.
+        "clearWorkoutHealthOfferResolution",
         // The custom exercise catalog (imported from a coach plan). Its own token even though
         // `resetDiary` already clears `settings.customExercises`, because `WorkoutExerciseCatalog` is
         // a PROCESS-GLOBAL registry: without the re-publish a deleted exercise stays live in the
@@ -293,6 +297,10 @@ struct PrivacyWipeCoverageTests {
         (
             "clearSensitiveVisibilityResolution",
             "registering it would let its own manifest token be satisfied by its declaration line (the extractor includes it), making the token unfalsifiable — the P1b defect class. It removes three UserDefaults keys and calls nothing"
+        ),
+        (
+            "clearWorkoutHealthOfferResolution",
+            "the same unfalsifiable-token reason as clearSensitiveVisibilityResolution: registering it would let its own manifest token be satisfied by its declaration line. It removes one UserDefaults key (through WorkoutHealthAccessOffer.clearResolution) and drops an in-memory task handle — no store, no save, nothing a banned call could hide behind"
         )
     ]
 

@@ -422,7 +422,19 @@ struct ContentView: View {
     private func performLaunchWiring() async {
         wireSensitiveGatesAndScoringContexts()
         wireLockAndWorryBox()
+        wireWorkoutHealthAccessOffer()
         await runPostLaunchSequence()
+    }
+
+    /// The first-workout Health offer ("Asked the first time you log a workout…"), over the app's
+    /// gateway and its single preferences store (`WorkoutHealthAccessOffer`).
+    ///
+    /// Not under a test harness, for the backup-exclusion launch gate's two reasons: an unanswered
+    /// Health sheet would stall every UI test that logs a workout, and a unit-test host would flip the
+    /// REAL preferences blob on the test simulator.
+    private func wireWorkoutHealthAccessOffer() {
+        guard !UITestSupport.isTestHarnessActive else { return }
+        store.installWorkoutHealthAccessOffer(service: healthKitService, preferencesStore: storagePreferencesStore)
     }
 
     /// The hard visibility gates and the two scoring contexts (period bridge, body signals).

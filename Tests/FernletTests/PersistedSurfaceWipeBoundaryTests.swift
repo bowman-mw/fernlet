@@ -201,6 +201,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         // The plaintext half of the Health capability ledger. The live record is a keychain row now;
         // this defaults key is the legacy copy the ledger drains, and `clear` removes it directly.
         "fernlet.healthkit.requested-capabilities": .cleared(token: "HealthCapabilityRequestLedger.clear"),
+        // The first-workout Health-offer fact (2026-09-23): one Bool, "the one contextual workout ask
+        // is used up (or the user switched Health / workout sharing off in Settings)", in the store's
+        // device-local sensitive-surface suite. A wipe returns the install to a fresh start.
+        "fernlet.healthkit.workoutAccessOfferResolved": .cleared(token: "clearWorkoutHealthOfferResolution"),
         // Research §26 fix 1.10's local correction memory: normalized query → the food id the user
         // picked when they replaced a wrong match. Device-local, never synced, capped at 200 entries.
         "fernlet.foodSearchCorrections.v1": .cleared(token: "FoodSearchCorrectionMemory.clearAll"),
@@ -390,6 +394,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         // PrivacyWipeCoverageTests too: registering it would let its own token be satisfied by its
         // declaration line, which is the P1b defect class.
         "clearSensitiveVisibilityResolution",
+        // Removes the first-workout Health-offer key (through `WorkoutHealthAccessOffer.clearResolution`,
+        // one hop) and drops an in-memory task handle. Unregistered in PrivacyWipeCoverageTests for the
+        // same self-satisfying-token reason as the helper above.
+        "clearWorkoutHealthOfferResolution",
         // One line: `await ownPhotoBackupCoordinator.tearDownForDeleteAll()`. The clearest live
         // instance of the one-hop ceiling — the removal it certifies happens two files away.
         "deleteOwnPhotoEscrowBackups",

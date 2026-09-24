@@ -38,6 +38,14 @@ public protocol HealthKitServicing {
     /// ``HealthKitServiceError/sharingTurnedOff`` — the gate itself lives inside every write method,
     /// so skipping this check can never let a write through.
     func isWriteSharingEnabled(for capability: HealthCapability) -> Bool
+    /// Whether presenting the system authorization sheet for `capability` would actually SHOW it
+    /// (`.shouldRequest`), or HealthKit would answer at once because every type was already decided
+    /// (`.unnecessary`) — `.unknown` when HealthKit cannot say. Never prompts, never reads data.
+    ///
+    /// The first-workout offer asks this before it turns anything on: "asking" when HealthKit would
+    /// show nothing is not asking, and would silently re-enable sharing on the strength of an answer
+    /// the user gave before (say, before a "delete everything").
+    func authorizationRequestStatus(for capability: HealthCapability) async -> HKAuthorizationRequestStatus
     /// Starts a persistent anchored query for one sample type, delivering adds/deletes since the
     /// keychain-persisted anchor to the handler (on the main actor).
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws
@@ -100,6 +108,12 @@ public extension HealthKitServicing {
     /// service overrides this with the live master + per-capability switch read.
     func isWriteSharingEnabled(for capability: HealthCapability) -> Bool {
         isCapabilityRequestedAndEnabled(capability)
+    }
+
+    /// Test-double compatibility: `.unknown`, which callers must read as "do not auto-prompt" — a
+    /// conformer that cannot say whether a sheet would appear must never be the reason one does.
+    func authorizationRequestStatus(for capability: HealthCapability) async -> HKAuthorizationRequestStatus {
+        .unknown
     }
 }
 
@@ -391,6 +405,9 @@ public enum HealthKitServiceError: LocalizedError {
 public protocol HealthKitStoreControlling: AnyObject {
     /// Presents the system authorization sheet for the given share/read type sets.
     func requestAuthorization(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async throws
+    /// Whether a sheet for these type sets would be shown (`HKHealthStore.statusForAuthorizationRequest`),
+    /// without prompting. Conformers answer `.unknown` when the store cannot say.
+    func authorizationRequestStatus(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async -> HKAuthorizationRequestStatus
     /// Write (share) status for a type; non-sample types report `.notDetermined`.
     func authorizationStatus(for type: HKObjectType) -> HKAuthorizationStatus
     /// Starts a query on the underlying store.
@@ -438,6 +455,16 @@ final class SystemHealthKitStoreController: HealthKitStoreControlling {
 
     func requestAuthorization(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async throws {
         try await healthStore.requestAuthorization(toShare: shareTypes, read: readTypes)
+    }
+
+    func authorizationRequestStatus(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async -> HKAuthorizationRequestStatus {
+        do {
+            return try await healthStore.statusForAuthorizationRequest(toShare: shareTypes, read: readTypes)
+        } catch {
+            // R7: named, and answered with the value every caller treats as "do not auto-prompt".
+            FernletAuditLog.log("healthkit.requestStatus.failed", context: ["error": String(describing: error)])
+            return .unknown
+        }
     }
 
     func authorizationStatus(for type: HKObjectType) -> HKAuthorizationStatus {
@@ -1070,6 +1097,24 @@ public final class HealthKitService: HealthKitServicing {
         let types = try Self.types(for: capability)
         try await storeController.requestAuthorization(toShare: types.share, read: types.read)
         return AuthorizationOutcome(writeStatuses: writeStatuses(for: types.share))
+    }
+
+    /// Whether ``requestAuthorization(for:)`` would actually show the system sheet for `capability`.
+    ///
+    /// Not integration-gated: like ``currentAuthorizationSnapshot()`` it reads only HealthKit's own
+    /// bookkeeping about Fernlet's past answers — never a sample — and the one caller (the
+    /// first-workout offer) asks it precisely while Fernlet's Health may still be off. `.unknown` on
+    /// a device without Health or a capability whose types do not resolve.
+    public func authorizationRequestStatus(for capability: HealthCapability) async -> HKAuthorizationRequestStatus {
+        guard isHealthDataAvailable() else { return .unknown }
+        let types: (share: Set<HKSampleType>, read: Set<HKObjectType>)
+        do {
+            types = try Self.types(for: capability)
+        } catch {
+            FernletAuditLog.log("healthkit.requestStatus.typesUnavailable", context: ["capability": capability.rawValue])
+            return .unknown
+        }
+        return await storeController.authorizationRequestStatus(toShare: types.share, read: types.read)
     }
 
     /// Deletes every HealthKit sample Fernlet itself wrote, across every type it can write.

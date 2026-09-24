@@ -588,6 +588,16 @@ final class WriteRecordingStoreController: HealthKitStoreControlling {
         statuses[type.identifier] ?? .notDetermined
     }
 
+    /// Whether HealthKit "would show" a sheet: what `authorizationRequestStatus` reports.
+    var requestStatus: HKAuthorizationRequestStatus = .unknown
+    /// How many times the would-a-sheet-show question was asked.
+    private(set) var requestStatusQueries = 0
+
+    func authorizationRequestStatus(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async -> HKAuthorizationRequestStatus {
+        requestStatusQueries += 1
+        return requestStatus
+    }
+
     func execute(_ query: HKQuery) { executedQueries.append(query) }
     func stop(_ query: HKQuery) { }
 

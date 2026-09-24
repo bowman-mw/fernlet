@@ -181,6 +181,7 @@ general proof against arbitrarily renamed storage.
 | Cooking run state + Live Activity | App group + ActivityKit | `cookingRunStateStore.clear` |
 | Sensitive-visibility resolution | UserDefaults (`SensitiveVisibilityKeys`, device-local, non-synced): `sensitiveVisibilityResolved`, `sensitiveVisibilityResolvedPeriodVisible`, `sensitiveVisibilityResolvedIntimacyVisible` — the store's injectable `sensitiveVisibilityDefaults`, `.standard` in production. This column said "Memory" until 2026-08-20; it was wrong, and the difference matters — a memory-only resolution could not survive a wipe, and these keys can | `clearSensitiveVisibilityResolution` |
 | Age determination (intimacy 16+, mesh chat 13+) | UserDefaults `ageAssuranceRecord` | `ageAssurance.clear` |
+| First-workout Health-offer fact — one Bool: Fernlet has used its one contextual "save workouts to Apple Health?" ask, or the user switched Health (or workout sharing) off in Settings (2026-09-23) | UserDefaults `fernlet.healthkit.workoutAccessOfferResolved` (`WorkoutHealthAccessOffer`, in the store's device-local `sensitiveVisibilityDefaults` suite) | `clearWorkoutHealthOfferResolution` (a fresh start may be asked once more — and only when HealthKit would really show a sheet, so an answer given before the wipe is never silently turned back into sharing) |
 | Day rows + blob + tier-two memories inside the blob, the local JSON day-blob FILE, **including each meal component's bind score and the web-nutrition consent/revocation decision**, and the pre-database `LegacyKeys` UserDefaults corpus — `fernlet-settings`, `fernlet-recent-meals`, `fernlet-previous-journals`, `fernlet-memories`, `fernlet-goals`, `fernlet-workshop`, and every interpolated `fernlet-day-<yyyy-MM-dd>` row, which holds journal + memory JSON UNSEALED in the preferences plist | Core Data/CloudKit/disk + UserDefaults (`.standard`) | `repository.purgeAllPersistedData` → `LocalFernletRepository.clearLegacyUserDefaultsIfPresent()`, run BEFORE the file-existence guard so the shipping Core Data configuration (which reaches the local repository with no JSON file at all) still clears it. Left behind, those keys both survive the wipe as plaintext AND re-hydrate the store on the next launch, because an absent database file is indistinguishable from a first launch and routes straight through the legacy migration |
 | Widget snapshot files | App group | `widgetSnapshotMirror` |
 | Pending widget actions | App group | `pendingWidgetActionQueue.clear` |
@@ -374,7 +375,9 @@ scanned. `FernletStore.deleteOwnPhotoEscrowBackups()` is a single line delegatin
 Deleting the two ledger `reset()` calls inside that callee, two files away, leaves **both** halves of
 this wall green: the token is still called, and the writers that make the keys discoverable are
 untouched, so nothing goes stale either. The rows in this position today are the three sealed-photo
-ones, `repository.purgeAllPersistedData` and `ageAssurance.clear`. What *is* mechanical:
+ones, `repository.purgeAllPersistedData`, `ageAssurance.clear`, and `clearWorkoutHealthOfferResolution`
+(its removal happens one file away, in `WorkoutHealthAccessOffer.clearResolution`;
+`WorkoutHealthAccessOfferTests.deleteEverythingClearsTheFact` is its behavioural half). What *is* mechanical:
 `unscannedWipePathCallees` pins the set of such hops, so moving a clear into a new unscanned leg fails
 — including a leg spelled `func` or `private nonisolated func`, which the access-level enumeration in
 `PrivacyWipeCoverageTests` walks straight past.

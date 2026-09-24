@@ -407,6 +407,13 @@ final class FernletStore {
     /// Persisted tombstones for locally-removed workouts, so the workout observer can delete-and-skip an
     /// app-authored Health sample that resurfaces after its row was already removed (see `removeWorkout`).
     @ObservationIgnored private let workoutTombstones = WorkoutTombstoneStore()
+    /// The one contextual Apple Health ask for workouts ("Asked the first time you log a workout…"),
+    /// wired by `ContentView` at launch through ``installWorkoutHealthAccessOffer(service:preferencesStore:)``.
+    /// Nil in headless stores and in tests that do not drive it — then no workout log ever prompts.
+    @ObservationIgnored var workoutHealthAccessOffer: WorkoutHealthAccessOffer?
+    /// The claimed offer while it runs. Every workout save awaits it first, so a workout logged while
+    /// the Health sheet is up still reaches Health if the user allows it — and never if they decline.
+    @ObservationIgnored private var workoutHealthAccessOfferTask: Task<Void, Never>?
     @ObservationIgnored private lazy var workoutPlanningService = WorkoutPlanningService(host: self)
     @ObservationIgnored private lazy var mealResolutionService = MealResolutionService(host: self)
     @ObservationIgnored private lazy var sealedBackupCoordinator = SealedBackupCoordinator(host: self)
@@ -743,6 +750,10 @@ final class FernletStore {
     /// and `resetAll` is far and away the commonest wipe in the suite. Left on `.standard`, one store's
     /// reset returns every concurrently-live store to "never resolved", so the next read re-derives from
     /// `sex` instead of re-asserting a hidden surface fail-closed.
+    ///
+    /// Since 2026-09-23 the suite also holds the first-workout Health-offer fact
+    /// (`WorkoutHealthAccessOffer.resolvedKey`) — the same class of device-local consent record, isolated
+    /// by the same seam, cleared by the same `resetAll`.
     @ObservationIgnored private let sensitiveVisibilityDefaults: UserDefaults
 
     /// The age determination behind the intimacy (16+) and mesh-chat (13+) gates. Deliberately shares
@@ -3014,13 +3025,66 @@ final class FernletStore {
         addWorkout(workout, date: todayKey)
     }
 
+    /// Logs a workout on `date`, then — for a workout Fernlet itself logged, not a Health import —
+    /// offers Health access the first time ever (``offerWorkoutHealthAccessOnFirstUse()``) and
+    /// writes the workout to Health through the gated save once that offer has resolved.
+    ///
+    /// The log happens first and unconditionally: an unanswered, declined or failed ask never
+    /// blocks or loses the workout; it only decides whether the Health copy is written.
     func addWorkout(_ workout: Workout, date: String) {
         assert(!date.isEmpty, "workout date required")
         diary.appendWorkout(workout, date: date)
         guard workout.healthKitUUID == nil else { return }
+        let offer = offerWorkoutHealthAccessOnFirstUse()
         Task { [weak self] in
+            await offer?.value
             await self?.healthSyncCoordinator.saveWorkoutToHealthIfAuthorized(workout, date: date)
         }
+    }
+
+    // MARK: - First-workout Health offer
+
+    /// Wires the first-workout Health offer over the app's gateway and its single preferences store.
+    /// Its durable "resolved" fact lives in this store's device-local sensitive-surface suite, so a
+    /// test that isolates the suite isolates the offer with it and "delete everything" clears it.
+    func installWorkoutHealthAccessOffer(service: any HealthKitServicing, preferencesStore: StoragePreferencesStore) {
+        workoutHealthAccessOffer = WorkoutHealthAccessOffer(
+            service: service,
+            preferencesStore: preferencesStore,
+            markerDefaults: sensitiveVisibilityDefaults
+        )
+    }
+
+    /// Makes the one contextual workout ask if it is still available — the first workout logged or
+    /// started — and returns the task every save must await; a later call gets the same task back.
+    /// On a grant the workout observer starts at once, so Apple Watch workouts import without a relaunch.
+    ///
+    /// - Returns: The running (or finished) offer, or nil when there is none to wait for. A caller
+    ///   with nothing to save (a guided run just starting) may drop it: the handle carries no failure.
+    func offerWorkoutHealthAccessOnFirstUse() -> Task<Void, Never>? {
+        if let workoutHealthAccessOfferTask { return workoutHealthAccessOfferTask }
+        guard let offer = workoutHealthAccessOffer, offer.claimFirstUse() else { return nil }
+        let task = Task { [weak self] in
+            guard await offer.present() == .granted else { return }
+            await self?.refreshWorkoutsFromHealth()
+        }
+        workoutHealthAccessOfferTask = task
+        return task
+    }
+
+    /// Records that this install must never auto-ask about workout Health — the user turned Fernlet's
+    /// Health (or workout sharing) off in Settings. Written straight to the suite, so it holds even
+    /// before the offer is wired.
+    func recordWorkoutHealthOfferResolvedBySettings() {
+        WorkoutHealthAccessOffer.markResolved(in: sensitiveVisibilityDefaults)
+    }
+
+    /// "Delete everything": the install returns to a fresh start, so the one ask becomes available
+    /// again — safely, because the offer only presents when HealthKit would actually show a sheet (a
+    /// user who answered before the wipe is not silently switched back on).
+    private func clearWorkoutHealthOfferResolution() {
+        WorkoutHealthAccessOffer.clearResolution(in: sensitiveVisibilityDefaults)
+        workoutHealthAccessOfferTask = nil
     }
 
     func planWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
@@ -4235,6 +4299,10 @@ final class FernletStore {
         guidedRunState = state
         mirrorGuidedRunState(state)
         WorkoutLiveActivityController.start(state)
+        // Starting a guided workout (and its Live Activity) is a first workout too: make the one
+        // Health ask now, while the user is still holding the phone, not when the run finishes. The
+        // finish's save awaits the same task. Nothing to save yet, so the handle is dropped.
+        _ = offerWorkoutHealthAccessOnFirstUse()
         return true
     }
 
@@ -6002,6 +6070,10 @@ final class FernletStore {
         // Device-local sensitive-surface visibility resolution — reset to "unresolved" so a fresh start
         // re-derives from `sex` (resetDiary already restored the settings gate to its defaults).
         clearSensitiveVisibilityResolution()
+        // The same suite's first-workout Health-offer fact: a fresh start may be asked once more —
+        // and only if HealthKit would really show a sheet, so an answer given before the wipe is
+        // never silently turned back into sharing. A plain defaults removal; no failure signal.
+        clearWorkoutHealthOfferResolution()
         // The age determination is device-local and re-derivable from the Apple Account, so a wipe drops
         // it too rather than leaving a wiped device still holding a verdict about its user. Both gates
         // return to fail-closed until the user verifies again.
