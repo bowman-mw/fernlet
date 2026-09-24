@@ -168,12 +168,14 @@ struct MoveView: View {
             StartTodaysWorkoutCard(
                 state: guidedCardState,
                 loggedSessionName: loggedGuidedSessionName,
+                isRestDay: store.needsRestToday,
                 onStart: startTodaysGuidedWorkout
             )
         } else {
             StartTodaysWorkoutCard(
                 state: .noPlan,
                 loggedSessionName: nil,
+                isRestDay: store.needsRestToday,
                 onStart: { showingSuggestSheet = true }
             )
         }
@@ -607,6 +609,31 @@ struct ResumeWorkoutCard: View {
     }
 }
 
+/// The Move tab's rest-day copy, in one place so a test can hold all of it to "never push".
+///
+/// A rest day is today's readiness reading `"needs rest"` — the user marked today unwell (spec §6a).
+/// Every line here replaces a line that suggested an intensity or a workout; none may name one.
+/// `LocalizedStringResource` literals, so each extracts into the app catalog like a `Text("…")`.
+enum MoveRestDayCopy {
+    /// The root card's empty state on a rest day.
+    static let cardNoPlan: LocalizedStringResource = "You marked yourself unwell, so rest is today's plan. If moving would feel good, I can suggest something gentle."
+    /// ``cardNoPlan`` at accessibility sizes, where the body line shortens (1a·AX3).
+    static let cardNoPlanShort: LocalizedStringResource = "Resting today."
+    /// The root card over a plan the user approved before marking today unwell.
+    static let cardApprovedPlan: LocalizedStringResource = "You marked yourself unwell — this can wait for another day. Rest counts too."
+    /// The root card's empty-state button on a rest day.
+    static let suggestGentle: LocalizedStringResource = "Suggest something gentle"
+    /// ``suggestGentle`` at accessibility sizes.
+    static let suggestGentleShort: LocalizedStringResource = "Something gentle"
+    /// The Suggest sheet's readiness line on a rest day, in place of "Today's readiness suggests …".
+    static let suggestSheetLine: LocalizedStringResource = "You marked yourself unwell, so today is for rest. If moving would feel good, keep it gentle — or skip it entirely."
+
+    /// Every line above, for the "never push" test.
+    static let all: [LocalizedStringResource] = [
+        cardNoPlan, cardNoPlanShort, cardApprovedPlan, suggestGentle, suggestGentleShort, suggestSheetLine
+    ]
+}
+
 /// The Move-root "Today's workout" card — ALWAYS rendered (FLOW-03), so the guided flow is
 /// discoverable from the root in every state, not only once a plan is approved.
 ///
@@ -623,6 +650,11 @@ struct StartTodaysWorkoutCard: View {
     /// The session already logged today, when there is one — the done copy names it rather than
     /// saying "That's logged" about an unnamed something. Nil falls back to the generic line.
     var loggedSessionName: String?
+    /// Today's readiness is `"needs rest"` — the user marked today unwell (spec §6a). The card then
+    /// never pushes: the empty state offers "something gentle" instead of today's workout, and an
+    /// already-approved plan is framed as something that can wait. Geometry and actions are
+    /// unchanged; only the words soften, so the choice stays the user's.
+    var isRestDay: Bool = false
     /// Opens the runner (`.ready`) or the Suggest flow (`.noPlan`) — the parent decides.
     var onStart: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -682,6 +714,11 @@ struct StartTodaysWorkoutCard: View {
 
     /// 1a·AX3: labels shorten at accessibility sizes so they hold one line in the button.
     private var primaryLabel: Text {
+        if case .noPlan = state, isRestDay {
+            return dynamicTypeSize.isAccessibilitySize
+                ? Text(MoveRestDayCopy.suggestGentleShort)
+                : Text(MoveRestDayCopy.suggestGentle)
+        }
         if case .noPlan = state {
             return dynamicTypeSize.isAccessibilitySize
                 ? Text("Suggest workout")
@@ -711,8 +748,14 @@ struct StartTodaysWorkoutCard: View {
 
     private var subtitle: Text {
         switch state {
+        case .ready where isRestDay:
+            return Text(MoveRestDayCopy.cardApprovedPlan)
         case .ready:
             return Text("Ready when you are — I'll walk you through it, set by set, and time the rests. No pressure.")
+        case .noPlan where isRestDay:
+            return dynamicTypeSize.isAccessibilitySize
+                ? Text(MoveRestDayCopy.cardNoPlanShort)
+                : Text(MoveRestDayCopy.cardNoPlan)
         case .noPlan:
             return dynamicTypeSize.isAccessibilitySize
                 ? Text("Nothing planned yet.")
@@ -1667,10 +1710,12 @@ struct WorkoutSuggestionSheet: View {
         .background(Color.parchment)
     }
 
-    /// The Suggest primary's label across its states and sizes.
+    /// The Suggest primary's label across its states and sizes. A rest day asks for "something
+    /// gentle", never "a workout".
     private var suggestLabel: Text {
         if isSuggesting { return Text("Building your workout…") }
-        return dynamicTypeSize >= .accessibility5 ? Text("Suggest") : Text("Suggest a workout")
+        if dynamicTypeSize >= .accessibility5 { return Text("Suggest") }
+        return store.needsRestToday ? Text(MoveRestDayCopy.suggestGentle) : Text("Suggest a workout")
     }
 
     /// Generate today's plan with a brief, deliberate loading state. Generation is on-device and
@@ -1679,7 +1724,9 @@ struct WorkoutSuggestionSheet: View {
     private func startSuggesting() {
         guard !isSuggesting, store.currentGuidedWorkoutPlan == nil else { return }
         isSuggesting = true
-        let intensity = energy
+        // Belt to the light-only chips' braces: a chip state seeded before the rest day began can
+        // never build a harder plan on it.
+        let intensity = store.needsRestToday ? .light : energy
         let requestContext = context
         Task {
             await Task.yield()
@@ -1902,7 +1949,14 @@ struct WorkoutSuggestionSheet: View {
         } else {
             SheetField("How are you feeling?") {
                 VStack(alignment: .leading, spacing: 8) {
-                    if let rec = recommendedIntensity {
+                    // A rest day (today marked unwell → readiness `needs rest`, spec §6a) says rest,
+                    // never "suggests light": no intensity suggestion on the day the body asked for none.
+                    if store.needsRestToday {
+                        Text(MoveRestDayCopy.suggestSheetLine)
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    } else if let rec = recommendedIntensity {
                         Text("Today's readiness suggests \(rec.displayWord).")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
@@ -1914,10 +1968,17 @@ struct WorkoutSuggestionSheet: View {
         }
     }
 
-    /// The Light / Moderate / Hard intensity chips.
+    /// The intensity chips the configurator offers: Light / Moderate / Hard, or Light alone on a rest
+    /// day (readiness `needs rest` — today marked unwell). Gentle options only; no push. Static so it
+    /// is testable (the `AwayHeartsCopy` precedent).
+    nonisolated static func offeredIntensities(needsRest: Bool) -> [WorkoutIntensity] {
+        needsRest ? [.light] : Array(WorkoutIntensity.allCases)
+    }
+
+    /// The intensity chips — ``offeredIntensities(needsRest:)`` for today.
     private var feelingChips: some View {
         FlowLayout(spacing: 8) {
-            ForEach(WorkoutIntensity.allCases) { intensity in
+            ForEach(Self.offeredIntensities(needsRest: store.needsRestToday)) { intensity in
                 // `displayWord` is the localized token-free half; `.localizedCapitalized` raises it
                 // for a standalone chip using the USER's locale rules (Turkish dotless i included),
                 // which `String.capitalized` does not.

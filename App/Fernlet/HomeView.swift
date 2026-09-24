@@ -1040,7 +1040,18 @@ struct HomeView: View {
     }
 
     private var signalThought: String? {
-        let signals = store.derivedSignals
+        Self.signalThought(for: store.derivedSignals)
+    }
+
+    /// The signal-driven ambient line, or nil when no signal has one. Static so it is testable (the
+    /// `AwayHeartsCopy` precedent: a private view computed cannot be).
+    ///
+    /// Rest comes first. Marking today unwell forces readiness to `"needs rest"` (spec §6a), and on
+    /// that day nothing further down — least of all "room to push" — is the thing to say.
+    static func signalThought(for signals: [DerivedSignalRecord]) -> String? {
+        if signals.first(where: { $0.signalName == "intensityReadiness" })?.value == "needs rest" {
+            return SignalPresentation.restDayThought
+        }
         if let energy = signals.first(where: { $0.signalName == "energyTrend" }) {
             if energy.value == "low" { return "Energy has been low lately. Rest counts as care." }
             if energy.value == "rising" { return "Something has been building. Notice the upward pull." }
@@ -2254,7 +2265,7 @@ struct SignalDetailRow: View {
                     Text(SignalPresentation.title(for: signal.signalName))
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
-                    Text(signal.value.capitalized)
+                    Text(SignalPresentation.valueLabel(for: signal.value))
                         .font(.fernlet(.headerMedium))
                         .foregroundStyle(SignalPresentation.color(for: signal.value))
                     Text(SignalPresentation.explanation(for: signal))
@@ -2356,8 +2367,38 @@ enum SignalPresentation {
         }
     }
 
+    /// The display label for a signal's value: the localized label for a token that has one, else the
+    /// token capitalized (the pre-existing rendering, which cannot localize — the unresolved
+    /// token/display collision recorded on the LocalPersistence landing page).
+    ///
+    /// The value is a FROZEN logic token (`DerivedSignalFactory`); this is the separate display half.
+    /// `"needs rest"` is the first token to get one, so a translation never has to touch the token
+    /// that `FernletStore.needsRestToday`, Home, and the Move tab compare against.
+    static func valueLabel(for value: String) -> String {
+        switch value {
+        case "needs rest":
+            String(localized: "signal.value.needsRest", defaultValue: "Needs Rest",
+                   comment: "Trends: the readiness value on a day the user marked themselves unwell. Title case, like the other signal values beside it.")
+        default:
+            value.capitalized
+        }
+    }
+
+    /// Home's ambient line on a rest day — readiness `"needs rest"`, which marking today unwell
+    /// forces (spec §6a). Shared by `HomeView.signalThought(for:)` and the launch-time deterministic
+    /// companion thought, so the two can never disagree about what an unwell day hears.
+    static var restDayThought: String {
+        String(localized: "signal.thought.restDay",
+               defaultValue: "Today is for resting. Being unwell is reason enough to go slow.",
+               comment: "Home companion thought on a day the user marked themselves unwell. Gentle; never suggests exercise.")
+    }
+
     static func color(for value: String) -> Color {
         let lower = value.lowercased()
+        // A rest day reads in calm slate, never the terracotta of "low"/"light": being unwell is not
+        // an error or a low score. (Not the unwell row's dusty rose either — that measures ~3.3:1 as
+        // small text on parchment; slate holds 4.5:1.)
+        if lower == "needs rest" { return .slate }
         if lower.contains("low") || lower.contains("light") || lower.contains("declining") || lower.contains("dipping") || lower.contains("gap") || lower.contains("gentleness") {
             return .terracotta
         }
@@ -2369,7 +2410,7 @@ enum SignalPresentation {
 
     static func strength(for value: String) -> Int {
         let lower = value.lowercased()
-        if lower.contains("insufficient") { return 1 }
+        if lower.contains("insufficient") || lower == "needs rest" { return 1 }
         if lower.contains("low") || lower.contains("light") || lower.contains("gentleness") { return 2 }
         if lower.contains("steady") || lower.contains("consistent") || lower.contains("moderate") { return 3 }
         if lower.contains("building") || lower.contains("improving") || lower.contains("rising") || lower.contains("hard") || lower.contains("protein") { return 5 }
@@ -2393,6 +2434,9 @@ enum SignalPresentation {
         case "workouts.rpe": "Perceived effort"
         case "body.restingHeartRate": "Resting heart rate"
         case "body.heartRateVariability": "Heart rate variability"
+        case "sickness":
+            String(localized: "signal.source.sickness", defaultValue: "Marked unwell",
+                   comment: "Trends: the source chip under Readiness on a day the user marked themselves unwell.")
         default: field.replacingOccurrences(of: ".", with: " ")
         }
     }
@@ -2407,6 +2451,10 @@ enum SignalPresentation {
             return "Looks at meal frequency, recent missed meal days, and protein totals."
         case "progressionTrend":
             return "Compares newer workout load against earlier workout load."
+        case "intensityReadiness" where signal.value == "needs rest":
+            return String(localized: "signal.explanation.needsRest",
+                          defaultValue: "You marked today as unwell, so readiness rests until tomorrow.",
+                          comment: "Trends: why Readiness reads Needs Rest. The unwell mark clears itself at midnight.")
         case "intensityReadiness":
             return "Blends recent energy, training load, hard sessions, and meal coverage."
         default:

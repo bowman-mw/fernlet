@@ -847,8 +847,8 @@ struct LocalizationBoundaryTests {
         "low", "rising", "dipping",
         // eatingPattern
         "light", "protein-forward", "inconsistent", "consistent",
-        // intensityReadiness
-        "ready for light", "ready for moderate", "ready for hard",
+        // intensityReadiness ("needs rest" = today marked unwell, spec §6a; added 2026-09-23)
+        "needs rest", "ready for light", "ready for moderate", "ready for hard",
         // progressionTrend
         "building", "deloading",
         // micronutrientGaps{7,14}Day
@@ -875,7 +875,7 @@ struct LocalizationBoundaryTests {
     /// recommendation — with no error anywhere.
     ///
     /// APPROACH: a source scan of the declaration site, plus one live round-trip. Driving all
-    /// nineteen values through fixtures would mean reproducing each heuristic's thresholds (protein
+    /// twenty values through fixtures would mean reproducing each heuristic's thresholds (protein
     /// totals, RPE-weighted load, HRV recovery) in the test, which couples the wall to the thresholds
     /// rather than to the vocabulary — the wrong invariant, and brittle against every tuning change.
     /// The scan pins the vocabulary; the round-trip below proves the scan describes something the
@@ -888,7 +888,7 @@ struct LocalizationBoundaryTests {
             assignmentSites >= 20,
             """
             Found only \(assignmentSites) `value = …` assignments in \(Self.derivedSignalFactoryPath) \
-            (expected 22) — the factory was restructured and this scan is no longer reading the \
+            (expected 23) — the factory was restructured and this scan is no longer reading the \
             values it claims to freeze. Re-point the scan rather than lowering the floor.
             """
         )
@@ -960,6 +960,12 @@ struct LocalizationBoundaryTests {
              "the gentle-offer gate: with no match, the offer never appears on the days it exists for"),
             ("App/Fernlet/FernletStore.swift", #"case "ready for hard": return .hard"#,
              "the recommended-intensity map: with no match it returns nil and the workout card loses its recommendation"),
+            ("App/Fernlet/FernletStore.swift", #"case "needs rest": return .light"#,
+             "the rest-day intensity map: with no match an unwell day recommends nothing and the Move root commits `?? .moderate`"),
+            ("App/Fernlet/FernletStore.swift", #"?.value == "needs rest""#,
+             "`needsRestToday`: with no match every rest-day surface on Move (light-only chips, the gentle plan, the soft copy) silently switches off"),
+            ("App/Fernlet/HomeView.swift", #"?.value == "needs rest""#,
+             "Home's rest line: with no match an unwell user is back to hearing the ordinary signal lines"),
             ("App/Fernlet/HomeView.swift", #"mood.value == "needs gentleness""#,
              "Home's mood copy: with no match the card shows the generic line on the days that most need the gentle one"),
             ("App/Fernlet/HomeView.swift", #"readiness.value == "ready for hard""#,

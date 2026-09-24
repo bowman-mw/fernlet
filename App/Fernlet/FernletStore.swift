@@ -3458,8 +3458,16 @@ final class FernletStore {
     }
 
     /// Sets or clears the sickness flag for a specific day and persists the change.
+    ///
+    /// For TODAY it also rebuilds the derived signals at once: the unwell flag forces readiness to
+    /// `"needs rest"` (spec §6a), and Home's line and the Move tab key off that token. Waiting for
+    /// the debounced save's rebuild would leave the "I'm unwell today" tap answered by a second of
+    /// "room to push".
     func setSick(_ value: Bool, on dateKey: String) {
         diary.setSick(value, on: dateKey)
+        if dateKey == todayKey {
+            rebuildDerivedSignals()
+        }
     }
 
     /// Whether the "Today's intent" home prompt has been dismissed for the current day.
@@ -4051,8 +4059,16 @@ final class FernletStore {
     /// Builds today's session(s) from the active split, rotating by weekday so the program is
     /// consistent week to week. Equipment + injuries are applied deterministically by the engine,
     /// and reps/sets reflect logged progression.
+    ///
+    /// On a rest day (``needsRestToday`` — today marked unwell) the split is not consulted at all:
+    /// the plan is ``WorkoutPlanningService/restDayPlan(locationName:)``, one gentle un-guided
+    /// movement line the user can take or leave, so neither the preview nor a committed plan can put
+    /// strength work in front of someone who said they are unwell.
     func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
-        workoutPlanningService.workoutDayPlan(intensity: intensity, context: context)
+        if needsRestToday {
+            return WorkoutPlanningService.restDayPlan(locationName: settings.activeWorkoutLocation.name)
+        }
+        return workoutPlanningService.workoutDayPlan(intensity: intensity, context: context)
     }
 
     /// Records that catalog exercises were completed, advancing their week-to-week progression.
@@ -4116,14 +4132,31 @@ final class FernletStore {
 
     /// Maps the derived intensity-readiness signal to a recommended workout intensity, if present.
     /// Shared by the card (to pick a start intensity) and the Suggest sheet (its readiness note).
+    ///
+    /// `"needs rest"` (today marked unwell — spec §6a) maps to the gentlest intensity, never to nil:
+    /// the Move root commits `recommendedWorkoutIntensity() ?? .moderate`, so nil on a rest day would
+    /// build a moderate session. Surfaces that should say "rest" rather than "light" read
+    /// ``needsRestToday``.
     func recommendedWorkoutIntensity() -> WorkoutIntensity? {
         guard let r = derivedSignals.first(where: { $0.signalName == "intensityReadiness" }) else { return nil }
         switch r.value {
         case "ready for hard": return .hard
         case "ready for light": return .light
         case "ready for moderate": return .moderate
+        case "needs rest": return .light
         default: return nil
         }
+    }
+
+    /// Whether today's readiness is `"needs rest"` — spec §6a: marking today unwell always forces it.
+    ///
+    /// The one switch the rest-day surfaces turn on: Home's ambient line, the Move root card's copy,
+    /// the Suggest sheet's light-only chips and rest line, and the gentle rest plan
+    /// ``workoutDayPlan(intensity:context:)`` builds instead of the split's session. Read from the
+    /// signal rather than from ``isSick(on:)`` so every surface agrees with the Trends row and the AI
+    /// context about what today's readiness IS; ``setSick(_:on:)`` rebuilds the signal at once.
+    var needsRestToday: Bool {
+        derivedSignals.first(where: { $0.signalName == "intensityReadiness" })?.value == "needs rest"
     }
 
     /// Generates today's plan *without committing it* — for the Move-root card to read availability
@@ -6176,7 +6209,7 @@ final class FernletStore {
     }
 
     private func rebuildDerivedSignals() {
-        derivedSignalsService.rebuild(allDays: loadDays(), todayKey: todayKey)
+        derivedSignalsService.rebuild(allDays: loadDays(), todayKey: todayKey, isSickToday: isSick(on: todayKey))
     }
 
     /// Post-save hook: rebuild derived signals (existing behavior) plus a TODAY-ONLY milestone
@@ -6399,9 +6432,11 @@ final class FernletStore {
     }
 
     func deferredPostLaunchTasks() {
+        let deferredDayKey = todayKey
         derivedSignalsService.scheduleDeferredRebuild(
             allDaysProvider: { [weak self] in self?.loadDays() ?? [:] },
-            todayKey: todayKey
+            isSickTodayProvider: { [weak self] in self?.isSick(on: deferredDayKey) ?? false },
+            todayKey: deferredDayKey
         )
         // Catches the async-load path (whose private init reconciled against a possibly-cold cache) and
         // any day that became active since launch. Idempotent, so a second pass is cheap and safe.

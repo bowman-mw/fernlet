@@ -97,6 +97,37 @@ final class WorkoutPlanningService {
         )
     }
 
+    /// The descriptor line of the rest-day plan. A `" - N min"` tail, because a mobility session's
+    /// logged duration is parsed from its descriptor (`WorkoutProgram.descriptorMinutes(in:)`).
+    nonisolated static let restDayMovementLine = "Gentle stretching or an easy walk - 10 min"
+
+    /// The plan for a day whose readiness is `"needs rest"` (spec §6a: marking today unwell forces
+    /// it): no split session, no sets, nothing to guide — one gentle movement line, framed as
+    /// optional.
+    ///
+    /// A single `.mobility` session whose only exercise is a non-catalog descriptor (`sets == 0`), so
+    /// `GuidedWorkoutAvailability.isGuidable` is false: the Move root card settles on its "easy
+    /// movement" state instead of offering "Start today's workout", and "Already did this — log it"
+    /// still logs it (at light intensity) if the user did move. Plain strings, like every other
+    /// generated plan's copy (the domain's plan text is not localized yet).
+    nonisolated static func restDayPlan(locationName: String) -> WorkoutProgram.DayPlan {
+        let suggestion = WorkoutSuggestion(
+            name: "Gentle movement",
+            exercises: restDayMovementLine,
+            notes: "You marked yourself unwell, so rest is the real plan today. This is here only if moving would feel good."
+        )
+        let session = WorkoutProgram.SessionSuggestion(
+            title: "Rest",
+            timeLabel: "",
+            kind: .mobility,
+            exercises: [PrescribedExercise(name: restDayMovementLine, sets: 0, reps: "", role: .accessory, fromCatalog: false)],
+            suggestion: suggestion
+        )
+        return WorkoutProgram.DayPlan(
+            splitName: "Rest day", dayTitle: "Rest", sessions: [session], droppedSlots: [], locationName: locationName
+        )
+    }
+
     /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
     /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
     /// AI is off/unavailable or the request is empty.

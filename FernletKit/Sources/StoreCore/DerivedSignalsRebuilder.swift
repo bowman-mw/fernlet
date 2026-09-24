@@ -15,14 +15,18 @@ public struct DerivedSignalsRebuilder {
     ///   - allDays: The complete day history, keyed by `yyyy-MM-dd` day key.
     ///   - todayKey: The day key the factory treats as "today" for its recency math.
     ///   - windowDays: How many trailing days feed the factory.
+    ///   - isSickToday: Whether today is marked unwell — forwarded to the factory, where it forces
+    ///     readiness to `"needs rest"` (spec §6a). Defaults to `false`; ``DerivedSignalsService``,
+    ///     the production caller, always passes it.
     /// - Returns: The factory's freshly built `DerivedSignalRecord` set.
     public static func rebuild(
         allDays: [String: FernletDay],
         todayKey: String,
-        windowDays: Int = FernletLimits.signalWindowDays
+        windowDays: Int = FernletLimits.signalWindowDays,
+        isSickToday: Bool = false
     ) -> [DerivedSignalRecord] {
         let orderedDays = allDays.sorted { first, second in first.key < second.key }
         let recent = Array(orderedDays.suffix(windowDays))
-        return DerivedSignalFactory.makeSignals(from: recent, todayKey: todayKey)
+        return DerivedSignalFactory.makeSignals(from: recent, todayKey: todayKey, isSickToday: isSickToday)
     }
 }

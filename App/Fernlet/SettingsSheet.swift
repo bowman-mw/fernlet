@@ -1808,7 +1808,7 @@ struct SettingsSheet: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Spacer()
-                Text(signal.value.capitalized)
+                Text(SignalPresentation.valueLabel(for: signal.value))
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(SignalPresentation.color(for: signal.value))
             }

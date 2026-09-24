@@ -394,7 +394,18 @@ final class LaunchPreparationService {
     }
 
     private func deterministicThought(for store: FernletStore) -> String {
-        let signals = store.derivedSignals
+        Self.deterministicThought(for: store.derivedSignals)
+    }
+
+    /// The companion thought when the on-device model does not run. Static so it is testable.
+    ///
+    /// Rest first: marking today unwell forces readiness to `"needs rest"` (spec §6a), and the line
+    /// is Home's own (`SignalPresentation.restDayThought`), so the launch thought and the Home
+    /// fallback can never disagree about what an unwell day hears.
+    static func deterministicThought(for signals: [DerivedSignalRecord]) -> String {
+        if signals.first(where: { $0.signalName == "intensityReadiness" })?.value == "needs rest" {
+            return SignalPresentation.restDayThought
+        }
         if let energy = signals.first(where: { $0.signalName == "energyTrend" }) {
             if energy.value == "low" { return "Energy has been low lately. Rest counts as care." }
             if energy.value == "rising" { return "Something has been building. Notice the upward pull." }
@@ -410,6 +421,21 @@ final class LaunchPreparationService {
             if eating.value == "light" { return "Nutrition has been lighter lately. One nourishing meal is enough." }
         }
         return "A few ordinary care notes are here. Keep the day simple."
+    }
+
+    /// The signals the on-device companion-thought prompt sees: every record that is not
+    /// "insufficient data" (none at all means the model does not run), at most three, with a
+    /// `"needs rest"` readiness moved to the FRONT.
+    ///
+    /// Readiness is fifth in the factory's order, so on a day the user marked unwell the plain
+    /// `prefix(3)` this replaces dropped it — the model was asked to muse on "energy rising" for
+    /// someone who had just said they were unwell. Lives outside the `#if canImport(FoundationModels)`
+    /// block so it is testable on any host.
+    static func thoughtPromptSignals(_ signals: [DerivedSignalRecord]) -> [DerivedSignalRecord] {
+        let usable = signals.filter { $0.value != "insufficient data" }
+        let isRest: (DerivedSignalRecord) -> Bool = { $0.signalName == "intensityReadiness" && $0.value == "needs rest" }
+        let ordered = usable.filter(isRest) + usable.filter { !isRest($0) }
+        return Array(ordered.prefix(3))
     }
 
     // MARK: - Foundation Models
@@ -510,10 +536,10 @@ final class LaunchPreparationService {
 
     @available(iOS 26.0, *)
     private func foundationModelsThought(for store: FernletStore) async -> String? {
-        let signals = store.derivedSignals.filter { $0.value != "insufficient data" }
+        let signals = Self.thoughtPromptSignals(store.derivedSignals)
         guard !signals.isEmpty else { return nil }
 
-        let signalSummaries = signals.prefix(3).map { AISignalSummary(signalName: $0.signalName, value: $0.value) }
+        let signalSummaries = signals.map { AISignalSummary(signalName: $0.signalName, value: $0.value) }
         // Prompt vocabulary — the frozen token, never the localized label (see the day-summary
         // payload above for why).
         let journalTag = store.day.journals.last?.tag.rawValue.lowercased() ?? ""

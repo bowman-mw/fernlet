@@ -7,13 +7,19 @@ import FernletDomainModel
 /// Holds the current derived-signal records and controls when they are rebuilt.
 ///
 /// A thin `@MainActor` `@Observable` wrapper around the pure ``DerivedSignalsRebuilder``.
-/// `FernletStore` owns one instance, calls ``rebuild(allDays:todayKey:)`` after day-history
-/// mutations, and uses ``scheduleDeferredRebuild(allDaysProvider:todayKey:)`` at launch so the
+/// `FernletStore` owns one instance, calls ``rebuild(allDays:todayKey:isSickToday:)`` after
+/// day-history mutations (and when today's unwell flag flips), and uses
+/// ``scheduleDeferredRebuild(allDaysProvider:isSickTodayProvider:todayKey:)`` at launch so the
 /// first (potentially large) rebuild runs at utility priority after startup instead of blocking
 /// first render. The deferred rebuild is one-shot: `deferredStarted` latches on the first
 /// schedule and never resets, and the pending closure nils itself before running so the rebuild
 /// can never execute twice. ``flushDeferredRebuild()`` lets an early reader (or a test) force the
 /// pending rebuild synchronously before the utility-priority task gets around to it.
+///
+/// Today's unwell flag is a REQUIRED input on both entry points, unlike the defaulted parameter on
+/// the pure factory: it lives in settings, not on the day, so a call that forgot it would compute a
+/// behaviour-only readiness and tell an unwell user they are ready for a hard session (spec §6a:
+/// sickness always forces `"needs rest"`). The compiler, not a review, keeps every rebuild honest.
 @MainActor
 @Observable
 public final class DerivedSignalsService {
@@ -30,22 +36,25 @@ public final class DerivedSignalsService {
     public init() {}
 
     /// Rebuilds the signals synchronously from `allDays`, timed under the startup profiler.
-    public func rebuild(allDays: [String: FernletDay], todayKey: String) {
+    /// `isSickToday` is today's unwell flag; see the type note for why it is required.
+    public func rebuild(allDays: [String: FernletDay], todayKey: String, isSickToday: Bool) {
         StartupTiming.timed("FernletStore.rebuildDerivedSignals") {
             derivedSignals = DerivedSignalsRebuilder.rebuild(
                 allDays: allDays,
-                todayKey: todayKey
+                todayKey: todayKey,
+                isSickToday: isSickToday
             )
         }
     }
 
     /// Schedules a low-priority rebuild after launch. Runs exactly once — later calls are ignored.
-    /// `allDaysProvider` is evaluated at fire time (not capture time) so the rebuild sees the day
-    /// history as it stands when the utility-priority task finally runs. `todayKey`, by contrast,
-    /// is captured at schedule time — acceptable because the deferred task fires moments after
-    /// launch, well inside the same day.
+    /// `allDaysProvider` and `isSickTodayProvider` are evaluated at fire time (not capture time) so
+    /// the rebuild sees the day history and the unwell flag as they stand when the utility-priority
+    /// task finally runs. `todayKey`, by contrast, is captured at schedule time — acceptable because
+    /// the deferred task fires moments after launch, well inside the same day.
     public func scheduleDeferredRebuild(
         allDaysProvider: @escaping @MainActor () -> [String: FernletDay],
+        isSickTodayProvider: @escaping @MainActor () -> Bool,
         todayKey: String
     ) {
         guard !deferredStarted else { return }
@@ -53,7 +62,7 @@ public final class DerivedSignalsService {
         pendingDeferredRebuild = { [weak self] in
             guard let self else { return }
             self.pendingDeferredRebuild = nil
-            self.rebuild(allDays: allDaysProvider(), todayKey: todayKey)
+            self.rebuild(allDays: allDaysProvider(), todayKey: todayKey, isSickToday: isSickTodayProvider())
         }
         Task(priority: .utility) { [weak self] in
             await Task.yield()

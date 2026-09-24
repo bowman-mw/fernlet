@@ -30,20 +30,23 @@ import FernletScoring
 ///
 /// Every `value` string this file emits — `"insufficient data"`, `"needs gentleness"`,
 /// `"improving"` / `"declining"` / `"steady"`, `"low"` / `"rising"` / `"dipping"`, `"light"` /
-/// `"protein-forward"` / `"inconsistent"` / `"consistent"`, `"ready for light"` /
+/// `"protein-forward"` / `"inconsistent"` / `"consistent"`, `"needs rest"` / `"ready for light"` /
 /// `"ready for moderate"` / `"ready for hard"`, `"building"` / `"deloading"`, and the counted
 /// `"N possible gap(s)"` / `"N covered"` forms — reads like a phrase written for a person, and it
 /// is not. It is a logic token. Six gates in the app target compare these literals by exact string
 /// equality, and every one of them is a behavior switch, not a label:
 ///
-/// * `LaunchPreparationService.foundationModelsThought` filters on `value != "insufficient data"`
-///   and returns `nil` when nothing survives — this decides whether the AI runs AT ALL.
+/// * `LaunchPreparationService.thoughtPromptSignals` filters on `value != "insufficient data"`
+///   (and moves a `"needs rest"` readiness to the front), and `foundationModelsThought` returns
+///   `nil` when nothing survives — this decides whether the AI runs AT ALL.
 /// * `GentleOffers` gates the entire gentle-offer feature on `moodTrendValue == "needs gentleness"`.
 ///   That comparison is the feature's sole trigger; there is no second path in.
 /// * `AmbientCards` reads the same `moodTrend` value for its care-card trigger.
-/// * `FernletStore` maps `"ready for hard"` to the `.hard` intensity recommendation.
+/// * `FernletStore` maps `"ready for hard"` to the `.hard` intensity recommendation, and
+///   `"needs rest"` to `.light` plus `needsRestToday` — the switch the Move tab's rest-day surface
+///   (light-only chips, the gentle rest plan, no push copy) turns on.
 /// * `HomeView` and `LaunchPreparationService` each pick their ambient line by matching
-///   `"low"` / `"needs gentleness"` / `"ready for hard"`.
+///   `"needs rest"` / `"low"` / `"needs gentleness"` / `"ready for hard"`.
 ///
 /// So `String(localized:)` here, or an innocent copy edit ("needs gentleness" → "be gentle"), does
 /// not change a label: it turns six features off in six different places, with no compiler error,
@@ -72,10 +75,18 @@ public enum DerivedSignalFactory {
     ///   - days: `(dateKey, day)` pairs, oldest-first, at most ``FernletLimits/signalWindowDays``
     ///     entries (asserted in debug).
     ///   - todayKey: The current day key; required non-empty, used only for the debug assertion.
+    ///   - isSickToday: Whether the user marked TODAY unwell (the per-day `sickDays` flag, which
+    ///     lives in settings rather than on the day). Spec §6a: sickness always forces readiness to
+    ///     `"needs rest"`. Defaults to `false` — the behaviour-only readiness — for callers with no
+    ///     settings in hand; the production path (`DerivedSignalsService`) must pass it.
     /// - Returns: The seven records (mood, energy, eating, progression, readiness, and the 7- and
     ///   14-day micronutrient windows), or an empty array when the window has no days at all.
     ///   Sparse data never fails — signals degrade to an "insufficient data" value instead.
-    public static func makeSignals(from days: [(String, FernletDay)], todayKey: String) -> [DerivedSignalRecord] {
+    public static func makeSignals(
+        from days: [(String, FernletDay)],
+        todayKey: String,
+        isSickToday: Bool = false
+    ) -> [DerivedSignalRecord] {
         assert(!todayKey.isEmpty, "today key required")
         assert(days.count <= FernletLimits.signalWindowDays, "too many signal days")
         guard let first = days.first?.0, let last = days.last?.0 else { return [] }
@@ -84,7 +95,7 @@ public enum DerivedSignalFactory {
             energyTrend(from: days, start: first, end: last),
             eatingPattern(from: days, start: first, end: last),
             progressionTrend(from: days, start: first, end: last),
-            intensityReadiness(from: days, start: first, end: last),
+            intensityReadiness(from: days, start: first, end: last, isSickToday: isSickToday),
             micronutrientTrend(from: days, start: first, end: last, windowDays: 7),
             micronutrientTrend(from: days, start: first, end: last, windowDays: 14)
         ]
@@ -152,9 +163,15 @@ public enum DerivedSignalFactory {
         return DerivedSignalRecord(signalName: "eatingPattern", value: value, windowStart: start, windowEnd: end, sourceFields: ["meals.count", "meals.macros", "meals.calorieSnapshot"])
     }
 
-    /// Builds the `intensityReadiness` signal — the light/moderate/hard training recommendation —
-    /// from the last 3 days' load, energy, fueling, and (when wearable data exists) HR/HRV recovery.
-    private static func intensityReadiness(from days: [(String, FernletDay)], start: String, end: String) -> DerivedSignalRecord {
+    /// Builds the `intensityReadiness` signal — the rest/light/moderate/hard training recommendation
+    /// — from the last 3 days' load, energy, fueling, and (when wearable data exists) HR/HRV
+    /// recovery. A day the user marked unwell is `"needs rest"` before any of that is consulted.
+    private static func intensityReadiness(
+        from days: [(String, FernletDay)],
+        start: String,
+        end: String,
+        isSickToday: Bool
+    ) -> DerivedSignalRecord {
         assert(days.count <= FernletLimits.signalWindowDays, "too many days")
         assert(!end.isEmpty, "end required")
         let recentDays = Array(days.suffix(min(3, days.count)))
@@ -178,7 +195,11 @@ public enum DerivedSignalFactory {
         }
         let recovery: Double? = recoveryScores.isEmpty ? nil : average(recoveryScores)
         let value: String
-        if recentDays.isEmpty || (recentLoad == 0 && recentEnergy == 0 && recentMeals == 0) {
+        if isSickToday {
+            // Spec §6a: sickness always forces `needs rest` — ahead of every behavioural heuristic,
+            // including "insufficient data": an unwell day with nothing logged still needs rest.
+            value = "needs rest"
+        } else if recentDays.isEmpty || (recentLoad == 0 && recentEnergy == 0 && recentMeals == 0) {
             value = "insufficient data"
         } else if recentEnergy < 0.45 || recentHardCount >= 2 || recentLoad >= 260 || (recovery ?? 1) < 0.4 {
             // Poor autonomic recovery (low HRV / elevated resting HR) caps the recommendation at light.
@@ -188,7 +209,12 @@ public enum DerivedSignalFactory {
         } else {
             value = "ready for moderate"
         }
-        return DerivedSignalRecord(signalName: "intensityReadiness", value: value, windowStart: start, windowEnd: end, sourceFields: ["workouts.intensity", "workouts.duration", "workouts.rpe", "sleep", "journals.tag", "meals.count", "body.restingHeartRate", "body.heartRateVariability"])
+        // Provenance for the Trends row: on an unwell day the flag alone decided the value, so the
+        // row must not claim that workouts or sleep did.
+        let sourceFields = isSickToday
+            ? ["sickness"]
+            : ["workouts.intensity", "workouts.duration", "workouts.rpe", "sleep", "journals.tag", "meals.count", "body.restingHeartRate", "body.heartRateVariability"]
+        return DerivedSignalRecord(signalName: "intensityReadiness", value: value, windowStart: start, windowEnd: end, sourceFields: sourceFields)
     }
 
     /// Builds the `progressionTrend` signal — building / deloading / steady — by comparing total

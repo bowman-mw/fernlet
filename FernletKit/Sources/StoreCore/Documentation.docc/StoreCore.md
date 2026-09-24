@@ -50,7 +50,9 @@ re-synced day records, which carry fresh reconcile-time timestamps).
 ``DerivedSignalsService`` and the pure ``DerivedSignalsRebuilder`` cover Tier-2 derived data:
 signals recomputed deterministically from raw day history (via LocalPersistence's
 `DerivedSignalFactory`), with a one-shot deferred rebuild so the first large pass runs at utility
-priority after launch. ``AIRetryQueueService`` is the odd one out persistence-wise — its queue
+priority after launch. The one input that is not on a day — today's unwell flag, which forces
+readiness to `"needs rest"` (spec §6a) — is a REQUIRED parameter on both service entry points, so
+no rebuild can silently compute a behaviour-only readiness for someone who said they are unwell. ``AIRetryQueueService`` is the odd one out persistence-wise — its queue
 rides inside the snapshot blob, so it fires an `onChange` hook (wired to the coordinator's
 `schedule()`) instead of owning a repository; its policy work is the kind-scoped dedupe, TTL
 age-out, and bounded eviction that keep a future workout/recipe retry record safe from the meal

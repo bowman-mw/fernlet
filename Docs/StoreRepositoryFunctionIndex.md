@@ -173,11 +173,11 @@ split is by concern, not alphabetical.
 | `WorkoutLogRecord.init(dateKey:workout:)` | Converts a workout into a denormalized log row. |
 | `JournalLogRecord.init(dateKey:journal:)` | Converts a journal into a capped log row. |
 | `MacroTotals.init(meals:)` | Computes macro totals with per-day meal caps. |
-| `DerivedSignalFactory.makeSignals(from:todayKey:)` | Produces mood, energy, eating, progression, readiness, and micronutrient signals for a recent window. |
+| `DerivedSignalFactory.makeSignals(from:todayKey:isSickToday:)` | Produces mood, energy, eating, progression, readiness, and micronutrient signals for a recent window. |
 | `moodTrend(from:start:end:)` | Classifies mood direction and gentleness need from journal tags. |
 | `energyTrend(from:start:end:)` | Classifies energy trend from sleep, mood, and training load. |
 | `eatingPattern(from:start:end:)` | Classifies meal consistency, skipped days, and protein-forward patterns. |
-| `intensityReadiness(from:start:end:)` | Classifies suggested training intensity from recent load, energy, meals, and hard workouts. |
+| `intensityReadiness(from:start:end:isSickToday:)` | Classifies suggested training intensity from recent load, energy, meals, and hard workouts; a day marked unwell is `needs rest` first (spec §6a). |
 | `progressionTrend(from:start:end:)` | Compares older/newer training load to classify building, deloading, or steady patterns. |
 | `micronutrientTrend(from:start:end:windowDays:)` | Converts nutrient gap analysis into a derived signal. |
 | `dailyMoodScores(from:)` / `dailyEnergyScores(from:)` | Convert day records into trend input scores. |
@@ -281,7 +281,7 @@ split is by concern, not alphabetical.
 | `addTexture(_:)`, `deleteMemory(_:)`, `updateMemory(_:category:text:)` | Mutate workshop texture notes and memory records. |
 | `queueMealRetry(_:)`, `clearRetryItem(_:)` | Delegate AI retry queue operations. |
 | `resetAll()` | Resets store state, saved recipes, retry queue, and proximity trust/audit state. |
-| `rebuildDerivedSignals()` | Rebuilds derived signals from all days. |
+| `rebuildDerivedSignals()` | Rebuilds derived signals from all days and today's unwell flag; `setSick(_:on:)` calls it at once for today. |
 | `deferredPostLaunchTasks()` | Schedules a one-time deferred derived signal rebuild. |
 | `flushPendingSnapshotSave()` | Forces any pending debounced snapshot save to run now. |
 | `reloadFromRepository()` | Debounced remote reload handler that async-loads Core Data when available and applies a snapshot. |
@@ -497,15 +497,15 @@ declared here, never by naming the app-target types that implement them.
 
 | Function | What It Does |
 | --- | --- |
-| `rebuild(allDays:todayKey:)` | Rebuilds observed derived signals through `DerivedSignalsRebuilder`. |
-| `scheduleDeferredRebuild(allDaysProvider:todayKey:)` | Schedules a one-time utility-priority rebuild after launch. |
+| `rebuild(allDays:todayKey:isSickToday:)` | Rebuilds observed derived signals through `DerivedSignalsRebuilder`. `isSickToday` is required: it forces readiness to `needs rest` (spec §6a). |
+| `scheduleDeferredRebuild(allDaysProvider:isSickTodayProvider:todayKey:)` | Schedules a one-time utility-priority rebuild after launch; both providers are read at fire time. |
 | `flushDeferredRebuild()` | Runs the pending deferred rebuild immediately if one exists. |
 
 ### `DerivedSignalsRebuilder.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `rebuild(allDays:todayKey:windowDays:)` | Sorts all days, takes the recent window, and delegates signal creation to `DerivedSignalFactory`. |
+| `rebuild(allDays:todayKey:windowDays:isSickToday:)` | Sorts all days, takes the recent window, and delegates signal creation to `DerivedSignalFactory`, forwarding today's unwell flag. |
 
 ### `SavedRecipeService.swift`
 
