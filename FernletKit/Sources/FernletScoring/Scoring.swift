@@ -125,8 +125,9 @@ public struct ScoreBreakdown: Equatable {
 /// wellbeing score (and companion state) at the heart of Fernlet.
 ///
 /// A namespace enum that deliberately shares the module's name. `computeBreakdown` is the single
-/// entry point the stores use: it blends six 0–1 component scores — journaling (any entry earns the
-/// same credit, whatever its feeling tag), meals, movement, sleep, hydration, personal care — under
+/// entry point the stores use: it blends six 0–1 component scores — journaling (any written entry
+/// earns the same credit, whatever its feeling tag; a day of mood check-ins only earns half the credit
+/// above not journaling), meals, movement, sleep, hydration, personal care — under
 /// a goal-derived `ScoringWeights` vector, then
 /// layers the gentle modifiers on top: sickness reweighting, the ``PeriodScoringAdjustment``
 /// leniencies, the capped micronutrient nudge, and the capped ``StressEngine`` nudge. `DiaryStore`
@@ -155,12 +156,38 @@ public enum FernletScoring {
     /// by 0.45.
     public static let noJournalEntryScore: Double = 0.55
 
+    /// The journal component for a day whose only journal activity is one-tap mood check-ins
+    /// (see ``isCheckInOnly(_:)``): half the credit a written entry earns ABOVE not journaling,
+    /// 0.55 + 0.45 / 2 = 0.775.
+    ///
+    /// Owner decision, 2026-09-24: "maybe a check in is worth half the points of a journal entry",
+    /// confirmed as half the credit above the no-entry baseline rather than half of 1.0 (0.5), which
+    /// would have scored a check-in BELOW writing nothing. So a check-in always beats not checking
+    /// in, and any written entry the same day still earns the full ``journalEntryScore``.
+    public static let checkInOnlyScore: Double = noJournalEntryScore + (journalEntryScore - noJournalEntryScore) / 2
+
     /// Maps a day's latest journal tag to its 0–1 journal-component score:
-    /// ``journalEntryScore`` for any entry, ``noJournalEntryScore`` for none. The tag decides only
-    /// WHETHER there is an entry — how the day felt never costs points (see
-    /// ``journalMoodScore(for:)`` for where the feeling still goes).
-    public static func journalComponentScore(for tag: FeelingTag?) -> Double {
-        tag == nil ? noJournalEntryScore : journalEntryScore
+    /// ``journalEntryScore`` for a day with a written entry, ``checkInOnlyScore`` when
+    /// `checkInOnly` says the day holds nothing but mood check-ins, and ``noJournalEntryScore`` for
+    /// none. The tag decides only WHETHER there is an entry — how the day felt never costs points
+    /// (see ``journalMoodScore(for:)`` for where the feeling still goes). `checkInOnly` defaults to
+    /// `false`, so a caller that never passes it scores exactly as before the check-in rule.
+    public static func journalComponentScore(for tag: FeelingTag?, checkInOnly: Bool = false) -> Double {
+        guard tag != nil else { return noJournalEntryScore }
+        return checkInOnly ? checkInOnlyScore : journalEntryScore
+    }
+
+    /// Whether a day's journal holds ONLY one-tap mood check-ins: at least one entry, and every entry
+    /// one that `FernletStore.logQuickMood` positively marked (`isQuickMood`) and that still has no
+    /// text. One written entry anywhere in the day makes it a written day.
+    ///
+    /// Never inferred from empty text alone. A sealed entry synced from another device, or one read
+    /// while the private lock is closed, also has empty text but `isQuickMood == false`, so it
+    /// counts as written and keeps its full credit. The same goes for a check-in saved before the
+    /// marker existed: it decodes as `false`, so an old day never loses points to this rule.
+    public static func isCheckInOnly(_ entries: [JournalEntry]) -> Bool {
+        guard !entries.isEmpty else { return false }
+        return entries.allSatisfy { $0.isQuickMood && $0.text.isEmpty }
     }
 
     /// How the day felt, on the retired tag-weighted scale (hard 0.3 … bright 1.0; no entry reads as
@@ -304,6 +331,7 @@ public enum FernletScoring {
     /// sub-scores or the applied weight vector use `computeBreakdown` directly.
     public static func compute(
         journalTag: FeelingTag?,
+        journalIsCheckInOnly: Bool = false,
         mealCount: Int,
         workoutCount: Int,
         sleepQuality: SleepQuality?,
@@ -326,6 +354,7 @@ public enum FernletScoring {
     ) -> Double {
         computeBreakdown(
             journalTag: journalTag,
+            journalIsCheckInOnly: journalIsCheckInOnly,
             mealCount: mealCount,
             workoutCount: workoutCount,
             sleepQuality: sleepQuality,
@@ -351,8 +380,13 @@ public enum FernletScoring {
     /// Computes the overall score along with the per-component sub-scores and the applied
     /// (sickness-adjusted) weight vector. `compute` returns only `.overall`; callers that need
     /// to persist the breakdown (`DailyHealthScore`) use this directly.
+    ///
+    /// `journalTag` is the day's LAST entry's tag (nil for no entry). `journalIsCheckInOnly` is
+    /// ``isCheckInOnly(_:)`` over the same day's entries; a day holding only mood check-ins earns
+    /// ``checkInOnlyScore``. The mood reading ignores it and reads the tag alone.
     public static func computeBreakdown(
         journalTag: FeelingTag?,
+        journalIsCheckInOnly: Bool = false,
         mealCount: Int,
         workoutCount: Int,
         sleepQuality: SleepQuality?,
@@ -394,7 +428,7 @@ public enum FernletScoring {
         let adjustedWeights = weights.adjustedForSickness(isSick).adjustedForPeriod(periodAdjustment.leniency)
         let careCompletedCount = completedPersonalCareTaskCount ?? hygiene.count
         let careScore = hygieneScore(completedCount: careCompletedCount, taskCount: hygieneTaskCount)
-        let journalScore = journalComponentScore(for: journalTag)
+        let journalScore = journalComponentScore(for: journalTag, checkInOnly: journalIsCheckInOnly)
         let sleepScoreValue = sleepScore(sleepQuality, sleepHours: sleepHours, stages: sleepStages)
         let baseOverall = min(
             journalScore * adjustedWeights.journalWeight +

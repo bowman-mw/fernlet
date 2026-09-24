@@ -18,6 +18,11 @@ import PeriodContextBridge
 /// entry, which is what the period bridge correlates against cycle phase. Flattening the journal
 /// component without that would have turned "mood tends to be tender in this phase" into "you
 /// journal less in this phase" and fed the wrong answer to period-aware leniency.
+///
+/// Check-ins count half (owner, 2026-09-24): "maybe a check in is worth half the points of a journal
+/// entry", confirmed as half the credit ABOVE not journaling. A day holding only one-tap mood
+/// check-ins earns 0.55 + 0.45 / 2 = 0.775, never less than writing nothing. One written entry that
+/// day earns the full 1.0. The check-in's tag still feeds the mood reading exactly as before.
 @MainActor
 struct JournalScoringParityTests {
 
@@ -97,6 +102,131 @@ struct JournalScoringParityTests {
                     "the \(tag.rawValue) mood reading drifted from the retired scale")
         }
         #expect(breakdown(nil).components["mood"] == Self.noEntryValue)
+    }
+
+    // MARK: - Check-ins count half (2026-09-24)
+
+    /// A one-tap mood check-in exactly as `FernletStore.logQuickMood` writes it.
+    private static func checkIn(_ tag: FeelingTag) -> JournalEntry {
+        JournalEntry(text: "", tag: tag, isQuickMood: true)
+    }
+
+    /// A written journal entry.
+    private static func written(_ tag: FeelingTag) -> JournalEntry {
+        JournalEntry(text: "wrote a little about the day", tag: tag)
+    }
+
+    /// One ordinary day that differs only in its journal entries, derived the way both production
+    /// call sites derive it: the last entry's tag, and `isCheckInOnly` over the whole day.
+    private func breakdown(journals: [JournalEntry], goal: GoalType = .wellness) -> ScoreBreakdown {
+        FernletScoring.computeBreakdown(
+            journalTag: journals.last?.tag,
+            journalIsCheckInOnly: FernletScoring.isCheckInOnly(journals),
+            mealCount: 2,
+            workoutCount: 1,
+            sleepQuality: .good,
+            bottleCount: 2,
+            hydrationTarget: 4,
+            hygiene: [],
+            weights: GoalWeights.forGoal(goal)
+        )
+    }
+
+    @Test func aCheckInIsWorthHalfTheCreditAboveNotJournaling() {
+        // Pinned as a number, not only as the formula, so a change to either constant shows up here.
+        #expect(FernletScoring.checkInOnlyScore == 0.775)
+        #expect(FernletScoring.checkInOnlyScore
+                == FernletScoring.noJournalEntryScore
+                + (FernletScoring.journalEntryScore - FernletScoring.noJournalEntryScore) / 2)
+    }
+
+    @Test func aCheckInOnlyDayEarnsTheHalfCredit() {
+        for tag in FeelingTag.allCases {
+            #expect(breakdown(journals: [Self.checkIn(tag)]).components["journal"] == 0.775,
+                    "a \(tag.rawValue) check-in did not earn the half credit")
+        }
+        let twoCheckIns = breakdown(journals: [Self.checkIn(.good), Self.checkIn(.tired)])
+        #expect(twoCheckIns.components["journal"] == 0.775, "more check-ins must not add up to an entry")
+    }
+
+    @Test func aCheckInPlusAWrittenEntryEarnsTheFullCredit() {
+        let entryLast = breakdown(journals: [Self.checkIn(.hard), Self.written(.good)])
+        let checkInLast = breakdown(journals: [Self.written(.good), Self.checkIn(.hard)])
+        #expect(entryLast.components["journal"] == 1.0)
+        #expect(checkInLast.components["journal"] == 1.0, "a later check-in must not cost the day its entry")
+    }
+
+    @Test func aWrittenEntryOnlyEarnsTheFullCredit() {
+        for tag in FeelingTag.allCases {
+            #expect(breakdown(journals: [Self.written(tag)]).components["journal"] == 1.0)
+        }
+    }
+
+    @Test func noEntryKeepsTheBaseline() {
+        let none = breakdown(journals: [])
+        #expect(none.components["journal"] == Self.noEntryValue)
+        #expect(none.components["mood"] == Self.noEntryValue)
+    }
+
+    @Test func theMoodReadingIgnoresTheCheckInRule() {
+        for tag in FeelingTag.allCases {
+            let checkInMood = breakdown(journals: [Self.checkIn(tag)]).components["mood"]
+            #expect(checkInMood == Self.retiredJournalValues[tag], "the \(tag.rawValue) check-in's mood drifted")
+            #expect(checkInMood == breakdown(journals: [Self.written(tag)]).components["mood"])
+        }
+        // The mood is the LAST entry's tag, check-in or not: the existing same-day semantics.
+        #expect(breakdown(journals: [Self.written(.bright), Self.checkIn(.hard)]).components["mood"] == 0.3)
+        #expect(breakdown(journals: [Self.checkIn(.hard), Self.written(.bright)]).components["mood"] == 1.0)
+    }
+
+    @Test func overallOrderIsNoneThenCheckInThenWrittenForEveryGoal() {
+        for goal in GoalType.allCases {
+            let none = breakdown(journals: [], goal: goal).overall
+            let checkIn = breakdown(journals: [Self.checkIn(.good)], goal: goal).overall
+            let entry = breakdown(journals: [Self.written(.good)], goal: goal).overall
+            #expect(none < checkIn && checkIn < entry, "\(goal.rawValue): \(none), \(checkIn), \(entry)")
+            // The only difference is the journal component, weighted by the goal's journal weight.
+            let weight = GoalWeights.forGoal(goal).journalWeight
+            #expect(abs((entry - checkIn) - 0.225 * weight) < 1e-9, "\(goal.rawValue): \(entry - checkIn)")
+        }
+    }
+
+    @Test func onlyAPositivelyMarkedEmptyEntryIsACheckIn() {
+        #expect(!FernletScoring.isCheckInOnly([]), "no entries is not a check-in day")
+        #expect(FernletScoring.isCheckInOnly([Self.checkIn(.quiet)]))
+        // A sealed entry from another device (or read while locked) has empty text and no marker. It is
+        // a written entry whose words live elsewhere, and a pre-marker check-in decodes the same way.
+        let strippedSeal = JournalEntry(text: "", tag: .good, isQuickMood: false)
+        #expect(!FernletScoring.isCheckInOnly([strippedSeal]))
+        #expect(!FernletScoring.isCheckInOnly([Self.checkIn(.good), strippedSeal]))
+        #expect(breakdown(journals: [strippedSeal]).components["journal"] == 1.0)
+        // A marked entry that somehow carries words is a written entry.
+        let markedWithText = JournalEntry(text: "words", tag: .good, isQuickMood: true)
+        #expect(!FernletScoring.isCheckInOnly([markedWithText]))
+    }
+
+    @Test func callersThatNeverPassTheFlagScoreAsBefore() {
+        // `journalIsCheckInOnly` defaults to false, so the identity-preserving default holds.
+        #expect(breakdown(.good).components["journal"] == 1.0)
+        #expect(FernletScoring.journalComponentScore(for: .good) == 1.0)
+        #expect(FernletScoring.journalComponentScore(for: nil, checkInOnly: true) == Self.noEntryValue,
+                "a check-in flag with no entry is still no entry")
+    }
+
+    /// Both production call sites: `DiaryStore.scoreBreakdown(for:)` (every stored day score) and
+    /// `FernletStore.score` (today's live companion).
+    @Test func bothScorePathsGiveACheckInOnlyDayTheHalfCredit() {
+        let store = makeTestStore()
+        store.activateNoLockJournals()
+        store.logQuickMood(.good)
+        #expect(store.scoreBreakdown(for: store.day).components["journal"] == FernletScoring.checkInOnlyScore)
+        let checkInOnly = store.score
+        store.addJournal(text: "wrote a real entry about the day", tag: .good)
+        #expect(store.scoreBreakdown(for: store.day).components["journal"] == FernletScoring.journalEntryScore)
+        let written = store.score
+        let weight = GoalWeights.forGoal(store.settings.selectedGoal).journalWeight
+        #expect(abs((written - checkInOnly) - 0.225 * weight) < 1e-9,
+                "the live score moved \(written - checkInOnly), not the half credit's \(0.225 * weight)")
     }
 
     @Test func periodBridgeReadsTheMoodNotTheFlatJournalCredit() {

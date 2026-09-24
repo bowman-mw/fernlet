@@ -1013,6 +1013,7 @@ final class FernletStore {
         let activity = day.healthContext?.activity
         return FernletScoring.compute(
             journalTag: day.journals.last?.tag,
+            journalIsCheckInOnly: FernletScoring.isCheckInOnly(day.journals),
             mealCount: day.meals.count,
             workoutCount: day.workouts.count,
             sleepQuality: day.sleep?.quality,
@@ -3358,10 +3359,12 @@ final class FernletStore {
     }
 
     /// One-tap mood check-in: a tag-only journal entry (empty text, just a `FeelingTag`). It flows
-    /// through every existing "last entry's tag" consumer — the daily score's journal component,
-    /// the moodTrend derived signal, the Home ambient thought, and the calendar tint — with no
+    /// through every existing "last entry's tag" consumer — the daily score's mood reading, the
+    /// moodTrend derived signal, the Home ambient thought, and the calendar tint — with no
     /// special-casing, and a later real journal simply appends after it (last entry wins, exactly
-    /// the existing same-day semantics).
+    /// the existing same-day semantics). The one rule that tells it apart is the score's journal
+    /// credit: a day of check-ins only earns `FernletScoring.checkInOnlyScore`, half the credit
+    /// above not journaling (owner, 2026-09-24), and a written entry that day earns the full credit.
     ///
     /// Changing your mind updates the check-in IN PLACE when today's latest entry is one we can
     /// POSITIVELY identify as a tag-only check-in via its synced `isQuickMood` marker. We never infer

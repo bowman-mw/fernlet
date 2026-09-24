@@ -280,6 +280,7 @@ public final class DiaryStore {
         let activity = targetDay.healthContext?.activity
         return FernletScoring.computeBreakdown(
             journalTag: targetDay.journals.last?.tag,
+            journalIsCheckInOnly: FernletScoring.isCheckInOnly(targetDay.journals),
             mealCount: targetDay.meals.count,
             workoutCount: targetDay.workouts.count,
             sleepQuality: targetDay.sleep?.quality,

@@ -15,13 +15,17 @@ entry point: it blends six 0–1 component scores under a goal-derived `ScoringW
 day's `DailyHealthScore`. `state(for:)` finally bands the score into the companion's
 presentation state.
 
-**Journaling is scored by habit, not by feeling** (owner decision, 2026-09-23). Any journal entry
-earns the same journal component — `journalEntryScore`, the top of the retired tag scale — whatever
-its feeling tag, and a day with no entry keeps `noJournalEntryScore` (0.55), so writing about a hard
-day can never score below not writing. The tag survives only as the breakdown's unweighted `mood`
-reading (`journalMoodScore(for:)`, the retired values exactly), which the app's period bridge reads
-to learn which cycle phases are personally harder; it never enters the overall score. Pinned by
-`JournalScoringParityTests`.
+**Journaling is scored by habit, not by feeling** (owner decision, 2026-09-23). Any written journal
+entry earns the same journal component — `journalEntryScore`, the top of the retired tag scale —
+whatever its feeling tag, and a day with no entry keeps `noJournalEntryScore` (0.55), so writing about
+a hard day can never score below not writing. **A check-in counts half** (owner decision, 2026-09-24):
+a day whose only entries are one-tap mood check-ins (`isCheckInOnly(_:)`: every entry marked
+`isQuickMood` with no text) earns `checkInOnlyScore`, half the credit above not journaling
+(0.55 + 0.45 / 2 = 0.775), so a check-in still beats writing nothing; one written entry that day earns
+the full credit. The tag survives only as the breakdown's unweighted `mood` reading
+(`journalMoodScore(for:)`, the retired values exactly, check-in or not), which the app's period
+bridge reads to learn which cycle phases are personally harder; it never enters the overall score.
+Pinned by `JournalScoringParityTests`.
 
 The module's governing invariant is **identity-preserving determinism**: every optional
 refinement (HealthKit sleep stages and activity, nutrient gaps, period adjustment, stress

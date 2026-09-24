@@ -31,10 +31,10 @@ struct JournalQuickMoodTests {
         #expect(store.day.journals.last?.tag == .bright)
         // No tier-1 memory is minted from an empty check-in.
         #expect(store.memories.isEmpty)
-        // A check-in is a journal entry, so it earns the journal credit (the same for every tag since
-        // 2026-09-23 — JournalScoringParityTests), and its tag still reaches the unweighted mood reading.
+        // A day of check-ins only earns half the journal credit above not journaling (owner,
+        // 2026-09-24 — JournalScoringParityTests), and its tag still reaches the unweighted mood reading.
         let breakdown = store.scoreBreakdown(for: store.day)
-        #expect(breakdown.components["journal"] == FernletScoring.journalEntryScore)
+        #expect(breakdown.components["journal"] == FernletScoring.checkInOnlyScore)
         #expect(breakdown.components["mood"] == FernletScoring.journalMoodScore(for: .bright))
     }
 
