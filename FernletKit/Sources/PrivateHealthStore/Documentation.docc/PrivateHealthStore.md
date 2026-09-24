@@ -40,7 +40,12 @@ seam, not in view code**. While hidden, the stores are inert — reads return no
 nothing (``PeriodTrackerStore/loadEntries(unlockedContentKey:)`` refuses *before* the HealthKit
 read, because unencrypted flow samples are the larger exposure, and scrubs resident plaintext on
 the way out), and writes throw ``PeriodTrackingHiddenError`` / ``IntimacyTrackingHiddenError``.
-Deletes are deliberately ungated: hiding must never block "delete my data."
+Deletes are deliberately ungated: hiding must never block "delete my data." The same split holds
+on the HealthKit side since 2026-09-23: the gateway refuses a cycle-sample WRITE while Fernlet's
+Health sharing for cycle tracking is off, but lets Fernlet delete its own samples. Because an edit
+is delete-then-recreate, ``PeriodTrackerStore/editEvent(_:replacingEntry:unlockedContentKey:)``
+asks ``PeriodHealthKitServicing/checkPeriodEventWriteAllowed(_:)`` BEFORE it deletes anything —
+the visibility gate's rule ("never delete what you cannot rewrite") applied to the sharing gate.
 
 Orthogonal to visibility is the **content key**, supplied per call by `FernletLockService` and
 never retained here. The repositories — ``MenstrualNarrativeRepository`` and

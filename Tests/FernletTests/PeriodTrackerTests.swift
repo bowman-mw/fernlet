@@ -462,6 +462,48 @@ struct PeriodTrackerTests {
         #expect(surviving?.note == "must survive a refused edit")
     }
 
+    /// The same hazard from the Health side (2026-09-23). Deleting Fernlet's own samples is allowed
+    /// with cycle sharing off; re-writing them is not. An edit that did not ask first would delete the
+    /// day's samples and its sealed note, then have its re-log refused — so the write check must run,
+    /// and refuse, BEFORE anything is deleted.
+    @Test func editWithCycleSharingOffIsRefusedBeforeAnythingIsDeleted() async throws {
+        let health = MockPeriodHealthKitService()
+        let repo = makeRepository()
+        let key = SymmetricKey(data: Data(repeating: 15, count: 32))
+        let externalUUID = UUID()
+        health.loadedSamples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(flowLevel: .medium),
+            externalUUID: externalUUID
+        )
+        try repo.insert(MenstrualNarrative(
+            hkExternalUUID: externalUUID.uuidString,
+            dateKey: FernletDate.dayKey(for: Date()),
+            note: "must survive a sharing-off edit"
+        ), contentKey: key)
+        let store = makePeriodStore(
+            healthService: health,
+            narrativeRepository: repo,
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
+        )
+        await store.loadEntries(unlockedContentKey: key)
+        let entry = try #require(store.entries.first { $0.narrative != nil })
+        health.writeCheckError = HealthKitServiceError.sharingTurnedOff
+
+        await #expect(throws: HealthKitServiceError.self) {
+            _ = try await store.editEvent(
+                UserLoggedCycleEvent(flowLevel: .heavy),
+                replacingEntry: entry,
+                unlockedContentKey: key
+            )
+        }
+
+        #expect(health.writeCheckCallCount == 1)
+        #expect(health.deleteCallCount == 0, "nothing may be deleted before the re-log is known to be allowed")
+        #expect(health.savedSamples.isEmpty)
+        let surviving = try repo.narrative(forHKUUID: externalUUID.uuidString, contentKey: key)
+        #expect(surviving?.note == "must survive a sharing-off edit")
+    }
+
     /// Regression: `deleteEntry` used to recompute `prediction` with no key check, while the identical
     /// assignment in `loadEntries` was gated — so deleting an entry re-enabled phase resolution (and
     /// the scoring softening riding on it) with no content key, punching through both lock and gate.
@@ -674,7 +716,9 @@ private final class MockPeriodHealthKitService: PeriodHealthKitServicing {
     func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout] { [] }
     func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout] { [] }
     func save(_ samples: [HKObject]) async throws { savedSamples += samples.compactMap { $0 as? HKSample } }
-    func delete(_ samples: [HKSample]) async throws { }
+    /// How many delete batches reached the seam.
+    var deleteCallCount = 0
+    func delete(_ samples: [HKSample]) async throws { deleteCallCount += 1 }
     func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool { false }
     func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] { [] }
     func requestBodyProfileAuthorization() async throws -> HealthBodyProfile { HealthBodyProfile() }
@@ -691,6 +735,17 @@ private final class MockPeriodHealthKitService: PeriodHealthKitServicing {
         let samples = try HealthKitService.periodSamples(for: event, externalUUID: externalUUID)
         savedSamples += samples
         return samples
+    }
+
+    /// When set, the pre-edit write check throws it — standing in for Fernlet's cycle sharing being
+    /// off (the production conformer throws `HealthKitServiceError.sharingTurnedOff`).
+    var writeCheckError: Error?
+    /// How many times the pre-edit write check ran.
+    var writeCheckCallCount = 0
+
+    func checkPeriodEventWriteAllowed(_ event: UserLoggedCycleEvent) throws {
+        writeCheckCallCount += 1
+        if let writeCheckError { throw writeCheckError }
     }
 
     /// Counts HealthKit cycle reads so the visibility gate can assert ZERO of them — the flow samples

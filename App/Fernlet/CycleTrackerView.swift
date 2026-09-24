@@ -146,6 +146,8 @@ struct CycleTrackerView: View {
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
     @Environment(FernletLockService.self) private var lockService
+    /// The app's single preferences store, for the contextual cycle ask (see ``HealthAccessGrant``).
+    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @State private var authorization: HealthKitAuthorizationViewModel
     @State private var selectedDay: SelectedCycleDay?
     @State private var displayedMonth: Date = .now
@@ -564,7 +566,12 @@ struct CycleTrackerView: View {
         guard store.isPeriodTrackingVisible else { return }
         guard let contentKey = lockService.contentKey(for: .privateHub) else { return }
         if !authorization.hasRequested(.cycleTracking) {
-            await authorization.request(.cycleTracking)
+            await HealthAccessGrant.requestInContext(
+                .cycleTracking,
+                source: "cycleTracker",
+                authorization: authorization,
+                preferences: storagePreferencesStore
+            )
         }
         do {
             try await periodStore.drainPendingBuffer(contentKey: contentKey)

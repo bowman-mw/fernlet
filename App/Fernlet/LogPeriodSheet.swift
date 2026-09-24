@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletCrypto
 import FernletDomainModel
+import FernletFoundation
 import FernletLock
 import PrivateHealthStore
 import HealthKitGateway
@@ -52,6 +53,9 @@ struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore
     private let editingEntry: CycleDayEntry?
     @Environment(FernletLockService.self) private var lockService
+    /// The app's single preferences store: the contextual cycle ask turns this kind's Fernlet switch
+    /// on through it, or the gateway's write gate would refuse every log the prompt just allowed.
+    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @Environment(\.dismiss) private var dismiss
     @State private var authorization = HealthKitAuthorizationViewModel()
 
@@ -228,7 +232,12 @@ struct LogPeriodSheet: View {
         .task {
             periodStore.attachLockService(lockService)
             if !authorization.hasRequested(.cycleTracking) {
-                await authorization.request(.cycleTracking)
+                await HealthAccessGrant.requestInContext(
+                    .cycleTracking,
+                    source: "logPeriodSheet",
+                    authorization: authorization,
+                    preferences: storagePreferencesStore
+                )
             }
         }
         // A swipe-down used to throw away a period log with symptoms and a note, with no warning.

@@ -31,8 +31,9 @@ import HealthKitGateway
 /// straight into the day's health context, which is precisely the hole the visibility gate closes.
 ///
 /// "Give access" turns the capability's preference on (audited) and runs the authorization prompt
-/// + first pull; "Stop sharing" turns the preference off (audited) — Fernlet stops reading, and
-/// the samples stay in Apple Health (full revocation lives in the Health app, one tap away via
+/// + first pull; "Stop sharing" turns the preference off (audited) — Fernlet stops reading AND
+/// writing that kind (the gateway's write gate refuses it, 2026-09-23), and the samples already
+/// there stay in Apple Health (full revocation lives in the Health app, one tap away via
 /// "Open Health Privacy Settings"). Disabling the master switch warns first and then purges the
 /// locally cached Health-derived values, exactly as the Privacy & Data master used to.
 ///
@@ -452,8 +453,9 @@ struct HealthAccessSettingsView: View {
         Task { await requestAndPull(card) }
     }
 
-    /// Turns the card's preference keys off (audited). Fernlet stops reading; the samples stay in
-    /// Apple Health under its protections.
+    /// Turns the card's preference keys off (audited). Fernlet stops reading and writing that kind
+    /// (the gateway's write gate reads these keys live); the samples stay in Apple Health under its
+    /// protections.
     private func stopSharing(_ card: HealthAccessCard) {
         for capability in card.capabilities {
             FernletAuditLog.log(

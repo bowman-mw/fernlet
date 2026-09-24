@@ -31,6 +31,13 @@ public protocol HealthKitServicing {
     /// Whether Fernlet has previously requested this capability and its device-local opt-in remains
     /// enabled. Long-lived observations must pass this gate before touching HealthKit.
     func isCapabilityRequestedAndEnabled(_ capability: HealthCapability) -> Bool
+    /// Whether Fernlet may WRITE this kind of data into Apple Health right now: the device has a
+    /// Health store, Fernlet's master Health switch is on, and this capability's own switch is on.
+    ///
+    /// The quiet pre-check for callers that would rather skip a write than catch
+    /// ``HealthKitServiceError/sharingTurnedOff`` — the gate itself lives inside every write method,
+    /// so skipping this check can never let a write through.
+    func isWriteSharingEnabled(for capability: HealthCapability) -> Bool
     /// Starts a persistent anchored query for one sample type, delivering adds/deletes since the
     /// keychain-persisted anchor to the handler (on the main actor).
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws
@@ -44,14 +51,18 @@ public protocol HealthKitServicing {
     func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout]
     /// One-shot fetch of the trailing backfill window of workouts (30 days before `referenceDate`).
     func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout]
-    /// Saves arbitrary samples to Health (integration-gated).
+    /// Saves samples to Health. Write-gated per sample: every sample's type must belong to a
+    /// capability whose sharing is on (see ``isWriteSharingEnabled(for:)``), or nothing is saved.
     func save(_ samples: [HKObject]) async throws
-    /// Deletes specific fetched samples from Health (integration-gated).
+    /// Deletes specific fetched samples — Fernlet's own, which callers pre-filter and HealthKit
+    /// enforces — from Health. NOT gated on Fernlet's sharing switches: removing what Fernlet wrote,
+    /// at the user's request, is allowed with sharing off (see `HealthKitService.delete(_:)`).
     func delete(_ samples: [HKSample]) async throws
     /// Deletes the Fernlet-authored workout sample(s) matching `fernletWorkoutID` (our `fernlet.workoutID`
     /// / sync-identifier metadata). Returns whether anything was found and deleted. Only ever deletes our
     /// own authored samples — the metadata keys are forgeable by any co-installed app with workout share
     /// access, so it is the implementation's `sourceRevision` filter, not the metadata, that guarantees it.
+    /// Like ``delete(_:)``, not gated on Fernlet's sharing switches.
     func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool
     /// Interval-bucketed statistics for one quantity type from `anchor` to now.
     func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics]
@@ -59,9 +70,10 @@ public protocol HealthKitServicing {
     func requestBodyProfileAuthorization() async throws -> HealthBodyProfile
     /// Loads age/sex/height/weight from Health without prompting.
     func loadBodyProfile() async throws -> HealthBodyProfile
-    /// Writes the profile's height and weight to Health as fresh samples.
+    /// Writes the profile's height and weight to Health as fresh samples (write-gated on body profile).
     func saveBodyProfileMeasurements(_ profile: UserNutritionProfile) async throws
-    /// Writes a completed workout to Health via `HKWorkoutBuilder`, returning the new sample's UUID.
+    /// Writes a completed workout to Health via `HKWorkoutBuilder`, returning the new sample's UUID
+    /// (write-gated on workout logging).
     func saveWorkout(_ workout: Workout) async throws -> UUID
     /// Merged asleep hours for the sleep night containing `referenceDate` (18:00–11:00 window).
     func loadLastNightSleepHours(referenceDate: Date) async throws -> Double?
@@ -82,6 +94,12 @@ public extension HealthKitServicing {
     /// integration master state. The concrete service overrides this with the full persisted gate.
     func isCapabilityRequestedAndEnabled(_ capability: HealthCapability) -> Bool {
         currentAuthorizationSnapshot().isAvailable
+    }
+
+    /// Test-double compatibility: falls back to ``isCapabilityRequestedAndEnabled(_:)``. The concrete
+    /// service overrides this with the live master + per-capability switch read.
+    func isWriteSharingEnabled(for capability: HealthCapability) -> Bool {
+        isCapabilityRequestedAndEnabled(capability)
     }
 }
 
@@ -301,9 +319,10 @@ public struct HealthAuthorizationPresentation {
 
 /// Errors thrown by ``HealthKitService`` and its conformance seams.
 ///
-/// All three cases carry user-presentable `errorDescription`s; `healthDataUnavailable` doubles as
-/// the deliberate "gate closed" error for the master-toggle and per-capability opt-in guards, not
-/// only for devices without a Health store.
+/// Every case carries a user-presentable `errorDescription`. On the READ side,
+/// `healthDataUnavailable` doubles as the deliberate "gate closed" error for the master-toggle and
+/// per-capability opt-in guards, not only for devices without a Health store; on the WRITE side a
+/// closed Fernlet switch is ``sharingTurnedOff`` (2026-09-23), so the refusal can say what happened.
 public enum HealthKitServiceError: LocalizedError {
     /// The device has no Health store, or an integration/capability gate is closed.
     case healthDataUnavailable
@@ -316,11 +335,21 @@ public enum HealthKitServiceError: LocalizedError {
     /// A body measurement offered for writing was zero, negative, or not finite. Refused at entry
     /// rather than stored as a nonsense clinical sample under Fernlet's name.
     case invalidMeasurement
+    /// A write into Apple Health was refused because Fernlet's own sharing is off — the master
+    /// Health switch, or the switch for this kind of data. Nothing reached Health. Distinct from
+    /// ``healthDataUnavailable`` so a caller (and the user) can tell "you turned this off" from
+    /// "this device has no Health".
+    case sharingTurnedOff
 
     /// Package source, so every lookup passes `bundle: .module`: without it the resolution goes to
     /// `Bundle.main`, finds nothing, and silently renders the English `defaultValue` forever.
     public var errorDescription: String? {
         switch self {
+        case .sharingTurnedOff:
+            String(localized: "health.error.sharingTurnedOff",
+                   defaultValue: "Sharing with Apple Health is turned off in Fernlet, so nothing was saved to Health. You can turn it on in Settings › Health.",
+                   bundle: .module,
+                   comment: "Shown when Fernlet refused to write to Apple Health because the user turned Fernlet's Health sharing off (the master switch or this kind of data). Nothing was written.")
         case .healthDataUnavailable:
             String(localized: "health.error.healthDataUnavailable",
                    defaultValue: "Health data is not available on this device.",
@@ -370,6 +399,20 @@ public protocol HealthKitStoreControlling: AnyObject {
     func stop(_ query: HKQuery)
     /// Saves samples to the underlying store.
     func save(_ samples: [HKObject]) async throws
+    /// Builds and saves one workout with `HKWorkoutBuilder` — collection from `start` to `end`, the
+    /// energy/distance `samples` attached, then `metadata` — returning the saved workout's UUID.
+    ///
+    /// On the seam (2026-09-23) rather than built inline in the service, for two reasons: it is the
+    /// ONLY write that did not pass through ``save(_:)``, so the service's write gate could not be
+    /// shown to cover it, and a test could not observe it at all (the builder talked to the real
+    /// store). Callers are gated; this is the raw write.
+    func saveWorkout(
+        configuration: HKWorkoutConfiguration,
+        start: Date,
+        end: Date,
+        samples: [HKSample],
+        metadata: [String: Any]
+    ) async throws -> UUID
     /// Deletes specific fetched samples from the underlying store.
     func delete(_ samples: [HKSample]) async throws
     /// Bulk-deletes objects of one type matching a predicate. Needed for "delete everything": deleting
@@ -414,8 +457,72 @@ final class SystemHealthKitStoreController: HealthKitStoreControlling {
         try await healthStore.save(samples)
     }
 
+    func saveWorkout(
+        configuration: HKWorkoutConfiguration,
+        start: Date,
+        end: Date,
+        samples: [HKSample],
+        metadata: [String: Any]
+    ) async throws -> UUID {
+        let builder = HKWorkoutBuilder(healthStore: healthStore, configuration: configuration, device: .local())
+        try await Self.beginCollection(for: builder, at: start)
+        if !samples.isEmpty {
+            try await Self.add(samples, to: builder)
+        }
+        try await builder.addMetadata(metadata)
+        try await Self.endCollection(for: builder, at: end)
+        guard let saved = try await builder.finishWorkout() else {
+            throw HealthKitServiceError.healthDataUnavailable
+        }
+        return saved.uuid
+    }
+
     func delete(_ samples: [HKSample]) async throws {
         try await healthStore.delete(samples)
+    }
+
+    /// Bridges `HKWorkoutBuilder.beginCollection` to `async`, treating a `false` without an error as
+    /// unavailable.
+    private static func beginCollection(for builder: HKWorkoutBuilder, at startDate: Date) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            builder.beginCollection(withStart: startDate) { success, error in
+                Self.resume(continuation, success: success, error: error)
+            }
+        }
+    }
+
+    /// Bridges `HKWorkoutBuilder.add(_:)` to `async`.
+    private static func add(_ samples: [HKSample], to builder: HKWorkoutBuilder) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            builder.add(samples) { success, error in
+                Self.resume(continuation, success: success, error: error)
+            }
+        }
+    }
+
+    /// Bridges `HKWorkoutBuilder.endCollection` to `async`.
+    private static func endCollection(for builder: HKWorkoutBuilder, at endDate: Date) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            builder.endCollection(withEnd: endDate) { success, error in
+                Self.resume(continuation, success: success, error: error)
+            }
+        }
+    }
+
+    /// Resumes a builder continuation exactly once: the error if there is one, success, or
+    /// ``HealthKitServiceError/healthDataUnavailable`` for a bare `false`.
+    nonisolated private static func resume(
+        _ continuation: CheckedContinuation<Void, Error>,
+        success: Bool,
+        error: Error?
+    ) {
+        if let error {
+            continuation.resume(throwing: error)
+        } else if success {
+            continuation.resume()
+        } else {
+            continuation.resume(throwing: HealthKitServiceError.healthDataUnavailable)
+        }
     }
 
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
@@ -816,10 +923,15 @@ private final class CancellableHealthQuery<Value> {
 /// wall's DAG. Several instances coexist at runtime (the app store's, the Privacy settings
 /// screen's, previews'), so cross-instance state deliberately lives outside the instance:
 ///
-/// - **Gating:** almost every read/write first checks `isIntegrationEnabled`, which re-reads the
+/// - **Gating:** almost every read first checks `isIntegrationEnabled`, which re-reads the
 ///   `healthKitMasterEnabled` flag live from the keychain-backed `StoragePreferencesStore` (never a
-///   cached copy) so a toggle flipped by a *different* instance takes effect immediately. The
-///   stress and mindfulness paths additionally enforce their per-capability opt-in themselves.
+///   cached copy) so a toggle flipped by a *different* instance takes effect immediately; the
+///   stress path additionally enforces its per-capability opt-in itself. Every WRITE into Health
+///   passes `requireWriteSharing(_:)` first — master switch AND that kind's own switch, read live
+///   (2026-09-23, "with Fernlet's Health toggle off, Fernlet writes nothing to Apple Health") — and
+///   reaches the store only through ``save(_:)`` or the workout seam
+///   (`HealthKitWriteGateTests` pins both). Removing Fernlet's OWN samples at the user's request is
+///   deliberately not switch-gated; see ``delete(_:)``.
 /// - **Persistence:** query anchors go through ``HealthKitAnchorKeychain``; preferences through
 ///   `StoragePreferencesStore`; the one-time workout backfill marker through `UserDefaults`.
 ///   Clinical samples live only in HealthKit — this class caches nothing itself.
@@ -1142,13 +1254,33 @@ public final class HealthKitService: HealthKitServicing {
         try await recentWorkouts(since: Self.workoutBackfillStartDate(referenceDate: referenceDate))
     }
 
+    /// THE sample-write choke point: every sample Fernlet puts into Apple Health outside a workout
+    /// passes here, and nothing reaches the store unless sharing is on for the kind of data EACH
+    /// sample is (``writeCapability(for:)``; a type Fernlet never shares is refused outright).
+    ///
+    /// Before 2026-09-23 this checked the master switch only, so a capability the user had stopped
+    /// sharing (or never turned on) was still written — and `saveBodyProfileMeasurements` and
+    /// `saveWorkout` did not come through here at all. Owner rule: with Fernlet's Health switch off,
+    /// or this kind's switch off, Fernlet writes NOTHING to Apple Health.
     public func save(_ samples: [HKObject]) async throws {
-        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        // R5: an empty batch writes nothing, so it touches nothing — not even the gate's audit line.
+        guard !samples.isEmpty else { return }
+        for capability in try Self.writeCapabilities(for: samples) {
+            try requireWriteSharing(capability)
+        }
         try await storeController.save(samples)
     }
 
+    /// Deletes specific fetched samples from Health.
+    ///
+    /// Deliberately NOT gated on Fernlet's sharing switches (decision 2026-09-23): the only callers
+    /// remove samples Fernlet itself wrote, at the user's request (a cycle day deleted or edited),
+    /// HealthKit refuses to delete another app's data, and a delete puts nothing INTO Health — so
+    /// "sharing is off" must not strand Fernlet's own samples, the same stance as
+    /// ``deleteAllAuthoredSamples()``. An edit is delete-then-write, so its caller checks the write
+    /// half FIRST (`checkPeriodEventWriteAllowed(_:)`) and cannot delete what it could not rewrite.
     public func delete(_ samples: [HKSample]) async throws {
-        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         try await storeController.delete(samples)
     }
 
@@ -1172,8 +1304,13 @@ public final class HealthKitService: HealthKitServicing {
     ///   `fernlet.workoutID` / sync-identifier keys the fetch predicate matches are writable by any
     ///   co-installed app with workout share access, so a planted sample would otherwise be swept into
     ///   the delete and fail the whole batch with `errorAuthorizationDenied`.
+    ///
+    /// Not gated on Fernlet's sharing switches, for the reasons ``delete(_:)`` gives: removing a
+    /// workout the user removed keeps the row's "This also removes the copy saved to your Health
+    /// app" promise with sharing off. The edit re-sync (delete-then-save) checks the write half
+    /// before calling this (`WorkoutHealthKitSync.resyncAuthoredWorkoutInHealth`).
     public func deleteWorkout(fernletWorkoutID id: UUID) async throws -> Bool {
-        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         // We stamp both `fernlet.workoutID` and the sync identifier with the workout id on save; match
         // either so a sample is found regardless of which key survived.
         let idString = id.uuidString
@@ -1319,8 +1456,13 @@ public final class HealthKitService: HealthKitServicing {
         )
     }
 
+    /// Writes the profile's height and weight to Health as two fresh samples.
+    ///
+    /// Write-gated on body profile, and routed through ``save(_:)`` — until 2026-09-23 this called
+    /// the Health store directly, past both the per-capability switch and the test seam, so a user
+    /// who had stopped sharing body measurements still had every Settings edit written to Health.
     public func saveBodyProfileMeasurements(_ profile: UserNutritionProfile) async throws {
-        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        try requireWriteSharing(.bodyProfile)
         // R5: a zero/negative/non-finite measurement would otherwise reach HealthKit and either
         // throw opaquely or store a nonsense clinical sample under Fernlet's name.
         guard profile.heightInches.isFinite, profile.heightInches > 0,
@@ -1342,57 +1484,53 @@ public final class HealthKitService: HealthKitServicing {
                 end: now
             )
         ]
-        try await healthStore.save(samples)
+        try await save(samples)
     }
 
-    /// Writes a completed workout to Health via `HKWorkoutBuilder`, attaching energy/distance
-    /// samples when present and the full `fernlet.*` provenance metadata.
+    /// Writes a completed workout to Health via `HKWorkoutBuilder` (behind the store seam),
+    /// attaching energy/distance samples when present and the full `fernlet.*` provenance metadata.
     ///
     /// - Returns: The saved `HKWorkout`'s UUID, which the caller stamps onto the local row.
-    /// - Important: Gated only on device availability (`isHealthDataAvailable()`), not the master
-    ///   integration toggle — callers gate on workout-share authorization instead (see
-    ///   ``WorkoutHealthKitSync/isWorkoutLoggingAuthorized(_:)``).
+    /// - Important: Write-gated on workout logging BEFORE anything is built (2026-09-23, DPA-118). It
+    ///   used to be gated on device availability alone — "callers gate on share authorization" —
+    ///   and HealthKit's share grant outlives Fernlet's own switches, so turning Fernlet's Health
+    ///   off in Settings kept writing every logged workout to Apple Health. ``WorkoutHealthKitSync``
+    ///   still checks the share grant too; this gate is the one that cannot be skipped.
     public func saveWorkout(_ workout: Workout) async throws -> UUID {
-        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
-
-        let config = Self.makeConfiguration(for: workout)
+        try requireWriteSharing(.workoutLogging)
         let durationSeconds = TimeInterval((workout.duration ?? Self.defaultDuration(for: workout)) * 60)
         let endDate = workout.completedAt
         let startDate = endDate.addingTimeInterval(-durationSeconds)
+        return try await storeController.saveWorkout(
+            configuration: Self.makeConfiguration(for: workout),
+            start: startDate,
+            end: endDate,
+            samples: Self.workoutSamples(for: workout, start: startDate, end: endDate),
+            metadata: Self.makeMetadata(for: workout)
+        )
+    }
 
-        let builder = HKWorkoutBuilder(healthStore: healthStore, configuration: config, device: .local())
-        try await Self.beginCollection(for: builder, at: startDate)
-
+    /// The energy and distance samples a workout save attaches — one each when the workout carries a
+    /// positive value, none otherwise.
+    private static func workoutSamples(for workout: Workout, start: Date, end: Date) -> [HKSample] {
         var samples: [HKSample] = []
         if let kcal = workout.activeEnergyKcal, kcal > 0 {
-            let quantity = HKQuantity(unit: .kilocalorie(), doubleValue: kcal)
-            let sample = HKQuantitySample(
+            samples.append(HKQuantitySample(
                 type: HKQuantityType(.activeEnergyBurned),
-                quantity: quantity,
-                start: startDate,
-                end: endDate
-            )
-            samples.append(sample)
+                quantity: HKQuantity(unit: .kilocalorie(), doubleValue: kcal),
+                start: start,
+                end: end
+            ))
         }
         if let miles = workout.distanceMiles, miles > 0 {
-            let quantity = HKQuantity(unit: .mile(), doubleValue: miles)
-            let sample = HKQuantitySample(
-                type: HKQuantityType(Self.distanceTypeIdentifier(for: workout.activityType)),
-                quantity: quantity,
-                start: startDate,
-                end: endDate
-            )
-            samples.append(sample)
+            samples.append(HKQuantitySample(
+                type: HKQuantityType(distanceTypeIdentifier(for: workout.activityType)),
+                quantity: HKQuantity(unit: .mile(), doubleValue: miles),
+                start: start,
+                end: end
+            ))
         }
-        if !samples.isEmpty {
-            try await Self.add(samples, to: builder)
-        }
-
-        try await builder.addMetadata(Self.makeMetadata(for: workout))
-        try await Self.endCollection(for: builder, at: endDate)
-        let saved = try await builder.finishWorkout()
-        guard let saved else { throw HealthKitServiceError.healthDataUnavailable }
-        return saved.uuid
+        return samples
     }
 
     public func loadLastNightSleepHours(referenceDate: Date = Date()) async throws -> Double? {
@@ -1469,8 +1607,11 @@ public final class HealthKitService: HealthKitServicing {
     /// Writes one sexual-activity sample (1-minute span) stamped with the sealed store's external
     /// UUID so the Health sample and the encrypted local note stay correlated. The clinical sample
     /// lives in HealthKit; any narrative stays in the sealed store — never here. Audited on success.
+    ///
+    /// Write-gated on intimate logging (2026-09-23; it used to check the master switch only).
+    /// `LogIntimacySheet` also checks both switches before calling — this is the gate it relies on.
     public func saveIntimacyEvent(date: Date, protectionUsed: Bool?, externalUUID: UUID) async throws {
-        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        try requireWriteSharing(.intimateLogging)
         var metadata: [String: Any] = [
             HKMetadataKeyExternalUUID: externalUUID.uuidString
         ]
@@ -1492,18 +1633,14 @@ public final class HealthKitService: HealthKitServicing {
     /// `.mindfulSession` (the write authorization has been declared since the HealthKit integration
     /// shipped; this is its first writer).
     ///
-    /// Gating mirrors `stressMetricDays`: the master toggle AND the per-capability
-    /// `healthKitCapabilityEnabled["mindfulness"]` opt-in are enforced here (fail closed), and the
-    /// write additionally requires granted mindful-session share authorization — it never triggers
-    /// an authorization prompt of its own. Throws on any closed gate so tests can observe it; the
-    /// First Aid caller deliberately swallows errors (a missed Health write must stay silent and
-    /// non-blocking after a breathing exercise).
+    /// Gating: the shared write gate (the master toggle AND the per-capability
+    /// `healthKitCapabilityEnabled["mindfulness"]` opt-in, fail closed —
+    /// ``HealthKitServiceError/sharingTurnedOff``), and the write additionally requires granted
+    /// mindful-session share authorization — it never triggers an authorization prompt of its own.
+    /// Throws on any closed gate so tests can observe it; the First Aid caller keeps every refusal
+    /// silent toward the user (a missed Health write must not dampen a finished breathing exercise).
     public func saveMindfulSession(start: Date, end: Date) async throws {
-        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
-        let preferences = StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService)
-        guard preferences.healthKitCapabilityEnabled[HealthCapability.mindfulness.rawValue] == true else {
-            throw HealthKitServiceError.healthDataUnavailable
-        }
+        try requireWriteSharing(.mindfulness)
         let type = try Self.categoryType(.mindfulSession)
         guard storeController.authorizationStatus(for: type) == .sharingAuthorized else {
             throw HealthKitServiceError.healthDataUnavailable
@@ -1730,6 +1867,66 @@ public final class HealthKitService: HealthKitServicing {
             && StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService).healthKitMasterEnabled
     }
 
+    /// Whether Fernlet may write `capability`'s kind of data into Apple Health right now — the
+    /// device has a Health store, the master switch is on, AND this capability's own switch is on,
+    /// all read live from the keychain (the reason ``isIntegrationEnabled`` reads live applies: a
+    /// switch flipped on another instance must bind this one at once).
+    ///
+    /// Deliberately does NOT consult the request ledger: the user's switches are the rule ("with
+    /// Fernlet's Health switch off, or this kind's switch off, Fernlet writes nothing"), and
+    /// HealthKit's own share grant is the other half the callers already check.
+    public func isWriteSharingEnabled(for capability: HealthCapability) -> Bool {
+        guard isHealthDataAvailable() else { return false }
+        let preferences = StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService)
+        return preferences.healthKitMasterEnabled
+            && preferences.healthKitCapabilityEnabled[capability.rawValue] == true
+    }
+
+    /// The write gate every write INTO Apple Health passes before anything is built or sent:
+    /// ``HealthKitServiceError/healthDataUnavailable`` on a device without Health,
+    /// ``HealthKitServiceError/sharingTurnedOff`` when Fernlet's sharing for `capability` is off.
+    /// The refusal is audited (capability only, never a value) so a write the user's switch stopped
+    /// is not indistinguishable from one that failed.
+    private func requireWriteSharing(_ capability: HealthCapability) throws {
+        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
+        guard isWriteSharingEnabled(for: capability) else {
+            FernletAuditLog.log("healthkit.write.refused", context: ["capability": capability.rawValue])
+            throw HealthKitServiceError.sharingTurnedOff
+        }
+    }
+
+    /// The capability a write of `type` belongs to: the one whose SHARE set holds it, or nil for a
+    /// type Fernlet never writes.
+    ///
+    /// Derived from ``types(for:)`` rather than listed, so the write gate can never drift from the
+    /// types Fernlet actually asks to share. Each share type belongs to exactly one capability today
+    /// (`HealthKitWriteGateTests` pins that); if two ever claimed one, the first in `allCases` order
+    /// would win — and the gate would still require THAT capability's switch, never none.
+    nonisolated public static func writeCapability(for type: HKObjectType) -> HealthCapability? {
+        HealthCapability.allCases.first { capability in
+            // A capability whose types do not resolve owns no share type here, so its samples map
+            // to nil and ``save(_:)`` refuses them — the fallback fails CLOSED, never open.
+            let share = (try? types(for: capability).share) ?? []
+            return share.contains { $0.identifier == type.identifier }
+        }
+    }
+
+    /// The distinct capabilities a batch of samples writes, for ``save(_:)``'s gate. Throws
+    /// ``HealthKitServiceError/sharingTurnedOff`` for any object that is not a sample of a type
+    /// Fernlet shares — no switch can have allowed a write nobody asked the user about.
+    private static func writeCapabilities(for objects: [HKObject]) throws -> Set<HealthCapability> {
+        var capabilities: Set<HealthCapability> = []
+        for object in objects {
+            guard let sampleType = (object as? HKSample)?.sampleType,
+                  let capability = writeCapability(for: sampleType) else {
+                FernletAuditLog.log("healthkit.write.unknownType")
+                throw HealthKitServiceError.sharingTurnedOff
+            }
+            capabilities.insert(capability)
+        }
+        return capabilities
+    }
+
     /// Shared delivery path for both workout-query result handlers: extracts workouts + deleted
     /// UUIDs off the query's callback queue, then hops to the main actor to invoke the handler and
     /// persist the new anchor.
@@ -1743,48 +1940,6 @@ public final class HealthKitService: HealthKitServicing {
                 handler(workouts, deletedUUIDs)
             }
             if let anchor { HealthKitAnchorKeychain.storeWorkoutAnchor(anchor) }
-        }
-    }
-
-    private static func beginCollection(for builder: HKWorkoutBuilder, at startDate: Date) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            builder.beginCollection(withStart: startDate) { success, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if success {
-                    continuation.resume()
-                } else {
-                    continuation.resume(throwing: HealthKitServiceError.healthDataUnavailable)
-                }
-            }
-        }
-    }
-
-    private static func add(_ samples: [HKSample], to builder: HKWorkoutBuilder) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            builder.add(samples) { success, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if success {
-                    continuation.resume()
-                } else {
-                    continuation.resume(throwing: HealthKitServiceError.healthDataUnavailable)
-                }
-            }
-        }
-    }
-
-    private static func endCollection(for builder: HKWorkoutBuilder, at endDate: Date) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            builder.endCollection(withEnd: endDate) { success, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if success {
-                    continuation.resume()
-                } else {
-                    continuation.resume(throwing: HealthKitServiceError.healthDataUnavailable)
-                }
-            }
         }
     }
 
@@ -2420,10 +2575,13 @@ public final class HealthKitAuthorizationViewModel {
         await loadBodyProfile(current: profile, requestsAuthorization: false)
     }
 
-    /// Writes the profile's height/weight back to Health, but only when both types show write
-    /// authorization — otherwise silently no-ops rather than prompting.
+    /// Writes the profile's height/weight back to Health, but only when Fernlet's sharing for body
+    /// measurements is on AND both types show write authorization — otherwise silently no-ops
+    /// rather than prompting (a user who stopped sharing is not told on every Stepper tick that
+    /// nothing was sent; the service's own write gate would refuse it anyway).
     public func syncBodyProfileMeasurements(_ profile: UserNutritionProfile) async {
-        guard snapshot.status(for: HKQuantityTypeIdentifier.height.rawValue) == .sharingAuthorized,
+        guard service.isWriteSharingEnabled(for: .bodyProfile),
+              snapshot.status(for: HKQuantityTypeIdentifier.height.rawValue) == .sharingAuthorized,
               snapshot.status(for: HKQuantityTypeIdentifier.bodyMass.rawValue) == .sharingAuthorized else { return }
         do {
             try await service.saveBodyProfileMeasurements(profile)
@@ -2516,15 +2674,27 @@ extension HealthKitService: PeriodHealthKitServicing {
     /// Writes one logged cycle event as its constituent Health samples (flow, BBT, mucus,
     /// ovulation test, spotting — whichever fields are present), each stamped with the sealed
     /// store's external UUID so the encrypted narrative and the clinical samples stay correlated.
-    /// Gated on device availability only; audited on success.
+    ///
+    /// Write-gated on cycle tracking whenever the event has a clinical field to write (2026-09-23;
+    /// it used to check the master switch only, via ``save(_:)``). An event with none — symptoms or
+    /// a note only — writes nothing to Health and needs no sharing. Audited on success.
     public func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         let samples = try Self.periodSamples(for: event, externalUUID: externalUUID)
-        if !samples.isEmpty {
-            try await save(samples)
-        }
+        guard !samples.isEmpty else { return samples }
+        try requireWriteSharing(.cycleTracking)
+        try await save(samples)
         FernletAuditLog.log("hk.write.saved", context: ["type": "cycle", "externalUUID": externalUUID.uuidString])
         return samples
+    }
+
+    /// Throws exactly when ``savePeriodEvent(_:externalUUID:)`` would refuse `event` for sharing —
+    /// the check `PeriodTrackerStore.editEvent` runs BEFORE it deletes the entry it replaces, so an
+    /// edit can never delete a day it is not allowed to rewrite.
+    public func checkPeriodEventWriteAllowed(_ event: UserLoggedCycleEvent) throws {
+        let samples = try Self.periodSamples(for: event, externalUUID: UUID())
+        guard !samples.isEmpty else { return }
+        try requireWriteSharing(.cycleTracking)
     }
 
     /// Fetches every cycle-related sample (all five period sample types, whatever their source

@@ -6,6 +6,7 @@ import PrivateMemoryStore
 import FoodCatalog
 import PrivateStoreCore
 import CloudKitSync
+import HealthKitGateway
 @testable import Fernlet
 
 // Test-only sanitized wrappers. `forTestingSanitized` wraps WITHOUT stripping (for repository
@@ -206,6 +207,10 @@ func uniqueSharedRecipeImportQueueURL() -> URL {
 /// same holds for `proximitySupportDirectory` + `heartDropKeychainService`, which have to be passed
 /// TOGETHER to share heart state — the sidecars are sealed, so a second store needs the same file
 /// root AND the same key to read what the first one wrote.
+///
+/// `healthKitService` hands the store a HealthKit gateway (nil = the headless store every other test
+/// gets). It is how the HealthKit write-gate and first-workout-offer suites drive a real
+/// `HealthKitService` over a recording store seam without giving up the isolation above.
 @MainActor
 func makeTestStore(
     date: Date = .now,
@@ -219,7 +224,8 @@ func makeTestStore(
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
     foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
-    deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil
+    deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
+    healthKitService: (any HealthKitServicing)? = nil
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
@@ -233,7 +239,8 @@ func makeTestStore(
         sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
         foodSearchCorrectionDefaults: foodSearchCorrectionDefaults,
         sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL,
-        deviceHealthResidueStore: deviceHealthResidueStore
+        deviceHealthResidueStore: deviceHealthResidueStore,
+        healthKitService: healthKitService
     ).store
 }
 
@@ -258,6 +265,7 @@ func makeTestStoreWithRepositories(
     foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
     deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
+    healthKitService: (any HealthKitServicing)? = nil,
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     precondition(
@@ -299,6 +307,8 @@ func makeTestStoreWithRepositories(
         customItemRepository: CustomItemRepository(controller: controller),
         coinLedgerRepository: CoinLedgerRepository(controller: controller),
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
+        // The HealthKit gateway, when a test drives one (nil = headless, as before).
+        healthKitService: healthKitService,
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: foodCatalog ?? FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
         // The period/intimacy visibility resolution AND the age verdict share one defaults SUITE, and

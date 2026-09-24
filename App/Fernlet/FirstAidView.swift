@@ -285,11 +285,13 @@ struct FirstAidView: View {
         Task {
             do {
                 try await HealthKitService(preferencesStore: preferencesStore).saveMindfulSession(start: start, end: end)
+            } catch HealthKitServiceError.sharingTurnedOff {
+                // The user's own switch said no, and the service's write gate already audited the
+                // refusal (`healthkit.write.refused`) — not a failure to name twice.
+                return
             } catch {
                 // Stays silent toward the USER by design — the exercise happened and nothing should
-                // dampen that — but the write failure still has to be named somewhere. A closed
-                // consent gate returns without throwing inside the service, so this logs real
-                // failures only.
+                // dampen that — but the write failure still has to be named somewhere.
                 FernletAuditLog.log("firstAid.mindfulSessionWriteFailed", context: ["error": String(describing: error)])
             }
         }

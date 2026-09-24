@@ -149,10 +149,17 @@ public final class WorkoutHealthKitSync {
         self.ownBundleID = ownBundleID
     }
 
-    /// Writes a workout to Apple Health if workout sharing is authorized, then stamps the local row
-    /// with the returned sample UUID. Silently no-ops when unauthorized; save failures are audited,
-    /// not thrown.
+    /// Writes a workout to Apple Health if Fernlet's workout sharing is on AND HealthKit's workout
+    /// share grant is in place, then stamps the local row with the returned sample UUID. Silently
+    /// no-ops otherwise; save failures are audited, not thrown.
+    ///
+    /// Both halves, because they answer different questions: the grant is iOS's ("may this app
+    /// write workouts?") and it OUTLIVES Fernlet's own switches, which are the user's ("should it?").
+    /// Checking the grant alone is how turning Fernlet's Health off kept writing workouts
+    /// (DPA-118). The service's own write gate refuses regardless; this check keeps a refused
+    /// write from being audited as a failure on every log.
     public func saveIfAuthorized(_ workout: Workout, date: String) async {
+        guard service.isWriteSharingEnabled(for: .workoutLogging) else { return }
         let snapshot = service.currentAuthorizationSnapshot()
         guard Self.isWorkoutLoggingAuthorized(snapshot) else { return }
         do {
@@ -186,6 +193,10 @@ public final class WorkoutHealthKitSync {
     /// deleted now; a row still mid-save has no sample yet, so the delete no-ops and the tombstone catches
     /// the sample once it lands (`reconcileWorkouts` deletes + skips it). Clears the tombstone as soon as
     /// the delete confirms. No-op when workout logging isn't authorized — there is no sample we could own.
+    ///
+    /// Runs with Fernlet's workout SHARING off, on purpose (2026-09-23): the user removed a workout
+    /// whose Health copy Fernlet wrote, the row's dialog promises "This also removes the copy saved
+    /// to your Health app", and a delete adds nothing to Health. Only writes are switch-gated.
     public func removeAuthoredWorkoutFromHealth(fernletWorkoutID id: UUID) async {
         guard Self.isWorkoutLoggingAuthorized(service.currentAuthorizationSnapshot()) else { return }
         do {
@@ -202,7 +213,16 @@ public final class WorkoutHealthKitSync {
     /// the workout id (== `fernlet.workoutID` metadata) is unchanged, so reconcile keeps matching. The
     /// store clears the local row's `healthKitUUID` BEFORE calling this, so the delete's own deleted-object
     /// echo can't match — and therefore can't remove — the just-edited row.
+    ///
+    /// With Fernlet's workout sharing OFF this does nothing at all — neither half. The save would be
+    /// refused, and running the delete alone would turn an edit into a removal of the workout from
+    /// Health. The old sample stays as it was; the row, left un-stamped, is re-stamped by the
+    /// observer (its `fernlet.workoutID` still matches) once sharing is back on.
     public func resyncAuthoredWorkoutInHealth(_ workout: Workout, date: String) async {
+        guard service.isWriteSharingEnabled(for: .workoutLogging) else {
+            FernletAuditLog.log("healthkit.workout.resync.skippedSharingOff", context: ["workoutID": workout.id.uuidString])
+            return
+        }
         guard Self.isWorkoutLoggingAuthorized(service.currentAuthorizationSnapshot()) else { return }
         do {
             // R7: the Bool is "a prior sample was found and deleted". `false` is legitimate for a

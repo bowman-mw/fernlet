@@ -216,6 +216,7 @@ struct MindfulSessionSaveTests {
         func execute(_ query: HKQuery) {}
         func stop(_ query: HKQuery) {}
         func save(_ samples: [HKObject]) async throws { savedObjects.append(contentsOf: samples) }
+        func saveWorkout(configuration: HKWorkoutConfiguration, start: Date, end: Date, samples: [HKSample], metadata: [String: Any]) async throws -> UUID { UUID() }
         func delete(_ samples: [HKSample]) async throws {}
         func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {}
         func disableBackgroundDelivery(for type: HKObjectType) async throws {}

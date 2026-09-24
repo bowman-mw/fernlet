@@ -309,10 +309,16 @@ public protocol PeriodHealthKitServicing: AnyObject {
     /// key ``MenstrualNarrative/hkExternalUUID`` later joins on.
     /// - Returns: The samples that were saved.
     func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample]
+    /// Throws exactly when ``savePeriodEvent(_:externalUUID:)`` would refuse `event` because
+    /// Fernlet's sharing for cycle tracking is off (an event with no clinical field writes nothing
+    /// and never throws). Never writes. ``PeriodTrackerStore/editEvent(_:replacingEntry:unlockedContentKey:)``
+    /// runs it BEFORE deleting the entry it replaces.
+    func checkPeriodEventWriteAllowed(_ event: UserLoggedCycleEvent) throws
     /// All cycle-relevant samples (from any source app) starting in `dateRange`.
     func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample]
     /// Deletes the given samples; callers pre-filter to Fernlet-owned samples, since HealthKit
-    /// refuses deletes of other apps' data.
+    /// refuses deletes of other apps' data. Not gated on Fernlet's sharing switches — removing
+    /// what Fernlet wrote, at the user's request, must work with sharing off.
     func delete(_ samples: [HKSample]) async throws
 }
 
@@ -611,15 +617,20 @@ public final class PeriodTrackerStore {
     }
 
     /// Replaces an existing entry: deletes its Fernlet-owned samples and sealed narrative, then
-    /// re-logs `event` through ``logEvent(_:unlockedContentKey:)``. Gated up front so a hide racing
-    /// an edit cannot delete without re-creating (see the inline note). Samples written by other
-    /// apps are left untouched.
+    /// re-logs `event` through ``logEvent(_:unlockedContentKey:)``. Gated up front — on visibility
+    /// AND on the Health write the re-log will need — so neither a hide racing the edit nor
+    /// sharing that is turned off can delete without re-creating (see the inline note). Samples
+    /// written by other apps are left untouched.
     public func editEvent(_ event: UserLoggedCycleEvent, replacingEntry entry: CycleDayEntry, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
         // Gate BEFORE the deletes below. This is delete-then-recreate: it drops the old HealthKit
         // samples and the sealed narrative, then re-adds via `logEvent`. If the gate only fired inside
         // `logEvent`, an edit racing a hide would destroy the entry and then throw without writing the
         // replacement — turning the hide gate itself into the cause of data loss.
         guard isVisible() else { throw PeriodTrackingHiddenError() }
+        // The same hazard from the Health side (2026-09-23): the delete below is allowed with
+        // Fernlet's cycle sharing off, the re-log's write is not — so ask first, or the edit would
+        // destroy the day and then fail to write it back.
+        try healthService.checkPeriodEventWriteAllowed(event)
         let bundleID = Bundle.main.bundleIdentifier ?? ""
         let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
         if !ownedSamples.isEmpty {

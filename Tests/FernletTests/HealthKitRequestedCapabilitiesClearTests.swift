@@ -256,6 +256,7 @@ private final class RecordingHealthKitStoreController: HealthKitStoreControlling
     func execute(_ query: HKQuery) { }
     func stop(_ query: HKQuery) { }
     func save(_ samples: [HKObject]) async throws { }
+    func saveWorkout(configuration: HKWorkoutConfiguration, start: Date, end: Date, samples: [HKSample], metadata: [String: Any]) async throws -> UUID { UUID() }
     func delete(_ samples: [HKSample]) async throws { }
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
         deletedObjectTypeIdentifiers.append(type.identifier)

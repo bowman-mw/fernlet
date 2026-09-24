@@ -1096,6 +1096,7 @@ struct ContentView: View {
             LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingEntry: editingEntry)
                 .fernletSheetChrome(anchor: "sheet.logPeriod", detents: [.large])
                 .environment(lockService)
+                .environment(storagePreferencesStore)
                 .environment(captureProtection)
         case .logIntimacy:
             LogIntimacySheet(intimacyStore: intimacyStore)

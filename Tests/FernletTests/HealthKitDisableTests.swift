@@ -399,6 +399,8 @@ private final class MockHealthKitStoreController: HealthKitStoreControlling {
 
     func save(_ samples: [HKObject]) async throws { }
 
+    func saveWorkout(configuration: HKWorkoutConfiguration, start: Date, end: Date, samples: [HKSample], metadata: [String: Any]) async throws -> UUID { UUID() }
+
     func delete(_ samples: [HKSample]) async throws {
         deleteCallCount += 1
     }
