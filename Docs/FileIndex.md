@@ -702,7 +702,7 @@ the whole directory to keep it that way.
 | `Fernlet/Tests/FernletTests/RoutedShareRefusalCopyTests.swift` | P5 review finding 5: every `MeshRoutedShareRefusal` case has `LocalizedStringKey` copy, the causes a user can act on differently read differently, the tokens are frozen, and the package composes no sentence while the camera forks the token. |
 | `Fernlet/Tests/FernletTests/FernletIdentityEnvelopeTests.swift` | Envelope signing, verification, canonical encoding, and payload type tests. |
 | `Fernlet/Tests/FernletTests/NearbyRangingSessionTests.swift` | NearbyInteraction ranging session state machine and distance update tests. |
-| `Fernlet/Tests/FernletTests/ConnectionInspectorTests.swift` | Connection inspector session recording, subsampling, and purge-old logic tests. |
+| `Fernlet/Tests/FernletTests/ConnectionInspectorTests.swift` | Connection inspector session recording, subsampling, and purge-old logic tests. **2026-09-24:** the recorder cells build no store (a bare `ConnectionInspector()` records, as the `.live` default does, and persists nowhere); only the five cells whose claim is about the HOST store build one, and the suite carries no `.timeLimit` — the only one the target had, which measured the main actor's queue under full-suite load (206 s in P6, 306 s in P8) rather than the cell. |
 | `Fernlet/Tests/FernletTests/ProximityCoordinatorTests.swift` | Proximity coordinator handshake, payload dispatch, and error recovery tests. |
 | `Fernlet/Tests/FernletTests/TrainerProximityServiceTests.swift` | Trainer proximity service disclosure card and audit event tests. |
 | `Fernlet/Tests/FernletTests/FriendPhotoManifestPayloadTests.swift` | Friend-photo manifest payload round-trip and blocked-sender request filtering tests. |
