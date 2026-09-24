@@ -1,5 +1,15 @@
 # Companion emotions — scoping note (2026-09-23)
 
+> **Status, 2026-09-24: BUILT as Route A.** The owner chose the full set: *"happy, sad, tired (for
+> low scores), sleepy (for bedtime hours), hungry (if haven't eaten in a bit), and some others."*
+> The layer is `CompanionEmotion` (FernletDomainModel, not `Codable`) plus `CompanionEmotionEngine`
+> (FernletScoring), whose DocC page holds the precedence table. There are eleven emotions: happy,
+> sad, tired, sleepy, hungry, thirsty, loved, comforted, playful, calm and frazzled. The old
+> `stressTint`/`calmTint` flags became the last two. The widget draws six of them through an
+> additive emotion timeline; the Lock Screen keeps the state face (owner-confirmed). A Settings
+> switch turns the hunger and thirst cues off. The note below is the record of the scoping. Where it
+> and the code differ, the code and its DocC win.
+
 > **SCOPING ONLY. Nothing in this note is built, and companion behavior is unchanged.** The work is
 > meant for a separate session. Owner, verbatim: *"having a happy companion on a hard day seems
 > wrong. We'll need to add more emotions for the companion."*
@@ -25,7 +35,9 @@ Two call sites compute the state:
 - `DiaryStore.dailyHealthScore(for:day:)` stores each day's state in `DailyHealthScore.companionState`.
 
 **Nothing in the chain reads how the day felt.** Since 2026-09-23 the journal tag no longer affects
-the score at all: every entry earns the same journal credit (`JournalScoringParityTests`). The tag
+the score at all: every entry earns the same journal credit (`JournalScoringParityTests`). Since
+2026-09-24, a day with only one-tap mood check-ins earns half of that credit above the no-entry
+baseline (0.775). The tag
 now survives only as the breakdown's unweighted `"mood"` reading, which feeds the period bridge.
 A day tagged *hard* with decent sleep and meals therefore scores exactly like a *bright* one, and
 often lands in `.thriving`.

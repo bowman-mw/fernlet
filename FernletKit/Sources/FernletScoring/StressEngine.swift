@@ -63,7 +63,8 @@ public struct StressDaySample: Codable, Equatable, Sendable {
 /// The engine's gentle wellness vocabulary — never clinical.
 ///
 /// Raw values are stable identifiers for the device-local sidecar; they are NEVER persisted into
-/// any synced store or into `CompanionState` (companion "frazzled" is a presentation-only flag).
+/// any synced store or into `CompanionState` (the companion's "frazzled" and "calm" are presentation-only
+/// emotions, `CompanionEmotion.frazzled` / `.calm`, derived on the Home screen and never persisted).
 /// ``StressEngine/scoringModifier(for:)`` maps each state to its small capped score nudge.
 public enum StressState: String, Codable, Equatable, Sendable {
     case calm
