@@ -1244,7 +1244,7 @@ struct SettingsSheet: View {
         GoalPresetCards(selectedGoal: Binding(
             get: { store.settings.selectedGoal },
             set: { store.setSelectedGoal($0) }
-        ))
+        ), weightManagementDeficitPercent: NutritionTargetCalculator.weightManagementDeficitPercent(for: store.settings))
         if let note = goalOverrideFootnote {
             Text(note)
                 .font(.fernlet(.bodySmall))

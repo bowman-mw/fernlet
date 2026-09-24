@@ -6,7 +6,8 @@ import FernletUI
 /// automatically" — testers wanted to set their own. Calories, protein and fat are each editable;
 /// leaving a field blank (or typing 0) reverts it to the value Fernlet derives from goal + profile.
 /// Carbs is never edited here: it is the residual of the other three against the calorie total, so it
-/// is shown live and rebalances as the user types.
+/// is shown live and rebalances as the user types. While Weight Management is the goal, the card also
+/// carries the user's calorie deficit (``WeightManagementDeficitRow``) above the Calories row.
 struct NutritionTargetsEditor: View {
     @Bindable var store: FernletStore
 
@@ -105,6 +106,13 @@ struct NutritionTargetsEditor: View {
                         }
                         .accessibilityIdentifier("nutritionTargets.reset")
                     }
+                }
+
+                // Weight Management only: the deficit moves the Calories row's derived value, so it sits
+                // directly above it (owner, 2026-09-24).
+                if WeightManagementDeficitControl(settings: store.settings).isShown {
+                    WeightManagementDeficitRow(store: store)
+                    Divider().overlay(Color.bark.opacity(0.08))
                 }
 
                 MacroTargetRow(label: "Calories", identifier: "nutritionTargets.calories", unit: "cal", placeholder: applied.calories,

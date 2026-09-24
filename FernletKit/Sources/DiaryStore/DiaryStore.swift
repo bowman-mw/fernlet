@@ -505,6 +505,14 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Persists the Weight Management deficit chosen on the Nutrition targets card, in whole percent.
+    /// `FernletSettings.setWeightManagementDeficitPercent(_:)` normalizes it into the 0–20% range and
+    /// 5% step and stores the default as `nil`; the save is scheduled like every other setter's.
+    public func setWeightManagementDeficitPercent(_ percent: Int) {
+        settings.setWeightManagementDeficitPercent(percent)
+        scheduleSnapshotSave()
+    }
+
     /// Persists the "hide cycle predictions" display toggle.
     public func setHidePredictions(_ hidePredictions: Bool) {
         settings.hidePredictions = hidePredictions

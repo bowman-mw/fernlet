@@ -242,6 +242,7 @@ split is by concern, not alphabetical.
 | `pendingRetryCount` | Exposes queued AI retry count. |
 | `isIntimateLoggingAllowed` | Gates intimate logging by user age. |
 | `setHidePredictions(_:)`, `setHideFertileWindow(_:)`, `setConnectionInspectorMode(_:)`, `setProximityDisplayName(_:)`, `setShowProximityDebugTools(_:)`, `setAllowNearbyRecipeShares(_:)` | Mutate related settings and schedule persistence; recipe-share disabling stops the share manager. |
+| `setWeightManagementDeficitPercent(_:)` | Stores the Weight Management deficit the user chose on the Nutrition targets card (normalized to 0–20% in 5% steps; the 10% default is stored as `nil`) and schedules persistence (2026-09-24). |
 | `replaceConnectionSessionLogs(_:)` | Sorts and caps stored connection logs. |
 | Proximity trust wrappers | Delegate peer lookup, trust, revoke, block, unblock, audit, and trust-policy checks to `ProximityTrustVault`; see `ProximityFunctionIndex.md`. |
 | `setHomeWidgets(_:)` / `setQuickLogItems(_:)` | Normalize and persist home/quick-log customization. |

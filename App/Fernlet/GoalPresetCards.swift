@@ -11,11 +11,18 @@ import FernletUI
 /// training split; the cards just surface both summaries so the choice is legible.
 struct GoalPresetCards: View {
     @Binding var selectedGoal: GoalType
+    /// The Weight Management deficit in effect, in whole percent, so that card states the user's own
+    /// choice rather than the default (2026-09-24). Settings passes
+    /// `NutritionTargetCalculator.weightManagementDeficitPercent(for:)`; onboarding runs before anyone
+    /// could have changed it, so the default is the truth there.
+    var weightManagementDeficitPercent: Int = NutritionTargetCalculator.defaultWeightManagementDeficitPercent
 
     var body: some View {
         VStack(spacing: 10) {
             ForEach(GoalType.allCases) { goal in
-                GoalPresetCard(goal: goal, isSelected: goal == selectedGoal) {
+                GoalPresetCard(goal: goal, isSelected: goal == selectedGoal,
+                               nutritionSummary: goal.nutritionSummary(
+                                   weightManagementDeficitPercent: weightManagementDeficitPercent)) {
                     selectedGoal = goal
                 }
             }
@@ -33,6 +40,8 @@ struct GoalPresetCards: View {
 private struct GoalPresetCard: View {
     let goal: GoalType
     let isSelected: Bool
+    /// The card's nutrition line, resolved by ``GoalPresetCards`` against the user's settings.
+    let nutritionSummary: String
     let onTap: () -> Void
 
     var body: some View {
@@ -51,7 +60,7 @@ private struct GoalPresetCard: View {
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
-                summaryRow(icon: "fork.knife", text: goal.nutritionSummary)
+                summaryRow(icon: "fork.knife", text: nutritionSummary)
                 summaryRow(icon: "figure.run", text: goal.trainingSummary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -1000,21 +1000,31 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
     /// cards. Descriptive only — it summarizes the calorie/protein logic in
     /// `NutritionTargetCalculator` (per-goal calorie multiplier + protein g/kg), it does not recompute
     /// it. Keep the two in step: strength/sportsPrep eat a little more with more protein, weight
-    /// management runs a gentle deficit with higher protein, recovery sits near maintenance, and the
-    /// gentler goals hold at balanced maintenance.
+    /// management runs a deficit the user can adjust (gentle by default) with higher protein, recovery
+    /// sits near maintenance, and the gentler goals hold at balanced maintenance.
     ///
-    /// The weight-management line reads its percentage from
-    /// `NutritionTargetCalculator.weightManagementDeficitFraction` rather than restating it, and says
-    /// "up to" because the calculator's floor shrinks the cut for small, older, or sedentary bodies.
-    /// It makes no health claim and promises no rate of loss.
+    /// This property describes the DEFAULT plan, a 10% deficit. A card for a user who changed their
+    /// deficit must use ``nutritionSummary(weightManagementDeficitPercent:)`` instead.
     public var nutritionSummary: String {
+        nutritionSummary(weightManagementDeficitPercent: NutritionTargetCalculator.defaultWeightManagementDeficitPercent)
+    }
+
+    /// ``nutritionSummary`` for a user whose Weight Management deficit is `percent`: pass
+    /// `NutritionTargetCalculator.weightManagementDeficitPercent(for:)`.
+    ///
+    /// The weight-management line reads its percentage from the value in effect rather than restating
+    /// it, and says "up to" because the calculator's floor shrinks the cut for small, older, or
+    /// sedentary bodies. It stays honest when the user changes it (2026-09-24): a custom value says
+    /// "your choice", "gentle" is kept only at or below the 10% default, and 0% reads as maintenance.
+    /// It makes no health claim and promises no rate of loss. The other goals ignore `percent`.
+    public func nutritionSummary(weightManagementDeficitPercent percent: Int) -> String {
         switch self {
         case .strength:
             "A little more to grow on · high protein (~1.7 g/kg)"
         case .sportsPrep:
             "Fuelled for training · high protein (~1.6 g/kg)"
         case .weightManagement:
-            "A gentle calorie deficit (up to \(Self.weightManagementDeficitPercent)%) · higher protein"
+            Self.weightManagementSummary(deficitPercent: percent)
         case .recovery:
             "Maintenance calories · easy on the body"
         case .wellness, .mentalHealth, .exploring:
@@ -1022,9 +1032,30 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
         }
     }
 
-    /// The weight-management deficit as a whole percentage for the goal card (10 for 0.10).
-    private static var weightManagementDeficitPercent: Int {
-        Int((NutritionTargetCalculator.weightManagementDeficitFraction * 100).rounded())
+    /// The weight-management card line for a deficit of `deficitPercent`, normalized first so the
+    /// card can never state a number the calorie math would not use.
+    private static func weightManagementSummary(deficitPercent: Int) -> String {
+        let percent = NutritionTargetCalculator.normalizedWeightManagementDeficitPercent(deficitPercent)
+        let defaultPercent = NutritionTargetCalculator.defaultWeightManagementDeficitPercent
+        let percentText = percent.formatted(.percent)
+        if percent == 0 {
+            return String(localized: "goal.weightManagement.nutrition.noDeficit",
+                          defaultValue: "Maintenance calories (no deficit, your choice) · higher protein",
+                          bundle: .module, comment: "Goal card: Weight Management when the user chose no calorie deficit")
+        }
+        if percent == defaultPercent {
+            return String(localized: "goal.weightManagement.nutrition.default",
+                          defaultValue: "A gentle calorie deficit (up to \(percentText)) · higher protein",
+                          bundle: .module, comment: "Goal card: Weight Management at the default deficit. The argument is a percentage such as 10%")
+        }
+        if percent < defaultPercent {
+            return String(localized: "goal.weightManagement.nutrition.smaller",
+                          defaultValue: "A gentle calorie deficit (up to \(percentText), your choice) · higher protein",
+                          bundle: .module, comment: "Goal card: Weight Management with a smaller deficit the user chose. The argument is a percentage such as 5%")
+        }
+        return String(localized: "goal.weightManagement.nutrition.larger",
+                      defaultValue: "A calorie deficit (up to \(percentText), your choice) · higher protein",
+                      bundle: .module, comment: "Goal card: Weight Management with a larger deficit the user chose. The argument is a percentage such as 15%")
     }
 
     /// One-line description of the training split this goal recommends, for the goal preset cards and the

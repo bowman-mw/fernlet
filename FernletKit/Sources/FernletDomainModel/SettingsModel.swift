@@ -150,6 +150,26 @@ public nonisolated struct FernletSettings: Codable {
     public var hasAnyNutritionOverride: Bool {
         calorieTargetOverride != nil || proteinTargetOverride != nil || fatTargetOverride != nil
     }
+    /// The Weight Management calorie deficit the user chose, in whole percent below estimated
+    /// maintenance. Owner decision 2026-09-24: "do 10% as a baseline, users can change this as
+    /// afterwards".
+    ///
+    /// `nil` means Fernlet's default (``NutritionTargetCalculator/defaultWeightManagementDeficitPercent``,
+    /// 10%). Every blob written before the setting existed decodes that way, and choosing the default
+    /// again stores `nil` (``setWeightManagementDeficitPercent(_:)``), so a non-nil value means the
+    /// user customized it. Read it through ``NutritionTargetCalculator/weightManagementDeficitPercent(for:)``,
+    /// which enforces the 0–20% range and 5% step; the 1,200/1,500 kcal and resting-rate floors apply
+    /// whatever it says, and a pinned `calorieTargetOverride` outranks it. A last-writer-wins scalar in
+    /// the synced settings blob, like the macro overrides: a number the user chose, not Health data.
+    public var weightManagementDeficitPercent: Int? = nil
+
+    /// Records the user's deficit choice: normalized into the choosable range and step, and stored as
+    /// `nil` when it equals the default, so the default can move with the app while a custom choice stays.
+    public mutating func setWeightManagementDeficitPercent(_ percent: Int) {
+        let normalized = NutritionTargetCalculator.normalizedWeightManagementDeficitPercent(percent)
+        weightManagementDeficitPercent =
+            normalized == NutritionTargetCalculator.defaultWeightManagementDeficitPercent ? nil : normalized
+    }
     public var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
     /// Raw `quickLogItems` tokens this build's `FernletShortcut` doesn't know — shortcuts added by a
     /// NEWER build on another device. Parked here (and re-encoded) instead of thrown on, so a newer
@@ -391,7 +411,8 @@ public nonisolated struct FernletSettings: Codable {
         stressAwarenessEnabled = try container.decodeIfPresent(Bool.self, forKey: .stressAwarenessEnabled) ?? false
     }
 
-    /// The nutrition profile, preferences, and the three pinned macro-target overrides.
+    /// The nutrition profile, preferences, the three pinned macro-target overrides, and the Weight
+    /// Management deficit choice.
     private mutating func decodeNutrition(from container: KeyedDecodingContainer<CodingKeys>) throws {
         userProfile = try container.decodeIfPresent(UserNutritionProfile.self, forKey: .userProfile) ?? UserNutritionProfile()
         nutritionPreferences = try container.decodeIfPresent(UserNutritionPreferences.self, forKey: .nutritionPreferences) ?? UserNutritionPreferences()
@@ -402,6 +423,12 @@ public nonisolated struct FernletSettings: Codable {
         calorieTargetOverride = Self.positiveOverride(try container.decodeIfPresent(Int.self, forKey: .calorieTargetOverride))
         proteinTargetOverride = Self.positiveOverride(try container.decodeIfPresent(Int.self, forKey: .proteinTargetOverride))
         fatTargetOverride = Self.positiveOverride(try container.decodeIfPresent(Int.self, forKey: .fatTargetOverride))
+        // Absent ⇒ nil ⇒ the 10% default (every blob written before the setting existed). R5: a present
+        // value is forced into the choosable 0–20% range and 5% step here, at the boundary. A future
+        // build that widens the range or refines the step therefore needs a NEW key: this build would
+        // save its value back clamped.
+        weightManagementDeficitPercent = try container.decodeIfPresent(Int.self, forKey: .weightManagementDeficitPercent)
+            .map(NutritionTargetCalculator.normalizedWeightManagementDeficitPercent)
     }
 
     /// The quick-log shortcuts, home widgets (with their two one-time migrations), and care tasks.
@@ -561,7 +588,8 @@ public nonisolated struct FernletSettings: Codable {
              showCalories, hasCompletedOnboarding, periodTrackingVisible, didMigratePeriodVisibility,
              intimacyTrackingVisible, hidePredictions, hideFertileWindow, periodAwareScoringEnabled,
              periodContextPrimerSeen, stressAwarenessEnabled, userProfile, nutritionPreferences,
-             calorieTargetOverride, proteinTargetOverride, fatTargetOverride, quickLogItems,
+             calorieTargetOverride, proteinTargetOverride, fatTargetOverride,
+             weightManagementDeficitPercent, quickLogItems,
              unknownQuickLogTokens, homeWidgets, unknownHomeWidgetTokens,
              didMigrateMilestonesFirstAidWidgets, didMigrateMealPhotosWidget, personalCareTasks,
              proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
@@ -645,6 +673,7 @@ public nonisolated struct FernletSettings: Codable {
         try container.encodeIfPresent(calorieTargetOverride, forKey: .calorieTargetOverride)
         try container.encodeIfPresent(proteinTargetOverride, forKey: .proteinTargetOverride)
         try container.encodeIfPresent(fatTargetOverride, forKey: .fatTargetOverride)
+        try container.encodeIfPresent(weightManagementDeficitPercent, forKey: .weightManagementDeficitPercent)
         try container.encode(quickLogItems, forKey: .quickLogItems)
         try container.encode(unknownQuickLogTokens, forKey: .unknownQuickLogTokens)
         try container.encode(homeWidgets, forKey: .homeWidgets)

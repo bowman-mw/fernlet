@@ -1334,6 +1334,10 @@ final class FernletStore {
         diary.setSelectedGoal(goal)
     }
 
+    func setWeightManagementDeficitPercent(_ percent: Int) {
+        diary.setWeightManagementDeficitPercent(percent)
+    }
+
     func setHidePredictions(_ hidePredictions: Bool) {
         diary.setHidePredictions(hidePredictions)
     }

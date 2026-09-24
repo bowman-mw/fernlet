@@ -1,11 +1,13 @@
 # A gentler starting calorie deficit for Weight Management — research note (2026-09-23)
 
-> **OWNER SIGN-OFF NEEDED on the chosen value.** The code now ships the recommendation below
-> (10% below estimated maintenance, with a floor). The constant is
-> `NutritionTargetCalculator.weightManagementDeficitFraction` in
-> `FernletKit/Sources/FernletDomainModel/NutritionModels.swift`, and the floor is
-> `NutritionTargetCalculator.deficitFloorKilocalories(for:)`. Changing the value is a one-line edit.
-> The pinning tests are in `Tests/FernletTests/WeightManagementDeficitTests.swift`.
+> **Signed off 2026-09-24.** Owner: *"do 10% as a baseline, users can change this as afterwards."*
+> The code ships the recommendation below (10% below estimated maintenance, with a floor) as the
+> default, and the user can choose 0–20% in 5% steps; the floors apply at every choice. The default is
+> `NutritionTargetCalculator.defaultWeightManagementDeficitPercent` in
+> `FernletKit/Sources/FernletDomainModel/NutritionModels.swift`, the user's choice is
+> `FernletSettings.weightManagementDeficitPercent` (edited on the Nutrition targets card), and the
+> floor is `NutritionTargetCalculator.deficitFloorKilocalories(for:)`. The pinning tests are in
+> `Tests/FernletTests/WeightManagementDeficitTests.swift` and `WeightManagementDeficitSettingTests.swift`.
 
 ## Why this note exists
 
@@ -141,20 +143,26 @@ bodies are smallest.
 
 The goal card now reads "A gentle calorie deficit (up to 10%) · higher protein". It says "up to"
 because the floor can make the cut smaller. The copy makes no health claim and uses no rate or
-weight-loss promise. The percentage in the copy is interpolated from the constant, so it cannot
-drift from the math.
+weight-loss promise. The percentage in the copy is interpolated from the value in effect, so it cannot
+drift from the math. Since 2026-09-24 a customized value says so: "(up to 5%, your choice)", "A
+calorie deficit (up to 15%, your choice)" (not "gentle" above the default), and at 0% "Maintenance
+calories (no deficit, your choice)".
 
 ## Owner decisions
 
-1. **OWNER SIGN-OFF NEEDED on the chosen value**: 10% plus the 1,200/1,500 kcal and RMR floor, or
-   another row from the table above.
+1. **DECIDED 2026-09-24** — *"do 10% as a baseline, users can change this as afterwards."* 10% plus the
+   1,200/1,500 kcal and RMR floor is the default; the user may choose 0–20% in 5% steps (0% is option F;
+   20% is about the classic 500 kcal/day for the default profile, the bottom of NHLBI's clinical range;
+   finer steps would be false precision inside the estimate's own error). The floors apply at every
+   choice, and at 20% the RMR half binds for sedentary profiles (0.8 × 1.2 = 0.96 × RMR).
 2. **The spec conflict.** Either amend §5 L349/L846/L1131 (proposed wording below), or take option F.
-3. **Minors.** `UserNutritionProfile.age` accepts 5–120, Mifflin–St Jeor is an adult equation, and
-   the AAP advises against dieting for adolescents. Recommendation: no deficit under 18 (maintenance
-   plus the goal's protein). **Not implemented.** It is a behaviour change beyond "numbers and
-   copy", and it depends on the app's age-gating decisions.
-4. **Showing a number on the card.** The card now says "up to 10%". If the owner prefers no number
-   at all, drop the parenthetical. The math is unaffected.
+3. **Minors. DECIDED 2026-09-24: no under-18 exception** (owner: "No, same for every age"). The
+   question was: `UserNutritionProfile.age` accepts 5–120, Mifflin–St Jeor is an adult equation, and
+   the AAP advises against dieting for adolescents, so should under-18s get no deficit? The owner kept
+   one rule for every age; the floors still apply, and the user can choose 0%. Pinned by
+   `WeightManagementDeficitTests.underEighteensGetTheSameRuleAndTheSameFloors`.
+4. **Showing a number on the card.** The card says "up to 10%", or the user's own value with "your
+   choice". Still open only if the owner prefers no number at all; the math is unaffected.
 
 Proposed spec wording (§5, replacing L349's first sentence): *"The Weight Management goal applies a
 gentle starting deficit — 10% below estimated maintenance, never below 1,200 kcal (female) /

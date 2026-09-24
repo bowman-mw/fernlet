@@ -227,6 +227,14 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "Goal & nutrition › Nutrition targets",
             route: .goalNutrition
         ),
+        // The Weight Management deficit stepper on the Nutrition targets card (2026-09-24). The title is
+        // also the row's own `Text("Calorie deficit")` literal, so the catalog sync harvests it.
+        SettingsSearchEntry(
+            title: "Calorie deficit",
+            keywords: ["deficit", "calorie deficit", "weight management", "lose weight", "cut", "percent", "maintenance"],
+            breadcrumb: "Goal & nutrition › Nutrition targets",
+            route: .goalNutrition
+        ),
         SettingsSearchEntry(
             title: "Daily check-in reminder",
             keywords: ["reminder", "daily check-in", "check in", "nudge", "alert", "notify"],

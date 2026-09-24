@@ -2659,21 +2659,62 @@ public nonisolated struct NutritionTargets: Equatable {
 /// the stated calories rather than going negative (see the inline note in `targets(for:)`).
 ///
 /// The Weight Management goal is the only one that cuts calories meaningfully, and it is fenced:
-/// ``weightManagementDeficitFraction`` below maintenance, never under
-/// ``deficitFloorKilocalories(for:)``, and never above maintenance (so a body whose maintenance is
-/// already under the floor gets no deficit at all). See `Docs/Calorie-Deficit-Research-2026-09-23.md`.
+/// the user's chosen deficit (``weightManagementDeficitPercent(for:)`` — 10% by default, 0–20% in 5%
+/// steps) below maintenance, never under ``deficitFloorKilocalories(for:)``, and never above
+/// maintenance (so a body whose maintenance is already under the floor gets no deficit at all). The
+/// floors bind whatever the user chooses. See `Docs/Calorie-Deficit-Research-2026-09-23.md`.
 public nonisolated enum NutritionTargetCalculator {
-    /// The Weight Management goal's gentle starting deficit: 10% below estimated maintenance.
+    /// The Weight Management goal's default deficit, in whole percent below estimated maintenance.
     ///
-    /// OWNER SIGN-OFF NEEDED on this value — the evidence, the options (8%, a fixed 100–200 kcal
-    /// "small change", maintenance-only) and the worked examples are in
-    /// `Docs/Calorie-Deficit-Research-2026-09-23.md`. It was 12% (× 0.88, no floor) until
-    /// 2026-09-23, which the owner found "a tad bit aggressive" and which put small, older, sedentary
-    /// profiles under the unsupervised 1,200/1,500 kcal floor. A percentage rather than a fixed kcal
-    /// cut, because a fixed cut is proportionally harshest exactly where bodies are smallest.
-    /// `GoalType.nutritionSummary` interpolates this value, so the goal card's "up to 10%" cannot
-    /// drift from the math.
-    public static let weightManagementDeficitFraction: Double = 0.10
+    /// Owner decision, 2026-09-24: "do 10% as a baseline, users can change this as afterwards" (the
+    /// sign-off the research note asked for). Every user starts here; a later choice is
+    /// ``FernletSettings/weightManagementDeficitPercent``, read through
+    /// ``weightManagementDeficitPercent(for:)``. It was 12% (× 0.88, no floor) until 2026-09-23, which
+    /// the owner found "a tad bit aggressive" and which put small, older, sedentary profiles under the
+    /// unsupervised 1,200/1,500 kcal floor. A percentage rather than a fixed kcal cut, because a fixed
+    /// cut is proportionally harshest exactly where bodies are smallest. `GoalType.nutritionSummary`
+    /// interpolates the percentage in effect, so the goal card cannot drift from the math.
+    public static let defaultWeightManagementDeficitPercent = 10
+
+    /// The deficits a user may choose, in whole percent: none (maintenance) up to 20%.
+    ///
+    /// 0% is the research note's option F, maintenance plus protein. 20% comes to about 500 kcal/day
+    /// for the app's default profile: the classic "about 1 lb a week" dose, the bottom of NHLBI's
+    /// 500–1,000 kcal clinical range. Anything larger belongs to professionally supported programs
+    /// (AHA/ACC/TOS 2013 lists a 30% deficit there), which a self-directed app does not offer. The
+    /// 1,200/1,500 kcal and resting-rate floors apply at every value.
+    public static let weightManagementDeficitPercentRange: ClosedRange<Int> = 0...20
+
+    /// The step between choosable deficits: 0, 5, 10, 15, 20. Finer steps would be false precision,
+    /// because the maintenance estimate itself misses by more than 10% for a sizeable minority
+    /// (Frankenfield 2005).
+    public static let weightManagementDeficitPercentStep = 5
+
+    /// Every choosable deficit, in order: 0, 5, 10, 15, 20.
+    public static var weightManagementDeficitPercentOptions: [Int] {
+        Array(stride(from: weightManagementDeficitPercentRange.lowerBound,
+                     through: weightManagementDeficitPercentRange.upperBound,
+                     by: weightManagementDeficitPercentStep))
+    }
+
+    /// `percent` forced into ``weightManagementDeficitPercentRange`` and down onto a
+    /// ``weightManagementDeficitPercentStep`` boundary: the one enforcement seam for every stored,
+    /// synced or typed value.
+    ///
+    /// Rounds DOWN, toward the gentler cut, so a value between two steps (only a corrupt or foreign
+    /// blob can carry one) never cuts more than it asked for.
+    public static func normalizedWeightManagementDeficitPercent(_ percent: Int) -> Int {
+        let range = weightManagementDeficitPercentRange
+        let clamped = min(max(percent, range.lowerBound), range.upperBound)
+        return clamped - (clamped - range.lowerBound) % weightManagementDeficitPercentStep
+    }
+
+    /// The deficit in effect for `settings`, in whole percent: the user's choice, normalized, or
+    /// ``defaultWeightManagementDeficitPercent`` when they never made one.
+    public static func weightManagementDeficitPercent(for settings: FernletSettings) -> Int {
+        normalizedWeightManagementDeficitPercent(
+            settings.weightManagementDeficitPercent ?? defaultWeightManagementDeficitPercent)
+    }
 
     /// The unsupervised intake floor for a female profile (kcal/day) — the commonly cited
     /// "not below 1,200 a day in women … except under the supervision of a health professional".
@@ -2686,21 +2727,24 @@ public nonisolated enum NutritionTargetCalculator {
     /// (`femaleDeficitFloorKilocalories` / `maleDeficitFloorKilocalories`), and never below the
     /// profile's estimated resting metabolic rate.
     ///
-    /// The RMR half cannot bind at today's 10% (the lowest activity multiplier, 1.2, keeps a 10% cut
-    /// at ≥ 1.08 × RMR); it is kept so a future multiplier or percentage change cannot slip under it.
+    /// The RMR half cannot bind at the 10% default or at 15% (the lowest activity multiplier, 1.2,
+    /// keeps those cuts at ≥ 1.08 × and ≥ 1.02 × RMR). It does bind for a sedentary profile at the
+    /// 20% maximum (0.8 × 1.2 = 0.96 × RMR), which is exactly what it is for.
     public static func deficitFloorKilocalories(for profile: UserNutritionProfile) -> Double {
         let sexFloor = profile.sex == .male ? maleDeficitFloorKilocalories : femaleDeficitFloorKilocalories
         return max(sexFloor, restingMetabolicRate(for: profile))
     }
 
     /// The Weight Management goal's unrounded daily target for a body whose estimated maintenance is
-    /// `maintenance`: ``weightManagementDeficitFraction`` below it, but never under the deficit floor
-    /// — and never ABOVE maintenance, so a maintenance already under the floor means no deficit
-    /// rather than a surplus.
-    static func gentleDeficitTarget(maintenance: Double, profile: UserNutritionProfile) -> Double {
+    /// `maintenance`: `deficitPercent` below it (normalized first, so nothing outside the choosable
+    /// range can reach the math), but never under the deficit floor, and never ABOVE maintenance, so
+    /// a maintenance already under the floor means no deficit rather than a surplus.
+    static func weightManagementTarget(maintenance: Double, profile: UserNutritionProfile, deficitPercent: Int) -> Double {
         guard maintenance.isFinite, maintenance > 0 else { return maintenance }
-        assert((0..<0.5).contains(weightManagementDeficitFraction), "a starting deficit must stay small")
-        let reduced = maintenance * (1 - weightManagementDeficitFraction)
+        let percent = normalizedWeightManagementDeficitPercent(deficitPercent)
+        assert(weightManagementDeficitPercentRange.contains(percent), "a deficit outside the range reached the calorie math")
+        let fraction = Double(percent) / 100
+        let reduced = maintenance * (1 - fraction)
         return max(reduced, min(maintenance, deficitFloorKilocalories(for: profile)))
     }
 
@@ -2740,7 +2784,8 @@ public nonisolated enum NutritionTargetCalculator {
         let adjusted: Double
         switch settings.selectedGoal {
         case .weightManagement:
-            adjusted = gentleDeficitTarget(maintenance: base, profile: profile)
+            adjusted = weightManagementTarget(maintenance: base, profile: profile,
+                                              deficitPercent: weightManagementDeficitPercent(for: settings))
         case .strength:
             adjusted = base * 1.08
         case .sportsPrep:

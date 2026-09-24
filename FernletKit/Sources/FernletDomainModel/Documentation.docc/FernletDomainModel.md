@@ -136,10 +136,17 @@ non-exhaustive switches and ship corrupted binaries.
 ### Nutrition profile and targets
 
 ``NutritionTargetCalculator`` is Mifflin–St Jeor × activity, goal-adjusted. Weight Management is
-the one goal with a real calorie cut, and it is fenced (2026-09-23): 10% below maintenance
-(`weightManagementDeficitFraction`, pending owner sign-off), never under
-`deficitFloorKilocalories(for:)` (1,200 kcal female / 1,500 kcal male, and never under estimated
-RMR), and never above maintenance. Evidence and options: `Docs/Calorie-Deficit-Research-2026-09-23.md`.
+the one goal with a real calorie cut, and it is fenced (2026-09-23): 10% below maintenance by
+default (`defaultWeightManagementDeficitPercent`; owner sign-off 2026-09-24, "do 10% as a baseline,
+users can change this as afterwards"), never under `deficitFloorKilocalories(for:)` (1,200 kcal
+female / 1,500 kcal male, and never under estimated RMR), and never above maintenance. The user may
+choose 0–20% in 5% steps: ``FernletSettings/weightManagementDeficitPercent`` (`nil` = the default,
+synced like the macro overrides) read through `weightManagementDeficitPercent(for:)`, with
+`normalizedWeightManagementDeficitPercent(_:)` enforcing the range at decode, at the setter, and in
+the math. The floors bind at every choice; a pinned `calorieTargetOverride` outranks it; there is no
+under-18 exception (owner, 2026-09-24). `GoalType.nutritionSummary(weightManagementDeficitPercent:)`
+states the value in effect on the goal card. Evidence and options:
+`Docs/Calorie-Deficit-Research-2026-09-23.md`.
 
 - ``UserNutritionProfile``
 - ``UserNutritionPreferences``
