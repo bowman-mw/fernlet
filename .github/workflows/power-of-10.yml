@@ -53,3 +53,12 @@ jobs:
         # Same "static analyzer, daily" obligation (rule 10) and the same cheap runner, so it rides
         # along here rather than getting its own workflow.
         run: python3 Scripts/doc-coverage-scan.py
+
+      - name: Accessibility scan (the accessibility wall's canonical scanner)
+        # The accessibility wall has this repo's two-half shape: this scanner plus a Swift port,
+        # AccessibilityBoundaryTests, reading one allowlist (Scripts/accessibility-allowlist.json).
+        # The port runs in s3-wall.yml; this runs the scanner it ports, pure Python, ~2 s, for the
+        # same reason power-of-10-scan.py runs here beside PowerOfTenBoundaryTests there — the port
+        # is pinned to the scanner's constants and regexes, not to its logic, so only running both
+        # catches the two halves disagreeing about a line. AccessibilityBoundaryTests pins this step.
+        run: python3 Scripts/accessibility-scan.py

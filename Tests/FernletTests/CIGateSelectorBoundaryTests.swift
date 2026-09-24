@@ -126,7 +126,11 @@ import Testing
     /// identity effect, the host pin, and the six wire goldens nothing demanded (five routed families
     /// and `PeerHandleWireGoldenTests`). Only the goldens are demanded, by shape, in
     /// ``everyWireGoldenSuiteIsGated()`` — so this entry is what notices any of the other seven
-    /// leaving. Counted off the line.
+    /// leaving. Five lines are NEW, one per wall that ran on no workflow at all: `privacy-wipe` (4:
+    /// the coverage scan, its two behaviour siblings, the persisted-surface discovery wall),
+    /// `accessibility`, `memory-lifecycle`, `messages-extension` and `codeowners` (1 each). Each is
+    /// also pinned by name in ``wallLines``, since a count of one cannot tell its wall from another.
+    /// Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 7,
         "no-tracking": 1,
@@ -134,7 +138,36 @@ import Testing
         "localization": 1,
         "key-custody": 4,
         "crypto-goldens": 3,
+        "privacy-wipe": 4,
+        "accessibility": 1,
+        "memory-lifecycle": 1,
+        "messages-extension": 1,
+        "codeowners": 1,
         "mesh-batteries": 154
+    ]
+
+    /// The walls each line exists to run, by label — the names a count cannot tell apart.
+    ///
+    /// ``measuredSuiteNameCounts`` notices a name LEAVING a line, but not a line whose one name was
+    /// swapped for another (the count stays one), and not a line whose last name was deleted: with
+    /// no suite left, `gatedSteps` no longer parses it as a step, so nothing counts it at all. Every
+    /// suite here is a wall with no compiler half — the `MeshRoutedDrainWallTests` argument — so its
+    /// line leaving, or it leaving its line, must red rather than go quiet.
+    private static let wallLines: [String: [String]] = [
+        "s3-grep": ["S3BoundaryTests"],
+        "no-tracking": ["NoTrackingBoundaryTests"],
+        "power-of-10": ["PowerOfTenBoundaryTests"],
+        "localization": ["LocalizationBoundaryTests"],
+        "key-custody": ["KeyCustodyBoundaryTests", "ColumnCryptoDeviceBindingTests",
+                        "SealedBackupFormatPinTests", "IdentityProvisioningReadTests"],
+        "crypto-goldens": ["CryptographicPurposeBoundaryTests", "CryptographicDomainSeparationTests",
+                           "MeshMembershipEventGoldenTests"],
+        "privacy-wipe": ["PrivacyWipeCoverageTests", "PrivacyWipeMediaKeySurvivalTests",
+                         "PrivacyWipeAttemptMemoryRemovalTests", "PersistedSurfaceWipeBoundaryTests"],
+        "accessibility": ["AccessibilityBoundaryTests"],
+        "memory-lifecycle": ["MemoryLifecycleBoundaryTests"],
+        "messages-extension": ["MessagesExtensionBoundaryTests"],
+        "codeowners": ["CodeOwnersResolutionTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -221,7 +254,7 @@ import Testing
     @Test func everyGatedSelectorNamesADeclaredSuite() throws {
         let steps = Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath))
         let declared = try Self.declaredTopLevelTypes()
-        #expect(steps.count >= 6, "the workflow lost test steps — \(steps.count) floor-script invocations found")
+        #expect(steps.count >= 12, "the workflow lost test steps — \(steps.count) floor-script invocations found")
         var undeclared: [String] = []
         // R2: bounded by the step count × the suite count.
         for step in steps {
@@ -295,6 +328,37 @@ import Testing
             test count:
             \(ungated.joined(separator: "\n"))
             """)
+    }
+
+    /// Every measured line is still a step, and every wall is still on the line that runs it.
+    ///
+    /// The two holes ``measuredSuiteNameCounts`` leaves: a step deleted whole (the pin iterates the
+    /// steps that exist, so a missing one is never compared) and a wall swapped for another suite
+    /// (the count does not move). See ``wallLines``.
+    @Test func everyMeasuredLineIsAStepAndEveryWallIsOnItsLine() throws {
+        let steps = Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath))
+        // R2: bounded by the measured labels.
+        for label in Self.measuredSuiteNameCounts.keys.sorted() {
+            let runs = steps.filter { $0.label == label }.count
+            #expect(runs == 1, """
+                `\(label)` is measured in `measuredSuiteNameCounts` but the workflow runs it \(runs) \
+                time(s). Zero means the whole step left, which no name count can see; two means one \
+                label names two steps, and neither its floor nor its count can say which. Retire the \
+                entry in the same commit, with the argument, or put the step back.
+                """)
+        }
+        #expect(Set(Self.wallLines.keys).isSubset(of: Set(Self.measuredSuiteNameCounts.keys)),
+                "every wall line is also a measured line")
+        // R2: bounded by the wall lines × their walls.
+        for (label, walls) in Self.wallLines.sorted(by: { $0.key < $1.key }) {
+            let named = Set(steps.first { $0.label == label }?.suites ?? [])
+            for wall in walls {
+                #expect(named.contains(wall), """
+                    `\(wall)` is not on the `\(label)` line. It is a wall with no compiler half — \
+                    nothing else runs it on a push — so it must be named there, not only counted.
+                    """)
+            }
+        }
     }
 
     /// No test step bypasses the floor, and this suite gates itself.

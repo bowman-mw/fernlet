@@ -246,6 +246,75 @@ jobs:
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests
 
+      # The five walls below have no compiler half and ran on NO workflow until 2026-09-24 — each
+      # was green only when somebody remembered to run it locally, which is the gap the mesh
+      # batteries sat in for three phases. They are source scans over the live tree (plus the wipe
+      # wall's two single-cell behaviour suites), so each step is cheap and its own: a red names its
+      # wall in the Actions list. Floors are 1 in the commit that adds the steps — "at least not
+      # vacuous", the wall-step convention above — and are RAISED to the measured bundle count in
+      # the commit that measures them.
+      - name: Privacy-wipe walls (PrivacyWipeCoverageTests + PersistedSurfaceWipeBoundaryTests)
+        # "Delete everything" is a promise with no compiler half. PrivacyWipeCoverageTests pins, in
+        # the bodies of the wipe path only, a call for every manifest row, a registered body for
+        # every private wipe helper, a doc row for every keychain service;
+        # PersistedSurfaceWipeBoundaryTests DISCOVERS every UserDefaults-backed surface in shipping
+        # source and fails unless each has a disposition (cleared / kept / unreachable by design /
+        # an open gap) that the wipe path and Docs/PrivacyWipeCoverage.md both agree on. They judge
+        # ONE wipe path through shared helpers, so they ride one step. The first file declares two
+        # more suites, PrivacyWipeMediaKeySurvivalTests and PrivacyWipeAttemptMemoryRemovalTests —
+        # one cell each, a real store through the real `deleteAllData`, no sleep (the media-key
+        # cell reads the host's own media-key rows, which the wipe must KEEP) — and its
+        # VERIFY-BATCH NOTE says CI wiring must name all three, since `-only-testing:` would
+        # otherwise skip the two silently. So all three are named.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh privacy-wipe 1 \
+            PrivacyWipeCoverageTests \
+            PrivacyWipeMediaKeySurvivalTests \
+            PrivacyWipeAttemptMemoryRemovalTests \
+            PersistedSurfaceWipeBoundaryTests
+
+      - name: Accessibility wall (AccessibilityBoundaryTests)
+        # The Swift port of Scripts/accessibility-scan.py, reading the same allowlist: seven
+        # structural VoiceOver / Dynamic Type / Smart Invert invariants that fail SILENTLY when
+        # dropped — the screen looks identical and only an assistive technology can tell. Its own
+        # doc called it "the half CI enforces" before any line ran it. The Python scanner itself
+        # runs in power-of-10.yml on the cheap runner, as power-of-10-scan.py and
+        # doc-coverage-scan.py do; this step is the Swift half and the port-drift pins.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh accessibility 1 AccessibilityBoundaryTests
+
+      - name: Memory-lifecycle wall (MemoryLifecycleBoundaryTests)
+        # ML1–ML5: stored Task handles cancelled in deinit, block observers removed, observation
+        # tracking confined to ObservationLoop, every Task in a host-holding file pinned or marked,
+        # and no test building a manager over an inline host. The 2026-08-17 leak review's durable
+        # half; the timed weak-reference polls of MemoryLifecycleTests.swift are its behaviour
+        # siblings and stay off every line (MeshP9HonestyAcceptanceTests.ungatedByDesign says why).
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh memory-lifecycle 1 MemoryLifecycleBoundaryTests
+
+      - name: Messages-extension wall (MessagesExtensionBoundaryTests)
+        # The iMessage extension is a separate process Messages hosts, with its own privacy
+        # manifest: every file in the target may import only the exchange core and Apple's UI
+        # frameworks (never a private store, health or repository module), every copy-vault key it
+        # renders must reach the string catalog, and — since 2026-09-23 — its manifest must declare
+        # exactly the required-reason APIs its binary uses. This test bundle does not link the
+        # appex, so these source pins are most of what holds the target at all.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh messages-extension 1 MessagesExtensionBoundaryTests
+
+      - name: CODEOWNERS resolution (CodeOwnersResolutionTests)
+        # GitHub never complains about a CODEOWNERS pattern that matches nothing — it silently stops
+        # requiring review. The 2026-08-12 restructure left 11 of 26 entries matching nothing,
+        # including all seven wall and crypto test files, so the owner-review half of branch
+        # protection (Docs/Release-Process.md §1) is only true while this passes.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh codeowners 1 CodeOwnersResolutionTests
+
       - name: Mesh acceptance batteries (P3 – P9) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
         # §11.4, §23.4) ran only by hand until 2026-09-06. Tier 1 throughout: FakePeerNetwork, an

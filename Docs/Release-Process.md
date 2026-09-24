@@ -19,10 +19,13 @@ On `main`, enable branch protection with:
    — so a cross-wall import, tracking, Power-of-10, localization-bundle, key-custody, or
    at-rest-format regression cannot merge green — and, since 2026-09-06, the three mesh-migration
    acceptance batteries (28 `MeshP3*` / `MeshP4*` / `MeshP5*` and convergence suites) plus
-   `CIGateSelectorBoundaryTests`. Since 2026-09-24 the mesh line also carries the newest mesh
-   security suites, and every `…GoldenTests` wire-vector suite in the tree is on a line
-   (`CIGateSelectorBoundaryTests` demands it). **Every test step runs through
-   `Scripts/run-gated-suites.sh`**,
+   `CIGateSelectorBoundaryTests`. Since 2026-09-24 it also runs five walls that no workflow ran
+   before, each on its own line — the privacy-wipe walls (`PrivacyWipeCoverageTests` with the two
+   behaviour suites its file declares, and `PersistedSurfaceWipeBoundaryTests`),
+   `AccessibilityBoundaryTests`, `MemoryLifecycleBoundaryTests`, `MessagesExtensionBoundaryTests`
+   and `CodeOwnersResolutionTests` — the mesh line carries the newest mesh security suites, and
+   every `…GoldenTests` wire-vector suite in the tree is on a line (`CIGateSelectorBoundaryTests`
+   demands it). **Every test step runs through `Scripts/run-gated-suites.sh`**,
    which reads the step's result bundle and refuses a green run that executed fewer tests than the
    step's floor: `-only-testing:` matches suite names exactly, matches nothing on a misspelling or a
    deleted suite, and would otherwise print `TEST EXECUTE SUCCEEDED` over zero tests.

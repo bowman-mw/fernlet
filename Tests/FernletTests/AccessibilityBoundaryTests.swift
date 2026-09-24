@@ -1004,6 +1004,22 @@ extension AccessibilityBoundaryTests {
         \(missing.joined(separator: "\n"))
         """)
     }
+
+    /// The scanner itself runs on every push, on a non-comment line of the cheap-runner workflow.
+    ///
+    /// The two cells above pin the port to the scanner's constants and regexes; they cannot pin its
+    /// LOGIC, so the only thing that catches the halves disagreeing about a line is running both.
+    /// This half — the Swift port — runs on its own `s3-wall.yml` line (pinned by name in
+    /// `CIGateSelectorBoundaryTests.wallLines`); the scanner runs in `power-of-10.yml` beside
+    /// `power-of-10-scan.py`, the shape `PowerOfTenBoundaryTests.r10ScannerRunsInCIAndOnPrePush`
+    /// pins for that wall. Until 2026-09-24 neither half ran on any workflow.
+    @Test func theScannerRunsInCI() throws {
+        let workflowPath = ".github/workflows/power-of-10.yml"
+        let code = try RepoRoot.source(workflowPath).components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
+        #expect(code.contains { $0.contains("python3 \(Self.scannerPath)") },
+                "\(workflowPath) no longer runs \(Self.scannerPath) on a non-comment line")
+    }
 }
 
 // MARK: - Non-vacuity: planted fixtures
