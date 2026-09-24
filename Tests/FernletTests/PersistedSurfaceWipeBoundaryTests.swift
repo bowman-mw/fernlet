@@ -349,10 +349,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "pastDayJournalScrubAttempts": .openGap(
             reason: "The scrub's retry-budget counter: how many launches sealed at least one day badly. Usually absent (it is removed at every terminal state), but when present it is a trace of app use that the wipe does not reach."
-        ),
-        "FernletMessages.lastRecipeID": .openGap(
-            reason: "The recipe the user last picked in the iMessage composer, remembered so the composer re-selects it. It is written to the MESSAGES EXTENSION's own UserDefaults.standard — a separate defaults domain from the containing app's — so the funnel cannot reach it at all without first moving the key into the shared App Group suite. That move is a decision nobody has made, which is what puts it here rather than in the exceptions table. It is a pointer to a recipe the wipe deletes, not recipe content."
         )
+        // `FernletMessages.lastRecipeID` (the iMessage composer's last-picked recipe) left this
+        // table on 2026-09-23 by leaving the tree: it lived in the extension's OWN defaults domain,
+        // which the funnel cannot open, so the gap was closed by deleting the write rather than by
+        // inventing an App Group defaults suite to hold one UUID. The extension stays a scan root,
+        // so a new write there needs a row here before it can ship.
     ]
 
     /// How many CALL SITES each `unresolved:` seam accounts for today.
@@ -449,9 +451,9 @@ struct PersistedSurfaceWipeBoundaryTests {
     /// this list, so a new target cannot ship outside the frame.
     static let scanRoots = [
         "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension",
-        // The iMessage extension is shipping Swift with its own persisted surface, and it writes to
-        // a defaults domain the funnel cannot reach — precisely the thing that must be visible here
-        // rather than outside the wall.
+        // The iMessage extension is shipping Swift, and anything it writes to defaults lands in a
+        // domain the funnel cannot reach — precisely the thing that must be visible here rather
+        // than outside the wall. It persists nothing today (its one key was removed 2026-09-23).
         "App/FernletMessagesExtension",
         "FernletKit/Sources"
     ]

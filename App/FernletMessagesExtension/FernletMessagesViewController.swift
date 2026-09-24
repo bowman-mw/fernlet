@@ -4,6 +4,13 @@ import UIKit
 
 /// A bounded recipe/workout composer. It reads only the App Group catalog and independently
 /// decodes every received envelope instead of trusting the visible message card.
+///
+/// It persists nothing of its own. The one thing it ever remembered — the recipe last picked, in
+/// the extension's own `UserDefaults.standard` — was a surface "Delete everything" could not reach
+/// (a separate defaults domain the containing app cannot open) and the target's only required-
+/// reason API use; it was removed on 2026-09-23 rather than moved, and the compact strip now pins
+/// the card picked in the current composer session from memory instead. Its only writes are the
+/// review-inbox records `FernletExchange` coordinates, which the app's wipe clears.
 final class FernletMessagesViewController: MSMessagesAppViewController, UISearchBarDelegate {
     /// Which half of the App Group catalog the composer is showing.
     ///
@@ -331,7 +338,10 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         if presentationStyle == .expanded {
             return FernletMessagesRecipePicker.entries(matching: searchBar.text ?? "", in: catalog)
         }
-        return FernletMessagesRecipePicker.compactEntries(in: catalog, lastSelectedRecipeID: lastSelectedRecipeID())
+        // Pins the card picked in THIS composer session — including one chosen from the expanded
+        // list — so the selection is still on screen after collapsing. From memory only: see the
+        // type's doc comment for why nothing is written to disk.
+        return FernletMessagesRecipePicker.compactEntries(in: catalog, lastSelectedRecipeID: selectedRecipeID)
     }
 
     private func visibleWorkoutEntries(in catalog: FernletMessagesCatalog) -> [FernletMessagesWorkoutCatalogEntry] {
@@ -425,7 +435,6 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func selectRecipe(_ id: UUID) {
         selectedRecipeID = id
-        UserDefaults.standard.set(id.uuidString, forKey: "FernletMessages.lastRecipeID")
         renderComposer()
     }
 
@@ -442,11 +451,6 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     private func selectedWorkoutEntry() -> FernletMessagesWorkoutCatalogEntry? {
         guard let selectedWorkoutID, let catalog else { return nil }
         return catalog.workouts.first(where: { $0.packet.originContentID == selectedWorkoutID })
-    }
-
-    private func lastSelectedRecipeID() -> UUID? {
-        guard let text = UserDefaults.standard.string(forKey: "FernletMessages.lastRecipeID") else { return nil }
-        return UUID(uuidString: text)
     }
 
     private func recipePreviewText(for entry: FernletMessagesRecipeCatalogEntry?) -> String {

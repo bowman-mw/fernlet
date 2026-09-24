@@ -306,17 +306,26 @@ device-only keychain row), the workout tombstone ring, and the companion petting
 discovery wall then found two more of the same class, which is what a discovery floor is for.
 
 **A third generation, 2026-08-27.** Adding `App/FernletMessagesExtension` to `scanRoots` — it holds
-shipping Swift and was outside the wall entirely — surfaced the composer's `FernletMessages.lastRecipeID`
-below, and the same sweep closed the three `fernlet.messages.pending*` keys into the cleared-by
+shipping Swift and was outside the wall entirely — surfaced the composer's `FernletMessages.lastRecipeID`,
+and the same sweep closed the three `fernlet.messages.pending*` keys into the cleared-by
 table. The lesson is the one the scan-root check already encodes: a whole target can be missing from
 the inventory without a single row looking wrong.
+
+**Closed by deletion, 2026-09-23.** `FernletMessages.lastRecipeID` — one recipe UUID the iMessage
+composer remembered so it could pin the last-picked card first — was different in KIND from every
+row still below: it lived in the extension's own `UserDefaults.standard`, a defaults domain the
+containing app cannot open, so no funnel call could ever have reached it. The two ways out were to
+move it into an App Group defaults suite (the app has none — it would have been the first, created
+to hold one pointer) or to stop writing it. The write was removed: the composer now pins the card
+picked in the current session from memory, and the extension persists nothing of its own. Its row
+left this table and the disposition table in the same commit; the extension stays a scan root, so a
+new write there needs a row before it can ship.
 
 | Surface | What actually survives | Why it matters | Severity |
 | --- | --- | --- | --- |
 | **Day-summary backfill day key** — `fernlet.daySummary.lastRunKey` (`LaunchPreparationService`) | One `yyyy-MM-dd` key: the last day the once-per-day summary backfill ran | A date the app was used, surviving the deletion of every day it describes. No content, and its functional effect post-wipe is benign (the backfill simply skips today). Listed for completeness, and because "one harmless date" is how every one of these starts | **Low** |
 | **Past-day journal scrub latch** — `pastDayJournalScrubVersion` (`FernletStore`) | One integer: the version of the one-time historical journal scrub (WI-1) that has completed on this install | *Found 2026-08-20 by the discovery wall.* Unlike the migration latches in the exceptions table, keeping this one is **not** load-bearing: post-wipe the store is empty, so a re-run would scrub nothing and set the flag again. It survives because nothing clears it, which is the definition of this section rather than of "by design" | **Low** |
 | **Past-day journal scrub attempts** — `pastDayJournalScrubAttempts` (`FernletStore`) | A small counter: launches on which the scrub ran but at least one day's seal failed | *Found 2026-08-20 by the discovery wall.* Usually absent — it is removed whenever the scrub reaches a terminal state — but while present it is a trace of app use (and of sealing trouble) that the wipe does not reach. Same class and same fix as the row above | **Low** |
-| **iMessage composer's last recipe** — `FernletMessages.lastRecipeID` (`FernletMessagesViewController`) | One recipe UUID: the card the user last picked in the Messages composer, remembered so the composer re-selects it | *Found 2026-08-27, when `App/FernletMessagesExtension` was added to `scanRoots` — it had been shipping Swift outside the wall since the extension landed.* Different from every row above in KIND: it is written to the extension's own `UserDefaults.standard`, a separate defaults domain from the containing app's, so the funnel cannot reach it at all. Closing it means first moving the key into the shared App Group suite — a decision nobody has made, which is what puts it here rather than in the exceptions table. It is a pointer to a recipe the wipe deletes, not recipe content | **Low** |
 
 Two notes on scope, so this section is not read as bigger or smaller than it is. **The sealed
 corpus is not implicated:** none of these keys holds journal, cycle, intimacy, Worry Box or photo
@@ -328,8 +337,9 @@ is the in-place "delete everything" — the path the dialog makes promises about
 
 `Tests/FernletTests/PersistedSurfaceWipeBoundaryTests.swift` (round 2026-08-20, Part 4.4) is the
 discovery half of this document. It walks the shipping sources — `App/Fernlet`,
-`App/FernletWidgets`, `App/FernletShareExtension`, `FernletKit/Sources`, excluding tests and DocC
-catalogs — finds every `UserDefaults`-backed persisted surface, and requires each one to carry
+`App/FernletWidgets`, `App/FernletShareExtension`, `App/FernletMessagesExtension`,
+`FernletKit/Sources`, excluding tests and DocC catalogs — finds every `UserDefaults`-backed
+persisted surface, and requires each one to carry
 exactly one disposition: `.cleared` (naming a funnel token that is also in the manifest),
 `.kept` (with a reason and a row in the exceptions table), `.unreachableByDesign`, or `.openGap`
 (with a row in the section above). **A new defaults-backed store fails CI until somebody decides, in

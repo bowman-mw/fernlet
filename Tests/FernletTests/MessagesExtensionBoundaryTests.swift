@@ -22,7 +22,9 @@ import Testing
 ///   `FernletExchangeTests`, against the same types the controller calls;
 /// - its display copy is extracted to `FernletMessagesCopy` and held by
 ///   `LocalizationBoundaryTests` rules H1/H2;
-/// - its import surface and file inventory are held here.
+/// - its import surface and file inventory are held here;
+/// - so is its privacy manifest's required-reason declaration, against every source file that is
+///   compiled into the appex binary (the target plus the package modules it links).
 struct MessagesExtensionBoundaryTests {
 
     /// The target's directory. Every `.swift` file under it is in the appex process.
@@ -165,5 +167,214 @@ struct MessagesExtensionBoundaryTests {
             modules.append(String(words[1].split(separator: ".").first ?? ""))
         }
         return modules
+    }
+
+    // MARK: - The privacy manifest matches the binary's required-reason API use
+
+    /// The appex's own privacy manifest. App Store Connect checks each executable's required-reason
+    /// API references against the manifest of the bundle that ships it (ITMS-91053); the containing
+    /// app's manifest does not cover an extension's binary.
+    static let privacyManifestPath = "App/FernletMessagesExtension/PrivacyInfo.xcprivacy"
+
+    /// The package products the extension target links, per the project file. The source closure
+    /// below is derived from this, so a second product is a deliberate edit here, not a silent gap.
+    static let expectedPackageProducts = ["FernletExchange"]
+
+    /// Floor for the binary-closure scan: the target's 3 files plus the 60 in `FernletExchange`,
+    /// `FernletDomainModel` and `FernletFoundation` at the time of writing.
+    static let minimumClosureFilesScanned = 40
+
+    /// Apple's required-reason API categories and the identifiers that reach each one, transcribed
+    /// from the `NSPrivacyAccessedAPIType` documentation (checked 2026-09-23).
+    ///
+    /// Matched as whole identifiers in comment- and string-stripped source, so `stat` does not fire
+    /// inside `status`. What is deliberately NOT here: `FileManager.attributesOfItem(atPath:)` and
+    /// `FileAttributeKey.size`. The Messages stores read an item's SIZE through that call to bound a
+    /// read, and neither the call nor the size key is on Apple's list; the timestamp keys that ride
+    /// the same dictionary (`creationDate`, `modificationDate`) are, and reading one of them fires
+    /// this wall. `getattrlist` and friends reach two categories and are listed under both.
+    static let requiredReasonIdentifiers: [String: Set<String>] = [
+        "NSPrivacyAccessedAPICategoryUserDefaults": ["UserDefaults", "NSUserDefaults", "AppStorage"],
+        "NSPrivacyAccessedAPICategoryFileTimestamp": [
+            "creationDate", "modificationDate", "fileModificationDate", "contentModificationDateKey",
+            "creationDateKey", "getattrlist", "getattrlistbulk", "fgetattrlist", "getattrlistat",
+            "stat", "fstat", "fstatat", "lstat"
+        ],
+        "NSPrivacyAccessedAPICategorySystemBootTime": ["systemUptime", "mach_absolute_time"],
+        "NSPrivacyAccessedAPICategoryDiskSpace": [
+            "volumeAvailableCapacityKey", "volumeAvailableCapacityForImportantUsageKey",
+            "volumeAvailableCapacityForOpportunisticUsageKey", "volumeTotalCapacityKey",
+            "systemFreeSize", "systemSize", "statfs", "statvfs", "fstatfs", "fstatvfs",
+            "getattrlist", "fgetattrlist", "getattrlistat"
+        ],
+        "NSPrivacyAccessedAPICategoryActiveKeyboards": ["activeInputModes"]
+    ]
+
+    /// The extension's privacy manifest declares EXACTLY the required-reason API categories used by
+    /// the code compiled into its binary — no missing category (an upload refusal) and no extra one
+    /// (a public claim about a use that does not exist).
+    ///
+    /// Written after the manifest shipped an empty `NSPrivacyAccessedAPITypes` while the composer
+    /// read and wrote `UserDefaults.standard`: nothing compared the two, because the no-tracking wall
+    /// reads manifests for tracking flags only. The scan covers the target AND every package module
+    /// linked into the appex, because App Store Connect reads the binary, not the target folder.
+    @Test func theExtensionManifestDeclaresExactlyTheRequiredReasonAPIsItsBinaryUses() throws {
+        let products = try Self.linkedPackageProducts()
+        #expect(products == Self.expectedPackageProducts, """
+            The Messages extension links package products \(products), expected \
+            \(Self.expectedPackageProducts). A new product widens the code compiled into the appex, \
+            so the source closure this test scans must be widened with it.
+            """)
+        let roots = try [Self.extensionRoot] + Self.linkedModuleClosure(of: products).map { "FernletKit/Sources/\($0)" }
+        let (used, scanned) = try Self.requiredReasonUse(under: roots)
+        #expect(scanned >= Self.minimumClosureFilesScanned, """
+            Scanned only \(scanned) Swift files across \(roots) (floor \
+            \(Self.minimumClosureFilesScanned)) — the closure or the enumerator broke.
+            """)
+
+        let declared = try Self.declaredRequiredReasons()
+        #expect(Set(declared.keys) == Set(used.keys), """
+            \(Self.privacyManifestPath) declares \(declared.keys.sorted()) but the appex's code \
+            uses \(used.keys.sorted()). Declare every used category with Apple's reason code (for \
+            example CA92.1 for the extension's own defaults, 1C8F.1 for an App Group suite), and \
+            remove any category nothing uses. Where each use is: \
+            \(used.mapValues { $0.sorted() }.sorted { $0.key < $1.key })
+            """)
+        for (category, reasons) in declared {
+            #expect(!reasons.isEmpty, "\(category) is declared with no reason code — App Store Connect rejects that.")
+        }
+    }
+
+    /// Fixture: the identifier matcher fires on a real use, ignores prose and longer identifiers,
+    /// and the manifest reader reads the shape the real file has.
+    @Test func theRequiredReasonMatcherSeesUsesAndIgnoresProse() {
+        let fire = Self.requiredReasonCategories(in: "let d = UserDefaults.standard\nlet t = attrs[.modificationDate]")
+        #expect(fire == ["NSPrivacyAccessedAPICategoryUserDefaults", "NSPrivacyAccessedAPICategoryFileTimestamp"])
+        #expect(Self.requiredReasonCategories(in: "// UserDefaults in a comment\nlet s = \"stat\"").isEmpty)
+        #expect(Self.requiredReasonCategories(in: "let status = attrs[.size]; let userDefaultsLike = 1").isEmpty,
+                "`stat` must not fire inside `status`, and a size read is not a timestamp read")
+        #expect(Self.requiredReasonCategories(in: "if stat(path, &info) == 0 {}")
+                == ["NSPrivacyAccessedAPICategoryFileTimestamp"])
+    }
+
+    /// Every required-reason category used under `roots`, with the files that use it.
+    static func requiredReasonUse(under roots: [String]) throws -> (used: [String: Set<String>], scanned: Int) {
+        var used: [String: Set<String>] = [:]
+        var scanned = 0
+        for root in roots {
+            guard let walker = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root) — the appex's source closure is unscanned.")
+                continue
+            }
+            for case let url as URL in walker where url.pathExtension == "swift" {
+                scanned += 1
+                let source = try String(contentsOf: url, encoding: .utf8)
+                for category in requiredReasonCategories(in: source) {
+                    used[category, default: []].insert(url.lastPathComponent)
+                }
+            }
+        }
+        return (used, scanned)
+    }
+
+    /// The required-reason categories `source` reaches, judged on code only.
+    static func requiredReasonCategories(in source: String) -> Set<String> {
+        let identifiers = identifierSet(in: PrivacyWipeCoverageTests.strippingCommentsAndStringLiteralBodies(source))
+        return Set(requiredReasonIdentifiers.compactMap { category, names in
+            names.isDisjoint(with: identifiers) ? nil : category
+        })
+    }
+
+    /// Every identifier in `source` — one linear pass, so a whole-identifier match is set membership.
+    static func identifierSet(in source: String) -> Set<String> {
+        var identifiers: Set<String> = []
+        var current = ""
+        for character in source {
+            if character == "_" || character.isLetter || character.isNumber {
+                current.append(character)
+            } else if !current.isEmpty {
+                identifiers.insert(current)
+                current = ""
+            }
+        }
+        if !current.isEmpty { identifiers.insert(current) }
+        return identifiers
+    }
+
+    /// The `NSPrivacyAccessedAPITypes` the manifest declares, as category → reason codes.
+    static func declaredRequiredReasons() throws -> [String: [String]] {
+        let data = try Data(contentsOf: RepoRoot.url(privacyManifestPath))
+        let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any]
+        guard let manifest = plist, let types = manifest["NSPrivacyAccessedAPITypes"] as? [[String: Any]] else {
+            Issue.record("\(privacyManifestPath) has no readable NSPrivacyAccessedAPITypes array.")
+            return [:]
+        }
+        var declared: [String: [String]] = [:]
+        for entry in types {
+            let category = entry["NSPrivacyAccessedAPIType"] as? String ?? "<unnamed>"
+            declared[category] = entry["NSPrivacyAccessedAPITypeReasons"] as? [String] ?? []
+        }
+        return declared
+    }
+
+    /// The package products listed in the extension target's `packageProductDependencies`.
+    static func linkedPackageProducts() throws -> [String] {
+        let project = try RepoRoot.source("App/Fernlet.xcodeproj/project.pbxproj")
+        let lines = project.components(separatedBy: "\n")
+        // The same `/* FernletMessagesExtension */ = {` opener also names the synchronized folder
+        // group, so the match is the one whose next line says it is the native target.
+        let openers = lines.indices.filter { index in
+            lines[index].hasSuffix("/* FernletMessagesExtension */ = {")
+                && lines.indices.contains(index + 1) && lines[index + 1].contains("isa = PBXNativeTarget;")
+        }
+        guard openers.count == 1, let start = openers.first else {
+            Issue.record("Found \(openers.count) FernletMessagesExtension native targets in the project file, expected 1.")
+            return []
+        }
+        var products: [String] = []
+        var inList = false
+        for line in lines[(start + 1)...].prefix(64) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed == "};" { break }
+            if trimmed.hasPrefix("packageProductDependencies = (") { inList = true; continue }
+            guard inList else { continue }
+            if trimmed == ");" { break }
+            guard let open = trimmed.range(of: "/* "), let close = trimmed.range(of: " */") else { continue }
+            products.append(String(trimmed[open.upperBound..<close.lowerBound]))
+        }
+        return products
+    }
+
+    /// Every FernletKit target the given products pull into a binary, by walking the `dependencies:`
+    /// lists in `FernletKit/Package.swift` (the link graph, which is wider than the import graph
+    /// whenever a dependency is declared but not imported).
+    static func linkedModuleClosure(of products: [String]) throws -> [String] {
+        let manifest = try RepoRoot.source("FernletKit/Package.swift")
+        var closure: [String] = []
+        var frontier = products
+        // Bounded by the package's target count: each pass adds at least one new module or stops.
+        for _ in 0..<64 where !frontier.isEmpty {
+            let module = frontier.removeFirst()
+            guard !closure.contains(module) else { continue }
+            guard FileManager.default.fileExists(atPath: RepoRoot.url("FernletKit/Sources/\(module)").path) else {
+                Issue.record("\(module) is linked into the appex but is not a FernletKit/Sources module — update this wall.")
+                continue
+            }
+            closure.append(module)
+            frontier += packageDependencies(of: module, in: manifest)
+        }
+        return closure
+    }
+
+    /// The quoted names in one target's `dependencies: [...]` list; empty when it declares none.
+    static func packageDependencies(of target: String, in manifest: String) -> [String] {
+        let pattern = #"name:\s*""# + target + #""\s*,\s*dependencies:\s*\[([^\]]*)\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: manifest, range: NSRange(manifest.startIndex..., in: manifest)),
+              let listRange = Range(match.range(at: 1), in: manifest) else { return [] }
+        return manifest[listRange].split(separator: ",").compactMap { item in
+            let name = item.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            return name.isEmpty ? nil : name
+        }
     }
 }

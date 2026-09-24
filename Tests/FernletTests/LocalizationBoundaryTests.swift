@@ -3076,16 +3076,6 @@ struct LocalizationBoundaryTests {
             reason: "SF Symbol name — see the `fork.knife` entry."
         ),
         UIKitTargetToken(
-            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
-            literal: "FernletMessages.lastRecipeID",
-            reason: """
-                `UserDefaults` key. It is written on selection and read back on the next launch, so \
-                a spelling that varied by language would lose the person's last choice every time \
-                they changed the device language — the exact silent-data-loss failure the \
-                token/display separation exists to prevent.
-                """
-        ),
-        UIKitTargetToken(
             path: "App/FernletMessagesExtension/MessageTransportProbe.swift",
             literal: "data:application/vnd.fernlet.message-probe;base64,",
             reason: """
