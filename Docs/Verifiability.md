@@ -324,15 +324,15 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   private key still derives every generation's key, one at a time. Records written before that
   change (format v1) remain openable under the single static derivation, by design: re-keying them
   is impossible without the plaintext, and they are replaced by their next re-seal.
-- **"Nothing read from HealthKit is stored in iCloud" is about Fernlet's own iCloud use, and one
-  file shows why the scoping matters.** Sync and the encrypted backup never carry a HealthKit value
-  (§2), and the device-local residue cache that keeps this device scoring is excluded from device
-  backups. But the opt-in body-tension estimate keeps its 60-day history of daily HRV, resting heart
-  rate, respiratory rate and wrist-temperature readings in `StressLocalState.json` in Application
-  Support, which is device-local and never synced but is **not** backup-excluded — so an iCloud
-  device backup of the phone can carry it, as the privacy policy says. And what the app *computes*
-  from those readings — the wellbeing score and its components, the companion state, the coins for
-  an active day — does sync, by design.
+- **"Nothing read from HealthKit is stored in iCloud" covers the readings, not what is computed from
+  them.** Sync and the encrypted backup never carry a HealthKit value (§2); the two device-local
+  files that hold them — the residue cache that keeps this device scoring, and the opt-in
+  body-tension estimate's 60-day history in `StressLocalState.json` — are excluded from device
+  backups (the latter re-flagged after every atomic write,
+  `StressEngineTests.serviceSidecarIsExcludedFromDeviceBackupAfterEveryWrite`). A device backup taken
+  by an earlier build may still hold the body-tension file. What the app *computes* from the
+  readings — the wellbeing score and its components, the companion state, the coins for an active
+  day — does sync, by design.
 - **iOS builds are not byte-exactly reproducible** (§2, last row). Checksums + signed tags are a
   self-build baseline and an attribution trail, not a store-binary proof.
 - **Apple frameworks are trusted, not audited.** CloudKit, WeatherKit, APNs, and the OS itself
@@ -585,7 +585,7 @@ shipped; the rest are still open.
    2026-09-23 do not follow this preference at all: the Tier-2 memory sidecar and the HealthKit
    residue cache are excluded from device backups unconditionally, because neither may reach iCloud
    in any form (`TierTwoDeviceLocalTests`, `DeviceHealthResidueStoreTests`); the body-tension
-   history that is not excluded is named in §5.
+   history (`StressLocalState.json`) is excluded the same way (`StressEngineTests`).
 
 ## 7. What publishing unlocks
 

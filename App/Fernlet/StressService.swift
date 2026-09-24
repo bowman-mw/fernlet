@@ -50,7 +50,7 @@ protocol StressScoringContextProviding: AnyObject {
 ///
 /// Persistence is deliberate: the baselines/EWMA state live in a device-local JSON sidecar
 /// (`StressLocalState.json` in Application Support, written atomically with complete file
-/// protection) — NEVER in FernletSettings, the day records, `dailyScores`, or anything
+/// protection and re-marked excluded from device backups after every write) — NEVER in FernletSettings, the day records, `dailyScores`, or anything
 /// CloudKit-synced, because every existing structured store syncs when iCloud is on and a rolling
 /// clinical series must not ride along. Only the boolean opt-in flag syncs. Consent is honored
 /// aggressively: a disabled toggle, a closed HealthKit gate, and a mid-flight revocation all
@@ -219,11 +219,28 @@ final class StressService: StressScoringContextProviding {
             // Complete file protection: only ever written in the foreground, and the payload is
             // a clinical-adjacent series that should stay sealed while the device is locked.
             try data.write(to: stateFileURL, options: [.atomic, .completeFileProtection])
+            excludeSidecarFromDeviceBackup()
         } catch {
             // Benign: the assessment stays in memory and the next debounced refresh re-persists.
             // The log line is the recovery — a permanently unwritable sidecar loses the baseline
             // on every relaunch, and that must be diagnosable.
             FernletAuditLog.log("stress.persistFailed", context: ["error": String(describing: error)])
+        }
+    }
+
+    /// Marks the sidecar excluded from device (iCloud) backups. Nothing read from HealthKit may reach
+    /// iCloud in any form (owner decision 2026-09-23), and this series is HealthKit-derived. An atomic
+    /// write REPLACES the file, which drops the flag, so this runs after every write — not once.
+    private func excludeSidecarFromDeviceBackup() {
+        var url = stateFileURL
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        do {
+            try url.setResourceValues(values)
+        } catch {
+            // The series is still on this device only, but a device backup could now carry it; that
+            // has to be diagnosable, and the next write retries the flag.
+            FernletAuditLog.log("stress.backupExclusionFailed", context: ["error": String(describing: error)])
         }
     }
 }

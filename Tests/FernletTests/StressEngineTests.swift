@@ -359,6 +359,36 @@ struct StressEngineTests {
         #expect(reloaded.assessment == service.assessment)
     }
 
+    /// The HealthKit-derived sidecar never rides a device (iCloud) backup, and the flag is re-set on
+    /// EVERY write: an atomic rewrite replaces the file and would otherwise drop it. Clearing the flag
+    /// between refreshes proves the second write re-sets it rather than inheriting it.
+    @Test func serviceSidecarIsExcludedFromDeviceBackupAfterEveryWrite() async throws {
+        let directory = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = makeTestStore()
+        store.setStressAwarenessEnabled(true)
+        let service = StressService(stateDirectory: directory)
+        service.attach(store: store, fetchMetricDays: { [fixture = metricDayFixture()] _ in fixture })
+        var fileURL = directory.appendingPathComponent(StressService.stateFileName)
+
+        await service.refresh()
+        #expect(try Self.isExcludedFromBackup(fileURL))
+
+        var cleared = URLResourceValues()
+        cleared.isExcludedFromBackup = false
+        try fileURL.setResourceValues(cleared)
+        fileURL.removeAllCachedResourceValues()
+        #expect(try Self.isExcludedFromBackup(fileURL) == false)
+
+        await service.refresh()
+        fileURL.removeAllCachedResourceValues()
+        #expect(try Self.isExcludedFromBackup(fileURL))
+    }
+
+    private static func isExcludedFromBackup(_ url: URL) throws -> Bool {
+        try url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true
+    }
+
     @Test func serviceScrubsSidecarWhenOptedOutOrGateThrows() async throws {
         let directory = try makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

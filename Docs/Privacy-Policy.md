@@ -36,8 +36,8 @@
      rate" where Fernlet reads resting heart rate and heart-rate variability, and omitted exercise
      minutes, mindful minutes, respiratory rate, wrist temperature and the body profile); writes
      now happen only while Fernlet's own switches are on — a logged workout used to be written with
-     them off — with one ask at the first workout; the optional body-tension history is named as
-     the one Health-derived file a device backup can still carry. §4 the synced friends list and
+     them off — with one ask at the first workout; the optional body-tension history, like the rest,
+     stays on the device and out of its device backup. §4 the synced friends list and
      session log are named; they always synced. §5 "never analyzed" was wrong: Apple's on-device
      Vision framework reads the barcode, label or food in a photo taken to log food. §1/§6/§12 the
      iMessage app. §7 the Open Food Facts barcode lookup. §9 the shop pause, its remaining time,
@@ -169,19 +169,18 @@ Health. When you remove a workout or delete a cycle day in Fernlet, Fernlet also
 wrote to Apple Health — even while sharing is off, since removing adds nothing to Apple Health. It
 can only ever remove samples Fernlet itself wrote.
 
-**Nothing Fernlet reads from Apple Health is stored in iCloud by Fernlet** — not in iCloud sync, and
-not in the encrypted backup. Your steps, energy and exercise minutes, sleep and heart readings,
+**Nothing Fernlet reads from Apple Health is stored in iCloud by Fernlet** — not in iCloud sync, not
+in the encrypted backup, and not in your phone's device backup. Your steps, energy and exercise minutes, sleep and heart readings,
 mindful minutes, the workouts other apps saved to Apple Health, and the age, sex, height and weight
 Fernlet reads for your body profile stay on the device that read them, in a device-only file that is
 also excluded from your phone's device backup. If you use Fernlet on more than one device, each one
 reads Apple Health for itself. Turning off **Share with Health**, or deleting everything, erases that
 file.
 
-One file is the exception to the device-backup part: if you turn on "Notice body tension", the
-60-day history of heart-rate variability, resting heart rate, breathing rate and wrist temperature it
-compares against stays on this device and never syncs, but your phone's own device backup can include
-it unless you turn Fernlet off in your device's iCloud Backup settings. Turning that setting off, or
-deleting everything, erases it.
+If you turn on "Notice body tension", the 60-day history of heart-rate variability, resting heart
+rate, breathing rate and wrist temperature it compares against is kept the same way: on this device
+only, never synced, and excluded from its device backup. Turning that setting off, or deleting
+everything, erases it.
 
 Health data accessed through HealthKit is used only on the device that read it, to compute your
 companion's state, your derived trends, and your nutrition targets. It is **never** used for
