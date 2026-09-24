@@ -62,9 +62,9 @@ nonisolated enum ExchangeMessageWireV2 {
 
     /// The strict inverse of ``frame(document:)``: header checks, then a bounded inflate.
     static func document(fromFrame frame: Data) throws -> Data {
-        let bytes = Data(frame) // normalise a slice's indices to start at zero
-        guard bytes.count > headerByteCount else { throw ExchangePacketError.invalidPayload }
-        guard bytes.count <= ExchangeLimits.maxMessageFrameBytes else { throw ExchangePacketError.tooLarge }
+        guard frame.count > headerByteCount else { throw ExchangePacketError.invalidPayload }
+        guard frame.count <= ExchangeLimits.maxMessageFrameBytes else { throw ExchangePacketError.tooLarge }
+        let bytes = Data(frame) // normalise a slice's indices to start at zero — after the size check
         guard bytes[0] == magic else { throw ExchangePacketError.invalidPayload }
         guard bytes[1] == frameVersion else { throw ExchangePacketError.unsupportedFormat }
         let declared = Int(bytes[2]) << 8 | Int(bytes[3])
