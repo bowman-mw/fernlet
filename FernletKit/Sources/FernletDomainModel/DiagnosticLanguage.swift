@@ -1,8 +1,9 @@
 // DiagnosticLanguage.swift
 // SPM carve-up: pure diagnostic-language post-classifier (spec §8).
 //
-// Lives in the domain layer so domain value types (e.g. `MemoryNote.fromJournal`)
-// can screen proposed memories WITHOUT depending on the app-layer `MemoryAgent`.
+// Lives in the domain layer so domain value types (e.g. `JournalMemorySummaryPolicy`, which
+// screens an AI journal summary before it may become Core Memory text) can screen proposed
+// memories WITHOUT depending on the app-layer `MemoryAgent`.
 // `MemoryAgent` (app target) forwards to this classifier for its public API.
 
 import Foundation
@@ -10,8 +11,9 @@ import Foundation
 /// Best-effort keyword screen for clinical/diagnostic language in text bound for AI prompts or
 /// stored memories (spec §8).
 ///
-/// Lives in the domain layer so value types (``MemoryNote``'s journal capture) can screen proposed
-/// memories without depending on the app-layer `MemoryAgent`, which forwards its public API here.
+/// Lives in the domain layer so value types (``JournalMemorySummaryPolicy``, the gate an AI journal
+/// summary passes before it may become a ``MemoryNote``'s text) can screen proposed memories without
+/// depending on the app-layer `MemoryAgent`, which forwards its public API here.
 /// See `contains(_:)` for why this is defense-in-depth, never a hard privacy boundary.
 public nonisolated enum DiagnosticLanguage {
 

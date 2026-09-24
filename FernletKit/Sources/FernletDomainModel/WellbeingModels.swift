@@ -888,11 +888,15 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
     }
 }
 
-/// A short, screened memory captured from a journal entry.
+/// A Core Memory: a short, user-visible, editable note — the kind the Settings "Core memory" page
+/// lists and the companion draws on.
 ///
-/// `fromJournal` enforces the capture rules: minimum length, a 120-character cap, and the
-/// ``DiagnosticLanguage`` screen that silently rejects clinical language before anything is stored
-/// (spec §8).
+/// A journal entry never lands here as text (owner decision 2026-09-23). It mints an EMOTION-ONLY
+/// memory — ``emotionOnly(for:)``: the ``FeelingTag`` token as `category`, `text` empty — and only an
+/// on-device AI summary that passes ``JournalMemorySummaryPolicy`` may later fill `text` in. The
+/// category is a frozen token (a `FeelingTag` raw value for journal memories), so an emotion-only
+/// memory's sentence is built at display time, never stored. `text` also holds whatever the user
+/// types in the memory editor.
 public nonisolated struct MemoryNote: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var category: String
@@ -909,16 +913,6 @@ public nonisolated struct MemoryNote: Identifiable, Codable, Equatable {
         category = try c.decode(String.self, forKey: .category)
         text = try c.decode(String.self, forKey: .text)
         sourceDate = try c.decodeIfPresent(Date.self, forKey: .sourceDate) ?? Date()
-    }
-
-    public static func fromJournal(text: String, tag: FeelingTag) -> MemoryNote? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 20 else { return nil }
-        let prefix = String(trimmed.prefix(120))
-        // Spec §8: a diagnostic-language post-classifier runs on every proposed memory
-        // before storage; any match is silently rejected so clinical language never lands.
-        guard !DiagnosticLanguage.contains(prefix) else { return nil }
-        return MemoryNote(category: tag.rawValue, text: prefix)
     }
 }
 

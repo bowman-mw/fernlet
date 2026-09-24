@@ -329,6 +329,15 @@ final class FernletStore {
             intent: settings.aiStatus
         )
     }
+    /// Who a journal entry's Core Memory asks for its on-device summary (owner decision 2026-09-23 —
+    /// see `rememberJournalEntry`). Production is the walled on-device stage; internal-settable ONLY
+    /// so a test can hand in a double, since the Foundation model never runs in the simulator.
+    @ObservationIgnored lazy var journalMemorySummarizer: any JournalMemorySummarizing = OnDeviceJournalMemorySummarizer()
+    /// The one in-flight summary upgrade. R3: at most one — a newer entry cancels it, and the
+    /// superseded memory simply keeps its emotion. Cancelled by the delete-all funnel's writer stop.
+    /// Internal ONLY so a test can await it; production writes it solely in
+    /// `requestJournalMemorySummary`.
+    @ObservationIgnored var journalMemorySummaryTask: Task<Void, Never>?
     /// Test-injected override for `aiAuditLogStore` (a temp-path sink), so a delete-all test can assert
     /// the wipe leg without touching the process-global Application Support file. `nil` in production.
     @ObservationIgnored private var injectedAuditLogStore: AIAuditLogPersisting?
@@ -3368,10 +3377,10 @@ final class FernletStore {
             }
         } else {
             // The same append + seal + previousJournals bookkeeping as `addJournal`, so it goes through
-            // the same core. The only thing the core adds is the `MemoryNote.fromJournal` call, which
-            // returns nil below 20 characters — a tag-only check-in has empty text, so it can never mint
-            // a memory. Sealing is likewise a no-op for empty text, which is what lets a check-in work
-            // while the private lock is closed.
+            // the same core. The only thing the core adds is the Core Memory capture, whose
+            // `MemoryNote.emotionOnly(for:)` returns nil below 20 characters — a tag-only check-in has
+            // empty text, so it can never mint a memory (or ask for a summary). Sealing is likewise a
+            // no-op for empty text, which is what lets a check-in work while the private lock is closed.
             appendJournalEntry(JournalEntry(text: "", tag: tag, isQuickMood: true), date: todayKey)
         }
     }
@@ -3852,8 +3861,8 @@ final class FernletStore {
     /// The `previousJournals` / `memories` bookkeeping is deliberately today-only. Both are
     /// today-scoped views (the "recent entries" strip and the memory pool feeding the companion), so
     /// back-dating an entry must not push it to the front of "recent" or mint a memory as if it had
-    /// just been written. `MemoryNote.fromJournal` additionally rejects anything under 20 characters,
-    /// so a tag-only mood check-in never mints a memory even though it flows through here.
+    /// just been written. `MemoryNote.emotionOnly(for:)` additionally skips anything under 20
+    /// characters, so a tag-only mood check-in never mints a memory even though it flows through here.
     private func appendJournalEntry(_ entry: JournalEntry, date: String) {
         assert(!date.isEmpty, "journal date required")
         journalSealingCoordinator.seal(entry, dayKey: date)
@@ -3866,10 +3875,62 @@ final class FernletStore {
         guard date == todayKey else { return }
         previousJournals.insert(entry, at: 0)
         previousJournals = Array(previousJournals.prefix(30))
-        if let memory = MemoryNote.fromJournal(text: entry.text, tag: entry.tag) {
-            memories.append(memory)
-            memories = Array(memories.suffix(300))
+        rememberJournalEntry(entry)
+    }
+
+    /// Core Memory's journal capture — owner decision 2026-09-23: a journal entry is SUMMARIZED into
+    /// Core Memory, never copied, and with AI off only its emotion is kept.
+    ///
+    /// Core Memory rides the aggregate blob, which CloudKit mirrors when sync is on, so this is the
+    /// one place journal words could still have reached iCloud. The memory is therefore minted
+    /// EMOTION-ONLY, synchronously — the entry's `FeelingTag` token as its category, no text — and
+    /// `requestJournalMemorySummary` may later upgrade it with an on-device summary. AI off,
+    /// unavailable, over budget, failed, filtered, or the app dying first: the emotion-only memory
+    /// is the whole memory.
+    private func rememberJournalEntry(_ entry: JournalEntry) {
+        guard let memory = MemoryNote.emotionOnly(for: entry) else { return }
+        memories.append(memory)
+        memories = Array(memories.suffix(300))
+        requestJournalMemorySummary(memoryID: memory.id, entryText: entry.text)
+    }
+
+    /// Asks the summarizer for an on-device summary of the entry just remembered, then hands the
+    /// reply to `applyJournalMemorySummary`.
+    ///
+    /// AI off is filtered here (G1), so with the helper off no payload is ever built and no task is
+    /// spawned. The gate the summarizer dispatches through stays the authority for every other
+    /// fallback — resting, sleepy (this is ambient memory work), and an incapable device. The entry
+    /// text crosses as a typed `JournalSummaryPayload` value, never a store handle (the S3 wall).
+    private func requestJournalMemorySummary(memoryID: UUID, entryText: String) {
+        guard settings.aiStatus != .off else { return }
+        let payload = JournalSummaryPayload(entryText: entryText)
+        guard !payload.entryText.isEmpty else { return }
+        let gate = aiGate
+        let summarizer = journalMemorySummarizer
+        journalMemorySummaryTask?.cancel()
+        journalMemorySummaryTask = Task { [weak self] in
+            // Superseded before it ever ran: don't spend a budgeted call on a reply nobody will keep.
+            guard !Task.isCancelled else { return }
+            let candidate = await summarizer.summarize(payload, gate: gate)
+            guard !Task.isCancelled else { return }
+            self?.applyJournalMemorySummary(candidate, memoryID: memoryID, entryText: entryText)
         }
+    }
+
+    /// Gives an emotion-only journal memory its summary — only when every condition still holds at
+    /// the moment of writing: AI is still on, the reply passes `JournalMemorySummaryPolicy` against
+    /// the FULL entry (whatever the summarizer checked), and the memory still exists with no text of
+    /// its own. It only ever UPDATES a memory by id, never appends — so a memory the user deleted, or
+    /// one a delete-all wiped, cannot come back, and words the user typed in the editor are never
+    /// overwritten.
+    private func applyJournalMemorySummary(_ candidate: String?, memoryID: UUID, entryText: String) {
+        guard settings.aiStatus != .off, let candidate,
+              let summary = JournalMemorySummaryPolicy.accepted(candidate, entryText: entryText),
+              let index = memories.firstIndex(where: { $0.id == memoryID }),
+              memories[index].text.isEmpty
+        else { return }
+        memories[index].text = summary
+        scheduleSnapshotSave()
     }
 
     func updateJournal(_ entry: JournalEntry, text: String, tag: FeelingTag, date: String) {
@@ -5568,6 +5629,9 @@ final class FernletStore {
         periodBackupSettleTask?.cancel()
         // The intimacy un-hide settle is the same class of writer, added with the intimacy payload.
         intimacyBackupSettleTask?.cancel()
+        // The journal → Core Memory summary upgrade. It only ever updates an existing memory by id,
+        // so it cannot resurrect a wiped one; cancelled anyway so no model call outlives the wipe.
+        journalMemorySummaryTask?.cancel()
     }
 
     /// Wipe leg 2: the sealed iCloud backups, the own-photo escrow backup, every re-upload deferral,

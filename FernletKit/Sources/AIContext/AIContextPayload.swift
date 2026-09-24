@@ -272,6 +272,55 @@ public struct IngredientSubstitutionPayload: AIContextPayload {
     }
 }
 
+// MARK: - Journal memory summary payload
+
+/// Fields allowed for the journal → Core Memory summary (owner decision 2026-09-23: a journal entry
+/// is summarized into Core Memory, never copied).
+///
+/// The ONE payload that carries journal text, so everything about where it may go is pinned in code
+/// rather than left to the call site:
+/// - ``capabilityTier`` is `light`, and ``FernletModelRouter`` refuses to resolve a `light` task to
+///   any destination whose `leavesDevice` is true — the entry can reach the on-device model and
+///   nothing else, whatever rungs a later SDK adds;
+/// - ``isUserInvoked`` is `false`: summarizing is ambient memory work, so it takes the deterministic
+///   path in the `.sleepy` band (Ladder §3.2) and the memory keeps its emotion only;
+/// - it is deliberately NOT in ``MemoryAgent/allowedPayloadKinds`` — the prompt receives zero Tier-2
+///   behavioral context, only the entry itself;
+/// - the text is the plaintext the app store already holds at the moment it appends the entry,
+///   handed over as a value. Never a sealed-store handle: `AIProviders` cannot even name the
+///   journal narrative store (the S3 wall).
+///
+/// Forbidden: period data, health metrics, TierTwo memories, narratives, other journal entries, and
+/// any Core Memory. The model's reply is never trusted as-is — `JournalMemorySummaryPolicy` rejects
+/// one that reproduces the entry, runs long, or uses diagnostic language.
+public struct JournalSummaryPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input (where
+    /// it is absent from the allowlist on purpose); never rendered. See ``AIContextPayload/payloadKind``.
+    public let payloadKind = "journal-memory-summary"
+    /// The entry's text, trimmed and capped at ``maxEntryCharacters`` for the on-device context window.
+    public let entryText: String
+
+    /// The capability tier every dispatch of this payload declares — `light`, the tier that never
+    /// leaves the device. The stage and any test double read it from here, so the two cannot drift.
+    public static let capabilityTier: AICapabilityTier = .light
+    /// Summarizing is AMBIENT memory work, not an explicit tap: it falls back in the sleepy band.
+    public static let isUserInvoked = false
+    /// Prompt budget for the entry. The on-device model's context window is small and shared with
+    /// the instructions and the reply; an entry past this is summarized from its opening, and the
+    /// acceptance policy still checks the reply against the FULL entry.
+    public static let maxEntryCharacters = 2_000
+
+    public var includedFieldNames: [String] { ["entryText"] }
+
+    /// Trims and caps the entry at ``maxEntryCharacters``. Line breaks are kept — they are the
+    /// user's own paragraphs, and the entry is the last block of its prompt, so nothing follows
+    /// it for a line break to forge.
+    public init(entryText: String) {
+        let trimmed = entryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.entryText = String(trimmed.prefix(Self.maxEntryCharacters))
+    }
+}
+
 // MARK: - Web page extraction payloads
 
 /// Shared bounds for externally authored text that reaches an on-device model prompt.

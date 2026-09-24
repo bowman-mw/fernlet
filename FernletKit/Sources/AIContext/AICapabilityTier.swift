@@ -15,8 +15,9 @@ import FernletDomainModel
 /// `FernletSettings`), and both the walled `AIProviders` module and the app-side callers already
 /// import `AIContext`, so no new dependency edge is introduced.
 public enum AICapabilityTier: String, Codable, Sendable, CaseIterable {
-    /// Journal emotion tags, tone wrapper, thought bubbles, diagnostic-language classifier.
-    /// On-device ONLY — never escalates off the device.
+    /// Journal emotion tags, journal → Core Memory summaries (`JournalSummaryPayload`), tone
+    /// wrapper, thought bubbles, diagnostic-language classifier. On-device ONLY — never escalates
+    /// off the device.
     case light
     /// Meal decomposition, food selection, workout adjustment, day summary. On-device → PCC (later).
     case standard

@@ -7,7 +7,8 @@ import FernletDomainModel
 /// Pins the behaviour of the ONE journal-append path.
 ///
 /// `addJournal(text:tag:)`, `addJournal(text:tag:date:)`, and `logQuickMood`'s new-entry branch each
-/// used to hand-roll the same seal + append + `previousJournals` + `memories` bookkeeping. They now
+/// used to hand-roll the same seal + append + `previousJournals` + `memories` bookkeeping (the memory
+/// half is now emotion-only — see JournalMemoryCaptureTests for the capture rules themselves). They now
 /// funnel through a single private core, and the today-vs-past-date difference is left entirely to
 /// `DiaryStore.mutateDay` — today mutates the live day and schedules one debounced snapshot save,
 /// a past date round-trips that day's repository row through the `SanitizedDay` privacy barrier.
@@ -19,7 +20,8 @@ import FernletDomainModel
 struct JournalAppendPathTests {
 
     /// Today's append does the full today-scoped bookkeeping: the entry lands on the live day, heads
-    /// the `previousJournals` strip, and (being long enough) mints a memory.
+    /// the `previousJournals` strip, and (being long enough) mints a memory — an EMOTION-ONLY one,
+    /// the entry's feeling token and none of its words (owner decision 2026-09-23).
     @Test func todayAppendUpdatesDayPreviousJournalsAndMemories() throws {
         let store = makeTestStore()
         store.activateNoLockJournals()
@@ -31,6 +33,7 @@ struct JournalAppendPathTests {
         #expect(store.previousJournals.first?.text == "A long enough entry to mint a tier-one memory note.")
         #expect(store.memories.count == 1)
         #expect(store.memories.first?.category == FeelingTag.good.rawValue)
+        #expect(store.memories.first?.text.isEmpty == true, "Core Memory must never hold journal text")
     }
 
     /// The two-argument overload is exactly the `date == todayKey` case of the three-argument one, so
@@ -79,8 +82,8 @@ struct JournalAppendPathTests {
         )
     }
 
-    /// Short entries mint no memory, on either path — `MemoryNote.fromJournal` rejects anything under
-    /// 20 characters. Pinned because the consolidated core now runs that call for every append,
+    /// Short entries mint no memory, on either path — `MemoryNote.emotionOnly(for:)` skips anything
+    /// under 20 characters. Pinned because the consolidated core now runs that call for every append,
     /// including the quick-mood one that never used to reach it.
     @Test func shortEntryAppendsWithoutMintingAMemory() {
         let store = makeTestStore()

@@ -18,7 +18,11 @@ That position dictates its three hard rules. First, the S3 privacy wall: because
 `AIProviders` and `CloudKitSync` targets import this module, **nothing sensitive may be nameable
 here**. The raw cycle types (`CyclePhase`, cycle day entries) deliberately live in
 `PrivateHealthStore`, sealed journal text is stripped before the synced blob by
-``JournalEntry/strippedIfSealed(in:)`` (a fail-closed memberwise allowlist), friends receive only
+``JournalEntry/strippedIfSealed(in:)`` (a fail-closed memberwise allowlist), Core Memory — which
+rides that same synced blob — never holds a journal entry's words: an entry mints an emotion-only
+``MemoryNote`` (``MemoryNote/emotionOnly(for:)``, its ``FeelingTag`` token and no text), and only an
+on-device AI summary that passes ``JournalMemorySummaryPolicy`` (bounded, no diagnostic language,
+not verbatim, not a prefix, not an excerpt) may give it text (owner decision 2026-09-23), friends receive only
 the 3-way ``FriendFuzzyState`` fold of ``CompanionState`` (never a number), and the heart
 dead-drop seam (``HeartDropTransporting``) sees only pseudonymous tags and ciphertext. The
 HealthKit day-context types are nameable here but never persisted to iCloud: since 2026-09-23 the
@@ -112,6 +116,7 @@ non-exhaustive switches and ship corrupted binaries.
 - ``PersonalCareTask``
 - ``CareGroup``
 - ``MemoryNote``
+- ``JournalMemorySummaryPolicy``
 - ``TierTwoMemoryRecord``
 - ``FitnessGoal``
 - ``GoalType``

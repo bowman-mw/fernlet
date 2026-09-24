@@ -31,7 +31,12 @@ destinations, *before*) the call, the site records an ``AIAuditEntry`` in ``AIAu
 
 Three hard privacy invariants are enforced in code, not convention. First, the `light` tier
 (journal- and memory-adjacent work) can never resolve to a destination whose `leavesDevice` is true
-— ``FernletModelRouter`` asserts this at resolution time and fails closed in release builds. Second,
+— ``FernletModelRouter`` asserts this at resolution time and fails closed in release builds. That
+pin is what makes ``JournalSummaryPayload`` — the one payload that carries journal text, for the
+journal → Core Memory summary (owner decision 2026-09-23) — safe to exist: its tier is pinned to
+`light` on the type itself (``JournalSummaryPayload/capabilityTier``), it is ambient work that falls
+back in the sleepy band, and it is absent from ``MemoryAgent/allowedPayloadKinds``, so its prompt
+gets the entry and nothing else. Second,
 a provider content refusal never steps down the ladder: re-sending the same health-adjacent data to
 a different vendor would widen the leak, so `contentRefusal` terminates to the deterministic
 fallback. Third, everything this module tracks is device-local by construction: the quota counter
@@ -85,6 +90,7 @@ separate display property in the UI layer and leave the token alone.
 - ``IngredientSubstitutionPayload``
 - ``WebPageNutritionExtractionPayload``
 - ``RecipeExtractionPayload``
+- ``JournalSummaryPayload``
 
 ### Dispatch gate and routing
 

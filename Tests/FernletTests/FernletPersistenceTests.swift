@@ -87,7 +87,7 @@ struct FernletPersistenceTests {
         let store = makeStore(controller: controller)
 
         store.addMeal(from: "oatmeal and eggs", type: .breakfast)
-        // Text ≥ 20 chars so MemoryNote.fromJournal creates a memory entry.
+        // Text ≥ 20 chars so MemoryNote.emotionOnly(for:) creates a (text-free) memory entry.
         store.addJournal(text: "Feeling strong and energetic today!", tag: .good)
         store.setSleep(hours: 7.5, quality: .good, note: "Slept well")
         store.day.bottleCount = 5

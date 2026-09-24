@@ -1004,17 +1004,18 @@ struct SettingsSheet: View {
         let trimmed = memorySearch.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return store.memories }
         let needle = forgetKeyword ?? trimmed.lowercased()
-        return store.memories.filter {
-            $0.text.localizedCaseInsensitiveContains(needle) ||
-            $0.category.localizedCaseInsensitiveContains(needle)
-        }
+        return store.memories.filter { Self.memory($0, matches: needle) }
+    }
+
+    /// Search and "forget" match what the row SHOWS (`displayText` — for an emotion-only memory, the
+    /// sentence built from its feeling) as well as the stored category token.
+    private static func memory(_ memory: MemoryNote, matches needle: String) -> Bool {
+        memory.displayText.localizedCaseInsensitiveContains(needle) ||
+            memory.category.localizedCaseInsensitiveContains(needle)
     }
 
     @ViewBuilder private func forgetShellView(keyword: String) -> some View {
-        let matches = store.memories.filter {
-            $0.text.localizedCaseInsensitiveContains(keyword) ||
-            $0.category.localizedCaseInsensitiveContains(keyword)
-        }
+        let matches = store.memories.filter { Self.memory($0, matches: keyword) }
         if matches.isEmpty {
             FernletCard { EmptyState(text: "No memories match \"\(keyword)\".") }
         } else {
@@ -2046,7 +2047,7 @@ struct SettingsSheet: View {
     private func confirmDeleteMemory(_ memory: MemoryNote) {
         pendingDestructiveAction = DestructiveConfirmation(
             title: "Delete this memory?",
-            message: "\"\(memory.text)\"\n\nFernlet forgets it for good. Your journal entry stays.",
+            message: "\"\(memory.displayText)\"\n\nFernlet forgets it for good. Your journal entry stays.",
             confirmLabel: "Delete",
             auditEvent: "settings.memory.deleteConfirmed"
         ) {
@@ -2065,7 +2066,9 @@ struct SettingsSheet: View {
     private func memoryRow(_ memory: MemoryNote) -> some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(memory.text)
+                // `displayText`: an emotion-only journal memory stores its feeling as a token and no
+                // words, so its sentence is built here at render time (MemoryNoteDisplay.swift).
+                Text(memory.displayText)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()

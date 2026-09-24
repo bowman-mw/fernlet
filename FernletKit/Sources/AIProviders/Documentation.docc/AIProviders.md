@@ -13,11 +13,11 @@ no `Private*` store appears, so no sealed type (`CyclePhase`, `JournalNarrative`
 `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` (see `Scripts/spm-wall-check.sh`) turns a forbidden
 `import PrivateHealthStore` into a hard build error. The only path from sensitive data to a model is
 the typed, `Sendable` payload DTOs in `AIContext` (`FoodSelectionPayload`,
-`WorkoutAdjustmentPayload`, `IngredientSubstitutionPayload`, `RecipeExtractionPayload`) — the
-de-identification contract. When editing this module, never add a dependency edge; if a type you
+`WorkoutAdjustmentPayload`, `IngredientSubstitutionPayload`, `RecipeExtractionPayload`,
+`JournalSummaryPayload`) — the de-identification contract. When editing this module, never add a dependency edge; if a type you
 need is unreachable, that is the wall working.
 
-The module contains four Foundation-model "stages" plus the production capability probe. Every stage
+The module contains five Foundation-model "stages" plus the production capability probe. Every stage
 follows the same shape:
 
 1. **Candidates built in code.** The caller (or ``WorkoutAdjustmentCandidateBuilder``) assembles a
@@ -36,6 +36,18 @@ follows the same shape:
 5. **Audit.** Every dispatch outcome (succeeded / fell back / error class) is recorded to
    `AIAuditLog` with the payload kind and included *field names* — never content. Session errors are
    audited, then rethrown.
+
+``FoundationJournalSummaryModel`` is the one stage whose payload carries journal text, and it bends
+the shape above in two deliberate places (owner decision 2026-09-23: a journal entry is summarized
+into Core Memory, never copied). There is no candidate pool — the model writes a short note of its
+own — so step 4 is an ACCEPTANCE test instead of a binding: `JournalMemorySummaryPolicy` (in
+`FernletDomainModel`) rejects a reply that is empty, runs long, uses diagnostic language, or
+reproduces the entry verbatim, as a prefix, or as an excerpt, and a rejected reply is audited as a
+fallback and dropped. And it dispatches at the payload's pinned `light` tier as ambient work, so it
+never leaves the device and yields to the sleepy band. It has no retry by design: a retry record
+would have to hold the entry, and the retry queue rides the synced blob. The app-side caller has
+already stored the entry's emotion-only memory before it asks, so every `nil` here leaves exactly
+that.
 
 ``RecipeWebImporter`` is the one place the module touches the network: an SSRF-guarded, bounded
 HTTPS fetch of a user-supplied recipe page, preferring the page's own JSON-LD structured data (no
@@ -89,6 +101,10 @@ their helpers are extracted.
 - ``FoundationWorkoutAdjustmentModel``
 - ``WorkoutAdjustmentCandidateBuilder``
 - ``WorkoutAdjustmentCandidate``
+
+### Journal memory summary
+
+- ``FoundationJournalSummaryModel``
 
 ### Recipe web import
 
