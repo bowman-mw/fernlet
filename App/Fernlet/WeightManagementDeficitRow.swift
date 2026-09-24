@@ -39,28 +39,29 @@ struct WeightManagementDeficitControl: Equatable {
 /// disabled and the line says why instead of pretending the choice still applies.
 struct WeightManagementDeficitRow: View {
     var store: FernletStore
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let control = WeightManagementDeficitControl(settings: store.settings)
         VStack(alignment: .leading, spacing: 6) {
-            Stepper(value: percentBinding,
-                    in: NutritionTargetCalculator.weightManagementDeficitPercentRange,
-                    step: NutritionTargetCalculator.weightManagementDeficitPercentStep) {
-                HStack {
-                    Text("Calorie deficit")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                    Spacer()
-                    valueText(control)
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
+            if dynamicTypeSize.isAccessibilitySize {
+                // Seen at AX3: beside the stepper, the title and "10% (default)" broke mid-word.
+                // The title gets its own line; the stepper still carries the name for VoiceOver.
+                title
+                    .fernletWrappingText()
+                    .accessibilityHidden(true)
+                stepper(control) {
+                    styledValue(control)
+                }
+            } else {
+                stepper(control) {
+                    HStack {
+                        title
+                        Spacer()
+                        styledValue(control)
+                    }
                 }
             }
-            .disabled(!control.isInEffect)
-            .accessibilityLabel(Text("Calorie deficit"))
-            .accessibilityValue(valueText(control))
-            .accessibilityHint(rangeHint)
-            .accessibilityIdentifier("nutritionTargets.deficit")
 
             note(control)
                 .font(.fernlet(.bodySmall))
@@ -68,6 +69,39 @@ struct WeightManagementDeficitRow: View {
                 .fernletWrappingText()
                 .accessibilityIdentifier("nutritionTargets.deficitNote")
         }
+    }
+
+    /// The row's name, drawn beside the stepper (or above it at accessibility sizes).
+    private var title: some View {
+        Text("Calorie deficit")
+            .font(.fernlet(.body))
+            .foregroundStyle(Color.bark)
+    }
+
+    /// The stepper over the choosable percentages, named and valued for VoiceOver whatever its
+    /// visible label, and disabled while a pinned calorie target outranks it.
+    ///
+    /// Also dimmed then: seen on the iOS 26 simulator, a disabled stepper still draws its "−"
+    /// at full strength, so it looked tappable while doing nothing.
+    private func stepper<Label: View>(_ control: WeightManagementDeficitControl,
+                                      @ViewBuilder label: () -> Label) -> some View {
+        Stepper(value: percentBinding,
+                in: NutritionTargetCalculator.weightManagementDeficitPercentRange,
+                step: NutritionTargetCalculator.weightManagementDeficitPercentStep,
+                label: label)
+            .disabled(!control.isInEffect)
+            .opacity(control.isInEffect ? 1 : 0.5)
+            .accessibilityLabel(Text("Calorie deficit"))
+            .accessibilityValue(valueText(control))
+            .accessibilityHint(rangeHint)
+            .accessibilityIdentifier("nutritionTargets.deficit")
+    }
+
+    /// ``valueText(_:)`` in the row's stat style.
+    private func styledValue(_ control: WeightManagementDeficitControl) -> some View {
+        valueText(control)
+            .font(.fernlet(.stat))
+            .foregroundStyle(Color.slate)
     }
 
     /// The percentage in effect, marked when it is the default.

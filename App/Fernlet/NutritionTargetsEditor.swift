@@ -32,12 +32,26 @@ struct NutritionTargetsEditor: View {
         applied.protein * 4 + applied.fat * 9 > applied.calories
     }
 
-    /// True whenever the macros THIS CARD SHOWS sum above the stated calorie target. The carbs floor
-    /// (30% of calories / 50 g) kicks in long before protein + fat alone fill the budget — from roughly
-    /// 70% — so this is the honest trigger for "the totals read high", keyed to the same
-    /// `macroTotals.calories` math the rings use rather than to the protein + fat extreme only.
+    /// True whenever the macros THIS CARD SHOWS sum above the stated calorie target by more than
+    /// rounding. See ``totalsExceedCalories(_:)``.
     private var totalsExceedCalories: Bool {
-        applied.macroTotals.calories > applied.calories
+        Self.totalsExceedCalories(applied)
+    }
+
+    /// How far above the stated calories the four macros may sum from rounding alone. Carbs are the
+    /// residual rounded to a whole gram, which moves their calories by up to 2 kcal (0.5 g × 4).
+    static let carbRoundingAllowanceKilocalories = 2
+
+    /// Whether `targets`' macros sum above its calorie target by more than the carbs' rounding. The
+    /// carbs floor (30% of calories / 50 g) kicks in long before protein + fat alone fill the budget
+    /// (from roughly 70%), so this is the honest trigger for "the totals read high", keyed to the same
+    /// `macroTotals.calories` math the rings use rather than to the protein + fat extreme only.
+    ///
+    /// The allowance matters since the deficit became adjustable (2026-09-24). Without it the default
+    /// profile at a 20% deficit (2,125 kcal, carbs 255.5 g shown as 256 g, totals 2,127) was told its
+    /// protein and fat "leave less room than the carb minimum", which was not true.
+    static func totalsExceedCalories(_ targets: NutritionTargets) -> Bool {
+        targets.macroTotals.calories > targets.calories + carbRoundingAllowanceKilocalories
     }
 
     /// The plan Fernlet would derive with every override cleared — the "back to automatic" values, so a

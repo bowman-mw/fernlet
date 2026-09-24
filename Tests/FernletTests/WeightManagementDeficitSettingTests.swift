@@ -104,6 +104,27 @@ struct WeightManagementDeficitSettingTests {
                 "the Nutrition targets card no longer carries the deficit row")
     }
 
+    // MARK: - The targets card's footnote stays true at every choice
+
+    /// Seen in the simulator: at 20% the default profile's carbs are 255.5 g, shown as 256 g, so the
+    /// four macros sum to 2,127 kcal against 2,125. That is rounding, and the card must not blame
+    /// the carb minimum for it. A real carb-floor case still gets the note.
+    @Test func carbRoundingIsNotReportedAsTheCarbMinimum() {
+        var twentyPercent = settings(goal: .weightManagement, deficit: 20)
+        twentyPercent.userProfile = UserNutritionProfile()
+        let targets = NutritionTargetCalculator.targets(for: twentyPercent)
+        #expect(targets.calories == 2_125)
+        #expect(targets.macroTotals.calories - targets.calories <= NutritionTargetsEditor.carbRoundingAllowanceKilocalories)
+        #expect(!NutritionTargetsEditor.totalsExceedCalories(targets))
+
+        var floorBinds = FernletSettings()
+        floorBinds.calorieTargetOverride = 2_000
+        floorBinds.proteinTargetOverride = 250
+        floorBinds.fatTargetOverride = 90
+        #expect(NutritionTargetsEditor.totalsExceedCalories(NutritionTargetCalculator.targets(for: floorBinds)),
+                "protein and fat this high leave carbs on their floor, and the note must say so")
+    }
+
     // MARK: - Findable
 
     @Test func settingsSearchFindsTheRow() {
