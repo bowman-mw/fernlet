@@ -531,6 +531,54 @@ struct PowerOfTenBoundaryTests {
         #expect(Self.pythonStringTuple("DENSITY_KINDS", in: scanner) == Self.densityKinds, "DENSITY_KINDS in \(Self.scannerPath) differs from densityKinds here.")
     }
 
+    /// Every sibling wall whose rule applies to shipping code scans exactly ``shippingRoots``, and
+    /// every `App/` directory that holds Swift is one of them.
+    ///
+    /// Written 2026-09-23, when the Messages extension — shipping since `a814ac4` — was found missing
+    /// from seven walls (no-tracking, test hooks, pasteboard, memory lifecycle, key custody,
+    /// accessibility and the announcer scan) a month after this file, the wipe wall, the crypto walls
+    /// and the localization wall had each added it. Most of those lists carried the comment "same
+    /// set as the Power-of-10 scanner's `SHIPPING_ROOTS`" and nothing checked the comment. This
+    /// does, and it derives the `App/` half from the file system, so the next target cannot ship
+    /// outside every wall at once by being absent from a hard-coded list.
+    @Test func everyShippingCodeWallScansEveryShippingRoot() throws {
+        let canonical = Set(Self.shippingRoots)
+        let walls: [(name: String, roots: [String])] = [
+            ("NoTrackingBoundaryTests.shippingSwiftRoots", NoTrackingBoundaryTests.shippingSwiftRoots),
+            ("TestHookBoundaryTests.shippingRoots", TestHookBoundaryTests.shippingRoots),
+            ("PasteboardBoundaryTests.shippingRoots", PasteboardBoundaryTests.shippingRoots),
+            ("MemoryLifecycleBoundaryTests.shippingRoots", MemoryLifecycleBoundaryTests.shippingRoots),
+            ("KeyCustodyBoundaryTests.shippingRoots", KeyCustodyBoundaryTests.shippingRoots),
+            ("AccessibilityBoundaryTests.shippingRoots", AccessibilityBoundaryTests.shippingRoots),
+            ("FernletAnnouncerTests.announcementScanRoots", FernletAnnouncerTests.announcementScanRoots),
+            ("PersistedSurfaceWipeBoundaryTests.scanRoots", PersistedSurfaceWipeBoundaryTests.scanRoots),
+            ("CryptographicWallScan.roots", CryptographicWallScan.roots)
+        ]
+        for wall in walls {
+            let roots = Set(wall.roots)
+            #expect(roots == canonical, """
+                \(wall.name) scans \(roots.sorted()) but the shipping roots are \(canonical.sorted()): \
+                missing \(canonical.subtracting(roots).sorted()), extra \(roots.subtracting(canonical).sorted()). \
+                A shipping root a wall does not list is code that wall never reads.
+                """)
+        }
+        let unscannedByNoTracking = canonical.subtracting(NoTrackingBoundaryTests.allSwiftRoots).sorted()
+        #expect(unscannedByNoTracking.isEmpty, "NoTrackingBoundaryTests.allSwiftRoots omits shipping root(s) \(unscannedByNoTracking).")
+
+        let appDirectories = try FileManager.default.contentsOfDirectory(at: RepoRoot.url("App"), includingPropertiesForKeys: nil)
+        let appTargets = appDirectories
+            .filter { PersistedSurfaceWipeBoundaryTests.holdsSwiftSource($0) }
+            .map { "App/" + $0.lastPathComponent }
+        #expect(!appTargets.isEmpty, "Found no App/ directory holding Swift — the enumerator broke, not the tree.")
+        let outside = Set(appTargets).subtracting(canonical).sorted()
+        #expect(outside.isEmpty, """
+            App/ director\(outside.count == 1 ? "y" : "ies") \(outside) hold\(outside.count == 1 ? "s" : "") shipping Swift \
+            and \(outside.count == 1 ? "is" : "are") not a shipping root. Add it to `SHIPPING_ROOTS` in \
+            \(Self.scannerPath), to `shippingRoots` here, and to every wall this test lists — in the \
+            same commit as the target.
+            """)
+    }
+
     /// Every ported regex appears VERBATIM (Python syntax, piece by piece) in the scanner source. Editing
     /// a regex in the scanner therefore fails here until the port is re-verified — the port cannot
     /// silently fall behind the canonical checker.

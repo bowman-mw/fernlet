@@ -60,6 +60,7 @@
 /App/Fernlet/PrivacyInfo.xcprivacy            @bowman-mw
 /App/FernletWidgets/PrivacyInfo.xcprivacy     @bowman-mw
 /App/FernletShareExtension/PrivacyInfo.xcprivacy @bowman-mw
+/App/FernletMessagesExtension/PrivacyInfo.xcprivacy @bowman-mw
 
 # Key custody and at-rest formats (what the tripwire/format tests protect)
 /FernletKit/Sources/FernletCrypto/            @bowman-mw

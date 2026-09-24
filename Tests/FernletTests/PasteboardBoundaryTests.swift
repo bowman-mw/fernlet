@@ -26,8 +26,13 @@ struct PasteboardBoundaryTests {
 
     // MARK: - Scope, floors, allowlist
 
-    /// The four shipping roots — same set as the Power-of-10 scanner's `SHIPPING_ROOTS`.
-    static let shippingRoots = ["FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension"]
+    /// The five shipping roots — same set as the Power-of-10 scanner's `SHIPPING_ROOTS`, which
+    /// `PowerOfTenBoundaryTests.everyShippingCodeWallScansEveryShippingRoot()` now enforces (the
+    /// Messages extension was missing here until 2026-09-23).
+    static let shippingRoots = [
+        "FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension",
+        "App/FernletMessagesExtension"
+    ]
 
     /// Floor for the shipping scan; a root that stops resolving trips it rather than passing empty.
     static let minimumShippingFilesScanned = 300
@@ -66,7 +71,7 @@ struct PasteboardBoundaryTests {
 
     static let sharedScan: TreeScan = scan(repoRoot: RepoRoot.url)
 
-    /// Scans the four shipping roots. Never throws or traps: unreadable files are listed for the
+    /// Scans the five shipping roots. Never throws or traps: unreadable files are listed for the
     /// enforcement tests to fail on.
     static func scan(repoRoot: URL) -> TreeScan {
         var result = TreeScan()

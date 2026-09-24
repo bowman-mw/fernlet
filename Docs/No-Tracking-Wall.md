@@ -73,7 +73,7 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 
 | Test | What it forbids | How it fails |
 |---|---|---|
-| `noAdvertisingOrTrackingSDKIsReferencedAnywhere` | 45 banned SDK/framework module names and 11 banned tracking symbols, in **every** Swift file of **every** target — app, all 24 package modules, both extensions, and both test targets. | `import FirebaseAnalytics`, `#if canImport(AppTrackingTransparency)`, `ASIdentifierManager.shared().advertisingIdentifier`, `identifierForVendor`. |
+| `noAdvertisingOrTrackingSDKIsReferencedAnywhere` | 45 banned SDK/framework module names and 11 banned tracking symbols, in **every** Swift file of **every** target — app, all 25 package modules, all three extensions, and both test targets. | `import FirebaseAnalytics`, `#if canImport(AppTrackingTransparency)`, `ASIdentifierManager.shared().advertisingIdentifier`, `identifierForVendor`. |
 | `thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage` | Any package dependency other than CryptoSwift, in `FernletKit/Package.swift` **or** the pbxproj's `XCRemoteSwiftPackageReference` / `packageProductDependencies`. | Adding *any* new SPM dependency, named or not — the rule is an exact-set match, not a blocklist. |
 | `hardcodedNetworkDestinationsAreExactlyTheAllowlist` | Any hardcoded host in shipping code outside the §3 allowlist — **and** any stale allowlist entry the code no longer uses. | `URL(string: "https://telemetry.fernlet.com/v1/events")`. |
 | `onlyThePinnedWebImportersMayHoldAnHTTPClient` | A raw HTTP/socket client (`URLSession`, `URLRequest`, `NWConnection`, `WKWebView`, …) anywhere in shipping code except the two pinned web importers and the session factory they share. | A new `URLSession` in a "TelemetryUploader.swift" — *even if its hostname is assembled at runtime*, which is the gap the host allowlist alone cannot close. |
@@ -81,7 +81,7 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 | `theTwoNetworkPermitSetsAreDisjoint` | Any file holding **both** network permissions, and any marker on both families' lists. | Fixing the marker gap by appending the TN3213 names to `httpClientMarkers`, which would have handed the mesh transport a `URLSession` too. |
 | `everyOutboundFetchUsesTheEphemeralPrivateTabSession` | `URLSession.shared`, `URLSessionConfiguration.default`, or `.background` **anywhere** in shipping code; a `URLSession(configuration:)` built outside the one reviewed factory or without `.ephemeral`; a factory that has quietly stopped setting one of its seven privacy knobs; an importer that no longer routes through it. See §2a. | Someone "just quickly" fetching something with `URLSession.shared`, which silently re-attaches the process-wide cookie jar. |
 | `noPersistentWebViewExistsAndInAppBrowsersArePinned` | Any `WKWebView` / `WKWebViewConfiguration` / `WKProcessPool` / `WKHTTPCookieStore` in shipping code (there are none), and, forward-compatibly, any that appears without `WKWebsiteDataStore.nonPersistent()`. Plus an exact-set pin on which file may present an out-of-process browser. | Adding a `WKWebView` for an OAuth flow or a help page — its default data store is an on-disk cookie/localStorage jar shared app-wide. |
-| `privacyManifestsDeclareNoTrackingOrAdvertising` | `NSPrivacyTracking: true`, a non-empty `NSPrivacyTrackingDomains`, or a collected data type flagged for tracking / third-party advertising / developer advertising / analytics, in any of the three `PrivacyInfo.xcprivacy` files. | Flipping the manifest to match a newly added SDK — which is what an SDK's own integration guide tells you to do. |
+| `privacyManifestsDeclareNoTrackingOrAdvertising` | `NSPrivacyTracking: true`, a non-empty `NSPrivacyTrackingDomains`, or a collected data type flagged for tracking / third-party advertising / developer advertising / analytics, in any of the four `PrivacyInfo.xcprivacy` files (the Messages extension's joined the pin on 2026-09-23). | Flipping the manifest to match a newly added SDK — which is what an SDK's own integration guide tells you to do. |
 | `plistFamilyFilesDeclareNoTrackingPermissionOrForeignContainer` | `NSUserTrackingUsageDescription`, `SKAdNetworkItems`, or `NSAdvertisingAttributionReportEndpoint` in any Info.plist/entitlements, plus any iCloud container other than the user's own `iCloud.MBO.Fernlet`. | Adding the ATT usage string, or repointing sync at somebody else's CloudKit container. |
 
 ### Two design decisions worth knowing
@@ -416,7 +416,7 @@ check** alongside [`.github/workflows/s3-wall.yml`](../.github/workflows/s3-wall
 argument that makes the S3 grep-wall a gate applies here, and more so, because this wall has no
 compiler half to fall back on.
 
-Coverage at the time of writing (2026-08-09):
+Coverage at the time of writing (2026-08-09; the manifest and plist-family rows re-measured 2026-09-23, when the Messages extension — shipping since `a814ac4` — joined every scan here):
 
 | Scan | Files seen | Floor | Result |
 |---|---|---|---|
@@ -429,8 +429,8 @@ Coverage at the time of writing (2026-08-09):
 | WebKit web views in shipping code | 0 | forward rule | none exist; the first one must use `WKWebsiteDataStore.nonPersistent()` |
 | Out-of-process in-app browsers | 1 | exact set | `FoodView.swift` (`SFSafariViewController`) |
 | Package manifests | 2 | must be non-empty | 1 dependency: CryptoSwift |
-| `PrivacyInfo.xcprivacy` | 3 | pinned by path | tracking `false`, 0 tracking domains, 0 collected data types |
-| Info.plist + entitlements + manifests | 9 | 6 | no ATT key, no ad network, 1 iCloud container (`iCloud.MBO.Fernlet`) |
+| `PrivacyInfo.xcprivacy` | 4 | pinned by path | tracking `false`, 0 tracking domains, 0 collected data types |
+| Info.plist + entitlements + manifests | 12 | 8 | no ATT key, no ad network, 1 iCloud container (`iCloud.MBO.Fernlet`) |
 
 > The two Swift file counts move with every commit (the SPM carve-up is ongoing and a concurrent
 > branch was adding and removing app files while these were measured). They are reported for context;

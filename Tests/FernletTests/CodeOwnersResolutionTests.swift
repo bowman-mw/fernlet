@@ -100,6 +100,12 @@ struct CodeOwnersResolutionTests {
         "/.github/CODEOWNERS",
         "/.github/workflows/s3-wall.yml",
         "/.github/workflows/power-of-10.yml",
+        // All four privacy manifests — the public App Store claim NoTrackingBoundaryTests pins. The
+        // Messages extension's was missing from CODEOWNERS until 2026-09-23.
+        "/App/Fernlet/PrivacyInfo.xcprivacy",
+        "/App/FernletWidgets/PrivacyInfo.xcprivacy",
+        "/App/FernletShareExtension/PrivacyInfo.xcprivacy",
+        "/App/FernletMessagesExtension/PrivacyInfo.xcprivacy",
     ]
 
     /// The wall files named in Docs/Verifiability.md and Docs/Release-Process.md stay covered, and

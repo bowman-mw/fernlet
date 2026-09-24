@@ -52,9 +52,12 @@ import Testing
     // MARK: - Shape
 
     /// The shipping roots scanned. Test and tool sources are deliberately excluded: a fixture in a
-    /// test file is *supposed* to contain the shapes this wall forbids.
+    /// test file is *supposed* to contain the shapes this wall forbids. The Messages extension —
+    /// the only UIKit target, and the one A2's property-assignment matcher exists for — joined on
+    /// 2026-09-23 with zero findings.
     static let shippingRoots = [
-        "FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension"
+        "FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension",
+        "App/FernletMessagesExtension"
     ]
 
     /// Floor on files scanned (385 at the time of writing). Set well below the real count so

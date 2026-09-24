@@ -268,9 +268,14 @@ struct KeyCustodyBoundaryTests {
 
     // MARK: - Grep-walls (shipping source, exact-set in both directions)
 
-    /// Shipping-code roots — app, all package modules, and both extensions. Test targets are
-    /// deliberately excluded (this file plants violation fixtures).
-    private static let shippingRoots = ["App/Fernlet", "FernletKit/Sources", "App/FernletWidgets", "App/FernletShareExtension"]
+    /// Shipping-code roots — app, all package modules, and all three extensions. Test targets are
+    /// deliberately excluded (this file plants violation fixtures). The Messages extension joined on
+    /// 2026-09-23; `PowerOfTenBoundaryTests.everyShippingCodeWallScansEveryShippingRoot()` now
+    /// fails when a shipping root is missing here.
+    static let shippingRoots = [
+        "App/Fernlet", "FernletKit/Sources", "App/FernletWidgets", "App/FernletShareExtension",
+        "App/FernletMessagesExtension"
+    ]
 
     /// Minimum shipping files the scan must see; catches a broken enumerator, not churn.
     private static let scanFloor = 250

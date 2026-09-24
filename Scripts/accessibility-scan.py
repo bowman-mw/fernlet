@@ -13,7 +13,7 @@ a scanner + a Swift-port boundary test (Tests/FernletTests/AccessibilityBoundary
 allowlist JSON.
 
 Usage:
-    Scripts/accessibility-scan.py                 # scan the four shipping roots, human-readable
+    Scripts/accessibility-scan.py                 # scan the five shipping roots, human-readable
     Scripts/accessibility-scan.py --json          # same, machine-readable (one JSON object)
     Scripts/accessibility-scan.py <root> ...      # scan specific roots/files instead
     Scripts/accessibility-scan.py --allowlist a.json   # use this allowlist file instead
@@ -95,7 +95,9 @@ import os
 import re
 import sys
 
-SHIPPING_ROOTS = ("FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension")
+# One line, and no trailing comment on it: AccessibilityBoundaryTests.pythonStringTuple reads from
+# the opening parenthesis to the first ")\n", so anything after the tuple would be read as part of it.
+SHIPPING_ROOTS = ("FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension", "App/FernletMessagesExtension")
 
 # ---------------------------------------------------------------------------------------------
 # Fixed window bounds. Power of 10 rule 2: every scan below is bounded by one of these CONSTANTS,

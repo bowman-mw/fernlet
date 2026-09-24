@@ -57,6 +57,14 @@ private final class SpeechRecorder {
 /// does not.
 @Suite struct FernletAnnouncerTests {
 
+    /// The shipping roots ``onlyTheAnnouncerPostsAnAnnouncement()`` scans — the Power-of-10 set,
+    /// which `PowerOfTenBoundaryTests.everyShippingCodeWallScansEveryShippingRoot()` holds it to. The
+    /// Messages extension was missing until 2026-09-23.
+    static let announcementScanRoots = [
+        "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension", "App/FernletMessagesExtension",
+        "FernletKit/Sources"
+    ]
+
     /// An already-resolved sentence is posted verbatim, carrying the kind the call site chose.
     ///
     /// Verbatim matters: the `resolved:` overload exists for text that is ALREADY final (an error's
@@ -404,8 +412,10 @@ private final class SpeechRecorder {
     ///
     /// Comment lines are exempt (this file's own prose names the API), and the floor on files
     /// scanned is the standard non-vacuity guard: a scan that reads nothing must fail, not pass.
+    ///
+    /// The Messages extension joined the roots on 2026-09-23; see ``announcementScanRoots``.
     @Test func onlyTheAnnouncerPostsAnAnnouncement() throws {
-        let roots = ["App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension", "FernletKit/Sources"]
+        let roots = Self.announcementScanRoots
         var scanned = 0
         var posters: Set<String> = []
         for root in roots {
@@ -428,7 +438,7 @@ private final class SpeechRecorder {
         }
 
         // 383 shipping files at the time of writing — the same count `Scripts/power-of-10-scan.py`
-        // reports over the same four roots. The floor sits well below it so ordinary churn and the
+        // reports over the same roots. The floor sits well below it so ordinary churn and the
         // continuing SPM carve-up never trip it, but a root that stops resolving does.
         #expect(scanned >= 340,
                 "Scanned only \(scanned) shipping Swift files — a root moved and this wall is passing over nothing.")

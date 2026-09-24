@@ -44,7 +44,7 @@ import Testing
 /// - ``everyOutboundFetchUsesTheEphemeralPrivateTabSession()`` — HOW those clients fetch: no shared
 ///   cookie jar, cache, or credential store.
 /// - ``noPersistentWebViewExistsAndInAppBrowsersArePinned()`` — the WebKit/Safari surface.
-/// - ``privacyManifestsDeclareNoTrackingOrAdvertising()`` — the three `PrivacyInfo.xcprivacy` files.
+/// - ``privacyManifestsDeclareNoTrackingOrAdvertising()`` — the four `PrivacyInfo.xcprivacy` files.
 /// - ``plistFamilyFilesDeclareNoTrackingPermissionOrForeignContainer()`` — Info.plist + entitlements.
 /// - ``theRetiredRadiosBonjourTypesAreGoneFromThePlist()`` — the app's declared `NSBonjourServices`:
 ///   no retired radio's type is still declared, every live radio's type still is, and no declared
@@ -57,14 +57,20 @@ struct NoTrackingBoundaryTests {
 
     // MARK: - Scan roots & floors
 
-    /// Every root holding Swift source in this repo — app, package modules, both extensions, and BOTH
-    /// test targets. Test code is included deliberately: an analytics SDK linked "only for tests" is
-    /// still a dependency in the project file and still a thing a contributor can promote later.
-    private static let allSwiftRoots = [
+    /// Every root holding Swift source in this repo — app, package modules, all three extensions, and
+    /// BOTH test targets. Test code is included deliberately: an analytics SDK linked "only for tests"
+    /// is still a dependency in the project file and still a thing a contributor can promote later.
+    ///
+    /// `App/FernletMessagesExtension` joined on 2026-09-23. It had shipped since `a814ac4` outside
+    /// this wall — and outside the manifest pin below — while being the one extension a process
+    /// Messages hosts runs; `PowerOfTenBoundaryTests.everyShippingCodeWallScansEveryShippingRoot()`
+    /// now fails when a shipping root is missing from any wall.
+    static let allSwiftRoots = [
         "App/Fernlet",
         "FernletKit/Sources",
         "App/FernletWidgets",
         "App/FernletShareExtension",
+        "App/FernletMessagesExtension",
         "Tests/FernletTests",
         "Tests/FernletUITests"
     ]
@@ -72,11 +78,12 @@ struct NoTrackingBoundaryTests {
     /// The roots that actually SHIP. The destination allowlist is enforced only here, because test
     /// fixtures legitimately name throwaway hosts (`example.com`, `www.costco.com`, RFC 1918 literals
     /// used by the SSRF-guard tests) that must not be mistaken for real destinations.
-    private static let shippingSwiftRoots = [
+    static let shippingSwiftRoots = [
         "App/Fernlet",
         "FernletKit/Sources",
         "App/FernletWidgets",
-        "App/FernletShareExtension"
+        "App/FernletShareExtension",
+        "App/FernletMessagesExtension"
     ]
 
     /// Floor for the all-target Swift scan (536 files at the time of writing). Set well below the real
@@ -87,13 +94,15 @@ struct NoTrackingBoundaryTests {
     /// Floor for the shipping-only Swift scan (345 files at the time of writing).
     private static let minimumShippingFilesScanned = 250
 
-    /// The three bundle roots that carry an Info.plist / entitlements / privacy manifest. A subset of
+    /// The four bundle roots that carry an Info.plist / entitlements / privacy manifest. A subset of
     /// ``shippingSwiftRoots`` (the package sources ship no bundle of their own).
-    private static let bundleRoots = ["App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension"]
+    private static let bundleRoots = [
+        "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension", "App/FernletMessagesExtension"
+    ]
 
-    /// Floor for the plist-family scan (9 files at the time of writing: 3 Info.plist, 3 entitlements,
-    /// 3 PrivacyInfo.xcprivacy).
-    private static let minimumPlistFamilyFilesScanned = 6
+    /// Floor for the plist-family scan (12 files at the time of writing: 4 Info.plist, 4
+    /// entitlements, 4 PrivacyInfo.xcprivacy).
+    private static let minimumPlistFamilyFilesScanned = 8
 
     // MARK: - Banned SDKs & symbols
 
@@ -384,7 +393,8 @@ struct NoTrackingBoundaryTests {
     private static let privacyManifestPaths = [
         "App/Fernlet/PrivacyInfo.xcprivacy",
         "App/FernletShareExtension/PrivacyInfo.xcprivacy",
-        "App/FernletWidgets/PrivacyInfo.xcprivacy"
+        "App/FernletWidgets/PrivacyInfo.xcprivacy",
+        "App/FernletMessagesExtension/PrivacyInfo.xcprivacy"
     ]
 
     /// Declared-purpose values that mean "this data feeds advertising or developer-side measurement".
