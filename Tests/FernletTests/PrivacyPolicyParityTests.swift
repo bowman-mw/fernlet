@@ -56,6 +56,25 @@ struct PrivacyPolicyParityTests {
     /// may refuse or end it. It is the first thing the friend features do while the person is not
     /// looking at them, so a copy that drifts out of sync on this one is a copy that under-describes
     /// what the app does in the background.
+    ///
+    /// The nine markers added 2026-09-24 pin the disclosures of the 2026-09-23 owner-decisions round.
+    /// Several of them replaced text that was false in all three copies at once, the same trap as the
+    /// 2026-08-20 pair — a parity check stays green over a policy that is consistently wrong:
+    /// - `Nothing Fernlet reads from Apple Health is stored in iCloud` — Health readings had synced in
+    ///   the day records while the policy said Health data was used only on the device;
+    /// - `Share with Health` — every write is gated on Fernlet's own switch (a logged workout used to
+    ///   be written with it off);
+    /// - `never leave this device in any form` — sensitive (Tier-2) memories had synced in plaintext
+    ///   while the policy placed them in the sealed store;
+    /// - `Core memories never hold your journal text` — a memory had kept a 120-character excerpt;
+    /// - `Apple's Vision framework` — the on-device photo reads for food logging ("never analyzed"
+    ///   was wrong);
+    /// - `through Apple's Messages service` — the iMessage app's cards, the one route by which the
+    ///   user hands an item to people who are not in the room;
+    /// - `Data from Open Food Facts (ODbL)` — the barcode lookup's new destination and its licence;
+    /// - `right after the age check` — intimacy tracking is on by default for users 16+ ("hidden and
+    ///   off by default" was wrong), with the onboarding choice;
+    /// - `how long is left` — the shop pause, whose record survives Delete Everything.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -67,7 +86,16 @@ struct PrivacyPolicyParityTests {
         "signed record of that report",
         "Deliver hearts later",
         "cervical mucus quality",
-        "includes your journal entries"
+        "includes your journal entries",
+        "Nothing Fernlet reads from Apple Health is stored in iCloud",
+        "Share with Health",
+        "never leave this device in any form",
+        "Core memories never hold your journal text",
+        "Apple's Vision framework",
+        "through Apple's Messages service",
+        "Data from Open Food Facts (ODbL)",
+        "right after the age check",
+        "how long is left"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.
