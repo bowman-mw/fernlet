@@ -26,7 +26,7 @@ names the exact command, test, or file that backs it, so "trust us" can be repla
    tracking — there is no backend, no account, no install ping, no crash reporter, no
    "anonymous usage statistics". ([`No-Tracking-Wall.md`](No-Tracking-Wall.md) §1)
 2. **Every byte that leaves the device is enumerable, and enumerated.** The complete outbound
-   surface — five hardcoded hosts, Apple-operated system services the user opts into, URLs the
+   surface — six hardcoded hosts, Apple-operated system services the user opts into, URLs the
    user themself supplies, and link-local peer-to-peer — is written down in
    [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3–§4 and enforced by tests.
 3. **Sealed data is structurally unreachable by AI and sync code.** The on-device AI
@@ -101,12 +101,16 @@ xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet 
 
 | Claim | Verification |
 |---|---|
-| No tracking SDK, no unlisted network destination, no third-party dependency beyond CryptoSwift, private-tab-only fetching, clean privacy manifests | `xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/NoTrackingBoundaryTests` — eight independent scans, each with planted-violation fixtures proving the scan itself works. What each test forbids is tabled in [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §2. |
+| No tracking SDK, no unlisted network destination, no third-party dependency beyond CryptoSwift, private-tab-only fetching, clean privacy manifests | `xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/NoTrackingBoundaryTests` — eleven independent scans, with planted-violation fixtures proving the scans themselves work (this row said eight until 2026-09-24; the two local-link scans and the retired-radio scan had joined since). What each test forbids is tabled in [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §2. The Open Food Facts barcode lookup's consent gate — no request is even built without the web-nutrition-lookup consent — is pinned separately by `-only-testing:FernletTests/OpenFoodFactsLookupTests`. |
 | AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:FernletTests/S3BoundaryTests`. |
-| The complete egress inventory is accurate | Read [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3 (hardcoded-host allowlist — the test fails on both an unlisted host AND a stale listed one) and §4 (Apple services, user-supplied URLs, link-local mesh). Then grep the tree yourself: every HTTP client must live in one of the three pinned files, so there is very little to read. |
+| The complete egress inventory is accurate | Read [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3 (hardcoded-host allowlist — the test fails on both an unlisted host AND a stale listed one) and §4 (Apple services, user-supplied URLs, link-local mesh). Then grep the tree yourself: every HTTP client must live in one of the four pinned files (three fetchers and the session factory they share), each held to its own exact host set, so there is very little to read. |
 | Key custody: every sealed-data key is device-bound; only the two sanctioned exceptions exist | `-only-testing:FernletTests/KeyCustodyBoundaryTests` — writes through each production key store and reads the keychain row's actual `kSecAttrAccessible` / `kSecAttrSynchronizable` attributes back, then greps shipping code so `synchronizable: true` and any non-`ThisDeviceOnly` accessibility class appear only at the sanctioned sites. |
 | The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format **v3** — the round trip, the cross-install refusal, and, since the crypto standardization round's Phase 3, the two retired generations pinned as *refusals by name* rather than as compatibility: every "still opens" assertion there is now an inverted "is refused" one, and the fail-open write is pinned CLOSED), `-only-testing:FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity. It also pins **every payload type's raw value** and round-trips all four on v2 — the raw value keys the CloudKit record name *and* is bound into the AAD, so a rename would orphan existing backups; a relabelled chunk is proved unopenable as another payload). |
-| Observe the app's actual traffic (no source trust required) | Run the app in a simulator behind an intercepting proxy (e.g. mitmproxy: `mitmproxy --mode local`, or set the Mac's system proxy and trust the mitm CA in the simulator). You should see: nothing at install, nothing at launch, nothing during normal logging. Traffic appears **only** when you invoke a feature that names its egress: the off-by-default packaged-food lookup (one request to `html.duckduckgo.com`), a recipe/product URL you pasted, the one-time GET for a saved recipe's own picture on first open of its detail page (to the image host the recipe page itself named via JSON-LD/`og:image` — often a third-party CDN, not the pasted URL's host), the `SFSafariViewController` connection pre-warm to a saved recipe's source host when its detail or notes sheet appears (a DNS lookup + TLS handshake only, no HTTP request), or Apple's own CloudKit/WeatherKit endpoints when you enabled those features. The complete expected-traffic inventory is [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3–§4 — judge any capture against that list, not this summary. Note Apple system services (APNs, App Store, CloudKit) use certificate pinning and will not decrypt — but their *hosts* are visible and are Apple's, not ours. |
+| Nothing read from HealthKit reaches iCloud sync — not the synced day rows, not the blob, not the stored scores — while this device keeps working from a device-local, backup-excluded cache (owner decision 2026-09-23; App Review 5.1.3(ii)) | `-only-testing:FernletTests/HealthKitCloudBoundaryTests` — every stored field of the health-bearing types is classified (a field added later fails until someone decides whether it is HealthKit's), and sentinel values planted in every HealthKit field are checked absent from the JSON a synced row or blob would carry, while what the user typed survives. `-only-testing:FernletTests/DeviceHealthResidueStoreTests` (the cache directory is excluded from device backup; clearing it removes the file) and `-only-testing:FernletTests/HealthImportedBodyProfileTests` (an age/sex/height/weight import never reaches the synced settings). The one Health-derived file this does not cover is stated in §5. |
+| Fernlet writes to Apple Health only while its own switches are on | `-only-testing:FernletTests/HealthKitWriteGateTests` — every write kind against each closed switch, through the real service over a recording seam, with positive controls, a mixed batch refused whole, the ungated removal of Fernlet's own samples, and a source scan proving no third door into HealthKit exists; `-only-testing:FernletTests/WorkoutHealthAccessOfferTests` (the first-workout ask happens once, never after a decline or an explicit off, and never re-enables sharing silently). |
+| Core Memory never holds journal text | `-only-testing:FernletTests/JournalMemoryCaptureTests` — with AI off (or unavailable, or failing) only the mood token is stored; verbatim, prefix, padded-excerpt, re-cased, diagnostic and runaway summaries are refused; and the persisted blob is decoded to show it carries the emotion or an accepted summary, never the entry. |
+| Tier-2 behavioral memories never reach iCloud, in any form (owner decision 2026-09-23) | `-only-testing:FernletTests/TierTwoDeviceLocalTests` (decodes the bytes written to the mirrored record and to the day-blob file; checks the sidecar's backup exclusion) and `-only-testing:FernletTests/SensitiveNotesRetirementTests` (the retired "sensitive notes" backup uploads nothing and restores nothing, and a surviving iCloud copy is deleted). |
+| Observe the app's actual traffic (no source trust required) | Run the app in a simulator behind an intercepting proxy (e.g. mitmproxy: `mitmproxy --mode local`, or set the Mac's system proxy and trust the mitm CA in the simulator). You should see: nothing at install, nothing at launch, nothing during normal logging. Traffic appears **only** when you invoke a feature that names its egress: the off-by-default packaged-food lookup (one request to `html.duckduckgo.com`), a barcode lookup you tap on the scanner's not-found screen behind the same consent (one request to `world.openfoodfacts.org`), a recipe/product URL you pasted, the one-time GET for a saved recipe's own picture on first open of its detail page (to the image host the recipe page itself named via JSON-LD/`og:image` — often a third-party CDN, not the pasted URL's host), the `SFSafariViewController` connection pre-warm to a saved recipe's source host when its detail or notes sheet appears (a DNS lookup + TLS handshake only, no HTTP request), or Apple's own CloudKit/WeatherKit endpoints when you enabled those features (and Apple's Messages traffic when you send a card from Fernlet's iMessage app — sent by Messages, not by Fernlet's process). The complete expected-traffic inventory is [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3–§4 — judge any capture against that list, not this summary. Note Apple system services (APNs, App Store, CloudKit) use certificate pinning and will not decrypt — but their *hosts* are visible and are Apple's, not ours. |
 | Release binaries correspond to the source | Byte-exact reproduction of an App Store build is not possible on iOS (Apple re-signs, re-encrypts, and may recompile bitcode-free binaries server-side; see §5). The honest substitute: every release is an annotated **signed git tag**, `Scripts/release-checksum.sh` publishes SHA-256 checksums of the exact archived products for that tag, and anyone can build the same tag themselves and diff behavior — plus sideload their own build; nothing in the app depends on being the App Store copy. |
 
 ## 3. Standing invitation: independent traffic audit
@@ -251,9 +255,10 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   restore to the *same* device, but Secure Enclave keys never restore anywhere — so an "Erase All
   Content and Settings", a Secure-Enclave reset, or a restore onto replacement hardware destroys
   the content key permanently. Escrow-backed payloads (cycle narratives, journal narratives,
-  intimacy logs, sensitive notes, each behind its own opt-in toggle) survive via the sealed iCloud
-  backup; **the Worry Box does not and is accepted to die on an Erase All** — "let it go" notes
-  are deliberately device-only. When this happens the app says so: a correct passcode surfaces
+  intimacy logs, each behind its own opt-in toggle) survive via the sealed iCloud backup; the
+  Tier-2 sensitive memories deliberately do not (owner decision 2026-09-23) — they are re-derived
+  from the day history; **the Worry Box does not and is accepted to die on an Erase All** — "let it
+  go" notes are deliberately device-only. When this happens the app says so: a correct passcode surfaces
   "Sealed data can no longer be opened on this device. Reset app lock to continue." rather than
   silently failing to decrypt — and the reset it names is reachable from that very screen (the
   unlock overlay grows its own card for this state, because a correct passcode never trips the
@@ -319,6 +324,15 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   private key still derives every generation's key, one at a time. Records written before that
   change (format v1) remain openable under the single static derivation, by design: re-keying them
   is impossible without the plaintext, and they are replaced by their next re-seal.
+- **"Nothing read from HealthKit is stored in iCloud" is about Fernlet's own iCloud use, and one
+  file shows why the scoping matters.** Sync and the encrypted backup never carry a HealthKit value
+  (§2), and the device-local residue cache that keeps this device scoring is excluded from device
+  backups. But the opt-in body-tension estimate keeps its 60-day history of daily HRV, resting heart
+  rate, respiratory rate and wrist-temperature readings in `StressLocalState.json` in Application
+  Support, which is device-local and never synced but is **not** backup-excluded — so an iCloud
+  device backup of the phone can carry it, as the privacy policy says. And what the app *computes*
+  from those readings — the wellbeing score and its components, the companion state, the coins for
+  an active day — does sync, by design.
 - **iOS builds are not byte-exactly reproducible** (§2, last row). Checksums + signed tags are a
   self-build baseline and an attribution trail, not a store-binary proof.
 - **Apple frameworks are trusted, not audited.** CloudKit, WeatherKit, APNs, and the OS itself
@@ -550,9 +564,11 @@ shipped; the rest are still open.
    (WorryNarrative) — which days have entries and their HealthKit linkage, never content.
    Default-on exclusion removes even that at near-zero recovery cost: the ciphertext already
    cannot be opened off-device, and each escrow-backed payload type (period, journal, intimacy,
-   sensitive notes, own photos) restores via its encrypted iCloud backup — for the users who
-   switched that backup on. All five `sealedBackup*Enabled` toggles default OFF, so the escrow
-   restore path exists exactly for the opted-in; for everyone else the flip trades away only a
+   own photos) restores via its encrypted iCloud backup — for the users who switched that backup
+   on. All four live `sealedBackup*Enabled` toggles default OFF (the fifth,
+   `sealedBackupSensitiveNotesEnabled`, is retired: no switch, only the marker that a
+   pre-2026-09-23 copy still owes a delete), so the escrow restore path exists exactly for the
+   opted-in; for everyone else the flip trades away only a
    device-backup copy that was already unreadable off-device, which is the near-zero part. The
    same preference now also flags the `LocalFernletRepository` JSON day blob (re-applied after
    every atomic rewrite). To be precise about that file's role: it is NOT the live history —
@@ -565,7 +581,11 @@ shipped; the rest are still open.
    preference did not reach — flagging it closes that gap in the Privacy & Data toggle's "your
    local Fernlet data is excluded" copy. The manual toggle remains for later changes. Gate logic
    pinned by `Tests/FernletTests/BackupExclusionLaunchGateTests`, the day-blob flag by
-   `Tests/FernletTests/LocalDayBlobBackupExclusionTests`.
+   `Tests/FernletTests/LocalDayBlobBackupExclusionTests`. Two device-local files added on
+   2026-09-23 do not follow this preference at all: the Tier-2 memory sidecar and the HealthKit
+   residue cache are excluded from device backups unconditionally, because neither may reach iCloud
+   in any form (`TierTwoDeviceLocalTests`, `DeviceHealthResidueStoreTests`); the body-tension
+   history that is not excluded is named in §5.
 
 ## 7. What publishing unlocks
 

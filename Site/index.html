@@ -290,11 +290,11 @@
     </div>
     <div class="stack">
       <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never touches the AI</h3><p>On-device models cannot import the sealed store. No summaries, no suggestions, no reflections built from your cycle.</p></div></div>
-      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never written to Apple Health</h3><p>Fernlet reads sleep, steps and workouts from Health. It writes back only workouts — never period, mood, journal, hydration or hygiene.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Your notes never go to Apple Health</h3><p>Flow, temperature and the like reach Apple Health only while you share cycle tracking with Health. Your cycle notes, mood, journal, hydration and hygiene never do.</p></div></div>
       <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never in ordinary sync</h3><p>It is excluded from iCloud sync and from your data export, so a shared laptop or a file you send someone can't carry it out with everything else.</p></div></div>
       <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never visible to friends</h3><p>In-person friends see a fuzzy vibe and a companion. There is no field in the handshake that could carry cycle information.</p></div></div>
       <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>The wall breaks the build</h3><p>A pre-merge script fails the build the moment the AI or networking code imports the sealed store — a compiler check that runs before every merge.</p></div></div>
-      <div class="note-lichen"><p>Intimate-activity notes sit in the same sealed store, are gated to 16+, and are hidden and off until you go looking for them.</p></div>
+      <div class="note-lichen"><p>Intimate-activity notes sit in the same sealed store. Intimacy tracking is only for people who confirm they're 16 or older; it's on for them by default, onboarding offers to turn it off, and hiding it never deletes anything.</p></div>
     </div>
   </div>
 </section>
@@ -305,7 +305,7 @@
       <div class="eyebrow">Privacy</div>
       <h2>Privacy shouldn't depend on a promise.</h2>
       <p class="lede">Fernlet has no ads, no trackers, and no developer-run server holding your health information. The app works without an account. Your everyday information stays on your phone; if you choose iCloud sync, it goes to your own private iCloud database, not one Fernlet operates. Sensitive information — journal text, cycle data, and similar notes — is kept separately and encrypted.</p>
-      <p class="lede">Period data, journal text, sensitive memories and intimate notes live in a sealed, encrypted store the AI and networking code physically cannot import — a build script turns any cross-wall import into a hard compile error.</p>
+      <p class="lede">Period data, journal text and intimate notes live in a sealed, encrypted store the AI and networking code physically cannot import — a build script turns any cross-wall import into a hard compile error.</p>
       <div class="row">
         <a class="btn btn-moss" href="/privacy/">Read the privacy policy
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
@@ -319,7 +319,7 @@
       <div class="label">Inside one phone</div>
       <div class="diagbox">
         <div class="dbox"><b>Everyday store</b><i>meals, movement, water, sleep, hygiene, the companion</i></div>
-        <div class="dbox sealedbox"><b><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Sealed store</b><i>cycle, journal text, sensitive memories — encrypted, walled off at the module boundary</i></div>
+        <div class="dbox sealedbox"><b><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Sealed store</b><i>cycle, journal text, intimate notes — encrypted, walled off at the module boundary</i></div>
         <div class="drow">
           <div class="dbox sm"><b>On-device AI</b><i>reads the everyday store only</i></div>
           <div class="dbox sm"><b>Networking</b><i>no health payloads, ever</i></div>
@@ -346,7 +346,7 @@
       <details><summary>What happens if I miss a day?</summary><p>That day scores lower. That is all. There are no streaks to break, and every unlock you have earned is cumulative and can never be taken back.</p></details>
       <details><summary>Does it count calories?</summary><p>Never. You get macro goals — protein, carbs, fat — and nothing else. No calorie ring, no weight target, no body-composition anything.</p></details>
       <details><summary>Can my friends see my numbers?</summary><p>No. Friends exchange display names, companion appearances and a fuzzy vibe — thriving, okay, struggling. Your score, goals, cycle data and raw health data never leave your phone.</p></details>
-      <details><summary>What if I lose my phone?</summary><p>If you turned on iCloud sync, your core data restores from your own iCloud. Sealed categories — cycle data, journal text, sensitive memories, intimate logs, your own photos — work differently: their key is locked to this phone's Secure Enclave, so no device backup can bring them back on a new phone. The only way to recover them is the optional encrypted sealed backup, which uses a key stored in your iCloud Keychain. If you lose access to that Keychain everywhere, that data is gone for good — the app tells you this before you turn the backup on.</p></details>
+      <details><summary>What if I lose my phone?</summary><p>If you turned on iCloud sync, your core data restores from your own iCloud. Sealed categories — cycle data, journal text, intimate logs, your own photos — work differently: their key is locked to this phone's Secure Enclave, so no device backup can bring them back on a new phone. The only way to recover them is the optional encrypted sealed backup, which uses a key stored in your iCloud Keychain. If you lose access to that Keychain everywhere, that data is gone for good — the app tells you this before you turn the backup on.</p></details>
       <details><summary>Which iPhones does it need?</summary><p>iOS 26 or later; iPhone 15 Pro or newer for the full on-device AI features. The 15 cm friend handshake needs a phone with precise ranging — on other phones you confirm on screen instead.</p></details>
     </div>
   </div>

@@ -79,10 +79,10 @@
       <h2 id="t2">Two kinds of storage</h2>
       <p>Fernlet separates everyday information from especially sensitive information.</p>
       <div class="callout">
-        <p><strong>Everyday information</strong> — meals, movement, hydration, sleep, settings, and companion state are stored locally. You may choose to sync this information through your private iCloud database.</p>
+        <p><strong>Everyday information</strong> — meals, movement, hydration, sleep, settings, and companion state are stored locally. You may choose to sync this information through your private iCloud database. What Fernlet reads from Apple Health is the exception: it stays on the device that read it and is never part of that sync.</p>
       </div>
       <div class="callout">
-        <p><strong>Sealed information</strong> — journal text, cycle data, intimate notes, sensitive memories, and similar information are stored in a separate encrypted area on your device. Fernlet's networking code and its AI features are deliberately kept from reading that raw information — a build script blocks it: importing the sealed store from either one fails the build.</p>
+        <p><strong>Sealed information</strong> — journal text, cycle data, intimate notes, and similar information are stored in a separate encrypted area on your device. Fernlet's networking code and its AI features are deliberately kept from reading that raw information — a build script blocks it: importing the sealed store from either one fails the build.</p>
       </div>
     </section>
 

@@ -52,8 +52,9 @@ Three concrete commitments follow from it:
    `AppTrackingTransparency`, no IDFA, no SKAdNetwork, no third-party SDK of any kind except one
    crypto library. The app has never shown an ATT prompt and structurally cannot.
 3. **Everything the app sends leaves for a reason the user chose.** The complete outbound surface is
-   enumerated in §4 and is either Apple-operated infrastructure the user opted into (iCloud sync,
-   WeatherKit), one of two fixed lookup endpoints behind a single explicit off-by-default toggle (a
+   enumerated in §4 and is either Apple-operated infrastructure the user opted into (iCloud sync and
+   the opt-in heart drop-off, WeatherKit, and Messages when the user sends a card from Fernlet's
+   iMessage app), one of two fixed lookup endpoints behind a single explicit off-by-default toggle (a
    search endpoint for typed product searches, and Open Food Facts' product database for a scanned
    barcode, one tap per lookup), a URL the *user* pasted, or a link-local peer in the same room.
 
@@ -206,6 +207,7 @@ was produced by grepping every URL literal and every networking API in the tree,
 | **CloudKit — private database** | `CloudKitSync/CloudKitDataService.swift:243`, container `iCloud.MBO.Fernlet` | The user's own encrypted snapshot, in the user's own iCloud account. Off unless the user enables sync. Apple operates the storage; the developer has no read access to a private database. Record types today: the mirrored day/blob types, `SealedBackupRecord` (the chunked sealed payloads) and — since security-hardening Phase 5 — `SealedPhotoRecord`, the opt-in own-photo escrow route (one AES-GCM-sealed photo per record plus a sealed per-corpus manifest). Same container, same endpoint, no new host: a new record TYPE is not a new destination, so the allowlist in §3 is unchanged. |
 | **CloudKit — public database** | `CloudKitSync/HeartDropCloudTransport.swift:66` (`publicCloudDatabase`) | The heart dead-drop only: a rotating pseudonymous day tag plus a sealed (ChaChaPoly) payload. See §6 for the honest caveat about this one. |
 | **WeatherKit** | `AppServices/WeatherKitService.swift:233` | A coarse location, to Apple, only when weather-aware prompts are enabled. |
+| **Messages (iMessage)** | `App/FernletMessagesExtension/FernletMessagesViewController.swift` (`MSConversation.insert`) | Only when the user picks a recipe or a planned workout in Fernlet's iMessage app: the card — the item packed into the `MSMessage` URL, at most 5,000 characters (`ExchangeLimits`) — is inserted into the conversation's input field, and **Messages** sends it, through Apple's Messages service, when the user presses its own send button. Fernlet's process opens no connection; nothing is sent automatically, and the extension holds no HTTP client (it links only `FernletExchange`). Disclosed in Privacy Policy §6/§12 (added to this inventory 2026-09-24; the extension has shipped since `a814ac4`). |
 | **APNs / App Store** | `aps-environment` entitlement; the platform | Standard OS-level traffic. No payload of ours. |
 
 None of these can carry data *to the developer*, and none is a channel the developer chooses the
@@ -425,10 +427,14 @@ A privacy claim that overstates itself is worse than none. Specifically:
 ## 7. Running it, and the numbers it sees today
 
 ```
-xcodebuild test-without-building -scheme Fernlet \
+xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -only-testing:Tests/FernletTests/NoTrackingBoundaryTests
+  -only-testing:FernletTests/NoTrackingBoundaryTests
 ```
+
+(Corrected 2026-09-24: this block had no `-project` — there is no project at the repo root since the
+2026-08-12 restructure — and used the disk path `Tests/FernletTests/…`, which `-only-testing:` matches
+to nothing, so the run "passed" having executed zero tests. `Docs/Verifiability.md` §2 explains both.)
 
 It runs as part of `FernletTests`, needs no simulator state, and should be a **required status
 check** alongside [`.github/workflows/s3-wall.yml`](../.github/workflows/s3-wall.yml) — the same
@@ -477,4 +483,4 @@ plist.
   invitation, the device-binding story, and the hardening items awaiting an owner decision.
 - [`Docs/App-Privacy-Nutrition-Labels.md`](App-Privacy-Nutrition-Labels.md) — the App Store declarations that must stay consistent with the manifests.
 - [`Docs/PrivacyWipeCoverage.md`](PrivacyWipeCoverage.md) — the same enforcement pattern applied to deletion.
-- [`Site/_headers`](../Site/_headers) — the marketing site's matching stance: `default-src 'none'`, no JS, no cookies, no third-party requests.
+- [`Site/_headers`](../Site/_headers) — the marketing site's matching stance: `default-src 'none'`, no third-party script (one first-party `app.js`, see §1), no cookies, no third-party requests.

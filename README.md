@@ -44,7 +44,7 @@ Two independent, mechanically-enforced walls hold the privacy claims up. Both fa
 ship.
 
 **The S3 wall — sealed data is structurally unreachable.** Period/cycle data, journal text,
-sensitive memories, Worry Box notes and intimate-activity notes live in encrypted `Private*` stores.
+Worry Box notes and intimate-activity notes live in encrypted `Private*` stores.
 The walled on-device-AI (`AIProviders`) and iCloud-sync (`CloudKitSync`) modules cannot import them:
 a forbidden cross-wall `import` is a **compile error**, not a code-review note. Enforced by
 [`Scripts/spm-wall-check.sh`](Scripts/spm-wall-check.sh) (building with
