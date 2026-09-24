@@ -48,6 +48,18 @@
           }
         }
       }
+    },
+    "health.error.sharingTurnedOff" : {
+      "comment" : "Shown when Fernlet refused to write to Apple Health because the user turned Fernlet's Health sharing off (the master switch or this kind of data). Nothing was written.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sharing with Apple Health is turned off in Fernlet, so nothing was saved to Health. You can turn it on in Settings › Health."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -457,6 +457,18 @@
         }
       }
     },
+    "foodItemSource.openFoodFacts.attribution" : {
+      "comment" : "Attribution shown wherever a food imported from the Open Food Facts database is displayed. 'Open Food Facts' is the database's name and 'ODbL' (Open Database License) is its licence — keep both untranslated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Data from Open Food Facts (ODbL)"
+          }
+        }
+      }
+    },
     "hygiene.deodorant" : {
       "comment" : "Personal-care checklist item: applying deodorant",
       "extractionState" : "extracted_with_value",
