@@ -10,6 +10,13 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
 - [ ] Measure the largest successful `MSMessage.url` envelope on the current iOS release. Record
   the measured limit and keep `ExchangeLimits.maxMessageEnvelopeBytes` below it; never infer it
   from the 64 KB recipe or 512 KB workout-file limits.
+  *Since 2026-09-23 the code sits at Apple's DOCUMENTED limit — `MSMessage.url` "cannot be longer
+  than 5,000 characters" — so `maxMessageURLCharacters` is 5,000 and the envelope bound is the
+  derived 3,711 bytes (it was 16 KiB, four times the documented limit). The measurement is now the
+  only reason to raise it: send a recipe whose card sits just under 5,000 characters, then one just
+  over, and record whether iOS 26 still refuses the second with `urlExceedsMaxSize`. A mid-size
+  recipe (about ten steps of ordinary length) no longer fits; check that the composer says "too
+  large … export a Fernlet recipe file instead" rather than "couldn't insert".*
 - [ ] Sender and receiver both have the shipping Fernlet version: send and review one recipe and
   one planned-workout card.
 - [ ] Sender and receiver use different supported Fernlet versions: verify unsupported envelopes
@@ -36,6 +43,9 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
   the review resumes or expires cleanly without a duplicate import.
 - [ ] Use **Delete everything** with queued recipe and workout cards. Confirm neither card can
   reopen a pre-wipe import review.
+- [ ] After **Delete everything** — and separately after a duress wipe entered at the lock screen
+  right after launch — open Fernlet in the Messages app drawer and confirm the composer lists no
+  pre-wipe recipe or workout (the catalog clear stopped depending on launch wiring on 2026-09-23).
 
 ## Accessibility and presentation
 
@@ -43,6 +53,9 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
 - [ ] Verify Dynamic Type, VoiceOver labels, and reduced-motion behavior in the composer and both
   Fernlet review screens.
 - [ ] Confirm static/local card artwork renders without a network request.
+- [ ] Replace the PLACEHOLDER iMessage App Icon (`App/FernletMessagesExtension/Assets.xcassets`,
+  generated 2026-09-23 from the app icon) with purpose-made art, then confirm it in the Messages app
+  drawer, in Settings, and — once uploaded — that App Store Connect accepts the 1024×768 image.
 
 ## Localization
 
