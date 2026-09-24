@@ -134,6 +134,7 @@ struct CryptographicDomainSeparationTests {
         Domain("Hash.meshCustodyReceiptIDV1", FernletCryptoPurpose.Hash.meshCustodyReceiptIDV1),
         Domain("Hash.meshRecipientReceiptIDV1", FernletCryptoPurpose.Hash.meshRecipientReceiptIDV1),
         Domain("Hash.recoveryContentKeyV1", FernletCryptoPurpose.Hash.recoveryContentKeyV1),
+        Domain("Hash.moderationBanReporterTagV1", FernletCryptoPurpose.Hash.moderationBanReporterTagV1),
     ]
 
     /// Fixed, non-secret material. Deterministic on purpose: a failure here must reproduce.

@@ -2116,7 +2116,8 @@ shop) and local peer bans (their catalogs are dropped).
 | `applySelfBan(durationDays:...)` / `applyPeerBan(fingerprint:durationDays:...)` | Arm a ban. |
 | `isSelfBanned` / `selfBanRemainingSeconds()` / `isPeerBanned(fingerprint:)` | Countdown reads (which also refresh the credited-time record). |
 | `selfBanTamperCount()` | How often a clock rollback was detected. |
-| `reconcile(rows:localSigningKey:)` | Applies the bans the verified report set warrants, re-arming a served ban only on a NEW qualifying artwork. |
+| `reconcile(rows:localSigningKey:)` | Two directions (2026-09-24). Applies the bans the verified report set warrants — re-arming a served ban only on a NEW qualifying artwork — and records the evidence each rests on (`BanEvidence`: salted reporter tags, artwork hashes, seqs). LIFTS an active ban once reporters have POSITIVELY withdrawn enough of it (a `retract` superseding their report) that the rest misses the threshold (`ModerationBanRecovery`, uncapped and monotone). Absence, decay, clock moves and the banned device's own rows never count. |
+| `reporterTagger(salt:)` | The salted SHA-256 reporter tag (`FernletCryptoPurpose.Hash.moderationBanReporterTagV1`) — how a wipe-surviving ban record recognizes a reporter's withdrawal without holding their key. |
 
 Two survival properties, both deliberate: it survives **app delete + reinstall** (records live in the
 Keychain under the dedicated `com.fernlet.moderation` service, ThisDeviceOnly, and are never wiped by
@@ -2124,7 +2125,8 @@ identity resets — the self-ban is keyed to a constant device account, not the 
 survives **device clock changes** (a credited-time countdown over `mach_continuous_time` plus a
 wall-clock high-water ratchet: a rollback voids wall credit and flags tampering, a forward jump
 credits almost nothing, and the reboot-gap credit is capped). It is deliberately NOT cleared by
-"Reset everything".
+"Reset everything". Its exits are time served and reporters' withdrawals — see
+`Docs/Moderation-SelfBan-Recovery-2026-09-23.md`.
 
 ## UI Diagnostics
 

@@ -1744,7 +1744,9 @@ final class FernletStore {
         /// so the UI never shows a misleading "shop is full" message for the wrong reason.
         case notAllowed
         /// This device's store is banned (repeatedly-reported content) — nothing can be listed.
-        case storeBanned
+        /// Carries the ban's remaining time, read in the SAME keychain pass that refused the listing,
+        /// so the alert can say honestly when the shop reopens instead of "after a while".
+        case storeBanned(remainingSeconds: Double)
     }
 
     /// The user's own designs currently listed for sale.
@@ -1761,7 +1763,8 @@ final class FernletStore {
     /// List one of the user's OWN items for sale at `price`. Enforces the cap (a flagged name keeps the
     /// item unlisted with a notice; an over-cap attempt is refused). Records today for the gentle throttle.
     func listCustomItemForSale(id: UUID, price: Int) -> ShopListingResult {
-        if moderationBanStore.isSelfBanned { return .storeBanned }
+        let banRemaining = moderationBanStore.selfBanRemainingSeconds()
+        if banRemaining > 0 { return .storeBanned(remainingSeconds: banRemaining) }
         guard let item = customItems.first(where: { $0.id == id }), isSelfDesigned(item) else { return .notAllowed }
         if !item.isShareable && !canListMoreShopItems { return .capReached }
         let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2422,8 +2425,10 @@ final class FernletStore {
     /// Whether this device's own shop is currently banned for repeatedly-reported content.
     var isStoreBanned: Bool { moderationBanStore.isSelfBanned }
 
-    /// Re-evaluates escalation from the local report ledger and applies any warranted self/peer bans.
-    /// Inert until peers' verified reports arrive (Phase 3b) — a device only holds its own reports today.
+    /// Re-evaluates escalation from the local report ledger in both directions: applies any
+    /// warranted self/peer ban, and lifts an active one whose reporters have positively withdrawn
+    /// enough of its evidence (a relayed `retract`). Runs after every local report and every
+    /// verified relay batch — the batch is where a reporter's withdrawal arrives.
     func reconcileModerationBans() {
         moderationBanStore.reconcile(
             rows: moderationLedger.rows,

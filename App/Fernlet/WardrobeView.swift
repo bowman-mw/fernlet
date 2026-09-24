@@ -392,7 +392,7 @@ struct WardrobeView: View {
             assertionFailure("toggleListing reached .notAllowed behind the self-designed guard")
         case .nameFlagged: shopAlert = .nameFlagged
         case .capReached: shopAlert = .capReached
-        case .storeBanned: shopAlert = .storeBanned
+        case .storeBanned(let remainingSeconds): shopAlert = .storeBanned(remainingSeconds: remainingSeconds)
         }
     }
 }

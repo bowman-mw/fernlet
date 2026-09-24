@@ -444,5 +444,14 @@ public nonisolated enum FernletCryptoPurpose {
         /// ``meshCustodyReceiptIDV1`` so the two receipt families cannot collide on one id.
         public static let meshRecipientReceiptIDV1 = CryptographicPurpose("fernlet.mesh.recipient-receipt-id.hash.v1")
         public static let recoveryContentKeyV1 = CryptographicPurpose("fernlet.lock.recovery.contentkey.v1")
+        /// **Written since 2026-09-24 (tracker §3.5).** The domain a store ban's evidence records a
+        /// REPORTER under: SHA-256 over this tag, then the ban record's own 32-byte random salt, then
+        /// the reporter's signing key (`ModerationBanStore.reporterTagger(salt:)`). The tag lets a ban
+        /// recognize the same reporter's later withdrawal while the keychain row — which outlives
+        /// "Delete everything" by design — never holds another person's key; the per-record salt keeps
+        /// two records' tags unlinkable. Its own domain rather than a reuse of
+        /// ``FernletCryptoPurpose/Signature/moderationReportV2``: that one tags bytes a reporter SIGNS,
+        /// this one bytes that are hashed, and the spellings share no prefix.
+        public static let moderationBanReporterTagV1 = CryptographicPurpose("fernlet.moderation.ban-evidence.reporter-tag.hash.v1")
     }
 }

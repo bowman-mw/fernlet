@@ -746,8 +746,8 @@ struct CreationStudioView: View {
             shopAlert = .capReached
         case .notAllowed:
             leaveStudio()              // not your design (unreachable — `canSell` guards); item saved, just unlisted
-        case .storeBanned:
-            shopAlert = .storeBanned
+        case .storeBanned(let remainingSeconds):
+            shopAlert = .storeBanned(remainingSeconds: remainingSeconds)
         }
     }
 

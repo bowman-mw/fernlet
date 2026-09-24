@@ -176,6 +176,7 @@ on the reasoning.
 | `meshCustodyReceiptIDV1` | `fernlet.mesh.custody-receipt-id.hash.v1` | `MeshCustodyReceipt` (the derived dedup id — `(itemID, origin, custodian)`, excluding both the hedged signature and `custodiedAt`, so a re-mint of the same claim is the same id) |
 | `meshRecipientReceiptIDV1` | `fernlet.mesh.recipient-receipt-id.hash.v1` | `MeshRecipientReceipt` (the derived dedup id — `(itemID, origin, recipient)`, excluding both the hedged signature and `receivedAt`; ONE id per `(recipient, item)`, which is the wire-level statement that a recipient receipt is whole-item and never per chunk) |
 | `recoveryContentKeyV1` | `fernlet.lock.recovery.contentkey.v1` | `FernletLockService` |
+| `moderationBanReporterTagV1` | `fernlet.moderation.ban-evidence.reporter-tag.hash.v1` | `ModerationBanStore` (the salted reporter tag a store ban's evidence records instead of a key — 2026-09-24, tracker §3.5) |
 
 ### A drift note, 2026-09-03 (P5 item 3)
 

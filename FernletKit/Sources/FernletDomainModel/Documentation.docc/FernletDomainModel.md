@@ -349,6 +349,8 @@ what actually happened.
 - ``ModerationLedgerEntry``
 - ``ClothingModerationLimits``
 - ``ModerationEconomy``
+- ``BanEvidence``
+- ``ModerationBanRecovery``
 
 ### Coins and milestones
 
