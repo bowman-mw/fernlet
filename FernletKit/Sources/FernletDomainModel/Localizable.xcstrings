@@ -145,6 +145,282 @@
         }
       }
     },
+    "companionEmotion.calm" : {
+      "comment" : "Companion feeling when opt-in body signals read calm",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Calm"
+          }
+        }
+      }
+    },
+    "companionEmotion.comforted" : {
+      "comment" : "Companion feeling on a hard day when a friend's heart or a pet arrives",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Comforted"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.calm" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling calm'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling calm"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.comforted" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling comforted'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling comforted"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.frazzled" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling a little frazzled'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling a little frazzled"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.happy" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling happy'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling happy"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.hungry" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling hungry'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling hungry"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.loved" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling loved'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling loved"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.playful" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling playful'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling playful"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.sad" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling sad'. Sad with the person, never disappointed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling sad"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.sleepy" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling sleepy'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling sleepy"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.thirsty" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling thirsty'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling thirsty"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.tired" : {
+      "comment" : "Follows the companion's state: 'Tired, feeling tired'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling tired"
+          }
+        }
+      }
+    },
+    "companionEmotion.frazzled" : {
+      "comment" : "Companion feeling when opt-in body signals read tense — warm, never alarming",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A little frazzled"
+          }
+        }
+      }
+    },
+    "companionEmotion.happy" : {
+      "comment" : "Companion feeling: cheerful. Shown beside the companion's state",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Happy"
+          }
+        }
+      }
+    },
+    "companionEmotion.hungry" : {
+      "comment" : "Companion feeling when no meal has been logged in a while",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hungry"
+          }
+        }
+      }
+    },
+    "companionEmotion.loved" : {
+      "comment" : "Companion feeling after a friend sent a heart",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Loved"
+          }
+        }
+      }
+    },
+    "companionEmotion.playful" : {
+      "comment" : "Companion feeling right after being petted",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Playful"
+          }
+        }
+      }
+    },
+    "companionEmotion.sad" : {
+      "comment" : "Companion feeling on a day the person tagged hard — sad WITH them, never disappointed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sad"
+          }
+        }
+      }
+    },
+    "companionEmotion.sleepy" : {
+      "comment" : "Companion feeling during the person's bedtime hours",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleepy"
+          }
+        }
+      }
+    },
+    "companionEmotion.stateAndFeeling" : {
+      "comment" : "The companion's spoken status: its state, then its feeling. Example: 'Okay, feeling sleepy'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "companionEmotion.thirsty" : {
+      "comment" : "Companion feeling when water is behind the day's pace",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thirsty"
+          }
+        }
+      }
+    },
+    "companionEmotion.tired" : {
+      "comment" : "Companion feeling: low on energy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tired"
+          }
+        }
+      }
+    },
     "companionState.okay" : {
       "comment" : "Companion wellbeing state: steady",
       "extractionState" : "extracted_with_value",
@@ -465,6 +741,54 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Data from Open Food Facts (ODbL)"
+          }
+        }
+      }
+    },
+    "goal.weightManagement.nutrition.default" : {
+      "comment" : "Goal card: Weight Management at the default deficit. The argument is a percentage such as 10%",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A gentle calorie deficit (up to %@) · higher protein"
+          }
+        }
+      }
+    },
+    "goal.weightManagement.nutrition.larger" : {
+      "comment" : "Goal card: Weight Management with a larger deficit the user chose. The argument is a percentage such as 15%",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A calorie deficit (up to %@, your choice) · higher protein"
+          }
+        }
+      }
+    },
+    "goal.weightManagement.nutrition.noDeficit" : {
+      "comment" : "Goal card: Weight Management when the user chose no calorie deficit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Maintenance calories (no deficit, your choice) · higher protein"
+          }
+        }
+      }
+    },
+    "goal.weightManagement.nutrition.smaller" : {
+      "comment" : "Goal card: Weight Management with a smaller deficit the user chose. The argument is a percentage such as 5%",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A gentle calorie deficit (up to %@, your choice) · higher protein"
           }
         }
       }
@@ -1341,6 +1665,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ didn't come through as a number."
+          }
+        }
+      }
+    },
+    "recipePart.fallbackName" : {
+      "comment" : "Name given to a part of a multipart recipe the user left unnamed, e.g. Part 2",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Part %lld"
           }
         }
       }

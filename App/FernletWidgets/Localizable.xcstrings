@@ -27,6 +27,16 @@
         }
       }
     },
+    "%lld of %lld bottles today" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld bottles today"
+          }
+        }
+      }
+    },
     "%lld/%lld" : {
       "localizations" : {
         "en" : {
@@ -206,6 +216,162 @@
     },
     "bottles today" : {
 
+    },
+    "companionEmotion.feeling.happy" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling happy'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling happy"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.hungry" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling hungry'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling hungry"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.sad" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling sad'. Sad with the person, never disappointed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling sad"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.sleepy" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling sleepy'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling sleepy"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.thirsty" : {
+      "comment" : "Follows the companion's state: 'Okay, feeling thirsty'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling thirsty"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.tired" : {
+      "comment" : "Follows the companion's state: 'Tired, feeling tired'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "feeling tired"
+          }
+        }
+      }
+    },
+    "companionEmotion.happy" : {
+      "comment" : "Companion feeling: cheerful. Shown beside the companion's state",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Happy"
+          }
+        }
+      }
+    },
+    "companionEmotion.hungry" : {
+      "comment" : "Companion feeling when no meal has been logged in a while",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hungry"
+          }
+        }
+      }
+    },
+    "companionEmotion.sad" : {
+      "comment" : "Companion feeling on a day the person tagged hard — sad WITH them, never disappointed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sad"
+          }
+        }
+      }
+    },
+    "companionEmotion.sleepy" : {
+      "comment" : "Companion feeling during the person's bedtime hours",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleepy"
+          }
+        }
+      }
+    },
+    "companionEmotion.stateAndFeeling" : {
+      "comment" : "The companion's spoken status: its state, then its feeling. Example: 'Okay, feeling sleepy'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "companionEmotion.thirsty" : {
+      "comment" : "Companion feeling when water is behind the day's pace",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thirsty"
+          }
+        }
+      }
+    },
+    "companionEmotion.tired" : {
+      "comment" : "Companion feeling: low on energy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tired"
+          }
+        }
+      }
     },
     "companionState.okay" : {
       "comment" : "Companion wellbeing state: steady",

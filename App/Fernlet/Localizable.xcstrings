@@ -43,6 +43,9 @@
         }
       }
     },
+    "%@ (default)" : {
+
+    },
     "%@ - %@" : {
       "localizations" : {
         "en" : {
@@ -328,6 +331,16 @@
     },
     "%@, intimacy logged" : {
 
+    },
+    "%@, part %lld of %lld. Step %lld of %lld. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, part %2$lld of %3$lld. Step %4$lld of %5$lld. %6$@"
+          }
+        }
+      }
     },
     "%@, predicted period day" : {
 
@@ -1033,7 +1046,13 @@
     "Add an item" : {
 
     },
+    "Add another part" : {
+
+    },
     "Add by hand" : {
+
+    },
+    "Add ingredient" : {
 
     },
     "Add its macros below, then save the custom ingredient." : {
@@ -1286,6 +1305,9 @@
     "Basal body temperature: %@ °F" : {
 
     },
+    "Bedtime" : {
+
+    },
     "Begin" : {
 
     },
@@ -1380,6 +1402,9 @@
 
     },
     "Calls" : {
+
+    },
+    "Calorie deficit" : {
 
     },
     "Calorie figures stay hidden everywhere else — this one only shapes your protein, fat and carb split." : {
@@ -1579,6 +1604,9 @@
 
     },
     "Companion" : {
+
+    },
+    "Companion feelings" : {
 
     },
     "Companion thought" : {
@@ -2614,6 +2642,9 @@
     "Food match" : {
 
     },
+    "For a recipe made in stages, like a dressing you make first and a salad you put together after." : {
+
+    },
     "For anything a report or block can't resolve, reach the developer, Michael Bowman Olay." : {
 
     },
@@ -2690,6 +2721,16 @@
     },
     "Friends tab" : {
 
+    },
+    "From %@ to %@, in steps of %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From %1$@ to %2$@, in steps of %3$@."
+          }
+        }
+      }
     },
     "From recipe" : {
 
@@ -2857,6 +2898,9 @@
 
     },
     "How's today feeling?" : {
+
+    },
+    "Hunger and thirst cues" : {
 
     },
     "Hydration" : {
@@ -3287,7 +3331,23 @@
     "Made by %@, for your companion." : {
 
     },
+    "Made in %lld parts. Start with %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Made in %1$lld parts. Start with %2$@."
+          }
+        }
+      }
+    },
     "Make Fernlet yours" : {
+
+    },
+    "Make part %lld earlier" : {
+
+    },
+    "Make part %lld later" : {
 
     },
     "Make the first little thing for your companion to wear. New creations appear on your companion right away." : {
@@ -3450,6 +3510,12 @@
     "Move closer so the label fills the frame." : {
 
     },
+    "Move step %lld down" : {
+
+    },
+    "Move step %lld up" : {
+
+    },
     "Movement" : {
 
     },
@@ -3468,7 +3534,13 @@
     "Name" : {
 
     },
+    "Name of part %lld" : {
+
+    },
     "Name stays put — it's how your guided plan keeps track of this one." : {
+
+    },
+    "Name this part, like Dressing" : {
 
     },
     "Name your item" : {
@@ -3982,10 +4054,46 @@
     "Pain, form issues, stopped early..." : {
 
     },
+    "Part %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Part %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Part %lld of %lld · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Part %1$lld of %2$lld · %3$@"
+          }
+        }
+      }
+    },
+    "Part %lld of %lld: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Part %1$lld of %2$lld: %3$@"
+          }
+        }
+      }
+    },
     "Partial nutrition data — some meals were logged without micronutrients." : {
 
     },
     "Partly shared" : {
+
+    },
+    "Parts" : {
+
+    },
+    "Parts: %@" : {
 
     },
     "Paste URL" : {
@@ -4502,6 +4610,12 @@
     "Remove member?" : {
 
     },
+    "Remove part" : {
+
+    },
+    "Remove part %lld" : {
+
+    },
     "Remove participant?" : {
 
     },
@@ -4511,7 +4625,13 @@
     "Remove recovery device?" : {
 
     },
+    "Remove step %lld" : {
+
+    },
     "Remove this meal?" : {
+
+    },
+    "Remove this part?" : {
 
     },
     "Remove this photo" : {
@@ -4521,6 +4641,9 @@
 
     },
     "Remove timer" : {
+
+    },
+    "Remove “%@”?" : {
 
     },
     "Removed" : {
@@ -4795,6 +4918,9 @@
 
     },
     "Scan a food" : {
+
+    },
+    "Scan barcode" : {
 
     },
     "Scan label" : {
@@ -5158,6 +5284,9 @@
     "Split" : {
 
     },
+    "Split into parts" : {
+
+    },
     "Sport" : {
 
     },
@@ -5421,6 +5550,9 @@
     "The lock guards period, intimacy, and other sensitive areas before they open." : {
 
     },
+    "The part's ingredients and steps are taken out of this recipe." : {
+
+    },
     "The recipe, its steps and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this." : {
 
     },
@@ -5448,7 +5580,7 @@
     "The words you wrote for this day are sealed on this device — deleting them can't be undone." : {
 
     },
-    "Theme, backgrounds, Home widgets" : {
+    "Theme, backgrounds, companion, Home widgets" : {
 
     },
     "These are optional except age. Fernlet never asks for weight goals." : {
@@ -5761,6 +5893,9 @@
     "Up next" : {
 
     },
+    "Up to this much below what your body is estimated to use in a day. Your calories never go under a safe floor for your body, whatever you choose." : {
+
+    },
     "Update data" : {
 
     },
@@ -5825,6 +5960,9 @@
 
     },
     "Waiting for another participant to second this decision." : {
+
+    },
+    "Wake-up" : {
 
     },
     "Wardrobe" : {
@@ -5903,6 +6041,9 @@
 
     },
     "When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later." : {
+
+    },
+    "When it's been a while since a meal or some water, your companion can look a little hungry or thirsty — only in waking hours, never when you're unwell. Turn this off and it never will." : {
 
     },
     "When off, your local Fernlet data is excluded from iOS and iCloud device backups." : {
@@ -6120,6 +6261,9 @@
     "You've saved %lld locations — remove one to add another." : {
 
     },
+    "You've set your own calorie target, so the deficit isn't used. Clear the Calories field to use it again." : {
+
+    },
     "You: %@" : {
 
     },
@@ -6133,6 +6277,12 @@
 
     },
     "Your closet is empty" : {
+
+    },
+    "Your companion gets sleepy at bedtime and wakes with you. It never mentions food or water in the last hour and a half before bed." : {
+
+    },
+    "Your companion shows how it feels — sleepy at bedtime, happy on a bright day, sad with you on a hard one. Its feelings are worked out on this phone and are never synced or sent to friends." : {
 
     },
     "Your companion, wardrobe and coins" : {
