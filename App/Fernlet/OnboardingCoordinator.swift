@@ -92,6 +92,13 @@ struct OnboardingCloudDataDetectorFactory {
 /// (``OnboardingDefaults``) immediately, and the storage step, which writes preferences from its
 /// own view. `@MainActor` + `@Observable`: SwiftUI reads it on the main actor and re-renders on
 /// mutation; the store and completion callback are `@ObservationIgnored` since they never change.
+///
+/// The personal-details step exits through ``ageCheckFinished()`` rather than ``advance()``: for a
+/// user the 16+ intimacy gate admits, the age check is followed by ``OnboardingIntimacyChoiceScreen``
+/// — keep intimacy tracking (the default) or turn it off — as a second page of that same step. The
+/// answer is draft state too, committed by ``complete()`` through the same setter the Settings
+/// toggle uses. Under-16 and undetermined users never see the page and their setting is never
+/// touched.
 @MainActor
 @Observable
 final class OnboardingCoordinatorModel {
@@ -126,16 +133,28 @@ final class OnboardingCoordinatorModel {
     /// read this one value, so they cannot disagree about what colour was chosen.
     var starterColor: CompanionAssetColor = .fern
     var proximityDisplayName = ""
+    /// The answer from the intimacy choice page — `nil` until the user continues past it, so a user
+    /// who never saw the page (under 16, undetermined) or never answered it leaves the setting
+    /// exactly as it stands. Draft like everything else here: only ``complete()`` commits it.
+    private(set) var intimacyTrackingDraft: Bool?
+    /// Whether the personal-details step is showing its second page, the intimacy choice. Raised
+    /// only by ``ageCheckFinished()`` for a user the 16+ gate admits.
+    private(set) var isShowingIntimacyChoice = false
 
     @ObservationIgnored private let store: FernletStore
     @ObservationIgnored private let onComplete: () -> Void
+    /// Where the lock step's deferral and the completion bit land (``OnboardingDefaults``).
+    @ObservationIgnored private let defaults: UserDefaults
 
     /// Exposed so the personal-details step can run the system age-range request. Onboarding is the one
     /// place Fernlet asks unprompted; everywhere else the request is user-initiated from Settings.
     var ageAssurance: AgeAssuranceStore { store.ageAssurance }
 
-    init(store: FernletStore, onComplete: @escaping () -> Void) {
+    /// - Parameter defaults: Where the lock deferral and `hasCompletedOnboarding` are written.
+    ///   Production uses `.standard`, which `FernletApp` reads; tests pass a throwaway suite.
+    init(store: FernletStore, defaults: UserDefaults = .standard, onComplete: @escaping () -> Void) {
         self.store = store
+        self.defaults = defaults
         self.onComplete = onComplete
         self.goal = store.settings.selectedGoal
         self.profile = store.settings.userProfile
@@ -172,7 +191,7 @@ final class OnboardingCoordinatorModel {
 
     /// Records that lock setup was deferred ("Face ID later" or "Skip for now"), audits it, and advances.
     func deferLockSetup() {
-        UserDefaults.standard.set(true, forKey: OnboardingDefaults.lockSetupDeferredKey)
+        defaults.set(true, forKey: OnboardingDefaults.lockSetupDeferredKey)
         FernletAuditLog.log("onboarding.lock.skipped")
         advance()
     }
@@ -181,19 +200,75 @@ final class OnboardingCoordinatorModel {
     /// method, and advances.
     /// - Parameter method: Audit-log label for how the lock was set up (e.g. "passcode").
     func markLockSetupChosen(via method: String) {
-        UserDefaults.standard.set(false, forKey: OnboardingDefaults.lockSetupDeferredKey)
+        defaults.set(false, forKey: OnboardingDefaults.lockSetupDeferredKey)
         FernletAuditLog.log("onboarding.lock.chosen", context: ["method": method])
         advance()
+    }
+
+    // MARK: - Intimacy tracking choice (right after the age gate)
+
+    /// Whether the intimacy choice applies to this user: only while the age gate is OPEN for
+    /// intimacy. Reads the one derived gate every intimacy surface reads —
+    /// `FernletStore.isIntimateLoggingAllowed`, i.e. `AgeAssuranceStore.allows(.intimacy)` — so a
+    /// user the system placed under 16, or never ruled on, can never be offered it.
+    var offersIntimacyTrackingChoice: Bool { store.isIntimateLoggingAllowed }
+
+    /// What the choice page shows selected: the user's answer once given, else the setting as it
+    /// stands — `true` ("keep") on every fresh install, because `intimacyTrackingVisible` defaults on.
+    var keepsIntimacyTracking: Bool { intimacyTrackingDraft ?? store.settings.intimacyTrackingVisible }
+
+    /// The personal-details step's exit once the system age check has answered (declined and
+    /// unavailable included): straight on for everyone the 16+ gate refuses, the intimacy choice
+    /// page first for everyone it admits.
+    ///
+    /// A page swap inside the step rather than a presented sheet, deliberately: this runs the moment
+    /// the SYSTEM age-range sheet returns, and a presentation started while that one is still
+    /// animating away can fail silently on device — leaving a flag raised over nothing on screen.
+    func ageCheckFinished() {
+        guard offersIntimacyTrackingChoice else {
+            advance()
+            return
+        }
+        isShowingIntimacyChoice = true
+    }
+
+    /// The choice page's Continue: records the answer as draft and moves the flow on.
+    func confirmIntimacyTrackingChoice(keep: Bool) {
+        intimacyTrackingDraft = keep
+        isShowingIntimacyChoice = false
+        advance()
+    }
+
+    /// The choice page's Back: returns to the personal-details form with nothing recorded.
+    func leaveIntimacyChoice() {
+        isShowingIntimacyChoice = false
+    }
+
+    /// Commits the intimacy answer through `FernletStore.setIntimacyTrackingVisible(_:)` — the SAME
+    /// setter the Settings toggle drives — so the answer IS the Settings setting and can be changed
+    /// there any time. Off is a hide on the gate's usual terms, never a delete: the sealed logs stay,
+    /// unread, until the user turns it back on.
+    ///
+    /// Writes nothing without an answer, when the answer matches the setting (a default "keep" leaves
+    /// the default untouched and runs no un-hide settle), or when the gate is closed by the time
+    /// onboarding completes — someone who answered, went back and re-ran the check to a closed verdict
+    /// is someone the choice no longer applies to.
+    private func applyIntimacyTrackingChoice() {
+        guard let keep = intimacyTrackingDraft, offersIntimacyTrackingChoice else { return }
+        guard keep != store.settings.intimacyTrackingVisible else { return }
+        store.setIntimacyTrackingVisible(keep)
     }
 
     /// Commits every accumulated choice to the store, marks onboarding done, and hands control back
     /// to `FernletApp` via `onComplete`.
     ///
     /// - Important: This is the single persistence point for the flow — profile, preferences, goal,
-    ///   default workout goals/profile, proximity display name, companion name, and the starter
-    ///   body color all land here, so a flow abandoned before this call leaves the store untouched.
+    ///   default workout goals/profile, proximity display name, companion name, the starter body
+    ///   color, and the intimacy answer all land here, so a flow abandoned before this call leaves
+    ///   the store untouched.
     func complete() {
         store.completeOnboarding(profile: profile, preferences: nutritionPreferences, goal: goal)
+        applyIntimacyTrackingChoice()
         store.replaceGoals(WorkoutPlanner.defaultGoals(
             level: goalPlanningLevel,
             interests: goalPlanningInterests,
@@ -221,7 +296,7 @@ final class OnboardingCoordinatorModel {
         var appearance = store.settings.companionAppearance
         appearance.bodyColor = starterColor
         store.setCompanionAppearance(appearance)
-        UserDefaults.standard.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
+        defaults.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
         onComplete()
     }
 }
@@ -251,6 +326,8 @@ struct OnboardingCoordinator: View {
             currentScreen
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.step)
+        // The personal-details step's second page swaps in with the same spring as a step change.
+        .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.isShowingIntimacyChoice)
     }
 
     @ViewBuilder
@@ -292,14 +369,7 @@ struct OnboardingCoordinator: View {
                 continueAction: model.advance
             )
         case .personalDetails:
-            OnboardingPersonalDetailsScreen(
-                stepText: model.step.indexText,
-                profile: $model.profile,
-                displayName: $model.proximityDisplayName,
-                ageAssurance: model.ageAssurance,
-                backAction: model.backActionIfAvailable,
-                continueAction: model.advance
-            )
+            personalDetailsStep
         case .dietaryPattern:
             OnboardingDietaryPatternScreen(
                 stepText: model.step.indexText,
@@ -312,6 +382,35 @@ struct OnboardingCoordinator: View {
                 stepText: model.step.indexText,
                 backAction: model.backActionIfAvailable,
                 finishAction: model.complete
+            )
+        }
+    }
+
+    /// The personal-details step: its form, then — for a user the 16+ gate admits — its second page,
+    /// the intimacy choice.
+    ///
+    /// Continue on the form exits through ``OnboardingCoordinatorModel/ageCheckFinished()`` rather
+    /// than `advance`, because the age answer decides whether the choice page comes first. The page
+    /// belongs to THIS step (same "N of 8" caption) rather than being a ninth one, so the count
+    /// never depends on an age answer and nobody the gate refuses meets a step that isn't there for
+    /// them. Its Back returns to the form, not to the previous step.
+    @ViewBuilder
+    private var personalDetailsStep: some View {
+        if model.isShowingIntimacyChoice {
+            OnboardingIntimacyChoiceScreen(
+                stepText: model.step.indexText,
+                keepsIntimacyTracking: model.keepsIntimacyTracking,
+                backAction: model.leaveIntimacyChoice,
+                continueAction: model.confirmIntimacyTrackingChoice(keep:)
+            )
+        } else {
+            OnboardingPersonalDetailsScreen(
+                stepText: model.step.indexText,
+                profile: $model.profile,
+                displayName: $model.proximityDisplayName,
+                ageAssurance: model.ageAssurance,
+                backAction: model.backActionIfAvailable,
+                continueAction: model.ageCheckFinished
             )
         }
     }
@@ -495,7 +594,9 @@ private struct OnboardingStarterScreen: View {
 /// The typed age (field + ±1 stepper) feeds nutrition targets only; the age-gated features
 /// (intimacy 16+, mesh chat 13+) read Apple's DeclaredAgeRange answer instead, requested through
 /// ``AgeAssuranceStore`` when Continue is tapped. A declined or unavailable answer never blocks
-/// onboarding.
+/// onboarding. `continueAction` runs once the answer is recorded; the coordinator wires it to
+/// ``OnboardingCoordinatorModel/ageCheckFinished()``, which shows users the 16+ gate admits the
+/// step's second page, ``OnboardingIntimacyChoiceScreen``.
 private struct OnboardingPersonalDetailsScreen: View {
     var stepText: String
     @Binding var profile: UserNutritionProfile
