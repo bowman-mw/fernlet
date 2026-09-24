@@ -250,9 +250,14 @@ jobs:
       # was green only when somebody remembered to run it locally, which is the gap the mesh
       # batteries sat in for three phases. They are source scans over the live tree (plus the wipe
       # wall's two single-cell behaviour suites), so each step is cheap and its own: a red names its
-      # wall in the Actions list. Floors are 1 in the commit that adds the steps — "at least not
-      # vacuous", the wall-step convention above — and are RAISED to the measured bundle count in
-      # the commit that measures them.
+      # wall in the Actions list. Each floor is MEASURED (2026-09-24), not the wall-step `1`: each
+      # line run exactly as written below, at floor 1, after a CLEAN build-for-testing of the final
+      # integration head 0c48e45 with this round's commits on top, and read off its own result
+      # bundle — privacy-wipe 42 tests in 4 suites, accessibility 20 in 1, memory-lifecycle 8 in 1,
+      # messages-extension 5 in 1, codeowners 2 in 1; 0 failed, 0 skipped, no `Restarting after
+      # unexpected exit` line on any of them. A wall's own cells count here, so a wall that loses
+      # its fixtures or its tree scan reds on the floor as well as on its name. RAISE a floor when
+      # its wall grows; never lower it in passing.
       - name: Privacy-wipe walls (PrivacyWipeCoverageTests + PersistedSurfaceWipeBoundaryTests)
         # "Delete everything" is a promise with no compiler half. PrivacyWipeCoverageTests pins, in
         # the bodies of the wipe path only, a call for every manifest row, a registered body for
@@ -268,7 +273,7 @@ jobs:
         # otherwise skip the two silently. So all three are named.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh privacy-wipe 1 \
+          Scripts/run-gated-suites.sh privacy-wipe 42 \
             PrivacyWipeCoverageTests \
             PrivacyWipeMediaKeySurvivalTests \
             PrivacyWipeAttemptMemoryRemovalTests \
@@ -283,7 +288,7 @@ jobs:
         # doc-coverage-scan.py do; this step is the Swift half and the port-drift pins.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh accessibility 1 AccessibilityBoundaryTests
+          Scripts/run-gated-suites.sh accessibility 20 AccessibilityBoundaryTests
 
       - name: Memory-lifecycle wall (MemoryLifecycleBoundaryTests)
         # ML1–ML5: stored Task handles cancelled in deinit, block observers removed, observation
@@ -293,7 +298,7 @@ jobs:
         # siblings and stay off every line (MeshP9HonestyAcceptanceTests.ungatedByDesign says why).
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh memory-lifecycle 1 MemoryLifecycleBoundaryTests
+          Scripts/run-gated-suites.sh memory-lifecycle 8 MemoryLifecycleBoundaryTests
 
       - name: Messages-extension wall (MessagesExtensionBoundaryTests)
         # The iMessage extension is a separate process Messages hosts, with its own privacy
@@ -304,7 +309,7 @@ jobs:
         # appex, so these source pins are most of what holds the target at all.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh messages-extension 1 MessagesExtensionBoundaryTests
+          Scripts/run-gated-suites.sh messages-extension 5 MessagesExtensionBoundaryTests
 
       - name: CODEOWNERS resolution (CodeOwnersResolutionTests)
         # GitHub never complains about a CODEOWNERS pattern that matches nothing — it silently stops
@@ -313,7 +318,7 @@ jobs:
         # protection (Docs/Release-Process.md §1) is only true while this passes.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh codeowners 1 CodeOwnersResolutionTests
+          Scripts/run-gated-suites.sh codeowners 2 CodeOwnersResolutionTests
 
       - name: Mesh acceptance batteries (P3 – P9) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
@@ -800,12 +805,22 @@ jobs:
         # suites of MeshChunkTests.swift, MeshCustodyReceiptTests.swift, MeshRecipientReceiptTests.swift,
         # MeshRoutedDrainAnswerTests.swift and MeshRoutedInventoryTests.swift.
         # The NAME count moves 141 -> 154 in CIGateSelectorBoundaryTests' `measuredSuiteNameCounts` in
-        # this same commit. The FLOOR stays 1226 here — still a true lower bound, since names only
-        # joined — and is RAISED to the measured bundle count, on a clean build of the integration
-        # head, in the commit that measures it.
+        # this same commit. The FLOOR stayed 1226 in that commit — still a true lower bound, since
+        # names only joined — until it was measured:
+        # RAISED 1226 -> 1353 (2026-09-24). MEASURED over this exact 154-name list on a Mac after a
+        # CLEAN build-for-testing of the final integration head 0c48e45 with this round's commits on
+        # top, read off the result bundle: "Test run with 1353 tests in 154 suites" (180.380 s) —
+        # and ONE red, deterministic: MeshRoutedItemSealGoldenTests' registry tripwire read
+        # `allDomains.count` 76 against a pin of 75, because the moderation round registered
+        # `Hash.moderationBanReporterTagV1` and its gates never ran this line. The tripwire was
+        # acknowledged (75 -> 76, a separate commit; no count moves) and the line re-run AT 1353:
+        # "Test run with 1353 tests in 154 suites passed after 178.457 seconds", 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. 1226 + 125 (the thirteen) + 2
+        # (CIGateSelectorBoundaryTests' two new cells) = 1353 is the ARITHMETIC CHECK, never the
+        # number.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1226 \
+          Scripts/run-gated-suites.sh mesh-batteries 1353 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
