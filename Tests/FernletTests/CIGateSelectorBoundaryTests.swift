@@ -131,8 +131,17 @@ import Testing
     /// `accessibility`, `memory-lifecycle`, `messages-extension` and `codeowners` (1 each). Each is
     /// also pinned by name in ``wallLines``, since a count of one cannot tell its wall from another.
     /// Counted off the lines.
+    ///
+    /// RE-MEASURED at the 2026-09-24 round (companion emotions, recipes made in parts, the version-2
+    /// Messages card): `s3-grep` 7 → 8, for `CompanionEmotionPrivacyTests` — the wall behind
+    /// Docs/Verifiability.md's "your companion's feelings are never saved, synced, exported or sent to
+    /// friends"; the step's floor stays the shared `1`. Two lines are NEW, one per exchange wire that
+    /// had no compiler half and ran on no line: `messages-envelope` (3: the version-2 envelope, the
+    /// multipart packet, and the exchange core with its version-1 goldens) and `recipe-wire` (1: the
+    /// multipart `fernlet.recipe` golden and its older-reader mirrors). Each is also pinned by name
+    /// in ``wallLines``. Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 7,
+        "s3-grep": 8,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,
@@ -143,6 +152,8 @@ import Testing
         "memory-lifecycle": 1,
         "messages-extension": 1,
         "codeowners": 1,
+        "messages-envelope": 3,
+        "recipe-wire": 1,
         "mesh-batteries": 154
     ]
 
@@ -154,7 +165,7 @@ import Testing
     /// suite here is a wall with no compiler half — the `MeshRoutedDrainWallTests` argument — so its
     /// line leaving, or it leaving its line, must red rather than go quiet.
     private static let wallLines: [String: [String]] = [
-        "s3-grep": ["S3BoundaryTests"],
+        "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests"],
         "no-tracking": ["NoTrackingBoundaryTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],
@@ -167,7 +178,10 @@ import Testing
         "accessibility": ["AccessibilityBoundaryTests"],
         "memory-lifecycle": ["MemoryLifecycleBoundaryTests"],
         "messages-extension": ["MessagesExtensionBoundaryTests"],
-        "codeowners": ["CodeOwnersResolutionTests"]
+        "codeowners": ["CodeOwnersResolutionTests"],
+        "messages-envelope": ["ExchangeMessageEnvelopeV2Tests", "ExchangeMultipartRecipeTests",
+                              "FernletExchangeTests"],
+        "recipe-wire": ["RecipeMultipartWireTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -254,7 +268,7 @@ import Testing
     @Test func everyGatedSelectorNamesADeclaredSuite() throws {
         let steps = Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath))
         let declared = try Self.declaredTopLevelTypes()
-        #expect(steps.count >= 12, "the workflow lost test steps — \(steps.count) floor-script invocations found")
+        #expect(steps.count >= 14, "the workflow lost test steps — \(steps.count) floor-script invocations found")
         var undeclared: [String] = []
         // R2: bounded by the step count × the suite count.
         for step in steps {

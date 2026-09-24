@@ -176,12 +176,20 @@ jobs:
         # anywhere; and this step's floor is the shared `1`, so adding a name here needs no Mac to
         # re-measure, whereas the mesh step's floor is a measured test count that a draft must not
         # guess at. Item 9 may move it when it measures its own battery line.
+        #
+        # `CompanionEmotionPrivacyTests` joins them at the 2026-09-24 round. The companion's feelings are
+        # presentation only: the type is not `Codable`, a reviewed allowlist names every file that may
+        # mention it, and the friend payload and the stored day score are pinned unchanged. It is the
+        # wall Docs/Verifiability.md cites for "your companion's feelings are never saved, synced,
+        # exported or sent to friends", it has no compiler half, and this step's floor is the shared `1`,
+        # so the name needs no re-measure (the line ran 88 tests in 8 suites on the round's integrated
+        # tree).
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
             AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests \
             CompanionRefreshSchedulingTests CompanionRefreshPipelineTests \
-            WidgetSnapshotContentEqualityTests
+            WidgetSnapshotContentEqualityTests CompanionEmotionPrivacyTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
@@ -319,6 +327,35 @@ jobs:
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh codeowners 2 CodeOwnersResolutionTests
+
+      # The two exchange-wire lines below are the 2026-09-24 round's (the version-2 Messages card, and
+      # recipes made in parts). Each pins a WIRE — bytes that an older build, or a card already sitting
+      # in a conversation, must keep reading — and neither has a compiler half, so until they ran here
+      # they were green only when somebody remembered to run them. Floors MEASURED on the round's
+      # integrated tree (a clean build-for-testing), each line run exactly as written below at floor 1
+      # and read off its own result bundle: messages-envelope 46 tests in 3 suites, recipe-wire 19 in 1;
+      # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. RAISE a floor when its wire
+      # grows; never lower it in passing.
+      - name: Messages envelope (ExchangeMessageEnvelopeV2Tests + ExchangeMultipartRecipeTests + FernletExchangeTests)
+        # The Messages wire: the inflate-bomb bound checked before a byte is inflated, the tight
+        # 3,719-byte frame bound under Apple's 5,000-character URL limit, the two version-1 cards minted
+        # by the 2026-09-23 build that must keep opening, the literal version-1 content-hash pre-images,
+        # and the versioned scheme-2 hash for a recipe made in parts.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh messages-envelope 46 \
+            ExchangeMessageEnvelopeV2Tests \
+            ExchangeMultipartRecipeTests \
+            FernletExchangeTests
+
+      - name: Recipe wire for recipes made in parts (RecipeMultipartWireTests)
+        # The `fernlet.recipe` payload a recipe made in parts travels as on the paste text and the mesh's
+        # `.local` arm: the salad-and-dressing golden, one-part payloads byte-identical to every earlier
+        # build, and mirrors of the older readers, which must still read a flat recipe. A failing golden
+        # is a WIRE decision, never re-pinned from Swift's output.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh recipe-wire 19 RecipeMultipartWireTests
 
       - name: Mesh acceptance batteries (P3 – P9) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
