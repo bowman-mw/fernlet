@@ -422,7 +422,7 @@ struct SettingsSheet: View {
     /// (spec note 3: every row on the old hub has a stated home).
     private var yourDaySection: some View {
         Section {
-            hubLink("Appearance", subtitle: Text("Theme, backgrounds, Home widgets"), .appearance)
+            hubLink("Appearance", subtitle: Text("Theme, backgrounds, companion, Home widgets"), .appearance)
                 .accessibilityIdentifier("settings.row.appearance")
             hubLink("Goal & nutrition", subtitle: Text("Goal, body, targets, hydration, calories"), .goalNutrition)
                 .accessibilityIdentifier("settings.row.goalNutrition")
@@ -597,6 +597,9 @@ struct SettingsSheet: View {
     private var appearanceTab: some View {
         VStack(alignment: .leading, spacing: 14) {
             appearanceModeCard
+            SectionLabel("Companion feelings")
+            // A change re-derives the widget's emotion timeline, so republish it at once.
+            CompanionFeelingsSettingsCard(onChange: { store.publishWidgetSnapshot() })
             SectionLabel("Backgrounds")
             VStack(alignment: .leading, spacing: 12) {
                 Text("Choose separate backgrounds for light and dark mode. Cards and input boxes stay in the same color family so the existing text colors remain readable.")

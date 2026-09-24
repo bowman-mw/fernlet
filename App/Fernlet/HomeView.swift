@@ -73,6 +73,14 @@ struct HomeView: View {
     @State private var periodActivityTask: Task<Void, Never>?
     /// Cancel-and-replace handle for the settled-pose re-sync (R3: one sleeping task, not one per pet).
     @State private var settledResyncTask: Task<Void, Never>?
+    /// When the playful beat after the latest pet ends — the companion's `petted` emotion input.
+    /// In-memory only: a pet is a touch in this session, not something to remember across launches.
+    @State private var playfulUntil: Date?
+    /// The companion-feelings settings, read through `@AppStorage` so a change in Settings redraws
+    /// the companion at once. Same keys `CompanionEmotionPreferences` reads for the widget.
+    @AppStorage(CompanionEmotionPreferences.appetiteCuesKey) private var appetiteCuesEnabled = true
+    @AppStorage(CompanionEmotionPreferences.bedtimeMinuteKey) private var bedtimeMinute = CompanionSleepWindow.standard.bedtimeMinute
+    @AppStorage(CompanionEmotionPreferences.wakeMinuteKey) private var wakeMinute = CompanionSleepWindow.standard.wakeMinute
     /// The photowall strip's height, scaled with the user's text size — the tiles sit inside it and
     /// the thought bubble sits on top of it, so a fixed height clipped both at accessibility sizes.
     /// 126: FLOW-18 cut this to 92 for the compacted cold open, which shrank the prints to stamps.
@@ -486,75 +494,97 @@ struct HomeView: View {
 
     private var companionSection: some View {
         VStack(spacing: 10) {
-            CompanionView(
-                state: store.companionState,
-                appearance: store.settings.companionAppearance,
-                size: 132,
-                interactionLevel: companionPetCount,
-                equippedItems: store.equippedCustomItems,
-                stressTint: stressTintActive,
-                calmTint: calmTintActive,
-                settled: isCompanionSettled,
-                pausesAnimation: !isActive
-            )
-            .scaleEffect(isCompanionCalmSettling ? 0.98 : 1)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                interactWithCompanion()
-            }
-            .onLongPressGesture(minimumDuration: 0.45) {
-                isCompanionSheetPresented = true
-            }
-            // The app's one INTERACTIVE companion, and the only render that names itself (T1-10).
-            // `children: .ignore` makes the drawing a single element rather than leaving the outer
-            // label hoping to land on something — the figure is `Shape`s and decorative images, so
-            // without this there is nothing underneath for a label to attach to.
-            .accessibilityElement(children: .ignore)
-            // Name in the label, CHANGING STATE in the value: a value is re-announced when it
-            // changes while the element is focused, so the mood is heard when it moves rather than
-            // only on first landing. `displayName` is the localized display fork — never
-            // `rawValue`, which is a frozen cross-process token.
-            .accessibilityLabel("Fernlet companion")
-            .accessibilityValue(store.companionState.displayName)
-            // T2-2: the companion's line is only ever *drawn* inside the photowall strip, which the
-            // body drops entirely at accessibility text sizes — and which fades to `opacity(0)` after
-            // six seconds even at ordinary ones. Both leave it out of the accessibility tree, so the
-            // one piece of the companion that speaks in its own voice was unreachable to a screen
-            // reader for most of a session. See ``companionThought`` for the convention.
-            .accessibilityCustomContent("Thought", Text(verbatim: companionThought))
-            // It is a control, and it was never announced as one; the explicit default action makes
-            // the VoiceOver activate gesture pet the companion rather than depend on how SwiftUI
-            // maps `onTapGesture`.
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { interactWithCompanion() }
-            // The old hint promised "Press and hold to edit" — a gesture a VoiceOver user cannot
-            // make, since a long press is intercepted by the screen reader. The edit path is a
-            // named custom action instead, which is the reachable form of the same affordance.
-            .accessibilityAction(named: "Edit your companion") { isCompanionSheetPresented = true }
-            .accessibilityHint("Double tap to pet.")
-            .accessibilityIdentifier("home.companion")
-            // 8, down from 14 (FLOW-18): part of the compacted cold open.
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
-            .background {
-                // Home-only environment layer (time tint + optional sky accents).
-                // Composes beneath the companion; decorative only (no hit testing, no
-                // accessibility), so petting and the appearance probes are untouched.
-                // Full-bleed per the mockup: the wash feathers its own edges, so let it
-                // extend a little past the companion's tight bounds to dissolve into the
-                // parchment strip rather than stop at the frame.
-                CompanionAmbienceLayer(
-                    phase: .current(),
-                    ambient: store.settings.weatherPromptsEnabled ? companionAmbient : nil,
-                    isActive: isActive
-                )
-                .padding(.horizontal, -FernletMetrics.spaceMd)
-                .padding(.vertical, -FernletMetrics.spaceSm)
+            // A 30-second tick re-derives the emotion, so the time-driven ones — sleepy at bedtime,
+            // hungry at the hunger onset, the end of the playful beat after a pet — arrive while Home
+            // is open. The derivation is a pure function; the tick costs one evaluation.
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                companionHero(emotion: companionEmotion(at: context.date))
             }
 
             companionActions
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// The Home companion's emotion at `date`: the store's inputs plus the three app-only signals
+    /// (body signals, the pet, a friend's heart) and the companion-feelings settings.
+    private func companionEmotion(at date: Date) -> CompanionEmotion? {
+        store.companionEmotion(
+            at: date,
+            bodySignal: companionBodySignal,
+            playfulUntil: playfulUntil,
+            appetiteCuesEnabled: appetiteCuesEnabled,
+            sleepWindow: CompanionSleepWindow(bedtimeMinute: bedtimeMinute, wakeMinute: wakeMinute)
+        )
+    }
+
+    /// The interactive companion hero: the figure, its gestures, its accessibility, and the ambience.
+    private func companionHero(emotion: CompanionEmotion?) -> some View {
+        CompanionView(
+            state: store.companionState,
+            appearance: store.settings.companionAppearance,
+            size: 132,
+            interactionLevel: companionPetCount,
+            equippedItems: store.equippedCustomItems,
+            emotion: emotion,
+            gentleDay: store.isGentleCompanionDay,
+            settled: isCompanionSettled,
+            pausesAnimation: !isActive
+        )
+        .scaleEffect(isCompanionCalmSettling ? 0.98 : 1)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            interactWithCompanion()
+        }
+        .onLongPressGesture(minimumDuration: 0.45) {
+            isCompanionSheetPresented = true
+        }
+        // The app's one INTERACTIVE companion, and the only render that names itself (T1-10).
+        // `children: .ignore` makes the drawing a single element rather than leaving the outer
+        // label hoping to land on something — the figure is `Shape`s and decorative images, so
+        // without this there is nothing underneath for a label to attach to.
+        .accessibilityElement(children: .ignore)
+        // Name in the label, CHANGING STATE in the value: a value is re-announced when it
+        // changes while the element is focused, so the mood is heard when it moves rather than
+        // only on first landing. Built from the two localized display forks ("Okay, feeling
+        // sleepy") — never a `rawValue`, which is a frozen cross-process token.
+        .accessibilityLabel("Fernlet companion")
+        .accessibilityValue(CompanionEmotion.accessibilityValue(state: store.companionState, emotion: emotion))
+        // T2-2: the companion's line is only ever *drawn* inside the photowall strip, which the
+        // body drops entirely at accessibility text sizes — and which fades to `opacity(0)` after
+        // six seconds even at ordinary ones. Both leave it out of the accessibility tree, so the
+        // one piece of the companion that speaks in its own voice was unreachable to a screen
+        // reader for most of a session. See ``companionThought`` for the convention.
+        .accessibilityCustomContent("Thought", Text(verbatim: companionThought))
+        // It is a control, and it was never announced as one; the explicit default action makes
+        // the VoiceOver activate gesture pet the companion rather than depend on how SwiftUI
+        // maps `onTapGesture`.
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { interactWithCompanion() }
+        // The old hint promised "Press and hold to edit" — a gesture a VoiceOver user cannot
+        // make, since a long press is intercepted by the screen reader. The edit path is a
+        // named custom action instead, which is the reachable form of the same affordance.
+        .accessibilityAction(named: "Edit your companion") { isCompanionSheetPresented = true }
+        .accessibilityHint("Double tap to pet.")
+        .accessibilityIdentifier("home.companion")
+        // 8, down from 14 (FLOW-18): part of the compacted cold open.
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background {
+            // Home-only environment layer (time tint + optional sky accents).
+            // Composes beneath the companion; decorative only (no hit testing, no
+            // accessibility), so petting and the appearance probes are untouched.
+            // Full-bleed per the mockup: the wash feathers its own edges, so let it
+            // extend a little past the companion's tight bounds to dissolve into the
+            // parchment strip rather than stop at the frame.
+            CompanionAmbienceLayer(
+                phase: .current(),
+                ambient: store.settings.weatherPromptsEnabled ? companionAmbient : nil,
+                isActive: isActive
+            )
+            .padding(.horizontal, -FernletMetrics.spaceMd)
+            .padding(.vertical, -FernletMetrics.spaceSm)
+        }
     }
 
     /// The row of companion actions under the hero (HOME-22): Customize is a visible door now —
@@ -827,23 +857,21 @@ struct HomeView: View {
         }
     }
 
-    /// Presentation-only frazzle flag for the companion. Never overrides the sick/resting
-    /// postures (their own care states win), and only ever appears when the user opted in.
-    private var stressTintActive: Bool {
-        guard store.settings.stressAwarenessEnabled,
-              let state = stressService?.assessment?.state,
-              state == .tense || state == .needsCare else { return false }
-        return store.companionState != .sick && store.companionState != .resting
+    /// The opt-in body-signal reading as the companion's emotion input: `.tense` for tense or
+    /// needs-care, `.calm` for calm, nil otherwise — and always nil unless the person opted in. The
+    /// emotion engine keeps the frazzled and calm faces to thriving and okay days, as the old tint
+    /// flags did.
+    private var companionBodySignal: CompanionBodySignal? {
+        guard store.settings.stressAwarenessEnabled, let state = stressService?.assessment?.state else { return nil }
+        switch state {
+        case .tense, .needsCare: return .tense
+        case .calm: return .calm
+        case .okay: return nil
+        }
     }
 
-    /// Presentation-only calm/settled accent for the companion — the positive counterpart to
-    /// `stressTintActive`. Shows when opted-in body signals read `.calm`; like the frazzle flag,
-    /// it never overrides the sick/resting postures.
-    private var calmTintActive: Bool {
-        guard store.settings.stressAwarenessEnabled,
-              stressService?.assessment?.state == .calm else { return false }
-        return store.companionState != .sick && store.companionState != .resting
-    }
+    /// How long the companion stays playful after a pet.
+    private static let playfulBeat: TimeInterval = 3 * 60
 
     /// The next-period outlook for the Home ambient bubble, gated by the same opt-in + hide-predictions.
     private var homePeriodPrediction: CyclePrediction? {
@@ -888,6 +916,7 @@ struct HomeView: View {
 
     private func interactWithCompanion() {
         guard !isCompanionJumping else { return }
+        playfulUntil = Date().addingTimeInterval(Self.playfulBeat)
         switch petGovernor.registerPet() {
         case .bounce:
             performPetBounce(settling: false)

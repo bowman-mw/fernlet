@@ -9,10 +9,11 @@ import FernletUI
 /// state-resolved colors), eyes/mouth, the built-in accessory/clothing/side-item layers, and any
 /// equipped user-designed items (``CompanionCustomItemLayer``, stacked by
 /// ``CompanionView/itemPaintOrder(_:)``). Animation is one clock-driven `TimelineView(.animation)`
-/// — breath tempo and amplitude come from the `CompanionState`, and `interactionLevel` toggling
-/// parity produces the pet bounce. The `stressTint` / `calmTint` / `settled` flags are
-/// presentation-only accents (never persisted, never `CompanionState` cases — new raw values
-/// would fail decode on older builds) layering the frazzle, calm, and pet-cooldown looks.
+/// — breath tempo and amplitude come from the `CompanionState` (shaded by the emotion), and
+/// `interactionLevel` toggling parity produces the pet bounce. The `emotion` and `settled` inputs
+/// are presentation-only layers (never persisted, never `CompanionState` cases — new raw values
+/// would fail decode on older builds): the emotion picks the face and one small motif
+/// (``CompanionExpression``, ``CompanionEmotionMotif``), and `settled` is the pet-cooldown pose.
 /// Used everywhere a companion appears: Home, activity rosters (friends' cached appearances),
 /// the studio preview, and more.
 ///
@@ -45,18 +46,21 @@ struct CompanionView: View {
     /// User-designed items currently equipped (one per occupied slot). Drawn as the topmost layer so
     /// they always read clearly over the base avatar.
     var equippedItems: [CustomizationItem] = []
-    /// Presentation-only "a little frazzled" accent (opt-in body signals, state >= tense):
-    /// a sliding sweat bead, faint rising steam, a soft brow furrow, and a slightly quicker
-    /// breath. DELIBERATELY not a `CompanionState` case — new raw values in the persisted
-    /// `DailyHealthScore.companionState` would fail decode on older builds, so frazzled stays
-    /// a render flag that is never persisted. It stays warm-neutral (no red, shake, or flash),
-    /// and is ignored for the low-energy states (sick/resting/tired keep their own posture).
-    var stressTint: Bool = false
-    /// Presentation-only "calm / settled" accent (opt-in body signals read `.calm`): eyes soften
-    /// to happy arcs, a warm blush, a slower breath, and two drifting motes. A gentle positive
-    /// counterpart to `stressTint` — also a pure render flag, never persisted, and suppressed
-    /// for the low-energy states. `stressTint` wins if both are somehow set.
-    var calmTint: Bool = false
+    /// How the companion feels right now (owner decision 2026-09-24), or nil for the plain state
+    /// face. A pure render input — derived by `CompanionEmotionEngine`, never persisted, never a
+    /// `CompanionState` case. It picks the face (``CompanionExpression``) and one small motif
+    /// (``CompanionEmotionMotif``) and shades the breath.
+    ///
+    /// The two body-signal looks that used to be separate flags are emotions now: `.frazzled` draws
+    /// the sliding sweat bead, faint steam and soft brow furrow (warm-neutral — no red, shake or
+    /// flash), and `.calm` the happy-arc eyes, blush and drifting motes. The engine only derives them
+    /// on a thriving or okay day, as the flags only ever showed there. Only Home passes one; every
+    /// decorative render (launch, previews, friends' avatars) leaves it nil.
+    var emotion: CompanionEmotion? = nil
+    /// Whether today is a gentle day — tagged hard or tired, or a mood trend that needs gentleness
+    /// (`CompanionEmotionInputs.isGentleDay`). Only the settled pose reads it: on a gentle or unwell
+    /// day the pose softens to soothed, closed eyes instead of its droopy-happy grin.
+    var gentleDay: Bool = false
     /// Presentation-only "settled" pet-cooldown pose: a droopy-happy slump (wider than tall),
     /// happy-arc eyes, a wide soft smile, a warm blush, and a drifting "z". Driven from the
     /// pet-interaction cooldown window — not a mood, never persisted.
@@ -64,13 +68,22 @@ struct CompanionView: View {
     /// Retained root tabs keep their view trees alive. Pausing holds the last frame while this
     /// companion is offscreen so an invisible animation cannot keep allocating render work.
     var pausesAnimation: Bool = false
+    /// A fixed instant to draw instead of running the animation clock — for previews and the
+    /// emotion gallery, whose PNGs must show every motif mid-loop rather than at whatever phase the
+    /// wall clock happened to be in. Nil (every shipping call site) runs the clock as always.
+    var renderClock: Date? = nil
 
     private var showsStressAccent: Bool {
-        stressTint && !state.isLowEnergy && !settled
+        emotion == .frazzled && !settled
     }
 
     private var showsCalmAccent: Bool {
-        calmTint && !stressTint && !state.isLowEnergy && !settled
+        emotion == .calm && !settled
+    }
+
+    /// The face this frame draws — the one place state, emotion and the settled pose meet.
+    private var face: CompanionExpression {
+        CompanionExpression.resolve(state: state, emotion: emotion, settled: settled, gentleDay: gentleDay)
     }
 
     /// T1-6: Reduce Motion pauses the breathing clock rather than hiding the companion — `paused:`
@@ -81,22 +94,33 @@ struct CompanionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion || pausesAnimation)) { timeline in
-            let elapsed = timeline.date.timeIntervalSinceReferenceDate
-            // Breath tempo: the tense accent quickens the swell (~3s), the calm accent and the
-            // settled pose slow it into a longer, softer cycle (~6.6s). The sine period is 2·tempo.
-            let tempo: Double = if showsStressAccent {
-                state.animationTempo * 0.8
-            } else if settled || showsCalmAccent {
-                max(state.animationTempo, 3.3)
-            } else {
-                state.animationTempo
+        if let renderClock {
+            frame(at: renderClock)
+        } else {
+            TimelineView(.animation(paused: reduceMotion || pausesAnimation)) { timeline in
+                frame(at: timeline.date)
             }
-            let breath = (sin(elapsed * .pi / tempo) + 1) / 2
-            let petBounce = interactionLevel.isMultiple(of: 2) ? 0.0 : -size * 0.060
-            let bodyColor = appearance.resolvedBodyColor(for: state)
-            figure(elapsed: elapsed, breath: breath, petBounce: petBounce, bodyColor: bodyColor)
         }
+    }
+
+    /// One animation frame at `date`: the breath, the pet bounce, and the layered figure.
+    @ViewBuilder
+    private func frame(at date: Date) -> some View {
+        let elapsed = date.timeIntervalSinceReferenceDate
+        // Breath tempo: the emotion shades the state's own (frazzled quickens it, sleepy and
+        // calm slow it — see `CompanionEmotion.breathTempo`), and the settled pose slows it into
+        // a longer, softer cycle (~6.6s). The sine period is 2·tempo.
+        let tempo: Double = if settled {
+            max(state.animationTempo, 3.3)
+        } else if let emotion {
+            emotion.breathTempo(from: state.animationTempo)
+        } else {
+            state.animationTempo
+        }
+        let breath = (sin(elapsed * .pi / tempo) + 1) / 2
+        let petBounce = interactionLevel.isMultiple(of: 2) ? 0.0 : -size * 0.060
+        let bodyColor = appearance.resolvedBodyColor(for: state)
+        figure(elapsed: elapsed, breath: breath, petBounce: petBounce, bodyColor: bodyColor)
     }
 
     /// The layered figure itself — extracted so ``body`` stays under the Power-of-10 line ceiling
@@ -115,11 +139,10 @@ struct CompanionView: View {
             )
 
             CompanionFaceLayers(
+                face: face,
                 state: state,
                 size: size,
-                facePetBounce: settled ? size * 0.05 : petBounce,
-                settled: settled,
-                showsCalmAccent: showsCalmAccent
+                facePetBounce: settled ? size * 0.05 : petBounce
             )
 
             ForEach(equippedItems) { item in
@@ -137,12 +160,14 @@ struct CompanionView: View {
                 petBounce: petBounce,
                 showsStressAccent: showsStressAccent,
                 showsCalmAccent: showsCalmAccent,
-                settled: settled
+                settled: settled,
+                motif: settled ? nil : emotion
             )
             .zIndex(5)
         }
         .animation(.easeInOut(duration: 0.44), value: interactionLevel)
         .animation(.easeInOut(duration: 0.5), value: settled)
+        .animation(.easeInOut(duration: 0.5), value: emotion)
     }
 
     /// Back-to-front paint order for equipped custom items so layers stack naturally (the outfit sits
@@ -216,65 +241,55 @@ private struct CompanionBaseLayers: View {
     }
 }
 
-/// The companion's face: the optional warm blush, the eyes, and the state-resolved mouth.
+/// The companion's face: the optional warm blush, sympathetic brows, the eyes, and the mouth — all
+/// as the resolved ``CompanionExpression`` says.
 ///
 /// `facePetBounce` is the already-resolved vertical offset for the face (the settled pose sits
 /// lower than the pet bounce), so this view never re-derives the pose.
 private struct CompanionFaceLayers: View {
+    let face: CompanionExpression
     let state: CompanionState
     let size: CGFloat
     let facePetBounce: CGFloat
-    let settled: Bool
-    let showsCalmAccent: Bool
-
-    private var showsHappyArcEyes: Bool { settled || showsCalmAccent }
 
     var body: some View {
         ZStack {
-            if settled || showsCalmAccent {
-                // Warm blush cheeks that ride with the settled/calm face. Settled sits deeper in
-                // the content beat, so its blush is a touch wider and warmer than the calm accent's.
-                let blushOpacity = settled ? 0.42 : 0.38
-                let blushWidth = settled ? size * 0.15 : size * 0.135
+            if face.blush > 0 {
+                // Warm blush cheeks. The settled pose's is a touch wider than the rest.
+                let blushWidth = face.mouth == .settledLens ? size * 0.15 : size * 0.135
                 HStack(spacing: size * 0.17) {
                     Ellipse()
-                        .fill(Color.dustyRose.opacity(blushOpacity))
+                        .fill(Color.dustyRose.opacity(face.blush))
                         .frame(width: blushWidth, height: size * 0.072)
                     Ellipse()
-                        .fill(Color.dustyRose.opacity(blushOpacity))
+                        .fill(Color.dustyRose.opacity(face.blush))
                         .frame(width: blushWidth, height: size * 0.072)
                 }
                 .offset(y: size * 0.02 + facePetBounce)
             }
 
+            if face.sympatheticBrows {
+                CompanionSympatheticBrows(size: size)
+                    .offset(y: -size * 0.19 + facePetBounce)
+            }
+
             HStack(spacing: size * 0.18) {
-                EyeView(tired: state.isLowEnergy, happyArc: showsHappyArcEyes, size: size)
-                EyeView(tired: state.isLowEnergy, happyArc: showsHappyArcEyes, size: size)
+                CompanionEyeView(style: face.leftEye, size: size)
+                CompanionEyeView(style: face.rightEye, size: size)
             }
             .offset(y: -size * 0.08 + facePetBounce)
 
-            if settled {
-                // A wide soft smile completes the droopy-happy "completely content" read.
-                CompanionSettledMouth()
-                    .fill(.white.opacity(0.78))
-                    .frame(width: size * 0.30, height: size * 0.15)
-                    .offset(y: size * 0.14 + facePetBounce)
-            } else {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(.white.opacity(0.72))
-                    .frame(width: size * 0.18, height: state.mouthHeight(for: size))
-                    .offset(y: size * 0.14 + facePetBounce)
-            }
+            CompanionMouthView(style: face.mouth, state: state, size: size)
+                .offset(y: size * 0.14 + facePetBounce)
         }
     }
 }
 
 /// The presentation-only accent layers above the companion: the frazzled set (brow furrow, steam,
-/// sweat bead), the calm motes, and the settled drifting "z".
+/// sweat bead), the calm motes, the settled drifting "z", and every other emotion's motif.
 ///
-/// The three groups are mutually exclusive by construction — `showsStressAccent` and
-/// `showsCalmAccent` both require `!settled`, and the calm accent additionally requires no stress
-/// tint — so at most one renders at a time.
+/// The groups are mutually exclusive by construction — the frazzled and calm sets each require
+/// their own emotion and `!settled`, and `motif` is nil while settled — so at most one renders.
 private struct CompanionAccentLayers: View {
     let size: CGFloat
     let elapsed: Double
@@ -282,9 +297,18 @@ private struct CompanionAccentLayers: View {
     let showsStressAccent: Bool
     let showsCalmAccent: Bool
     let settled: Bool
+    /// The emotion whose motif to draw; nil draws none.
+    let motif: CompanionEmotion?
 
     var body: some View {
         ZStack {
+            if let motif {
+                CompanionEmotionMotif(emotion: motif, size: size, elapsed: elapsed)
+                    .offset(y: petBounce)
+                    .zIndex(5)
+                    .transition(.opacity)
+            }
+
             if showsStressAccent {
                 // Frazzled / tense: a soft brow furrow, faint rising steam, and one cool
                 // sweat bead that slides down and fades. Warm-neutral, never alarming.
@@ -409,42 +433,10 @@ struct CompanionBlobShape: Shape {
     }
 }
 
-/// One companion eye: a round white-and-pupil eye, drooping to a half-lid when tired.
-///
-/// ``CompanionView`` places two of these; the `happyArc` flag swaps in the
-/// ``CompanionHappyArcEye`` crescent for the calm/settled accents and wins over `tired`.
-struct EyeView: View {
-    var tired: Bool
-    /// Presentation-only "happy arc" eye (calm/settled accents): an upward crescent instead of
-    /// the round pupil, reading as a soft, content squint. Wins over `tired`.
-    var happyArc: Bool = false
-    var size: CGFloat
-
-    var body: some View {
-        if happyArc {
-            CompanionHappyArcEye()
-                .stroke(
-                    Color(red: 0.239, green: 0.180, blue: 0.118),
-                    style: StrokeStyle(lineWidth: max(2, size * 0.024), lineCap: .round)
-                )
-                .frame(width: size * 0.15, height: size * 0.085)
-        } else {
-            ZStack {
-                Ellipse()
-                    .fill(.white.opacity(0.92))
-                    .frame(width: size * 0.13, height: tired ? size * 0.07 : size * 0.13)
-                Circle()
-                    .fill(Color(red: 0.239, green: 0.180, blue: 0.118))
-                    .frame(width: size * 0.06, height: size * 0.06)
-            }
-        }
-    }
-}
-
 /// An upward-opening crescent — the calm/settled "happy arc" eye.
 ///
 /// Drawn as a quadratic arc so it reads as a gentle smile-shaped squint rather than a full
-/// closed lid; stroked (not filled) by ``EyeView`` when its `happyArc` flag is set.
+/// closed lid; stroked (not filled) by ``CompanionEyeView`` for the `happyArc` style.
 struct CompanionHappyArcEye: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -459,8 +451,8 @@ struct CompanionHappyArcEye: Shape {
 
 /// The settled pose's wide soft smile — a downward-opening lens (flat top, rounded bottom).
 ///
-/// Replaces the default rounded-rectangle mouth only while ``CompanionView``'s `settled` flag is
-/// on, completing the droopy-happy "completely content" read of the pet cooldown.
+/// The settled pose's mouth (``CompanionMouthStyle/settledLens``) and, smaller, the playful grin —
+/// completing the droopy-happy "completely content" read of the pet cooldown.
 struct CompanionSettledMouth: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -968,7 +960,10 @@ private extension Color {
     }
 }
 
-private extension CompanionState {
+/// The companion's render metrics per state: which bands droop, and the breath and mouth each one
+/// draws. Internal (not private) so the emotion faces in `CompanionEmotionArt.swift` read the same
+/// numbers the state face does.
+extension CompanionState {
     var isLowEnergy: Bool {
         self == .tired || self == .resting || self == .sick
     }

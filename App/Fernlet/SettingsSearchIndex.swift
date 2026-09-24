@@ -181,6 +181,14 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "Appearance › Backgrounds",
             route: .appearance
         ),
+        // The companion's feelings (2026-09-24): the hunger and thirst cues switch and the bedtime window.
+        SettingsSearchEntry(
+            title: "Companion feelings",
+            keywords: ["companion", "feelings", "emotions", "mood", "hungry", "hunger", "thirsty", "thirst",
+                       "appetite", "cues", "sleepy", "bedtime", "wake up", "tamagotchi"],
+            breadcrumb: "Appearance › Companion feelings",
+            route: .appearance
+        ),
         // Home-widget layout moved onto the Appearance page in the 2026-08-21 hub restructure
         // (SETT-14): the old Layout & shortcuts page became the Quick-log shortcuts editor (5g).
         SettingsSearchEntry(

@@ -10,6 +10,9 @@
 //   - `fernletAppGroupIdentifier`  mirrors SharedRecipeImportQueue.appGroupIdentifier /
 //                                  SharedRecipeImportQueueWriter.appGroupIdentifier (documented dup #3)
 //   - `WidgetCompanionState`       mirrors CompanionState raw values (FernletDomainModel/CompanionModels.swift)
+//   - `WidgetCompanionEmotion`     mirrors the WIDGET-PUBLISHABLE CompanionEmotion raw values
+//                                  (FernletDomainModel/CompanionEmotion.swift, `isWidgetPublishable`)
+//   - `WidgetEmotionTimeline`      mirrors the day-scoped lookup `CompanionEmotionEngine.emotion(in:at:)`
 //   - `WidgetSnapshot`             mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot`
 //   - `PendingWidgetAction`        mirrors Fernlet/WidgetBridge.swift `PendingWidgetAction`
 //   - `WidgetDayKey`               mirrors FernletFoundation.FernletDate.dayKey ("yyyy-MM-dd", en_US_POSIX)
@@ -68,10 +71,94 @@ enum WidgetCompanionState: String {
     }
 }
 
+/// Raw-value mirror of the app's WIDGET-PUBLISHABLE `CompanionEmotion` cases (owner decision
+/// 2026-09-24): the companion's momentary feeling, drawn over its state.
+///
+/// The raw values are the persisted contract, exactly as the app writes them into each
+/// `EmotionMoment.emotionRaw`; an unknown raw value decodes to nil and the widget draws the plain
+/// state face. Only six of the app's eleven emotions ever reach this process — the body-signal
+/// (`calm`, `frazzled`), friend-heart (`loved`, `comforted`) and petting (`playful`) ones stay in
+/// the app, so they have no case here. `LocalizationBoundaryTests` pins this list against the app's
+/// `isWidgetPublishable` set.
+enum WidgetCompanionEmotion: String {
+    case happy
+    case sad
+    case tired
+    case sleepy
+    case hungry
+    case thirsty
+
+    /// The emotion's localized standalone name ("Sleepy") — the display fork of the frozen token.
+    ///
+    /// No `bundle:` argument on purpose, as on ``WidgetCompanionState/displayName``: this target is an
+    /// app extension, so `Bundle.main` is its own catalog.
+    var displayName: String {
+        switch self {
+        case .happy: String(localized: "companionEmotion.happy", defaultValue: "Happy",
+                            comment: "Companion feeling: cheerful. Shown beside the companion's state")
+        case .sad: String(localized: "companionEmotion.sad", defaultValue: "Sad",
+                          comment: "Companion feeling on a day the person tagged hard — sad WITH them, never disappointed")
+        case .tired: String(localized: "companionEmotion.tired", defaultValue: "Tired",
+                            comment: "Companion feeling: low on energy")
+        case .sleepy: String(localized: "companionEmotion.sleepy", defaultValue: "Sleepy",
+                             comment: "Companion feeling during the person's bedtime hours")
+        case .hungry: String(localized: "companionEmotion.hungry", defaultValue: "Hungry",
+                             comment: "Companion feeling when no meal has been logged in a while")
+        case .thirsty: String(localized: "companionEmotion.thirsty", defaultValue: "Thirsty",
+                              comment: "Companion feeling when water is behind the day's pace")
+        }
+    }
+
+    /// The emotion as the second half of the spoken status ("feeling sleepy").
+    var feelingPhrase: String {
+        switch self {
+        case .happy: String(localized: "companionEmotion.feeling.happy", defaultValue: "feeling happy",
+                            comment: "Follows the companion's state: 'Okay, feeling happy'")
+        case .sad: String(localized: "companionEmotion.feeling.sad", defaultValue: "feeling sad",
+                          comment: "Follows the companion's state: 'Okay, feeling sad'. Sad with the person, never disappointed")
+        case .tired: String(localized: "companionEmotion.feeling.tired", defaultValue: "feeling tired",
+                            comment: "Follows the companion's state: 'Tired, feeling tired'")
+        case .sleepy: String(localized: "companionEmotion.feeling.sleepy", defaultValue: "feeling sleepy",
+                             comment: "Follows the companion's state: 'Okay, feeling sleepy'")
+        case .hungry: String(localized: "companionEmotion.feeling.hungry", defaultValue: "feeling hungry",
+                             comment: "Follows the companion's state: 'Okay, feeling hungry'")
+        case .thirsty: String(localized: "companionEmotion.feeling.thirsty", defaultValue: "feeling thirsty",
+                              comment: "Follows the companion's state: 'Okay, feeling thirsty'")
+        }
+    }
+}
+
+/// The widget's twin of the app's day-scoped emotion lookup (`CompanionEmotionEngine.emotion(in:at:)`).
+///
+/// The rule is the cross-process contract, so it is copied, not reinvented: a moment applies from
+/// its `at` onward, ONLY on its own local day. A snapshot from yesterday can therefore never draw
+/// yesterday's feeling today — only the moments the app computed for today's date (the sleepy
+/// night carried past midnight) can apply after the rollover.
+enum WidgetEmotionTimeline {
+    /// The emotion at `date`: the latest moment at or before it on the same local day, or nil.
+    static func emotion(in moments: [WidgetSnapshot.EmotionMoment], at date: Date,
+                        calendar: Calendar = .current) -> WidgetCompanionEmotion? {
+        guard !moments.isEmpty else { return nil }
+        let day = calendar.startOfDay(for: date)
+        let current = moments.last { $0.at <= date && calendar.startOfDay(for: $0.at) == day }
+        return current?.emotionRaw.flatMap(WidgetCompanionEmotion.init(rawValue:))
+    }
+
+    /// The upcoming instants at which the drawn emotion may change, after `date`, at most `limit`
+    /// of them — one WidgetKit timeline entry each.
+    static func transitionDates(in moments: [WidgetSnapshot.EmotionMoment], after date: Date,
+                                limit: Int = 12) -> [Date] {
+        guard limit > 0 else { return [] }
+        return Array(moments.map(\.at).filter { $0 > date }.sorted().prefix(limit))
+    }
+}
+
 /// The benign outbound snapshot the app mirrors into the app-group container.
 ///
-/// PRIVACY: wellness score + water + macro grams ONLY — never journal, cycle, stress, or intimacy
-/// data. Written by the app's `WidgetSnapshotMirror` on every snapshot save and read back by
+/// PRIVACY: wellness score + water + macro grams + the companion's state and emotion tokens ONLY —
+/// never journal text, cycle, stress, or intimacy data. The emotion timeline can reflect the day's
+/// journal mood TAG, the meal and water logging gaps and the bedtime window; the body-signal emotions
+/// never enter it. Written by the app's `WidgetSnapshotMirror` on every snapshot save and read back by
 /// ``WidgetSnapshotStore`` on each timeline build; `dateKey` is what ``WidgetDayGate`` checks so a
 /// stale snapshot never leaks yesterday's state into a new day.
 struct WidgetSnapshot: Codable, Equatable {
@@ -85,6 +172,14 @@ struct WidgetSnapshot: Codable, Equatable {
         var fat: Double
     }
 
+    /// One step of the companion's emotion timeline: from `at` on (that local day only), draw the
+    /// emotion whose frozen token is `emotionRaw` — nil for the plain state face. Byte-identical to
+    /// the app-side twin.
+    struct EmotionMoment: Codable, Equatable {
+        var at: Date
+        var emotionRaw: String?
+    }
+
     var companionStateRaw: String
     var score: Double
     var bottleCount: Int
@@ -92,6 +187,9 @@ struct WidgetSnapshot: Codable, Equatable {
     var macroSummary: MacroSummary
     var dateKey: String
     var computedAt: Date
+    /// The companion's emotions across the day (app side: `CompanionEmotionEngine.timeline`).
+    /// ADDITIVE (2026-09-24) and optional: a file an older app wrote simply has no emotions.
+    var companionEmotionTimeline: [EmotionMoment]? = nil
 
     var companionState: WidgetCompanionState? { WidgetCompanionState(rawValue: companionStateRaw) }
 
@@ -243,6 +341,8 @@ struct WidgetSnapshotStore {
                 // yesterday's companion all day until the app republishes. Empty raw → nil companionState
                 // → the neutral "Fernlet" treatment; the app corrects with the real fresh-day snapshot on
                 // next open. (Score/macros aren't rendered by the widget, but are zeroed to stay coherent.)
+                // The emotion timeline stays: its lookup is scoped to each moment's own day, so none of
+                // yesterday's moments can draw today, and today's (sleepy until wake) are clock-only.
                 snapshot.dateKey = dayKey
                 snapshot.bottleCount = 1
                 snapshot.companionStateRaw = ""

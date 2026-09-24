@@ -266,6 +266,17 @@ struct PersistedSurfaceWipeBoundaryTests {
         "com.fernlet.savedRecipeMigrationCompleted": .kept(
             reason: "The saved-recipe legacy-migration latch. A wipe leaves the Core Data store empty by definition, so clearing this bit would re-run the JSON migration on the next launch and resurrect every recipe it describes."
         ),
+        // The companion-feelings settings (2026-09-24): the hunger-and-thirst cue switch and the
+        // companion's bedtime window. Preferences the person set, not records.
+        "fernlet.companionFeelings.appetiteCues": .kept(
+            reason: "The hunger-and-thirst cue switch: a preference, not a record. Clearing it would silently switch appetite cues back on for someone who turned them off, which is the one outcome the switch exists to prevent."
+        ),
+        "fernlet.companionFeelings.bedtimeMinute": .kept(
+            reason: "When the companion gets sleepy: a preference the person set, holding nothing about any day. Clearing it only hands someone who just deleted their data a companion on the wrong clock."
+        ),
+        "fernlet.companionFeelings.wakeMinute": .kept(
+            reason: "When the companion wakes: the bedtime preference's other half and the same class, with no content and nothing about any day."
+        ),
         "fernlet.breathing.presetID": .kept(
             reason: "Breathing-timer configuration, not a record: which preset the user last chose. It holds nothing about the user's days, and clearing it only hands someone who just deleted their data a suddenly-unfamiliar app."
         ),
@@ -342,6 +353,24 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/SettingsSheet.swift": .kept(
             reason: "@AppStorage(FernletThemeDefaults.customDarkBackgroundKey) — the custom dark background `fernletCustomDarkBackgroundHex`, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
         ),
+        "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .kept(
+            reason: "@AppStorage(CompanionEmotionPreferences.appetiteCuesKey) in Home's live companion — `fernlet.companionFeelings.appetiteCues`, the hunger-and-thirst cue switch, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
+        ),
+        "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .kept(
+            reason: "@AppStorage(CompanionEmotionPreferences.appetiteCuesKey) in the Companion feelings settings card — `fernlet.companionFeelings.appetiteCues`, the hunger-and-thirst cue switch, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
+        ),
+        "unresolved:CompanionEmotionPreferences.bedtimeMinuteKey@App/Fernlet/HomeView.swift": .kept(
+            reason: "@AppStorage(CompanionEmotionPreferences.bedtimeMinuteKey) in Home's live companion — `fernlet.companionFeelings.bedtimeMinute`, the companion's bedtime, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
+        ),
+        "unresolved:CompanionEmotionPreferences.bedtimeMinuteKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .kept(
+            reason: "@AppStorage(CompanionEmotionPreferences.bedtimeMinuteKey) in the Companion feelings settings card — `fernlet.companionFeelings.bedtimeMinute`, the companion's bedtime, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
+        ),
+        "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/HomeView.swift": .kept(
+            reason: "@AppStorage(CompanionEmotionPreferences.wakeMinuteKey) in Home's live companion — `fernlet.companionFeelings.wakeMinute`, the companion's wake time, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
+        ),
+        "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .kept(
+            reason: "@AppStorage(CompanionEmotionPreferences.wakeMinuteKey) in the Companion feelings settings card — `fernlet.companionFeelings.wakeMinute`, the companion's wake time, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
+        ),
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/FernletApp.swift": .kept(
             reason: "@AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) — the kept `hasCompletedOnboarding` bit. The constant lives in OnboardingCoordinator.swift, so this binding's key cannot be resolved from here."
         ),
@@ -379,6 +408,12 @@ struct PersistedSurfaceWipeBoundaryTests {
     /// `noDispositionRowIsStale` already catches a seam that disappears entirely.
     static let expectedSeamSites: [String: Int] = [
         "unresolved:$0@FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift": 3,
+        "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": 1,
+        "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": 1,
+        "unresolved:CompanionEmotionPreferences.bedtimeMinuteKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": 1,
+        "unresolved:CompanionEmotionPreferences.bedtimeMinuteKey@App/Fernlet/HomeView.swift": 1,
+        "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": 1,
+        "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/HomeView.swift": 1,
         "unresolved:FernletAppearanceMode.storageKey@App/Fernlet/FernletApp.swift": 1,
         "unresolved:FernletAppearanceMode.storageKey@App/Fernlet/SettingsSheet.swift": 1,
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/ContentView.swift": 1,

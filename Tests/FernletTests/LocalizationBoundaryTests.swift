@@ -506,6 +506,33 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The companion's emotions (owner decision 2026-09-24): tokens exactly as frozen as the state.
+    ///
+    /// A widget-publishable raw value crosses into the widget extension as each moment's
+    /// `emotionRaw` in the app-group snapshot's `companionEmotionTimeline`, where the hand-copied
+    /// `WidgetCompanionEmotion` re-parses it (part C). They are lower-case, unlike the state — which
+    /// only makes them look less like display copy. Rename one and the widget quietly stops drawing
+    /// that feeling. Localize `displayName` / `feelingPhrase`; never these.
+    @Test func frozenCompanionEmotionTokens() {
+        #expect(
+            CompanionEmotion.allCases.map(\.rawValue) == Self.frozenCompanionEmotionRawValues,
+            """
+            CompanionEmotion raw values changed (now \(CompanionEmotion.allCases.map(\.rawValue))). The \
+            publishable ones cross a PROCESS boundary as `emotionRaw` in the widget snapshot; the \
+            widget links no FernletKit product, so nothing but this wall connects the two sides.
+            """
+        )
+        #expect(
+            CompanionEmotion.allCases.filter(\.isWidgetPublishable).map(\.rawValue) == Self.frozenWidgetEmotionRawValues,
+            """
+            The widget-publishable emotions changed. Widening the set puts a body-signal, friend-heart \
+            or petting feeling into the app-group file (see `CompanionEmotion.isWidgetPublishable` for \
+            why each is kept in the app); it needs a widget face, a `WidgetCompanionEmotion` case and \
+            a privacy-policy line in the same commit.
+            """
+        )
+    }
+
     /// Meal + workout categories: persisted rows AND Foundation Models prompt vocabulary.
     ///
     /// `MealType` raw values are display-shaped ("Breakfast", "Pre-workout") and are round-tripped
@@ -654,6 +681,17 @@ struct LocalizationBoundaryTests {
     /// two checks cannot drift apart into separately-wrong lists.
     static let frozenCompanionStateRawValues = ["Thriving", "Okay", "Tired", "Resting", "Sick"]
 
+    /// The app-side emotion raw values (2026-09-24), frozen once for parts B and C.
+    static let frozenCompanionEmotionRawValues = [
+        "happy", "sad", "tired", "sleepy", "hungry", "thirsty", "loved", "comforted", "playful", "calm", "frazzled"
+    ]
+
+    /// The emotions the widget snapshot may carry — the `WidgetCompanionEmotion` mirror, one-for-one.
+    static let frozenWidgetEmotionRawValues = ["happy", "sad", "tired", "sleepy", "hungry", "thirsty"]
+
+    /// Repo-relative path of the app-side `CompanionEmotion` declaration.
+    static let companionEmotionPath = "FernletKit/Sources/FernletDomainModel/CompanionEmotion.swift"
+
     /// Repo-relative path of the widget extension's hand-copied contract file.
     static let widgetSharedModelsPath = "App/FernletWidgets/WidgetSharedModels.swift"
 
@@ -737,6 +775,65 @@ struct LocalizationBoundaryTests {
         )
 
         try Self.expectWidgetDayKeyFormatterMatchesTheApp(widgetSource)
+    }
+
+    /// The emotion half of the cross-process contract: the widget's hand-copied
+    /// `WidgetCompanionEmotion` is exactly the app's widget-publishable `CompanionEmotion` cases.
+    ///
+    /// Parsed off disk on both sides, like the state check above, so an ADDED case on either side
+    /// reds here. A widget case the app never publishes is dead art; an app emotion the widget cannot
+    /// parse draws the plain state face forever.
+    @Test func widgetEmotionMirrorMatchesTheAppsPublishableEmotions() throws {
+        let widgetSource = try RepoRoot.source(Self.widgetSharedModelsPath)
+        let appSource = try RepoRoot.source(Self.companionEmotionPath)
+        let widget = try #require(
+            Self.enumRawValues(in: widgetSource, enumName: "WidgetCompanionEmotion"),
+            "`enum WidgetCompanionEmotion` is gone from \(Self.widgetSharedModelsPath)")
+        let app = try #require(
+            Self.enumRawValues(in: appSource, enumName: "CompanionEmotion"),
+            "`enum CompanionEmotion` is gone from \(Self.companionEmotionPath)")
+        #expect(app == Self.frozenCompanionEmotionRawValues,
+                "CompanionEmotion now declares \(app); the frozen contract is \(Self.frozenCompanionEmotionRawValues)")
+        #expect(widget == Self.frozenWidgetEmotionRawValues,
+                "WidgetCompanionEmotion now declares \(widget); the frozen mirror is \(Self.frozenWidgetEmotionRawValues)")
+        #expect(widget == CompanionEmotion.allCases.filter(\.isWidgetPublishable).map(\.rawValue), """
+            the widget mirror \(widget) and the app's publishable set disagree — edit \
+            `CompanionEmotion.isWidgetPublishable` and `WidgetCompanionEmotion` in the same commit.
+            """)
+    }
+
+    /// Every emotion's display pair — `displayName` and `feelingPhrase` — is a localized fork keyed
+    /// `companionEmotion.<token>` / `companionEmotion.feeling.<token>`, in the domain module's
+    /// catalog and, for the publishable six, in the widget's catalog too.
+    ///
+    /// The source half proves the fork exists; the catalog half proves the sync harvested it, which
+    /// is the step a `String` parameter or a missing `bundle:` silently skips.
+    @Test func companionEmotionDisplayForksReachBothCatalogs() throws {
+        let appSource = try RepoRoot.source(Self.companionEmotionPath)
+        let widgetSource = try RepoRoot.source(Self.widgetSharedModelsPath)
+        let appKeys = try Self.catalogKeys(at: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings")
+        let widgetKeys = try Self.catalogKeys(at: "App/FernletWidgets/Localizable.xcstrings")
+        for emotion in CompanionEmotion.allCases {
+            let keys = ["companionEmotion.\(emotion.rawValue)", "companionEmotion.feeling.\(emotion.rawValue)"]
+            #expect(!emotion.displayName.isEmpty && !emotion.feelingPhrase.isEmpty, "\(emotion) has an empty display half")
+            for key in keys {
+                #expect(appSource.contains("String(localized: \"\(key)\""), "the domain enum lost its \(key) fork")
+                #expect(appKeys.contains(key), "\(key) never reached the FernletDomainModel catalog")
+                guard emotion.isWidgetPublishable else { continue }
+                #expect(widgetSource.contains("String(localized: \"\(key)\""), "the widget mirror lost its \(key) fork")
+                #expect(widgetKeys.contains(key), "\(key) never reached the widget catalog")
+            }
+        }
+        #expect(appKeys.contains("companionEmotion.stateAndFeeling") && widgetKeys.contains("companionEmotion.stateAndFeeling"),
+                "the spoken \"Okay, feeling sleepy\" format is missing from a catalog")
+    }
+
+    /// The keys of one string catalog.
+    static func catalogKeys(at path: String) throws -> Set<String> {
+        let data = try Data(contentsOf: RepoRoot.url(path))
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        return Set(strings.keys)
     }
 
     /// The widget's day-key formatter, rebuilt from the literals in its source and compared against
@@ -2112,6 +2209,17 @@ struct LocalizationBoundaryTests {
     /// Every allowlisted `String`-typed accessibility member. Keep this list very short: a third or
     /// fourth entry means the rule, not the list, needs rethinking.
     static let accessibilityCopyExceptions: [AccessibilityCopyException] = [
+        AccessibilityCopyException(
+            path: "FernletKit/Sources/FernletDomainModel/CompanionEmotion.swift",
+            declaration: "public static func accessibilityValue(state: CompanionState, emotion: CompanionEmotion?) -> String {",
+            reason: """
+                Already translated when it returns: its body resolves through `String(localized:bundle: .module)` \
+                (the "Okay, feeling sleepy" format and both display forks), inside a domain module that \
+                imports no SwiftUI and so cannot return `Text`. It is the same shape as \
+                `CompanionState.displayName`, which Home handed to `.accessibilityValue(_:)` before it — \
+                a final, localized string, which is exactly what the verbatim overload should render.
+                """
+        ),
         AccessibilityCopyException(
             path: "App/Fernlet/MoveView.swift",
             declaration: "private var spaceAccessibilityValue: String {",

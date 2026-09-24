@@ -1,7 +1,7 @@
 // FernletWidgetsBundle.swift
 // FernletWidgets
 //
-// v1 companion widget: systemSmall (interactive +1 water) + lock-screen accessories.
+// v1 companion widget: systemSmall (interactive +1 water) + systemMedium + lock-screen accessories.
 // DESIGN: the companion renders as a per-mood GLYPH whose FACE is negative space (a filled blob
 // with the eyes/mouth punched out via Canvas .destinationOut) — so it reads small and survives the
 // Lock Screen's monochrome/tinted rendering, where the EXPRESSION (not colour) distinguishes moods.
@@ -74,15 +74,28 @@ struct FernletCompanionEntry: TimelineEntry {
         guard reflectsCurrentDay else { return nil }
         return snapshot?.companionState
     }
+
+    /// The companion's emotion at THIS entry's date (owner decision 2026-09-24) — the only place a
+    /// family reads it.
+    ///
+    /// Day-scoped per moment rather than per snapshot (``WidgetEmotionTimeline``): a moment applies
+    /// only on its own local day, so a stale snapshot can never draw yesterday's feeling — while the
+    /// moments the app computed for the NEW date (the sleepy night carried past midnight, which only
+    /// the clock decides) still apply after the rollover, when the state itself has gone neutral.
+    var currentCompanionEmotion: WidgetCompanionEmotion? {
+        guard let moments = snapshot?.companionEmotionTimeline else { return nil }
+        return WidgetEmotionTimeline.emotion(in: moments, at: date)
+    }
 }
 
 /// Timeline provider for the companion widget: reads the mirrored app-group snapshot and builds a
-/// two-entry timeline (now + the next local midnight) refreshed hourly.
+/// timeline of now, every upcoming emotion transition, and the next local midnight, refreshed hourly.
 ///
-/// The midnight entry reuses the SAME snapshot — each entry's own day gate (see
-/// ``FernletCompanionEntry``) is what makes it render as a fresh day, so the rollover self-corrects
-/// with the app closed and no fetch. The hourly `.after` policy only backstops that; real refreshes
-/// are pushed by the app via `WidgetCenter` on every snapshot mirror.
+/// Every entry reuses the SAME snapshot — each entry's own day gate and emotion lookup (see
+/// ``FernletCompanionEntry``) decide what it renders, so the rollover self-corrects with the app
+/// closed and no fetch, and a sleepy companion appears at bedtime or a hungry one at the hunger onset
+/// the same way. The hourly `.after` policy only backstops that; real refreshes are pushed by the app
+/// via `WidgetCenter` on every snapshot mirror.
 struct FernletCompanionProvider: TimelineProvider {
     func placeholder(in context: Context) -> FernletCompanionEntry {
         FernletCompanionEntry(date: Date(), snapshot: .placeholder)
@@ -98,6 +111,11 @@ struct FernletCompanionProvider: TimelineProvider {
         let now = Date()
         var entries = [FernletCompanionEntry(date: now, snapshot: snapshot)]
 
+        // One entry at each upcoming emotion transition (bedtime, the hunger onset, the wake time…),
+        // so the face changes on time with the app closed. Bounded, and never at `now` itself.
+        let transitions = WidgetEmotionTimeline.transitionDates(in: snapshot?.companionEmotionTimeline ?? [], after: now)
+        entries += transitions.map { FernletCompanionEntry(date: $0, snapshot: snapshot) }
+
         // A second entry pinned to the next local midnight, built from the SAME snapshot. Each entry
         // decides what it renders via its own date-vs-dateKey gate (see FernletCompanionEntry), so
         // once the day rolls over this entry shows the neutral mood + zero water WITHOUT WidgetKit
@@ -105,17 +123,19 @@ struct FernletCompanionProvider: TimelineProvider {
         // the water count already did. Refreshes are still pushed by the app via WidgetCenter on
         // every snapshot mirror; the hourly policy only backstops day rollover while the app is closed.
         let startOfToday = Calendar.current.startOfDay(for: now)
-        if let nextMidnight = Calendar.current.date(byAdding: .day, value: 1, to: startOfToday) {
+        if let nextMidnight = Calendar.current.date(byAdding: .day, value: 1, to: startOfToday),
+           !transitions.contains(nextMidnight) {
             entries.append(FernletCompanionEntry(date: nextMidnight, snapshot: snapshot))
         }
+        entries.sort { $0.date < $1.date }
 
         let nextHour = Calendar.current.date(byAdding: .hour, value: 1, to: now) ?? now.addingTimeInterval(3600)
         completion(Timeline(entries: entries, policy: .after(nextHour)))
     }
 }
 
-/// The companion widget configuration: mood + water at a glance, in systemSmall and the two Lock
-/// Screen accessory families.
+/// The companion widget configuration: mood + water at a glance, in systemSmall, systemMedium and
+/// the two Lock Screen accessory families.
 ///
 /// A `StaticConfiguration` (no user options) keyed by ``FernletWidgetKind/companion`` and driven by
 /// ``FernletCompanionProvider``; ``FernletCompanionWidgetView`` picks the per-family layout.
@@ -126,7 +146,7 @@ struct FernletCompanionWidget: Widget {
         }
         .configurationDisplayName("Fernlet")
         .description("Your companion's mood and today's water, at a glance.")
-        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
     }
 }
 
@@ -168,13 +188,32 @@ enum FernletWidgetPalette {
 /// The mood a ``CompanionGlyph`` is speaking, for the families where the glyph is the ONLY place the
 /// mood appears (systemSmall and the circular accessory both draw it without a written label).
 ///
-/// The word comes from ``WidgetCompanionState/displayName`` and never from `rawValue` — that raw
-/// string is the cross-process wire token, so speaking it would read the persistence format aloud
-/// and would stay English after translation. A day-gated `nil` has no mood to report: the glyph is
-/// the neutral face, so it says so rather than implying yesterday's state still holds.
-private func companionMoodValue(_ state: WidgetCompanionState?) -> Text {
-    guard let state else { return Text("No mood yet today") }
-    return Text(state.displayName)
+/// The words come from ``WidgetCompanionState/displayName`` and ``WidgetCompanionEmotion`` 's display
+/// forks, never from a `rawValue` — those raw strings are the cross-process wire tokens, so speaking
+/// one would read the persistence format aloud and would stay English after translation. With an
+/// emotion the value reads "Okay, feeling sleepy". A day-gated `nil` state has no mood to report:
+/// the glyph is the neutral face (or, after midnight, the clock's sleepy face), so it says so rather
+/// than implying yesterday's state still holds.
+private func companionMoodValue(_ state: WidgetCompanionState?, _ emotion: WidgetCompanionEmotion? = nil) -> Text {
+    guard let state else {
+        guard let emotion else { return Text("No mood yet today") }
+        return Text(emotion.displayName)
+    }
+    guard let emotion else { return Text(state.displayName) }
+    return Text(String(localized: "companionEmotion.stateAndFeeling",
+                       defaultValue: "\(state.displayName), \(emotion.feelingPhrase)",
+                       comment: "The companion's spoken status: its state, then its feeling. Example: 'Okay, feeling sleepy'"))
+}
+
+/// Which widget families may draw the companion's emotion.
+///
+/// PRIVACY-FORWARD, OWNER-CONFIRMED (2026-09-24: "State face only"): the Lock Screen accessories
+/// draw the STATE face only, and the Home Screen families draw the emotion. A sad or hungry face on the Lock
+/// Screen tells anyone who glances at the phone how the day went; the Home Screen is only seen
+/// unlocked. The whole widget is `.privacySensitive()` besides, so a locked Lock Screen redacts it.
+enum FernletWidgetEmotionPolicy {
+    /// Whether the Lock Screen accessory families draw the emotion. `false` = the state face only.
+    static let lockScreenShowsEmotion = false
 }
 
 // MARK: - Companion glyph (9a): a blob silhouette with the FACE as negative space
@@ -191,10 +230,13 @@ private func companionMoodValue(_ state: WidgetCompanionState?) -> Text {
 /// Because the mood is told by the punched-out EXPRESSION rather than the fill color, the glyph
 /// survives the Lock Screen's monochrome/tinted rendering — accessory families pass `.white` and let
 /// the system tint it. `nil` state draws the neutral (thriving-faced) blob. Shared by every widget
-/// family in this file.
+/// family in this file. An `emotion` replaces the state's face with the emotion's own (the fill
+/// colour still follows the state), exactly as the app's companion draws an emotion over its state.
 private struct CompanionGlyph: View {
     /// The mood to draw; `nil` renders the neutral face (used pre-first-launch and after a day gate).
     let state: WidgetCompanionState?
+    /// The feeling to draw instead of the state's face; nil draws the state's face.
+    var emotion: WidgetCompanionEmotion? = nil
     /// Single fill colour for the whole silhouette. Accessories pass `.white` (system tints it).
     var fill: Color
 
@@ -210,8 +252,12 @@ private struct CompanionGlyph: View {
                 let body = Path(ellipseIn: CGRect(x: 8, y: 10, width: 84, height: 84))
                 layer.fill(body, with: .color(fill))
 
-                // 2) punch the face out of the body
-                Self.eraseFace(for: state, in: layer)
+                // 2) punch the face out of the body — the emotion's, when there is one
+                if let emotion {
+                    Self.eraseEmotionFace(for: emotion, in: layer)
+                } else {
+                    Self.eraseFace(for: state, in: layer)
+                }
             }
         }
         // Let the Lock Screen recolour the single-colour drawing.
@@ -305,9 +351,100 @@ private struct CompanionGlyph: View {
             p.addQuadCurve(to: CGPoint(x: 62, y: 63), control: CGPoint(x: 58, y: 58))
         }, width: 4)
     }
+
+    // MARK: Emotion faces (2026-09-24) — same 100×100 space, same erase-only drawing
+
+    /// Draws one emotion's face with `.destinationOut`: the six widget-publishable feelings.
+    ///
+    /// *Tired* reuses the tired state's face, so "Tired, feeling tired" is one face, not two. The
+    /// small motifs (the moon, the apple, the drop) are punched out inside the blob like the resting
+    /// face's "z", so they survive the Lock Screen's single-tint rendering too.
+    private static func eraseEmotionFace(for emotion: WidgetCompanionEmotion, in ctx: GraphicsContext) {
+        var eyeCtx = ctx
+        eyeCtx.blendMode = .destinationOut
+        let eraser = FaceEraser(ctx: eyeCtx)
+
+        switch emotion {
+        case .happy:   eraseHappyFace(eraser)
+        case .sad:     eraseSadFace(eraser)
+        case .tired:   eraseTiredFace(eraser)
+        case .sleepy:  eraseSleepyFace(eraser)
+        case .hungry:  eraseHungryFace(eraser)
+        case .thirsty: eraseThirstyFace(eraser)
+        }
+    }
+
+    private static func eraseHappyFace(_ e: FaceEraser) {
+        e.stroke({ p in                       // crescent eyes, bowed up
+            p.move(to: CGPoint(x: 30, y: 49))
+            p.addQuadCurve(to: CGPoint(x: 44, y: 49), control: CGPoint(x: 37, y: 39))
+        }, width: 5)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 56, y: 49))
+            p.addQuadCurve(to: CGPoint(x: 70, y: 49), control: CGPoint(x: 63, y: 39))
+        }, width: 5)
+        e.stroke({ p in                       // wide smile
+            p.move(to: CGPoint(x: 33, y: 58))
+            p.addQuadCurve(to: CGPoint(x: 67, y: 58), control: CGPoint(x: 50, y: 77))
+        }, width: 6.5)
+    }
+
+    private static func eraseSadFace(_ e: FaceEraser) {
+        e.dot(37, 51, 5.2)
+        e.dot(63, 51, 5.2)
+        e.stroke({ p in                       // brows lifted at the INNER ends: sympathy
+            p.move(to: CGPoint(x: 29, y: 41)); p.addLine(to: CGPoint(x: 42, y: 36))
+        }, width: 4)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 71, y: 41)); p.addLine(to: CGPoint(x: 58, y: 36))
+        }, width: 4)
+        e.stroke({ p in                       // a small, soft frown
+            p.move(to: CGPoint(x: 41, y: 69))
+            p.addQuadCurve(to: CGPoint(x: 59, y: 69), control: CGPoint(x: 50, y: 61))
+        }, width: 4.5)
+    }
+
+    private static func eraseSleepyFace(_ e: FaceEraser) {
+        e.stroke({ p in                       // closed lids
+            p.move(to: CGPoint(x: 30, y: 50))
+            p.addQuadCurve(to: CGPoint(x: 44, y: 50), control: CGPoint(x: 37, y: 56))
+        }, width: 5)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 56, y: 50))
+            p.addQuadCurve(to: CGPoint(x: 70, y: 50), control: CGPoint(x: 63, y: 56))
+        }, width: 5)
+        e.oval(50, 66, width: 9, height: 11)  // a yawn
+        e.stroke({ p in                       // a crescent moon, opening to the upper right
+            p.addArc(center: CGPoint(x: 72, y: 28), radius: 8.5,
+                     startAngle: .degrees(60), endAngle: .degrees(290), clockwise: false)
+        }, width: 4)
+    }
+
+    private static func eraseHungryFace(_ e: FaceEraser) {
+        e.dot(37, 46, 5.2)                    // eyes raised toward the apple
+        e.dot(63, 46, 5.2)
+        e.oval(50, 66, width: 12, height: 10) // an open "o"
+        e.dot(71, 31, 7)                      // the apple…
+        e.stroke({ p in                       // …and its leaf (kept inside the blob's edge)
+            p.move(to: CGPoint(x: 72.5, y: 23)); p.addLine(to: CGPoint(x: 76, y: 20))
+        }, width: 3)
+    }
+
+    private static func eraseThirstyFace(_ e: FaceEraser) {
+        e.dot(37, 47, 5.2)
+        e.dot(63, 47, 5.2)
+        e.oval(50, 65, width: 9, height: 8)   // a small "o"
+        e.fill { p in                         // a drop of water, point up
+            p.move(to: CGPoint(x: 71, y: 18))
+            p.addQuadCurve(to: CGPoint(x: 78, y: 31), control: CGPoint(x: 78, y: 24.5))
+            p.addArc(center: CGPoint(x: 71, y: 31), radius: 7,
+                     startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
+            p.addQuadCurve(to: CGPoint(x: 71, y: 18), control: CGPoint(x: 64, y: 24.5))
+        }
+    }
 }
 
-/// The two drawing primitives every mood's face is made of, over a `.destinationOut` context.
+/// The drawing primitives every mood's face is made of, over a `.destinationOut` context.
 ///
 /// Holds the already-blend-mode-set context plus the opaque shading whose only job is to erase, so
 /// each `erase<Mood>Face` function is nothing but coordinates.
@@ -320,6 +457,20 @@ private struct FaceEraser {
     /// Punches a filled circle of radius `r` centred at (`cx`, `cy`) — the dot eyes.
     func dot(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat) {
         ctx.fill(Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)), with: shade)
+    }
+
+    /// Punches a filled ellipse centred at (`cx`, `cy`) — the open and yawning mouths.
+    func oval(_ cx: CGFloat, _ cy: CGFloat, width: CGFloat, height: CGFloat) {
+        guard width > 0, height > 0 else { return }
+        ctx.fill(Path(ellipseIn: CGRect(x: cx - width / 2, y: cy - height / 2, width: width, height: height)), with: shade)
+    }
+
+    /// Punches the filled shape the path `build` describes — the water drop.
+    func fill(_ build: (inout Path) -> Void) {
+        var p = Path()
+        build(&p)
+        p.closeSubpath()
+        ctx.fill(p, with: shade)
     }
 
     /// Punches a round-capped stroke of the path `build` describes — mouths, lids, and the "z".
@@ -416,6 +567,8 @@ struct FernletCompanionWidgetView: View {
                 CircularCompanionView(entry: entry)
             case .accessoryRectangular:
                 RectangularCompanionView(entry: entry)
+            case .systemMedium:
+                MediumCompanionView(entry: entry)
             default:
                 SmallCompanionView(entry: entry)
             }
@@ -451,13 +604,14 @@ private struct SmallCompanionView: View {
                 // top row: companion glyph (left) + water ring (right)
                 HStack(alignment: .top) {
                     CompanionGlyph(state: entry.currentDayCompanionState,
+                                   emotion: entry.currentCompanionEmotion,
                                    fill: FernletWidgetPalette.mood(entry.currentDayCompanionState))
                         .frame(width: 52, height: 52)
                         // systemSmall never writes the mood down — the face IS the reading, so this
                         // element is the only place it can be heard.
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(Text("Fernlet companion"))
-                        .accessibilityValue(companionMoodValue(entry.currentDayCompanionState))
+                        .accessibilityValue(companionMoodValue(entry.currentDayCompanionState, entry.currentCompanionEmotion))
                     Spacer(minLength: 8)
                     WaterRing(filled: entry.bottleCount, target: entry.hydrationTarget, lineWidth: 6)
                         .frame(width: 52, height: 52)
@@ -493,6 +647,64 @@ private struct SmallCompanionView: View {
                     // the control without minting a second string that could drift from it.
                     .accessibilityLabel(Text(WaterPlusOneIntent.title))
                     .background(FernletWidgetPalette.buttonFill, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+            }
+        } else {
+            PlaceholderView()
+        }
+    }
+}
+
+/// The systemMedium Home Screen layout (2026-09-24): a larger companion glyph with its state and
+/// feeling written beside it, the water count, and the water ring over the interactive "+1".
+///
+/// The one family with room to WRITE the feeling, so the glyph itself is hidden from VoiceOver and
+/// the two words beside it carry the reading. With no snapshot it falls back to ``PlaceholderView``.
+private struct MediumCompanionView: View {
+    let entry: FernletCompanionEntry
+
+    /// The state's written name, or the companion's own name when the day has no state yet.
+    private var stateLabel: String {
+        entry.currentDayCompanionState?.displayName ?? String(localized: "Fernlet")
+    }
+
+    var body: some View {
+        if entry.snapshot != nil {
+            HStack(alignment: .center, spacing: 14) {
+                CompanionGlyph(state: entry.currentDayCompanionState,
+                               emotion: entry.currentCompanionEmotion,
+                               fill: FernletWidgetPalette.mood(entry.currentDayCompanionState))
+                    .frame(width: 84, height: 84)
+                    .accessibilityHidden(true)      // the words beside it say the same thing
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(stateLabel)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(FernletWidgetPalette.ink)
+                    if let emotion = entry.currentCompanionEmotion {
+                        Text(emotion.displayName)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(FernletWidgetPalette.inkSoft)
+                    }
+                    Spacer(minLength: 6)
+                    Text("\(entry.bottleCount) of \(entry.hydrationTarget) bottles today")
+                        .font(.system(size: 13))
+                        .foregroundStyle(FernletWidgetPalette.inkSoft)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 8)
+                VStack(spacing: 10) {
+                    WaterRing(filled: entry.bottleCount, target: entry.hydrationTarget, lineWidth: 6)
+                        .frame(width: 52, height: 52)
+                    Button(intent: WaterPlusOneIntent()) {
+                        Text("+1")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(FernletWidgetPalette.buttonInk)
+                            .frame(width: 44, height: 36)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(WaterPlusOneIntent.title))
+                    .background(FernletWidgetPalette.buttonFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             }
         } else {
@@ -569,14 +781,20 @@ private struct CircularCompanionView: View {
         // Companion glyph is the primary circular option; the shape+negative-space reads in the
         // single-tint Lock Screen render (white fill, system applies the vibrancy tint). No snapshot
         // AND a stale (previous-day) snapshot both resolve to the neutral glyph via the day gate.
-        CompanionGlyph(state: entry.currentDayCompanionState, fill: .white)
+        CompanionGlyph(state: entry.currentDayCompanionState, emotion: lockScreenEmotion, fill: .white)
             .padding(3)
             // The whole accessory is one Canvas, which is an accessibility element with no content —
             // it reads as an unlabelled blank on the Lock Screen. The face is the only reading this
             // family offers, so it has to be spoken here or not at all.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("Fernlet companion"))
-            .accessibilityValue(companionMoodValue(entry.currentDayCompanionState))
+            .accessibilityValue(companionMoodValue(entry.currentDayCompanionState, lockScreenEmotion))
+    }
+
+    /// The emotion this Lock Screen family may draw — none under the privacy-forward default
+    /// (``FernletWidgetEmotionPolicy``).
+    private var lockScreenEmotion: WidgetCompanionEmotion? {
+        FernletWidgetEmotionPolicy.lockScreenShowsEmotion ? entry.currentCompanionEmotion : nil
     }
 }
 
@@ -600,10 +818,17 @@ private struct RectangularCompanionView: View {
         entry.currentDayCompanionState?.displayName ?? String(localized: "Fernlet")
     }
 
+    /// The emotion this Lock Screen family may draw — none under the privacy-forward default
+    /// (``FernletWidgetEmotionPolicy``). The written label stays the state either way: the Lock
+    /// Screen never spells a feeling out.
+    private var lockScreenEmotion: WidgetCompanionEmotion? {
+        FernletWidgetEmotionPolicy.lockScreenShowsEmotion ? entry.currentCompanionEmotion : nil
+    }
+
     var body: some View {
         if entry.snapshot != nil {
             HStack(spacing: 10) {
-                CompanionGlyph(state: entry.currentDayCompanionState, fill: .white)
+                CompanionGlyph(state: entry.currentDayCompanionState, emotion: lockScreenEmotion, fill: .white)
                     .frame(width: 34, height: 34)
                     // Unlike the other two families this one WRITES the mood beside the face, so
                     // labelling the Canvas would say it twice; hiding it drops the empty element.

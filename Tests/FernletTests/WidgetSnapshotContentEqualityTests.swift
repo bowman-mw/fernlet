@@ -50,7 +50,8 @@ struct WidgetSnapshotContentEqualityTests {
     /// is content is in `WidgetSnapshot.contentEquals(_:)`'s own table, which is where a reviewer
     /// should be reading it.
     static let contentFields = [
-        "companionStateRaw", "score", "bottleCount", "hydrationTarget", "macroSummary", "dateKey"
+        "companionStateRaw", "score", "bottleCount", "hydrationTarget", "macroSummary", "dateKey",
+        "companionEmotionTimeline"
     ]
 
     /// The fields stamped at construction that no widget family renders. A difference in one of
@@ -81,7 +82,11 @@ struct WidgetSnapshotContentEqualityTests {
             hydrationTarget: 8,
             macroSummary: WidgetSnapshot.MacroSummary(protein: 42, carbs: 118, fat: 31),
             dateKey: "2026-09-20",
-            computedAt: Date(timeIntervalSince1970: 1_780_000_123)
+            computedAt: Date(timeIntervalSince1970: 1_780_000_123),
+            companionEmotionTimeline: [
+                WidgetSnapshot.EmotionMoment(at: Date(timeIntervalSince1970: 1_780_000_000), emotionRaw: "sleepy"),
+                WidgetSnapshot.EmotionMoment(at: Date(timeIntervalSince1970: 1_780_025_200), emotionRaw: nil)
+            ]
         )
     }
 
@@ -108,7 +113,13 @@ struct WidgetSnapshotContentEqualityTests {
         Flip(field: "macroSummary", apply: {
             $0.macroSummary = WidgetSnapshot.MacroSummary(protein: 43, carbs: 118, fat: 31)
         }),
-        Flip(field: "dateKey", apply: { $0.dateKey = "2026-09-21" })
+        Flip(field: "dateKey", apply: { $0.dateKey = "2026-09-21" }),
+        // A feeling changing on the widget is a change a person sees — hungry arriving, sleepy
+        // leaving — so the timeline is content. It is time-stable by construction (whole-day, whole
+        // seconds), which is what keeps an unchanged day from reloading on every refresh.
+        Flip(field: "companionEmotionTimeline", apply: {
+            $0.companionEmotionTimeline?[1].emotionRaw = "hungry"
+        })
     ]
 
     // MARK: - The thesis
@@ -177,7 +188,7 @@ struct WidgetSnapshotContentEqualityTests {
             construction, rendered by nothing → no reload), and the one that is missing has to be \
             put on a side before this passes.
             """)
-        #expect(fields.count == 7, "MEASURED at P10 item 4: six content fields and one metadata field")
+        #expect(fields.count == 8, "MEASURED 2026-09-24: seven content fields (the emotion timeline joined) and one metadata field")
 
         let macroFields = Mirror(reflecting: WidgetSnapshot.MacroSummary(protein: 0, carbs: 0, fat: 0))
             .children.compactMap(\.label)

@@ -6359,12 +6359,14 @@ final class FernletStore {
         return mirror
     }
 
-    /// The benign snapshot the widget would render right now. PRIVACY: score/water/macros only.
+    /// The benign snapshot the widget would render right now. PRIVACY: score/water/macros plus the
+    /// companion's state and its widget-safe emotion timeline only.
     ///
     /// Lifted out of `publishWidgetSnapshot()` unchanged — same fields, same order, same `Date()`
     /// stamp — so the background refresh can DIFF a snapshot before deciding whether publishing it
     /// is worth a timeline reload. Building one is pure: it reads the live day, the settings and
-    /// the derived signals, and touches no gateway, no network and no disk.
+    /// the derived signals, and touches no gateway, no network and no disk (the emotion timeline
+    /// adds the heart ledger's in-memory mirror and the device-local companion-feelings settings).
     ///
     /// - Returns: The snapshot.
     func currentWidgetSnapshot() -> WidgetSnapshot {
@@ -6380,7 +6382,8 @@ final class FernletStore {
                 fat: Double(macros.fat)
             ),
             dateKey: todayKey,
-            computedAt: Date()
+            computedAt: Date(),
+            companionEmotionTimeline: widgetEmotionTimeline()
         )
     }
 

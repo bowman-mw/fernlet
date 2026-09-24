@@ -15,8 +15,11 @@
 // which carries the sealed Private* stores). Keep both sides byte-identical: iso8601 dates,
 // sorted keys, same field names.
 //
-// PRIVACY: the snapshot carries the wellness score, water count, and macro grams ONLY — never
-// journal text, cycle data, stress baselines, or intimacy data (those are sealed by design).
+// PRIVACY: the snapshot carries the wellness score, water count, macro grams, and the companion's
+// state and emotion tokens ONLY — never journal text, cycle data, stress readings, or intimacy data
+// (those are sealed by design). The emotion timeline can reflect the day's journal mood TAG, the meal
+// and water logging gaps, the bedtime window, and a friend's heart; the body-signal emotions never
+// enter it (`CompanionEmotion.isWidgetPublishable`).
 
 import Foundation
 import WidgetKit
@@ -24,10 +27,10 @@ import FernletFoundation
 
 /// The benign outbound snapshot mirrored to the app-group container for the widget.
 ///
-/// Carries only the wellness score, companion state, water count, and macro grams — never
-/// journal/cycle/intimacy data (sealed by design). Must stay byte-identical to the widget-side
-/// twin in `FernletWidgets/WidgetSharedModels.swift` (deliberate duplication; the widget cannot
-/// link the FernletKit umbrella).
+/// Carries only the wellness score, companion state and emotion timeline, water count, and macro
+/// grams — never journal text, cycle, stress or intimacy data (sealed by design). Must stay
+/// byte-identical to the widget-side twin in `FernletWidgets/WidgetSharedModels.swift` (deliberate
+/// duplication; the widget cannot link the FernletKit umbrella).
 struct WidgetSnapshot: Codable, Equatable {
     /// The day's protein/carbs/fat gram totals, in the widget's own minimal shape.
     ///
@@ -39,6 +42,14 @@ struct WidgetSnapshot: Codable, Equatable {
         var fat: Double
     }
 
+    /// One step of the companion's emotion timeline: from `at` on (that local day only), the widget
+    /// draws the emotion whose FROZEN `CompanionEmotion` token is `emotionRaw` — nil for the plain
+    /// state face. Byte-identical to the widget-side twin.
+    struct EmotionMoment: Codable, Equatable {
+        var at: Date
+        var emotionRaw: String?
+    }
+
     var companionStateRaw: String
     var score: Double
     var bottleCount: Int
@@ -46,6 +57,15 @@ struct WidgetSnapshot: Codable, Equatable {
     var macroSummary: MacroSummary
     var dateKey: String
     var computedAt: Date
+    /// The companion's emotions across the day, one moment per change, from local midnight through
+    /// the next wake time (`CompanionEmotionEngine.timeline`). The widget adds a timeline entry at
+    /// each moment, so a sleepy face appears at bedtime with the app closed.
+    ///
+    /// ADDITIVE (2026-09-24) and optional, so a file written by an older build decodes with no
+    /// emotion and an older widget ignores the key. One time-stable field rather than a separate
+    /// "emotion now": a now-value would change on the clock alone, and ``contentEquals(_:)`` would
+    /// then either reload the widget on every background refresh or have to ignore it.
+    var companionEmotionTimeline: [EmotionMoment]? = nil
 }
 
 // MARK: - Content vs. metadata
@@ -97,6 +117,7 @@ extension WidgetSnapshot {
     /// | `hydrationTarget` | content | the denominator of that count |
     /// | `macroSummary` | content | compared WHOLE; no family renders it today, but it is data the snapshot promises and a change in it is a real change |
     /// | `dateKey` | content | what `WidgetDayGate.snapshotReflectsDay` checks — the most important change there is |
+    /// | `companionEmotionTimeline` | content | the faces the widget draws through the day; time-stable (built from local midnight on whole seconds), so an unchanged day compares equal |
     /// | `computedAt` | **metadata** | stamped at construction, rendered by nothing |
     ///
     /// `WidgetSnapshotContentEqualityTests` pins that table — the field COUNT through `Mirror`, the
@@ -118,6 +139,7 @@ extension WidgetSnapshot {
             && hydrationTarget == other.hydrationTarget
             && macroSummary == other.macroSummary
             && dateKey == other.dateKey
+            && companionEmotionTimeline == other.companionEmotionTimeline
     }
 }
 
@@ -247,6 +269,8 @@ struct WidgetSnapshotFileStore {
                 // yesterday's companion all day until the app republishes. Empty raw → nil companionState
                 // → the neutral "Fernlet" treatment; the app corrects with the real fresh-day snapshot on
                 // next open. (Score/macros aren't rendered by the widget, but are zeroed to stay coherent.)
+                // The emotion timeline stays: its lookup is scoped to each moment's own day, so none of
+                // yesterday's moments can draw today, and today's (sleepy until wake) are clock-only.
                 snapshot.dateKey = dayKey
                 snapshot.bottleCount = 1
                 snapshot.companionStateRaw = ""
