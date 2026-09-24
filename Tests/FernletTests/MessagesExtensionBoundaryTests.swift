@@ -19,7 +19,8 @@ import Testing
 /// amount of test-writing in this file changes that. What holds it instead:
 /// - the exchange logic it drives (envelope round trip, card-metadata revalidation, size limits,
 ///   catalog store, picker priority, inbox expiry/overflow/clear) is covered by
-///   `FernletExchangeTests`, against the same types the controller calls;
+///   `FernletExchangeTests` and `ExchangeMessageEnvelopeV2Tests`, against the same types the
+///   controller calls;
 /// - its display copy is extracted to `FernletMessagesCopy` and held by
 ///   `LocalizationBoundaryTests` rules H1/H2;
 /// - its import surface and file inventory are held here;

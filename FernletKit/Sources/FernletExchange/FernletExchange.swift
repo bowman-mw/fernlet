@@ -7,15 +7,38 @@ import Foundation
 public nonisolated enum ExchangeLimits {
     public static let maxRecipePacketBytes = 64 * 1024
     public static let maxWorkoutPlanPacketBytes = CoachPlanLimits.maxPastedBytes
-    /// The largest envelope whose data URL still fits ``maxMessageURLCharacters``.
+    /// The largest VERSION-1 envelope whose data URL still fits ``maxMessageURLCharacters``.
     ///
     /// Derived, not chosen: the URL is a 50-character `data:` prefix followed by the envelope in
     /// base64, which spends 4 characters on every 3 bytes, so (5,000 − 50) / 4 × 3 = 3,711.
     /// `FernletExchangeTests` pins that the bound is tight. It was 16 KiB until 2026-09-23 — over
     /// four times what Apple documents — so a large recipe passed every check here and then failed
     /// inside `MSConversation.insert` as an unexplained "couldn't insert", instead of meeting the
-    /// "too large for Messages, export a file" answer this bound exists to give.
+    /// "too large for Messages, export a file" answer this bound exists to give. Version 1 is read,
+    /// never written, since 2026-09-24; ``maxMessageFrameBytes`` is the version-2 bound.
     public static let maxMessageEnvelopeBytes = 3_711
+    /// The largest VERSION-2 frame whose data URL still fits ``maxMessageURLCharacters``.
+    ///
+    /// Derived, not chosen: the URL is the 41-character prefix
+    /// `data:application/vnd.fernlet.exchange.v2,` followed by the frame in unpadded base64url —
+    /// 4 characters for every 3 bytes, rounded up — so ⌊(5,000 − 41) × 3 / 4⌋ = 3,719.
+    /// `ExchangeMessageEnvelopeV2Tests` pins that the bound is tight. The frame is 4 header bytes
+    /// and then deflated JSON, so this is a bound on COMPRESSED bytes: what it carries depends on
+    /// the content, and the capacity tests there measure it on realistic recipes.
+    public static let maxMessageFrameBytes = 3_719
+    /// The largest packet a Messages card may carry, in either wire version.
+    ///
+    /// Equal to the review inbox's per-record cap (``FernletMessagesInboxLimits/maxPacketBytes`` is
+    /// defined from it), so a card that decodes can always be handed to Fernlet for review — a
+    /// larger one would open in the bubble and then fail at "Review in Fernlet".
+    public static let maxMessagePacketBytes = 12 * 1024
+    /// The inflate-bomb bound: the most bytes a version-2 frame may declare, and so the most it may
+    /// inflate to.
+    ///
+    /// DEFLATE reaches about 1,032:1, so without this a 3.7 KB frame could claim almost 4 MB inside
+    /// a process Messages hosts. One packet at ``maxMessagePacketBytes`` plus the document's own
+    /// keys (about 120 bytes; 1 KiB is the margin), and not a byte more.
+    public static let maxMessageDocumentBytes = maxMessagePacketBytes + 1_024
     /// Apple's documented ceiling on `MSMessage.url`: "the URL cannot be longer than 5,000
     /// characters" (Messages framework, `MSMessage.url`, checked 2026-09-23). A longer URL fails
     /// with `MSMessageErrorCode.urlExceedsMaxSize`. Raise this only against a measurement on the
@@ -344,12 +367,28 @@ public nonisolated struct ExchangeCardMetadata: Codable, Equatable, Sendable {
     }
 }
 
-/// The standalone, serverless `MSMessage.url` payload. It has a stricter provisional size budget
-/// than a file packet, so a large plan can fall back to the existing `.fernletplan` workflow.
+/// The standalone, serverless `MSMessage.url` payload: one packet plus the bounded card that
+/// describes it. It has a far smaller size budget than a file packet, so an item too large for a
+/// card falls back to the `.fernletrecipe` / `.fernletplan` file workflow.
+///
+/// **Two wire versions, both read.** Version 2, written since 2026-09-24, nests the packet as raw
+/// JSON in a small document that ``ExchangeMessageWireV2`` deflates and base64url-encodes once, and
+/// carries no card — the receiver derives it. Version 1, written by the 2026-09-23 build, is this
+/// type's own JSON (the packet base64'd into `packetData`, the card alongside) base64'd again into
+/// the URL; a card already sitting in a conversation must keep opening, so it is still read. The
+/// URL prefix picks the reader, and each reader accepts only its own encoding.
+///
+/// The stored properties are the decoded, validated value either way. `formatVersion` records the
+/// wire an envelope came from or will be written to, and an envelope whose `formatVersion` is 1
+/// still encodes exactly as the 2026-09-23 build did — the tests mint legacy bubbles that way; no
+/// production path does. The `Codable` conformance IS the version-1 wire and must not change.
 public nonisolated struct ExchangeMessageEnvelope: Codable, Equatable, Sendable {
     public static let format = "fernlet.exchange.message"
-    public static let formatVersion = 1
-    private static let dataURLPrefix = "data:application/vnd.fernlet.exchange+json;base64,"
+    /// The wire version this build writes.
+    public static let formatVersion = 2
+    /// The 2026-09-23 wire. Read, never written.
+    public static let legacyFormatVersion = 1
+    private static let legacyDataURLPrefix = "data:application/vnd.fernlet.exchange+json;base64,"
 
     public var format: String
     public var formatVersion: Int
@@ -383,35 +422,92 @@ public nonisolated struct ExchangeMessageEnvelope: Codable, Equatable, Sendable 
         try validate()
     }
 
+    /// The wire bytes for this envelope's own version: a version-2 frame (at most
+    /// ``ExchangeLimits/maxMessageFrameBytes``) or the version-1 JSON (at most
+    /// ``ExchangeLimits/maxMessageEnvelopeBytes``). ``ExchangePacketError/tooLarge`` means the item
+    /// needs a file instead of a card.
     public func encodedData() throws -> Data {
         try validate()
+        guard formatVersion == Self.legacyFormatVersion else {
+            return try ExchangeMessageWireV2.frame(document: ExchangeCoder.encode(currentDocument()))
+        }
         let data = try ExchangeCoder.encode(self)
         guard data.count <= ExchangeLimits.maxMessageEnvelopeBytes else { throw ExchangePacketError.tooLarge }
         return data
     }
 
     public func messageURL() throws -> URL {
-        let urlText = Self.dataURLPrefix + (try encodedData()).base64EncodedString()
+        let data = try encodedData()
+        let urlText = formatVersion == Self.legacyFormatVersion
+            ? Self.legacyDataURLPrefix + data.base64EncodedString()
+            : ExchangeMessageWireV2.dataURLPrefix + ExchangeMessageWireV2.base64URLEncoded(data)
         guard urlText.utf8.count <= ExchangeLimits.maxMessageURLCharacters,
               let url = URL(string: urlText) else { throw ExchangePacketError.invalidMessageURL }
         return url
     }
 
+    /// Reads either version's wire bytes. Version-1 JSON always opens with `{`; anything else must
+    /// be a version-2 frame, whose own header check rejects it otherwise.
     public static func decode(_ data: Data) throws -> ExchangeMessageEnvelope {
+        guard !data.isEmpty else { throw ExchangePacketError.invalidPayload }
+        guard data.first == UInt8(ascii: "{") else { return try decodeCurrent(frame: data) }
+        return try decodeLegacy(data)
+    }
+
+    /// Reads a card's URL. The prefix picks the version, and each version's reader accepts only its
+    /// own encoding — version-2 base64url behind the version-2 prefix, version-1 JSON in standard
+    /// base64 behind the version-1 prefix — so no URL has two readings.
+    public static func decode(messageURL: URL) throws -> ExchangeMessageEnvelope {
+        let text = messageURL.absoluteString
+        guard text.utf8.count <= ExchangeLimits.maxMessageURLCharacters else { throw ExchangePacketError.invalidMessageURL }
+        if text.hasPrefix(ExchangeMessageWireV2.dataURLPrefix) {
+            let body = String(text.dropFirst(ExchangeMessageWireV2.dataURLPrefix.count))
+            return try decodeCurrent(frame: ExchangeMessageWireV2.base64URLDecoded(body))
+        }
+        guard text.hasPrefix(legacyDataURLPrefix) else { throw ExchangePacketError.invalidMessageURL }
+        let encoded = String(text.dropFirst(legacyDataURLPrefix.count))
+        guard let data = Data(base64Encoded: encoded) else { throw ExchangePacketError.invalidMessageURL }
+        return try decodeLegacy(data)
+    }
+
+    private static func decodeLegacy(_ data: Data) throws -> ExchangeMessageEnvelope {
         guard data.count <= ExchangeLimits.maxMessageEnvelopeBytes else { throw ExchangePacketError.tooLarge }
         let envelope = try ExchangeCoder.decode(ExchangeMessageEnvelope.self, from: data)
+        guard envelope.formatVersion == legacyFormatVersion else { throw ExchangePacketError.invalidPayload }
         try envelope.validate()
         return envelope
     }
 
-    public static func decode(messageURL: URL) throws -> ExchangeMessageEnvelope {
-        let text = messageURL.absoluteString
-        guard text.hasPrefix(dataURLPrefix), text.utf8.count <= ExchangeLimits.maxMessageURLCharacters else {
-            throw ExchangePacketError.invalidMessageURL
+    /// Bounded inflate first (``ExchangeMessageWireV2``), then the document, then the ordinary
+    /// initializer — which re-validates the nested packet through its own `decode`, hash included,
+    /// and derives the card from it.
+    private static func decodeCurrent(frame: Data) throws -> ExchangeMessageEnvelope {
+        let bytes = try ExchangeMessageWireV2.document(fromFrame: frame)
+        let document = try ExchangeCoder.decode(ExchangeMessageDocument.self, from: bytes)
+        guard document.format == format, document.formatVersion == formatVersion else {
+            throw ExchangePacketError.unsupportedFormat
         }
-        let encoded = String(text.dropFirst(dataURLPrefix.count))
-        guard let data = Data(base64Encoded: encoded) else { throw ExchangePacketError.invalidMessageURL }
-        return try decode(data)
+        switch (document.recipe, document.workoutPlan) {
+        case (let recipe?, nil):
+            guard document.scheduledStartDayKey == nil else { throw ExchangePacketError.invalidPayload }
+            return try ExchangeMessageEnvelope(recipe: recipe)
+        case (nil, let plan?):
+            return try ExchangeMessageEnvelope(workoutPlan: plan, scheduledStartDayKey: document.scheduledStartDayKey)
+        default:
+            throw ExchangePacketError.invalidPayload
+        }
+    }
+
+    /// The version-2 document for this envelope's already-validated packet.
+    private func currentDocument() throws -> ExchangeMessageDocument {
+        switch try validatedPayload() {
+        case .recipe(let packet):
+            return ExchangeMessageDocument(format: Self.format, formatVersion: Self.formatVersion,
+                                           recipe: packet, workoutPlan: nil, scheduledStartDayKey: nil)
+        case .workoutPlan(let packet):
+            return ExchangeMessageDocument(format: Self.format, formatVersion: Self.formatVersion, recipe: nil,
+                                           workoutPlan: packet, scheduledStartDayKey: scheduledStartDayKey)
+        }
     }
 
     public func validatedPayload() throws -> ExchangeMessagePayload {
@@ -430,9 +526,10 @@ public nonisolated struct ExchangeMessageEnvelope: Codable, Equatable, Sendable 
     }
 
     private func validate() throws {
-        guard format == Self.format, formatVersion == Self.formatVersion,
-              packetData.count > 0, packetData.count <= ExchangeLimits.maxMessageEnvelopeBytes,
-              card.kind == kind else { throw ExchangePacketError.invalidPayload }
+        guard format == Self.format,
+              formatVersion == Self.formatVersion || formatVersion == Self.legacyFormatVersion,
+              !packetData.isEmpty, card.kind == kind else { throw ExchangePacketError.invalidPayload }
+        guard packetData.count <= packetByteLimit else { throw ExchangePacketError.tooLarge }
         try card.validate()
         let canonicalCard = try canonicalCardMetadata()
         guard card == canonicalCard,
@@ -440,6 +537,34 @@ public nonisolated struct ExchangeMessageEnvelope: Codable, Equatable, Sendable 
             throw ExchangePacketError.invalidPayload
         }
     }
+
+    /// Version 1 packed the packet into a URL-sized envelope; version 2 carries any packet the
+    /// review inbox accepts, and the frame bound then decides whether it compresses small enough.
+    private var packetByteLimit: Int {
+        formatVersion == Self.legacyFormatVersion
+            ? ExchangeLimits.maxMessageEnvelopeBytes
+            : ExchangeLimits.maxMessagePacketBytes
+    }
+}
+
+/// The JSON document a version-2 Messages frame deflates.
+///
+/// The packet travels as raw JSON under the key named for its kind — exactly one of `recipe` and
+/// `workoutPlan` — rather than as base64 bytes inside a string, which is what version 1 paid a
+/// second base64 pass for. There is deliberately no card: the receiver derives it from the packet
+/// (version 1 carried one only to reject it when it disagreed). `scheduledStartDayKey` is the
+/// envelope's one field of its own, and only a workout plan may carry it.
+///
+/// Decoded only after ``ExchangeMessageWireV2`` has bounded the inflate, and a nested packet decoded
+/// here is not yet trusted: ``ExchangeMessageEnvelope`` re-encodes it canonically and runs it
+/// through the packet type's own `decode` — bounds, format version and content hash — before the
+/// envelope exists. The field set is part of the version-2 wire; changing it needs a version 3.
+private nonisolated struct ExchangeMessageDocument: Codable {
+    var format: String
+    var formatVersion: Int
+    var recipe: RecipeExchangePacket?
+    var workoutPlan: WorkoutPlanExchangePacket?
+    var scheduledStartDayKey: String?
 }
 
 /// The decoded, fully validated contents of an ``ExchangeMessageEnvelope``.

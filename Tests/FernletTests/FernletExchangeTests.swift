@@ -148,8 +148,10 @@ struct FernletExchangeTests {
         #expect(FernletMessagesWorkoutPicker.entries(matching: "strength", in: catalog) == [entry])
     }
 
+    /// The VERSION-1 byte bound, still enforced on the read path for cards already in conversations.
+    /// (The version-2 bounds are `ExchangeMessageEnvelopeV2Tests`'.)
     @Test func messageEnvelopeAcceptsItsExactByteLimitAndRejectsOneMoreByte() throws {
-        let envelope = try ExchangeMessageEnvelope(recipe: recipePacket())
+        let envelope = try legacyEnvelope(recipe: recipePacket())
         let exactBoundary = try envelopeData(atExactLimitFor: envelope)
         var tooLarge = exactBoundary
         tooLarge.append(0)
@@ -161,14 +163,14 @@ struct FernletExchangeTests {
         }
     }
 
-    /// The envelope bound is exactly the largest that keeps the `MSMessage.url` within Apple's
-    /// documented 5,000 characters — safe, and tight.
+    /// The version-1 envelope bound is exactly the largest that keeps the `MSMessage.url` within
+    /// Apple's documented 5,000 characters — safe, and tight.
     ///
     /// The prefix length is MEASURED from a real envelope's URL rather than restated, so a change to
     /// the wire prefix moves the arithmetic with it. Until 2026-09-23 the bound was 16 KiB and the
     /// URL cap 22 KiB, which let a URL four times Apple's limit through every check here.
     @Test func theEnvelopeBoundIsTheLargestThatFitsApplesMessageURLLimit() throws {
-        let envelope = try ExchangeMessageEnvelope(recipe: recipePacket())
+        let envelope = try legacyEnvelope(recipe: recipePacket())
         let prefixLength = try envelope.messageURL().absoluteString.count
             - envelope.encodedData().base64EncodedString().count
         let urlLength = { (envelopeBytes: Int) in prefixLength + (envelopeBytes + 2) / 3 * 4 }
@@ -184,14 +186,21 @@ struct FernletExchangeTests {
     /// A recipe that is a perfectly legal FILE but too large for a Messages URL is refused by the
     /// envelope itself, so the composer can answer "too large — export a file instead" rather than
     /// handing Messages a URL it rejects with an unexplained insert failure.
+    ///
+    /// Twelve steps was the example until 2026-09-24: version 1 refused it, and it still does on
+    /// that wire. Version 2 carries it (`ExchangeMessageEnvelopeV2Tests`), so the version-2 refusal
+    /// is measured here on sixty steps — past the packet cap every card shares.
     @Test func aRecipeFileTooLargeForMessagesIsRefusedBeforeItReachesMessages() throws {
-        let packet = try recipePacket(stepCount: 12)
-        let fileBytes = try packet.encodedData().count
+        let twelve = try recipePacket(stepCount: 12)
+        let sixty = try recipePacket(stepCount: 60)
 
-        #expect(fileBytes <= ExchangeLimits.maxRecipePacketBytes, "precondition: a legal .fernletrecipe file")
-        #expect(fileBytes > ExchangeLimits.maxMessageEnvelopeBytes, "precondition: larger than a Messages envelope")
-        #expect(throws: ExchangePacketError.self) {
-            _ = try ExchangeMessageEnvelope(recipe: packet).messageURL()
+        #expect(try twelve.encodedData().count > ExchangeLimits.maxMessageEnvelopeBytes, "precondition: larger than a v1 envelope")
+        #expect(try sixty.encodedData().count <= ExchangeLimits.maxRecipePacketBytes, "precondition: a legal .fernletrecipe file")
+        #expect(throws: ExchangePacketError.tooLarge) {
+            _ = try legacyEnvelope(recipe: twelve).messageURL()
+        }
+        #expect(throws: ExchangePacketError.tooLarge) {
+            _ = try ExchangeMessageEnvelope(recipe: sixty).messageURL()
         }
     }
 
@@ -199,7 +208,9 @@ struct FernletExchangeTests {
         let envelope = try ExchangeMessageEnvelope(recipe: recipePacket())
         var unsupported = envelope
         unsupported.formatVersion += 1
-        var tamperedCard = envelope
+        // The card travels only on the version-1 wire (version 2 derives it), so that is where a
+        // hand-edited card can be tampered with — and must be refused.
+        var tamperedCard = try legacyEnvelope(recipe: recipePacket())
         tamperedCard.card.title = "Not the packet title"
 
         #expect(throws: ExchangePacketError.invalidPayload) {
@@ -442,6 +453,14 @@ struct FernletExchangeTests {
             days: [CoachPlanDay(dayIndex: 1, title: "Wednesday", sessions: [CoachSession(title: "Strength")])]
         )
         return try WorkoutPlanExchangePacket(plan: plan)
+    }
+
+    /// An envelope written on the version-1 wire, exactly as the 2026-09-23 build wrote it — the
+    /// shape every card sent before 2026-09-24 has, and the one the read path must keep accepting.
+    private func legacyEnvelope(recipe packet: RecipeExchangePacket) throws -> ExchangeMessageEnvelope {
+        var envelope = try ExchangeMessageEnvelope(recipe: packet)
+        envelope.formatVersion = ExchangeMessageEnvelope.legacyFormatVersion
+        return envelope
     }
 
     private func envelopeData(atExactLimitFor envelope: ExchangeMessageEnvelope) throws -> Data {

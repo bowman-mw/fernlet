@@ -20,9 +20,11 @@ publishes into the App Group after each durable save (`FernletMessagesCatalogFil
 presentation shows up to four cards — the card picked in this session pinned first — and the
 expanded one adds search over the whole catalog. **Share** builds an `ExchangeMessageEnvelope`,
 wraps it in an `MSMessage` with a template layout, and *inserts* it into the conversation's input
-field; the person still presses Messages' own send button. An item larger than a Messages URL can
-carry (`ExchangeLimits`: Apple's 5,000-character URL limit, a 3,711-byte envelope) gets the "too
-large — export a file instead" status rather than a card Messages would refuse.
+field; the person still presses Messages' own send button. Since 2026-09-24 the envelope is version
+2 — the packet's raw JSON, deflated and base64url-encoded once — which carries about three times what
+version 1 did: a realistic forty-step, sixteen-ingredient recipe fits. An item larger than a card can
+carry (`ExchangeLimits`: Apple's 5,000-character URL limit, a 3,719-byte compressed frame, a 12 KiB
+packet) gets the "too large — export a file instead" status rather than a card Messages would refuse.
 
 The card artwork is drawn locally — an SF Symbol and a wordmark on a 1200×630 canvas — so Messages
 never fetches, and a recipient never sees, a private food photo.
@@ -30,10 +32,11 @@ never fetches, and a recipient never sees, a private food photo.
 ### Receiving
 
 When a Fernlet card is opened (`willBecomeActive(with:)` with a selected message, or
-`didSelect(_:conversation:)`), the controller decodes the message URL itself and re-validates the
-packet and its card through `FernletExchange`; it never trusts what the bubble displays, and an
-envelope it cannot validate shows "This Fernlet item can't be opened" and writes nothing. **Review
-in Fernlet** enqueues the validated packet into the App Group review inbox and opens
+`didSelect(_:conversation:)`), the controller decodes the message URL itself — either wire version,
+so a card the 2026-09-23 build sent still opens — and re-validates the packet and its card through
+`FernletExchange`, whose inflate is bounded before it starts; it never trusts what the bubble
+displays, and an envelope it cannot validate shows "This Fernlet item can't be opened" and writes
+nothing. **Review in Fernlet** enqueues the validated packet into the App Group review inbox and opens
 `fernlet://messages/recipe?id=…` (or `/workout`) — a link that carries an opaque inbox identifier
 and nothing else. Nothing is imported here: the containing app presents the review, applies the
 replay ledger and the calendar and safety checks, and saves only when the person confirms.
@@ -84,8 +87,9 @@ one is marked `@Sendable` so it cannot silently inherit main-actor isolation.
 
 `FernletTests` does not link this target, so the controller itself cannot be exercised there. What
 holds it instead: `FernletExchangeTests` (the envelope, card, limits, catalog and inbox logic the
-controller drives), `MessagesExtensionBoundaryTests` (imports, the copy vault's catalog, the
-manifest), `LocalizationBoundaryTests` H1/H2, and every shipping-code wall, which since 2026-09-23
+controller drives), `ExchangeMessageEnvelopeV2Tests` (the version-2 wire, its inflate bound, its
+capacity, and the version-1 cards that must keep opening), `MessagesExtensionBoundaryTests`
+(imports, the copy vault's catalog, the manifest), `LocalizationBoundaryTests` H1/H2, and every shipping-code wall, which since 2026-09-23
 is held to the full set of shipping roots by
 `PowerOfTenBoundaryTests.everyShippingCodeWallScansEveryShippingRoot`. What a simulator cannot check
 — two phones, real delivery, locked devices — is the checklist in

@@ -7,16 +7,24 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
 
 ## Transport and compatibility
 
-- [ ] Measure the largest successful `MSMessage.url` envelope on the current iOS release. Record
-  the measured limit and keep `ExchangeLimits.maxMessageEnvelopeBytes` below it; never infer it
-  from the 64 KB recipe or 512 KB workout-file limits.
+- [ ] Measure the largest successful `MSMessage.url` on the current iOS release. Record the
+  measured limit and keep `ExchangeLimits.maxMessageURLCharacters` (and the frame bound derived from
+  it) below it; never infer it from the 64 KB recipe or 512 KB workout-file limits.
   *Since 2026-09-23 the code sits at Apple's DOCUMENTED limit — `MSMessage.url` "cannot be longer
-  than 5,000 characters" — so `maxMessageURLCharacters` is 5,000 and the envelope bound is the
-  derived 3,711 bytes (it was 16 KiB, four times the documented limit). The measurement is now the
-  only reason to raise it: send a recipe whose card sits just under 5,000 characters, then one just
-  over, and record whether iOS 26 still refuses the second with `urlExceedsMaxSize`. A mid-size
-  recipe (about ten steps of ordinary length) no longer fits; check that the composer says "too
-  large … export a Fernlet recipe file instead" rather than "couldn't insert".*
+  than 5,000 characters" — so `maxMessageURLCharacters` is 5,000. Since 2026-09-24 cards are
+  written as envelope VERSION 2 (deflated JSON, base64url once), whose derived frame bound is 3,719
+  bytes; a realistic forty-step, sixteen-ingredient recipe makes a 4,704-character URL. The
+  measurement is now the only reason to raise it: send a recipe whose card sits just under 5,000
+  characters, then one just over, and record whether iOS 26 still refuses the second with
+  `urlExceedsMaxSize`. Then send a recipe too large for any card (a very long one with long steps)
+  and check that the composer says "too large … export a Fernlet recipe file instead" rather than
+  "couldn't insert".*
+- [ ] Version-2 bytes survive delivery: send a version-2 recipe card and a workout card, and confirm
+  the receiving phone opens both (the URL body is unpadded base64url — `-` and `_` — which no layer
+  should re-encode; if Messages percent-encodes or rewrites the URL, the card fails to open and the
+  composer's bound needs revisiting).
+- [ ] A version-1 card sent by the 2026-09-23 build (any card already in a conversation from that
+  build) still opens and reviews on the 2026-09-24 build.
 - [ ] Sender and receiver both have the shipping Fernlet version: send and review one recipe and
   one planned-workout card.
 - [ ] Sender and receiver use different supported Fernlet versions: verify unsupported envelopes

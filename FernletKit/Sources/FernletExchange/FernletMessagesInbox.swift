@@ -4,7 +4,9 @@ import Foundation
 /// catalog and never falls back outside the App Group when protected storage is unavailable.
 public nonisolated enum FernletMessagesInboxLimits {
     public static let maxRecords = 20
-    public static let maxPacketBytes = 12 * 1024
+    /// One record's packet cap — defined from ``ExchangeLimits/maxMessagePacketBytes`` so the two can
+    /// never drift apart: every packet a Messages card can carry fits here.
+    public static let maxPacketBytes = ExchangeLimits.maxMessagePacketBytes
     public static let maxInboxBytes = 384 * 1024
     public static let maximumAge: TimeInterval = 7 * 24 * 60 * 60
 }
