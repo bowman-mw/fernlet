@@ -2152,15 +2152,15 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
     }
 }
 
-/// A recipe: servings, structured ingredients (or a web import), notes, cooking steps, and fork
-/// provenance.
+/// A recipe: servings, structured ingredients (or a web import), notes, cooking steps, fork
+/// provenance, and optional named parts.
 ///
 /// The single recipe model for every path — manual, peer-shared, and web-imported (a non-nil
 /// `webImport` switches it to free-text ingredient lines with precomputed nutrition).
-/// `parentRecipeID` (F4 fork provenance) and `steps` (F5 cooking mode) are additive
-/// tolerant-decoded fields with documented blob-strip landmines: an un-updated paired device
-/// re-encoding the synced blob strips them, so correctness must never depend on either surviving a
-/// round-trip (see the field docs below).
+/// `parentRecipeID` (F4 fork provenance), `steps` (F5 cooking mode) and `components` (multipart
+/// recipes) are additive tolerant-decoded fields with documented blob-strip landmines: an un-updated
+/// paired device re-encoding the synced blob strips them, so correctness must never depend on any of
+/// them surviving a round-trip (see the field docs below).
 public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
@@ -2199,6 +2199,20 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     /// make correctness depend on `steps` surviving a round-trip through an older peer's synced blob.
     public var steps: [RecipeStep]?
 
+    /// The recipe's named parts (multipart recipes, 2026-09-24): a dressing made first, then the salad.
+    /// `nil` on every one-part recipe, which is every recipe authored before parts existed, so a one-part
+    /// recipe encodes byte-identically to earlier builds (the key is omitted).
+    ///
+    /// A PARTITION over `ingredients` and `steps` by id, never a copy (see ``RecipeComponent``): the
+    /// flat arrays keep holding the whole recipe, so nutrition, scaling, grocery aggregation and logging
+    /// are unchanged and count every row once. Read it through ``resolvedComponents``.
+    ///
+    /// BLOB-STRIP LANDMINE (deliberate, accepted, the same trade as `steps`): an un-updated paired device
+    /// decodes a synced recipe ignoring this key and re-encodes the blob WITHOUT it. The recipe then
+    /// degrades to a correct one-part recipe (every ingredient and step intact, nutrition identical) and
+    /// loses only its grouping. Never make correctness depend on this surviving an older peer's write.
+    public var components: [RecipeComponent]?
+
     /// True when this recipe was imported from the web (and therefore stores free-text ingredient
     /// lines + precomputed nutrition rather than structured `ingredients`).
     public var isWebImport: Bool { webImport != nil }
@@ -2214,7 +2228,8 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         updatedAt: Date,
         webImport: RecipeWebImport? = nil,
         parentRecipeID: UUID? = nil,
-        steps: [RecipeStep]? = nil
+        steps: [RecipeStep]? = nil,
+        components: [RecipeComponent]? = nil
     ) {
         self.id = id
         self.name = name
@@ -2227,6 +2242,7 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         self.webImport = webImport
         self.parentRecipeID = parentRecipeID
         self.steps = steps
+        self.components = components
     }
 
     public init(from decoder: Decoder) throws {
@@ -2245,6 +2261,8 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         parentRecipeID = try container.decodeIfPresent(UUID.self, forKey: .parentRecipeID)
         // Tolerant + additive (F5). Missing key -> nil, never a decode failure. See the blob-strip note.
         steps = try container.decodeIfPresent([RecipeStep].self, forKey: .steps)
+        // Tolerant + additive (multipart, 2026-09-24). Missing key -> nil = a one-part recipe.
+        components = try container.decodeIfPresent([RecipeComponent].self, forKey: .components)
     }
 }
 
@@ -2253,7 +2271,8 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
 /// Decoded from untrusted peer text/envelopes, hence `Sendable` and flat snapshot fields. `steps`
 /// is an optional key ON version 1 by design: an older peer ignores it and decodes minus steps, so
 /// bumping `version` for steps would wrongly make every steps-carrying share unreadable — see the
-/// field note.
+/// field note. `components` (multipart recipes) follows the same rule; the flattening that keeps an
+/// older reader whole is documented in `RecipeComponentWire.swift`.
 public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     public var format = "fernlet.recipe"
     public var version = 1
@@ -2269,8 +2288,15 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     /// none and one that did sends them. Do NOT bump `version` for this — `RecipeShareCodec.decodePayload`
     /// rejects any version != 1, so a bump would make every steps-carrying recipe unreadable by old peers.
     public var steps: [RecipeStep]?
+    /// The multipart partition (2026-09-24): which leading run of `ingredients` and `steps` belongs to
+    /// each named part, in making order. WIRE-COMPAT: an OPTIONAL key on version 1, exactly like
+    /// `steps`. An older peer ignores it and reads the flat arrays, which already hold the whole recipe
+    /// with section-labelled steps. `nil`, and therefore absent from the encoding, on every one-part
+    /// recipe, which keeps those bytes identical to earlier builds. Validated at decode by
+    /// ``SharedRecipeComponent/validatedPartition(_:ingredientCount:stepCount:)``.
+    public var components: [SharedRecipeComponent]?
 
-    public init(format: String = "fernlet.recipe", version: Int = 1, name: String, servings: Int, notes: String, ingredients: [SharedRecipeIngredient], steps: [RecipeStep]? = nil) {
+    public init(format: String = "fernlet.recipe", version: Int = 1, name: String, servings: Int, notes: String, ingredients: [SharedRecipeIngredient], steps: [RecipeStep]? = nil, components: [SharedRecipeComponent]? = nil) {
         self.format = format
         self.version = version
         self.name = name
@@ -2278,6 +2304,7 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
         self.notes = notes
         self.ingredients = ingredients
         self.steps = steps
+        self.components = components
     }
 
     /// Bounded decode (R3/R5). This type is built from UNTRUSTED bytes — pasted share text and mesh
@@ -2286,7 +2313,7 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     /// where the bytes enter, and a non-finite or absurd quantity is rejected rather than carried
     /// into the macro arithmetic.
     public init(from decoder: Decoder) throws {
-        // Every key except `steps` stays REQUIRED, exactly as the synthesized decode had it — this
+        // Every key except `steps` and `components` stays REQUIRED, as the synthesized decode had it — this
         // initializer adds bounds, it does not relax the wire contract.
         let c = try decoder.container(keyedBy: CodingKeys.self)
         format = try c.decode(String.self, forKey: .format)
@@ -2322,6 +2349,11 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
             throw RecipeImportError.invalidPayload
         }
         steps = decodedSteps
+        // Optional like `steps`; a present partition must match the flat arrays exactly.
+        components = try SharedRecipeComponent.validatedPartition(
+            c.decodeIfPresent([SharedRecipeComponent].self, forKey: .components),
+            ingredientCount: decodedIngredients.count, stepCount: decodedSteps?.count ?? 0
+        )
     }
 
     /// Rejects an over-long free-text field rather than silently truncating it — a truncated recipe
@@ -2333,7 +2365,7 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
 
     /// Wire JSON keys for a shared recipe payload.
     private enum CodingKeys: String, CodingKey {
-        case format, version, name, servings, notes, ingredients, steps
+        case format, version, name, servings, notes, ingredients, steps, components
     }
 }
 

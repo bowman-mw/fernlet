@@ -41,13 +41,15 @@ enum RecipeLimits {
 ///
 /// The single place that knows the `fernlet.recipe` v1 format. Ingredients are resolved against the
 /// passed `foodItems` and carried as (name, quantity, unit, scaled macros) — recipient devices don't
-/// share the sender's catalog ids, so the payload is self-contained. Steps ride an optional key
-/// (version stays 1; old peers ignore it). `FernletStore.importRecipe(from:)` decodes pasted share
+/// share the sender's catalog ids, so the payload is self-contained. Steps and a multipart recipe's
+/// parts ride optional keys (version stays 1; old peers ignore them and read the flattened recipe —
+/// see `RecipeComponentWire.swift`). `FernletStore.importRecipe(from:)` decodes pasted share
 /// text through ``decodePayload(from:)``, and the proximity recipe-share flow sends
 /// ``proximityPayload(for:foodItems:)`` over the mesh.
 struct RecipeShareCodec {
     /// The full text a user shares: readable name/servings/ingredients/notes followed by a
     /// "Fernlet recipe data:" line carrying the single-line JSON payload the importer parses back.
+    /// A multipart recipe lists its ingredients under each part's name.
     static func shareText(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> String {
         let payload = payload(for: recipe, foodItems: foodItems)
         var lines: [String] = [
@@ -56,8 +58,12 @@ struct RecipeShareCodec {
             "",
             "Ingredients:"
         ]
-        lines += payload.ingredients.map { ingredient in
-            "- \(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name) (P\(ingredient.protein) C\(ingredient.carbs) F\(ingredient.fat))"
+        if let parts = payload.componentSlices {
+            for part in parts where !part.ingredients.isEmpty {
+                lines += ["", "\(part.name):"] + part.ingredients.map { ingredientLine($0) }
+            }
+        } else {
+            lines += payload.ingredients.map { ingredientLine($0) }
         }
         if !payload.notes.isEmpty {
             lines += ["", "Notes:", payload.notes]
@@ -68,11 +74,18 @@ struct RecipeShareCodec {
         return lines.joined(separator: "\n")
     }
 
+    /// One readable ingredient line of the share text: "- 3 tbsp Olive oil (P0 C0 F42)".
+    private static func ingredientLine(_ ingredient: SharedRecipeIngredient) -> String {
+        "- \(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name) (P\(ingredient.protein) C\(ingredient.carbs) F\(ingredient.fat))"
+    }
+
     /// The self-contained `SharedRecipePayload` for a structured recipe: each ingredient resolved
     /// against `foodItems` and flattened to name + quantity + scaled macros (ingredients whose food
-    /// item can't be resolved are dropped), with ordered steps riding along.
+    /// item can't be resolved are dropped), with ordered steps riding along, and — for a multipart
+    /// recipe — the `components` partition over both. Both share-text and mesh readers ignore an
+    /// unknown key, so this is the form they get (the hash-covered exchange packet does not).
     static func payload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
-        ExchangeRecipePayloadBuilder.payload(for: recipe, foodItems: foodItems)
+        ExchangeRecipePayloadBuilder.componentPayload(for: recipe, foodItems: foodItems)
     }
 
     /// Builds the over-the-wire proximity payload for any recipe. Web-imported recipes (those with a

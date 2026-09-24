@@ -191,7 +191,14 @@ struct CookingModeView: View {
         if let runSteps = store.cookingRunState?.steps {
             return runSteps.map { RecipeStep(text: $0.text, durationSeconds: $0.durationSeconds) }
         }
-        return recipe.steps ?? []
+        // Making order (a multipart recipe's first part, then the next), exactly what a run will walk.
+        return recipe.cookingSteps.map(\.step)
+    }
+
+    /// A multipart recipe's parts with the ingredients as mise en place shows them (scaled or not);
+    /// fewer than two means a one-part recipe, which renders its plain list.
+    private var miseParts: [ResolvedRecipeComponent] {
+        RecipePartsLayout.parts(of: recipe, displaying: displayIngredients)
     }
     private var hasSteps: Bool { !steps.isEmpty }
     private var isScalable: Bool { RecipeScaling.isScalable(recipe) }
@@ -323,6 +330,12 @@ struct CookingModeView: View {
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
+                    if miseParts.count > 1, let first = miseParts.first?.name {
+                        Text("Made in \(miseParts.count) parts. Start with \(first).")
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.bark)
+                            .fernletWrappingText()
+                    }
                 }
 
                 if isScalable {
@@ -377,6 +390,11 @@ struct CookingModeView: View {
             ForEach(webImport.ingredientLines, id: \.self) { line in
                 ingredientRow(line)
             }
+        } else if miseParts.count > 1 {
+            // A multipart recipe lays each part's ingredients out under its own heading.
+            RecipePartsIngredientList(parts: miseParts) { ingredient in
+                ingredientRow(ingredientLine(ingredient))
+            }
         } else if !displayIngredients.isEmpty {
             ForEach(displayIngredients) { ingredient in
                 ingredientRow(ingredientLine(ingredient))
@@ -411,6 +429,15 @@ struct CookingModeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if let step = currentStep {
+                        if let part = store.cookingRunState?.currentPart {
+                            // Which part of a multipart recipe this step belongs to ("make the dressing
+                            // first"). Read as part of the step's own label below, so hidden here.
+                            Text("Part \(part.position) of \(part.count) · \(part.name)")
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.moss)
+                                .fernletWrappingText()
+                                .accessibilityHidden(true)
+                        }
                         Text(step.text)
                             .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
@@ -420,7 +447,7 @@ struct CookingModeView: View {
                             // and it carries its own position: the "Step 3 of 8" in the header is a
                             // separate element the cook would have to go looking for.
                             .accessibilityAddTraits(.isHeader)
-                            .accessibilityLabel(Text("Step \(stepIndex + 1) of \(steps.count). \(step.text)"))
+                            .accessibilityLabel(stepAccessibilityLabel(step))
                             .accessibilityFocused($isStepFocused)
                             .transition(.opacity)
                             .id(stepIndex)
@@ -456,6 +483,15 @@ struct CookingModeView: View {
 
     private var currentStep: RecipeStep? {
         steps.indices.contains(stepIndex) ? steps[stepIndex] : nil
+    }
+
+    /// The step's VoiceOver label: its position, and for a multipart recipe its part first, because focus
+    /// lands on the step text on every advance and would otherwise skip the part banner above it.
+    private func stepAccessibilityLabel(_ step: RecipeStep) -> Text {
+        guard let part = store.cookingRunState?.currentPart else {
+            return Text("Step \(stepIndex + 1) of \(steps.count). \(step.text)")
+        }
+        return Text("\(part.name), part \(part.position) of \(part.count). Step \(stepIndex + 1) of \(steps.count). \(step.text)")
     }
 
     private func stepTimer(duration: Int) -> some View {

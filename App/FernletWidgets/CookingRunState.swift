@@ -40,14 +40,18 @@ struct CookingRunState: Codable, Hashable {
     /// which the app target maps to/from).
     ///
     /// A positive `durationSeconds` drives the passive per-step timer; `nil` means the step just
-    /// shows the Next button.
+    /// shows the Next button. `partName` names the part of a multipart recipe the step belongs to
+    /// ("Lemon dressing"). It is `nil` for a one-part recipe, and absent from runs persisted before
+    /// parts existed, which decode unchanged: the key is optional.
     struct Step: Codable, Hashable {
         var text: String
         var durationSeconds: Int?
+        var partName: String?
 
-        init(text: String, durationSeconds: Int? = nil) {
+        init(text: String, durationSeconds: Int? = nil, partName: String? = nil) {
             self.text = text
             self.durationSeconds = durationSeconds
+            self.partName = partName
         }
     }
 
@@ -125,6 +129,22 @@ struct CookingRunState: Codable, Hashable {
 
     var currentStepText: String { currentStep?.text ?? "" }
 
+    /// The current step's part (1-based position among the run's parts, the part count, and its name),
+    /// or `nil` for a one-part recipe. Parts are the runs of consecutive steps sharing a `partName`, so
+    /// the walker needs no recipe to say "Part 1 of 2 · Lemon dressing".
+    var currentPart: (position: Int, count: Int, name: String)? {
+        guard let name = currentStep?.partName else { return nil }
+        var position = 0
+        var count = 0
+        var previous: String?
+        for (index, step) in steps.enumerated() {
+            if index == 0 || step.partName != previous { count += 1 }
+            if index == stepIndex { position = count }
+            previous = step.partName
+        }
+        return (position, count, name)
+    }
+
     /// 1-based cursor for display ("Step 3 of 8").
     var stepNumber: Int { min(stepIndex + 1, max(stepCount, 1)) }
 
@@ -180,10 +200,12 @@ struct CookingRunState: Codable, Hashable {
     // MARK: Live Activity mapping
 
     /// Snapshot into the Live Activity content. `finished` is never rendered — the activity is ended
-    /// the instant a run finishes — so the mapping just carries the current cursor + timer window.
+    /// the instant a run finishes — so the mapping just carries the current cursor + timer window. A
+    /// multipart step leads with its part's name ("Lemon dressing · Whisk the oil…"), so the Lock
+    /// Screen says which part you are on without a new content-state field.
     var contentState: CookingActivityAttributes.ContentState {
         CookingActivityAttributes.ContentState(
-            stepText: currentStepText,
+            stepText: currentStep?.partName.map { "\($0) · \(currentStepText)" } ?? currentStepText,
             stepNumber: stepNumber,
             stepCount: max(stepCount, 1),
             isLastStep: isLastStep,

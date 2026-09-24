@@ -4580,9 +4580,13 @@ final class FernletStore {
     /// caller already knows (the walker entry point is gated on it), not a failure to report.
     @discardableResult
     func startCookingRun(_ recipe: RecipeDefinition, startDayKey: String? = nil) -> CookingRunState? {
-        let domainSteps = recipe.steps ?? []
+        // Making order, part by part (the dressing's steps, then the salad's), each step carrying its
+        // part's name for the walker and the Live Activity. A one-part recipe walks exactly as before.
+        let domainSteps = recipe.cookingSteps
         guard !domainSteps.isEmpty else { return nil }
-        let steps = domainSteps.map { CookingRunState.Step(text: $0.text, durationSeconds: $0.durationSeconds) }
+        let steps = domainSteps.map {
+            CookingRunState.Step(text: $0.step.text, durationSeconds: $0.step.durationSeconds, partName: $0.partName)
+        }
         let state = CookingRunState(
             recipeID: recipe.id,
             recipeName: recipe.name,
@@ -4738,6 +4742,16 @@ final class FernletStore {
     // overwritten unconditionally, so a defaulted-nil would silently erase them.
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+    }
+
+    /// Multipart twins of the two above (a dressing made first, then the salad): see
+    /// `DiaryStore.addRecipe(name:servings:notes:parts:)`.
+    @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) -> RecipeDefinition {
+        diary.addRecipe(name: name, servings: servings, notes: notes, parts: parts)
+    }
+
+    func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) {
+        diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, parts: parts)
     }
 
     // MARK: - F4 ingredient substitution (fork on explicit save; decision §11.4)
@@ -5282,6 +5296,9 @@ final class FernletStore {
                 foodItems.append(foodItem)
                 return RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit)
             }
+            // F5 steps (sanitized, nil when a peer sent none) and, for a multipart share, its parts
+            // rebuilt from the partition with the flattening labels removed — one rule for every path.
+            let layout = RecipeComponentImport.layout(for: payload, ingredientIDs: recipeIngredients.map(\.id))
 
             let recipe = RecipeDefinition(
                 id: importedRecipeID ?? UUID(),
@@ -5292,8 +5309,8 @@ final class FernletStore {
                 source: "imported",
                 createdAt: now,
                 updatedAt: now,
-                // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
-                steps: Self.sanitizedSharedSteps(payload.steps)
+                steps: layout.steps,
+                components: layout.components
             )
             recipes.insert(recipe, at: 0)
             return recipe

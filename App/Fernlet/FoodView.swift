@@ -1254,6 +1254,11 @@ struct RecipeSheet: View {
     /// F5 manual step entry. Held as `[RecipeStep]` directly (Identifiable + mutable `text`), sanitized
     /// on save by `RecipeStepSanitizer` (drops blanks). Empty means "no cooking steps".
     @State private var steps: [RecipeStep] = []
+    /// Multipart state (2026-09-24). Empty for a one-part recipe, so `ingredients`/`steps` above stay in
+    /// charge exactly as before. Once split, it holds every row and those two stay empty.
+    @State private var partsDraft = RecipePartsDraft()
+    /// The part a barcode scan lands in, set by that part's Scan button (multipart only).
+    @State private var scanTargetPartID: UUID?
     @State private var expandedId: UUID?
     @State private var scannerPath = false
     @State private var didStartScanner = false
@@ -1278,12 +1283,17 @@ struct RecipeSheet: View {
         self.startsWithScanner = startsWithScanner
         self.onSaved = onSaved
         if let recipe {
-            let loadedIngredients = Self.inputs(for: recipe, foodItems: store.foodCatalog.items(forRecipe: recipe))
+            let recipeFoods = store.foodCatalog.items(forRecipe: recipe)
+            let loadedParts = RecipePartsDraft.parts(for: recipe, foodItems: recipeFoods)
+            // A multipart recipe opens into its parts; its flat lists stay empty (the parts hold every row).
+            let loadedIngredients = loadedParts.isEmpty ? Self.inputs(for: recipe, foodItems: recipeFoods) : []
+            let loadedSteps = loadedParts.isEmpty ? (recipe.steps ?? []) : []
             _name = State(initialValue: recipe.name)
             _servings = State(initialValue: recipe.servings)
             _notes = State(initialValue: recipe.notes)
             _ingredients = State(initialValue: loadedIngredients)
-            _steps = State(initialValue: recipe.steps ?? [])
+            _steps = State(initialValue: loadedSteps)
+            _partsDraft = State(initialValue: RecipePartsDraft(parts: loadedParts))
             // Editing opens on the WHOLE recipe: expanding the first ingredient's search editor pushed
             // the list, servings and steps below the fold, so the user had to tap Done before they
             // could see what they came to change. Blank rows still auto-expand (see `ingredientsSection`).
@@ -1293,7 +1303,8 @@ struct RecipeSheet: View {
                 servings: recipe.servings,
                 notes: recipe.notes,
                 ingredients: loadedIngredients,
-                steps: recipe.steps ?? []
+                steps: loadedSteps,
+                parts: loadedParts
             )
         } else {
             let first = ManualRecipeIngredientInput()
@@ -1304,7 +1315,8 @@ struct RecipeSheet: View {
                 servings: 1,
                 notes: "",
                 ingredients: [first],
-                steps: []
+                steps: [],
+                parts: []
             )
         }
     }
@@ -1312,8 +1324,14 @@ struct RecipeSheet: View {
     /// Whether the editor holds edits a swipe-away would silently throw out.
     private var isDirty: Bool {
         originalDraft != RecipeDraftSnapshot(
-            name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps
+            name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps,
+            parts: partsDraft.parts
         )
+    }
+
+    /// Every ingredient row being edited: the one list of a one-part recipe, or every part's rows.
+    private var allIngredientInputs: [ManualRecipeIngredientInput] {
+        partsDraft.isMultipart ? partsDraft.allIngredients : ingredients
     }
 
     @ViewBuilder
@@ -1347,13 +1365,20 @@ struct RecipeSheet: View {
                         SheetTextEditor(text: $notes, placeholder: "prep notes, substitutions, storage", minHeight: 82)
                     }
 
-                    ingredientsSection
+                    if partsDraft.isMultipart {
+                        partsSection
+                    } else {
+                        ingredientsSection
+                    }
 
                     perServingCard
 
                     servingsField
 
-                    stepsSection
+                    if !partsDraft.isMultipart {
+                        stepsSection
+                        splitIntoPartsButton
+                    }
 
                     deleteRecipeButton
                 }
@@ -1395,35 +1420,15 @@ struct RecipeSheet: View {
     private var ingredientsSection: some View {
         SheetField("Ingredients") {
             VStack(spacing: 8) {
-                ForEach($ingredients) { $ingredient in
-                    if expandedId == ingredient.id || ingredient.trimmedName.isEmpty {
-                        RecipeIngredientEditor(
-                            ingredient: $ingredient,
-                            catalog: store.foodCatalog,
-                            onSaveCustomIngredient: { store.saveCustomIngredient($0) },
-                            onCollapse: ingredient.trimmedName.isEmpty ? nil : { expandedId = nil },
-                            onRemove: { removeIngredient(ingredient.id) }
-                        )
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    } else {
-                        CollapsedIngredientRow(
-                            ingredient: ingredient,
-                            catalog: store.foodCatalog,
-                            showCalories: store.settings.showCalories,
-                            onExpand: { expandedId = ingredient.id },
-                            onRemove: { removeIngredient(ingredient.id) }
-                        )
-                    }
-                }
+                RecipeIngredientRows(ingredients: $ingredients, expandedId: $expandedId, store: store,
+                                     onRemove: removeIngredient)
                 // Stacks at accessibility sizes: side by side, "Add ingredient" / "Scan barcode"
                 // squeezed to the edge and broke mid-word.
                 AdaptiveStack(spacing: 8) {
                     Button {
                         addIngredient()
                     } label: {
-                        ingredientActionLabel("Add ingredient", systemImage: "plus")
+                        RecipeEditorActionLabel(title: "Add ingredient", systemImage: "plus")
                     }
                     .buttonStyle(.plain)
                     // R3: the list is bounded where it grows — the same ceiling the paste decoder uses.
@@ -1431,9 +1436,10 @@ struct RecipeSheet: View {
 
                     #if canImport(UIKit)
                     Button {
+                        scanTargetPartID = nil
                         showingBarcodeScanner = true
                     } label: {
-                        ingredientActionLabel("Scan barcode", systemImage: "barcode.viewfinder")
+                        RecipeEditorActionLabel(title: "Scan barcode", systemImage: "barcode.viewfinder")
                     }
                     .buttonStyle(.plain)
                     #endif
@@ -1442,15 +1448,71 @@ struct RecipeSheet: View {
         }
     }
 
-    /// The shared cream-card label used by both ingredient action buttons (their styling is identical).
-    private func ingredientActionLabel(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
-            .frame(maxWidth: .infinity)
-            .padding(12)
+    /// A multipart recipe's parts, each with its own ingredients and steps (see `RecipePartsEditor`).
+    private var partsSection: some View {
+        SheetField("Parts") {
+            RecipePartsEditor(
+                draft: $partsDraft, store: store, expandedId: $expandedId,
+                onScanBarcode: { partID in
+                    scanTargetPartID = partID
+                    showingBarcodeScanner = true
+                },
+                onRemovePart: requestRemovePart
+            )
+        }
+    }
+
+    /// Offers to split a one-part recipe into parts: its rows become the first part and an empty second
+    /// part follows, ready to be named ("a dressing you make first, then the salad").
+    private var splitIntoPartsButton: some View {
+        Button {
+            guard partsDraft.split(ingredients: ingredients, steps: steps) != nil else { return }
+            ingredients = []
+            steps = []
+            expandedId = nil
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Split into parts", systemImage: "square.split.1x2")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                Text("For a recipe made in stages, like a dressing you make first and a salad you put together after.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(ingredients.count >= RecipeLimits.maxIngredients)
+        .accessibilityIdentifier("recipeEditor.splitIntoParts")
+    }
+
+    /// Removes a part, asking first when it holds anything the user typed. When one part is left, the
+    /// recipe goes back to a single ingredient list and step list, holding that part's rows.
+    private func requestRemovePart(_ partID: UUID) {
+        guard !partsDraft.isBlank(partID) else {
+            removePart(partID)
+            return
+        }
+        let partName = (partsDraft.parts.first { $0.id == partID }?.name ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: partName.isEmpty ? "Remove this part?" : "Remove \u{201C}\(partName)\u{201D}?",
+            message: "The part's ingredients and steps are taken out of this recipe.",
+            confirmLabel: "Remove part",
+            auditEvent: "recipe.partRemoveConfirmed",
+            perform: { removePart(partID) }
+        )
+    }
+
+    private func removePart(_ partID: UUID) {
+        guard let survivor = partsDraft.removePart(partID) else { return }
+        ingredients = survivor.ingredients.isEmpty ? [ManualRecipeIngredientInput()] : survivor.ingredients
+        steps = survivor.steps
+        expandedId = nil
     }
 
     /// Appends one blank ingredient row, refusing past ``RecipeLimits/maxIngredients`` (R3: the cap
@@ -1538,7 +1600,11 @@ struct RecipeSheet: View {
     @ViewBuilder private var saveBar: some View {
         if let editingRecipe {
             SheetSaveBar(disabled: !canSave) {
-                store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                if partsDraft.isMultipart {
+                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, parts: partsDraft.parts)
+                } else {
+                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                }
                 finishAfterSave(named: name)
             }
         } else {
@@ -1546,12 +1612,21 @@ struct RecipeSheet: View {
         }
     }
 
+    /// Creates the recipe from whichever form the editor is in: one list, or parts. Discardable because
+    /// "Save recipe" needs only the side effect; "Log & save" logs the recipe it returns.
+    @discardableResult private func addDraftRecipe() -> RecipeDefinition {
+        guard partsDraft.isMultipart else {
+            return store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+        }
+        return store.addRecipe(name: name, servings: servings, notes: notes, parts: partsDraft.parts)
+    }
+
     /// Stacks at accessibility sizes — side by side, "Save recipe" / "Log & save" squeezed to the
     /// screen edge and broke mid-word.
     private var createButtons: some View {
         AdaptiveStack(spacing: 12) {
             Button("Save recipe") {
-                store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                addDraftRecipe()
                 finishAfterSave(named: name)
             }
             .buttonStyle(.plain)
@@ -1565,7 +1640,7 @@ struct RecipeSheet: View {
             .opacity(canSave ? 1 : 0.4)
 
             Button("Log & save") {
-                let recipe = store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                let recipe = addDraftRecipe()
                 store.logRecipe(recipe)
                 finishAfterSave(named: name)
             }
@@ -1594,7 +1669,10 @@ struct RecipeSheet: View {
             carbs: foodItem.macros.carbs,
             fat: foodItem.macros.fat
         )
-        if ingredients.count == 1, ingredients[0].trimmedName.isEmpty {
+        if partsDraft.isMultipart {
+            // A part's Scan button aimed the scanner at that part.
+            partsDraft.appendIngredient(input, to: scanTargetPartID)
+        } else if ingredients.count == 1, ingredients[0].trimmedName.isEmpty {
             ingredients[0] = input
         } else {
             ingredients.append(input)
@@ -1603,15 +1681,17 @@ struct RecipeSheet: View {
     }
 
     private var canSave: Bool {
-        let resolved = store.foodCatalog.items(ids: ingredients.compactMap(\.selectedFoodItemId))
+        let rows = allIngredientInputs
+        let resolved = store.foodCatalog.items(ids: rows.compactMap(\.selectedFoodItemId))
         return !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        ingredients.contains { !$0.trimmedName.isEmpty } &&
-        ingredients.filter { !$0.trimmedName.isEmpty }.allSatisfy { $0.hasResolvedMacros(foodItems: resolved) }
+        rows.contains { !$0.trimmedName.isEmpty } &&
+        rows.filter { !$0.trimmedName.isEmpty }.allSatisfy { $0.hasResolvedMacros(foodItems: resolved) }
     }
 
     private var perServingTotals: MacroTotals {
-        let resolved = store.foodCatalog.items(ids: ingredients.compactMap(\.selectedFoodItemId))
-        let totals = ingredients.reduce(into: MacroTotals()) { partial, ingredient in
+        let rows = allIngredientInputs
+        let resolved = store.foodCatalog.items(ids: rows.compactMap(\.selectedFoodItemId))
+        let totals = rows.reduce(into: MacroTotals()) { partial, ingredient in
             guard !ingredient.trimmedName.isEmpty,
                   let macros = ingredient.resolvedMacros(foodItems: resolved) else { return }
             partial.protein += macros.protein
@@ -1639,74 +1719,24 @@ struct RecipeSheet: View {
                 // the computed one rewrote the whole array on every keystroke, which reset the caret
                 // mid-word and dropped characters as the user typed.
                 ForEach($steps) { $step in
-                    stepEditorCard($step, index: steps.firstIndex(where: { $0.id == step.id }) ?? 0)
+                    let index = steps.firstIndex(where: { $0.id == step.id }) ?? 0
+                    RecipeStepEditorCard(
+                        step: $step, index: index, count: steps.count,
+                        accessibilityIdentifier: "recipeEditor.step.\(index)",
+                        onMove: { moveStep(step.id, by: $0) },
+                        onRemove: { removeStep(step.id) }
+                    )
                 }
                 addStepButton
             }
         }
     }
 
-    /// One step's editor card: position label + move/remove controls, the text editor, and the
-    /// optional per-step timer.
-    private func stepEditorCard(_ step: Binding<RecipeStep>, index: Int) -> some View {
-        let id = step.wrappedValue.id
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Step \(index + 1)")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                Spacer()
-                stepControlButton(systemImage: "chevron.up", enabled: index > 0, label: "Move step \(index + 1) up") {
-                    moveStep(id, by: -1)
-                }
-                stepControlButton(systemImage: "chevron.down", enabled: index < steps.count - 1, label: "Move step \(index + 1) down") {
-                    moveStep(id, by: 1)
-                }
-                stepControlButton(systemImage: "xmark", enabled: true, tint: Color.slate, label: "Remove step \(index + 1)") {
-                    removeStep(id)
-                }
-            }
-            SheetTextEditor(text: step.text, placeholder: "what to do in this step", minHeight: 60)
-            StepTimerControl(durationSeconds: step.durationSeconds)
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("recipeEditor.step.\(index)")
-    }
-
-    /// One 34pt glyph control on a step card — the up/down/remove buttons share this styling exactly.
-    private func stepControlButton(
-        systemImage: String,
-        enabled: Bool,
-        tint: Color = Color.moss,
-        label: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(enabled ? tint : Color.slate.opacity(0.3))
-                .frame(minWidth: 34, minHeight: 34)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .accessibilityLabel(label)
-    }
-
     private var addStepButton: some View {
         Button {
             addStep()
         } label: {
-            Label("Add step", systemImage: "plus")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .frame(maxWidth: .infinity)
-                .padding(12)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            RecipeEditorActionLabel(title: "Add step", systemImage: "plus")
         }
         .buttonStyle(.plain)
         // R3: bounded by the same step ceiling the paste decoder enforces.
@@ -1775,20 +1805,7 @@ struct RecipeSheet: View {
     }
 
     private static func inputs(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> [ManualRecipeIngredientInput] {
-        let inputs = recipe.ingredients.compactMap { recipeIngredient -> ManualRecipeIngredientInput? in
-            guard let foodItem = foodItems.first(where: { $0.id == recipeIngredient.foodItemId }) else { return nil }
-            let selectedFoodItemId = foodItem.source == .manual ? nil : foodItem.id
-            return ManualRecipeIngredientInput(
-                name: foodItem.name,
-                selectedFoodItemId: selectedFoodItemId,
-                quantity: recipeIngredient.quantity,
-                unit: recipeIngredient.unit,
-                protein: foodItem.macros.protein,
-                carbs: foodItem.macros.carbs,
-                fat: foodItem.macros.fat,
-                scannedMicronutrients: foodItem.source == .manual && foodItem.micronutrients.hasAnyValue ? foodItem.micronutrients : nil
-            )
-        }
+        let inputs = RecipeEditorInputs.inputs(for: recipe.ingredients, foodItems: foodItems)
         return inputs.isEmpty ? [ManualRecipeIngredientInput()] : inputs
     }
 }
@@ -1804,6 +1821,8 @@ private struct RecipeDraftSnapshot: Equatable {
     let notes: String
     let ingredients: [ManualRecipeIngredientInput]
     let steps: [RecipeStep]
+    /// A multipart recipe's parts (empty for a one-part recipe), so an edit inside any part counts.
+    let parts: [RecipeComponentInput]
 }
 
 /// The collapsed one-line summary of a recipe ingredient (name plus a quantity/macros line), shown
@@ -1811,7 +1830,7 @@ private struct RecipeDraftSnapshot: Equatable {
 ///
 /// Tapping the row re-expands it into ``RecipeIngredientEditor``; the trailing x removes it. The
 /// calorie figure in the summary renders only behind the explicit calorie opt-in.
-private struct CollapsedIngredientRow: View {
+struct CollapsedIngredientRow: View {
     var ingredient: ManualRecipeIngredientInput
     var catalog: FoodCatalog
     /// Macros-first: the trailing calorie figure renders only behind the explicit opt-in.
@@ -2016,7 +2035,7 @@ private struct CatalogSearchEmptyState: View {
 /// unbinds it, and the editor deliberately never auto-binds on an exact name match so branded products
 /// can't hijack common words like "chicken". "Save custom ingredient" persists manual macros as a user
 /// `FoodItem` via the injected closure.
-private struct RecipeIngredientEditor: View {
+struct RecipeIngredientEditor: View {
     @Binding var ingredient: ManualRecipeIngredientInput
     var catalog: FoodCatalog
     var onSaveCustomIngredient: (ManualRecipeIngredientInput) -> FoodItem?
@@ -5714,6 +5733,10 @@ struct RecipeDetailView: View {
                     Text("No ingredients listed.")
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
+                } else if recipe.isMultipart {
+                    RecipePartsIngredientList(parts: RecipePartsLayout.parts(of: recipe, displaying: displayIngredients)) {
+                        structuredIngredientRow($0)
+                    }
                 } else {
                     ForEach(displayIngredients) { ingredient in
                         structuredIngredientRow(ingredient)
@@ -5781,8 +5804,13 @@ struct RecipeDetailView: View {
             FernletCard {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionLabel("Steps")
-                    ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                        stepRow(number: index + 1, step: step)
+                    if recipe.isMultipart {
+                        // Part by part, in making order, numbered from 1 within each part.
+                        RecipePartsStepList(parts: recipe.resolvedComponents) { stepRow(number: $0, step: $1) }
+                    } else {
+                        ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                            stepRow(number: index + 1, step: step)
+                        }
                     }
                 }
             }

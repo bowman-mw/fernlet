@@ -27,15 +27,42 @@ public nonisolated enum ExchangeLimits {
 }
 
 /// Builds the portable recipe arm without importing the app's Proximity or private-media code.
+///
+/// Two forms, one per reader population (multipart recipes, 2026-09-24):
+/// - ``payload(for:foodItems:)`` is the form EVERY build reads. It is byte-identical to earlier builds
+///   for a one-part recipe; a multipart recipe comes out flattened, with section-labelled steps and no
+///   `components` key. The hash-covered v1 ``RecipeExchangePacket`` uses it, because an older reader
+///   re-hashes the decoded recipe and an unknown key would fail that hash.
+/// - ``componentPayload(for:foodItems:)`` is the same payload plus the `components` partition, for the
+///   wires where an unknown key is ignored (pasted share text, the mesh `.local` arm) and for a packet
+///   format that versions its own hash.
 public nonisolated enum ExchangeRecipePayloadBuilder {
     public static func payload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
-        SharedRecipePayload(
-            name: recipe.name,
-            servings: recipe.servings,
-            notes: recipe.notes,
-            ingredients: sharedIngredients(for: recipe.ingredients, foodItems: foodItems),
-            steps: recipe.steps
-        )
+        componentPayload(for: recipe, foodItems: foodItems).droppingComponents()
+    }
+
+    /// The payload with the multipart partition. A one-part recipe (or one whose parts resolve to fewer
+    /// than two non-empty groups) takes the original path unchanged: flat ingredients in stored order,
+    /// `steps` passed through verbatim. A multipart recipe resolves each part's ingredients on its own,
+    /// so an ingredient dropped as unresolvable shrinks only its own part's count.
+    public static func componentPayload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
+        let parts = recipe.resolvedComponents
+        guard parts.count >= RecipeComponentLimits.minComponents else {
+            return SharedRecipePayload(
+                name: recipe.name,
+                servings: recipe.servings,
+                notes: recipe.notes,
+                ingredients: sharedIngredients(for: recipe.ingredients, foodItems: foodItems),
+                steps: recipe.steps
+            )
+        }
+        let contents = parts.map { part in
+            SharedRecipeComponentContent(name: part.name ?? "",
+                                         ingredients: sharedIngredients(for: part.ingredients, foodItems: foodItems),
+                                         steps: part.steps)
+        }
+        return SharedRecipePayload.assembled(name: recipe.name, servings: recipe.servings, notes: recipe.notes,
+                                             parts: contents)
     }
 
     private static func sharedIngredients(
@@ -52,7 +79,8 @@ public nonisolated enum ExchangeRecipePayloadBuilder {
     }
 }
 
-/// The additional recipe constraints historically enforced by the app-side share codec.
+/// The additional recipe constraints historically enforced by the app-side share codec, plus the
+/// multipart partition's shape when a payload carries one.
 public nonisolated enum ExchangeRecipePayloadValidator {
     public static func validate(_ payload: SharedRecipePayload) throws {
         guard payload.format == "fernlet.recipe", payload.version == 1 else {
@@ -63,9 +91,19 @@ public nonisolated enum ExchangeRecipePayloadValidator {
               payload.ingredients.count <= 100, (payload.steps?.count ?? 0) <= 60 else {
             throw ExchangePacketError.invalidPayload
         }
-        guard ingredientsAreValid(payload.ingredients), stepsAreValid(payload.steps ?? []) else {
+        guard ingredientsAreValid(payload.ingredients), stepsAreValid(payload.steps ?? []),
+              componentsAreValid(payload) else {
             throw ExchangePacketError.invalidPayload
         }
+    }
+
+    /// A payload built in-process never passed the decoder's partition gate, so check it here too: no
+    /// partition, or one that matches the flat arrays exactly.
+    private static func componentsAreValid(_ payload: SharedRecipePayload) -> Bool {
+        guard let components = payload.components else { return true }
+        return SharedRecipeComponent.isValidPartition(
+            components, ingredientCount: payload.ingredients.count, stepCount: payload.steps?.count ?? 0
+        )
     }
 
     private static func ingredientsAreValid(_ ingredients: [SharedRecipeIngredient]) -> Bool {

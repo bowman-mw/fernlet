@@ -7,7 +7,8 @@ import FernletUI
 ///
 /// Presented by ContentView when `ProximityRecipeShareManager` holds a
 /// `PendingProximityRecipeShare`. Shows the recipe's kind (local Fernlet recipe vs. saved web
-/// recipe), servings/ingredient counts, macros, notes, and the ingredient list, plus a duplicate
+/// recipe), servings/ingredient counts, macros, notes, and the ingredient list and steps (grouped
+/// under each part's heading for a multipart recipe, as the import will rebuild it), plus a duplicate
 /// warning when a same-named (or same-source) recipe already exists — import then becomes
 /// "Import anyway". The source-URL duplicate check uses `RecipeSourceURLMatcher`, the SAME
 /// normalized match the import path decides with, so the warning fires for exactly the shares the
@@ -136,35 +137,74 @@ struct ProximityRecipeShareReviewSheet: View {
         }
     }
 
-    /// The cooking steps exactly as shared (F5) — the sheet previously imported them unseen.
+    /// The cooking steps exactly as shared (F5) — the sheet previously imported them unseen. A
+    /// multipart share shows each part's steps under its heading, numbered from 1 within the part.
     @ViewBuilder
     private var stepsField: some View {
         if !sharedSteps.isEmpty {
             SheetField("Steps") {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(sharedSteps.enumerated()), id: \.offset) { index, step in
-                        Text("\(index + 1). \(step.text)")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
+                    if let sharedParts {
+                        ForEach(Array(sharedParts.enumerated()), id: \.offset) { index, part in
+                            if !part.steps.isEmpty {
+                                RecipePartHeader(name: part.name, position: index + 1, count: sharedParts.count)
+                                stepRows(part.steps)
+                            }
+                        }
+                    } else {
+                        stepRows(sharedSteps)
                     }
                 }
             }
         }
     }
 
-    /// The ingredient list exactly as shared.
+    /// The ingredient list exactly as shared; a multipart share lists each part's under its heading.
     private var ingredientsField: some View {
         SheetField("Ingredients") {
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(ingredientLines.enumerated()), id: \.offset) { _, line in
-                    Text("- \(line)")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
+                if let sharedParts {
+                    ForEach(Array(sharedParts.enumerated()), id: \.offset) { index, part in
+                        if !part.ingredients.isEmpty {
+                            RecipePartHeader(name: part.name, position: index + 1, count: sharedParts.count)
+                            ingredientRows(part.ingredients.map(Self.ingredientLine))
+                        }
+                    }
+                } else {
+                    ingredientRows(ingredientLines)
                 }
             }
         }
+    }
+
+    private func stepRows(_ steps: [RecipeStep]) -> some View {
+        ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+            Text("\(index + 1). \(step.text)")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+        }
+    }
+
+    private func ingredientRows(_ lines: [String]) -> some View {
+        ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+            Text("- \(line)")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+        }
+    }
+
+    /// A multipart local share's parts (steps already stripped of their flattening labels), or nil
+    /// for a one-part share or a saved web recipe.
+    private var sharedParts: [SharedRecipeComponentSlice]? {
+        guard case .local = share.payload.recipe.kind else { return nil }
+        return share.payload.recipe.local?.componentSlices
+    }
+
+    /// One shared ingredient as a readable line: "3 tbsp Olive oil".
+    nonisolated private static func ingredientLine(_ ingredient: SharedRecipeIngredient) -> String {
+        "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name)"
     }
 
     private var recipeKindLabel: String {
@@ -184,9 +224,7 @@ struct ProximityRecipeShareReviewSheet: View {
     private var ingredientLines: [String] {
         switch share.payload.recipe.kind {
         case .local:
-            share.payload.recipe.local?.ingredients.map { ingredient in
-                "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name)"
-            } ?? []
+            share.payload.recipe.local?.ingredients.map(Self.ingredientLine) ?? []
         case .saved:
             share.payload.recipe.saved?.ingredients ?? []
         }

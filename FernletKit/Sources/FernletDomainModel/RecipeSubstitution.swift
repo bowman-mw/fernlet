@@ -122,7 +122,16 @@ public nonisolated enum RecipeSubstitution {
             // step text broadly valid (and user-editable), so the "(adapted)" copy keeps its Cook
             // walker instead of silently losing it. Without this the added `steps` field defaults to
             // nil and manual-recipe steps vanish on fork.
-            steps: source.steps
+            steps: source.steps,
+            // Multipart: the fork keeps its parts, and the substitute takes the replaced row's place
+            // in whichever part owned it (its id is fresh, so the claim is re-pointed, not dropped).
+            components: source.components.map { parts in
+                parts.map { part in
+                    var remapped = part
+                    remapped.ingredientIDs = part.ingredientIDs.map { $0 == originalIngredientID ? newIngredient.id : $0 }
+                    return remapped
+                }
+            }
         )
     }
 

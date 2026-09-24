@@ -554,30 +554,47 @@ extension FernletStore {
     /// manual recipe's structured ingredients resolved to `"Name (2 cup)"`. The one both-shapes unifier
     /// (§4.1); also reused by the F3 grocery composer for web-import per-recipe sections, so it is
     /// `internal` (not `private`) to reach `GroceryListComposer` in the same target.
+    /// A multipart recipe's lines lead with their part's name ("Lemon dressing: Olive oil (3 tbsp)"), in
+    /// making order, the same labelling its share carries. A one-part recipe's lines are unchanged.
     static func recipeIngredientLines(_ recipe: RecipeDefinition, nameByFoodID: [UUID: String] = [:]) -> [String]? {
         if let webImport = recipe.webImport, !webImport.ingredientLines.isEmpty {
             return webImport.ingredientLines
         }
-        let lines = recipe.ingredients.map { ing -> String in
-            let measure = "\(formatQuantity(ing.quantity)) \(ing.unit)".trimmingCharacters(in: .whitespaces)
-            if let name = nameByFoodID[ing.foodItemId], !name.isEmpty {
-                return measure.isEmpty ? name : "\(name) (\(measure))"
+        let parts = recipe.resolvedComponents
+        let lines = parts.flatMap { part in
+            part.ingredients.map { ing -> String in
+                let measure = "\(formatQuantity(ing.quantity)) \(ing.unit)".trimmingCharacters(in: .whitespaces)
+                var line = measure   // food not resolvable → measure only (still better than a trap)
+                if let name = nameByFoodID[ing.foodItemId], !name.isEmpty {
+                    line = measure.isEmpty ? name : "\(name) (\(measure))"
+                }
+                return partLabelled(line, partName: part.name, isMultipart: parts.count > 1)
             }
-            return measure   // food not resolvable → measure only (still better than a trap)
         }
         return lines.isEmpty ? nil : lines
     }
 
     /// Renders a recipe's ordered cooking steps (F5) to readable lines for the export: the step text, with
     /// a step's optional passive timer appended as " (N min timer)". Returns nil when the recipe has no
-    /// steps, so the section is omitted rather than exported as an empty array.
+    /// steps, so the section is omitted rather than exported as an empty array. A multipart recipe's
+    /// steps run part by part, each led by its part's name.
     static func recipeStepLines(_ recipe: RecipeDefinition) -> [String]? {
-        guard let steps = recipe.steps, !steps.isEmpty else { return nil }
-        return steps.map { step in
-            guard let seconds = step.durationSeconds, seconds > 0 else { return step.text }
-            let minutes = max(seconds / 60, 1)
-            return "\(step.text) (\(minutes) min timer)"
+        let steps = recipe.cookingSteps
+        guard !steps.isEmpty else { return nil }
+        return steps.map { cooking in
+            let step = cooking.step
+            var line = step.text
+            if let seconds = step.durationSeconds, seconds > 0 {
+                line = "\(step.text) (\(max(seconds / 60, 1)) min timer)"
+            }
+            return partLabelled(line, partName: cooking.partName, isMultipart: cooking.partName != nil)
         }
+    }
+
+    /// `line` led by its part's name for a multipart recipe, else unchanged.
+    private static func partLabelled(_ line: String, partName: String?, isMultipart: Bool) -> String {
+        guard isMultipart, let partName else { return line }
+        return partName + RecipeComponentWire.labelSeparator + line
     }
 
     /// Whole numbers render without a trailing decimal; a non-finite / out-of-Int-range quantity falls

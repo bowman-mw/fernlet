@@ -1500,8 +1500,70 @@ public final class DiaryStore {
             recipes[index].ingredients = recipeIngredients
             recipes[index].notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             recipes[index].steps = RecipeStepSanitizer.sanitized(steps)
+            // A one-part save: any parts the recipe had are gone (their ids name rows this save replaced).
+            recipes[index].components = nil
             recipes[index].updatedAt = Date()
         }
+    }
+
+    /// Creates a MULTIPART manual recipe from the editor's parts (a dressing, then the salad).
+    ///
+    /// Each part's rows resolve through the same upsert and step sanitizer as
+    /// ``addRecipe(name:servings:notes:ingredients:steps:)``, via ``RecipeComponentAssembly``. Fewer than
+    /// two non-empty parts store a plain one-part recipe.
+    /// - Returns: The newly created recipe.
+    @discardableResult public func addRecipe(name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) -> RecipeDefinition {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        assert(!trimmedName.isEmpty, "recipe name required")
+        let now = Date()
+        return batchSnapshotPersistence {
+            let assembled = assembleRecipeParts(parts, verifiedAt: now)
+            let recipe = RecipeDefinition(
+                name: trimmedName,
+                servings: max(servings, 1),
+                ingredients: assembled.ingredients,
+                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+                source: "manual",
+                createdAt: now,
+                updatedAt: now,
+                steps: assembled.steps,
+                components: assembled.components
+            )
+            recipes.insert(recipe, at: 0)
+            return recipe
+        }
+    }
+
+    /// Rewrites an existing recipe in place from the editor's parts, with the same resolution as
+    /// ``addRecipe(name:servings:notes:parts:)``. Ingredients, steps and parts are all written, so a
+    /// part the user removed is gone. A no-op when the recipe id is no longer in the book.
+    public func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        assert(!trimmedName.isEmpty, "recipe name required")
+        guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
+        batchSnapshotPersistence {
+            let assembled = assembleRecipeParts(parts, verifiedAt: Date())
+            assert(!assembled.ingredients.isEmpty, "recipe ingredients required")
+            recipes[index].name = trimmedName
+            recipes[index].servings = max(servings, 1)
+            recipes[index].ingredients = assembled.ingredients
+            recipes[index].notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            recipes[index].steps = assembled.steps
+            recipes[index].components = assembled.components
+            recipes[index].updatedAt = Date()
+        }
+    }
+
+    /// Resolves the editor's parts into rows + partition against the live catalog, minting custom
+    /// ingredient foods into `foodItems` exactly as the one-part path does.
+    private func assembleRecipeParts(_ parts: [RecipeComponentInput], verifiedAt: Date) -> RecipeComponentAssembly.Result {
+        let selectedIDs = parts.flatMap(\.ingredients).compactMap(\.selectedFoodItemId)
+        return RecipeComponentAssembly.assemble(
+            parts,
+            selectionCatalog: foodCatalog.items(ids: selectedIDs),
+            in: &foodItems,
+            verifiedAt: verifiedAt
+        )
     }
 
     /// Inserts an ALREADY-BUILT recipe (structured ingredients already bound to catalog `foodItemId`s)
