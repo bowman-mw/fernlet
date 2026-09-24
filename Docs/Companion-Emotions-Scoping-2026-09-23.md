@@ -8,7 +8,10 @@
 > `stressTint`/`calmTint` flags became the last two. The widget draws six of them through an
 > additive emotion timeline; the Lock Screen keeps the state face (owner-confirmed). A Settings
 > switch turns the hunger and thirst cues off. The note below is the record of the scoping. Where it
-> and the code differ, the code and its DocC win.
+> and the code differ, the code and its DocC win. One such difference already: §1 says every entry
+> earns the same journal credit, but since 2026-09-24 a day whose only entries are one-tap mood
+> check-ins earns half the credit above writing nothing (0.775; owner decision) — a written entry
+> still earns the full 1.0 (`JournalScoringParityTests`).
 
 > **SCOPING ONLY. Nothing in this note is built, and companion behavior is unchanged.** The work is
 > meant for a separate session. Owner, verbatim: *"having a happy companion on a hard day seems

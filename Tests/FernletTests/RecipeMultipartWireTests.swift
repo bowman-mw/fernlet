@@ -13,7 +13,7 @@ import FernletExchange
 /// - a one-part recipe's bytes are identical to every earlier build's;
 /// - the hash-covered exchange packet (Files, Shortcuts, Messages) carries a one-part recipe as format
 ///   version 1, which an older reader re-hashes exactly, and a multipart recipe as version 2 with its
-///   parts (W2-messages-v2), which an older reader refuses cleanly as a format it does not know.
+///   parts (the Messages v2 work), which an older reader refuses cleanly as a format it does not know.
 @MainActor
 struct RecipeMultipartWireTests {
 

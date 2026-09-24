@@ -66,9 +66,13 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
 - [ ] Verify Dynamic Type, VoiceOver labels, and reduced-motion behavior in the composer and both
   Fernlet review screens.
 - [ ] Confirm static/local card artwork renders without a network request.
-- [ ] Replace the PLACEHOLDER iMessage App Icon (`App/FernletMessagesExtension/Assets.xcassets`,
-  generated 2026-09-23 from the app icon) with purpose-made art, then confirm it in the Messages app
-  drawer, in Settings, and — once uploaded — that App Store Connect accepts the 1024×768 image.
+- [ ] Confirm the iMessage App Icon (`App/FernletMessagesExtension/Assets.xcassets`) on a physical
+  iPhone — in the Messages "+" menu (light and dark) and in Settings — and, once uploaded, that App
+  Store Connect accepts the 1024×768 image.
+  *Since 2026-09-24 the art is purpose-made, not the placeholder: the Home Screen sprig re-framed for
+  4:3 and fitted inside the "+" menu's mask, owner-approved, rendered by
+  `Scripts/render-imessage-icon.py` (never hand-edit the PNGs). The iOS 26.5 simulator shows it
+  correctly in light and dark mode; hardware and App Store Connect are what is left.*
 
 ## Localization
 

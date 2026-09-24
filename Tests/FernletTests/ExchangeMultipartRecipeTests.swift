@@ -8,7 +8,7 @@ import Testing
 /// a Messages card (2026-09-24).
 ///
 /// **The packet rule.** A one-part recipe stays packet version 1, byte-for-byte what every earlier
-/// build wrote. A recipe made in parts is version 2: its payload carries W1-multipart's `components`
+/// build wrote. A recipe made in parts is version 2: its payload carries the multipart model's `components`
 /// partition, which a version-1 reader could not keep (it re-hashes what it decoded, without the
 /// unknown key, and would call an honest file corrupt), so the version is the gate. The content-hash
 /// scheme is versioned with it: the same SHA-256-over-canonical-JSON construction, with the version

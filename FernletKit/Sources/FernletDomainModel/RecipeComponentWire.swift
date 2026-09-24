@@ -14,7 +14,7 @@ import Foundation
 //
 // The one wire that cannot carry the key as an ignorable extra is the hash-covered exchange packet
 // (Files, Shortcuts, Messages): an older reader re-encodes the decoded payload WITHOUT the unknown key
-// and fails the content hash. So that packet VERSIONS instead (W2-messages-v2, 2026-09-24): a
+// and fails the content hash. So that packet VERSIONS instead (the Messages v2 work, 2026-09-24): a
 // multipart recipe travels as `RecipeExchangePacket` format version 2, partition and all, under a
 // version-2 content hash, which an older build refuses cleanly as a format it does not know; a
 // one-part recipe stays version 1, byte for byte. The flattened old-reader form,

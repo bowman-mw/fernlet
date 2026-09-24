@@ -11,7 +11,7 @@ import FernletDomainModel
 ///
 /// Whole-recipe macros: P12 C56 F58 (dressing P0 C8 F42, salad P12 C48 F16), 4 servings.
 ///
-/// Reused by W2-messages-v2's envelope tests: `RecipeMultipartFixtures.saladWithHomemadeDressing()`
+/// Reused by the Messages v2 envelope tests: `RecipeMultipartFixtures.saladWithHomemadeDressing()`
 /// for the recipe and its foods, `saladPayload()` for the wire payload, and `saladPayloadGoldenJSON`
 /// for its exact canonical (`.sortedKeys`) bytes.
 enum RecipeMultipartFixtures {
