@@ -5485,9 +5485,9 @@ final class FernletStore {
         // past day survives on disk, reloads on next launch, and re-uploads to iCloud — which is
         // exactly what "Reset everything" did before.
         //
-        // Tier-two memories live inside the blob record, so the purge takes them; the old explicit
-        // `replaceTierTwoMemories([])` here was worse than redundant — it is load-then-SAVE, so it
-        // re-created the blob (and a fresh CloudKit record) microseconds after the purge deleted it.
+        // Tier-two memories live in the repository's device-local sidecar (never the blob, since the
+        // 2026-09-23 owner decision), and this same purge removes it. Do not add a separate
+        // `replaceTierTwoMemories([])` here: that writes an empty sidecar back instead of removing it.
         if !repository.purgeAllPersistedData() {
             outcome.incompleteStores.append("your day history")
         }

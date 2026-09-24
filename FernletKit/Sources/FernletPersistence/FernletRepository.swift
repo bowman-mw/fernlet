@@ -44,10 +44,14 @@ public protocol FernletRepository {
     /// rehydrates on launch.
     func loadAllDays() -> [String: FernletDay]
     /// Loads the persisted Tier-2 behavioral memory records that seed the inference base.
+    ///
+    /// Tier-2 is DEVICE-LOCAL (owner decision 2026-09-23): conformers keep it out of the snapshot blob
+    /// entirely — both real conformers read a never-synced, backup-excluded sidecar — so an
+    /// implementation must never source these records from, or write them into, anything that syncs.
     func loadTierTwoMemories() -> [TierTwoMemoryRecord]
-    /// Overwrites the persisted Tier-2 behavioral memories. Used by sealed-backup restore on a
-    /// fresh install to seed the inference base from an encrypted iCloud backup. Returns whether
-    /// the write succeeded.
+    /// Overwrites the persisted Tier-2 behavioral memories in their device-local home. Used by
+    /// sealed-backup restore on a fresh install to seed the inference base from an encrypted iCloud
+    /// backup. Returns whether the write succeeded.
     func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool
     /// Loads a single persisted day by its date key (defaulted below in terms of ``loadSnapshot(todayKey:)``).
     func loadDay(for dateKey: String, todayKey: String) -> FernletDay

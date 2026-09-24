@@ -18,6 +18,11 @@ import FernletPersistence
 ///   (normally ``DayRecordRepository``), which removed the blob's day cap and lets CloudKit
 ///   merge different-day edits from different devices per record.
 ///
+/// A third, deliberately UNSYNCED home sits beside them: the Tier-2 behavioral memories live in the
+/// device-local `TierTwoMemoryStore` sidecar this repository shares with its legacy repository —
+/// never in the mirrored blob (owner decision 2026-09-23). It is refreshed after every successful
+/// save over the same bounded window the derived tables use, and purged with everything else.
+///
 /// Key invariants:
 /// - **Sanitize-before-sync (S3)**: day writes accept only `SanitizedDay`/`SanitizedSnapshot`,
 ///   and the one-time blob→row migration re-strips every legacy day through the same barrier, so
@@ -46,6 +51,10 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     private let dayRecordRepository: any DayRecordRepositoring
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    /// The device-local Tier-2 sidecar — the legacy repository's own, so both backends agree on one
+    /// file per install. Never serialized into the mirrored blob. Public (read-only) for the same
+    /// reason as `LocalFernletRepository.tierTwoMemoryStore`: tests assert on the bytes.
+    public let tierTwoMemoryStore: TierTwoMemoryStore
 
     private var cachedDatabase: LocalFernletDatabase?
     private var cachedRecordUpdatedAt: Date?
@@ -93,15 +102,19 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
 
     /// Creates the repository, defaulting to the shared ``PersistenceController``, the standard
     /// legacy JSON store, and a ``DayRecordRepository`` on the same controller; all three are
-    /// injectable for tests. Subscribes to the controller's remote-change publisher immediately.
+    /// injectable for tests. The Tier-2 sidecar is always the resolved legacy repository's, so a
+    /// test that injects a unique legacy file gets a unique sidecar for free. Subscribes to the
+    /// controller's remote-change publisher immediately.
     public init(
         controller: PersistenceController? = nil,
         legacyRepository: LocalFernletRepository? = nil,
         dayRecordRepository: (any DayRecordRepositoring)? = nil
     ) {
         let resolvedController = controller ?? .shared
+        let resolvedLegacy = legacyRepository ?? LocalFernletRepository(fileURL: LocalFernletRepository.defaultFileURL())
         self.controller = resolvedController
-        self.legacyRepository = legacyRepository ?? LocalFernletRepository(fileURL: LocalFernletRepository.defaultFileURL())
+        self.legacyRepository = resolvedLegacy
+        self.tierTwoMemoryStore = resolvedLegacy.tierTwoMemoryStore
         self.dayRecordRepository = dayRecordRepository ?? DayRecordRepository(controller: resolvedController)
         self.encoder = RowPayloadCoders.makeEncoder()
         self.decoder = RowPayloadCoders.makeDecoder()
@@ -176,10 +189,12 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     }
 
     /// Persists a sanitized snapshot: today's day row first, then the aggregate blob with its
-    /// row-derived state refreshed.
+    /// row-derived state refreshed, then — only once the blob landed — the device-local Tier-2
+    /// sidecar over the same window.
     ///
     /// - Returns: `false` when the row write or blob save fails (nothing is half-persisted; the
     ///   caller — `SnapshotSaveCoordinator` — must retry rather than treat the save as durable).
+    ///   The Tier-2 refresh is derived and best-effort, so it never changes the answer.
     public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
         let snapshot = sanitized.snapshot
         // Guard, not assert: an empty key would key a CloudKit-synced row on "" in Release. False
@@ -208,8 +223,10 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         // clears the blob's days entirely, so the bound here is moot — apply still writes the aggregate.
         let blobDayBound = database.daysMigratedToRows ? FernletLimits.derivedLogWindowDays : nil
         database.apply(snapshot, maxStoredDays: blobDayBound)
-        refreshRowDerivedState(&database, todayKey: snapshot.todayKey, justWrote: (snapshot.todayKey, snapshot.day))
-        return saveDatabase(database, invalidatesDayCache: false)
+        let recent = refreshRowDerivedState(&database, todayKey: snapshot.todayKey, justWrote: (snapshot.todayKey, snapshot.day))
+        guard saveDatabase(database, invalidatesDayCache: false) else { return false }
+        tierTwoMemoryStore.refresh(from: recent, goals: database.goals)
+        return true
     }
 
     /// After day rows are written, refresh the blob's row-derived state from the bounded recent window:
@@ -221,17 +238,21 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// patched in place with that day and the derived window is built from the warm cache — so a normal
     /// save no longer re-fetches and re-decodes the whole (uncapped) row history on the hot path. When the
     /// memo is cold, it falls back to a bounded `loadRecent` fetch.
+    ///
+    /// - Returns: the window it rebuilt from (oldest-first), so the caller can refresh the device-local
+    ///   Tier-2 sidecar over exactly the same days once the blob has landed — Tier-2 is not a blob slice.
     private func refreshRowDerivedState(
         _ database: inout LocalFernletDatabase,
         todayKey: String,
         justWrote: (dateKey: String, day: FernletDay)
-    ) {
+    ) -> [(String, FernletDay)] {
         let recent = recentDayPairs(patching: justWrote)
         database.rebuildDerivedTables(todayKey: todayKey, recentDays: recent)
         database.dayContentSummary = DayContentSummary(days: recent.map(\.1))
         if database.daysMigratedToRows {
             database.days = [:]
         }
+        return recent
     }
 
     /// Persists an edit to a single (typically past) day: writes/deletes its row, keeps any
@@ -273,8 +294,10 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         }
         // The edited day lives in its row; refresh the derived tables + detection summary from rows (and,
         // once migrated, keep the blob's days cleared).
-        refreshRowDerivedState(&database, todayKey: todayKey, justWrote: (dateKey, day))
-        return saveDatabase(database, invalidatesDayCache: false)
+        let recent = refreshRowDerivedState(&database, todayKey: todayKey, justWrote: (dateKey, day))
+        guard saveDatabase(database, invalidatesDayCache: false) else { return false }
+        tierTwoMemoryStore.refresh(from: recent, goals: database.goals)
+        return true
     }
 
     /// Persists one sanitized day to its per-row store, guarding on logged content (item G): a day with no
@@ -486,17 +509,16 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         return all
     }
 
-    /// Reads the Tier-2 memory records stored in the aggregate blob.
+    /// Reads the Tier-2 memory records from the device-local sidecar — never the mirrored blob, which
+    /// has carried none since 2026-09-23.
     public func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
-        loadDatabase(todayKey: FernletDate.dayKey(for: .now)).tierTwoMemories
+        tierTwoMemoryStore.load()
     }
 
-    /// Replaces the blob's Tier-2 memory records wholesale and persists the blob.
+    /// Replaces the device-local Tier-2 memory records wholesale. Touches only the sidecar: the
+    /// mirrored blob is neither read nor re-saved, so this can never push Tier-2 toward iCloud.
     public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
-        var database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))
-        database.tierTwoMemories = records
-        database.updatedAt = Date()
-        return saveDatabase(database)
+        tierTwoMemoryStore.replace(records)
     }
 
     /// The synchronous blob load: serves the memo, or fetches/decodes the primary record —
@@ -658,18 +680,22 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         persistenceBlockedByFetchFailure = false
     }
 
-    /// Erases every persisted day row, the snapshot blob record, the legacy JSON store, and every
-    /// in-memory memo of them.
+    /// Erases every persisted day row, the snapshot blob record, the legacy JSON store, the
+    /// device-local Tier-2 sidecar, and every in-memory memo of them.
     ///
-    /// All three stores must go together. The per-row `DayRecord` store is the authoritative source of
+    /// All of them must go together. The per-row `DayRecord` store is the authoritative source of
     /// truth, so clearing only the blob leaves the whole history intact; clearing only the rows leaves
     /// the blob's `days` cache to repopulate them; and leaving the legacy JSON file behind lets the
     /// blob→row migration re-seed rows from it on a later launch. The memos must be dropped too, or the
     /// next read serves the data we just deleted straight back.
     ///
-    /// When iCloud sync is on, these deletions propagate as ordinary CloudKit deletes.
+    /// When iCloud sync is on, these deletions propagate as ordinary CloudKit deletes. The Tier-2
+    /// sidecar never reached iCloud, so its delete is purely local — and it is purged here explicitly
+    /// even though the legacy repository's purge also takes the same file, so the wipe cannot come to
+    /// depend on the two sharing it.
     public func purgeAllPersistedData() -> Bool {
         var succeeded = dayRecordRepository.deleteAll()
+        if !tierTwoMemoryStore.purge() { succeeded = false }
 
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "FernletDatabaseRecord")
@@ -699,7 +725,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// on failure the context is rolled back and every memo is dropped.
     private func saveDatabase(_ database: LocalFernletDatabase, invalidatesDayCache: Bool = true) -> Bool {
         assert(database.schemaVersion >= 1, "schema version invalid")
-        // Most saves (migration, tier-2 memories) may have changed the day history underneath the memo, so
+        // Most saves (e.g. migration) may have changed the day history underneath the memo, so
         // drop it — the next read re-decodes the fresh rows. saveSnapshot/updateDay instead patch the memo
         // in place for the single day they wrote (item H) and pass `invalidatesDayCache: false`, so a normal
         // save no longer re-fetches and re-decodes the whole (uncapped) history on the hot path.

@@ -98,7 +98,7 @@ struct SettingsSheet: View {
     /// Settings search query (item 10). Non-empty swaps the Form for a results List; the search bar
     /// lives on the stable `settingsContent` so it persists across that swap.
     @State private var settingsSearch = ""
-    // Debug tab only: tier-2 records load post-render (repository decodes the whole DB per read).
+    // Debug tab only: tier-2 records load post-render (a disk read of the device-local sidecar).
     @State private var debugTierTwoMemories: [TierTwoMemoryRecord]?
     #if DEBUG
     // Debug tab only: the Phase-0 cryptographic format census, loaded post-render for the same
@@ -1720,9 +1720,8 @@ struct SettingsSheet: View {
         }
     }
 
-    /// The tier-2 memory inspector. Loads post-render via its own `.task`: the repository decodes the
-    /// whole database for this read, which is far too slow for a NavigationStack push's first body
-    /// pass.
+    /// The tier-2 memory inspector. Loads post-render via its own `.task`: the read is disk I/O on the
+    /// device-local Tier-2 sidecar, which has no place in a NavigationStack push's first body pass.
     private var tierTwoMemorySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("Tier 2 memory (test-only view)")
@@ -1745,7 +1744,7 @@ struct SettingsSheet: View {
             }
         }
         // The load the comment above describes. Runs once per push, after the first frame, so
-        // the whole-database decode never blocks the navigation animation.
+        // the disk read never blocks the navigation animation.
         .task {
             guard debugTierTwoMemories == nil else { return }
             debugTierTwoMemories = store.tierTwoMemories

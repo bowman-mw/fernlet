@@ -14,7 +14,7 @@ import FernletDomainModel
 /// consistency profile, journal-avoidance patterns, and workout-mood correlation — from the
 /// rolling day window.
 ///
-/// Runs inside `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` on every save,
+/// Runs from ``TierTwoMemoryStore/refresh(from:goals:)`` after every successful repository save,
 /// so inferences track the data with no AI involvement (Tier-2 memories are behavioral
 /// observations *about* the user, distinct from the user-visible Tier-1 `MemoryNote`s). The
 /// engine is change-driven: for each category a fresh candidate is compared against the newest
@@ -23,9 +23,10 @@ import FernletDomainModel
 /// save. Every candidate must pass the `DiagnosticLanguage` post-classifier (spec §8) before
 /// storage; any diagnostic-sounding text is silently rejected. ``updateInferences(existing:from:goals:)``
 /// always ends with ``prune(_:)`` (5 per category / 20 total). Results persist as
-/// `TierTwoMemoryRecord`s in the ``LocalFernletDatabase`` blob and reach the AI layer only
-/// through snapshot loading. Internal to `LocalPersistence`; a stateless namespace enum,
-/// nonisolated.
+/// `TierTwoMemoryRecord`s in the device-local ``TierTwoMemoryStore`` sidecar — never in the
+/// synced ``LocalFernletDatabase`` blob (owner decision 2026-09-23) — and reach the AI layer only
+/// through `MemoryAgent`'s filtered projection. Internal to `LocalPersistence`; a stateless
+/// namespace enum, nonisolated.
 enum TierTwoMemoryEngine {
 
     /// Each category stores at most 5 records; total is capped at 20.
@@ -42,7 +43,7 @@ enum TierTwoMemoryEngine {
     ///   - days: `(dateKey, day)` pairs, oldest-first; only the trailing 14 are considered, and
     ///     fewer than 3 days short-circuits to a prune of the existing records.
     ///   - goals: The user's fitness goals; the first drives the goal-behavior-gap category.
-    /// - Returns: The pruned, updated record list to persist back into the blob.
+    /// - Returns: The pruned, updated record list to persist back into the device-local store.
     static func updateInferences(
         existing: [TierTwoMemoryRecord],
         from days: [(String, FernletDay)],

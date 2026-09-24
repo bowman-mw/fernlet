@@ -12,7 +12,7 @@ import FernletScoring
 import FernletPersistence
 
 /// The single Codable aggregate both persistence backends serialize — every diary slice (day
-/// history, settings, aggregate lists, derived log tables, Tier-2 memories) in one blob.
+/// history, settings, aggregate lists, derived log tables) in one blob.
 ///
 /// ``LocalFernletRepository`` writes it as a pretty-printed JSON file (the local/no-iCloud path,
 /// where ``days`` holds the full, uncapped history), while `CoreDataFernletRepository` (in
@@ -21,6 +21,13 @@ import FernletPersistence
 /// of truth. Because this type IS the synced payload, it must only ever contain
 /// privacy-stripped content: writes arrive through the `SanitizedSnapshot` seam, so sealed
 /// narratives (journal bodies destined for the encrypted store, cycle data) never enter the blob.
+///
+/// **Tier-2 behavioral memories are deliberately NOT a slice** (owner decision 2026-09-23: "Tier 2
+/// sensitive notes shouldn't be backed up to iCloud at all"). They live in the device-local
+/// ``TierTwoMemoryStore`` sidecar instead. A blob written before the decision still carries a
+/// `tierTwoMemories` key; the decoder below ignores it and the synthesized encoder no longer emits
+/// it, so the next ordinary save rewrites the mirrored record without it — which is what scrubs the
+/// cloud copy. Never re-add a field for them here.
 ///
 /// The hand-written `init(from:)` decodes every key with `decodeIfPresent` plus a default, so a
 /// blob written by an older build (missing newer keys) always decodes; a hard decode failure is
@@ -70,9 +77,6 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
     public var journalLogs: [JournalLogRecord] = []
     /// Pending AI meal-analysis retries, persisted so they survive relaunch.
     public var retryQueue: [AIAnalysisRetryRecord] = []
-    /// Tier-2 behavioral memories inferred by `TierTwoMemoryEngine` on each derived-table
-    /// rebuild; also replaceable wholesale via sealed-backup restore.
-    public var tierTwoMemories: [TierTwoMemoryRecord] = []
     /// The user's custom food library.
     public var foodItems: [FoodItem] = []
     /// Saved recipe definitions (including mesh-shared recipes).
@@ -108,7 +112,8 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
         workoutLogs = try container.decodeIfPresent([WorkoutLogRecord].self, forKey: .workoutLogs) ?? []
         journalLogs = try container.decodeIfPresent([JournalLogRecord].self, forKey: .journalLogs) ?? []
         retryQueue = try container.decodeIfPresent([AIAnalysisRetryRecord].self, forKey: .retryQueue) ?? []
-        tierTwoMemories = try container.decodeIfPresent([TierTwoMemoryRecord].self, forKey: .tierTwoMemories) ?? []
+        // No `tierTwoMemories`: a pre-2026-09-23 blob's key is ignored here on purpose (see the type
+        // doc) — reading it back would re-home cloud-borne Tier-2 on this device for nothing.
         foodItems = try container.decodeIfPresent([FoodItem].self, forKey: .foodItems) ?? []
         recipes = try container.decodeIfPresent([RecipeDefinition].self, forKey: .recipes) ?? []
         dailyScores = try container.decodeIfPresent([DailyHealthScore].self, forKey: .dailyScores) ?? []
@@ -129,9 +134,14 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
 ///
 /// Behavior:
 /// - **Whole-file read-modify-write.** Every save decodes the file, applies the sanitized
-///   snapshot/day, rebuilds the derived log tables + Tier-2 memories, and atomically rewrites
-///   the file with `.completeFileProtection`. On this path the blob's `days` is the full,
-///   uncapped history (no `maxStoredDays` bound is passed).
+///   snapshot/day, rebuilds the derived log tables, and atomically rewrites the file with
+///   `.completeFileProtection`. On this path the blob's `days` is the full, uncapped history (no
+///   `maxStoredDays` bound is passed).
+/// - **Tier-2 lives beside the file, never in it.** After every successful save the repository
+///   refreshes ``tierTwoMemoryStore`` — the device-local, always-backup-excluded
+///   ``TierTwoMemoryStore`` sidecar derived from ``databaseFileURL()`` — over the same ordered
+///   days. `CoreDataFernletRepository` reuses this repository's sidecar, so one file per install
+///   holds the inferences whichever backend is live, and ``purgeAllPersistedData()`` removes it.
 /// - **Fail-closed corruption handling.** An unreadable or undecodable file flips the instance
 ///   into read-only recovery mode (`State`'s `persistenceBlockedByDecodeFailure`): reads
 ///   return a fresh/migrated database, but every save is refused so a later write cannot
@@ -192,6 +202,12 @@ public struct LocalFernletRepository: FernletRepository {
     /// that seeds them on `.standard` — or asserts a wipe removed them there — reads and destroys
     /// the same keys as every concurrently running suite, and as the developer's own install.
     private let legacyDefaults: UserDefaults
+    /// The device-local home of the Tier-2 behavioral memories: `<stem>-TierTwoMemories.json` beside
+    /// this repository's file (``TierTwoMemoryStore/sidecarURL(besideDatabaseAt:)``). Never part of
+    /// ``LocalFernletDatabase``; refreshed after every successful save and removed by
+    /// ``purgeAllPersistedData()``. Public so `CoreDataFernletRepository` can share it with its legacy
+    /// repository, and so tests can assert on the bytes.
+    public let tierTwoMemoryStore: TierTwoMemoryStore
 
     /// Creates a repository backed by the given file, defaulting to
     /// `Application Support/Fernlet/FernletDatabase.json` (see ``defaultFileURL()``).
@@ -221,6 +237,9 @@ public struct LocalFernletRepository: FernletRepository {
         self.backupExclusionPreference = backupExclusionPreference
             ?? { StoragePreferencesStore.currentPreferences().localBackupExcludedFromiOSBackup }
         self.legacyDefaults = legacyDefaults ?? .standard
+        self.tierTwoMemoryStore = TierTwoMemoryStore(
+            fileURL: TierTwoMemoryStore.sidecarURL(besideDatabaseAt: resolvedURL)
+        )
         applyBackupExclusionFromPreferenceIfSet()
     }
 
@@ -255,12 +274,14 @@ public struct LocalFernletRepository: FernletRepository {
     }
 
     /// Persists a privacy-stripped snapshot: read-modify-write of the whole file, including a
-    /// derived-table + Tier-2 rebuild.
+    /// derived-table rebuild, then — only once the file write landed — a refresh of the device-local
+    /// Tier-2 sidecar over the same ordered days.
     ///
     /// - Parameter sanitized: A `SanitizedSnapshot` — mintable only through the storage privacy
     ///   strip, which is what keeps un-stripped content out of the blob by type.
     /// - Returns: `false` when the save is refused (read-only recovery mode) or any encode/write
-    ///   step fails; the on-disk file is left untouched in that case.
+    ///   step fails; the on-disk file is left untouched in that case. The Tier-2 refresh never
+    ///   changes the answer (it is derived and best-effort — see ``TierTwoMemoryStore``).
     ///   Not discardable (R7): a dropped `false` is a save the caller believes landed.
     public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
         let snapshot = sanitized.snapshot
@@ -272,12 +293,16 @@ public struct LocalFernletRepository: FernletRepository {
         }
         var database = loadDatabase(todayKey: snapshot.todayKey)
         database.apply(snapshot)
-        database.rebuildDerivedTables(todayKey: snapshot.todayKey)
-        return saveDatabase(database)
+        let orderedDays = LocalFernletDatabase.sortedDayPairs(database.days)
+        database.rebuildDerivedTables(todayKey: snapshot.todayKey, recentDays: orderedDays)
+        guard saveDatabase(database) else { return false }
+        tierTwoMemoryStore.refresh(from: orderedDays, goals: database.goals)
+        return true
     }
 
     /// Persists a single (typically past) day without touching the aggregate slices, then
-    /// rebuilds the derived tables so they reflect the edit.
+    /// rebuilds the derived tables so they reflect the edit, and — once the write landed —
+    /// refreshes the device-local Tier-2 sidecar.
     ///
     /// - Parameters:
     ///   - sanitized: The privacy-stripped day; its `date` must equal `dateKey` (asserted).
@@ -294,8 +319,11 @@ public struct LocalFernletRepository: FernletRepository {
         }
         var database = loadDatabase(todayKey: todayKey)
         database.days[dateKey] = day
-        database.rebuildDerivedTables(todayKey: todayKey)
-        return saveDatabase(database)
+        let orderedDays = LocalFernletDatabase.sortedDayPairs(database.days)
+        database.rebuildDerivedTables(todayKey: todayKey, recentDays: orderedDays)
+        guard saveDatabase(database) else { return false }
+        tierTwoMemoryStore.refresh(from: orderedDays, goals: database.goals)
+        return true
     }
 
     /// The concrete on-disk location of the JSON database, surfaced for diagnostics and
@@ -316,20 +344,18 @@ public struct LocalFernletRepository: FernletRepository {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).days
     }
 
-    /// The persisted Tier-2 behavioral memories that seed the inference base.
+    /// The persisted Tier-2 behavioral memories that seed the inference base — read from the
+    /// device-local ``tierTwoMemoryStore`` sidecar, never from the database file.
     public func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
-        loadDatabase(todayKey: FernletDate.dayKey(for: .now)).tierTwoMemories
+        tierTwoMemoryStore.load()
     }
 
-    /// Overwrites the persisted Tier-2 memories wholesale (sealed-backup restore on a fresh
-    /// install), bumping `updatedAt`.
+    /// Overwrites the device-local Tier-2 memories wholesale (sealed-backup restore on a fresh
+    /// install). Writes only the sidecar; the database file is untouched.
     ///
-    /// - Returns: Whether the write succeeded (`false` under read-only recovery mode).
+    /// - Returns: Whether the sidecar write succeeded.
     public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
-        var database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))
-        database.tierTwoMemories = records
-        database.updatedAt = Date()
-        return saveDatabase(database)
+        tierTwoMemoryStore.replace(records)
     }
 
     /// Exposes the raw decoded database so `CoreDataFernletRepository` can hydrate the Core Data
@@ -389,20 +415,25 @@ public struct LocalFernletRepository: FernletRepository {
     /// source, so the common wipe reaches here with no JSON file at all — an early return would
     /// skip the keys in exactly the configuration that ships.
     ///
-    /// - Returns: `false` when the file could not be removed. Not discardable (R7): "delete
-    ///   everything" reports the store it could not clear.
+    /// The device-local Tier-2 sidecar (``tierTwoMemoryStore``) goes before that guard for the same
+    /// reason: in the shipping configuration it is the one file of this repository's that EXISTS,
+    /// because the Core Data repository shares it.
+    ///
+    /// - Returns: `false` when the file or the Tier-2 sidecar could not be removed. Not discardable
+    ///   (R7): "delete everything" reports the store it could not clear.
     public func purgeAllPersistedData() -> Bool {
         clearLegacyUserDefaultsIfPresent()
         // The keys are gone, so nothing is awaiting the post-save cleanup any more; a later
         // migration re-arms this when it finds something to migrate.
         state.pendingLegacyCleanup = false
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return true }
+        let tierTwoPurged = tierTwoMemoryStore.purge()
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return tierTwoPurged }
         do {
             try FileManager.default.removeItem(at: fileURL)
             // A decode failure earlier in the session blocks writes; the file is gone now, so the block
             // must lift or the user would be unable to save anything after wiping.
             state.persistenceBlockedByDecodeFailure = false
-            return true
+            return tierTwoPurged
         } catch {
             PersistenceFailureAudit.record("localStore.purge.failed", error: error)
             return false
@@ -585,11 +616,15 @@ extension LocalFernletDatabase {
         updatedAt = Date()
     }
 
-    /// Rebuilds the derived log tables + Tier-2 memories. `recentDays` (oldest-first) lets a per-row store
-    /// inject a bounded window of days instead of paying a whole-history scan of `self.days`; when omitted
-    /// it falls back to the blob's own `days` (the local/no-iCloud path). This is the shared write-path
+    /// Rebuilds the derived log tables. `recentDays` (oldest-first) lets a per-row store inject a
+    /// bounded window of days instead of paying a whole-history scan of `self.days`; when omitted it
+    /// falls back to the blob's own `days` (the local/no-iCloud path). This is the shared write-path
     /// step both repositories run on every save, which is what makes the derived tables safely
     /// disposable — any frozen or stale row is overwritten on the next save.
+    ///
+    /// Tier-2 memories are NOT rebuilt here any more: they are not a slice of this (synced) type.
+    /// Each repository refreshes its device-local ``TierTwoMemoryStore`` over the same window after
+    /// the save lands.
     public mutating func rebuildDerivedTables(todayKey: String, recentDays: [(String, FernletDay)]? = nil) {
         assert(!todayKey.isEmpty, "today key required")
         let orderedDays = recentDays ?? Self.sortedDayPairs(days)
@@ -597,11 +632,12 @@ extension LocalFernletDatabase {
         mealLogs = Self.makeMealLogs(from: orderedDays)
         workoutLogs = Self.makeWorkoutLogs(from: orderedDays)
         journalLogs = Self.makeJournalLogs(from: orderedDays)
-        tierTwoMemories = TierTwoMemoryEngine.updateInferences(existing: tierTwoMemories, from: orderedDays, goals: goals)
     }
 
     /// Orders the day dictionary oldest-first by date key (day keys sort lexicographically).
-    private static func sortedDayPairs(_ days: [String: FernletDay]) -> [(String, FernletDay)] {
+    /// Module-internal so ``LocalFernletRepository`` can feed ONE ordering to both the derived-table
+    /// rebuild and the Tier-2 refresh.
+    static func sortedDayPairs(_ days: [String: FernletDay]) -> [(String, FernletDay)] {
         // No upper-bound assertion: day storage is uncapped now (per-row rows for iCloud, a single
         // uncapped file for local-only). The log builders below still bound their output by
         // `derivedLogWindowDays`, so the derived tables stay sized regardless of history depth.

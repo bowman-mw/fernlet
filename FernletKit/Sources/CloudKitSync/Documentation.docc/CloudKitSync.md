@@ -28,7 +28,12 @@ load, best-effort on a background context; a mirrored store is never pruned by t
 `FernletRepository` contract by splitting state between a single aggregate blob record (settings,
 memories, recipes, derived tables) and the per-row `DayRecord` store — one CloudKit record per day,
 which is what removed the old 370-day cap and lets different-day edits from different devices merge
-per record. It also owns the one-time legacy-JSON migration, the blob→row day backfill (which
+per record. One diary structure is deliberately in NEITHER: the Tier-2 behavioral memories (owner
+decision 2026-09-23, "Tier 2 sensitive notes shouldn't be backed up to iCloud at all") live in
+LocalPersistence's device-local, backup-excluded `TierTwoMemoryStore` sidecar, which the repository
+shares with its legacy repository, refreshes after each successful save and purges with the rest —
+nothing in this module serializes them, so the mirror has nothing to export. The repository also
+owns the one-time legacy-JSON migration, the blob→row day backfill (which
 re-sanitizes every legacy day so neither sealed journal text nor any HealthKit-derived value — the
 health context, HealthKit's sleep hours, Apple Health workout imports — reaches a synced row;
 since 2026-09-23 HealthKit information is not stored in iCloud at all), and a

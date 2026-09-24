@@ -18,7 +18,7 @@ on it, `RowPayloadCoders`, and the CloudKit heart-drop transport.
 | Mutating app state and scheduling persistence | `FernletStore.batchSnapshotPersistence(...)`, `FernletStore.mutateDay(date:_:)`, `SnapshotSaveCoordinator.schedule()` |
 | Loading or saving the whole app snapshot | `FernletRepository.loadSnapshot(todayKey:)`, `saveSnapshot(_:)`, `CoreDataFernletRepository`, `LocalFernletRepository`. 2026-08 consolidation: both backends now assemble snapshots through the shared `FernletSnapshot.assembled(todayKey:day:from:)` (LocalPersistence), and their duplicated JSON encoder/decoder factories were consolidated into `RowPayloadCoders` (FernletFoundation). |
 | Routing any AI call | `FernletAIGate.dispatch(tier:userInvoked:)` — never call a model provider directly; the gate is the sole quota-charge point and the sole capability cap. |
-| Device-local (never-synced) counters and ledgers | `UserDefaultsAICallQuotaStore`, `FileAIAuditLogStore`, `WorkoutTombstoneStore`, `FileDeviceHealthResidueStore` — the established pattern for state that must stay off the synced blob. |
+| Device-local (never-synced) counters and ledgers | `UserDefaultsAICallQuotaStore`, `FileAIAuditLogStore`, `WorkoutTombstoneStore`, `FileDeviceHealthResidueStore` — the established pattern for state that must stay off the synced blob. **Derived data that must never leave the device** (not even in a device backup): `TierTwoMemoryStore` (LocalPersistence, 2026-09-23 owner decision) — a sidecar beside the local database, backup-excluded after every write, re-derived by the next save if lost. |
 | Keeping a value off iCloud while THIS device keeps using it (HealthKit readings, 2026-09-23) | The strip/residue/overlay triple in `FernletPersistence/HealthKitStorageStrip.swift`: `FernletDay.strippingHealthKitValues()` (applied by the one sanitize boundary), `healthKitResidue` (what the strip removes), `overlayingHealthKitResidue(_:)` (puts it back on read), stored through `DeviceHealthResidueStoring`. `DiaryStore` overlays on every read and records a past day's residue in `mutatePastDay`; the facade records today's at the HealthKit ingestion points only (never on a save — see `FernletStore+HealthKitResidue.swift` for why). The same cache holds the HealthKit BODY-PROFILE import (`DeviceHealthBodyProfile`): record it with `FernletStore.recordHealthImportedBodyProfile(_:)`, read the profile through `effectiveUserProfile` / `effectiveSettings` (never `settings.userProfile` for anything computed from the body), and route a profile-screen edit through `applyEditedBodyProfile(_:)`. Do not add a second strip or a second cache. |
 | Writing anything INTO Apple Health (2026-09-23) | `HealthKitService.save(_:)` for samples, `HealthKitService.saveWorkout(_:)` for workouts — the only two doors, both behind the private `requireWriteSharing(_:)` gate (master switch AND that kind's own switch; a closed one throws `HealthKitServiceError.sharingTurnedOff`). Callers that would rather skip than catch ask `HealthKitServicing.isWriteSharingEnabled(for:)`. Never call `HKHealthStore` or build an `HKWorkoutBuilder` anywhere else — `HealthKitWriteGateTests` scans the tree for a third door. Deleting Fernlet's OWN samples at the user's request is deliberately NOT gated; an edit (delete-then-write) checks the write half first. |
 | Append-only per-row cloud stores | `AppendOnlyRowStore` (CloudKitSync) — the generic engine behind the coin, milestone, and custom-item repositories. |
@@ -141,12 +141,12 @@ split is by concern, not alphabetical.
 | `FernletSnapshot.assembled(todayKey:day:from:)` | Shared read-side slice mapping — builds the snapshot from an already-resolved day plus a `LocalFernletDatabase`'s aggregate slices. Both repositories call it; day resolution stays at the call sites because it differs per backend. The read-side counterpart of `LocalFernletDatabase.apply(_:maxStoredDays:)`. |
 | `LocalFernletRepository.init(fileURL:)` | Resolves the JSON database URL and configures coding through `RowPayloadCoders` (pretty-printed). |
 | `loadSnapshot(todayKey:)` | Loads the database, selects or creates today's day, and returns `FernletSnapshot.assembled(...)`. |
-| `saveSnapshot(_:)` | Applies a snapshot, rebuilds derived tables, and atomically writes the JSON database. |
-| `updateDay(_:for:todayKey:)` | Replaces one date's day, rebuilds derived tables, and saves without rebuilding the whole store state in memory. |
+| `saveSnapshot(_:)` | Applies a snapshot, rebuilds derived tables, atomically writes the JSON database, then refreshes the device-local Tier-2 sidecar from the same day window. |
+| `updateDay(_:for:todayKey:)` | Replaces one date's day, rebuilds derived tables, saves without rebuilding the whole store state in memory, then refreshes the Tier-2 sidecar. |
 | `databaseFileURL()` | Exposes the JSON file URL for diagnostics or migration code. |
 | `storageDescription()` | Returns the visible local storage description. |
 | `loadAllDays()` | Decodes the database and returns all stored day aggregates. |
-| `loadTierTwoMemories()` | Reads tier-two memory records directly from the database. |
+| `loadTierTwoMemories()` | Reads tier-two memory records from the device-local `TierTwoMemoryStore` sidecar — never from the database file (2026-09-23). |
 | `loadDatabaseForMigration(todayKey:)` | Exposes private database loading to Core Data migration. |
 | `loadDatabase(todayKey:)` | Loads JSON if present, otherwise builds a migrated legacy database. |
 | `decodeDatabase(_:todayKey:)` | Decodes JSON into `LocalFernletDatabase`, falling back to legacy migration on failure. |
@@ -159,8 +159,8 @@ split is by concern, not alphabetical.
 | `RowPayloadCoders.makeEncoder(prettyPrinted:)` / `makeDecoder()` | The shared sorted-keys + ISO-8601 coder config (FernletFoundation) that replaced this file's private `makeEncoder()` / `makeDecoder()`; this repository opts into `prettyPrinted` for its on-disk blob. |
 | `LegacyKeys.day(_:)` | Builds the legacy per-day `UserDefaults` key. |
 | `LocalFernletDatabase.apply(_:maxStoredDays:)` | Copies snapshot fields into the database, updates `updatedAt`, and trims the blob's own `days` window when a bound is passed (the Core Data path bounds it; the local path passes nil). |
-| `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` | Rebuilds daily, meal, workout, journal, and tier-two memory tables, optionally over an injected bounded day window. |
-| `sortedDayPairs(_:)` | Orders day records oldest-first by date key. |
+| `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` | Rebuilds the daily, meal, workout, and journal tables, optionally over an injected bounded day window. Tier-two memories are no longer a database slice — the repositories refresh `TierTwoMemoryStore` after a successful save instead. |
+| `sortedDayPairs(_:)` | Orders day records oldest-first by date key (module-internal: the local repository reuses one ordering for the derived tables and the Tier-2 refresh). |
 | `makeDailyLogs(from:)` | Builds daily rollup records from stored days. |
 | `makeMealLogs(from:)` | Builds capped meal log records with daily macro totals. |
 | `makeWorkoutLogs(from:)` | Builds capped workout log records. |
@@ -183,7 +183,9 @@ split is by concern, not alphabetical.
 | `trendValue(scores:rising:falling:steady:)` | Converts score deltas into trend labels. |
 | `sleepEnergyScore(_:healthSleepHours:)` / `dailyTrainingLoad(_:)` / `average(_:)` | Shared scoring helpers for derived signal logic. |
 | `FeelingTag.moodScore` | The single 0.2–1.0 tag-to-mood-score scale (`FeelingTagMoodScale.swift`), replacing the private `moodScore(_:)` copies this factory and `TierTwoMemoryEngine` each carried. |
-| `TierTwoMemoryEngine.updateInferences(existing:from:goals:)` | Updates longer-term behavioral memory records only when state changes. |
+| `TierTwoMemoryEngine.updateInferences(existing:from:goals:)` | Updates longer-term behavioral memory records only when state changes. Driven only by `TierTwoMemoryStore.refresh(from:goals:)`. |
+| `TierTwoMemoryStore.refresh(from:goals:)` | Runs the engine against the persisted records and rewrites the sidecar only when the result changed; best-effort (audited, retried by the next save), never fails the caller's save. |
+| `TierTwoMemoryStore.load()` / `purge()` / `sidecarURL(besideDatabaseAt:)` | Reads the device-local records; deletes the sidecar for "delete everything"; derives the per-database sidecar path (`<stem>-TierTwoMemories.json`). |
 | `prune(_:)` | Caps tier-two memories per category and globally, preferring active/recent records. |
 | `goalBehaviorGap(window:goals:)` | Infers alignment between stated goals and logged behavior. |
 | `consistencyProfile(window:)` | Infers overall logging consistency. |
@@ -199,13 +201,13 @@ split is by concern, not alphabetical.
 | `loadSnapshot(todayKey:)` | Synchronously loads the database and maps it into a snapshot. |
 | `loadSnapshotAsync(todayKey:)` | Async-loads and decodes the Core Data payload, using cache when possible and migrating legacy data when no record exists. |
 | `loadDay(for:todayKey:)` | Loads one day from the cached/persisted database. |
-| `saveSnapshot(_:)` | Applies a snapshot, rebuilds derived tables, and saves the database payload to Core Data. |
-| `updateDay(_:for:todayKey:)` | Updates one date's day in the payload, rebuilds derived tables, and saves. |
+| `saveSnapshot(_:)` | Applies a snapshot, rebuilds derived tables, saves the database payload to Core Data, then refreshes the device-local Tier-2 sidecar from the same bounded window. |
+| `updateDay(_:for:todayKey:)` | Updates one date's day in the payload, rebuilds derived tables, saves, then refreshes the Tier-2 sidecar. |
 | `storageDescription()` | Returns the user-facing storage location string. |
 | `invalidateCache()` | Clears cached database state and emits a remote-change event. |
 | `invalidateCacheIfRecordChanged()` | Checks the Core Data record timestamp and invalidates only when it changed. |
 | `loadAllDays()` | Returns all days from the current database payload. |
-| `loadTierTwoMemories()` | Returns tier-two memory records from the current database payload. |
+| `loadTierTwoMemories()` | Returns tier-two memory records from the device-local sidecar it shares with its legacy repository — the mirrored payload has carried none since 2026-09-23. |
 | `loadDatabase(todayKey:)` | Uses cache, fetches the primary record, migrates from legacy JSON when absent, and decodes payload data. |
 | `saveDatabase(_:)` | Encodes the database into the single primary Core Data record and updates cache metadata. |
 | `fetchRecordUpdatedAt()` | Reads the latest primary record timestamp. |
