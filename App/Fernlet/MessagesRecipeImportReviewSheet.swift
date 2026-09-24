@@ -51,6 +51,11 @@ struct MessagesRecipeImportReviewSheet: View {
             Text(record.packet.recipe.name).font(.title2.weight(.semibold))
             Text("\(record.packet.recipe.servings) servings · \(record.packet.recipe.ingredients.count) ingredients")
             Text("\(record.packet.recipe.steps?.count ?? 0) steps · \(notesStatus)")
+            // A recipe made in parts names them, in making order — a dressing first, then the salad.
+            // The names are the sender's own words; the payload's decode bounded them.
+            if let parts = record.packet.recipe.components, !parts.isEmpty {
+                Text("Parts: \(parts.map(\.name).joined(separator: " · "))")
+            }
             if record.packet.includesNotes, !record.packet.recipe.notes.isEmpty {
                 Text("Notes")
                     .font(.headline)

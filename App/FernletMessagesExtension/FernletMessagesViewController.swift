@@ -469,13 +469,28 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func recipePreviewText(for entry: FernletMessagesRecipeCatalogEntry?) -> String {
         guard let entry else { return "" }
-        guard entry.packet.includesNotes else {
-            return FernletMessagesCopy.recipePreviewWithoutNote(summary: recipeSummary(for: entry.packet))
-        }
-        let note = entry.packet.recipe.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = entry.packet.includesNotes
+            ? notePreviewOrSummary(for: entry.packet)
+            : FernletMessagesCopy.recipePreviewWithoutNote(summary: recipeSummary(for: entry.packet))
+        return prependingParts(of: entry.packet, to: detail)
+    }
+
+    /// The sender's note (its first 120 characters) when there is one, otherwise the counts summary.
+    private func notePreviewOrSummary(for packet: RecipeExchangePacket) -> String {
+        let note = packet.recipe.notes.trimmingCharacters(in: .whitespacesAndNewlines)
         return note.isEmpty
-            ? recipeSummary(for: entry.packet)
+            ? recipeSummary(for: packet)
             : FernletMessagesCopy.recipeNotePreview(note: String(note.prefix(120)))
+    }
+
+    /// `text` under a "Parts: …" line for a recipe made in parts, or `text` alone for a one-part
+    /// recipe. The names are the sender's own words, shown verbatim; the payload's decode has already
+    /// bounded them (at most 12 parts, 40 characters each, one line apiece). The two lines are one
+    /// catalogued string, so a translator owns their order and the break between them.
+    private func prependingParts(of packet: RecipeExchangePacket, to text: String) -> String {
+        guard let components = packet.recipe.components, !components.isEmpty else { return text }
+        return FernletMessagesCopy.recipePartsPreview(parts: components.map(\.name).joined(separator: " · "),
+                                                      detail: text)
     }
 
     private func workoutPreviewText(for entry: FernletMessagesWorkoutCatalogEntry?) -> String {
@@ -646,14 +661,11 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         isShowingReceivedItem = true
         receivedRecipe = packet
         receivedWorkout = nil
-        let note = packet.recipe.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        let preview = note.isEmpty
-            ? recipeSummary(for: packet)
-            : FernletMessagesCopy.recipeNotePreview(note: String(note.prefix(120)))
         let status = packet.includesNotes
             ? FernletMessagesCopy.receivedRecipeWithNote
             : FernletMessagesCopy.receivedRecipe
-        showReceived(title: card.title, status: status, preview: preview)
+        showReceived(title: card.title, status: status,
+                     preview: prependingParts(of: packet, to: notePreviewOrSummary(for: packet)))
     }
 
     private func showReceivedWorkout(_ packet: WorkoutPlanExchangePacket, dayKey: String?) throws {

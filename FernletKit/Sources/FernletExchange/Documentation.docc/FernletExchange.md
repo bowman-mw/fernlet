@@ -29,12 +29,21 @@ the extension's footprint down to "can render a card and write one inbox record"
 ### Packets
 
 ``RecipeExchangePacket`` and ``WorkoutPlanExchangePacket`` are the two portable payloads. Each is a
-versioned JSON document (`fernlet.exchange.recipe` / `fernlet.exchange.workout-plan`, version 1)
-with a `packetID`, an `originContentID` and a lowercase-hex SHA-256 `contentHash` over every other
-field. The hash is **integrity, not authentication**: it detects a truncated or edited file and
-proves nothing about who produced it (signing and trust live in `ProximityKit`). It also gives the
-app's replay ledger a stable identity, which is why a forwarded message still maps to the same
-import.
+versioned JSON document (`fernlet.exchange.recipe` / `fernlet.exchange.workout-plan`) with a
+`packetID`, an `originContentID` and a lowercase-hex SHA-256 `contentHash` over every other field.
+The hash is **integrity, not authentication**: it detects a truncated or edited file and proves
+nothing about who produced it (signing and trust live in `ProximityKit`). It also gives the app's
+replay ledger a stable identity, which is why a forwarded message still maps to the same import.
+
+A workout plan is version 1. A recipe is version 1 when it is one part — byte-for-byte what every
+earlier build wrote — and **version 2 when it is made in parts** (2026-09-24): a salad and its
+homemade dressing carry the payload's `components` partition, which an older reader could not keep
+(it re-hashes the payload it decoded, without the unknown key), so the version is the gate and an
+older build refuses the file as a format it does not know rather than calling it corrupt. **The
+content-hash scheme is versioned with it**: both schemes are SHA-256 over the canonical pre-image,
+the pre-image carries the version, so neither can verify the other's packets, and each version may
+carry only its own shape — scheme 1 never holds `components`, scheme 2 always does
+(`ExchangeMultipartRecipeTests` checks the scheme-2 digest against a pre-image it builds itself).
 
 Their encodings are **frozen**. `ExchangeCoder` pins `.sortedKeys` and `.withoutEscapingSlashes`, and
 the private `RecipeHashInput` / `WorkoutPlanHashInput` pre-images are the hashed bytes — adding,
@@ -49,10 +58,10 @@ enforced (servings, name and note length, ingredient and step counts), plus the 
 recipe's `components` partition when a payload carries one. The recipe builder has two forms (multipart
 recipes, 2026-09-24). ``ExchangeRecipePayloadBuilder/payload(for:foodItems:)`` is what EVERY build can
 read: byte-identical to earlier builds for a one-part recipe, and a multipart recipe comes out flattened
-(whole recipe, section-labelled steps, no `components` key). The version-1 ``RecipeExchangePacket``
-carries this form because an older reader re-hashes the decoded recipe, and an unknown key would fail
-its hash. ``ExchangeRecipePayloadBuilder/componentPayload(for:foodItems:)`` adds the partition. It is
-the form for the paste text, the mesh, and any packet format that versions its own hash. A web-imported recipe
+(whole recipe, section-labelled steps, no `components` key) — what an older reader makes of a multipart
+share; no shipping wire sends it any more. ``ExchangeRecipePayloadBuilder/componentPayload(for:foodItems:)``
+adds the partition. It is the form for the paste text, the mesh, and ``RecipeExchangePacket``, which
+versions its own hash (above). A web-imported recipe
 currently exchanges with **no ingredients** — its ingredient lines live in `webImport`, which the
 builder does not read — and `FernletExchangeTests.webImportedRecipesShareWithNoIngredientsAPinnedDefect`
 pins that as a known defect awaiting an owner decision, not a specification.

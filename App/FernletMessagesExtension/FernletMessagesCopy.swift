@@ -203,6 +203,11 @@ enum FernletMessagesCopy {
                comment: "Preview line quoting the sender's recipe note. %@ is the note itself, truncated to 120 characters by the caller.")
     }
 
+    static func recipePartsPreview(parts: String, detail: String) -> String {
+        String(localized: "messages.recipe.partsPreview", defaultValue: "Parts: \(parts)\n\(detail)",
+               comment: "Two-line preview for a recipe made in parts — a salad and its homemade dressing, say. The first %@ is the part names the sender chose, joined by ' · ' and shown verbatim; 'Parts' is the word Fernlet's recipe editor uses for them. The second %@, on its own line, is the recipe's note or its servings/ingredients/steps summary — keep the line break. Deliberately a list, not a count, so no plural form is needed.")
+    }
+
     // MARK: - Inserting
 
     static var chooseRecipe: String {

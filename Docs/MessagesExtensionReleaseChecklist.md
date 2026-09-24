@@ -25,6 +25,11 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
   composer's bound needs revisiting).
 - [ ] A version-1 card sent by the 2026-09-23 build (any card already in a conversation from that
   build) still opens and reviews on the 2026-09-24 build.
+- [ ] A recipe made in parts (a salad and its homemade dressing): the composer's preview and the
+  received card both show "Parts: …" with the sender's part names; **Review in Fernlet** lists them;
+  the saved copy keeps both parts, their names, and every ingredient and step. Then export the same
+  recipe as a `.fernletrecipe` file and import it on a 2026-09-23 build: that build must refuse it as a
+  format it does not know (packet version 2), not as damaged.
 - [ ] Sender and receiver both have the shipping Fernlet version: send and review one recipe and
   one planned-workout card.
 - [ ] Sender and receiver use different supported Fernlet versions: verify unsupported envelopes

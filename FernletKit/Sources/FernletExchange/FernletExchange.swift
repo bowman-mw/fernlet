@@ -54,11 +54,11 @@ public nonisolated enum ExchangeLimits {
 /// Two forms, one per reader population (multipart recipes, 2026-09-24):
 /// - ``payload(for:foodItems:)`` is the form EVERY build reads. It is byte-identical to earlier builds
 ///   for a one-part recipe; a multipart recipe comes out flattened, with section-labelled steps and no
-///   `components` key. The hash-covered v1 ``RecipeExchangePacket`` uses it, because an older reader
-///   re-hashes the decoded recipe and an unknown key would fail that hash.
+///   `components` key — what an older reader makes of a multipart share. No shipping wire sends it
+///   any more: the hash-covered ``RecipeExchangePacket`` carried it until its version 2 existed.
 /// - ``componentPayload(for:foodItems:)`` is the same payload plus the `components` partition, for the
-///   wires where an unknown key is ignored (pasted share text, the mesh `.local` arm) and for a packet
-///   format that versions its own hash.
+///   wires where an unknown key is ignored (pasted share text, the mesh `.local` arm) and for the
+///   exchange packet, which versions its own hash (version 2 for a recipe in parts).
 public nonisolated enum ExchangeRecipePayloadBuilder {
     public static func payload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
         componentPayload(for: recipe, foodItems: foodItems).droppingComponents()
@@ -167,11 +167,29 @@ public nonisolated enum ExchangeWorkoutPlanBuilder {
     }
 }
 
-/// One recipe exchange file. Its wire keys and canonical hash intentionally remain unchanged from
-/// the app-target implementation so existing `.fernletrecipe` files stay compatible.
+/// One recipe exchange file — a `.fernletrecipe`, a Shortcuts result, and the packet inside a
+/// Messages card. Its wire keys and canonical hash intentionally remain unchanged from the app-target
+/// implementation so existing `.fernletrecipe` files stay compatible.
+///
+/// **Two format versions (2026-09-24).** A one-part recipe is version 1: byte-for-byte what every
+/// earlier build wrote, hashed exactly as they hash it. A recipe made in parts — a salad and its
+/// homemade dressing — is version 2: its payload carries the `components` partition. A version-1
+/// reader could not keep that (it re-hashes the payload it decoded, without the unknown key, and would
+/// call an honest file corrupt), so the version is the gate, and an older build refuses the file as a
+/// format it does not know instead. The paste text and the mesh carry the same partition as an
+/// ignorable key; they have no hash to break.
+///
+/// **The content-hash scheme is versioned with the format.** Both versions hash one way — SHA-256
+/// over `ExchangeCoder`'s canonical JSON of `RecipeHashInput` — and the pre-image carries the packet's
+/// version, so a digest under one scheme can never verify a packet of the other. Each version may carry
+/// only its own shape: scheme 1's pre-image never holds `components`, scheme 2's always does, and
+/// ``decode(_:)`` refuses the two crossed even when the hash verifies.
 public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
     public static let format = "fernlet.exchange.recipe"
+    /// A one-part recipe: every packet written before 2026-09-24, and every one-part recipe since.
     public static let formatVersion = 1
+    /// A recipe made in parts: the payload carries its `components` partition, hashed under scheme 2.
+    public static let multipartFormatVersion = 2
 
     public var format: String
     public var formatVersion: Int
@@ -182,10 +200,10 @@ public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
     public var contentHash: String
 
     public init(recipe definition: RecipeDefinition, foodItems: [FoodItem], includesNotes: Bool) throws {
-        var payload = ExchangeRecipePayloadBuilder.payload(for: definition, foodItems: foodItems)
+        var payload = ExchangeRecipePayloadBuilder.componentPayload(for: definition, foodItems: foodItems)
         if !includesNotes { payload.notes = "" }
         format = Self.format
-        formatVersion = Self.formatVersion
+        formatVersion = payload.components == nil ? Self.formatVersion : Self.multipartFormatVersion
         packetID = definition.id
         originContentID = definition.id
         self.includesNotes = includesNotes && !payload.notes.isEmpty
@@ -204,17 +222,25 @@ public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
     public static func decode(_ data: Data) throws -> RecipeExchangePacket {
         guard data.count <= ExchangeLimits.maxRecipePacketBytes else { throw ExchangePacketError.tooLarge }
         let packet = try ExchangeCoder.decode(RecipeExchangePacket.self, from: data)
-        guard packet.format == format, packet.formatVersion == formatVersion else {
+        guard packet.format == format,
+              packet.formatVersion == formatVersion || packet.formatVersion == multipartFormatVersion else {
             throw ExchangePacketError.unsupportedFormat
         }
         let expected = try hash(format: packet.format, version: packet.formatVersion, packetID: packet.packetID,
                                 originContentID: packet.originContentID, includesNotes: packet.includesNotes, recipe: packet.recipe)
         guard packet.contentHash == expected else { throw ExchangePacketError.invalidHash }
-        guard packet.includesNotes == !packet.recipe.notes.isEmpty else {
+        guard packet.includesNotes == !packet.recipe.notes.isEmpty, packet.carriesItsVersionsShape else {
             throw ExchangePacketError.invalidPayload
         }
         try ExchangeRecipePayloadValidator.validate(packet.recipe)
         return packet
+    }
+
+    /// Parts exactly when the version says so: a version-1 packet carrying a partition would slip it
+    /// past an older reader's gate, and a version-2 packet without one is a one-part recipe in the
+    /// wrong format — neither is something an honest sender writes.
+    private var carriesItsVersionsShape: Bool {
+        (formatVersion == Self.multipartFormatVersion) == (recipe.components != nil)
     }
 
     private static func hash(
@@ -613,7 +639,7 @@ private nonisolated enum ExchangeHasher {
     }
 }
 
-/// The frozen pre-image of ``RecipeExchangePacket/contentHash``.
+/// The frozen pre-image of ``RecipeExchangePacket/contentHash``, under both content-hash schemes.
 ///
 /// A separate type from the packet purely so the hash covers every field *except* the hash itself.
 /// Its field set, names, and types are **frozen**: they are encoded by `ExchangeCoder` and
@@ -621,6 +647,12 @@ private nonisolated enum ExchangeHasher {
 /// changes the digest of already-exported `.fernletrecipe` files, which then fail
 /// ``ExchangePacketError/invalidHash`` on decode. Note `version` maps to the packet's
 /// `formatVersion` — that name difference is likewise part of the frozen encoding.
+///
+/// **Scheme 1** (`version: 1`, a one-part recipe) is exactly what every earlier build computes: the
+/// `recipe` then has no `components`, so it encodes byte-for-byte as it always has — pinned by
+/// literal pre-images in `ExchangeMessageEnvelopeV2Tests`. **Scheme 2** (`version: 2`, 2026-09-24) is
+/// the same construction with the recipe's `components` partition inside it. The version in the
+/// pre-image is what keeps either scheme from verifying the other's packets.
 private nonisolated struct RecipeHashInput: Codable {
     var format: String
     var version: Int

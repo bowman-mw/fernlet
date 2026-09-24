@@ -54,6 +54,9 @@ private struct RecipeExchangeConfirmation: View {
             Text(verbatim: packet.recipe.name).font(.headline)
             Text("\(packet.recipe.servings) servings · \(packet.recipe.ingredients.count) ingredients")
             Text("\(packet.recipe.steps?.count ?? 0) steps · \(packet.includesNotes ? "Notes included" : "No notes")")
+            if let parts = packet.recipe.components, !parts.isEmpty {
+                Text("Parts: \(parts.map(\.name).joined(separator: " · "))")
+            }
         }
     }
 }

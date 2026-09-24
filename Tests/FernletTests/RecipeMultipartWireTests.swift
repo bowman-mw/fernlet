@@ -11,8 +11,9 @@ import FernletExchange
 /// - an older reader (mirrored below by the PRE-multipart shapes) reads a whole, flattened recipe;
 /// - a newer reader rebuilds the parts exactly;
 /// - a one-part recipe's bytes are identical to every earlier build's;
-/// - the hash-covered v1 exchange packet (Files, Shortcuts, Messages) carries the flattened form, so
-///   an older reader's re-hash still verifies.
+/// - the hash-covered exchange packet (Files, Shortcuts, Messages) carries a one-part recipe as format
+///   version 1, which an older reader re-hashes exactly, and a multipart recipe as version 2 with its
+///   parts (W2-messages-v2), which an older reader refuses cleanly as a format it does not know.
 @MainActor
 struct RecipeMultipartWireTests {
 
@@ -214,17 +215,22 @@ struct RecipeMultipartWireTests {
         #expect(received.hasShareNotes == false)
     }
 
-    // MARK: - The v1 exchange packet (Files, Shortcuts, Messages v1) stays verifiable by older builds
+    // MARK: - The exchange packet (Files, Shortcuts, Messages): one part stays v1, parts travel as v2
 
-    @Test func aMultipartRecipeTravelsTheV1PacketFlattenedAndStillVerifiesOnOlderBuilds() throws {
+    /// A multipart recipe travels the exchange packet as format version 2, WITH its parts (it used to
+    /// go out flattened in version 1, losing them new-to-new). An older build reads the packet's
+    /// version first and accepts only 1, so it refuses the file cleanly as a format it does not know
+    /// — never as corrupt, which is what a partition inside a version-1 packet would have caused.
+    @Test func aMultipartRecipeTravelsAsPacketVersion2WhichOlderBuildsRefuseCleanly() throws {
         let salad = RecipeMultipartFixtures.saladWithHomemadeDressing()
         let packet = try RecipeExchangePacket(recipe: salad.recipe, foodItems: salad.foodItems, includesNotes: true)
-        #expect(packet.recipe.components == nil)
-        #expect(packet.recipe.steps?.first?.text.hasPrefix("Lemon-dijon dressing: ") == true)
+        #expect(packet.formatVersion == RecipeExchangePacket.multipartFormatVersion)
+        #expect(packet.recipe.components?.map(\.name) == [RecipeMultipartFixtures.dressingName, RecipeMultipartFixtures.saladName])
 
         let data = try packet.encodedData()
         #expect(try RecipeExchangePacket.decode(data) == packet)
-        #expect(try olderBuildRehash(data) == packet.contentHash)
+        let older = try JSONDecoder().decode(PreMultipartPacket.self, from: data)
+        #expect(older.formatVersion != 1, "an older build's `formatVersion == 1` gate refuses it as unsupportedFormat")
     }
 
     @Test func aOnePartRecipesPacketHashIsWhatOlderBuildsCompute() throws {
@@ -236,7 +242,8 @@ struct RecipeMultipartWireTests {
         #expect(try olderBuildRehash(packet.encodedData()) == packet.contentHash)
     }
 
-    @Test func aMultipartRecipeFitsAMessagesV1EnvelopeFlattened() throws {
+    /// A Messages card carries the multipart recipe whole: its parts come back out on the other side.
+    @Test func aMultipartRecipeFitsAMessagesCardWithItsParts() throws {
         let salad = RecipeMultipartFixtures.saladWithHomemadeDressing()
         let packet = try RecipeExchangePacket(recipe: salad.recipe, foodItems: salad.foodItems, includesNotes: true)
         let envelope = try ExchangeMessageEnvelope(recipe: packet)
@@ -245,6 +252,11 @@ struct RecipeMultipartWireTests {
         let decoded = try ExchangeMessageEnvelope.decode(messageURL: url)
         #expect(decoded.card.ingredientCount == 9)
         #expect(decoded.card.stepCount == 5)
+        guard case .recipe(let received) = try decoded.validatedPayload() else {
+            Issue.record("Expected a recipe packet.")
+            return
+        }
+        #expect(received.recipe.componentSlices?.map(\.name) == [RecipeMultipartFixtures.dressingName, RecipeMultipartFixtures.saladName])
     }
 
     // MARK: - Import: every path rebuilds the parts

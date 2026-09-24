@@ -12,10 +12,14 @@ import Foundation
 // ("Do NOT bump `version`" on ``SharedRecipePayload/steps``). A one-part recipe carries no
 // `components` key at all, so its bytes are identical to every build before this one.
 //
-// The one wire that cannot carry the key is the hash-covered v1 exchange packet (Files, Shortcuts,
-// Messages): an older reader re-encodes the decoded payload WITHOUT the unknown key and fails the
-// content hash. That path sends ``SharedRecipePayload/droppingComponents()`` (see
-// `ExchangeRecipePayloadBuilder.payload(for:foodItems:)`) until the versioned packet lands.
+// The one wire that cannot carry the key as an ignorable extra is the hash-covered exchange packet
+// (Files, Shortcuts, Messages): an older reader re-encodes the decoded payload WITHOUT the unknown key
+// and fails the content hash. So that packet VERSIONS instead (W2-messages-v2, 2026-09-24): a
+// multipart recipe travels as `RecipeExchangePacket` format version 2, partition and all, under a
+// version-2 content hash, which an older build refuses cleanly as a format it does not know; a
+// one-part recipe stays version 1, byte for byte. The flattened old-reader form,
+// ``SharedRecipePayload/droppingComponents()`` (`ExchangeRecipePayloadBuilder.payload(for:foodItems:)`),
+// is no longer sent on any wire.
 
 /// One part of a multipart recipe on the `fernlet.recipe` wire: its name and how many of the payload's
 /// flat ingredients and steps belong to it, counted from the front in order.

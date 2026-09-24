@@ -24,7 +24,11 @@ field; the person still presses Messages' own send button. Since 2026-09-24 the 
 2 — the packet's raw JSON, deflated and base64url-encoded once — which carries about three times what
 version 1 did: a realistic forty-step, sixteen-ingredient recipe fits. An item larger than a card can
 carry (`ExchangeLimits`: Apple's 5,000-character URL limit, a 3,719-byte compressed frame, a 12 KiB
-packet) gets the "too large — export a file instead" status rather than a card Messages would refuse.
+packet) gets the "too large — export a file instead" status rather than a card Messages would refuse;
+any other failure says it couldn't insert, never "too large". A recipe made in parts — the salad and
+its homemade dressing takes 955 of the 5,000 characters — travels whole (recipe packet version 2), and
+both the composer's preview and the received card put a "Parts: …" line, with the sender's part names,
+above the note.
 
 The card artwork is drawn locally — an SF Symbol and a wordmark on a 1200×630 canvas — so Messages
 never fetches, and a recipient never sees, a private food photo.
@@ -88,9 +92,11 @@ one is marked `@Sendable` so it cannot silently inherit main-actor isolation.
 `FernletTests` does not link this target, so the controller itself cannot be exercised there. What
 holds it instead: `FernletExchangeTests` (the envelope, card, limits, catalog and inbox logic the
 controller drives), `ExchangeMessageEnvelopeV2Tests` (the version-2 wire, its inflate bound, its
-capacity, and the version-1 cards that must keep opening), `MessagesExtensionBoundaryTests`
-(imports, the copy vault's catalog, the manifest), `LocalizationBoundaryTests` H1/H2, and every shipping-code wall, which since 2026-09-23
-is held to the full set of shipping roots by
+capacity, and the version-1 cards that must keep opening), `ExchangeMultipartRecipeTests` (a recipe
+made in parts as packet version 2, its versioned content hash, and the salad fixture on a card),
+`MessagesExtensionBoundaryTests` (imports, the copy vault's catalog, the manifest),
+`LocalizationBoundaryTests` H1/H2, and every shipping-code wall, which since 2026-09-23 is held to
+the full set of shipping roots by
 `PowerOfTenBoundaryTests.everyShippingCodeWallScansEveryShippingRoot`. What a simulator cannot check
 — two phones, real delivery, locked devices — is the checklist in
 `Docs/MessagesExtensionReleaseChecklist.md`.
