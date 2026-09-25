@@ -1167,9 +1167,20 @@ extension UXScreenProbe {
         // straight quotes on purpose: `baselinePinsAVolatileLiteral` reads every curly-quoted label
         // in this file, comments included.
         //
-        // "Feeling stronger" stays because it is a real clip, not a viewport artifact: before the
-        // audit runs, the strip is 203.67pt tall and a captioned card 215pt, and the attached
-        // screenshot shows the caption cut through its baseline by the strip's own bottom edge.
+        // "FEELING STRONGER" STAYS, BUT THE STRIP NO LONGER CUTS IT (2026-09-24, later that day).
+        // Until then the strip really did cut it. The strip took its height from the add tile,
+        // 203.67pt, around a 211pt captioned card (215pt by its accessibility frame, which starts 4pt
+        // above the picture), and its bottom edge cut the caption through its baseline.
+        // `ProgressPhotoSection.addTile` now reserves the tallest card's labels, so the
+        // strip is 223pt and the caption ends 6pt above its edge; it is 6pt at AX1, AX3 and AX5 too.
+        // The line still reproduces because the audit is measuring something else. The caption is
+        // `lineLimit(1)` in a 132pt card, so at the largest accessibility size it truncates
+        // ("Feelin..."). This was measured on one build with the same scroll stop: with that caption
+        // the finding reproduces; with the caption changed to "Strong" (about 117pt at AX5 by the
+        // font's metrics, so it fits), nothing is reported for the caption. That is the width rule
+        // the date chips follow (point 2). The line goes when the caption stops truncating at AX5:
+        // a card whose caption may wrap would do that, and so would a shorter seed caption, which
+        // would not be a fix.
         //
         // Re-recorded on a freshly created iPhone 17 (iPhone18,3), portrait, content size large,
         // en_US, light: copied from the "not in baseline" listing of a run with this entry emptied,

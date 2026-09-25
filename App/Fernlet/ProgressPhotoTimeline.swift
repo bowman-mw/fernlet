@@ -176,7 +176,10 @@ struct ProgressPhotoSection: View {
             .padding(.vertical, 4)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 14) {
+                // Top-aligned, so every picture starts on one line and a card with no caption ends
+                // short instead of drifting down to the middle. The stack's HEIGHT comes from its
+                // first child, which is why `addTile` reserves the tallest label block.
+                LazyHStack(alignment: .top, spacing: 14) {
                     PhotoCaptureControl(
                         onCameraCapture: onCapture,
                         onLibraryPickData: onCaptureData,
@@ -293,12 +296,27 @@ struct ProgressPhotoSection: View {
         .fernletSmallShadow()
     }
 
-    /// The leading "＋" tile in the populated strip — same footprint as a photo card.
+    /// The leading "＋" tile in the populated strip: a card-sized box over the TALLEST label block any
+    /// card in the strip carries, reserved and hidden.
+    ///
+    /// The reservation sets the strip's height. A `LazyHStack` in a horizontal `ScrollView` takes
+    /// its height from its FIRST child, and this tile is always first, so the strip is exactly as
+    /// tall as this tile, and the strip's edge cuts off any part of a taller card. Measured
+    /// 2026-09-24 on iPhone 17 while the tile reserved one caption line: at content size `large` the
+    /// strip was 203.67pt and a captioned card 211pt, so the centred stack pushed that card past both
+    /// edges. "Feeling stronger" was cut through its baseline and the top of the picture was cut too.
+    /// At the largest accessibility size the strip was 237.67pt around a 280pt card.
+    ///
+    /// So the tile reserves ``ProgressPhotoCardLabels`` itself, the same view every card renders, not
+    /// a hand-kept copy of its fonts (a copy is what drifted). It reserves one for each distinct date
+    /// in the strip, each over a caption line when any photo has a caption. In a `ZStack` the
+    /// tallest wins, so a date that wraps onto two lines at the largest text sizes reserves both.
+    /// Bounded: the chip has no year, so there are at most 366 distinct dates.
     private var addTile: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: ProgressPhotoCard.labelSpacing) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Color.moss.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
-                .frame(width: 132, height: 168)
+                .frame(width: ProgressPhotoCard.cardWidth, height: ProgressPhotoCard.cardHeight)
                 .overlay {
                     VStack(spacing: 8) {
                         Image(systemName: "camera.fill")
@@ -308,10 +326,24 @@ struct ProgressPhotoSection: View {
                     }
                     .foregroundStyle(Color.moss)
                 }
-            Text(" ")
-                .font(.fernlet(.labelSmall))
-                .hidden()
+            ZStack(alignment: .topLeading) {
+                ForEach(reservedDateLabels, id: \.self) { date in
+                    ProgressPhotoCardLabels(date: date, caption: reservesCaptionLine ? " " : nil)
+                }
+            }
+            .hidden()
+            .accessibilityHidden(true)
         }
+    }
+
+    /// Every distinct date chip the strip renders, in a stable order: what `addTile` reserves.
+    private var reservedDateLabels: [String] {
+        Set(records.map { ProgressPhotoCard.dateLabel(for: $0.capturedAt) }).sorted()
+    }
+
+    /// Whether any photo has a caption, and so whether the tallest card has a caption line.
+    private var reservesCaptionLine: Bool {
+        records.contains { $0.caption != nil }
     }
 }
 
@@ -431,19 +463,28 @@ private struct ProgressPhotoUnlockSheet: View {
 struct ProgressPhotoCard: View {
     let record: ProgressPhotoRecord
     let loadData: () -> Data?
-    /// The card's fixed width. Private and immutable: no caller ever customised it (R6).
-    private let cardWidth: CGFloat = 132
+    /// The card's fixed width, shared with the strip's add tile and ``ProgressPhotoCardLabels``.
+    /// Immutable: no caller ever customised it (R6).
+    static let cardWidth: CGFloat = 132
     /// The card's fixed picture height — the thumbnail is decoded to exactly this footprint.
-    private let cardHeight: CGFloat = 168
+    static let cardHeight: CGFloat = 168
+    /// The gap between the picture and its labels. The add tile uses it too, so the two footprints
+    /// match.
+    static let labelSpacing: CGFloat = 8
 
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
 
+    /// The date chip's text: abbreviated month and day, e.g. "Sep 9".
+    static func dateLabel(for date: Date) -> String {
+        date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Self.labelSpacing) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.parchment)
-                .frame(width: cardWidth, height: cardHeight)
+                .frame(width: Self.cardWidth, height: Self.cardHeight)
                 .overlay {
                     if let image {
                         Image(uiImage: image)
@@ -464,18 +505,7 @@ struct ProgressPhotoCard: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Color.bark.opacity(0.10), lineWidth: 1)
                 )
-            VStack(alignment: .leading, spacing: 1) {
-                Text(record.capturedAt.formatted(.dateTime.month(.abbreviated).day()))
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                if let caption = record.caption {
-                    Text(caption)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                        .lineLimit(1)
-                }
-            }
-            .frame(width: cardWidth, alignment: .leading)
+            ProgressPhotoCardLabels(date: Self.dateLabel(for: record.capturedAt), caption: record.caption)
         }
         .task {
             // Decode off the main thread straight to the card's own pixel size (mirrors the meal
@@ -483,11 +513,40 @@ struct ProgressPhotoCard: View {
             // ~8 MB bitmap behind a 132pt thumbnail — one per card scrolled past, for as long as the
             // strip lived. These are decrypted body photos, so the footprint matters twice.
             guard image == nil, let data = loadData() else { return }
-            let pixelSize = CGSize(width: cardWidth * displayScale, height: cardHeight * displayScale)
+            let pixelSize = CGSize(width: Self.cardWidth * displayScale, height: Self.cardHeight * displayScale)
             image = await UIImage(data: data)?.byPreparingThumbnail(ofSize: pixelSize)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Progress photo from \(record.capturedAt.formatted(.dateTime.month(.wide).day().year()))")
+    }
+}
+
+/// The date chip and optional caption under a progress photo's picture.
+///
+/// This is its own view because the strip's add tile also renders it, hidden, to reserve room for
+/// the tallest card (see `ProgressPhotoSection.addTile`). That reservation is exact only when it
+/// uses this view; a copy of its fonts and spacing is what drifted before. The parameters are
+/// `String` on purpose: a formatted date and the user's own note are data, and a
+/// `LocalizedStringKey` would look a caption up in the string catalog.
+struct ProgressPhotoCardLabels: View {
+    /// The date chip's text, as ``ProgressPhotoCard/dateLabel(for:)`` formats it.
+    let date: String
+    /// The user's note, or nil for none. It gets one line; a longer note truncates.
+    let caption: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(date)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.bark)
+            if let caption {
+                Text(caption)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .lineLimit(1)
+            }
+        }
+        .frame(width: ProgressPhotoCard.cardWidth, alignment: .leading)
     }
 }
 
