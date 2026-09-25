@@ -9,7 +9,7 @@ final class HomeCardsRedesignUITests: XCTestCase {
         let app = UXTestApp.launch()
 
         let firstAid = app.descendants(matching: .any)["home.firstAid"].firstMatch
-        XCTAssertTrue(scrollUntilHittable(firstAid, in: app), "First Aid card not reachable")
+        XCTAssertTrue(scrollClearOfTabBar(firstAid, in: app), "First Aid card not reachable")
 
         // The card is one tap target (chips are decorative) and opens the First Aid sheet.
         firstAid.tap()
@@ -19,7 +19,7 @@ final class HomeCardsRedesignUITests: XCTestCase {
         app.swipeDown(velocity: .fast)
 
         let milestones = app.descendants(matching: .any)["home.milestones"].firstMatch
-        XCTAssertTrue(scrollUntilHittable(milestones, in: app), "Milestones card not reachable")
+        XCTAssertTrue(scrollClearOfTabBar(milestones, in: app), "Milestones card not reachable")
         milestones.tap()
         // MilestonesView presents as a large sheet (HOME-13, 2026-08-21 redesign); assert its
         // stable screen anchor, which survived the push → sheet conversion (a bare
@@ -48,7 +48,12 @@ final class HomeCardsRedesignUITests: XCTestCase {
         // Label-based, so the walk finds the card in both the flattened and the restructured tree.
         let anchor = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Personal care")).firstMatch
-        XCTAssertTrue(scrollUntilHittable(anchor, in: app), "Personal care card not reachable on Home")
+        XCTAssertTrue(scrollClearOfTabBar(anchor, in: app), "Personal care card not reachable on Home")
+        // Then the card's last toggle, so the whole grid is on screen: it is lazy, and lays out only
+        // the rows near the screen (two of eight with the card's header at y≈820), while the walk
+        // below counts all eight.
+        let lastTask = app.buttons[Self.lastTaskLabel].firstMatch
+        XCTAssertTrue(scrollClearOfTabBar(lastTask, in: app), "'\(Self.lastTaskLabel)' toggle not reachable on Home")
 
         let reachable = dumpPersonalCareElements(in: app)
         XCTAssertEqual(reachable, Self.personalCareTaskLabels.count,
@@ -65,8 +70,9 @@ final class HomeCardsRedesignUITests: XCTestCase {
 
         // Operable, not merely present: activating one has to flip that task's own selected state,
         // and must not activate the card's open-the-sheet button underneath it.
+        // Clear of the tab bar, not merely hittable: see `scrollClearOfTabBar`.
         let floss = app.buttons[Self.flossTaskLabel].firstMatch
-        XCTAssertTrue(floss.isHittable, "'\(Self.flossTaskLabel)' toggle is present but not hittable")
+        XCTAssertTrue(scrollClearOfTabBar(floss, in: app), "'\(Self.flossTaskLabel)' toggle is present but not hittable")
         let wasSelected = floss.isSelected
         floss.tap()
         let flipped = expectation(for: NSPredicate(format: "isSelected == %@", NSNumber(value: !wasSelected)),
@@ -91,6 +97,9 @@ final class HomeCardsRedesignUITests: XCTestCase {
     ]
 
     private static let flossTaskLabel = "Floss"
+
+    /// The grid's last toggle — the last of ``personalCareTaskLabels``.
+    private static let lastTaskLabel = "Sunscreen"
 
     /// Prints the AX-walk — element type, label, value, enabled/selected/hittable for everything the
     /// card contributes to the accessibility tree — and returns how many of the eight toggles are
@@ -189,13 +198,59 @@ final class HomeCardsRedesignUITests: XCTestCase {
         start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.25)
     }
 
-    /// Scrolls the home feed until the element is hittable — both cards sit near the bottom, behind the
-    /// floating tab bar, so "exists" isn't enough to tap.
-    private func scrollUntilHittable(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+    /// Drags the home feed until the element sits wholly between the status bar and the floating tab
+    /// bar, and reports whether it got there.
+    ///
+    /// Hittable is not enough. The tab bar is the app's own view drawn over the feed, and XCUITest
+    /// steers its tap point off the tab BUTTONS' accessibility frames only — not off the pill drawn
+    /// around them. Measured 2026-09-24 with the First Aid header's top at y=810 under the compact
+    /// bar: `isHittable` was true, the tap point was (201, 835) — a point below Move's frame, inside
+    /// the pill — and `tap()` selected the Move tab, which is the full-suite flake. With the whole
+    /// frame above the bar there is nothing to steer around, and the tap lands on the element's centre.
+    private func scrollClearOfTabBar(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        let window = app.windows.firstMatch
+        // The feed scrolls up under the status bar. The pill reaches 6pt past the tab buttons, and a
+        // tap just outside a tab can still select it.
+        let topClear: CGFloat = 100
+        let tabBarClear: CGFloat = 16
         for _ in 0..<14 {
-            if element.exists && element.isHittable { return true }
-            app.swipeUp()
+            guard element.exists else { dragFeed(by: 300, in: app); continue }
+            let frame = element.frame
+            // Re-read every pass: the bar compacts, and drops 30pt, once the feed has scrolled.
+            let bottom = tabBarTop(in: app) - tabBarClear
+            let top = window.frame.minY + topClear
+            if frame.maxY > bottom {
+                dragFeed(by: frame.maxY - bottom + 40, in: app)
+            } else if frame.minY < top {
+                dragFeed(by: frame.minY - top - 40, in: app)
+            } else if element.isHittable, element.frame == frame {
+                // A second read that agrees: the feed has stopped moving.
+                return true
+            }
         }
-        return element.exists && element.isHittable
+        return false
+    }
+
+    /// The top of the floating tab bar, read off its Home tab as `UXScreenProbe.assertAboveTabBar`
+    /// does. `app.tabBars` is no use here: the bar is a custom SwiftUI view, and on a tab root the
+    /// query finds nothing.
+    private func tabBarTop(in app: XCUIApplication) -> CGFloat {
+        let homeTab = app.buttons["Home"].firstMatch
+        return homeTab.exists ? homeTab.frame.minY : app.windows.firstMatch.frame.maxY
+    }
+
+    /// Moves the feed's content up by about `distance` points (down when negative) with a
+    /// press-drag-hold, which ends where it is told to — unlike `swipeUp()`, whose fling keeps the
+    /// feed moving after the frame is read. Never under 60pt of travel: a press that moves less than
+    /// the scroll view's ~10pt slop is a tap on whatever sits under it, and that slop is added back.
+    private func dragFeed(by distance: CGFloat, in app: XCUIApplication) {
+        let window = app.windows.firstMatch
+        let height = window.frame.height
+        let travel = min(max(abs(distance) + 10, 60), height * 0.45) / height
+        let startY: CGFloat = distance > 0 ? 0.70 : 0.30
+        let endY = distance > 0 ? startY - travel : startY + travel
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: startY))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: endY))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.25)
     }
 }
