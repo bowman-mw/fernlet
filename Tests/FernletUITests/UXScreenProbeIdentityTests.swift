@@ -49,12 +49,14 @@ final class UXScreenProbeIdentityTests: XCTestCase {
     /// **The abbreviated month chip**, added 2026-09-20 — the shape that got past both halves of the
     /// wall until then.
     ///
-    /// `ProgressPhotoTimeline` renders `.month(.abbreviated).day()` over a seed dated relative to
-    /// the wall clock, so on any given day the three cards can straddle a month boundary and the
-    /// whole set walks forward every month. With only the full month names collapsing, that was two
-    /// identities today ("Aug #" and "Sep #") and a different two next month — a red on a calendar
-    /// boundary that the staleness wall could not see either, because neither literal carries a
-    /// digit or a full month name. All of these must key as one line.
+    /// `ProgressPhotoTimeline` renders `.month(.abbreviated).day()`, and until 2026-09-24 it did so
+    /// over a seed dated relative to the wall clock, so on any given day the three cards could
+    /// straddle a month boundary and the whole set walked forward every month. With only the full
+    /// month names collapsing, that was two identities on the day it was found ("Aug #" and
+    /// "Sep #") and a different two the next month — a red on a calendar boundary that the
+    /// staleness wall could not see either, because neither literal carries a digit or a full month
+    /// name. The seed is anchored to a fixed day now, but any abbreviated date the app renders
+    /// (`CoachPlanReviewView`'s among them) must still key as one line.
     @MainActor
     func testAbbreviatedMonthChipsCollapseToOneIdentity() {
         let keys = Set(["Aug 9", "Aug 30", "Sep 20", "Jan 1", "Dec 31", "Sept 5"]

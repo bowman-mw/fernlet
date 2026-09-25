@@ -247,12 +247,23 @@ extension FernletStore {
     /// Cross-day duplicate check of its own: progress photos persist across days (they are a timeline),
     /// so the day-scoped guard in `seedDemoContent` doesn't cover them — same reasoning as
     /// `seedJournals`/`seedMemories`.
+    ///
+    /// Dated back from ``demoProgressPhotoAnchor``, a FIXED day, not from today. The appearance probe
+    /// (`ProgressPhotoUITests`) freezes which of the strip's labels clip, and the dates decide part of
+    /// that: each card's chip renders `.month(.abbreviated).day()`, and whether the audit reports a
+    /// chip clipped is a function of that string's width. Measured on the pinned iPhone 17 with the
+    /// strip in the same place, on either card: "Sep 24" and "Aug 24" clip; "Sep 14", "Aug 19",
+    /// "Sep 9" and "Sep 3" do not. A seed dated from today changed that answer as the calendar
+    /// turned, and the detail's date heading wraps by the date's length the same way. Photos have no
+    /// retention window, so a fixed past date never ages out.
     private func seedProgressPhotos() {
         guard progressPhotoRecords().isEmpty else { return }
-        let calendar = Calendar.current
-        let entries: [(weeksAgo: Int, hue: CGFloat, caption: String?)] = [
-            (6, 0.55, "Starting out"),
-            (3, 0.52, nil),
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let anchor = calendar.date(from: Self.demoProgressPhotoAnchor) ?? Date()
+        let entries: [(monthsBefore: Int, hue: CGFloat, caption: String?)] = [
+            (2, 0.55, "Starting out"),
+            (1, 0.52, nil),
             (0, 0.50, "Feeling stronger"),
         ]
         for entry in entries {
@@ -261,13 +272,24 @@ extension FernletStore {
             let seeded = seedProgressPhoto(
                 data,
                 caption: entry.caption,
-                capturedAt: calendar.date(byAdding: .weekOfYear, value: -entry.weeksAgo, to: Date()) ?? Date()
+                capturedAt: calendar.date(byAdding: .month, value: -entry.monthsBefore, to: anchor) ?? anchor
             )
             if seeded == nil {
                 assertionFailure("demo progress photo failed to seal")
             }
         }
     }
+
+    /// The newest seeded progress photo's day — Wednesday 2026-09-09, at noon local so the rendered
+    /// date is that day in any time zone. The other two fall on the 9th of the two months before
+    /// it, so the chips read "Sep 9", "Aug 9" and "Jul 9" on every run.
+    ///
+    /// Chosen for margin, not at random: every chip is a one-digit day. The audit's cut-off falls
+    /// AMONG the two-digit dates (the list on `seedProgressPhotos()` has two-digit chips on both
+    /// sides of it), so any two-digit pick sits near it; a one-digit chip is the shortest this
+    /// format renders, clear of it. "Wednesday, September 9, 2026" still wraps the detail's heading
+    /// to two lines, as the detail's baseline was recorded.
+    private static let demoProgressPhotoAnchor = DateComponents(year: 2026, month: 9, day: 9, hour: 12)
 
     /// A cool neutral gradient stand-in for a body photo (no bundled image assets in the test seed).
     private static func demoProgressImage(hue: CGFloat) -> UIImage {

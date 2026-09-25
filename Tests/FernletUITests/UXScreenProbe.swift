@@ -1014,10 +1014,12 @@ extension UXScreenProbe {
     /// only invokes named `FernletTests` boundary suites — which is how that stayed unnoticed, and
     /// it is still true: this whole wall, including the `FernletTests` half, is local-only.
     ///
-    /// TWO ENTRIES ARE NEWER THAN THE REST (2026-09-20): `Home · Recent bites` and `Move · Progress
-    /// photos` were re-recorded on that date, on `Fernlet-A11y` (iPhone18,3) at content size
-    /// `large`, in dark and confirmed in light. Each carries its own dated note saying which run
-    /// produced it and what moved. Every other entry is still the 2026-08-23/08-27 record.
+    /// TWO ENTRIES ARE NEWER THAN THE REST: `Home · Recent bites` was re-recorded on 2026-09-20, on
+    /// `Fernlet-A11y` (iPhone18,3) at content size `large`, in dark and confirmed in light, and
+    /// `Move · Progress photos` on 2026-09-24, on a freshly created iPhone 17 (iPhone18,3) at
+    /// `large` in light, after its scroll stop and its seed dates were pinned. Each carries its own
+    /// dated note saying which run produced it and what moved. Every other entry is still the
+    /// 2026-08-23/08-27 record.
     ///
     /// Every entry here was copied from the "not in baseline" listing of a run on the pinned
     /// simulator and confirmed on a second, independent run. The high-signal findings the original
@@ -1065,8 +1067,9 @@ extension UXScreenProbe {
         // of the feed's content height, and the demo seed is dated relative to the wall clock
         // (`FernletStore+DemoSeed.swift`), so the feed grows and shrinks on its own. Read this
         // entry as "the bottom screenful of Home, whatever that currently holds", and expect the
-        // top of it to churn. `ProgressPhotoUITests` uses a stop-when-hittable scroll, which is
-        // less stable again.
+        // top of it to churn. `ProgressPhotoUITests` used a stop-when-hittable scroll, which was
+        // less stable again, and went red for it; it scrolls to the true bottom too since
+        // 2026-09-24 (see its entry).
         //
         // PERSONAL-CARE CARDS LEFT THIS VIEWPORT (2026-09-20): nine lines went, not three. The
         // three `Text clipped` lines for "Brush teeth AM", "Brush teeth PM" and "Skincare AM" came
@@ -1137,30 +1140,42 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
-        // DATE CHIP FROZEN AS ONE NORMALISED IDENTITY (2026-09-20): `ProgressPhotoTimeline.swift`
-        // renders each card's date chip with `.month(.abbreviated).day()`, and the demo seed dates
-        // those photos RELATIVE TO THE WALL CLOCK (`FernletStore+DemoSeed.swift`, weeksAgo 6/3/0).
-        // On the re-record run the chip clipped as TWO distinct identities, "Aug #" and "Sep #",
-        // because today's three seeded dates straddle a month boundary — one component, two
-        // baseline lines, and a different pair of lines next month.
+        // VIEWPORT AND SEED PINNED, DATE CHIP GONE (2026-09-24). This entry went red on main with
+        // one or two lines "no longer reproducing" — on 3eeb7bb AND 53633f50, on one simulator that
+        // was fresh when that session began — with no app change behind it. Two inputs moved it,
+        // and both are now pinned:
         //
-        // Freezing either literal would have rotted silently. `normalisedLabel` collapsed only FULL
-        // month names, so the abbreviation survived, and `baselinePinsAVolatileLiteral` could not
-        // see the rot either: it bans a digit or a full month name, and "Aug #" carries neither.
-        // The month ABBREVIATIONS are now in `volatileDateWords`, and the same list is in the
-        // wall's `months`, so all three chips key as the single line below and a raw paste of the
-        // abbreviated form now fails the wall. Recorded in dark and re-confirmed in light.
+        // 1. WHERE THE SCROLL STOPPED. `ProgressPhotoUITests` stopped the moment the strip was
+        //    hittable, which is anywhere from the true bottom to ~175pt above it, and the audit is
+        //    sensitive to exactly that. Measured on one binary: started at the bottom, or 30 or 80pt
+        //    above it, the audit reported the first card's caption (and, under that day's seed, its
+        //    chip) clipped; started 150 or 230pt above, neither. The probe now scrolls to the true
+        //    bottom (the section is last in Move's column), and the audit pulls any start within
+        //    78pt of the bottom to one offset.
+        // 2. THE SEED'S DATES. Whether the audit reports a date chip clipped is a function of the
+        //    chip's width. With the strip in the same place, on either card: "Sep 24" and "Aug 24"
+        //    clip; "Sep 14", "Aug 19", "Sep 9" and "Sep 3" do not. A seed dated from today moved that
+        //    answer with the calendar, so `FernletStore+DemoSeed.swift` now dates the photos from a
+        //    fixed day with one-digit days, clear of the cut-off — and `Text clipped — "<date-word> #"`
+        //    stopped reproducing, so it is deleted here.
         //
-        // (The abbreviations above are in straight quotes on purpose: `baselinePinsAVolatileLiteral`
-        // reads every curly-quoted label in this file, comments included, so a curly-quoted "Aug #"
-        // in a COMMENT would fail the wall exactly as a frozen one does.)
+        // That deletion is NOT a fix. A wide enough two-digit chip still reports clipped; it is just
+        // no longer what the seed renders. If chips start clipping again the line comes back as an
+        // appearance, which fails, so the wall now watches them more closely than the frozen line
+        // did. The 2026-09-20 work that made every chip key as ONE identity (the month abbreviations
+        // in `volatileDateWords`) stands, and is what would key them. Dates in this comment are in
+        // straight quotes on purpose: `baselinePinsAVolatileLiteral` reads every curly-quoted label
+        // in this file, comments included.
         //
-        // Still open, deliberately not fixed here: this probe keeps the stop-when-hittable scroll
-        // that the comment above `Home · Recent bites` warned about. The date chip is a clock
-        // problem rather than a viewport one, so the viewport was left alone instead of being
-        // changed in the same commit as a re-record.
+        // "Feeling stronger" stays because it is a real clip, not a viewport artifact: before the
+        // audit runs, the strip is 203.67pt tall and a captioned card 215pt, and the attached
+        // screenshot shows the caption cut through its baseline by the strip's own bottom edge.
+        //
+        // Re-recorded on a freshly created iPhone 17 (iPhone18,3), portrait, content size large,
+        // en_US, light: copied from the "not in baseline" listing of a run with this entry emptied,
+        // then confirmed on independent runs of a clean build with the simulator erased between
+        // them (the commit that made this change counts them).
         "Move · Progress photos": [
-            "Text clipped — “<date-word> #” (48)",
             "Text clipped — “Feeling stronger” (48)",
             "Text clipped — “Food” (9)",
             "Text clipped — “Friends” (9)",

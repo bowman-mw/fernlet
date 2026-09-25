@@ -302,14 +302,14 @@ extension AuditRatchetBoundaryTests {
     /// structural and may legitimately contain digits.
     ///
     /// **Month ABBREVIATIONS are banned too, added 2026-09-20 after they got past this check.**
-    /// `Move · Progress photos` renders its date chip with `.month(.abbreviated).day()` over a
-    /// wall-clock-relative seed, so the audit reported `Text clipped — "Aug 28"`. `normalisedLabel`
-    /// collapsed only FULL month names, which left the frozen identity as `"Aug #"` — no digit and
-    /// no full month name, so this function passed it — and that identity rotates to `"Sep #"` the
-    /// first time the seed's relative date crosses a month boundary. A red on a calendar boundary,
-    /// invisible to both halves of the wall. `volatileDateWords` now collapses the abbreviations so
-    /// the identity is stable, and they are listed here so a raw paste of the abbreviated form is
-    /// rejected rather than frozen.
+    /// `Move · Progress photos` renders its date chip with `.month(.abbreviated).day()`, then over a
+    /// wall-clock-relative seed (anchored to a fixed day since 2026-09-24), so the audit reported
+    /// `Text clipped — "Aug 28"`. `normalisedLabel` collapsed only FULL month names, which left the
+    /// frozen identity as `"Aug #"` — no digit and no full month name, so this function passed it —
+    /// and that identity rotated to `"Sep #"` the first time the seed's relative date crossed a
+    /// month boundary. A red on a calendar boundary, invisible to both halves of the wall.
+    /// `volatileDateWords` now collapses the abbreviations so the identity is stable, and they are
+    /// listed here so a raw paste of the abbreviated form is rejected rather than frozen.
     ///
     /// This reads EVERY curly-quoted label in the file, comments included, which is deliberate — a
     /// worked example in a comment is exactly where a stale literal gets copied from. The cost is
