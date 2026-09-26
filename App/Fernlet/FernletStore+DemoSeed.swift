@@ -90,6 +90,16 @@ extension FernletStore {
         // seed writes no goals, so empty IS its state; saying so makes it true on the second run
         // as well as the first. Only ever reached under `FERNLET_UI_TEST_SEED_DEMO`.
         goals = []
+        // And the nutrition targets, a fourth time. `NutritionTargetsEditorUITests` pins calories
+        // and then protein, and the Reset at its end does not always land: measured 2026-09-26, a
+        // passing run left protein pinned at 300, and a run stopped by a failure left calories
+        // pinned. The next launch on that simulator drew Home's macro card against the pinned
+        // targets ("of 300g" where the seed gives "of 93g"), which changed how far the audit moved
+        // `Home · Recent bites` (74pt, not 85.7pt), and the editor's own opening Reset changed
+        // where its probe's scroll stopped. The seed pins nothing, so no override IS its state.
+        settings.calorieTargetOverride = nil
+        settings.proteinTargetOverride = nil
+        settings.fatTargetOverride = nil
 
         guard day.meals.isEmpty, day.workouts.isEmpty else { return }
 
