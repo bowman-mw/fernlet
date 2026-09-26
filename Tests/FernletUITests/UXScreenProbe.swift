@@ -16,13 +16,25 @@ import XCTest
 // content pushed off-screen, blank states) that motivated this suite.
 
 /// Builds a `-completeOnboarding` app pre-seeded with representative demo content
-/// (`FERNLET_UI_TEST_SEED_DEMO`) so screens render populated rather than empty.
+/// (`FERNLET_UI_TEST_SEED_DEMO`) so screens render populated rather than empty, and hands it back
+/// only once the launch overlay has given the screen to the app — see
+/// ``waitForLaunchHandover(_:openSheet:file:line:)``.
 @MainActor
 enum UXTestApp {
+    /// Launches the seeded app and returns once its launch overlay has handed over.
+    ///
+    /// - Parameters:
+    ///   - sheetID: A `FernletSheet` id for `FERNLET_UI_TEST_OPEN_SHEET`, presented as launch ends.
+    ///   - bypassPrivateLock: Sets `FERNLET_UI_TEST_BYPASS_PRIVATE_LOCK`.
+    ///   - extraEnvironment: Further launch-environment entries.
+    ///   - file: The calling test's file, so a launch that never hands over fails at the caller.
+    ///   - line: The calling test's line.
     static func launch(
         openSheet sheetID: String? = nil,
         bypassPrivateLock: Bool = false,
-        extraEnvironment: [String: String] = [:]
+        extraEnvironment: [String: String] = [:],
+        file: StaticString = #file,
+        line: UInt = #line
     ) -> XCUIApplication {
         forcePortrait()
         let app = XCUIApplication()
@@ -32,7 +44,103 @@ enum UXTestApp {
         if bypassPrivateLock { app.launchEnvironment["FERNLET_UI_TEST_BYPASS_PRIVATE_LOCK"] = "1" }
         for (key, value) in extraEnvironment { app.launchEnvironment[key] = value }
         app.launch()
+        waitForLaunchHandover(app, openSheet: sheetID, file: file, line: line)
         return app
+    }
+
+    /// `LaunchScreen`'s anchor in `App/Fernlet/ContentView.swift` — a frozen token. The one view
+    /// covers both launch phases (`FernletApp` while the store loads, `ContentView` while
+    /// `LaunchPreparationService` prepares), so its absence means both are over.
+    static let launchOverlayIdentifier = "launch.screen"
+
+    /// The longest a launch may take to hand over before the test fails. The slowest measured was a
+    /// cold launch after `simctl erase` with the Mac deep in swap, whose overlay came down about 15s
+    /// into the test (2026-09-25). Four times that is headroom for a loaded machine, and only a
+    /// launch that is genuinely stuck ever spends it.
+    static let launchHandoverTimeout: TimeInterval = 60
+
+    /// Blocks until the launch overlay has handed the screen to the app: the tab bar is in the tree
+    /// — its Home tab hittable, unless a sheet was asked for — and `LaunchScreen`'s anchor has left
+    /// it. Fails the test once, saying what it saw, when that takes longer than
+    /// ``launchHandoverTimeout``.
+    ///
+    /// **Why `launch()` is not enough.** XCUITest's launch returns when the app first goes idle, and
+    /// the app goes idle with the overlay still up — `LaunchPreparationService` is awaiting work
+    /// XCUITest cannot see. Measured 2026-09-25 on a fresh iPhone 17 simulator: `launch()` returned
+    /// with the overlay showing on every launch: 3.8-4.6s after it began on a cold launch, 2.7-2.8s
+    /// on a warm one, up to 10.5s with the Mac under load. A test's first tap then waited for idle
+    /// (2ms — already idle), missed its target, retried a second later, found the tab bar, and
+    /// synthesized its event 0.2-0.9s after that with no second wait for idle. On the failing runs
+    /// that put the tap about 0.2s after Home first showed in the screen recording, and under
+    /// memory pressure (15.4 of 16 GB swap in use) it did nothing on 2 of 2 first runs after an
+    /// erase — `ProgressPhotoUITests` then audited Home under Move's name. The waits below cannot
+    /// finish before the app has taken over, because XCUITest's queries are answered on its main
+    /// thread (the one that straddled the hand-over took 0.9s); after them the first action finds
+    /// its target at once, and its own wait for idle comes after the hand-over rather than before
+    /// it.
+    ///
+    /// **Sheets.** `FERNLET_UI_TEST_OPEN_SHEET` presents in the same update that removes the overlay
+    /// and covers the tab bar, so a sheet launch asks only that the Home tab EXISTS (measured: under
+    /// a presented sheet it does, and is not hittable). Waiting for the sheet is the test's own job:
+    /// every sheet probe opens with `assertOnScreen("sheet.<id>")`.
+    ///
+    /// **What this does not prove.** The overlay leaves the accessibility tree at the START of its
+    /// 0.45s cross-fade, not the end — a snapshot with no overlay and the whole tab bar came with a
+    /// screenshot of Home still washed out — and the Home tab reports hittable from its first
+    /// appearance. So this establishes that the hand-over has begun and the tab bar is live, not
+    /// that the fade has finished.
+    ///
+    /// **Cost.** Each XCTest wait spends about a second before its first look even when its
+    /// condition already holds (measured 1.06-1.21s apiece), so every step asks directly first: a
+    /// launch that has already handed over costs three queries, not three seconds. Every step also
+    /// gets at least a second of real looking after the deadline, so a runner that stalls mid-wait
+    /// is never failed by the clock alone.
+    static func waitForLaunchHandover(
+        _ app: XCUIApplication,
+        openSheet sheetID: String?,
+        file: StaticString = #file,
+        line: UInt = #line
+    ) {
+        XCTContext.runActivity(named: "Wait for the launch overlay to hand over") { activity in
+            let deadline = Date().addingTimeInterval(launchHandoverTimeout)
+            func remaining() -> TimeInterval { max(deadline.timeIntervalSinceNow, 1) }
+            let homeTab = app.buttons["Home"].firstMatch
+            let overlay = app.descendants(matching: .any)[launchOverlayIdentifier]
+            let tabBarUp = homeTab.exists || homeTab.waitForExistence(timeout: remaining())
+            let homeReady = tabBarUp && (sheetID != nil || homeTab.isHittable
+                || homeTab.wait(for: \.isHittable, toEqual: true, timeout: remaining()))
+            let overlayGone = homeReady
+                && (!overlay.exists || overlay.waitForNonExistence(timeout: remaining()))
+            guard !overlayGone else { return }
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Launch overlay did not hand over"
+            activity.add(screenshot)
+            XCTFail(launchHandoverFailure(app, overlay: overlay, homeTab: homeTab), file: file, line: line)
+        }
+    }
+
+    /// What a launch that never handed over is stuck on, and where to look first.
+    private static func launchHandoverFailure(
+        _ app: XCUIApplication,
+        overlay: XCUIElement,
+        homeTab: XCUIElement
+    ) -> String {
+        let stuck: String
+        if app.state != .runningForeground {
+            stuck = "the app is not in the foreground (state \(app.state.rawValue)) — it likely crashed"
+        } else if overlay.exists {
+            let lines = overlay.staticTexts.allElementsBoundByIndex.prefix(4).map(\.label)
+            stuck = "the launch overlay is still up (\(lines.joined(separator: " / ")))"
+        } else if !homeTab.exists {
+            stuck = "the launch overlay has gone but the tab bar never appeared"
+        } else {
+            stuck = "the tab bar is up but its Home tab is not hittable — something covers it"
+        }
+        return """
+            The app did not hand over from its launch overlay within \(Int(launchHandoverTimeout))s: \
+            \(stuck). A cold launch after `simctl erase` on a Mac short of memory is the slowest \
+            case — check `sysctl vm.swapusage` and rerun warm before blaming the app.
+            """
     }
 
     /// Puts the simulator back in portrait before an app launches.
@@ -47,7 +155,8 @@ enum UXTestApp {
     ///
     /// ``UXScreenProbe/isOnBaselineEnvironment(file:line:)`` is the backstop that says so out loud;
     /// this is what stops it being needed. Call it from any probe suite that builds its own
-    /// `XCUIApplication` instead of going through ``launch(openSheet:bypassPrivateLock:extraEnvironment:)``.
+    /// `XCUIApplication` instead of going through
+    /// ``launch(openSheet:bypassPrivateLock:extraEnvironment:file:line:)``.
     static func forcePortrait() {
         XCUIDevice.shared.orientation = .portrait
     }

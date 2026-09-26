@@ -2135,6 +2135,10 @@ struct LaunchScreen: View {
                 Spacer()
             }
         }
+        // UX-test anchor (a frozen token, never display text): `UXTestApp.launch` waits for this
+        // to leave the tree before a test's first tap. `.contain` keeps the greeting and the status
+        // line individually readable, exactly as they were.
+        .uxScreenAnchor("launch.screen")
     }
 }
 
