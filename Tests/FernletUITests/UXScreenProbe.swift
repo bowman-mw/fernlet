@@ -366,7 +366,10 @@ struct UXScreenProbe {
         // whole wall silently passing is the failure this map exists to prevent. Retrying removes
         // the transient and leaves both directions walled; if the second pass is also empty the
         // report below still fails, saying exactly what happened.
-        if found.isEmpty && !(Self.auditBaselines[name] ?? []).isEmpty {
+        //
+        // "Frozen findings" means walled ones (``walledEntries(of:)``): a baseline made only of
+        // under-reporting lines legitimately audits to nothing, so it earns no retry either.
+        if found.isEmpty && !Self.walledEntries(of: Self.auditBaselines[name] ?? []).isEmpty {
             (raw, found) = try runAudit()
         }
         report(found, raw: raw, file: file, line: line)
@@ -615,12 +618,19 @@ struct UXScreenProbe {
         // fix, so those still fail as disappearances. The practical consequence, stated plainly:
         // this wall is only meaningful when the probe suites are run in their own `xcodebuild`
         // invocation, which is the context ``auditBaselineEntries`` was recorded in and says so.
-        if found.isEmpty && !baseline.isEmpty {
+        //
+        // **Only walled entries count here (2026-09-26).** A baseline made ONLY of under-reporting
+        // lines — `Settings · Nutrition targets` and `Studio · Confirmation (flagged name)` —
+        // audits to nothing on every run where those categories are absent, which on some simulator
+        // instances is every run. That is the excuse working, not the auditor dying; judged against
+        // the whole baseline it failed `Settings · Nutrition targets` on `Fernlet-A11y`.
+        let walled = Self.walledEntries(of: baseline)
+        if found.isEmpty && !walled.isEmpty {
             XCTFail("""
                 [\(name)] the accessibility audit returned NOTHING (0 raw issues) for a screen with \
-                \(baseline.count) frozen baseline finding(s), TWICE — `audit(file:line:)` already \
+                \(walled.count) frozen baseline finding(s), TWICE — `audit(file:line:)` already \
                 retried. That is almost certainly the auditor under-reporting rather than \
-                \(baseline.count) findings being fixed at once, so do NOT delete the baseline lines \
+                \(walled.count) findings being fixed at once, so do NOT delete the baseline lines \
                 on the strength of this run.
 
                 `performAccessibilityAudit` goes silent for whole screens inside a long run: \
@@ -798,6 +808,16 @@ struct UXScreenProbe {
     /// shape of what was measured. The cost is the same cost the Dynamic Type entry already pays and
     /// should be read the same way: on any given run those seven entries may be watched in one
     /// direction only.
+    ///
+    /// **What its absences depend on, measured 2026-09-26.** Not the app, the clock or the locale.
+    /// Newly created iPhone 17 simulators split, per boot: 4 of 6 reported the category on every
+    /// run of their first boot, 2 did not (one of those did after a reboot), and `simctl erase`
+    /// moved one from the first group to the second. Identical build, pixel-identical screenshots,
+    /// identical element trees, identical OCR. On the three screens investigated then, the finding
+    /// only appeared when element detection shared an audit with the Dynamic Type pass AND that
+    /// pass left the layout changed (a page pulled up from its bottom, a control that did not
+    /// shrink back). The eight older entries in this category were not re-measured. See the notes
+    /// on `Home · Recent bites` in the map.
     static let underReportingCategoryPrefixes = ["Dynamic Type font sizes",
                                                  "Potentially inaccessible text"]
 
@@ -843,6 +863,18 @@ struct UXScreenProbe {
             skipped.formUnion(baseline.filter { $0.hasPrefix(prefix) })
         }
         return skipped.subtracting(found)
+    }
+
+    /// The part of `baseline` a run is expected to reproduce: every entry OUTSIDE the
+    /// ``underReportingCategoryPrefixes`` categories.
+    ///
+    /// Only these can prove the auditor went silent. An under-reporting line may be absent from any
+    /// honest run, so a screen whose baseline is nothing but such lines audits to zero raw issues
+    /// whenever they are absent, and ``audit(file:line:)`` must not read that as a dead auditor.
+    static func walledEntries(of baseline: Set<String>) -> Set<String> {
+        baseline.filter { entry in
+            !underReportingCategoryPrefixes.contains { entry.hasPrefix($0) }
+        }
     }
 
     /// One suppressed audit issue, matched on the audit type plus a substring of the issue's own
@@ -1123,10 +1155,11 @@ extension UXScreenProbe {
     /// only invokes named `FernletTests` boundary suites — which is how that stayed unnoticed, and
     /// it is still true: this whole wall, including the `FernletTests` half, is local-only.
     ///
-    /// TWO ENTRIES ARE NEWER THAN THE REST: `Home · Recent bites` was re-recorded on 2026-09-20, on
-    /// `Fernlet-A11y` (iPhone18,3) at content size `large`, in dark and confirmed in light, and
-    /// `Move · Progress photos` on 2026-09-24, on a freshly created iPhone 17 (iPhone18,3) at
-    /// `large` in light, after its scroll stop and its seed dates were pinned. Each carries its own
+    /// THREE ENTRIES ARE NEWER THAN THE REST: `Home · Recent bites` was re-recorded on 2026-09-20,
+    /// on `Fernlet-A11y` (iPhone18,3) at content size `large`, in dark and confirmed in light, and
+    /// gained one line on 2026-09-26; `Move · Progress photos` on 2026-09-24, on a freshly created
+    /// iPhone 17 (iPhone18,3) at `large` in light, after its scroll stop and its seed dates were
+    /// pinned; and `Settings · Nutrition targets` was created on 2026-09-26. Each carries its own
     /// dated note saying which run produced it and what moved. Every other entry is still the
     /// 2026-08-23/08-27 record.
     ///
@@ -1163,6 +1196,28 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
+        // "POTENTIALLY INACCESSIBLE TEXT" ADDED (2026-09-26), element-less, 2 raw issues. Copied
+        // from the "not in baseline" listing of runs on two independent, freshly created iPhone 17
+        // simulators (iPhone18,3, portrait, `large`, en_US, light), clean build, nothing else
+        // appearing or disappearing. It is NOT an inaccessible label: every text the auditor's OCR
+        // found here is carried by an element. It comes from the audit's own Dynamic Type pass.
+        // This probe parks Home at the bottom of its feed, the small text sizes shorten the feed,
+        // and the page comes back 85.7pt higher than it started. Element detection then reads a
+        // screenshot taken BEFORE that pass against the page AFTER it. Measured on a simulator that
+        // reproduced it: element detection alone reported nothing in 82 audits across this screen
+        // and the two Settings ones, even straight after a Dynamic-Type-only pass; full audits
+        // reported it at 3 of the 4 scroll stops the audit moved, and at none of the 3 it left
+        // alone.
+        //
+        // Whether it appears is decided per SIMULATOR BOOT, not by the app or the clock. Of 6 newly
+        // created iPhone 17 simulators, 4 reported it on every run of their first boot and 2 did
+        // not; one of those 2 did after a reboot, and erasing one that reported it stopped it.
+        // Build, screenshots (pixel-identical), element trees before and after the audit,
+        // SpringBoard's tree and the OCR were the same either way; time of day, the app's time
+        // zone, the status-bar clock, AppleLanguages and host CPU/GPU load all changed nothing.
+        // `Fernlet-A11y` does not report it. The category is in ``underReportingCategoryPrefixes``,
+        // so where it is absent this line is excused, not failed.
+        //
         // Last re-recorded 2026-09-20. What is PINNED about this entry is the environment, which
         // `isOnBaselineEnvironment(file:line:)` now asserts in four places: the device
         // (iPhone18,3), the window (402x874 portrait), content size `large` and en_US. What is NOT
@@ -1203,6 +1258,7 @@ extension UXScreenProbe {
         // sitting unwalled. That is what makes deleting them safe rather than merely tidy: if the
         // cards return to this viewport, the six come back as unconditional appearances.
         "Home · Recent bites": [
+            "Potentially inaccessible text",
             "Text clipped — “Chicken rice bowl” (48)",
             "Text clipped — “Food” (9)",
             "Text clipped — “Friends” (9)",
@@ -1411,9 +1467,27 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are unsupported",
             "Text clipped — “Search settings” (45)",
         ],
-        // The fully-derived state has no entry here on purpose: it reports nothing, because with no
-        // override pinned there is no Reset control to be too small. The pinned variant below is
-        // where that finding lives.
+        // CREATED 2026-09-26, and the only line is the audit's, not the editor's. With no override
+        // pinned there is still no Reset control to be too small (that finding lives in the pinned
+        // variant below). "Potentially inaccessible text" was recorded the same way as the line on
+        // `Home · Recent bites` and has the same cause: the probe's swipes park the Goal &
+        // nutrition page at its bottom, and the audit's Dynamic Type pass brings it back 146pt
+        // higher. Full audits reported it at all 4 scroll stops within 146pt of the bottom (the
+        // audit pulled every one of them to the same offset) and at none of the 3 it left alone.
+        // Boot-dependent in the same way, so it is excused where it is absent. Being this entry's
+        // ONLY line, its absence leaves a clean audit of 0 raw issues, which the "returned nothing"
+        // guard used to fail; ``walledEntries(of:)`` is why it no longer does.
+        //
+        // `Settings · Appearance` has no entry, on purpose. It reported the same element-less pair
+        // from 2026-09-25, and there the cause was an app bug: its two compact time pickers stayed
+        // at their largest-size height (77.3pt instead of 36pt) after the audit's Dynamic Type
+        // pass, and after a user's own text-size round trip. Fixed in
+        // `CompanionFeelingsSettingsCard`. A/B on one simulator that reported it, six runs per arm:
+        // without the fix it was reported on 5 runs, each with the pickers left tall; with it, on
+        // none.
+        "Settings · Nutrition targets": [
+            "Potentially inaccessible text",
+        ],
         "Settings · Nutrition targets (calories pinned)": [
             "Hit area is too small — “Reset” id=nutritionTargets.reset (9)",
         ],
