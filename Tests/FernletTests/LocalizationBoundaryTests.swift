@@ -638,6 +638,37 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The portion reader's words (ingredient-search round, F4a). USDA writes its household portions
+    /// in English ("medium (7\" to 7-7/8\" long)", "clove", "NLEA serving"), so these are matching
+    /// inputs read against the catalog's own text, never display text; the size and noun a line was
+    /// chosen as are also persisted as a recipe line's `householdMeasure` label.
+    @Test func frozenFoodPortionReaderTokens() throws {
+        #expect(FoodPortionReader.sizeWords == ["extra large", "extra small", "large", "medium", "small"])
+        #expect(FoodPortionReader.defaultSize == "medium")
+        #expect(FoodPortionReader.referenceWords == ["nlea", "portion", "racc", "serving", "servings"])
+        #expect(
+            FoodPortionReader.countNouns.sorted() == [
+                "apple", "apricot", "artichoke", "avocado", "banana", "beet", "carrot", "clove", "cucumber",
+                "date", "egg", "eggplant", "fig", "fruit", "kiwifruit", "leek", "lemon", "lime", "mango",
+                "mushroom", "nectarine", "olive", "onion", "orange", "parsnip", "peach", "pear", "pepper",
+                "plantain", "plum", "potato", "radish", "stalk", "stick", "tomato", "tortilla"
+            ],
+            """
+            The portion reader's count nouns changed. Each is matched against USDA's English portion \
+            text ("clove", "fruit (2\" dia)"); a translated or re-spelled noun matches nothing and \
+            "1 each" of that food refuses again. Add a noun deliberately (it moves tap defaults and \
+            quick-log counts) and measure it; never localize one.
+            """
+        )
+        let measure = RecipeHouseholdMeasure(label: "medium", gramsPerUnit: 118)
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(measure))
+        #expect(Set(try #require(object as? [String: Any]).keys) == ["label", "gramsPerUnit"],
+                "the household measure's keys are persisted on recipe lines")
+        let line = RecipeIngredient(foodItemId: UUID(), quantity: 118, unit: "g", householdMeasure: measure)
+        let lineObject = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(line)) as? [String: Any])
+        #expect(lineObject["householdMeasure"] != nil, "…under the frozen key householdMeasure")
+    }
+
     /// Coach-plan wire tokens.
     ///
     /// `MuscleGroup` and `Equipment` raw values are persisted in day rows, persisted in the

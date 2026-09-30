@@ -178,9 +178,13 @@ struct IngredientSearchCorpusTests {
     /// Count-noun queries whose first plausible plain VISIBLE row takes "1 each". Zero on cf46b8eb:
     /// the report's §4.3 "1 of 26" counted "1 each" OR "1 piece" on the first plain row of the top
     /// 10 ("Chicken breast, roasted" takes "1 piece" only). One with F2: "garlic clove" lands on a
-    /// branded jar whose label serving became its "each" (15 g — a serving, not a clove). F4a is
-    /// expected to raise it with the rows' own USDA counts.
-    static let eachBaseline = 1
+    /// branded jar whose label serving became its "each" (15 g — a serving, not a clove). Seventeen
+    /// with F4a, from the rows' own USDA counts: banana(s) and onions to their medium, eggs to the
+    /// Foundation row's 50.3 g egg, lemon to the fruit its NLEA serving names, lime, orange, carrot(s),
+    /// cucumber, jalapeno, grape tomatoes, corn tortillas and zucchini. Still refused: apple(s), egg,
+    /// potato, sweet potato (no plain row in view), avocado and tomato (RACC-only rows), bell
+    /// peppers, chicken, graham crackers and marshmallows.
+    static let eachBaseline = 17
 
     /// The count-noun queries — the research's `replay/units.py` list. Frozen English matching inputs.
     static let countNouns: Set<String> = [
@@ -390,7 +394,7 @@ struct IngredientSearchCorpusTests {
         .init("white chocolate chips", 1, nil),
         .init("butter", 2, 2),
         .init("unsalted butter", 1, 1),
-        .init("eggs", 1, 1, each: false),
+        .init("eggs", 1, 1, each: true),
         .init("egg", nil, nil, each: false),
         .init("egg whites", 1, 1),
         .init("yeast", 5, 5),
@@ -424,42 +428,42 @@ struct IngredientSearchCorpusTests {
         .init("canola oil", 3, 3),
         .init("olive oil", 4, 4),
         .init("extra virgin olive oil", 1, 1),
-        .init("banana", 1, 1, each: false),
-        .init("bananas", 1, 1, each: false),
+        .init("banana", 1, 1, each: true),
+        .init("bananas", 1, 1, each: true),
         .init("apple", nil, nil, each: false),
         .init("apples", nil, nil, each: false),
-        .init("lemon", 4, 4, each: false),
+        .init("lemon", 4, 4, each: true),
         .init("lemon juice", 1, 1),
-        .init("lime", 1, 1, each: false),
-        .init("orange", 1, 1, each: false),
+        .init("lime", 1, 1, each: true),
+        .init("orange", 1, 1, each: true),
         .init("strawberries", 1, 1),
         .init("blueberries", 1, 1),
         .init("raspberries", 1, 1),
         .init("avocado", 1, 1, each: false),
         .init("tomato", 2, 2, each: false),
-        .init("tomatoes", 3, 3, each: false),
+        .init("tomatoes", 3, 3, each: true),
         .init("cherry tomatoes", 1, 1),
-        .init("onion", 1, 1, each: false),
-        .init("red onion", 1, 1, each: false),
-        .init("yellow onion", 1, 1, each: false),
+        .init("onion", 1, 1, each: true),
+        .init("red onion", 1, 1, each: true),
+        .init("yellow onion", 1, 1, each: true),
         .init("garlic", 1, 1),
         .init("garlic clove", 2, 2, each: true),
         .init("ginger", 1, 1),
-        .init("carrot", 1, 1, each: false),
-        .init("carrots", 1, 1, each: false),
+        .init("carrot", 1, 1, each: true),
+        .init("carrots", 1, 1, each: true),
         .init("celery", 1, 1),
         .init("potato", nil, nil, each: false),
         .init("sweet potato", nil, nil, each: false),
         .init("spinach", 1, 1),
         .init("kale", 1, 1),
         .init("lettuce", 1, 1),
-        .init("cucumber", 1, 1, each: false),
+        .init("cucumber", 1, 1, each: true),
         .init("bell pepper", 1, 1, each: false),
         .init("red bell pepper", 1, 1, each: false),
-        .init("jalapeno", 1, 1, each: false),
+        .init("jalapeno", 1, 1, each: true),
         .init("broccoli", 1, 1),
         .init("cauliflower", 1, 1),
-        .init("zucchini", 1, 1, each: false),
+        .init("zucchini", 1, 1, each: true),
         .init("mushrooms", 1, 1),
         .init("corn", 5, 5),
         .init("peas", 1, 1),
@@ -487,7 +491,7 @@ struct IngredientSearchCorpusTests {
         .init("spaghetti", nil, nil),
         .init("quinoa", 1, 1),
         .init("bread", 2, 2),
-        .init("tortillas", 1, 1, each: false),
+        .init("tortillas", 1, 1, each: true),
         .init("cheddar cheese", 6, 6),
         .init("mozzarella", 2, 2),
         .init("parmesan", 2, 2),

@@ -224,10 +224,14 @@ enum WholeDescriptionFoodProbe {
         countWords[FoodItemSearch.normalized(token)] ?? LocaleTolerantNumber.double(from: token)
     }
 
+    /// The first portion stated EXACTLY in the typed unit. Exact on purpose (ingredient-search round,
+    /// F4a): the tolerant reader also reads "cup, chopped" as a cup, but this probe short-circuits
+    /// every later tier on the row it finds and fails closed when that row's conversion picks a
+    /// different portion, so a qualified portion must not become "compatible" here.
     private static func matchingPortion(in item: FoodItem, unit: String) -> FoodPortion? {
         guard let target = RecipeUnit.normalized(unit) else { return nil }
         for portion in item.portions.prefix(maximumPortionsPerFood) {
-            if portion.recipeUnit == target { return portion }
+            if portion.exactRecipeUnit == target { return portion }
         }
         return nil
     }

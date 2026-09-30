@@ -14,6 +14,11 @@
 // recipe editor (and a bare-count quick log) binds, and it must convert — the unit the data suggests
 // is kept only when it does, else grams, else "1 serving". "Oil" is a word ("oil", "oils"), not a
 // substring of "boiled".
+//
+// F4a, "1 each": `FoodPortionReader` reads a portion's leading measure word and drops its qualifiers,
+// so "medium (7" to 7-7/8" long)" is a size, "clove" a count noun and "cup, sliced" a cup. "Each" is
+// the one medium portion among several sizes, else the single named count, else the named count that
+// is the food's own reference serving. Every gram weight is USDA's; the reader invents none.
 
 import Foundation
 import Testing
@@ -163,13 +168,169 @@ struct HouseholdPortionConversionTests {
         #expect(!Self.tapConverts(pastBound))
     }
 
-    /// A cup default that converts is kept (butter's stated cup); one that cannot — a cup portion on
-    /// a serving the converter cannot weigh — is not, and the tap lands on "1 serving".
+    /// A cup default that converts is kept (olive oil's stated cup); one that cannot — a cup portion
+    /// on a serving the converter cannot weigh — is not, and the tap lands on "1 serving".
     @Test func aCandidateIsKeptOnlyWhenItConverts() throws {
-        let butter = try Self.shipped(173_410)
-        #expect(butter.preferredRecipeUnit == .cup && Self.tapConverts(butter))
+        let oil = try Self.shipped(171_413)         // Oil, olive, salad or cooking: tablespoon, tsp, cup
+        #expect(oil.preferredRecipeUnit == .cup && Self.tapConverts(oil))
         let syrup = Self.food("Syrup", portions: [FoodPortion(amount: 1, unit: "cup", gramWeight: 300)], size: 1, unit: "IU")
         #expect(!syrup.tapDefaultConverts(.cup))
         #expect(syrup.preferredRecipeUnit == .serving && Self.tapConverts(syrup))
+    }
+
+    // MARK: - F4a: the tolerant reader
+
+    static func portion(_ unit: String, _ grams: Double = 100, amount: Double = 1, description: String? = nil) -> FoodPortion {
+        FoodPortion(amount: amount, unit: unit, gramWeight: grams, description: description)
+    }
+
+    /// The leading measure word decides, and qualifiers (a parenthetical, anything after a comma) are
+    /// dropped: USDA's own portion text, read the way a cook reads it.
+    @Test func theReaderClassifiesUSDAPortionText() {
+        let cases: [(FoodPortion, FoodPortionMeasure?)] = [
+            (Self.portion("medium (7\" to 7-7/8\" long)"), .count(noun: nil, size: "medium")),
+            (Self.portion("extra large (9\" or longer)"), .count(noun: nil, size: "extra large")),
+            (Self.portion("large whole (3\" dia)"), .count(noun: nil, size: "large")),
+            (Self.portion("cup, sliced"), .unit(.cup)),
+            (Self.portion("tbsp chopped"), .unit(.tablespoon)),
+            (Self.portion("fl oz"), .unit(.fluidOunce)),
+            (Self.portion("oz"), .unit(.ounce)),
+            (Self.portion("lb"), .unit(.pound)),
+            (Self.portion("NLEA serving"), .reference),
+            (Self.portion("RACC"), .reference),
+            (Self.portion("serving 1 cube"), .reference),
+            (Self.portion("clove"), .count(noun: "clove", size: nil)),
+            (Self.portion("cloves", 9, amount: 3), .count(noun: "clove", size: nil)),
+            (Self.portion("Potato medium (2-1/4\" to 3-1/4\" dia)"), .count(noun: "potato", size: "medium")),
+            (Self.portion("stalk, medium (7-1/2\" - 8\" long)"), .count(noun: "stalk", size: "medium")),
+            (Self.portion("tortilla, medium (approx 6\" dia)"), .count(noun: "tortilla", size: "medium")),
+            (Self.portion("5 tomatoes", amount: 5), nil),
+            (Self.portion("tomatoes", 50, amount: 5), .count(noun: "tomato", size: nil)),
+            (Self.portion("medium slice (approx 3\" x 2\" x 1/4\")"), .unit(.slice)),
+            (Self.portion("slice, medium (1/8\" thick)"), .unit(.slice)),
+            (Self.portion("strip large (3\" long)"), nil),
+            (Self.portion("package (5 oz)"), nil),
+            (Self.portion("wedge (1/4 of medium tomato)"), nil),
+            (Self.portion("undetermined", description: "1 banana"), .count(noun: "banana", size: nil)),
+            (Self.portion("undetermined", description: "1 piece, NFS"), .unit(.piece))
+        ]
+        for (portion, expected) in cases {
+            #expect(portion.measure == expected, "\(portion.unit) / \(portion.description ?? "")")
+        }
+        #expect(Self.portion("cup, sliced").exactRecipeUnit == nil, "the exact reading is unchanged")
+        #expect(Self.portion("cup").exactRecipeUnit == .cup)
+        #expect(Self.portion("medium").recipeUnit == .each && Self.portion("RACC").recipeUnit == nil)
+    }
+
+    /// "Each" among several sizes is the medium one; a single named count is itself; several
+    /// portions of one noun that agree are one size; the food's reference serving breaks a tie.
+    @Test func eachResolvesToTheMediumOrTheSingleNamedCount() {
+        let banana = Self.food("Banana", portions: [
+            Self.portion("NLEA serving", 126), Self.portion("extra large (9\" or longer)", 152),
+            Self.portion("large (8\" to 8-7/8\" long)", 136), Self.portion("cup, sliced", 150),
+            Self.portion("small (6\" to 6-7/8\" long)", 101), Self.portion("medium (7\" to 7-7/8\" long)", 118)
+        ])
+        #expect(Self.grams(banana, 1, "each") == 118)
+        #expect(Self.grams(banana, 2, "each") == 236)
+        let garlic = Self.food("Garlic", portions: [Self.portion("clove", 3), Self.portion("cloves", 9, amount: 3)])
+        #expect(Self.grams(garlic, 2, "each") == 6, "\"clove\" and \"3 cloves\" agree: one size")
+        let lemon = Self.food("Lemon", portions: [
+            Self.portion("fruit (2-3/8\" dia)", 84), Self.portion("fruit (2-1/8\" dia)", 58), Self.portion("NLEA serving", 58)
+        ])
+        #expect(Self.grams(lemon, 1, "each") == 58, "two fruit sizes; USDA's label serving names the 58 g one")
+        let orange = Self.food("Orange", portions: [
+            Self.portion("small (2-3/8\" dia)", 96), Self.portion("large (3-1/16\" dia)", 184), Self.portion("fruit (2-5/8\" dia)", 131)
+        ])
+        #expect(Self.grams(orange, 1, "each") == 131, "sizes without a medium; the one unsized fruit")
+        let tortillas = Self.food("Tortillas", portions: [
+            Self.portion("tortilla (approx 12\" dia)", 117), Self.portion("tortilla (approx 7-8\" dia)", 49),
+            Self.portion("tortilla, medium (approx 6\" dia)", 32)
+        ])
+        #expect(Self.grams(tortillas, 1, "each") == nil, "three tortilla sizes, one medium: ambiguous")
+        let sizesOnly = Self.food("Leather", portions: [Self.portion("large", 20), Self.portion("small", 10)])
+        #expect(Self.grams(sizesOnly, 1, "each") == nil, "two sizes and no medium")
+        let turkey = Self.food("Turkey, Ground, cooked", portions: [
+            Self.portion("oz", 85, amount: 3), Self.portion("patty (4 oz, raw) (yield after cooking)", 82),
+            Self.portion("unit, yield from 1 lb raw", 330)
+        ])
+        #expect(Self.grams(turkey, 1, "each") == nil, "a qualified \"unit\" (a pound's yield) is not one of anything")
+        #expect(turkey.preferredRecipeUnit == .gram)
+    }
+
+    /// A portion stated exactly as "each" still answers first and strictly, and "slice"/"piece" read
+    /// a single qualified portion only when none is stated exactly.
+    @Test func exactCountPortionsStillAnswerFirst() {
+        let orange = Self.food("Orange", portions: [Self.portion("each", 140), Self.portion("medium", 131), Self.portion("large", 184)])
+        #expect(Self.grams(orange, 1, "each") == 140)
+        let twoEach = Self.food("Two", portions: [Self.portion("each", 140), Self.portion("each", 150), Self.portion("medium", 131)])
+        #expect(Self.grams(twoEach, 1, "each") == nil, "two stated \"each\" portions stay ambiguous")
+        let onion = Self.food("Onion", portions: [Self.portion("slice, thin", 9), Self.portion("medium", 110), Self.portion("large", 150)])
+        #expect(Self.grams(onion, 1, "slice") == 9, "one qualified slice is the slice")
+        let slices = Self.food("Onion", portions: [Self.portion("slice, thin", 9), Self.portion("slice, large (1/4\" thick)", 38)])
+        #expect(Self.grams(slices, 1, "slice") == nil)
+    }
+
+    /// The tolerant reader only ADDS conversions: a qualified cup answers "1 cup" when it is the only
+    /// cup, an exactly stated cup still wins over it, and the exactly stated volume portions' old
+    /// answer survives a qualified portion that disagrees with them.
+    @Test func qualifiedVolumePortionsOnlyAddConversions() {
+        let jalapeno = Self.food("Jalapeno", portions: [Self.portion("pepper", 14), Self.portion("cup, sliced", 90)])
+        #expect(Self.grams(jalapeno, 1, "cup") == 90)
+        let seeds = Self.food("Seeds", portions: [Self.portion("cup", 140), Self.portion("cup, with hulls", 46)])
+        #expect(Self.grams(seeds, 1, "cup") == 140, "the stated cup, not the hulled one")
+        let cream = Self.food("Cream cheese", portions: [
+            Self.portion("tbsp", 14.5), Self.portion("cup", 232), Self.portion("cup, whipped", 145)
+        ])
+        #expect(Self.near(Self.grams(cream, 1, "tsp"), 4.84, within: 0.05), "the stated tbsp and cup still agree")
+    }
+
+    /// The tap default is "each" when the portions say what one is — ahead of a cup — and a qualified
+    /// cup does not move a tap default.
+    @Test func eachLeadsTheTapDefault() {
+        let egg = Self.food("Egg", portions: [
+            Self.portion("cup (4.86 large eggs)", 243), Self.portion("medium", 44), Self.portion("large", 50)
+        ])
+        #expect(egg.preferredRecipeUnit == .each, "never \"1 cup\" of eggs for a bare \"2 eggs\"")
+        #expect(Self.grams(egg, 2, "each") == 88)
+        let spinach = Self.food("Spinach", portions: [Self.portion("cup, chopped", 30), Self.portion("bunch", 340)])
+        #expect(spinach.preferredRecipeUnit == .gram, "a qualified cup does not become the tap default")
+    }
+
+    /// "1 each" on shipped USDA rows (FDC id, the portion it reads, grams). Each value is the row's
+    /// own portion weight; these rows refused "each" before this round.
+    @Test func shippedCountNounsTakeOneEach() throws {
+        let pins: [(fdc: Int, name: String, grams: Double)] = [
+            (173_944, "Bananas, raw — medium (7\" to 7-7/8\" long)", 118),
+            (170_000, "Onions, raw — medium (2-1/2\" dia)", 110),
+            (790_577, "Onions, red, raw — Onion", 197),
+            (170_005, "Onions, spring or scallions — medium (4-1/8\" long)", 15),
+            (748_967, "Eggs, Grade A, Large, egg whole — egg", 50.3),
+            (171_287, "Egg, whole, raw, fresh — medium", 44),
+            (169_230, "Garlic, raw — clove (and \"3 cloves\" 9 g)", 3),
+            (167_746, "Lemons, raw, without peel — fruit (2-1/8\" dia) = NLEA serving", 58),
+            (168_155, "Limes, raw — fruit (2\" dia)", 67),
+            (169_097, "Oranges, raw, all commercial varieties — fruit (2-5/8\" dia)", 131),
+            (170_393, "Carrots, raw — medium", 61),
+            (168_409, "Cucumber, with peel, raw — cucumber (8-1/4\")", 301),
+            (168_576, "Peppers, jalapeno, raw — pepper", 14),
+            (170_108, "Peppers, sweet, red, raw — medium", 119),
+            (169_988, "Celery, raw — stalk, medium", 40),
+            (170_026, "Potatoes, flesh and skin, raw — Potato medium", 213),
+            (169_291, "Squash, summer, zucchini, includes skin, raw — medium", 196),
+            (170_457, "Tomatoes, red, ripe, raw, year round average — medium whole", 123),
+            (171_688, "Apples, raw, with skin — medium (3\" dia)", 182),
+            (171_706, "Avocados, raw, California — fruit, without skin and seed", 136),
+            (167_762, "Strawberries, raw — medium (1-1/4\" dia)", 12),
+            (173_410, "Butter, salted — stick", 113),
+            (173_241, "Tortillas, corn, without added salt — tortilla, medium", 26)
+        ]
+        for pin in pins {
+            let row = try Self.shipped(pin.fdc)
+            #expect(Self.grams(row, 1, "each") == pin.grams, "FDC \(pin.fdc) \(pin.name)")
+            #expect(row.preferredRecipeUnit == .each, "FDC \(pin.fdc) taps to one")
+        }
+        #expect(Self.grams(try Self.shipped(173_242), 1, "each") == nil, "four flour-tortilla sizes: ambiguous")
+        #expect(Self.grams(try Self.shipped(2_710_824), 1, "each") == nil, "Avocado, Hass: USDA states RACC only")
+        #expect(Self.grams(try Self.shipped(173_944), 1, "cup") == nil, "a banana's two cups still disagree")
     }
 }

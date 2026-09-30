@@ -1805,17 +1805,39 @@ public nonisolated enum FoodSelectionCandidateBuilder {
 ///
 /// Stores no nutrition of its own — macros/micros always derive from one validated
 /// ``RecipeServingConversion`` against the bound ``FoodItem``.
+///
+/// `householdMeasure` (2026-09-30, the ingredient-search round's F4a) is DISPLAY metadata only: a
+/// line chosen as a household amount ("1 each" of a banana) is saved as the grams it converts to
+/// (`118 g` — the only encoding every build resolves) with "medium" beside it, so the recipe still
+/// reads "1 medium". An additive optional key, decoded with `decodeIfPresent` and omitted when nil, so
+/// every line without it encodes byte-identically to earlier builds; an older build ignores the key
+/// and totals the grams. Nutrition never reads it.
 public nonisolated struct RecipeIngredient: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var foodItemId: UUID
     public var quantity: Double
     public var unit: String
+    /// The household amount this grams line was chosen as, or nil (``RecipeHouseholdMeasure``).
+    public var householdMeasure: RecipeHouseholdMeasure?
 
-    public init(id: UUID = UUID(), foodItemId: UUID, quantity: Double, unit: String) {
+    public init(
+        id: UUID = UUID(), foodItemId: UUID, quantity: Double, unit: String,
+        householdMeasure: RecipeHouseholdMeasure? = nil
+    ) {
         self.id = id
         self.foodItemId = foodItemId
         self.quantity = quantity
         self.unit = unit
+        self.householdMeasure = householdMeasure
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        foodItemId = try container.decode(UUID.self, forKey: .foodItemId)
+        quantity = try container.decode(Double.self, forKey: .quantity)
+        unit = try container.decode(String.self, forKey: .unit)
+        householdMeasure = try container.decodeIfPresent(RecipeHouseholdMeasure.self, forKey: .householdMeasure)
     }
 }
 
@@ -2123,7 +2145,7 @@ extension RecipeServingConversion {
 
     private static func sourcePortion(for unit: RecipeUnit, foodItem: FoodItem) -> FoodPortion? {
         guard let dimension = unit.dimension else { return nil }
-        if unit.isCount { return foodItem.uniquePortion(matching: unit) }
+        if unit.isCount { return foodItem.countPortion(for: unit) }
         if unit.isVolume { return foodItem.volumePortion(for: unit) }
         return foodItem.uniquePortion(in: dimension)
     }
@@ -2733,19 +2755,21 @@ extension FoodItem {
     }
 
     /// The unit the food's data suggests for a tap, before the F1(c) conversion check: grams for a
-    /// flour, a cup or count portion when the food states exactly one, a spoon or cup for an oil with
-    /// no portions, else the serving's own unit. "Oil" matches as a WORD ("oil" or "oils"), not a
-    /// substring — "Chicken, boiled" and "broiled" names are not oils.
+    /// flour; "each" when the food's portions say what one is (F4a — a banana taps to one medium
+    /// banana, garlic to one clove, an egg to one egg, ahead of any cup); a cup when the food states
+    /// exactly one portion spelled exactly "cup" (a qualified "cup, chopped" does not move a tap
+    /// default); a spoon or cup for an oil with no portions; else the serving's own unit. "Oil"
+    /// matches as a WORD ("oil" or "oils"), not a substring — "Chicken, boiled" is not an oil.
     private var preferredRecipeUnitCandidate: RecipeUnit {
         let nameText = FoodItemSearch.normalized(name)
         if nameText.contains("flour") {
             return .gram
         }
-        if portion(for: .cup) != nil {
-            return .cup
-        }
-        if portion(for: .each) != nil {
+        if countPortion(for: .each) != nil {
             return .each
+        }
+        if exactPortion(matching: .cup) != nil {
+            return .cup
         }
         let nameWords = nameText.split(separator: " ")
         if (nameWords.contains("oil") || nameWords.contains("oils")) && portions.isEmpty {
@@ -2781,17 +2805,38 @@ extension FoodItem {
         RecipeServingConversion.grams(quantity: quantity, unit: unit, foodItem: self)
     }
 
+    /// Exactly one portion the tolerant reader reads as `unit` (``FoodPortion/recipeUnit``), or nil.
     fileprivate func uniquePortion(matching unit: RecipeUnit) -> FoodPortion? {
         let matches = portions.filter { $0.recipeUnit == unit && $0.hasValidGramMeasure }
         return matches.count == 1 ? matches[0] : nil
     }
 
+    /// Exactly one portion stating `unit` exactly (``FoodPortion/exactRecipeUnit``), or nil.
+    fileprivate func exactPortion(matching unit: RecipeUnit) -> FoodPortion? {
+        let matches = portions.filter { $0.exactRecipeUnit == unit && $0.hasValidGramMeasure }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
+    /// The one portion in `dimension` stated exactly — the MASS provenance a conversion reports (a
+    /// mass amount itself is physical and never needs it), read exactly so it stays what it was.
     fileprivate func uniquePortion(in dimension: RecipeUnit.Dimension) -> FoodPortion? {
         let matches = portions.filter {
-            guard let unit = $0.recipeUnit else { return false }
+            guard let unit = $0.exactRecipeUnit else { return false }
             return unit.dimension == dimension && $0.hasValidGramMeasure
         }
         return matches.count == 1 ? matches[0] : nil
+    }
+
+    /// The portion a COUNT amount converts through (ingredient-search round, F4a). A portion stated
+    /// exactly in the unit answers first and strictly — exactly one, so two identical "slice"
+    /// portions stay ambiguous. With none, "each" is what the food's own named counts say one is
+    /// (``FoodPortionReader/eachPortion(in:)``: one medium banana, one clove of garlic, one egg), and
+    /// "slice" or "piece" takes the single portion the tolerant reader reads as it ("slice, thin").
+    fileprivate func countPortion(for unit: RecipeUnit) -> FoodPortion? {
+        guard unit.isCount else { return nil }
+        let stated = portions.filter { $0.exactRecipeUnit == unit && $0.hasValidGramMeasure }
+        guard stated.isEmpty else { return stated.count == 1 ? stated[0] : nil }
+        return unit == .each ? FoodPortionReader.eachPortion(in: portions) : uniquePortion(matching: unit)
     }
 
     /// The portion a VOLUME amount converts through (ingredient-search round, F1(b)): the one portion
@@ -2804,21 +2849,30 @@ extension FoodItem {
     /// honey refused "1 cup" as ambiguous although their portions describe one density. Portions that
     /// disagree — a banana's "cup, sliced" (150 g) against its "cup, mashed" (225 g) — still refuse:
     /// no single density is source-backed. Counts never take this path; a count stays strict
-    /// (``uniquePortion(matching:)``), so two identical "slice" portions remain ambiguous.
+    /// (``countPortion(for:)``), so two identical "slice" portions remain ambiguous.
+    ///
+    /// Read in layers so the tolerant reader (F4a) only ever ADDS conversions: a portion stated
+    /// exactly in the unit, then one read tolerantly as it ("cup, sliced"), then the exactly stated
+    /// volume portions' agreement (one of them is enough — the rule every earlier build had), and
+    /// only then the agreement of every volume portion the tolerant reader finds.
     fileprivate func volumePortion(for unit: RecipeUnit) -> FoodPortion? {
         guard unit.isVolume else { return nil }
-        if let stated = uniquePortion(matching: unit) { return stated }
+        if let stated = exactPortion(matching: unit) ?? uniquePortion(matching: unit) { return stated }
+        let exactVolumes = portions.filter { $0.exactRecipeUnit?.isVolume == true && $0.hasValidGramMeasure }
+        if let agreed = FoodPortion.densityAgreement(among: exactVolumes) { return agreed }
         let volumes = portions.filter { $0.recipeUnit?.isVolume == true && $0.hasValidGramMeasure }
         return FoodPortion.densityAgreement(among: volumes)
-    }
-
-    private func portion(for unit: RecipeUnit) -> FoodPortion? {
-        uniquePortion(matching: unit)
     }
 }
 
 extension FoodPortion {
-    public var recipeUnit: RecipeUnit? {
+    /// The recipe unit this portion states EXACTLY: its whole unit string is one of the
+    /// ``RecipeUnit/normalized(_:)`` spellings, or — for an empty or "undetermined" unit — its
+    /// description reads "<amount> <count unit>" ("1 slice"). The reading every build before the
+    /// ingredient-search round's F4a used; the strict first answer beneath the tolerant
+    /// ``recipeUnit`` (FoodPortionReader.swift), so a portion stated exactly never loses to a
+    /// qualified one.
+    public var exactRecipeUnit: RecipeUnit? {
         let normalizedUnit = FoodItemSearch.normalized(unit)
         let normalizedDescription = FoodItemSearch.normalized(description ?? "")
         if let direct = RecipeUnit.normalized(normalizedUnit), direct != .serving {

@@ -217,6 +217,8 @@ packet never carries it.
 
 - ``FoodItem``
 - ``FoodPortion``
+- ``FoodPortionReader``
+- ``FoodPortionMeasure``
 - ``FoodDataType``
 - ``FoodItemSource``
 - ``FoodBarcode``
@@ -232,6 +234,15 @@ COUNT stays strict — exactly one portion of that count unit. The amount a tap 
 ``FoodItem/preferredRecipeUnit`` × ``FoodItem/defaultRecipeQuantity(for:)``, carries an invariant
 (F1(c)): it converts. The unit the data suggests is kept only when ``FoodItem/tapDefaultConverts(_:)``
 holds, else grams, else "1 serving" — so no tap lands on an amount the recipe editor then refuses.
+
+A portion is read TOLERANTLY (F4a, ``FoodPortionReader``): its leading measure word decides and the
+qualifiers go, so "cup, sliced" is a cup and "medium (7" to 7-7/8" long)" a size. "Each" is the
+food's one medium portion among several sizes, else its single named count ("clove", "egg", "fruit",
+a closed list of frozen English nouns), else the named count its own NLEA/RACC serving names (a
+lemon's 58 g fruit) — always a USDA weight, never an estimate. The reader only ADDS conversions: a
+portion stated exactly (``FoodPortion/exactRecipeUnit``) answers first, and every exactly stated
+answer an earlier build gave is kept. "Each" leads the tap default, so a banana taps to one medium
+banana (118 g) and a bare "2 eggs" logs two eggs, not two cups.
 
 ``FoodItemSource`` gained its fourth frozen token, `openFoodFacts`, on 2026-09-24: a barcode product
 the user looked up on Open Food Facts (behind the web-nutrition-lookup consent, one explicit tap per
@@ -298,6 +309,16 @@ newer one rebuilds the parts (``RecipeComponentImport``). The labelling separato
 are tokens and never localize. Part names are user content (``RecipeComponentNaming`` normalizes
 them).
 
+A line chosen as a household amount ("1 each" of a banana, half a cup of butter) is SAVED as the
+grams it converts to, with the choice in the line's additive optional ``RecipeHouseholdMeasure``
+("medium", 118 g per one) — 2026-09-30, F4a. Grams are the only encoding every build and every peer
+resolves; "1 each" of a banana converts only where the portion reader knows what one weighs, and an
+unconvertible line totals a recipe at zero. The measure is display metadata: nutrition never reads
+it, the recipe page shows "1 medium (118 g)" (``RecipeIngredient/amountText``), the editor re-opens
+the line as "1 each" (``RecipeIngredient/restoringHouseholdAmount(using:)``), and the
+`fernlet.recipe` wire carries the plain grams, so its bytes and keys are unchanged. No new
+``RecipeUnit`` token exists or may be added for it.
+
 - ``RecipeDefinition``
 - ``RecipeIngredient``
 - ``RecipeStep``
@@ -310,6 +331,7 @@ them).
 - ``RecipeComponentAssembly``
 - ``RecipeCookingStep``
 - ``RecipeUnit``
+- ``RecipeHouseholdMeasure``
 - ``RecipeWebImport``
 - ``RecipeSourceURLMatcher``
 - ``RecipeScaling``

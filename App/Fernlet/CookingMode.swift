@@ -416,10 +416,10 @@ struct CookingModeView: View {
         }
     }
 
+    /// "118 g · Bananas, raw", or "1 medium (118 g) · Bananas, raw" for a household choice (F4a).
     private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
-        let quantity = ingredient.quantity.formatted(.number.precision(.fractionLength(0...1)))
         let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
-        return "\(quantity) \(ingredient.unit) · \(name)"
+        return "\(ingredient.amountText) · \(name)"
     }
 
     // MARK: Cooking walker

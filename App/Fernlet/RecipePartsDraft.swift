@@ -157,7 +157,9 @@ enum RecipeEditorInputs {
     /// hand-typed row with its macros — its EXACT grams (``FoodItem/exactMacros``), so re-saving a
     /// 3.4 g food never rounds it to 3 — and a catalog food re-opens bound to its id.
     static func inputs(for ingredients: [RecipeIngredient], foodItems: [FoodItem]) -> [ManualRecipeIngredientInput] {
-        ingredients.compactMap { recipeIngredient -> ManualRecipeIngredientInput? in
+        // A household choice saved as grams ("118 g", medium) re-opens as the choice ("1 each") — F4a.
+        let editorLines = ingredients.map { $0.restoringHouseholdAmount(using: foodItems) }
+        return editorLines.compactMap { recipeIngredient -> ManualRecipeIngredientInput? in
             guard let foodItem = foodItems.first(where: { $0.id == recipeIngredient.foodItemId }) else { return nil }
             let selectedFoodItemId = foodItem.source == .manual ? nil : foodItem.id
             let grams = foodItem.exactMacros

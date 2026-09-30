@@ -2204,6 +2204,7 @@ struct RecipeIngredientEditor: View {
             searchHeaderRow
             suggestionList
             quantityUnitRow
+            householdCaption
             macroSection
             saveCustomIngredientButton
             removeIngredientButton
@@ -2259,6 +2260,27 @@ struct RecipeIngredientEditor: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
             .accessibilityLabel("Remove \(ingredient.trimmedName.isEmpty ? "ingredient" : ingredient.name)")
+    }
+
+    /// What a household amount counts as, when the line will be saved as grams (ingredient-search
+    /// round, F4a): "1 each" of a banana reads "Counted as 1 medium (118 g)", so the size the USDA
+    /// portion supplies is never silent.
+    @ViewBuilder private var householdCaption: some View {
+        if let counted = householdAmount {
+            Text("Counted as \(counted)")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("recipeIngredient.householdAmount")
+        }
+    }
+
+    /// The saved form's amount text ("1 medium (118 g)") when this line is a household choice.
+    private var householdAmount: String? {
+        guard let selectedFoodItem else { return nil }
+        let line = RecipeIngredient(foodItemId: selectedFoodItem.id, quantity: ingredient.quantity, unit: ingredient.unit)
+        let saved = line.savingHouseholdAsGrams(using: selectedFoodItem)
+        return saved.householdMeasure == nil ? nil : saved.amountText
     }
 
     @ViewBuilder private var suggestionList: some View {
@@ -6134,10 +6156,10 @@ struct RecipeDetailView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
 
+    /// "118 g · Bananas, raw", or "1 medium (118 g) · Bananas, raw" for a household choice (F4a).
     private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
-        let quantity = ingredient.quantity.formatted(.number.precision(.fractionLength(0...1)))
         let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
-        return "\(quantity) \(ingredient.unit) · \(name)"
+        return "\(ingredient.amountText) · \(name)"
     }
 
     private func save(_ image: UIImage) {
