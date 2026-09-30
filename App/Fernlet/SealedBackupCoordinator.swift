@@ -56,6 +56,15 @@ protocol SealedBackupContext: AnyObject {
     /// every payload because an app-lock reset is waiting for the device owner (design §5.3, Q14).
     /// The user's explicit restores still run.
     var sealedBackupRestoreAwaitsOwner: Bool { get }
+    /// Whether a re-upload of `payloadType` must wait for the device owner: an app-lock reset is
+    /// waiting and that payload's pre-reset iCloud copy is still there to keep (its backup was on at the
+    /// reset and has not been deleted since). A payload with no such copy re-uploads as usual (review
+    /// N-1) — holding it would keep the user's new entries out of the backup with nothing to protect.
+    func sealedBackupKeepsPreResetCopy(of payloadType: SealedBackupPayloadType) -> Bool
+    /// Records that `payloadType`'s iCloud chunk set was just deleted (a disable reconcile that landed:
+    /// the user's switch, or "delete everything"), so the owner hold has no pre-reset copy of it left to
+    /// keep. Called only after a delete that succeeded; a failed one leaves the copy protected.
+    func recordSealedBackupCloudCopyDeleted(_ payloadType: SealedBackupPayloadType)
     /// Whether cycle tracking is visible. The backup paths must consult this: both reconcile and
     /// restore decrypt period narratives on ambient, launch-time paths that no view drives.
     var isPeriodTrackingVisible: Bool { get }
@@ -458,6 +467,9 @@ final class SealedBackupCoordinator {
             if !enabled || payloadType != .periodData || host.isPeriodTrackingVisible {
                 host.recordSealedBackupReuploadDeferred(false, payloadType: payloadType)
             }
+            // The chunk set is gone, so an app-lock reset's owner hold has no pre-reset copy of this
+            // payload left to keep, and the uploads it held may run again (review N-1).
+            if !enabled { host.recordSealedBackupCloudCopyDeleted(payloadType) }
             return true
         } catch let wiring as SealedBackupWiringError where enabled && wiring != .storeNotEmpty {
             // The paged payloads are all sealed under the Private tab's content key, which is only live
@@ -533,6 +545,8 @@ final class SealedBackupCoordinator {
         // post-reset store, so every re-upload that reaches here — the Private tab's settle, the launch
         // follow-through, the intimacy un-hide, and the Retry pass's follow-through alike — waits for
         // the hold to be released. The deferral flag stays set, so it runs once it is (design §5.3).
+        // Only while that copy is still there: a payload that was off at the reset, or whose backup has
+        // been deleted since, has nothing to keep and uploads as usual (review N-1).
         guard !reuploadHeldForOwner(payloadType, site: "deferredRetry") else { return }
         if await !setSealedBackupEnabled(
             true,
@@ -765,8 +779,9 @@ final class SealedBackupCoordinator {
         let deviceWasFresh = isFreshInstallForRestore()
         // An app-lock reset is waiting for the device owner (design §5.3, Q14): the AMBIENT pass
         // restores nothing. The user's own Retry still does. The re-upload follow-through below is
-        // held too, on every pass (`retryDeferredReuploadIfNeeded`): the local stores hold only what
-        // was written since the reset, and exporting them would replace the pre-reset cloud copy.
+        // held too, on every pass, for each payload whose pre-reset cloud copy is still there
+        // (`retryDeferredReuploadIfNeeded`): the local stores hold only what was written since the
+        // reset, and exporting them would replace that copy.
         let heldForOwner = !userInitiated && host.sealedBackupRestoreAwaitsOwner
         if heldForOwner { FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "launch"]) }
         // No sensitive-notes arm: that payload is retired and never restored (the sweep above deletes
@@ -866,10 +881,11 @@ final class SealedBackupCoordinator {
     /// - Note: deliberately NOT `@discardableResult` (Power-of-10 R7). A `false` means the conflict
     ///   banner the user just acted on is still there, and only the caller can say so.
     ///
-    /// After an app-lock reset (``SealedBackupContext/sealedBackupRestoreAwaitsOwner``) the key is
-    /// still adopted but nothing is re-sealed: the local stores hold only what was written since the
-    /// reset, and re-sealing them would replace the owner's pre-reset history in iCloud. Each enabled
-    /// payload records a deferral instead, discharged once the hold is released (review C-U2-R1).
+    /// After an app-lock reset (``SealedBackupContext/sealedBackupKeepsPreResetCopy(of:)``) the key is
+    /// still adopted, but no payload whose pre-reset copy the hold keeps is re-sealed: the local stores
+    /// hold only what was written since the reset, and re-sealing them would replace the owner's
+    /// pre-reset history in iCloud. Each such payload records a deferral instead, discharged once the
+    /// hold is released (review C-U2-R1); the others re-seal as usual (review N-1).
     ///
     /// The injected journal repository and intimacy store are for tests only, as for
     /// ``setSealedBackupEnabled(_:payloadType:journalRepository:intimacyStore:)``.
@@ -888,28 +904,30 @@ final class SealedBackupCoordinator {
         }
         FernletAuditLog.log("sealedBackup.escrowAdopted")
         host.recordSealedBackupEscrowConflict(false)
-        let prefs = currentPreferences()
-        if host.sealedBackupRestoreAwaitsOwner {
-            deferReuploadsHeldForOwner(prefs)
-            return true
-        }
-        await reuploadAfterEscrowAdopt(prefs, journalRepository: journalRepository, intimacyStore: intimacyStore)
+        let remaining = deferReuploadsHeldForOwner(currentPreferences())
+        await reuploadAfterEscrowAdopt(remaining, journalRepository: journalRepository, intimacyStore: intimacyStore)
         return true
     }
 
-    /// The escrow adopt's re-uploads while an app-lock reset waits for the device owner: none. Every
-    /// enabled payload records a deferral (surfaced by Privacy & Data, discharged once the hold is
-    /// released), so the cloud chunks sealed to the replaced key are re-sealed later rather than
-    /// overwritten now with the post-reset store.
-    private func deferReuploadsHeldForOwner(_ prefs: StoragePreferences) {
-        let enabled: [(SealedBackupPayloadType, Bool)] = [
-            (.periodData, prefs.sealedBackupPeriodEnabled),
-            (.journalNarratives, prefs.sealedBackupJournalEnabled),
-            (.intimacyLogs, prefs.sealedBackupIntimacyEnabled)
-        ]
-        for (payload, isOn) in enabled where isOn && reuploadHeldForOwner(payload, site: "escrowAdopt") {
-            host.recordSealedBackupReuploadDeferred(true, payloadType: payload)
+    /// The escrow adopt's re-uploads that an app-lock reset holds for the device owner: every enabled
+    /// payload whose pre-reset iCloud copy the hold keeps records a deferral (surfaced by Privacy &
+    /// Data, discharged once the hold is released) instead of being re-sealed now with the post-reset
+    /// store. Returns `prefs` with those payloads switched off: what the adopt may re-seal now.
+    private func deferReuploadsHeldForOwner(_ prefs: StoragePreferences) -> StoragePreferences {
+        var remaining = prefs
+        if prefs.sealedBackupPeriodEnabled, reuploadHeldForOwner(.periodData, site: "escrowAdopt") {
+            host.recordSealedBackupReuploadDeferred(true, payloadType: .periodData)
+            remaining.sealedBackupPeriodEnabled = false
         }
+        if prefs.sealedBackupJournalEnabled, reuploadHeldForOwner(.journalNarratives, site: "escrowAdopt") {
+            host.recordSealedBackupReuploadDeferred(true, payloadType: .journalNarratives)
+            remaining.sealedBackupJournalEnabled = false
+        }
+        if prefs.sealedBackupIntimacyEnabled, reuploadHeldForOwner(.intimacyLogs, site: "escrowAdopt") {
+            host.recordSealedBackupReuploadDeferred(true, payloadType: .intimacyLogs)
+            remaining.sealedBackupIntimacyEnabled = false
+        }
+        return remaining
     }
 
     /// Re-seals + re-uploads whatever the user has enabled so the cloud copy matches the key the escrow
@@ -1136,7 +1154,8 @@ final class SealedBackupCoordinator {
     /// The hold alone does not keep the cloud copy intact: a caller that re-uploads after the restore
     /// would replace the pre-reset history with the post-reset store. The un-hide settles stop on the
     /// retryable outcome; every other re-upload — the Private tab's settle, the launch follow-through
-    /// and the escrow adopt — is held by ``reuploadHeldForOwner(_:site:)`` (review C-U2-R1).
+    /// and the escrow adopt — is held by ``reuploadHeldForOwner(_:site:)`` (review C-U2-R1) for each
+    /// payload whose pre-reset copy is still there (review N-1).
     private func heldForOwner(site: String, initiatedByUser: Bool) -> Bool {
         guard !initiatedByUser, host.sealedBackupRestoreAwaitsOwner else { return false }
         FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": site])
@@ -1144,11 +1163,13 @@ final class SealedBackupCoordinator {
     }
 
     /// Whether a re-upload of `payloadType` must wait because an app-lock reset is waiting for the
-    /// device owner: exporting now would replace the cloud copy of the pre-reset history with whatever
-    /// was written since the reset. Held uniformly — ambient or not — until the hold is released; the
-    /// caller leaves (or records) the per-payload deferral so the re-upload runs afterwards.
+    /// device owner and that payload's pre-reset cloud copy is still there: exporting now would replace
+    /// it with whatever was written since the reset. Held uniformly — ambient or not — until the hold
+    /// is released; the caller leaves (or records) the per-payload deferral so the re-upload runs
+    /// afterwards. A payload that was off at the reset, or whose backup was deleted since, is not held
+    /// (review N-1): there is no pre-reset copy of it to keep.
     private func reuploadHeldForOwner(_ payloadType: SealedBackupPayloadType, site: String) -> Bool {
-        guard host.sealedBackupRestoreAwaitsOwner else { return false }
+        guard host.sealedBackupKeepsPreResetCopy(of: payloadType) else { return false }
         FernletAuditLog.log("sealedBackup.reuploadHeldForOwner", context: [
             "payload": payloadType.rawValue, "site": site
         ])

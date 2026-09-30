@@ -307,6 +307,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.sealedBackup.restoreAwaitsOwner": .kept(
             reason: "The sealed-backup restore owner hold (period-data design 2026-09-30, §5.3, Q14): one bit set by the app-lock reset funnel, holding every AMBIENT restore until the device owner asks. It must outlive the wipe, or a phone whose lock was reset and whose data was then wiped would start restoring the cloud history on its own."
         ),
+        "fernlet.sealedBackup.preResetCopies": .kept(
+            reason: "The owner hold's per-payload record (review N-1): the payload tokens whose backup was on at the app-lock reset, i.e. whose pre-reset iCloud copy the hold keeps from being replaced by a re-upload. The wipe's own delete leg removes each payload whose chunk set it actually deletes; one whose delete FAILED must stay recorded, or the post-wipe store could be uploaded over a copy the user never saw deleted."
+        ),
         "fernlet.intimacyLog.everStored": .kept(
             reason: "A sealed-store divergence latch: one bit meaning 'this install held intimacy rows'. It must outlive the wipe, or a sealed-backup chunk that survived a failed delete could restore itself onto the device."
         ),

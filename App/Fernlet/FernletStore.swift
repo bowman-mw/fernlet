@@ -3540,14 +3540,19 @@ final class FernletStore {
     /// `FernletLockService.onResetCompleted` after `reset()` destroyed every key and purged the rows:
     /// the backup bookkeeping that spoke for the destroyed key is cleared (`clearBookkeeping` — the
     /// three divergence latches), and ambient restores are held for the device owner (Q14), so the
-    /// cleared latches cannot turn the next hub settle into an automatic restore.
+    /// cleared latches cannot turn the next hub settle into an automatic restore. The re-uploads that
+    /// would replace a pre-reset copy are held too — for the payload backups that are on right now,
+    /// the only ones that can have a copy in iCloud (review N-1).
     ///
     /// Later design units add their own clears here (the period restore marker, the period
     /// compare-and-swap record, the import halves). Never called by a duress response.
     ///
-    /// - Parameter clearBookkeeping: Clears the three divergence latches.
-    func handleAppLockResetCompleted(clearBookkeeping: () -> Void) {
-        sealedBackupRestoreHold.hold()
+    /// - Parameters:
+    ///   - preferences: The storage preferences at the reset; nil (production) reads the live ones.
+    ///     Injectable for tests only.
+    ///   - clearBookkeeping: Clears the three divergence latches.
+    func handleAppLockResetCompleted(preferences: StoragePreferences? = nil, clearBookkeeping: () -> Void) {
+        sealedBackupRestoreHold.hold(keepingCopiesFrom: preferences ?? StoragePreferencesStore.currentPreferences())
         clearBookkeeping()
         FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "appLockReset"])
     }
@@ -7158,6 +7163,19 @@ extension FernletStore: SealedBackupContext {
     var sealedBackupContentKey: SymmetricKey? { hubContentKeyProvider?() }
     /// Whether ambient restores wait for the device owner (``SealedBackupRestoreHold``).
     var sealedBackupRestoreAwaitsOwner: Bool { sealedBackupRestoreHold.isHeld }
+    /// Whether the owner hold keeps `payloadType`'s pre-reset iCloud copy, so its re-uploads wait.
+    func sealedBackupKeepsPreResetCopy(of payloadType: SealedBackupPayloadType) -> Bool {
+        sealedBackupRestoreHold.keepsPreResetCopy(of: payloadType)
+    }
+    /// A disable reconcile deleted `payloadType`'s chunk set: nothing pre-reset is left to keep.
+    func recordSealedBackupCloudCopyDeleted(_ payloadType: SealedBackupPayloadType) {
+        sealedBackupRestoreHold.forgetPreResetCopy(of: payloadType)
+    }
+    /// The payloads whose pre-reset iCloud copy the owner hold keeps right now (Privacy & Data's
+    /// status line reads this snapshot on appear and after a switch changes).
+    var sealedBackupPayloadsKeptForOwner: Set<SealedBackupPayloadType> {
+        sealedBackupRestoreHold.payloadsKeepingPreResetCopy
+    }
     func recordRetiredSealedBackupDeleted(_ payloadType: SealedBackupPayloadType) {
         retiredSealedBackupClearedHook?(payloadType)
     }

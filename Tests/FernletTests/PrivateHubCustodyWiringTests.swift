@@ -10,6 +10,7 @@
 // Driven through the same static step `ContentView.wirePrivateHubCustody` runs, over a real lock
 // service on isolated keychain services.
 
+import CloudKitSync
 import CryptoKit
 import Foundation
 import Testing
@@ -90,5 +91,27 @@ struct PrivateHubCustodyWiringTests {
 
         #expect(store.sealedBackupRestoreAwaitsOwner, "after a reset, restores wait for the device owner")
         #expect(!cycle.hasEverStoredNarrative, "the latch spoke for the destroyed key; it is cleared")
+    }
+
+    /// Review N-1: the reset funnel keeps only the pre-reset copies that can exist — the payload
+    /// backups switched on at the reset — and a delete that lands afterwards ends the claim on that
+    /// payload, while the ambient-restore hold stays.
+    @MainActor
+    @Test func aResetKeepsOnlyTheBackupsThatWereOnAndALandedDeleteEndsTheClaim() {
+        let store = makeTestStore()
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: Self.isolatedDefaults())
+        var cleared = false
+
+        store.handleAppLockResetCompleted(
+            preferences: StoragePreferences(sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true),
+            clearBookkeeping: { cleared = true }
+        )
+
+        #expect(cleared)
+        #expect(store.sealedBackupPayloadsKeptForOwner == [.journalNarratives, .intimacyLogs])
+        #expect(!store.sealedBackupKeepsPreResetCopy(of: .periodData), "period was off: no copy to keep")
+        store.recordSealedBackupCloudCopyDeleted(.journalNarratives)
+        #expect(store.sealedBackupPayloadsKeptForOwner == [.intimacyLogs], "the deleted journal copy is no longer kept")
+        #expect(store.sealedBackupRestoreAwaitsOwner, "ambient restores still wait for the owner")
     }
 }

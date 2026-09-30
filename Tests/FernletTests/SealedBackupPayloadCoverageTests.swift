@@ -34,8 +34,26 @@ import PrivateStoreCore
 @MainActor
 final class FakeSealedBackupHost: SealedBackupContext {
     var sealedBackupContentKey: SymmetricKey?
-    /// The app-lock-reset hold (period-data design §5.3); off unless a test sets it.
-    var sealedBackupRestoreAwaitsOwner = false
+    /// The REAL owner hold (period-data design §5.3) on an isolated suite, so the per-payload
+    /// bookkeeping these tests drive through the coordinator is production's own. Off unless a test
+    /// sets it.
+    let restoreHold = SealedBackupRestoreHold(
+        defaults: UserDefaults(suiteName: "fernlet.tests.fakeHold.\(UUID().uuidString)") ?? .standard
+    )
+    /// The app-lock-reset hold. Setting it true is a reset with every payload backup on (so every
+    /// pre-reset copy is kept); false drops the bit, which only a test may do.
+    var sealedBackupRestoreAwaitsOwner: Bool {
+        get { restoreHold.isHeld }
+        set {
+            guard newValue else {
+                restoreHold.defaults.removeObject(forKey: SealedBackupRestoreHold.defaultsKey)
+                return
+            }
+            restoreHold.hold(keepingCopiesFrom: StoragePreferences(
+                sealedBackupPeriodEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true
+            ))
+        }
+    }
     var isPeriodTrackingVisible = true
     var isIntimacyTrackingVisible = true
     var previousJournals: [JournalEntry] = []
@@ -54,6 +72,12 @@ final class FakeSealedBackupHost: SealedBackupContext {
     private(set) var retiredBackupsDeleted: [SealedBackupPayloadType] = []
 
     func loadAllDaysFromRepository() -> [String: FernletDay] { days }
+    func sealedBackupKeepsPreResetCopy(of payloadType: SealedBackupPayloadType) -> Bool {
+        restoreHold.keepsPreResetCopy(of: payloadType)
+    }
+    func recordSealedBackupCloudCopyDeleted(_ payloadType: SealedBackupPayloadType) {
+        restoreHold.forgetPreResetCopy(of: payloadType)
+    }
     func recordSealedBackupReuploadDeferred(_ deferred: Bool, payloadType: SealedBackupPayloadType) {
         reuploadDeferrals[payloadType] = deferred
     }
@@ -450,6 +474,147 @@ struct SealedBackupPayloadCoverageTests {
         #expect(host.reuploadDeferrals[.journalNarratives] == true)
         #expect(host.reuploadDeferrals[.intimacyLogs] == true)
         #expect(host.reuploadDeferrals[.periodData] == nil, "a payload that is off owes nothing")
+    }
+
+    /// Review N-1, the finding's own scenario: after an app-lock reset the user turns the journal
+    /// backup OFF (which deletes the pre-reset copy from iCloud) and back on. From then on there is
+    /// nothing pre-reset to keep, so the hold must not keep their new entries out of the backup
+    /// forever. The control half first proves the hold was holding it.
+    @Test func aBackupDeletedSinceTheResetUploadsAgainBecauseNothingIsLeftToKeep() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        let preferences = StoragePreferences(
+            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupJournalReuploadDeferred: true
+        )
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        let journalHistory = makeJournalRepository()
+        try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
+        let preReset = cloud.sealedRecordIdentities
+
+        // The reset, with the journal backup on: its pre-reset copy is kept.
+        let resetKey = SymmetricKey(size: .bits256)
+        host.sealedBackupContentKey = resetKey
+        host.restoreHold.hold(keepingCopiesFrom: preferences)
+        let journalSince = makeJournalRepository()
+        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: resetKey)
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        #expect(cloud.sealedRecordIdentities == preReset, "control: while the copy is there, the upload is held")
+
+        // Off (the copy is deleted), then on again from Settings with Private closed.
+        #expect(await coordinator.setSealedBackupEnabled(false, payloadType: .journalNarratives))
+        #expect(cloud.sealedRecords.isEmpty, "turning it off deleted the pre-reset copy")
+        #expect(!host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "nothing pre-reset is left to keep")
+        host.sealedBackupContentKey = nil
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalSince))
+        #expect(host.reuploadDeferrals[.journalNarratives] == true, "Private is closed: the upload is owed")
+
+        // The next Private settle uploads it.
+        host.sealedBackupContentKey = resetKey
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        #expect(!cloud.sealedRecords.isEmpty, "the user's new entries reach the backup")
+        #expect(host.reuploadDeferrals[.journalNarratives] == false, "and the owed upload is discharged")
+        #expect(host.sealedBackupRestoreAwaitsOwner, "the ambient-restore half of the hold is untouched")
+    }
+
+    /// Review N-1: a backup that was OFF at the reset had no pre-reset copy, so turning it on later
+    /// uploads as usual — and the escrow adopt re-seals it — while a payload whose copy is kept stays
+    /// held beside it.
+    @Test func aBackupThatWasOffAtTheResetIsNeverHeld() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        host.restoreHold.hold(keepingCopiesFrom: StoragePreferences(sealedBackupJournalEnabled: true))
+        let preferences = StoragePreferences(
+            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true,
+            sealedBackupJournalReuploadDeferred: true, sealedBackupIntimacyReuploadDeferred: true
+        )
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        let journalSince = makeJournalRepository()
+        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        let intimacySince = makeIntimacyStore()
+        try seed(intimacyLog("after the reset", at: 30), into: intimacySince, key: host.sealedBackupContentKey)
+
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .intimacyLogs, intimacyStore: intimacySince)
+        #expect(names(in: cloud, for: .journalNarratives).isEmpty, "the kept journal copy is not replaced")
+        #expect(!names(in: cloud, for: .intimacyLogs).isEmpty, "intimacy was off at the reset: it uploads")
+
+        let otherDevice = try seedSyncedEscrowKey(into: cloud.keychainService)
+        defer { KeychainItem.deleteAll(service: otherDevice) }
+        let intimacyBefore = cloud.sealedRecordIdentities
+        #expect(await coordinator.adoptSyncedEscrowAndReupload(journalRepository: journalSince, intimacyStore: intimacySince))
+        #expect(names(in: cloud, for: .journalNarratives).isEmpty, "the adopt re-seals nothing over the kept copy")
+        #expect(host.reuploadDeferrals[.journalNarratives] == true)
+        #expect(cloud.sealedRecordIdentities != intimacyBefore, "the adopt re-seals the unheld payload under the adopted key")
+        #expect(host.reuploadDeferrals[.intimacyLogs] == false)
+    }
+
+    /// Review N-1: only a delete that LANDED ends the hold's claim. A failed one may have left the
+    /// pre-reset copy in iCloud, so it stays kept and its uploads stay held.
+    @Test func aFailedDeleteKeepsThePreResetCopyHeld() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        let preferences = StoragePreferences(
+            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupJournalReuploadDeferred: true
+        )
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        let journalHistory = makeJournalRepository()
+        try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
+        let preReset = cloud.sealedRecordIdentities
+        host.restoreHold.hold(keepingCopiesFrom: preferences)
+
+        cloud.database.failsDeletes = true
+        #expect(await !coordinator.setSealedBackupEnabled(false, payloadType: .journalNarratives), "the delete failed")
+        #expect(host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "the copy may still be there: still kept")
+        let journalSince = makeJournalRepository()
+        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        #expect(cloud.sealedRecordIdentities == preReset, "and nothing is uploaded over it")
+    }
+
+    /// The persisted bookkeeping itself (review N-1): a reset keeps exactly the payloads whose switch
+    /// was on; a landed delete forgets one; a hold without its record keeps every payload (fail
+    /// closed); nothing is written while no hold is set; the retired payload is never kept.
+    @Test func theOwnerHoldKeepsOnlyTheCopiesThatCanStillBeThere() {
+        let defaults = isolatedDefaults("ownerHold")
+        let hold = SealedBackupRestoreHold(defaults: defaults)
+        hold.forgetPreResetCopy(of: .journalNarratives)
+        #expect(defaults.object(forKey: SealedBackupRestoreHold.preResetCopiesKey) == nil, "no hold, nothing written")
+        #expect(hold.payloadsKeepingPreResetCopy.isEmpty)
+
+        hold.hold(keepingCopiesFrom: StoragePreferences(sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true))
+        #expect(hold.isHeld)
+        #expect(hold.payloadsKeepingPreResetCopy == [.journalNarratives, .intimacyLogs], "period was off at the reset")
+        hold.forgetPreResetCopy(of: .journalNarratives)
+        #expect(hold.payloadsKeepingPreResetCopy == [.intimacyLogs])
+        #expect(hold.isHeld, "forgetting a copy never lifts the ambient-restore hold")
+
+        defaults.removeObject(forKey: SealedBackupRestoreHold.preResetCopiesKey)
+        #expect(hold.payloadsKeepingPreResetCopy == Set(SealedBackupRestoreHold.reuploadablePayloads), "no record: fail closed")
+        hold.forgetPreResetCopy(of: .periodData)
+        #expect(hold.payloadsKeepingPreResetCopy == [.journalNarratives, .intimacyLogs])
+        #expect(!hold.keepsPreResetCopy(of: .sensitiveNotes), "the retired payload is never re-uploaded")
+    }
+
+    /// Review N-1: Privacy & Data's "your app lock was reset" line speaks only for a backup that is on
+    /// AND whose pre-reset copy the hold keeps; any other backup's own line shows instead.
+    @Test func theOwnerHoldLineSpeaksOnlyForAKeptCopy() {
+        let journalOn = StoragePreferences(sealedBackupJournalEnabled: true)
+        #expect(PrivacyDataSettingsView.showsOwnerHoldLine(kept: [.journalNarratives], preferences: journalOn))
+        #expect(!PrivacyDataSettingsView.showsOwnerHoldLine(kept: [], preferences: journalOn),
+                "a journal backup deleted since the reset has nothing kept")
+        #expect(!PrivacyDataSettingsView.showsOwnerHoldLine(
+            kept: [.journalNarratives], preferences: StoragePreferences(sealedBackupIntimacyEnabled: true)),
+                "the only backup on was off at the reset")
+    }
+
+    /// The sealed-backup record names in `cloud` for one payload (its frozen raw value is in the name).
+    private func names(in cloud: FakeSealedBackupCloud, for payload: SealedBackupPayloadType) -> [String] {
+        cloud.sealedRecords.map(\.recordID.recordName).filter { $0.contains(payload.rawValue) }
     }
 
     /// Plants another device's escrow key as an iCloud-Keychain (synchronizable) row in `service`, the
@@ -968,6 +1133,8 @@ final class FakeSealedBackupCloud {
 /// writer's scratch file goes away.
 final class InMemoryCloudKitRecordDatabase: CloudKitRecordDatabase {
     var recordsByType: [String: [CKRecord]] = [:]
+    /// When true every delete throws, as CloudKit does offline — a test's "the delete failed" case.
+    var failsDeletes = false
 
     private var allRecords: [CKRecord] { recordsByType.values.flatMap { $0 } }
 
@@ -1005,6 +1172,7 @@ final class InMemoryCloudKitRecordDatabase: CloudKitRecordDatabase {
     }
 
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws {
+        if failsDeletes { throw CKError(.networkUnavailable) }
         let deleted = Set(recordIDs.map(\.recordName))
         for recordType in recordsByType.keys {
             recordsByType[recordType] = recordsByType[recordType, default: []]
