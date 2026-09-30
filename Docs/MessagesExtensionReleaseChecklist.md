@@ -42,13 +42,20 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
   build that carries the extension), or an iPad or Mac (the extension is iPhone-only) — gets Messages'
   install sheet, which is empty while Fernlet has no public App Store page, and the card's `data:` URL
   gets no browser fallback. What to record: which device and Fernlet build tapped the card, and
-  whether the sheet is empty. Every card now carries "Opens in Fernlet on iPhone" as its trailing
-  subcaption so that recipient can read why; confirm the line is visible on the receiving device and
-  not truncated. If a phone WITH build 24 or later shows a blank panel instead, the diagnosis is wrong:
-  capture `log stream` (or Console) filtered on `process == "FernletMessagesExtension" OR process ==
-  "MobileSMS"` while tapping the card, pull that phone's crash logs (`devicectl device copy from
-  --domain-type systemCrashLogs`), and note how long the panel stays blank — Messages shows its own
-  blank panel with a spinner until the extension draws its first frame.*
+  whether the sheet is empty. One fact already cuts against the diagnosis: the owner's own iPhone
+  carried build 24 when the report came in, so if that phone was the recipient it cannot apply. Every
+  card now carries "Opens in Fernlet on iPhone" as its trailing subcaption so that recipient can read
+  why — a mitigation, not a fix: the sheet stays empty until a fallback `https` message URL or a
+  public App Store page exists (the owner's call). On a receiving device WITHOUT Fernlet (or with a
+  build older than 24), confirm the bubble is drawn at all, with its caption and that line, and not
+  truncated: it has been seen only on a recipient that has the extension, and the one simulator
+  attempt without it emptied the thread instead. If a phone WITH build 24 or later shows a blank
+  panel instead, the diagnosis is wrong: capture `log stream` (or Console) filtered on `process ==
+  "FernletMessagesExtension" OR process == "MobileSMS"` while tapping the card, pull that phone's
+  crash logs (`devicectl device copy from --domain-type systemCrashLogs`), note how long the panel
+  stays blank — Messages shows its own blank panel with a spinner until the extension draws its first
+  frame — and record whether Fernlet is listed in that phone's Messages app drawer (the + menu), since
+  an iMessage app the drawer does not list may not be what answers the tap.*
 - [ ] TestFlight note for testers: Fernlet cards open only on an iPhone with build 24 or later;
   anyone on an older build sees an empty sheet until they update.
 - [ ] Forward each card, then open it on a second recipient device. Confirm the packet UUID/hash

@@ -140,6 +140,12 @@ import Testing
     /// multipart packet, and the exchange core with its version-1 goldens) and `recipe-wire` (1: the
     /// multipart `fernlet.recipe` golden and its older-reader mirrors). Each is also pinned by name
     /// in ``wallLines``. Counted off the lines.
+    ///
+    /// RE-MEASURED at the Messages blank-screen round (2026-09-30): `messages-envelope` 3 → 4, for
+    /// `MessagesReceivedItemTests` — what an opened card resolves to (`FernletMessagesReceivedItem`),
+    /// the only behavioural pin that no input draws an empty screen; the extension's own wall checks
+    /// by source scan only that the controller routes through it. Pinned by name in ``wallLines``
+    /// too. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 8,
         "no-tracking": 1,
@@ -152,7 +158,7 @@ import Testing
         "memory-lifecycle": 1,
         "messages-extension": 1,
         "codeowners": 1,
-        "messages-envelope": 3,
+        "messages-envelope": 4,
         "recipe-wire": 1,
         "mesh-batteries": 154
     ]
@@ -180,7 +186,7 @@ import Testing
         "messages-extension": ["MessagesExtensionBoundaryTests"],
         "codeowners": ["CodeOwnersResolutionTests"],
         "messages-envelope": ["ExchangeMessageEnvelopeV2Tests", "ExchangeMultipartRecipeTests",
-                              "FernletExchangeTests"],
+                              "FernletExchangeTests", "MessagesReceivedItemTests"],
         "recipe-wire": ["RecipeMultipartWireTests"]
     ]
 

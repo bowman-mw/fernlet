@@ -50,7 +50,9 @@ that receiving a recipe "pops up and is blank"). Until then it paid for the comp
 to 100, in the expanded style a received card opens in), and `willBecomeActive(with:)` read the
 catalog again before looking at the selected message — all before the card's first frame, while
 Messages shows its own blank panel with a spinner. Now `viewDidLoad` shows an opening state (the brand
-mark on the panel's paper, every control hidden), `willBecomeActive(with:)` makes one decision —
+mark on the panel's paper, every control hidden) — only while nothing is decided yet, so a card an
+activation drew before the view loaded is never reset to that bare panel (Messages loaded the view
+first in every run observed, but documents no order) — `willBecomeActive(with:)` makes one decision —
 selected message → the card; none → re-read the catalog and draw the composer — and a presentation
 change or search keystroke redraws only while the composer is up (`PanelState`). The composer still
 reads the catalog fresh on every activation, and lazily if it is first drawn some other way.
@@ -72,10 +74,18 @@ on any device whose Fernlet has no such extension — a build older than 24 (the
 to carry it) — and on an iPad or a Mac, since the extension is iPhone-only. **That prompt is empty while Fernlet
 has no public App Store page**, and a `data:` URL gets no browser fallback (Apple loads only an HTTP(S)
 message URL when no app can open it) — the 2026-09-29 diagnosis of the owner's "pops up and is blank"
-report, not yet confirmed on the device that showed it. Since 2026-09-30 every card therefore carries
-one line meant for that recipient, the layout's `trailingSubcaption` "Opens in Fernlet on iPhone"
-(`FernletMessagesCopy.cardOpensInFernlet`): the template layout travels with the message and renders
-without the extension.
+report, **not confirmed**: nobody has yet said which device and build tapped the card, and the owner's
+own iPhone carried build 24 when the report came in, so if that phone was the recipient the diagnosis
+cannot apply and only the device logs `Docs/MessagesExtensionReleaseChecklist.md` lists can say what
+did. Nor does anything here change what that recipient taps into: only a fallback `https` message URL
+or a public App Store page would put something in the sheet, and both are the owner's call. Since
+2026-09-30 every card carries one line meant for that recipient, the layout's `trailingSubcaption`
+"Opens in Fernlet on iPhone" (`FernletMessagesCopy.cardOpensInFernlet`) — a mitigation, not a fix.
+Messages draws a template layout itself, and Apple describes a recipient without the app seeing that
+layout, so the line is *expected* to reach them; that is unverified. It has been seen only on a
+recipient that has the extension, and the one simulator attempt at a recipient without it (Fernlet
+uninstalled on the receiving side) emptied the thread instead of drawing any card, so it could not
+tell.
 
 ### What it keeps
 

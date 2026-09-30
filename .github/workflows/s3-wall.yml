@@ -314,10 +314,11 @@ jobs:
         # frameworks (never a private store, health or repository module), every copy-vault key it
         # renders must reach the string catalog, and — since 2026-09-23 — its manifest must declare
         # exactly the required-reason APIs its binary uses. This test bundle does not link the
-        # appex, so these source pins are most of what holds the target at all.
+        # appex, so these source pins are most of what holds the target at all. RAISED 2026-09-30,
+        # 5 → 6 (measured), for the pin that an opened card is drawn without the composer's catalog.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh messages-extension 5 MessagesExtensionBoundaryTests
+          Scripts/run-gated-suites.sh messages-extension 6 MessagesExtensionBoundaryTests
 
       - name: CODEOWNERS resolution (CodeOwnersResolutionTests)
         # GitHub never complains about a CODEOWNERS pattern that matches nothing — it silently stops
@@ -335,18 +336,25 @@ jobs:
       # integrated tree (a clean build-for-testing), each line run exactly as written below at floor 1
       # and read off its own result bundle: messages-envelope 46 tests in 3 suites, recipe-wire 19 in 1;
       # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. RAISE a floor when its wire
-      # grows; never lower it in passing.
-      - name: Messages envelope (ExchangeMessageEnvelopeV2Tests + ExchangeMultipartRecipeTests + FernletExchangeTests)
+      # grows; never lower it in passing. RAISED 2026-09-30: messages-envelope 46 → 53 in 4 suites, for
+      # MessagesReceivedItemTests, measured the same way.
+      - name: Messages envelope (ExchangeMessageEnvelopeV2Tests + ExchangeMultipartRecipeTests + FernletExchangeTests + MessagesReceivedItemTests)
         # The Messages wire: the inflate-bomb bound checked before a byte is inflated, the tight
         # 3,719-byte frame bound under Apple's 5,000-character URL limit, the two version-1 cards minted
         # by the 2026-09-23 build that must keep opening, the literal version-1 content-hash pre-images,
-        # and the versioned scheme-2 hash for a recipe made in parts.
+        # and the versioned scheme-2 hash for a recipe made in parts. Since 2026-09-30 also what a
+        # received card resolves to (`FernletMessagesReceivedItem.resolve`, the owner's "pops up and is
+        # blank" report): a card the sender minted — either wire version, a recipe or a workout plan —
+        # opens as itself, anything else is "can't be opened", and no input yields an empty screen. It
+        # is the only behavioural pin of that decision; the source scan in MessagesExtensionBoundaryTests
+        # checks only that the extension routes through it.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh messages-envelope 46 \
+          Scripts/run-gated-suites.sh messages-envelope 53 \
             ExchangeMessageEnvelopeV2Tests \
             ExchangeMultipartRecipeTests \
-            FernletExchangeTests
+            FernletExchangeTests \
+            MessagesReceivedItemTests
 
       - name: Recipe wire for recipes made in parts (RecipeMultipartWireTests)
         # The `fernlet.recipe` payload a recipe made in parts travels as on the paste text and the mesh's

@@ -86,7 +86,9 @@ struct MessagesExtensionBoundaryTests {
     /// at the selected message — all while Messages shows its own blank, spinning panel. A received
     /// card needs none of it, and the coordinated catalog read is the one step on that path that can
     /// wait on another process. `FernletTests` cannot link the appex, so this scan is what holds the
-    /// shape: `viewDidLoad` renders neither the composer nor the catalog; the selected-message branch
+    /// shape: `viewDidLoad` reads no catalog, and draws the opening state (or the composer) only in
+    /// the `PanelState` case that calls for it — never unconditionally, since Messages does not
+    /// document that the view loads before the activation draws its decision; the selected-message branch
     /// of `willBecomeActive` goes straight to `showReceivedItem`, which switches over
     /// `FernletMessagesReceivedItem.resolve` (pinned by `MessagesReceivedItemTests`); and no function
     /// on the received-card path reaches the catalog or the composer.
@@ -94,8 +96,15 @@ struct MessagesExtensionBoundaryTests {
         let source = try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesViewController.swift")
 
         let viewDidLoad = try Self.body(of: "viewDidLoad", in: source)
-        #expect(!viewDidLoad.contains("reloadCatalog") && !viewDidLoad.contains("renderComposer"),
-                "viewDidLoad reads the catalog or renders the composer again — before a received card's first frame")
+        #expect(!viewDidLoad.contains("reloadCatalog") && !viewDidLoad.contains("loadCatalogIfNeeded"),
+                "viewDidLoad reads the catalog again — before a received card's first frame")
+        let drawn = viewDidLoad.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        #expect(drawn.filter { $0.contains("renderComposer") } == ["case .composer: renderComposer()"],
+                "viewDidLoad renders the composer outside the case where an activation already decided it")
+        #expect(drawn.filter { $0.contains("showOpening") } == ["case .opening: showOpening()"], """
+            viewDidLoad draws the opening state whatever the panel is — if an activation ran before the \
+            view loaded, the card it drew would be reset to a brand-mark-only panel, the reported symptom
+            """)
 
         let activation = try Self.body(of: "willBecomeActive", in: source)
         let branch = try #require(activation.range(of: "guard let message = conversation.selectedMessage else {"),

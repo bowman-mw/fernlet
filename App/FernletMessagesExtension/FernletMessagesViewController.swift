@@ -24,10 +24,11 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     /// What the panel is showing, which decides what a presentation change or a search keystroke may
     /// redraw.
     ///
-    /// `opening` is the state from `viewDidLoad` until `willBecomeActive(with:)` has said whether this
-    /// activation is a card someone opened or the composer. Only `composer` redraws on a transition or a
-    /// keystroke, so a transition Messages delivers before activation cannot put the composer — and its
-    /// catalog read — in front of a received card.
+    /// `opening` is the state from creation until `willBecomeActive(with:)` has said whether this
+    /// activation is a card someone opened or the composer; `viewDidLoad` draws it only while it is
+    /// still the state, so a decision made before the view loaded is never reset. Only `composer`
+    /// redraws on a transition or a keystroke, so a transition Messages delivers before activation
+    /// cannot put the composer — and its catalog read — in front of a received card.
     private enum PanelState {
         case opening
         case composer
@@ -78,10 +79,22 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     /// the expanded style a received card opens in) before the first frame, for an activation that was
     /// usually about to show one received card instead; `willBecomeActive(with:)` then read the
     /// catalog a second time.
+    ///
+    /// The opening state is drawn only while nothing has been decided. Messages loaded the view
+    /// before `willBecomeActive(with:)` in every run observed, but no documentation promises that
+    /// order, and the activation's drawing never loads the view (it sets only labels and controls
+    /// this controller owns). So a card already drawn keeps its title, status and Review button
+    /// rather than being reset to a brand-mark-only panel, and a composer already decided is redrawn
+    /// over `configureView`'s defaults; its catalog was read by the activation that decided it, so
+    /// this still reads nothing.
     override func viewDidLoad() {
         super.viewDidLoad()
         configureView()
-        showOpening()
+        switch panelState {
+        case .opening: showOpening()
+        case .composer: renderComposer()
+        case .received: break
+        }
     }
 
     /// One decision per activation. A card someone opened is drawn from its own URL and nothing else;
