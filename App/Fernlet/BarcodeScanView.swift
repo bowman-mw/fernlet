@@ -688,6 +688,14 @@ struct BarcodeNotFoundView: View {
                 }
             }
         }
+        // Pushed inside a tab's stack (the recipe editor's barcode flow): a re-tap of the tab asks
+        // before it pops a named or scanned food that has not been remembered yet.
+        .tabReselectDraft(isDirty: hasUnrememberedInput)
+    }
+
+    /// Whether the screen holds a name or scanned macros that "Remember this food" has not saved.
+    private var hasUnrememberedInput: Bool {
+        rememberedItem == nil && (!trimmedName.isEmpty || scanResult != nil)
     }
 
     // MARK: Naming screen (11b)

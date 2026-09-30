@@ -364,8 +364,8 @@ struct ContentView: View {
 
     /// Preserves each page's scroll position and pushed pages across tabs. Re-selecting its current
     /// tab bumps that tab's re-select token, and the page acts on it (`tabReselect`): with a page
-    /// pushed inside the tab it pops to the tab's main page, and at the main page it scrolls to the
-    /// top — one or the other, never both. Doing either while changing selection made SwiftUI
+    /// pushed inside the tab it pops to the tab's main page (asking first when a pushed editor holds
+    /// typed input), and at the main page it scrolls to the top — one or the other, never both. Doing either while changing selection made SwiftUI
     /// receive a scroll request and a navigation request in the same frame, so a switch only
     /// switches. Home pushes nothing on its own stack, so a re-tap there only scrolls; a push added
     /// to it must adopt `tabReselect` the way Food, Move, Friends, Journal and Cycle do.

@@ -109,10 +109,11 @@ struct FoodView: View {
             )
         case .recipeDetail(let id, let isSaved):
             #if canImport(UIKit)
-            // Resolved live, so an edit made from the detail shows at once; nothing renders for the
-            // one update between a delete and `pruneDeadRecipeRoutes` popping the page.
-            if let recipe = (isSaved ? store.savedRecipes : store.recipes).first(where: { $0.id == id }) {
-                recipeDetail(for: recipe, isSaved: isSaved)
+            // Resolved live, so an edit made from the detail shows at once. After a delete the page
+            // keeps its last definition until `pruneDeadRecipeRoutes` has popped it (see
+            // `LastKnownRecipePage`) instead of sliding away blank.
+            LastKnownRecipePage(live: (isSaved ? store.savedRecipes : store.recipes).first(where: { $0.id == id })) {
+                recipeDetail(for: $0, isSaved: isSaved)
             }
             #else
             EmptyView()
@@ -793,6 +794,9 @@ private struct RecipeImportSheet: View {
 
     var body: some View {
         importPresentations(importContent)
+            // Pushed inside the book's create branch: a re-tap of the Food tab asks before it pops
+            // pasted text away.
+            .tabReselectDraft(isDirty: !importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
     private var importContent: some View {
@@ -1251,6 +1255,43 @@ private struct SourceLinkRow: View {
     }
 }
 
+/// A pushed recipe page that keeps drawing the last definition it resolved once that recipe is gone.
+///
+/// ``FoodRoute/recipeDetail(id:isSaved:)`` carries only an id and resolves the definition live, so
+/// an edit shows at once. Deleting the recipe (from its own editor sheet, or by a sync) empties the
+/// live lookup for the update between the delete and `FoodView`'s prune popping the page, and for
+/// the pop's slide-out after it. The view-destination link the route replaced captured the recipe,
+/// so the page used to leave still showing it; this keeps that by remembering the last live
+/// definition. A route that never resolved draws the app's parchment, not the system background.
+private struct LastKnownRecipePage<Content: View>: View {
+    /// The definition the route resolves to now; `nil` once the recipe has been deleted.
+    let live: RecipeDefinition?
+    /// Builds the page for a definition.
+    let content: (RecipeDefinition) -> Content
+    /// The last non-nil ``live``, seeded at the page's first render and kept current by edits.
+    @State private var lastKnown: RecipeDefinition?
+
+    init(live: RecipeDefinition?, @ViewBuilder content: @escaping (RecipeDefinition) -> Content) {
+        self.live = live
+        self.content = content
+        _lastKnown = State(initialValue: live)
+    }
+
+    var body: some View {
+        ZStack {
+            if let recipe = live ?? lastKnown {
+                content(recipe)
+            } else {
+                Color.parchment.ignoresSafeArea()
+            }
+        }
+        .onChange(of: live) { _, newValue in
+            guard let newValue else { return }
+            lastKnown = newValue
+        }
+    }
+}
+
 /// The pages the Food tab's root pushes onto its own `NavigationStack`, as path values.
 ///
 /// A path — rather than the view-destination links these used to be — is what lets a re-tap of the
@@ -1350,7 +1391,13 @@ struct RecipeSheet: View {
     @State private var pendingDestructiveAction: DestructiveConfirmation?
     /// The at-open draft, so the sheet can tell "nothing typed yet" from "unsaved edits" and only
     /// warn about the second (see ``isDirty``).
-    private let originalDraft: RecipeDraftSnapshot
+    ///
+    /// `@State`, like the draft fields it is compared with, so both halves come from the SAME first
+    /// init. As a plain `let` it was rebuilt on every re-init of this struct (any redraw of the
+    /// presenting view) while the `@State` fields kept their first values — and a new recipe's blank
+    /// first row is minted with a fresh id each time, so an untouched editor read as dirty and asked
+    /// "Discard your changes?" for nothing.
+    @State private var originalDraft: RecipeDraftSnapshot
 
     init(
         store: FernletStore,
@@ -1380,26 +1427,26 @@ struct RecipeSheet: View {
             // the list, servings and steps below the fold, so the user had to tap Done before they
             // could see what they came to change. Blank rows still auto-expand (see `ingredientsSection`).
             _expandedId = State(initialValue: nil)
-            originalDraft = RecipeDraftSnapshot(
+            _originalDraft = State(initialValue: RecipeDraftSnapshot(
                 name: recipe.name,
                 servings: recipe.servings,
                 notes: recipe.notes,
                 ingredients: loadedIngredients,
                 steps: loadedSteps,
                 parts: loadedParts
-            )
+            ))
         } else {
             let first = ManualRecipeIngredientInput()
             _ingredients = State(initialValue: [first])
             _expandedId = State(initialValue: first.id)
-            originalDraft = RecipeDraftSnapshot(
+            _originalDraft = State(initialValue: RecipeDraftSnapshot(
                 name: "",
                 servings: 1,
                 notes: "",
                 ingredients: [first],
                 steps: [],
                 parts: []
-            )
+            ))
         }
     }
 
@@ -1419,7 +1466,10 @@ struct RecipeSheet: View {
     @ViewBuilder
     var body: some View {
         if isEmbeddedInNavigationStack {
+            // Pushed: no draft guard of its own, so a re-tap of the tab that would pop it asks
+            // first (the tab button sits right under the save bar).
             recipeContent
+                .tabReselectDraft(isDirty: isDirty)
         } else {
             NavigationStack {
                 recipeContent

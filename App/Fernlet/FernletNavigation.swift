@@ -10,6 +10,7 @@
 
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 import PrivateHealthStore
 
 /// How Fernlet picks light or dark: follow the phone, or force one.
@@ -131,7 +132,8 @@ nonisolated enum FernletTab: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
-/// What re-tapping the already-selected tab does to that tab's page: the standard iOS pair.
+/// What re-tapping the already-selected tab does to that tab's page: the standard iOS pair, with
+/// the app's draft guard in front of the pop.
 ///
 /// With a page pushed inside the tab (Food → Recipe book → a recipe), the tap unwinds the tab's
 /// whole stack to its main page in one pop. At the main page it scrolls back to the top, which is
@@ -139,31 +141,103 @@ nonisolated enum FernletTab: String, CaseIterable, Hashable, Identifiable {
 /// `ContentView.selectTab(_:)` records that a scroll request and a navigation request landing in
 /// the same frame misbehaved, so each tap resolves to exactly one of the two.
 ///
+/// A pop would also throw away whatever a pushed editor holds (the manual recipe editor, a pasted
+/// import, a half-named barcode food, an activity being set up), and the tab button sits right under
+/// those pages' pinned save bars. So when a pushed page reports unsaved typed input
+/// (``TabDraftRegistry``) the tap asks first with the shared discard alert, and only its Discard
+/// pops — the same contract `fernletDraftGuard` gives the sheet presentations of those editors.
+///
 /// `nonisolated` like ``FernletTab``: a pure value, so the decision is unit-testable off the main
 /// actor under the Release configuration's `MainActor` default isolation.
 nonisolated enum TabReselectAction: Equatable {
-    /// Something is pushed: clear the tab's navigation path in one write.
+    /// Something is pushed and nothing unsaved is on it: clear the tab's navigation path in one write.
     case popToRoot
+    /// Something is pushed and a pushed page holds unsaved input: raise the discard alert, and pop
+    /// only from its Discard.
+    case confirmDiscardThenPop
     /// The main page is showing: scroll it to the top and re-expand the tab bar.
     case scrollToTop
 
-    /// The action for a re-tap given whether the tab's stack is at its main page.
-    static func forReselect(isAtRoot: Bool) -> TabReselectAction {
-        isAtRoot ? .scrollToTop : .popToRoot
+    /// The action for a re-tap given whether the tab's stack is at its main page and whether any
+    /// page pushed on it holds unsaved input. At the main page the draft state is irrelevant: a
+    /// scroll loses nothing.
+    static func forReselect(isAtRoot: Bool, hasUnsavedDraft: Bool) -> TabReselectAction {
+        guard !isAtRoot else { return .scrollToTop }
+        return hasUnsavedDraft ? .confirmDiscardThenPop : .popToRoot
     }
 }
 
-/// Routes `ContentView`'s per-tab re-select token to either a pop or a scroll-to-top, per
-/// ``TabReselectAction``.
+/// One pushed page's claim on its tab's ``TabDraftRegistry``: whether that page holds unsaved input
+/// right now.
+///
+/// Owned by the page's `@State` (through ``TabReselectDraftModifier``), so it lives exactly as long
+/// as the page is in the stack — including while a further page is pushed over it (the recipe
+/// editor under its barcode scanner still counts) — and is released with the page's state when the
+/// page leaves the stack. The registry only holds it weakly.
+final class TabDraftLease {
+    /// Whether the owning page holds unsaved input. Written by the page, read when a re-tap lands.
+    var isDirty = false
+}
+
+/// The unsaved-input state of every page pushed inside one tab's stack, read when a re-tap of that
+/// tab lands so the pop can ask before it throws a draft away (``TabReselectAction``).
+///
+/// Created by ``TabReselectModifier`` and injected into the tab's stack through the environment;
+/// a pushed page that holds typed input joins with `.tabReselectDraft(isDirty:)`. The registry keeps
+/// its ``TabDraftLease``s WEAKLY: a page that has left the stack took its lease with it, so a gone
+/// page can never keep the prompt alive, while a page merely covered by a further push still counts.
+///
+/// `@Observable` only so it can travel as a type-keyed environment object (which a missing value
+/// reads as `nil` rather than trapping); nothing observes it — the leases are
+/// `@ObservationIgnored` and read only when a tap lands, so an edit on a pushed page costs no redraw
+/// of the tab.
+@Observable
+final class TabDraftRegistry {
+    /// A weak slot for one enrolled lease.
+    private struct WeakLease {
+        weak var lease: TabDraftLease?
+    }
+
+    /// Named bound on enrolled leases (R3). One lease per pushed editor page; a real stack holds a
+    /// handful, so reaching the cap means the oldest slot is dropped rather than growing unbounded.
+    static let maxLeases = 16
+
+    @ObservationIgnored private var leases: [WeakLease] = []
+
+    /// Whether any page still in the stack holds unsaved input.
+    var hasUnsavedDraft: Bool {
+        leases.contains { $0.lease?.isDirty == true }
+    }
+
+    /// Enrolls `lease` once. Idempotent — a page that reappears after the page above it pops
+    /// enrolls again harmlessly — and prunes the slots of pages that have already gone.
+    func enroll(_ lease: TabDraftLease) {
+        leases.removeAll { $0.lease == nil }
+        guard !leases.contains(where: { $0.lease === lease }) else { return }
+        if leases.count >= Self.maxLeases { leases.removeFirst() }
+        leases.append(WeakLease(lease: lease))
+    }
+
+    /// Forgets every lease. Called once a pop to the main page has run: every enrolled page is
+    /// coming off, so none may speak for the next pushed page even if its state outlives the pop.
+    func releaseAll() {
+        leases.removeAll()
+    }
+}
+
+/// Routes `ContentView`'s per-tab re-select token to a pop, a discard-then-pop, or a scroll-to-top,
+/// per ``TabReselectAction``.
 ///
 /// Attach it to the tab page's `NavigationStack` — OUTSIDE the stack, never to the root
 /// `ScrollView` inside it — so the handler belongs to the page that owns the path and stays alive
-/// while other pages are pushed over the root. The page's root scroll view then takes its
-/// `fernletTabBarCompaction` reset token from `scrollToTopToken`, which this modifier bumps only at
-/// the root; ContentView's token itself now means "the tab was re-selected".
+/// while other pages are pushed over the root, and so the ``TabDraftRegistry`` it injects reaches
+/// every pushed page. The page's root scroll view then takes its `fernletTabBarCompaction` reset
+/// token from `scrollToTopToken`, which this modifier bumps only at the root; ContentView's token
+/// itself now means "the tab was re-selected".
 ///
 /// `isAtRoot` is a closure read when the tap lands rather than a value captured at the last body
-/// pass, so a path the system back gesture just changed is always seen as it is now.
+/// pass, so a path the system back gesture just changed is always seen as it is now; the draft
+/// registry is read at the same moment.
 struct TabReselectModifier: ViewModifier {
     /// ContentView's per-tab re-select token; bumped once per re-tap of the active tab.
     @Binding var reselectToken: Int
@@ -174,22 +248,62 @@ struct TabReselectModifier: ViewModifier {
     /// Clears the page's navigation state with ONE write; nested pushes above the first entry
     /// come off with it, together with the view state that drove them.
     let popToRoot: () -> Void
+    /// The unsaved-input state of the pages pushed in this tab's stack.
+    @State private var drafts = TabDraftRegistry()
+    /// Raises the shared discard alert for a re-tap over an unsaved draft.
+    @State private var askingToDiscard = false
 
     func body(content: Content) -> some View {
-        content.onChange(of: reselectToken) { _, _ in
-            switch TabReselectAction.forReselect(isAtRoot: isAtRoot()) {
-            case .popToRoot:
-                popToRoot()
-            case .scrollToTop:
-                scrollToTopToken &+= 1
-            }
+        content
+            .environment(drafts)
+            .onChange(of: reselectToken) { _, _ in handleReselect() }
+            .discardConfirmation(isPresented: $askingToDiscard) { popAndRelease() }
+    }
+
+    /// Acts on one re-tap: exactly one of pop, ask, or scroll.
+    private func handleReselect() {
+        switch TabReselectAction.forReselect(isAtRoot: isAtRoot(), hasUnsavedDraft: drafts.hasUnsavedDraft) {
+        case .popToRoot:
+            popAndRelease()
+        case .confirmDiscardThenPop:
+            askingToDiscard = true
+        case .scrollToTop:
+            scrollToTopToken &+= 1
         }
+    }
+
+    /// Pops to the main page and forgets the leases of the pages that pop took with it.
+    private func popAndRelease() {
+        popToRoot()
+        drafts.releaseAll()
+    }
+}
+
+/// Reports a pushed page's unsaved input to its tab's ``TabDraftRegistry``, so a re-tap of the tab
+/// asks before popping it (``TabReselectAction/confirmDiscardThenPop``).
+///
+/// Owns the page's ``TabDraftLease`` in `@State`, enrolls it on appear, and keeps its flag current.
+/// Outside a tab stack (a sheet presented from `ContentView`) there is no registry and it does nothing.
+struct TabReselectDraftModifier: ViewModifier {
+    /// Whether the page holds input a pop would throw away.
+    let isDirty: Bool
+    @Environment(TabDraftRegistry.self) private var registry: TabDraftRegistry?
+    @State private var lease = TabDraftLease()
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                lease.isDirty = isDirty
+                registry?.enroll(lease)
+            }
+            .onChange(of: isDirty) { _, dirty in lease.isDirty = dirty }
     }
 }
 
 extension View {
-    /// Makes a re-tap of this page's active tab pop its stack to the main page, or — already there —
-    /// scroll it to the top. See ``TabReselectModifier``.
+    /// Makes a re-tap of this page's active tab pop its stack to the main page — asking first when a
+    /// pushed page holds unsaved input — or, already there, scroll it to the top. See
+    /// ``TabReselectModifier``.
     func tabReselect(
         token: Binding<Int>,
         scrollToTopToken: Binding<Int>,
@@ -202,6 +316,13 @@ extension View {
             isAtRoot: isAtRoot,
             popToRoot: popToRoot
         ))
+    }
+
+    /// Declares that this pushed page holds unsaved input while `isDirty` is true, so a re-tap of its
+    /// tab raises the discard alert instead of popping straight past it. See
+    /// ``TabReselectDraftModifier``.
+    func tabReselectDraft(isDirty: Bool) -> some View {
+        modifier(TabReselectDraftModifier(isDirty: isDirty))
     }
 }
 

@@ -44,6 +44,9 @@ struct ActivitiesView: View {
         .navigationTitle("Activities")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { manager.gcExpired() }
+        // Pushed from the Friends album: a re-tap of the Friends tab asks before it pops a typed
+        // activity name or place away.
+        .tabReselectDraft(isDirty: !draftTitle.isEmpty || !draftLocation.isEmpty)
         .sheet(isPresented: joinPromptBinding) {
             if let first = manager.pendingJoinRequests.first {
                 JoinPromptSheet(

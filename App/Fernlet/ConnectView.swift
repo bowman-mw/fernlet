@@ -11,9 +11,10 @@ import FernletUI
 /// Friends tab pop them back to the album (``TabReselectModifier``). Pages pushed from these in turn
 /// (Friends & Blocks → Safety & reporting) stay their own navigation and come off with them.
 ///
-/// `friendShop` is pushed from the post-session shop-window card. Once pushed it stays until the
-/// user leaves, even if the one-hour window lapses under it; the link used to vanish with the card
-/// and pop the shop at the next minute tick.
+/// `friendShop` is pushed from the post-session shop-window card, and closes with its window: the
+/// view-destination link it replaced vanished with the card when the one-hour window lapsed (or
+/// closed early, or sharing was turned off) and popped the shop, so the album now pops it itself at
+/// that moment (``shopClosesAt(sharingEnabled:windowExpiresAt:)``, ``closingShop(_:)``).
 nonisolated enum FriendsRoute: Hashable {
     /// Group Activities.
     case activities
@@ -21,6 +22,21 @@ nonisolated enum FriendsRoute: Hashable {
     case friendList
     /// The friend shops exchanged during the last session.
     case friendShop
+
+    /// When a pushed friend shop has to close: its window's expiry, or `.distantPast` — at once —
+    /// when no window is open or nearby clothing sharing is off (the two conditions under which the
+    /// shop-window card, the shop's only entry point, is not drawn).
+    static func shopClosesAt(sharingEnabled: Bool, windowExpiresAt: Date?) -> Date {
+        guard sharingEnabled, let windowExpiresAt else { return .distantPast }
+        return windowExpiresAt
+    }
+
+    /// `path` with the friend shop, and anything pushed above it, taken off. Unchanged when the
+    /// shop is not pushed.
+    static func closingShop(_ path: [FriendsRoute]) -> [FriendsRoute] {
+        guard let shop = path.firstIndex(of: .friendShop) else { return path }
+        return Array(path[..<shop])
+    }
 }
 
 // MARK: - FriendsView
@@ -367,6 +383,35 @@ struct FriendsView: View {
         .tabReselect(token: $tabResetToken, scrollToTopToken: $scrollToTopToken, isAtRoot: { path.isEmpty }) {
             path.removeAll()
         }
+        .task(id: friendShopClosesAt) { await closeFriendShopWhenWindowLapses() }
+    }
+
+    /// When the pushed friend shop has to close: `nil` while the shop is not pushed. Keys the album's
+    /// close-the-shop watch, so the watch restarts when the shop is pushed or popped and whenever the
+    /// window changes (a later session reopening it, or closing it early).
+    private var friendShopClosesAt: Date? {
+        guard path.contains(.friendShop) else { return nil }
+        return FriendsRoute.shopClosesAt(
+            sharingEnabled: store.settings.allowNearbyClothingShares,
+            windowExpiresAt: manager.clothingShop.window?.expiresAt
+        )
+    }
+
+    /// Pops the friend shop when its post-session window lapses, which the shop-window card's
+    /// view-destination link used to do by vanishing at the minute tick; without it the pushed shop
+    /// kept its catalogs browsable, and buyable, past the hour.
+    private func closeFriendShopWhenWindowLapses() async {
+        guard let closesAt = friendShopClosesAt else { return }
+        let wait = closesAt.timeIntervalSinceNow
+        if wait > 0 {
+            do {
+                try await Task.sleep(for: .seconds(wait))
+            } catch {
+                // Superseded: the shop was left, or the window changed and a newer watch owns it.
+                return
+            }
+        }
+        path = FriendsRoute.closingShop(path)
     }
 
     /// Resolves a ``FriendsRoute`` pushed from the album to its page.
