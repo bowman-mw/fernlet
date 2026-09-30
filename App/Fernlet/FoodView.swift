@@ -1067,6 +1067,7 @@ private struct SavedRecipeRow: View {
                 }
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
+                WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines)
             }
         }
         .padding(.vertical, 6)
@@ -1178,6 +1179,9 @@ struct SavedRecipeNotesSheet: View {
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        } else {
+            // An estimate that rounds to all zeros hides the card, not the lines it left out.
+            WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines)
         }
     }
 
@@ -5861,6 +5865,7 @@ struct RecipeDetailView: View {
                 Text("Makes \(effectiveYield) serving\(effectiveYield == 1 ? "" : "s"): P \(displayTotals.protein)g · C \(displayTotals.carbs)g · F \(displayTotals.fat)g\(store.settings.showCalories ? " · \(displayTotals.calories) cal" : "")")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
+                WebImportEstimateNote(uncountedLines: recipe.webImport?.uncountedIngredientLines)
             }
         }
     }
