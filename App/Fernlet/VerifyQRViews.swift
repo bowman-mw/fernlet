@@ -37,15 +37,18 @@ enum QRCodeRenderer {
 /// the app leaves the foreground — the ceremony is an in-person, eyes-on-both-screens moment —
 /// and every dismissal path routes through the caller's `onDismiss` so the mesh manager stops
 /// honoring challenges for the displayed QR.
+///
+/// It names nobody (2026-09-29). The only thing it could have named the peer by is their
+/// fingerprint, since Option 1b withholds the name until commit and this ceremony is pre-commit;
+/// the sheet is bound to the row it opened from, so "the person you're connecting with" is exact.
 struct VerifyQRDisplaySheet: View {
     let url: URL?
-    let peerName: String
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Verify with \(peerName)")
+            Text("Your verification code")
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
             if let url, let image = QRCodeRenderer.image(for: url.absoluteString) {
@@ -64,9 +67,9 @@ struct VerifyQRDisplaySheet: View {
                     // (`MeshNetworkManager.beginQRVerification`), so "I hold up my phone, you scan
                     // it" is a fully supported ceremony for a blind user — it just has to be
                     // narratable.
-                    .accessibilityLabel("Your verification code, as a QR code for \(peerName) to scan")
+                    .accessibilityLabel("Your verification code, as a QR code for the person you're connecting with to scan")
                     .accessibilityIdentifier("friends.verifyQR.code")
-                Text("Have \(peerName) scan this code. It proves this phone really holds your Fernlet identity — the code expires after a few minutes.")
+                Text("Have the person you're connecting with scan this code. It proves this phone really holds your Fernlet identity. The code expires after a few minutes.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .multilineTextAlignment(.center)

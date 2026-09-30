@@ -17,8 +17,9 @@ private enum FriendListFilter: String, CaseIterable, Identifiable {
 /// The "Friends & Blocks" management screen: every trusted proximity peer, searchable and
 /// filterable, with block/unblock, remove, report, and heart-sending per peer.
 ///
-/// Pushed from the Friends tab header. Rows expand in place into a detail card (fingerprint,
-/// accepted/seen dates, mode, status timestamps) whose actions mirror the swipe actions; all
+/// Pushed from the Friends tab header. Rows expand in place into a detail card (accepted/seen
+/// dates, status timestamps, and the collapsed "Safety code": the one place the app still shows a
+/// fingerprint) whose actions mirror the swipe actions; all
 /// mutations go through ``FernletStore`` (`blockProximityPeer`, `revokeTrustedProximityPeer`,
 /// `reportProximityPeer`, …). The screen also owns the user's mesh display name — committed only
 /// on Return / focus loss / disappear, never per keystroke, because the name rides the discovery
@@ -44,6 +45,9 @@ struct FriendListView: View {
     // status line for queue outcomes (separate from the live-send heartSendState pipeline).
     @State private var awayConsentPeer: ProximityTrustedPeerRecord?
     @State private var awayStatus: String?
+    /// The friend whose safety code is revealed in their open detail card, if any. Collapsed by
+    /// default, and again whenever a row is tapped open or shut.
+    @State private var revealedSafetyCode: UUID?
     @FocusState private var nameFieldFocused: Bool
 
     var body: some View {
@@ -75,7 +79,7 @@ struct FriendListView: View {
         ) { peer in
             reportDialogActions(peer)
         } message: { peer in
-            Text("Reporting \(peer.displayName) blocks them and flags their shared content on your device.")
+            Text("Reporting \(shownName(peer)) blocks them and flags their shared content on your device.")
         }
         .onAppear {
             displayName = store.settings.proximityDisplayName
@@ -89,7 +93,7 @@ struct FriendListView: View {
             blockAlertMessage
         }
         .alert(
-            peerToRemove.map { "Remove \($0.displayName)?" } ?? "Remove friend?",
+            peerToRemove.map { "Remove \(shownName($0))?" } ?? "Remove friend?",
             isPresented: $peerToRemove.isPresent(),
             presenting: peerToRemove
         ) { peer in
@@ -145,12 +149,13 @@ struct FriendListView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
 
-    /// The name/fingerprint search field.
+    /// The search field. It still matches a fingerprint (someone who has one to hand can paste it),
+    /// but it says "name": a fingerprint is not something the list asks anyone to know.
     private var searchRow: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Color.slate)
-            TextField("Search by name or fingerprint", text: $searchText)
+            TextField("Search by name", text: $searchText)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
         }
@@ -204,6 +209,7 @@ struct FriendListView: View {
                 .onTapGesture {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                         selected = selected?.id == peer.id ? nil : peer
+                        revealedSafetyCode = nil
                     }
                 }
 
@@ -325,7 +331,7 @@ struct FriendListView: View {
     @ViewBuilder
     private var blockAlertMessage: some View {
         if let peer = peerToBlock {
-            Text("Blocking \(peer.displayName) will hide their content from you and yours from them.")
+            Text("Blocking \(shownName(peer)) will hide their content from you and yours from them.")
         }
     }
 
@@ -334,13 +340,13 @@ struct FriendListView: View {
     private func peerRow(_ peer: ProximityTrustedPeerRecord) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(peer.displayName)
+                Text(verbatim: shownName(peer))
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
 
-                // The raw hex fingerprint lives in the expanded detail card, not on every row: it is
-                // a verification tool, not a name, and a wall of hex made the roster read as a
-                // security console rather than a list of friends.
+                // The raw hex fingerprint lives behind the expanded detail card's "Safety code", not
+                // on every row: it is a verification tool, not a name, and a wall of hex made the
+                // roster read as a security console rather than a list of friends.
 
                 Text("Last seen \(peer.lastSeenAt.relativeFormatted)")
                     .font(.fernlet(.labelSmall))
@@ -428,7 +434,6 @@ struct FriendListView: View {
     private func peerDetailCard(_ peer: ProximityTrustedPeerRecord) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                fingerprintDetailRow(peer.fingerprint)
                 detailRow("Friends since", value: peer.firstAcceptedAt.formatted(date: .abbreviated, time: .omitted))
                 detailRow("Last seen", value: peer.lastSeenAt.formatted(date: .abbreviated, time: .shortened))
                 // "Mode: Uwb/Manual" was transport trivia in a friend's card — how the two phones
@@ -442,6 +447,7 @@ struct FriendListView: View {
                 if let reportedAt = peer.reportedAt {
                     detailRow("Reported", value: reportedAt.formatted(date: .abbreviated, time: .omitted))
                 }
+                safetyCodeDisclosure(peer)
             }
 
             if peer.blockedAt == nil && peer.revokedAt == nil && store.settings.allowNearbyHearts {
@@ -549,7 +555,7 @@ struct FriendListView: View {
     private func sendHeartBlock(_ peer: ProximityTrustedPeerRecord, reachable: Bool) -> some View {
         let onCooldown = !store.heartLedger.canSendHeart(to: peer.fingerprint)
         let sending = heartSendInProgress
-        let firstName = PresenceManager.firstName(of: peer.displayName)
+        let firstName = PresenceManager.firstName(of: shownName(peer))
         let awayEnabled = store.settings.heartsAwayDelivery
         // "Queued but not yet at the drop-off" — an uploaded heart drops out of this count, so it
         // reads as "still waiting on us", not "still undelivered".
@@ -629,7 +635,7 @@ struct FriendListView: View {
                     store.setHeartsAwayDelivery(true)
                     recordAwayOutcome(
                         store.heartDropService.queueHeart(to: consented),
-                        firstName: PresenceManager.firstName(of: consented.displayName)
+                        firstName: PresenceManager.firstName(of: shownName(consented))
                     )
                 }
                 awayConsentPeer = nil
@@ -787,17 +793,55 @@ struct FriendListView: View {
         }
     }
 
-    /// The fingerprint's own row — the one place the raw hex belongs, rendered through the shared
-    /// ``FingerprintText`` so every surface that shows one uses the same treatment.
-    private func fingerprintDetailRow(_ fingerprint: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Fingerprint")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-            Spacer(minLength: 12)
-            FingerprintText(fingerprint, color: Color.bark, lineLimit: 2)
-                .multilineTextAlignment(.trailing)
+    /// The friend's safety code (their identity fingerprint), collapsed until asked for.
+    ///
+    /// The one place in the app a fingerprint is still shown (owner decision 2026-09-29): it is a
+    /// verification tool, not part of knowing someone, so it sits behind a deliberate tap on a card
+    /// that is itself a deliberate expansion. A plain `.borderless` button rather than a
+    /// `DisclosureGroup`: this card lives inside a `List` row beside other buttons, where a
+    /// default-styled control can claim the whole row's tap.
+    ///
+    /// - Parameter peer: The friend whose card this is.
+    /// - Returns: The toggle, and the code beneath it once revealed.
+    private func safetyCodeDisclosure(_ peer: ProximityTrustedPeerRecord) -> some View {
+        let isRevealed = revealedSafetyCode == peer.id
+        return VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    revealedSafetyCode = isRevealed ? nil : peer.id
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Safety code")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                    Image(systemName: isRevealed ? "chevron.up" : "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Color.slate)
+                        .accessibilityHidden(true)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .fernletTapTarget()
+            .accessibilityValue(isRevealed ? Text("Shown") : Text("Hidden"))
+            .accessibilityIdentifier("friends.safetyCode.toggle")
+            if isRevealed {
+                FingerprintText(peer.fingerprint, color: Color.bark, lineLimit: 2)
+            }
         }
+    }
+
+    /// What a person reads for a friend (2026-09-29): their chosen name, or "Someone you met" for
+    /// a friend kept before their name arrived, whose record filed the fingerprint as the name.
+    ///
+    /// Display only. Search still matches the stored name and the fingerprint.
+    ///
+    /// - Parameter peer: A trust-vault record.
+    /// - Returns: The text to render.
+    private func shownName(_ peer: ProximityTrustedPeerRecord) -> String {
+        PeerNameDisplay.shown(peer.displayName, fingerprint: peer.fingerprint, placeholder: .met)
     }
 
     // MARK: - Display name

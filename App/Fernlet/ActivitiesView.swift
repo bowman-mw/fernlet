@@ -52,8 +52,7 @@ struct ActivitiesView: View {
                 JoinPromptSheet(
                     requests: manager.pendingJoinRequests,
                     targetName: titleForActivity(first.activityID),
-                    displayName: { $0.displayName },
-                    fingerprint: { $0.verifiedFingerprint },
+                    displayName: { PeerNameDisplay.shown($0.displayName, fingerprint: $0.verifiedFingerprint) },
                     accessibilityPrefix: "activity.join",
                     errorMessage: manager.activityError,
                     dismissError: { manager.activityError = nil },
@@ -245,24 +244,23 @@ struct ActivitiesView: View {
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             ForEach(participants) { member in
+                // The member's chosen name, never their fingerprint (2026-09-29): the name, the
+                // removal copy and the monogram all read the same filtered value.
+                let memberName = PeerNameDisplay.shown(member.displayName, fingerprint: member.fingerprint)
                 HStack(spacing: 10) {
-                    memberAvatar(member)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(ItemNameModeration.sanitizedName(member.displayName))
-                                .font(.fernlet(.headerMedium))
-                                .foregroundStyle(Color.bark)
-                            if member.fingerprint == hostFingerprint {
-                                Text("host")
-                                    .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.moss)
-                            }
+                    memberAvatar(member, name: memberName)
+                    HStack(spacing: 6) {
+                        Text(verbatim: memberName)
+                            .font(.fernlet(.headerMedium))
+                            .foregroundStyle(Color.bark)
+                        if member.fingerprint == hostFingerprint {
+                            Text("host")
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.moss)
                         }
-                        FingerprintText(member.fingerprint)
                     }
                     Spacer()
                     if removable && member.fingerprint != hostFingerprint {
-                        let memberName = ItemNameModeration.sanitizedName(member.displayName)
                         Button {
                             pendingRemoval = RemovalTarget(activityID: activityID, fingerprint: member.fingerprint,
                                                            name: memberName)
@@ -279,7 +277,7 @@ struct ActivitiesView: View {
     }
 
     @ViewBuilder
-    private func memberAvatar(_ member: ActivityParticipant) -> some View {
+    private func memberAvatar(_ member: ActivityParticipant, name: String) -> some View {
         if let cached = store.cachedFriendState(fingerprint: member.fingerprint) {
             // Someone ELSE's companion, drawn at 40pt beside their name. T1-10: it used to inherit
             // the shared "Fernlet companion, <state>" label, so every friend in the roster
@@ -290,7 +288,7 @@ struct ActivitiesView: View {
         } else {
             ZStack {
                 Circle().fill(Color.moss.opacity(0.18)).frame(width: 40, height: 40)
-                Text(monogram(member.displayName))
+                Text(monogram(name))
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
             }
@@ -403,7 +401,7 @@ struct ActivitiesView: View {
     private func hostSubtitle(_ joined: ProximityActivityManager.JoinedActivity) -> String {
         let hostName = joined.lastSnapshot.participants
             .first(where: { $0.fingerprint == joined.descriptor.hostFingerprint })
-            .map { ItemNameModeration.sanitizedName($0.displayName) }
+            .flatMap { PeerNameDisplay.personName($0.displayName, fingerprint: $0.fingerprint) }
         let base = hostName.map { "Hosted by \($0)" } ?? "Joined"
         let extra = subtitle(type: joined.descriptor.activityTypeToken, location: joined.descriptor.coarseLocation)
         return extra.isEmpty ? base : "\(base) · \(extra)"

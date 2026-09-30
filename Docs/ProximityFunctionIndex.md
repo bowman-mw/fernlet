@@ -117,7 +117,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `sendAdmissionRequest(for:)` (committed slots only) | Since the owner-calls re-verify, asks only slots this device has committed: a blanked request made the admitter prompt and record "A friend", which then spread through descriptor merges. Every trigger holds a committed slot (a descriptor is dropped from an uncommitted one; a rotation's rejoin comes from the coordinator). Pinned by `MeshNameWithholdingTests.aJoinRequestGoesOnlyToSlotsThisDeviceCommitted`. |
 | `knownDisplayName(forFingerprint:)` / `MeshRemovalProposalPayload.fillingWithheldNames(_:)` | The receiving half of Option 1b for votes: a withheld (empty) name on an ingested removal vote is filled from what this device already knows — its own name, the descriptor member's, the roster's, else the fingerprint; never blank, never "A friend". |
 | `MeshNetworkManager.sendEnvelopeCore` (Option 1b gate) | The mesh's one signing door: a slot with `fingerprint == nil` (not committed and seated) gets an empty envelope name and, for a `MeshPeerNameRedactable` payload (admission request, removal proposal, removal second), a copy with every name blanked — the fix for the blind verify's BLOCKER (the beacon, admission, rotation, votes and departure frames named this device to strangers). Pinned by `MeshNameWithholdingTests`. |
-| `PeerIdentity.isDisplayNameWithheld` / `displayNameOrFingerprint` | Empty name = withheld (every other ingest floors at "A friend"); what every render/persist site shows — the fingerprint until the name is disclosed. |
+| `PeerIdentity.isDisplayNameWithheld` / `displayNameOrFingerprint` | Empty name = withheld (every other ingest floors at "A friend"); what every PERSIST site records (roster, trust vault, audit), the fingerprint until the name is disclosed. Render sites use `PeerNameDisplay` instead (2026-09-29), so a withheld name reads "Someone nearby" on screen. |
 | `send(_:)` | Encodes and sends a prebuilt signed envelope over reliable transport while updating state, byte counts, foreground activity, and audit logs. |
 | `sendPayload(type:summary:payload:sealed:)` | Builds, optionally seals, signs, and sends an envelope for app payload data. |
 | `sealIfNeeded(_:sealed:)` | Pairwise-seals payload bytes to the connected peer's key-agreement public key when requested. |
@@ -2182,7 +2182,15 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 
 | Type | What It Does |
 | --- | --- |
-| `FingerprintText` | A peer's identity fingerprint, rendered identically everywhere one is shown. Fingerprints appear on four surfaces — the friend detail card, the join prompt (where two people read them off each other's screens), the activity roster, and the keep-as-friend rows — and each had hand-rolled its own `.system(.caption, design: .monospaced)`, a system font in an app whose type is entirely bundled. Centralized on the design system's `stat` role (DM Sans Medium, tabular figures) with extra tracking so a hex string still reads character by character. Truncation is MIDDLE, deliberately: the head and tail are what people compare, so a clipped tail would defeat the only thing the string is for. |
+| `FingerprintText` | A peer's identity fingerprint, for the one place a person may deliberately look one up: since 2026-09-29, the friend detail card's collapsed "Safety code" in Friends & Blocks, and nowhere else (the join prompt, the activity roster, the keep-as-friend rows and the connect row used to show it; `PeerNameDisplayTests` now pins that they don't). Centralized on the design system's `stat` role (DM Sans Medium, tabular figures) with extra tracking so a hex string still reads character by character, and spelled out for VoiceOver. Truncation is MIDDLE, deliberately: the head and tail are what people compare, so a clipped tail would defeat the only thing the string is for. |
+
+### `UI/PeerNameDisplay.swift`
+
+| Type Or Member | What It Does |
+| --- | --- |
+| `PeerNameDisplay.personName(_:fingerprint:)` | The peer's chosen name, sanitized (`ItemNameModeration.sanitizedName`), or nil when it is empty (Option 1b's withheld state), equals the peer's fingerprint ignoring case (a roster/vault row that filed the fingerprint as the name), has the canonical 16-hex fingerprint shape, or starts with `MeshLinkAdvertisement.instanceNamePrefix` (the QUIC instance name, whole or in its 24-character moderated form). |
+| `PeerNameDisplay.shown(_:fingerprint:placeholder:)` | `personName` or the localized placeholder: `.nearby` "Someone nearby" (connect rows, participants, join requests, recipe recipients) or `.met` "Someone you met" (keep-as-friend rows, Friends & Blocks). **Display only**: never persisted, never put in a roster, vault row, removal proposal or payload; those keep reading `displayNameOrFingerprint`. |
+| `PeerNameDisplay.text(for:)` | The placeholder alone (`ProximityUICopy.Peer`, resolved with `bundle: .module`). |
 
 ## Shared Support
 

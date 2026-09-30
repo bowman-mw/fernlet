@@ -23,8 +23,9 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// Runs `ProximityRecipeShareManager` for its whole presentation (`start()` on appear, `stop()`
 /// on disappear) and renders its observable state: the recipient list (with the hard 2-device cap
 /// — every other row disables while one is engaged), a searching pulse that gives way to a
-/// "no nearby Fernlets" hint after ~6 s, the connect/send/sent status line, and a collapsible
-/// diagnostics card. An "Include notes" toggle strips the payload's share notes before sending,
+/// "no nearby Fernlets" hint after ~6 s, the connect/send/sent status line, and — with the
+/// proximity debug tools on, never in Release — a collapsible diagnostics card. Recipients are
+/// named through `PeerNameDisplay`, never by fingerprint. An "Include notes" toggle strips the payload's share notes before sending,
 /// and an "Include picture" toggle (default ON, shown only when the draft carries one) strips the
 /// attached recipe photo — the picture can be the sender's own kitchen shot, so it gets the same
 /// per-share control as their notes.
@@ -74,7 +75,9 @@ struct ProximityRecipeShareSheet: View {
                                 .fernletWrappingText()
                         }
 
-                        if !manager.diagnosticEvents.isEmpty {
+                        // Developer detail (2026-09-29): its lines name peers by fingerprint and quote
+                        // transport errors, so it is not part of sharing a recipe.
+                        if store.proximityDebugToolsEnabled, !manager.diagnosticEvents.isEmpty {
                             diagnosticDetailsCard
                         }
 
@@ -185,15 +188,12 @@ struct ProximityRecipeShareSheet: View {
                     .foregroundStyle(Color.moss)
                     .frame(width: 34, height: 34)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(recipient.displayName)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                        .lineLimit(1)
-                    Text(recipient.fingerprint.map { String($0.prefix(8)) } ?? "Verifying…")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                }
+                // The name only (2026-09-29): the hex subtitle was an identifier, and its
+                // pre-handshake "Verifying…" claimed work nobody had started.
+                Text(verbatim: PeerNameDisplay.shown(recipient.displayName, fingerprint: recipient.fingerprint))
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
+                    .lineLimit(1)
                 Spacer()
                 Image(systemName: "paperplane.fill")
                     .font(.subheadline.weight(.semibold))
@@ -351,7 +351,8 @@ struct ProximityRecipeShareSheet: View {
     private func scheduleDismissAfterSendIfNeeded(_ state: ProximityRecipeShareManager.SendState) {
         dismissAfterSendTask?.cancel()
         guard case .sent(let recipientName) = state else { return }
-        FernletAnnouncer.system.announce(.success, LocalizedStringResource("Sent to \(recipientName)."))
+        let shownName = PeerNameDisplay.shown(recipientName, fingerprint: nil)
+        FernletAnnouncer.system.announce(.success, LocalizedStringResource("Sent to \(shownName)."))
         let window = FernletDismissalWindow.system.window(
             standard: .seconds(1.4),
             assistive: FernletDismissalWindow.assistiveActionWindow)
@@ -379,16 +380,19 @@ struct ProximityRecipeShareSheet: View {
         return payload
     }
 
+    /// The connect/send/sent line. Names pass through `PeerNameDisplay` with no fingerprint to
+    /// hand: the recipient row files the fingerprint as the name for a peer this radio never
+    /// discovered, and the helper's fingerprint-shape rule catches exactly that.
     private var statusText: String? {
         switch manager.sendState {
         case .idle:
             nil
         case .connecting(let recipientName):
-            "Connecting to \(recipientName)..."
+            "Connecting to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))..."
         case .sending(let recipientName):
-            "Sending to \(recipientName)..."
+            "Sending to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))..."
         case .sent(let recipientName):
-            "Sent to \(recipientName)."
+            "Sent to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))."
         case .failed(let message):
             message
         }

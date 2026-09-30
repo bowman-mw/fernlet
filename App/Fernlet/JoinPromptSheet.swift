@@ -5,10 +5,14 @@ import ProximityKit
 /// The shared "someone wants to join" confirmation sheet shown to the gatekeeper of a closed
 /// in-person group — the existing members of a mesh session and the host of a Group Activity.
 ///
-/// Pure presentation, zero manager reference: it renders the first pending request (display name +
-/// fingerprint for eyeball verification) with an "N more waiting" pill, and forwards Allow/Decline
-/// through the closures. The `displayName`/`fingerprint` extractor closures keep it generic over the
-/// request payload type without a retroactive protocol conformance, and `accessibilityPrefix`
+/// Pure presentation, zero manager reference: it renders the first pending request (the requester's
+/// name) with an "N more waiting" pill, and forwards Allow/Decline through the closures. No
+/// fingerprint (owner decision 2026-09-29): an identifier string is not part of the in-person
+/// experience, and the requester is already committed to an existing member, whose QR ceremony at
+/// the first meeting is the verification path. Callers pass the name through `PeerNameDisplay`, so
+/// an identifier filed as a name reads "Someone nearby". The `displayName` extractor closure keeps
+/// it generic over the request payload type without a retroactive protocol conformance, and
+/// `accessibilityPrefix`
 /// namespaces the button identifiers (`<prefix>.allow`, `<prefix>.decline`, `<prefix>.error`,
 /// `<prefix>.error.dismiss`) so each presentation surface keeps its own UI-test hooks.
 /// Swipe-to-dismiss declines everything still pending (fail-closed) — wired at the presentation
@@ -18,7 +22,6 @@ struct JoinPromptSheet<Request>: View {
     let requests: [Request]
     let targetName: String
     let displayName: (Request) -> String
-    let fingerprint: (Request) -> String
     let accessibilityPrefix: String
     /// An admit-time error (e.g. "This activity is full.") to show INLINE here. A root-level `.alert`
     /// can't present over this sheet while other requests keep it open, so the host would never see it;
@@ -105,16 +108,13 @@ struct JoinPromptSheet<Request>: View {
         .accessibilityIdentifier("\(accessibilityPrefix).error")
     }
 
-    /// The first pending request: who is asking, their fingerprint for eyeball verification, the
-    /// "N more waiting" pill, and Allow/Decline.
+    /// The first pending request: who is asking, the "N more waiting" pill, and Allow/Decline.
     private func requestCard(_ request: Request) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("\(Text(displayName(request)).bold()) wants to join \(Text(targetName).bold())")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
-
-            FingerprintText(fingerprint(request), lineLimit: 2)
 
             if requests.count > 1 {
                 Text("\(requests.count - 1) more waiting")

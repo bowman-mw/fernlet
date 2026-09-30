@@ -62,7 +62,10 @@ struct FriendsView: View {
     @Binding var tabResetToken: Int
 
     @State private var showConnectionAnimation = false
-    @State private var connectionPeerName = ""
+    /// The name the celebration shows: sampled at commit, and adopted once if it arrives while the
+    /// overlay is still up (Option 1b withholds it until the peer's first post-commit envelope).
+    /// Nil shows "Connected" alone, never an identifier in its place.
+    @State private var connectionPeerName: String?
     @State private var sessionReady = false
     @State private var disconnectReviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
@@ -132,6 +135,9 @@ struct FriendsView: View {
         }
         .onChange(of: manager.hasCommittedPeer) { hadPeer, hasPeer in
             handleCommittedPeerChange(hadPeer: hadPeer, hasPeer: hasPeer)
+        }
+        .onChange(of: connectedPeerName()) { _, name in
+            adoptDisclosedPeerName(name)
         }
         .sheet(isPresented: $disconnectReviewPresented) {
             disconnectReviewSheet
@@ -549,7 +555,7 @@ struct FriendsView: View {
                         ForEach(manager.slots) { slot in
                             NearbySlotRow(
                                 slot: slot,
-                                showDebugOverride: store.settings.showProximityDebugTools,
+                                showDebugOverride: store.proximityDebugToolsEnabled,
                                 onForceConnect: { manager.commitManualProximity(slotID: slot.id) },
                                 // The QR is minted FOR THIS ROW: only a challenge arriving on this
                                 // slot may answer it, so the manager binds the nonce to slot.id.
@@ -676,7 +682,8 @@ struct FriendsView: View {
     /// `DisposableCameraView` — which exists only *inside* a session. A discovery failure happens
     /// before any session, so the message was set and never seen: the pulse span forever and the
     /// mesh looked simply broken. On device the overwhelmingly likely cause is a declined Local
-    /// Network prompt, so lead with that and keep the raw reason as secondary detail.
+    /// Network prompt, so lead with that. The raw reason is secondary detail for developers, shown
+    /// only with the proximity debug tools on.
     private func discoveryFailureBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "wifi.exclamationmark")
@@ -689,10 +696,14 @@ struct FriendsView: View {
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(message)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate.opacity(0.8))
-                    .fixedSize(horizontal: false, vertical: true)
+                // The transport's own words are developer text: frozen English that can name a
+                // tunnel, an error and its identifiers (2026-09-29). Debug tools only.
+                if store.proximityDebugToolsEnabled {
+                    Text(verbatim: message)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 4)
         }
@@ -854,18 +865,33 @@ struct FriendsView: View {
 
     // MARK: - Helper
 
-    private func connectedPeerName() -> String {
+    /// The committed peer's chosen name, or nil while it is withheld (or when nothing on hand is a
+    /// name). Never the fingerprint and never the transport's instance name: the celebration shows
+    /// "Connected" alone rather than an identifier (2026-09-29).
+    private func connectedPeerName() -> String? {
         for slot in manager.slots where slot.fingerprint != nil {
             switch slot.coordinator.state {
             case .connected(let p), .transferring(let p, _),
                  .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
                  .awaitingUserConfirmation(let p):
-                return p.displayNameOrFingerprint
+                return PeerNameDisplay.personName(p.displayName, fingerprint: p.fingerprint)
             default:
                 break
             }
         }
-        return manager.slots.first?.peer.displayHint ?? "Friend"
+        return nil
+    }
+
+    /// Hands the celebration the peer's name when it arrives after the commit it celebrates.
+    ///
+    /// The commit happens with the name still withheld, and the peer's first post-commit envelope
+    /// (usually a heartbeat, well inside the overlay's two seconds) discloses it. Adopted once:
+    /// only while the overlay is up, and only over a missing name.
+    ///
+    /// - Parameter name: ``connectedPeerName()``'s new answer.
+    private func adoptDisclosedPeerName(_ name: String?) {
+        guard showConnectionAnimation, connectionPeerName == nil, let name else { return }
+        connectionPeerName = name
     }
 
     /// Session-end review, driven off OBSERVABLE MODEL STATE (Phase 2, "Session-end review is
@@ -1326,13 +1352,9 @@ private struct NearbySlotRow: View {
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
-                if let withheldFingerprint {
-                    FingerprintText(withheldFingerprint, color: Color.bark)
-                } else {
-                    Text(peerName)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                }
+                Text(verbatim: peerName)
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
                 Text(stateLabel)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
@@ -1408,7 +1430,7 @@ private struct NearbySlotRow: View {
                     .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
             }
             .sheet(isPresented: $verifyQRURL.isPresent(), onDismiss: onDismissVerifyQR) {
-                VerifyQRDisplaySheet(url: verifyQRURL, peerName: peerName)
+                VerifyQRDisplaySheet(url: verifyQRURL)
             }
             .sheet(isPresented: $showVerifyScanner, onDismiss: {
                 // Raise the alert only once the scanner has actually gone away.
@@ -1431,31 +1453,22 @@ private struct NearbySlotRow: View {
         }
     }
 
+    /// The row's title: the peer's chosen name once this device has it, else "Someone nearby".
+    ///
+    /// Never an identifier (owner decision 2026-09-29, reversing the fingerprint title of
+    /// stranger-admission Option 1b). Until this device commits, the peer has disclosed no name,
+    /// and the only other strings on hand are its fingerprint and, before the identity
+    /// introduction, the QUIC transport's random Bonjour instance name (`slot.peer.displayHint`,
+    /// `fernlet-mesh-…`). Both were debugging aids. The name replaces the placeholder once the
+    /// peer's first post-commit envelope discloses it; the row-bound QR ceremony is how two people
+    /// tell rows apart before that.
     private var peerName: String {
         switch slot.coordinator.state {
         case .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
              .awaitingUserConfirmation(let p), .connected(let p), .transferring(let p, _):
-            return p.displayNameOrFingerprint
+            return PeerNameDisplay.shown(p.displayName, fingerprint: p.fingerprint)
         default:
-            return slot.peer.displayHint
-        }
-    }
-
-    /// The fingerprint to show in place of a name — stranger-admission Option 1b (the owner's call
-    /// of 2026-09-22).
-    ///
-    /// Until this device commits, the peer has disclosed no name, so the row shows the fingerprint
-    /// the two people can read to each other; the name replaces it on the first frame after the
-    /// 15 cm dwell or the tap. Rendering it through ``FingerprintText`` rather than as a plain
-    /// name is the point: it spells out for VoiceOver, truncates in the middle, and reads as an
-    /// identifier rather than as somebody's name.
-    private var withheldFingerprint: String? {
-        switch slot.coordinator.state {
-        case .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
-             .awaitingUserConfirmation(let p), .connected(let p), .transferring(let p, _):
-            return p.isDisplayNameWithheld ? p.fingerprint : nil
-        default:
-            return nil
+            return PeerNameDisplay.text(for: .nearby)
         }
     }
 
@@ -1501,7 +1514,10 @@ private struct NearbySlotRow: View {
 /// Runs a fixed spring-and-fade choreography (card rise, expanding rings, auto-exit) and calls
 /// `onComplete` when finished so ``FriendsView`` can flip into the in-session camera.
 struct ConnectionSuccessOverlay: View {
-    let peerName: String
+    /// The peer's chosen name, or nil while it is withheld: then "Connected" is the headline on its
+    /// own. Never an identifier in a name's place (2026-09-29: the fingerprint in display type was
+    /// the "large string of characters" at the moment of connecting).
+    let peerName: String?
     let onComplete: () -> Void
 
     @State private var cardOffset: CGFloat = 100
@@ -1540,18 +1556,7 @@ struct ConnectionSuccessOverlay: View {
                         .foregroundStyle(Color.moss)
                 }
 
-                VStack(spacing: 6) {
-                    Text(peerName)
-                        .font(.fernlet(.display))
-                        .foregroundStyle(Color.bark)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text("Connected")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.moss)
-                        .textCase(.uppercase)
-                        .tracking(1.4)
-                }
+                headline
             }
             .padding(.horizontal, 44)
             .padding(.vertical, 36)
@@ -1570,6 +1575,32 @@ struct ConnectionSuccessOverlay: View {
         .accessibilityAddTraits(.isModal)
         .onAppear { runAnimation() }
         .onDisappear { animationTask?.cancel() }
+    }
+
+    /// The name over a small "Connected" caption, or "Connected" as the headline while there is no
+    /// name. The existing "Connected" key serves both, so the nameless state adds no string.
+    @ViewBuilder
+    private var headline: some View {
+        if let peerName {
+            VStack(spacing: 6) {
+                Text(verbatim: peerName)
+                    .font(.fernlet(.display))
+                    .foregroundStyle(Color.bark)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("Connected")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.moss)
+                    .textCase(.uppercase)
+                    .tracking(1.4)
+            }
+        } else {
+            Text("Connected")
+                .font(.fernlet(.display))
+                .foregroundStyle(Color.bark)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
     }
 
     private func runAnimation() {

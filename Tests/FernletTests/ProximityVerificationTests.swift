@@ -260,7 +260,7 @@ struct ProximityVerificationTests {
         let bobSlot = try await makeAwaitingManualCommitSlot(on: manager, localIdentity: local, remote: bob, name: "Bob")
         let mallorySlot = try await makeAwaitingManualCommitSlot(on: manager, localIdentity: local, remote: mallory, name: "Mallory")
 
-        // "Verify with Bob" — the sheet opened from Bob's row.
+        // "Show my code" on Bob's row: the sheet opened from Bob's row.
         let url = try #require(manager.makeLocalVerifyQRURL(slotID: bobSlot.peer.id))
         let qrNonce = try #require(ProximityVerifyQR.parse(url)?.nonce)
 
