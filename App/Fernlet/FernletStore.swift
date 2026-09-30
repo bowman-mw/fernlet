@@ -2187,27 +2187,41 @@ final class FernletStore {
     /// inside this body, because ``setMeshContinuation(state:lastAudit:)`` re-runs this funnel and a
     /// re-entrant pass would leave the outer one diffing against a `previous` the inner one had
     /// already replaced.
+    ///
+    /// **Sampled twice: the radio half reads the world the gate's pass left** (session photos U3,
+    /// fix round 1, U3-L-U3-R1). The gate's three legs are this edge's own facts, which its pass
+    /// cannot move — but the pass CAN move what the radio half reads: a rising leg re-reads a photo
+    /// index deferred at a locked launch and offers its held photos, and the re-entry projects late
+    /// routed photos as awaiting, either of which makes an ended session's review outstanding and so
+    /// raises `sessionPhotoReviewBlocksDiscovery`. Decided over the first sample, that edge started
+    /// the very search the review blocks (`startJoin`, or `resumeSearch` over a held mesh, which
+    /// revives the ended session). So the gate is written from a first sample, and the verdict the
+    /// radios are driven by (and kept) is decided over a second one taken after its pass; the two
+    /// verdicts' gates are equal, because the gate reads none of what the pass can move.
     private func runProximityPolicy(_ facts: ProximityEdgeFacts, now: Date) -> ProximityRunPolicy.Verdict {
-        let input = ProximityRunPolicy.Input(
-            scenePhase: facts.scenePhase,
-            selectedTab: selectedTab,
-            duressSessionActive: facts.duressSessionActive,
-            protectedDataAvailable: facts.protectedDataAvailable,
-            belowMinimumAge: ProximityRunPolicy.belowMinimumAge(ageAssurance.record),
-            deleteAllInProgress: deleteAllInProgress,
-            continuation: meshContinuationState.feed,
-            session: ProximitySessionPresence.folding(
-                isInSession: meshNetworkManager.isInSession,
-                hasCommittedPeer: meshNetworkManager.hasCommittedPeer
-            ),
-            allowNearbyPresence: settings.allowNearbyPresence,
-            allowNearbyRecipeShares: settings.allowNearbyRecipeShares,
-            sessionPhotoReviewBlocksDiscovery: sessionPhotoReviewCoordinator.blocksDiscovery
-        )
-        let verdict = ProximityRunPolicy.verdict(for: input)
+        func sampledInput() -> ProximityRunPolicy.Input {
+            ProximityRunPolicy.Input(
+                scenePhase: facts.scenePhase,
+                selectedTab: selectedTab,
+                duressSessionActive: facts.duressSessionActive,
+                protectedDataAvailable: facts.protectedDataAvailable,
+                belowMinimumAge: ProximityRunPolicy.belowMinimumAge(ageAssurance.record),
+                deleteAllInProgress: deleteAllInProgress,
+                continuation: meshContinuationState.feed,
+                session: ProximitySessionPresence.folding(
+                    isInSession: meshNetworkManager.isInSession,
+                    hasCommittedPeer: meshNetworkManager.hasCommittedPeer
+                ),
+                allowNearbyPresence: settings.allowNearbyPresence,
+                allowNearbyRecipeShares: settings.allowNearbyRecipeShares,
+                sessionPhotoReviewBlocksDiscovery: sessionPhotoReviewCoordinator.blocksDiscovery
+            )
+        }
+        let gate = ProximityRunPolicy.verdict(for: sampledInput()).routedAccessGate
+        meshNetworkManager.applyRoutedAccessGate(gate, now: now)
+        let verdict = ProximityRunPolicy.verdict(for: sampledInput())
         let previous = proximityRunVerdict
         proximityRunVerdict = verdict
-        meshNetworkManager.applyRoutedAccessGate(verdict.routedAccessGate, now: now)
         let meshFacts = ProximityRunTransition.MeshFacts(
             isSearching: meshNetworkManager.isSearching,
             isInSession: meshNetworkManager.isInSession,

@@ -644,6 +644,12 @@ struct ProximityRunPolicyFunnelTests {
     private static let epoch = Date(timeIntervalSince1970: 1_700_000_000)
 
     private func makeStore(_ name: String) -> FernletStore {
+        makeStore(name, proximity: uniqueProximityDirectory())
+    }
+
+    /// A store on the given proximity root — two stores on one root stand in for one device's
+    /// launches, since the manager's photo stores are files under it.
+    private func makeStore(_ name: String, proximity: URL) -> FernletStore {
         FernletStore(
             repository: LocalFernletRepository(
                 fileURL: FileManager.default.temporaryDirectory
@@ -652,7 +658,7 @@ struct ProximityRunPolicyFunnelTests {
             sensitiveVisibilityDefaults: UserDefaults(suiteName: "\(name)-\(UUID().uuidString)") ?? .standard,
             appGroupDirectory: uniqueAppGroupDirectory(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
-            proximitySupportDirectory: uniqueProximityDirectory(),
+            proximitySupportDirectory: proximity,
             heartDropKeychainService: uniqueHeartDropKeychainService()
         )
     }
@@ -744,5 +750,43 @@ struct ProximityRunPolicyFunnelTests {
                 "a fresh store's input is the edge's three facts, the mirrored tab, the two opt-ins, no ruling, no wipe, no task, no session, no photo review")
         #expect(!store.deleteAllInProgress, "no wipe is in flight on a fresh store")
         #expect(store.discoveryTimeoutTask == nil, "and no fresh-search timeout was armed — nothing here starts a search")
+    }
+
+    /// Session photos U3, fix round 1 (U3-L-U3-R1): the gate's own pass can CREATE the session-photo
+    /// review — the unlock re-reads a photo index deferred at a locked launch and offers the held
+    /// photos (and the foreground re-entry projects a late routed photo as awaiting) — so the radio
+    /// half is decided over a sample taken AFTER that pass. Before the fix the Friends tab's first
+    /// unlocked edge read the block before the pass created the review, and started the very search
+    /// the review blocks (`startJoin` resets the roster and drops a restored context; over a held
+    /// mesh the same stale sample answered `resumeSearch` and revived the ended session).
+    ///
+    /// The one row here on the Friends tab: after the fix it starts no radio (presence is off by
+    /// default and the recipe listener never runs on Friends); the `defer` stands down the search an
+    /// unfixed funnel starts.
+    @Test func aReviewTheGatesPassCreatesHoldsThatEdgesSearchBack() throws {
+        let proximity = uniqueProximityDirectory()
+        let before = makeStore("run-policy-funnel-review-seed", proximity: proximity)
+        let seeding = LastMemberReviewFixtures.foundedManager(store: before)
+        LastMemberReviewFixtures.capture(2, on: seeding)
+        seeding.leaveSession()
+        let aside = try HeldPhotoFixtures.makeWallUnreadable(before)   // the next launch is a locked one
+        let store = makeStore("run-policy-funnel-review", proximity: proximity)
+        let manager = store.meshNetworkManager
+        defer { if manager.isSearching { manager.stopJoin() } }
+        try #require(!manager.hasOutstandingPhotoReview && !store.sessionPhotoReviewCoordinator.blocksDiscovery,
+                     "precondition: over a wall that could not be read at launch nothing is offered yet")
+        try HeldPhotoFixtures.restoreWall(store, aside: aside)   // the unlock makes it readable
+        store.selectedTab = .social
+
+        let verdict = store.applyProximityRunPolicy(
+            scenePhase: .active, protectedDataAvailable: true, duressSessionActive: false, now: Self.epoch
+        )
+
+        #expect(manager.hasOutstandingPhotoReview && store.sessionPhotoReviewCoordinator.blocksDiscovery,
+                "the unlock edge's own gate pass re-read the index and offered the held photos")
+        #expect(verdict.discovery == .stop, "and the radio half saw that review: discovery stays down")
+        #expect(!manager.isSearching, "so no search started under a review that blocks it")
+        #expect(store.proximityRunVerdict == verdict, "the kept verdict is the one the radios were driven by")
+        #expect(verdict.routedAccessGate == manager.routedAccessGate, "while the gate is exactly the one pushed")
     }
 }
