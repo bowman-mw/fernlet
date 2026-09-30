@@ -38,6 +38,10 @@ public nonisolated enum RecipeSubstitution {
     /// upper clamp used across the recipe binders.
     public static let maxReplacementQuantity: Double = 5000
 
+    /// How far rounding may move a replacement amount off the exact gram match before a finer
+    /// rounding is used (``replacementQuantity(for:originalFoodItem:substitute:)``).
+    public static let roundingTolerance = 0.01
+
     /// A replacement quantity + unit for `substitute` that approximates the ORIGINAL ingredient's gram
     /// weight, so swapping (say) butter for olive oil keeps the recipe's scale roughly intact.
     ///
@@ -46,6 +50,12 @@ public nonisolated enum RecipeSubstitution {
     /// either side has no gram mapping (a `.serving`/`.each`-only food with no portion table, or an
     /// unresolved original), fall back to the substitute's natural `defaultRecipeQuantity` at its
     /// `preferredRecipeUnit` — a sane "1 serving / 1 each" default rather than a fabricated weight.
+    ///
+    /// The amount is rounded to one decimal when that stays within ``roundingTolerance`` of the gram
+    /// match, else to two or three decimals, and never to zero (fix round 2 of the ingredient-search
+    /// round, finding N-1). Since F4a a substitute's unit is often a whole item — an apple is 182 g, an
+    /// onion 110 g, a pineapple 905 g — and one decimal of one moved 118 g of banana to 0.6 of an apple
+    /// (109.2 g) and a clove of garlic (3 g) to "0 each" of onion, a line that converts on no build.
     ///
     /// - Parameters:
     ///   - original: the recipe ingredient being replaced (its stored base quantity/unit).
@@ -60,9 +70,7 @@ public nonisolated enum RecipeSubstitution {
         let unit = substitute.preferredRecipeUnit
         let fallback = (max(substitute.defaultRecipeQuantity(for: unit), 0.01), unit.rawValue)
 
-        guard let originalFoodItem,
-              let originalGrams = originalFoodItem.gramsEquivalent(quantity: original.quantity, unit: original.unit),
-              originalGrams > 0,
+        guard let originalGrams = matchedGrams(of: original, on: originalFoodItem),
               let gramsPerUnit = substitute.gramsEquivalent(quantity: 1, unit: unit.rawValue),
               gramsPerUnit > 0 else {
             return fallback
@@ -77,10 +85,13 @@ public nonisolated enum RecipeSubstitution {
     /// quantity/unit). Convenience over `replacementQuantity` for the fork call site.
     ///
     /// Saved the way the recipe editor saves a line (``RecipeIngredient/savingHouseholdAsGrams(using:)``):
-    /// a substitute whose preferred unit only this round's readers convert ("0.65 each" of apples —
-    /// one medium apple is USDA's "medium (3" dia)") becomes its grams with "medium" kept for display,
-    /// so the fork does not total zero on a paired device still on an older build (fix round 1,
-    /// finding u2-C-U2-3).
+    /// a substitute whose preferred unit only this round's readers convert (a medium apple is USDA's
+    /// "medium (3" dia)") becomes grams with "medium" kept for display, so the fork does not total zero
+    /// on a paired device still on an older build (fix round 1, finding u2-C-U2-3). Those grams are the
+    /// ORIGINAL line's, not the rounded count's (fix round 2, finding N-1): 118 g of banana swaps for
+    /// `118 g` of apple, shown "0.65 medium (118 g)". A count that is not a one-decimal cook's amount
+    /// ("0.032 cup" of rice for a teaspoon of something) is saved the same way even where an older
+    /// build reads the unit; a one-decimal count an older build reads ("1 cup", "2 slice") stays as is.
     public static func substitutedIngredient(
         replacing original: RecipeIngredient,
         originalFoodItem: FoodItem?,
@@ -91,8 +102,25 @@ public nonisolated enum RecipeSubstitution {
             originalFoodItem: originalFoodItem,
             substitute: substitute
         )
-        return RecipeIngredient(foodItemId: substitute.id, quantity: quantity, unit: unit)
-            .savingHouseholdAsGrams(using: substitute)
+        let line = RecipeIngredient(foodItemId: substitute.id, quantity: quantity, unit: unit)
+        let saved = line.savingHouseholdAsGrams(using: substitute)
+        let tenths = quantity * 10
+        let isCooksAmount = abs(tenths - tenths.rounded()) < 1e-9
+        guard saved.householdMeasure != nil || !isCooksAmount,
+              let originalGrams = matchedGrams(of: original, on: originalFoodItem),
+              let household = line.householdGrams(using: substitute) else { return saved }
+        let grams = roundedQuantity(min(originalGrams, RecipeConversionLimits.maxGrams))
+        return RecipeIngredient(id: household.id, foodItemId: household.foodItemId, quantity: grams,
+                                unit: household.unit, householdMeasure: household.householdMeasure)
+    }
+
+    /// The grams `original` weighs on its own food, or nil when the food is unresolved or the line
+    /// does not convert to grams.
+    private static func matchedGrams(of original: RecipeIngredient, on originalFoodItem: FoodItem?) -> Double? {
+        guard let originalFoodItem,
+              let grams = originalFoodItem.gramsEquivalent(quantity: original.quantity, unit: original.unit),
+              grams.isFinite, grams > 0 else { return nil }
+        return grams
     }
 
     /// Forks a NEW recipe from `source` with exactly one ingredient replaced. Returns `nil` when
@@ -151,8 +179,14 @@ public nonisolated enum RecipeSubstitution {
     }
 
     /// Round to a single decimal place — enough precision for a cooking amount without exposing the raw
-    /// gram-equivalence float.
+    /// gram-equivalence float — when that stays within ``roundingTolerance`` of `value`; else to two,
+    /// then three decimals (0.648 of an apple is 0.65, a clove of garlic is 0.027 of an onion). Never
+    /// zero: past three decimals the thousandth is kept, floored at one thousandth.
     private static func roundedQuantity(_ value: Double) -> Double {
-        (value * 10).rounded() / 10
+        let scales: [Double] = [10, 100, 1_000]
+        let fitting = scales.lazy
+            .map { (value * $0).rounded() / $0 }
+            .first { $0 > 0 && abs($0 - value) <= roundingTolerance * value }
+        return fitting ?? max((value * 1_000).rounded() / 1_000, 0.001)
     }
 }

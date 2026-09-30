@@ -197,6 +197,21 @@ import FernletDomainModel
         #expect(qty == margarine.defaultRecipeQuantity(for: .gram)) // 100 (serving grams), not a gram-match
     }
 
+    /// Fix round 2 of the ingredient-search round (N-1): one decimal only while it holds the gram match
+    /// within `roundingTolerance`, else two or three decimals — never zero, which no build converts.
+    @Test func replacementQuantityNeverRoundsAwayTheAmount() {
+        let butter = food(name: "Butter", servingUnit: "g")
+        let rice = food(name: "Rice, cooked", servingUnit: "g", portions: [FoodPortion(amount: 1, unit: "cup", gramWeight: 158)])
+        #expect(rice.preferredRecipeUnit == .cup)
+        let cases: [(grams: Double, cups: Double)] = [(158, 1), (237, 1.5), (160, 1.01), (5, 0.032), (1, 0.01)]
+        for (grams, cups) in cases {
+            let original = RecipeIngredient(foodItemId: butter.id, quantity: grams, unit: "g")
+            let (qty, unit) = RecipeSubstitution.replacementQuantity(for: original, originalFoodItem: butter, substitute: rice)
+            #expect(unit == "cup" && abs(qty - cups) < 1e-9, "\(grams) g -> \(qty) cup")
+            #expect(qty > 0)
+        }
+    }
+
     @Test func substitutedIngredientBindsToSubstituteFood() throws {
         let butter = food(name: "Butter", servingUnit: "g", macros: Macros(protein: 1, carbs: 0, fat: 81))
         let margarine = food(name: "Margarine", servingUnit: "g", macros: Macros(protein: 0, carbs: 1, fat: 60))

@@ -17,6 +17,7 @@
 // Every path that MINTS a recipe line applies it (fix round 1, finding u2-C-U2-3): the editor
 // (`CustomIngredientUpsert`), a substitution fork (`RecipeSubstitution.substitutedIngredient`), and a
 // recipe a meal log creates (`FernletStore.commitResolution`, via `RecipeDefinition.savingHouseholdAsGrams`).
+// A fork saved as grams saves the ORIGINAL line's grams, not its rounded count's (fix round 2, N-1).
 
 import Foundation
 
@@ -76,17 +77,28 @@ extension RecipeIngredient {
     /// line — grams, ounces, servings, a custom food's own serving, a volume-served food — is returned
     /// unchanged, as is one whose conversion fails.
     public func savingHouseholdAsGrams(using foodItem: FoodItem) -> RecipeIngredient {
+        guard let saved = householdGrams(using: foodItem) else { return self }
+        if let strict = strictlyReadGrams(using: foodItem),
+           abs(strict - saved.quantity) <= Self.householdRestoreTolerance * saved.quantity {
+            return self
+        }
+        return saved
+    }
+
+    /// The line as its grams with the choice beside them — a count or volume amount of a mass-served
+    /// food that converts through one of its USDA portions — whether or not an older build reads it
+    /// too; nil for every other line. ``savingHouseholdAsGrams(using:)`` keeps a line an older build
+    /// reads; a substitution fork whose computed count is not a cook's amount ("0.027 cup") takes
+    /// this form regardless (fix round 2, finding N-1).
+    func householdGrams(using foodItem: FoodItem) -> RecipeIngredient? {
         guard foodItem.id == foodItemId,
               let requested = RecipeUnit.normalized(unit), requested.isCount || requested.isVolume,
               RecipeUnit.normalized(foodItem.servingUnit)?.dimension == .mass,
               let conversion = servingConversion(using: foodItem), conversion.provenance == .sourcePortion,
               let grams = conversion.grams, let portion = conversion.sourcePortion,
-              let label = Self.householdLabel(for: requested, portion: portion) else { return self }
-        if let strict = strictlyReadGrams(using: foodItem), abs(strict - grams) <= Self.householdRestoreTolerance * grams {
-            return self
-        }
+              let label = Self.householdLabel(for: requested, portion: portion) else { return nil }
         let measure = RecipeHouseholdMeasure(label: label, gramsPerUnit: grams / quantity)
-        guard measure.isValid else { return self }
+        guard measure.isValid else { return nil }
         return RecipeIngredient(id: id, foodItemId: foodItemId, quantity: grams, unit: RecipeUnit.gram.rawValue,
                                 householdMeasure: measure)
     }

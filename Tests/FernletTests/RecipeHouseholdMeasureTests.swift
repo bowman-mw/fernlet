@@ -155,7 +155,44 @@ struct RecipeHouseholdMeasureTests {
             replacing: Self.line(banana, 118, "g"), originalFoodItem: banana, with: apples)
         #expect(swapped.unit == "g" && swapped.householdMeasure?.label == "medium")
         #expect(abs((swapped.householdMeasure?.gramsPerUnit ?? 0) - 182) < 0.001)
-        #expect(abs(swapped.quantity - 0.6 * 182) < 0.001, "118 g of banana → 0.6 of a 182 g apple, saved as its grams")
+        #expect(swapped.quantity == 118, "118 g of banana → 118 g of apple (fix round 2), not 0.6 × 182 g")
+    }
+
+    static func onion() -> FoodItem {
+        food("Onions, raw", [FoodPortion(amount: 1, unit: "medium (2-1/2\" dia)", gramWeight: 110),
+                             FoodPortion(amount: 1, unit: "cup, chopped", gramWeight: 160)])
+    }
+
+    /// Fix round 2 (N-1): a fork keeps the ORIGINAL line's grams. Rounding a whole-item count to one
+    /// decimal made 3 g of garlic "0 each" of a 110 g onion — a line no build converts, so the fork
+    /// totalled zero — and moved small amounts by tens of percent. A one-decimal count an older build
+    /// reads stays as typed; a finer one is saved as grams, or kept non-zero where grams do not apply.
+    @MainActor
+    @Test func aForkKeepsTheOriginalGrams() throws {
+        let garlic = Self.garlic()
+        let onion = Self.onion()
+        let clove = Self.line(garlic, 1, "each")
+        let swapped = RecipeSubstitution.substitutedIngredient(replacing: clove, originalFoodItem: garlic, with: onion)
+        #expect(swapped.quantity == 3 && swapped.unit == "g" && swapped.householdMeasure?.label == "medium")
+        let banana = Self.banana()
+        let source = Self.recipe("Stir fry", [clove, Self.line(banana, 118, "g")])
+        let fork = try #require(RecipeSubstitution.fork(source: source, replacing: clove.id, with: swapped))
+        #expect(MealBuilder.macroTotals(for: fork, foodItems: [onion, banana]) != MacroTotals(),
+                "a \"0 each\" line zeroed the whole fork")
+        let rice = Self.food("Rice, white, cooked", [FoodPortion(amount: 1, unit: "cup", gramWeight: 158)])
+        let cupOfRice = RecipeSubstitution.substitutedIngredient(
+            replacing: Self.line(garlic, 158, "g"), originalFoodItem: garlic, with: rice)
+        #expect(cupOfRice.quantity == 1 && cupOfRice.unit == "cup", "a one-decimal count an older build reads stays")
+        let spoonOfRice = RecipeSubstitution.substitutedIngredient(
+            replacing: Self.line(garlic, 5, "g"), originalFoodItem: garlic, with: rice)
+        #expect(spoonOfRice.quantity == 5 && spoonOfRice.unit == "g" && spoonOfRice.householdMeasure?.label == "cup",
+                "0.032 cup is not a cook's amount: saved as 5 g, shown against the cup")
+        let bagel = FoodItem(name: "Bagel", servingSize: 1, servingUnit: "each", macros: Macros(protein: 10, carbs: 50, fat: 2),
+                             micronutrients: Micronutrients(), category: "Bakery", source: .manual, tags: [],
+                             portions: [FoodPortion(amount: 1, unit: "each", gramWeight: 95)])
+        let crumb = RecipeSubstitution.substitutedIngredient(replacing: clove, originalFoodItem: garlic, with: bagel)
+        #expect(crumb.unit == "each" && crumb.quantity == 0.032, "a count-served substitute keeps a non-zero count")
+        #expect(crumb.servingConversion(using: bagel) != nil)
     }
 
     /// A recipe a quick log mints reaches the book through `FernletStore.commitResolution`, which saves

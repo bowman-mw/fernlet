@@ -329,6 +329,9 @@ kept as typed (fix round 1), so the grocery list, share text and export still sh
 that mints a recipe line applies the rule: the editor, a substitution fork
 (``RecipeSubstitution/substitutedIngredient(replacing:originalFoodItem:with:)``) and a recipe a meal
 log creates (``RecipeDefinition/savingHouseholdAsGrams(using:)``, applied where the store commits it).
+A fork saved as grams keeps the ORIGINAL line's grams (118 g of banana swaps for 118 g of apple,
+"0.65 medium"), and its count is rounded finer than one decimal where one decimal would move it more
+than ``RecipeSubstitution/roundingTolerance`` — never to zero (fix round 2).
 The measure is display metadata: nutrition never reads it, the recipe page shows "1 medium (118 g)"
 (``RecipeIngredient/amountText``), the editor re-opens the line as "1 each"
 (``RecipeIngredient/restoringHouseholdAmount(using:)``), and the `fernlet.recipe` wire carries the
