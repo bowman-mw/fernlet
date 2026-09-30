@@ -557,4 +557,40 @@ struct PendingSessionPhotoStoreTests {
         #expect(store.load(now: Date()) == .loaded(.empty))
         #expect(locked.purgeAll(), "purging an absent corpus is success")
     }
+
+    // MARK: - Reading for a keep (fix round 1, U2-C-U2-R1 / U2-L-U2-R3)
+
+    /// `readImage(for:)` tells a photo that is GONE (its file missing, or bytes that do not open
+    /// under a present key) from a read that may succeed LATER (no key right now, or a file that
+    /// exists and cannot be read). A keep removes a ticked photo only in the first case; before this
+    /// split every nil from `imageData(for:)` was "unreadable" and the photo was deleted for good.
+    @Test func readImageTellsAGonePhotoFromOneThatCannotBeReadRightNow() throws {
+        let directory = makeDirectory()
+        defer { cleanUp(directory) }
+        let store = PendingSessionPhotoStore(directory: directory, keyProvider: InMemoryPrivateMediaKeyProvider())
+        let bytes = jpeg()
+        let index = try requireHeld(held(), bytes: bytes, into: .empty, store: store)
+        let entry = try #require(index.photos.first)
+        let file = imageURL(in: directory, id: entry.localID)
+        #expect(store.readImage(for: entry) == .opened(bytes))
+
+        let locked = PendingSessionPhotoStore(directory: directory, keyProvider: NoMediaKeyProvider())
+        #expect(locked.readImage(for: entry) == .unavailable, "no key right now: may open after an unlock")
+
+        let aside = file.appendingPathExtension("aside")
+        try FileManager.default.moveItem(at: file, to: aside)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
+        #expect(store.readImage(for: entry) == .unavailable, "a file that exists and cannot be read is not lost")
+        try FileManager.default.removeItem(at: file)
+
+        #expect(store.readImage(for: entry) == .gone, "a missing file is gone for good")
+
+        try Data("FMA2 not a box".utf8).write(to: file)
+        #expect(store.readImage(for: entry) == .gone, "bytes that do not open under a present key are gone")
+        #expect(store.imageData(for: entry) == nil)
+
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.moveItem(at: aside, to: file)
+        #expect(store.readImage(for: entry) == .opened(bytes), "and nothing about a failed read touched the file")
+    }
 }

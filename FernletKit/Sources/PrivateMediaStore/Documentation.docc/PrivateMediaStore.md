@@ -110,6 +110,12 @@ the durable truth a review is rebuilt from after a process kill. The store is bu
   (delete-all), the duress crypto-erase, or an index whose AEAD open fails under a present key.
   `heldAt` orders the review and is never an expiry. The 200-photo cap is a refusal
   (``PendingSessionPhotoStore/Hold/full``), never an eviction.
+- **A read says why it failed.** ``PendingSessionPhotoStore/readImage(for:)`` answers
+  ``PendingSessionPhotoStore/HeldImageRead/gone`` only for bytes that can never open again (the
+  file is missing, or it does not open under a present key) and
+  ``PendingSessionPhotoStore/HeldImageRead/unavailable`` for a read that may succeed later (no key
+  right now, a file that exists and cannot be read). The owner removes a photo the person chose to
+  keep only when it is gone; an unavailable one stays held for the retry.
 - **Deferral versus purge.** An index that exists but cannot be read (no key, a file read error) is
   deferred and never written over. A present key that does not OPEN it purges the corpus at once —
   unlike the wall, because an unopenable pending file is corruption or a duress-swept key and has

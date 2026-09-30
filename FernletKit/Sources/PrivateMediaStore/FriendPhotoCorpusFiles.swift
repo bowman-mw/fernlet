@@ -199,32 +199,59 @@ struct FriendPhotoCorpusFiles {
 
     // MARK: - Reads
 
-    /// The full-size plaintext bytes for `id`, decrypted from disk.
+    /// What one full-size read found — the four outcomes a caller that must not lose a photo has to
+    /// tell apart (``PendingSessionPhotoStore/readImage(for:)``): bytes, bytes that are gone for
+    /// good, and a read that may succeed later.
+    enum ImageRead: Equatable {
+        /// The plaintext bytes (a legacy plaintext file, where allowed, is re-sealed in place).
+        case opened(Data)
+        /// No file for this id. Nothing a later read does can bring it back.
+        case missing
+        /// Nothing can be said right now: no key is available, or the file exists and could not be
+        /// read (a locked device's file protection, an I/O error). The file is kept; a later read
+        /// retries.
+        case unavailable
+        /// A key is present and the bytes do not open (corruption, a key that is not the one they
+        /// were sealed under, planted plaintext in a born-sealed corpus). Permanent.
+        case unopenable
+    }
+
+    /// Reads and opens the full-size file for `id`, saying WHY when there are no bytes (see
+    /// ``ImageRead``). Never hands back ciphertext.
+    func readImage(forID id: UUID) -> ImageRead {
+        let url = imageURL(for: id)
+        guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
+        let stored: Data
+        do {
+            stored = try Data(contentsOf: url)
+        } catch {
+            // Recovery: the file is kept and a later read (after unlock) retries.
+            FernletAuditLog.log("privateMedia.imageReadFailed", context: ["corpus": auditCorpus])
+            return .unavailable
+        }
+        switch openSealed(stored, purpose: imagePurpose) {
+        case .opened(let data):
+            return .opened(data)
+        case .legacyPlaintext(let data):
+            // Upgrade a pre-encryption plaintext file to ciphertext on first access (spec §11).
+            keyProvider.sealAndWriteBestEffort(data, to: url, purpose: imagePurpose, reason: "legacyPlaintextUpgrade")
+            return .opened(data)
+        case .noKey:
+            return .unavailable
+        case .unopenable:
+            return .unopenable
+        }
+    }
+
+    /// The full-size plaintext bytes for `id`, decrypted from disk — ``readImage(forID:)`` for a
+    /// caller that only draws them.
     ///
     /// Where legacy plaintext is allowed, a pre-sealing file is returned and re-sealed in place on
     /// this first access. Returns nil when no file exists or the bytes cannot be opened (no key,
     /// wrong key, corruption, planted plaintext in a born-sealed corpus) — never ciphertext.
     func imageData(forID id: UUID) -> Data? {
-        let url = imageURL(for: id)
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        let stored: Data
-        do {
-            stored = try Data(contentsOf: url)
-        } catch {
-            // Recovery: read as missing; the file is kept and a later read (after unlock) retries.
-            FernletAuditLog.log("privateMedia.imageReadFailed", context: ["corpus": auditCorpus])
-            return nil
-        }
-        switch openSealed(stored, purpose: imagePurpose) {
-        case .opened(let data):
-            return data
-        case .legacyPlaintext(let data):
-            // Upgrade a pre-encryption plaintext file to ciphertext on first access (spec §11).
-            keyProvider.sealAndWriteBestEffort(data, to: url, purpose: imagePurpose, reason: "legacyPlaintextUpgrade")
-            return data
-        case .unreadable:
-            return nil
-        }
+        guard case .opened(let data) = readImage(forID: id) else { return nil }
+        return data
     }
 
     /// Thumbnail plaintext for `id`: the sealed thumbnail if it opens, else one regenerated (and
@@ -243,8 +270,8 @@ struct FriendPhotoCorpusFiles {
                     reason: "legacyThumbnailUpgrade"
                 )
                 return data
-            case .unreadable:
-                break  // corrupt/unopenable thumbnail — regenerate from the full image below
+            case .noKey, .unopenable:
+                break  // no key, or a corrupt thumbnail — regenerate from the full image below
             }
         }
         guard let data = inMemoryImage ?? imageData(forID: id),
@@ -304,29 +331,32 @@ struct FriendPhotoCorpusFiles {
 
     // MARK: - At-rest encryption
 
-    /// Three-way outcome of opening an on-disk media file.
+    /// Outcome of opening an on-disk media file.
     ///
     /// Only `.opened` and `.legacyPlaintext` ever hand bytes to a caller, and `.legacyPlaintext`
-    /// is reachable only where ``allowsLegacyPlaintext`` is true.
+    /// is reachable only where ``allowsLegacyPlaintext`` is true. No key and bytes that do not open
+    /// under a present key are kept apart: the first can change (an unlock, a keychain read that
+    /// succeeds next time), the second cannot.
     private enum OpenResult {
         case opened(Data)           // decrypted from ciphertext
         case legacyPlaintext(Data)  // a pre-encryption plaintext file (re-encrypted in place on access)
-        case unreadable             // no key, or bytes that are neither openable nor a valid image
+        case noKey                  // no key available right now; nothing opens
+        case unopenable             // a key is present and the bytes are neither openable nor a valid image
     }
 
     /// Opens AES-256-GCM bytes. GCM open fails both for legacy pre-encryption plaintext files and
     /// for genuinely undecodable bytes (wrong/lost key, corruption); where legacy plaintext is a
     /// legitimate generation the two are told apart by whether the raw bytes are themselves a safe
-    /// image, so a wrong key or a corrupt file still resolves to `.unreadable`.
+    /// image, so a wrong key or a corrupt file still resolves to `.unopenable`.
     private func openSealed(_ stored: Data, purpose: CryptographicPurpose) -> OpenResult {
         // The explicit nil-key guard is load-bearing: without a key NOTHING opens — a legacy
-        // plaintext file is `.unreadable` here, never handed back as a photo.
-        guard keyProvider.mediaKey() != nil else { return .unreadable }
+        // plaintext file is `.noKey` here, never handed back as a photo.
+        guard keyProvider.mediaKey() != nil else { return .noKey }
         if let plaintext = keyProvider.gcmOpen(stored, purpose: purpose) {
             return .opened(plaintext)
         }
-        guard allowsLegacyPlaintext else { return .unreadable }
-        return PrivateMediaStore.isWithinSafePixelBounds(stored) ? .legacyPlaintext(stored) : .unreadable
+        guard allowsLegacyPlaintext else { return .unopenable }
+        return PrivateMediaStore.isWithinSafePixelBounds(stored) ? .legacyPlaintext(stored) : .unopenable
     }
 
     // MARK: - Safe thumbnail generation

@@ -478,8 +478,41 @@ public struct PendingSessionPhotoStore {
 
     // MARK: Reads
 
-    /// A held photo's full-size plaintext, or nil (no key, missing, unopenable). The owner's review
-    /// seam is the only caller, and it gates on its own access facts first.
+    /// What reading a held photo's full-size bytes found — the distinction a KEEP has to make
+    /// before it treats a photo as lost.
+    ///
+    /// Concurrency: an immutable `Sendable` value.
+    public enum HeldImageRead: Equatable, Sendable {
+        /// The plaintext bytes.
+        case opened(Data)
+        /// Gone for good: the file is missing, or a key is present and the bytes do not open
+        /// (corruption, or a duress crypto-erase that minted a fresh key). No later read can help.
+        case gone
+        /// Nothing can be said right now: no key is available (before the first unlock, a keychain
+        /// read that failed), or the file exists and could not be read (a locked device's file
+        /// protection, an I/O error). The file is kept; a later read may open it, so a photo in
+        /// this state must stay held.
+        case unavailable
+    }
+
+    /// Reads a held photo's full-size bytes and says why when there are none (see
+    /// ``HeldImageRead``). The owner's answer engine is the caller: a photo the person ticked is
+    /// removed only when its bytes are ``HeldImageRead/gone``, never on a read that may succeed
+    /// later.
+    public func readImage(for photo: HeldSessionPhoto) -> HeldImageRead {
+        switch files.readImage(forID: photo.localID) {
+        case .opened(let data):
+            return .opened(data)
+        case .missing, .unopenable:
+            return .gone
+        case .unavailable:
+            return .unavailable
+        }
+    }
+
+    /// A held photo's full-size plaintext, or nil (no key, missing, unopenable, unreadable right
+    /// now). The owner's review seam draws with it after gating on its own access facts; a caller
+    /// that must tell a lost photo from a read that may succeed later uses ``readImage(for:)``.
     public func imageData(for photo: HeldSessionPhoto) -> Data? {
         files.imageData(forID: photo.localID)
     }
