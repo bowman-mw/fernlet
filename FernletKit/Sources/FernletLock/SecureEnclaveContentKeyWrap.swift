@@ -221,10 +221,42 @@ nonisolated enum SecureEnclaveContentKeyWrap {
     }
 
     /// Loads the SE key, creating (permanent, enclave-resident, `.privateKeyUsage`-gated,
-    /// `WhenUnlockedThisDeviceOnly`) on first use. `nil` when the enclave is unavailable or
-    /// creation fails — callers fall back to scrypt-only behavior.
-    private static func loadOrCreateKey(service: String) -> SecKey? {
-        if let existing = loadKey(service: service) { return existing }
+    /// `WhenUnlockedThisDeviceOnly`) on first use. `nil` when the enclave is unavailable, when the
+    /// key read could not answer, or when creation fails — callers fall back to scrypt-only
+    /// behavior (the passcode custody) or refuse to persist anything (the device-custody row).
+    ///
+    /// **Creates only on a DEFINITIVE absence** (period-data design §4.2, review R1-F8). With the
+    /// collapsing read, one transient failure to read the EXISTING key (`errSecInteractionNotAllowed`
+    /// while the device auto-locks mid-unlock) minted a SECOND enclave key under the same tag, and
+    /// ``loadKeyResult(service:)`` returns one arbitrary match — so a later unwrap could pick the new
+    /// key and read every blob sealed under the old one as `blobRejected`, a terminal loss produced by
+    /// a transient. An unreadable key now yields nil: the caller retries on its next pass instead.
+    ///
+    /// - Parameters:
+    ///   - readKey: Replaces ``loadKeyResult(service:)`` when non-nil. Injectable only so
+    ///     `SecureEnclaveWrapTests` can force `.unreadable`, which no simulator produces.
+    ///   - create: Replaces the real mint when non-nil, so the same test can prove the mint is
+    ///     never reached on an unreadable read. Production passes neither.
+    static func loadOrCreateKey(
+        service: String,
+        readKey: ((String) -> KeyLoadOutcome)? = nil,
+        create: ((String) -> SecKey?)? = nil
+    ) -> SecKey? {
+        let outcome = readKey.map { $0(service) } ?? loadKeyResult(service: service)
+        switch outcome {
+        case .loaded(let existing):
+            return existing
+        case .unreadable:
+            return nil
+        case .absent:
+            guard let create else { return createKey(service: service) }
+            return create(service)
+        }
+    }
+
+    /// Mints this service's enclave key. Reached ONLY from ``loadOrCreateKey(service:)`` on a
+    /// definitive absence, so no path can put a second key under the same tag.
+    private static func createKey(service: String) -> SecKey? {
         // No CFError out-parameter (R9): the guard on the nil return IS the recovery, and this file
         // has no logger that could consume the error anyway.
         guard let access = SecAccessControlCreateWithFlags(

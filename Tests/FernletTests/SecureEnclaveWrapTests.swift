@@ -783,6 +783,28 @@ struct SecureEnclaveWrapTests {
         #expect(KeychainItem.load(for: .salt, service: service) == nil)
     }
 
+    // MARK: Create-only-on-absent (period-data design §4.2, review R1-F8): a key read that could not
+    // answer must never mint a SECOND enclave key under the same tag — the lookup returns one
+    // arbitrary match, so every blob sealed under the first key would read as `blobRejected`, a
+    // terminal loss produced by a transient.
+    @Test func theEnclaveKeyIsNeverMintedOverAnUnreadableRead() {
+        var mints = 0
+        let unreadable = SecureEnclaveContentKeyWrap.loadOrCreateKey(
+            service: "com.fernlet.lock.test.se.createonabsent",
+            readKey: { _ in .unreadable(errSecInteractionNotAllowed) },
+            create: { _ in mints += 1; return nil }
+        )
+        #expect(unreadable == nil)
+        #expect(mints == 0, "an unreadable key read minted a replacement")
+
+        _ = SecureEnclaveContentKeyWrap.loadOrCreateKey(
+            service: "com.fernlet.lock.test.se.createonabsent",
+            readKey: { _ in .absent },
+            create: { _ in mints += 1; return nil }
+        )
+        #expect(mints == 1, "a definitive absence is the one state that mints")
+    }
+
     // MARK: Proves a partially applied re-key is rolled back. `changeCredential` writes five rows;
     // a failure partway would otherwise leave salt + verifier derived from the NEW passcode over a
     // wrap only the SUPERSEDED derived key opens — a lock that accepts the new passcode and can
