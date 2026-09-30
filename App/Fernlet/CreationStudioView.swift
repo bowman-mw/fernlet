@@ -10,7 +10,14 @@ import FernletUI
 /// colour is pickable before the first stroke), then taps Next into the confirmation step to name
 /// it and optionally list it in their shop — the save is unlisted-first, so a flagged name or a
 /// full shop still keeps the item. New
-/// creations auto-equip so the result is immediately visible on the companion. Pushed within the
+/// creations auto-equip so the result is immediately visible on the companion.
+///
+/// The drawing screen does not scroll (owner decision 2026-09-29): the live preview sits beside
+/// the slot chips, Clear joins Undo and Mirror in one tool row, and the canvas takes the height
+/// that is left, as ``CreationStudioLayout`` decides from measured heights. Only where the controls
+/// cannot fit at all (the largest accessibility text sizes on the smallest iPhones) does the page
+/// scroll, and then only from touches outside the canvas — the canvas owns every touch that starts
+/// on it (``ZoomablePixelCanvas``). Pushed within the
 /// Wardrobe's navigation stack; pass `editingItem` to edit an existing item in place (id /
 /// createdAt / designer preserved, with cross-dimension textures resampled via
 /// ``CreationStudioView/editorPixels(for:palette:)``).
@@ -29,6 +36,8 @@ struct CreationStudioView: View {
     var onExit: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    /// Stacks the tool row into a column at accessibility sizes (see `canvasTools`).
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var slot: ItemSlot
     @State private var pixels: [Int]
@@ -68,12 +77,31 @@ struct CreationStudioView: View {
     @State private var didSave = false
     /// Drives the custom back button's discard prompt.
     @State private var askingToDiscard = false
+    /// The three measurements ``CreationStudioLayout`` reads, in points: the page's visible height
+    /// and the header and tool rows. Zero until first measured, which the layout reads as "does not
+    /// fit" for the one frame before the real numbers land.
+    @State private var viewportHeight: CGFloat = 0
+    @State private var headerHeight: CGFloat = 0
+    @State private var toolsHeight: CGFloat = 0
+    /// Returned to the top whenever the layout comes to fit (a text-size change back down, say): with
+    /// scrolling switched off, an offset left over from the scrolling layout could not be undone.
+    @State private var scrollPosition = ScrollPosition(edge: .top)
 
     /// Bounded so a long session can't grow without limit. A body grid is 48×40 Ints ≈ 15 KB, so 32
     /// snapshots is ~0.5 MB worst case — irrelevant next to the images this app already holds.
     private static let maxUndoSteps = 32
 
     private let palette = ItemDesignPalette.hexes
+
+    /// The gap between the header, the tool row and the canvas.
+    private static let sectionSpacing: CGFloat = 12
+    /// 12pt, not 20. The canvas is the point of this screen and its cell size is set by the room
+    /// around it, so page padding is the one thing directly costing drawing resolution — and it was
+    /// being paid twice (here and inside `editorCanvas`).
+    private static let pagePadding: CGFloat = 12
+    /// The live preview, beside the slot chips. It was a 140pt row of its own above them until the
+    /// screen stopped scrolling (2026-09-29); at 88pt it shares the chips' two rows.
+    private static let previewSize: CGFloat = 88
 
     init(store: FernletStore,
          editingItem: CustomizationItem? = nil,
@@ -94,8 +122,10 @@ struct CreationStudioView: View {
         } else {
             let initialSlot = ItemSlot.body
             _slot = State(initialValue: initialSlot)
-            // The UI-test seed paints the canvas so "Next" is enabled: XCUITest can't synthesize the
-            // custom canvas's paint gesture, and a blank canvas leaves the confirmation step unreachable.
+            // The UI-test seed paints the canvas so "Next" is enabled without a stroke: a blank
+            // canvas leaves the confirmation step unreachable, and the flow tests are about that
+            // step, not about painting. (Synthesized strokes do reach the canvas —
+            // `CreationStudioCanvasUITests` drives them.)
             let initialPixels = UITestSupport.shouldSeedStudioCanvas
                 ? Self.seededPixels(for: initialSlot)
                 : Self.blankPixels(for: initialSlot)
@@ -109,20 +139,36 @@ struct CreationStudioView: View {
     }
 
     var body: some View {
+        let layout = studioLayout
         ScrollView {
-            VStack(spacing: 18) {
-                preview
-                if editingItem == nil {
-                    slotPicker
-                }
+            VStack(spacing: Self.sectionSpacing) {
+                studioHeader
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                 canvasTools
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { toolsHeight = $0 }
                 editorCanvas
-                clearCanvasButton
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .frame(height: layout.canvasHeight)
             }
-            // 12pt, not 20. The canvas is the point of this screen and its cell size is
-            // width / gridCols, so horizontal padding is the one thing directly costing drawing
-            // resolution — and it was being paid twice (here and inside `editorCanvas`).
-            .padding(12)
+            .padding(Self.pagePadding)
+        }
+        // Owner decision 2026-09-29: drawing on a page that moves is what made this screen hard to
+        // use, so it does not scroll whenever everything fits — which is every iPhone at the
+        // default text size. See `CreationStudioLayout` for the accessibility-size exception.
+        .scrollDisabled(layout.fits)
+        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        .scrollPosition($scrollPosition)
+        // `containerSize` is already the page INSIDE its safe area — between the navigation bar
+        // and the pinned palette (measured 2026-09-29 on an iPhone 17: 556pt, with 70 + 186pt of
+        // insets that `visibleRect` spans and `containerSize` does not), so the insets must not be
+        // subtracted again; doing so roughly halves the canvas.
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.containerSize.height
+        } action: { _, visibleHeight in
+            viewportHeight = visibleHeight
+        }
+        .onChange(of: layout.fits) { _, fits in
+            if fits { scrollPosition.scrollTo(edge: .top) }
         }
         .background(Color.parchment)
         .tint(Color.moss)
@@ -131,7 +177,7 @@ struct CreationStudioView: View {
         .safeAreaInset(edge: .bottom) {
             // The editor screen is just the drawing now; naming + listing move to a confirmation
             // step. The palette is pinned here, above Next (3e): a colour is pickable before the
-            // first stroke, wherever the canvas is scrolled.
+            // first stroke, and the fitted canvas ends just above it.
             VStack(spacing: 0) {
                 pinnedPalette
                 SheetSaveBar(label: "Next", disabled: !canSave) { showingConfirmation = true }
@@ -199,17 +245,36 @@ struct CreationStudioView: View {
         }
     }
 
+    /// The fit-or-scroll decision for the current measurements (see ``CreationStudioLayout``).
+    private var studioLayout: CreationStudioLayout {
+        CreationStudioLayout(viewportHeight: viewportHeight, headerHeight: headerHeight,
+                             toolsHeight: toolsHeight, spacing: Self.sectionSpacing,
+                             padding: Self.pagePadding)
+    }
+
     // MARK: - Sections
+
+    /// The live preview beside the slot chips — one row rather than two, which is most of the
+    /// height the canvas needed to fit without scrolling. The edit path has no chips, so its
+    /// preview sits centred on its own.
+    private var studioHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            preview
+            if editingItem == nil {
+                slotPicker
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
 
     private var preview: some View {
         CompanionView(
             state: store.companionState,
             appearance: store.settings.companionAppearance,
-            size: 140,
+            size: Self.previewSize,
             equippedItems: previewEquipped
         )
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
+        .frame(width: Self.previewSize, height: Self.previewSize)
         // Decorative: a live render of the item being designed. The chips and fields below are
         // the semantics; the drawing has nothing to say that they do not.
         .accessibilityHidden(true)
@@ -242,34 +307,55 @@ struct CreationStudioView: View {
         }
     }
 
-    /// Undo + mirror, sat directly above the canvas where the drawing hand already is.
+    /// Undo · Clear canvas · Mirror, sat directly above the canvas where the drawing hand already
+    /// is. Clear lived under the canvas until the screen stopped scrolling (2026-09-29).
+    ///
+    /// One row, whose titles wrap rather than truncate as text grows; at accessibility sizes, one
+    /// button per row. The switch is an `AnyLayout`, not a `ViewThatFits`, because the buttons must
+    /// keep their identity across it: `ViewThatFits` swaps in a different subtree as text grows, and
+    /// the accessibility audit reads the titles in it as Dynamic Type left partially unsupported
+    /// (measured on this screen, 2026-09-29).
     private var canvasTools: some View {
-        HStack(spacing: 12) {
-            Button {
-                undo()
-            } label: {
-                Label("Undo", systemImage: "arrow.uturn.backward")
-                    .font(.fernlet(.label))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(undoStack.isEmpty ? Color.slate.opacity(0.4) : Color.fern)
-            .disabled(undoStack.isEmpty)
-            .accessibilityIdentifier("studio.undo")
-
-            Spacer()
-
-            Button {
-                isSymmetric.toggle()
-            } label: {
-                Label("Mirror", systemImage: isSymmetric ? "square.righthalf.filled" : "rectangle.split.2x1")
-                    .font(.fernlet(.label))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(isSymmetric ? Color.fern : Color.slate)
-            .accessibilityIdentifier("studio.mirror")
-            .accessibilityAddTraits(isSymmetric ? [.isSelected] : [])
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
+            undoButton
+            Spacer(minLength: 0)
+            clearCanvasButton
+            Spacer(minLength: 0)
+            mirrorButton
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 4)
+    }
+
+    private var undoButton: some View {
+        Button {
+            undo()
+        } label: {
+            Label("Undo", systemImage: "arrow.uturn.backward")
+                .font(.fernlet(.label))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(undoStack.isEmpty ? Color.slate.opacity(0.4) : Color.fern)
+        .disabled(undoStack.isEmpty)
+        .fernletTapTarget()
+        .accessibilityIdentifier("studio.undo")
+    }
+
+    private var mirrorButton: some View {
+        Button {
+            isSymmetric.toggle()
+        } label: {
+            Label("Mirror", systemImage: isSymmetric ? "square.righthalf.filled" : "rectangle.split.2x1")
+                .font(.fernlet(.label))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSymmetric ? Color.fern : Color.slate)
+        .fernletTapTarget()
+        .accessibilityIdentifier("studio.mirror")
+        .accessibilityAddTraits(isSymmetric ? [.isSelected] : [])
     }
 
     private var editorCanvas: some View {
@@ -284,8 +370,9 @@ struct CreationStudioView: View {
             onStrokeCancelled: { cancelStroke() },
             onPaintCell: { x, y in paintCell(x: x, y: y) }
         )
+        // Fitted into whatever slot `body` gives it — the full width, or the height the layout
+        // left, whichever binds first — so the card hugs the grid rather than the slot.
         .aspectRatio(CGFloat(slot.gridCols) / CGFloat(slot.gridRows), contentMode: .fit)
-        .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.parchment)
@@ -460,8 +547,8 @@ struct CreationStudioView: View {
             .strokeBorder(isSelected ? Color.moss : Color.bark.opacity(0.22), lineWidth: isSelected ? 2.5 : 1)
     }
 
-    /// Clear-canvas lives on the editor (it's a drawing action); naming + shop listing moved to the
-    /// confirmation step.
+    /// Clear-canvas lives on the editor (it's a drawing action), in the tool row since 2026-09-29;
+    /// naming + shop listing moved to the confirmation step.
     private var clearCanvasButton: some View {
         Button(role: .destructive) {
             // Snapshot before blanking so Clear is a single undoable step; guard skips a no-op snapshot on
@@ -472,10 +559,9 @@ struct CreationStudioView: View {
             Label("Clear canvas", systemImage: "trash")
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.terracotta)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
         }
         .buttonStyle(.plain)
+        .fernletTapTarget()
         .accessibilityIdentifier("studio.clearCanvas")
     }
 

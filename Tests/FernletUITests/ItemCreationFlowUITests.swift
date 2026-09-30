@@ -5,9 +5,10 @@ import XCTest
 /// customization sheet is opened via a launch hook — its real entry is a long-press XCUITest can't send)
 /// and asserts the name/shop controls are NO LONGER on the editor and that it leads to a Next step.
 ///
-/// XCUITest can't drive the custom UIScrollView canvas's paint gesture, so reaching the confirmation
-/// screen (Next is disabled while the canvas is blank) uses the `FERNLET_UI_TEST_SEED_STUDIO_CANVAS`
-/// DEBUG hook, which opens the editor pre-painted.
+/// Reaching the confirmation screen (Next is disabled while the canvas is blank) uses the
+/// `FERNLET_UI_TEST_SEED_STUDIO_CANVAS` DEBUG hook, which opens the editor pre-painted, so these
+/// tests do not depend on drawing. Painting itself, with synthesized strokes, is
+/// `CreationStudioCanvasUITests`' job.
 final class ItemCreationFlowUITests: XCTestCase {
     @MainActor
     func testNameAndShopAreOffTheEditorAndLeadToNext() throws {

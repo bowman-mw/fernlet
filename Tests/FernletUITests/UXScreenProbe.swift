@@ -1619,8 +1619,13 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “This name can't be used in your shop. Your item is saved — rename it and try listing again. (Private items can be named anything.)” (48)",
             "Potentially inaccessible text",
         ],
-        "Studio · Editor (name/shop moved off)": [
-            "Hit area is too small — “Mirror” id=studio.mirror (9)",
-        ],
+        // `Studio · Editor (name/shop moved off)` HAS NO ENTRY SINCE 2026-09-29: its one line,
+        // "Hit area is too small — “Mirror” id=studio.mirror (9)", was FIXED, not lost. The item
+        // designer stopped scrolling (owner decision) and its tool row was rebuilt as Undo · Clear
+        // canvas · Mirror, each with a 44pt `fernletTapTarget()` — the Mirror label's own ~18pt
+        // height was the finding. Measured on a fresh iPhone 17 (iOS 26.5) at `large`, light, with
+        // `-only-testing:FernletUITests/ItemCreationFlowUITests`: 0 raw issues on two independent
+        // runs, with the element still on screen. A missing key is an empty baseline, so the
+        // screen's next finding fails as new.
     ]
 }
