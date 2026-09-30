@@ -49,6 +49,19 @@ struct CatalogTypeaheadCancellationTests {
         #expect(pool == 1)
     }
 
+    /// A query too short to search never reaches retrieval: "ch" used to hydrate the whole 10,000-row
+    /// cap to answer nothing (F5's latency measurement). The answer is unchanged — empty — and the
+    /// source is not asked; a searchable query still is.
+    @Test func aTooShortQueryNeverReachesRetrieval() {
+        let source = CountingFoodSource(Self.catalog().results(for: "chocolate", context: .machineGenerated))
+        let catalog = FoodCatalog(source: source)
+        #expect(catalog.results(for: "ch", context: .userTyped).isEmpty)
+        #expect(catalog.results(for: "c", context: .machineGenerated, ranking: .ingredientIdentity).isEmpty)
+        #expect(source.fetches == 0, "a two-letter keystroke must not fetch candidates")
+        #expect(catalog.results(for: "cho", context: .userTyped).count == 1)
+        #expect(source.fetches > 0)
+    }
+
     /// The editor's own call: superseded before or during its settle, it applies nothing.
     @Test func aSupersededTypeaheadReturnsNil() async {
         let catalog = Self.catalog()
@@ -60,4 +73,29 @@ struct CatalogTypeaheadCancellationTests {
         let settled = await CatalogTypeahead.matches(for: "chocolate", catalog: catalog, ranking: .ingredientIdentity)
         #expect(settled?.count == 1, "an unsuperseded keystroke still answers")
     }
+}
+
+/// An in-memory catalog source that counts its candidate fetches.
+private final class CountingFoodSource: BundledFoodSource, @unchecked Sendable {
+    private let items: [FoodItem]
+    private let lock = NSLock()
+    private var fetchCount = 0
+
+    init(_ items: [FoodItem]) { self.items = items }
+
+    var fetches: Int {
+        lock.lock(); defer { lock.unlock() }
+        return fetchCount
+    }
+
+    func candidates(forQuery query: String, stripsStopwords: Bool) -> [FoodItem] {
+        lock.lock(); fetchCount += 1; lock.unlock()
+        return items
+    }
+
+    func item(id: UUID) -> FoodItem? { items.first { $0.id == id } }
+    func items(ids: [UUID]) -> [FoodItem] { items.filter { ids.contains($0.id) } }
+    func exactMatch(normalizedName: String) -> FoodItem? { nil }
+    func item(barcode: String) -> FoodItem? { nil }
+    var count: Int { items.count }
 }

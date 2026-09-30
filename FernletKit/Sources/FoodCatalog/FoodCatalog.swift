@@ -230,6 +230,11 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         context: FoodSearchContext,
         ranking: FoodSearchRanking = .standard
     ) -> [FoodItem] {
+        // A query too short to search is answered BEFORE retrieval. The scorer, the partial path, the
+        // alias and the correction all refuse one under `minimumQueryLength` anyway, but the FTS fetch
+        // did not: typing "ch" hydrated and indexed the 10,000-row cap (~0.4 s on the simulator, F5's
+        // latency measurement) to return nothing, on every typeahead.
+        guard FoodItemSearch.normalized(query).count >= FoodItemSearch.minimumQueryLength else { return [] }
         let rankingNow = Date()
         let typed = context == .userTyped
         let fetchLimit = typed ? TypeaheadDuplicateCollapse.fetchLimit(for: limit) : limit
