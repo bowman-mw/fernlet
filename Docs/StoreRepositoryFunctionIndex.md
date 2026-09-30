@@ -598,7 +598,8 @@ The debounce/queue mechanics this service used to own now live in `PendingWriteB
 | `purge()` | Deletes the pending buffer file. |
 | `loadEntries()` | Opens the ChaChaPoly buffer file with the buffer key and decodes payloads. Requires the `FNB2` marker since crypto-standardization Phase 3: a non-empty file without it is refused by name as `PendingNarrativeBufferError.legacyUnprefixedFormat` (audit-logged, never opened under no domain, and never deleted), and the Phase 2.4 migrator that converted such files went with the reader it converted through. |
 | `saveEntries(_:)` | Encodes, encrypts, atomically writes, excludes from backup, and marks complete file protection. |
-| `bufferKey()` | Loads or creates the background-accessible buffer key. |
-| `loadBufferKey()` | Reads the buffer key through the shared `KeychainItem.load(account:service:)`, migrating a legacy v1 row into the scoped v2 slot via `KeychainItem.store(...)`. |
+| `bufferKey()` | Reads the background-accessible buffer key with `KeychainItem.loadDistinguishingAbsence`: found → the key; unreadable → `PendingNarrativeBufferError.keyUnreadable(status:)` (never a mint); absent → the legacy migration, else a fresh key ONLY over an absent or empty file (a non-empty file with no key throws `.bufferUnopenable`). Period-data design 2026-09-30 §6.5. |
+| `bufferFileIsAbsentOrEmpty()` | Whether the buffer file holds nothing; an unreadable size answers false (fail closed). |
+| `migrateLegacyServicelessKeyIfPresent()` | Production scope only, on a v2 slot that read absent: moves the legacy v1 row into the scoped v2 slot via `KeychainItem.store(...)`. |
 | `loadLegacyServicelessKey()` | Raw `SecItemCopyMatching` read of the service-less v1 key — the one keychain call `KeychainItem` cannot express; dies with the v1 migration. |
 | `createAndStoreBufferKey()` | Creates a 256-bit buffer key and stores it after-first-unlock-this-device-only through `KeychainItem.store(...)`. |

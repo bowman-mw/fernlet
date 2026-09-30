@@ -35,6 +35,16 @@ public enum PendingNarrativeBufferError: Error, Equatable {
     /// byte-identical, because bytes that will not open may really be "sealed under a key this
     /// device lost", and the drain's contract is to keep what it cannot decode.
     case legacyUnprefixedFormat
+    /// The buffer key's keychain row could not be READ (`errSecInteractionNotAllowed` before first
+    /// unlock, `errSecNotAvailable`, …), carrying the status. Nothing is minted and nothing is
+    /// written: the key may be perfectly intact, and a fresh key over it would make every buffered
+    /// entry unopenable. An append fails with nothing lost; a drain retries at the next open.
+    case keyUnreadable(status: OSStatus)
+    /// The buffer key's row is definitively ABSENT while the buffer file still holds entries — the
+    /// entries were sealed under a key that no longer exists (a wipe that destroyed the key but not
+    /// the file, a restore that brought the file without the key). They can never be opened, so the
+    /// key is NOT re-minted over them: removing the file is a separate, explicit act.
+    case bufferUnopenable
 }
 
 // MARK: - Payload
@@ -103,7 +113,11 @@ public struct PendingNarrativePayload: Codable, Equatable {
 ///   content key so logging can reach the buffer without the user's Fernlet passcode. A legacy
 ///   service-less keychain item is migrated into the scoped slot on first read — by the
 ///   production scope only, since that row is production's migration source and the migration
-///   deletes it.
+///   deletes it. The key is read with a DISTINGUISHING read and minted only on a definitive
+///   absence over an absent or empty file: an unreadable key throws
+///   ``PendingNarrativeBufferError/keyUnreadable(status:)`` and a missing key over buffered
+///   entries throws ``PendingNarrativeBufferError/bufferUnopenable`` — never a fresh key over
+///   either (`KeyCustodyBoundaryTests.bufferKeyIsNeverMintedOverAnUnreadableRow`).
 /// - The buffer caps at 50 entries; ``append(_:)`` evicts the oldest beyond the cap and records
 ///   the eviction via `FernletAuditLog`.
 ///
@@ -274,19 +288,48 @@ public final class PendingNarrativeBuffer {
 
     // MARK: - Buffer key management
 
-    /// Returns the buffer key, creating and storing a fresh one on first use.
+    /// Returns the buffer key, minting one only when that provably loses nothing.
+    ///
+    /// **Never mints over a key it could not read, nor over entries it cannot open** (period-data
+    /// design 2026-09-30, §6.5, review R1-F5). The read distinguishes absence from failure:
+    /// - found → the key;
+    /// - unreadable → ``PendingNarrativeBufferError/keyUnreadable(status:)``. The old collapsing read
+    ///   minted a fresh key on ANY nil, and `KeychainItem.store` is delete-then-add, so one transient
+    ///   read failure destroyed the real key and every buffered entry with it;
+    /// - absent → the legacy service-less key is migrated if the production scope has one; otherwise
+    ///   a key is minted only when the buffer file is absent or empty. A non-empty file with no key
+    ///   is ``PendingNarrativeBufferError/bufferUnopenable``: those entries were sealed under a key
+    ///   that is gone, and a new key would not open them either.
     private func bufferKey() throws -> SymmetricKey {
-        if let existing = loadBufferKey() { return existing }
-        return try createAndStoreBufferKey()
+        switch KeychainItem.loadDistinguishingAbsence(account: Self.bufferKeyAccountV2, service: scope.keychainService) {
+        case .found(let data):
+            return SymmetricKey(data: data)
+        case .unreadable(let status):
+            FernletAuditLog.log("buffer.keyUnreadable", context: ["status": "\(status)"])
+            throw PendingNarrativeBufferError.keyUnreadable(status: status)
+        case .absent:
+            if let migrated = migrateLegacyServicelessKeyIfPresent() { return migrated }
+            guard bufferFileIsAbsentOrEmpty() else {
+                FernletAuditLog.log("buffer.keyMissingOverEntries")
+                throw PendingNarrativeBufferError.bufferUnopenable
+            }
+            return try createAndStoreBufferKey()
+        }
     }
 
-    /// Loads the buffer key from the keychain, migrating a legacy service-less item into the
-    /// scoped v2 slot when that is all that exists.
-    private func loadBufferKey() -> SymmetricKey? {
-        // Try current key (with service) first
-        if let data = KeychainItem.load(account: Self.bufferKeyAccountV2, service: scope.keychainService) {
-            return SymmetricKey(data: data)
-        }
+    /// Whether the buffer file holds no entries at all — absent, or zero bytes. A size that cannot be
+    /// read answers false (fail closed: "maybe entries" must never license a mint).
+    private func bufferFileIsAbsentOrEmpty() -> Bool {
+        let path = bufferFileURL.path
+        guard FileManager.default.fileExists(atPath: path) else { return true }
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+              let size = attributes[.size] as? NSNumber else { return false }
+        return size.intValue == 0
+    }
+
+    /// Migrates a legacy service-less buffer key into the scoped v2 slot, for a v2 slot that read
+    /// definitively ABSENT — the only state that may consult the legacy row.
+    private func migrateLegacyServicelessKeyIfPresent() -> SymmetricKey? {
         // Only the production scope may consume the legacy row: it is production's one migration
         // source, and the migration below DELETES it — a scoped (test) buffer that fell through
         // here would steal the key into its throwaway service and strand the real buffer file.
@@ -331,7 +374,7 @@ public final class PendingNarrativeBuffer {
     ///
     /// Kept as a raw `SecItemCopyMatching` call because `KeychainItem` cannot express a
     /// service-less query (service is a required parameter of its contract). This whole helper
-    /// dies when the v1-to-v2 migration in ``loadBufferKey()`` is retired.
+    /// dies when the v1-to-v2 migration in ``migrateLegacyServicelessKeyIfPresent()`` is retired.
     private func loadLegacyServicelessKey() -> SymmetricKey? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

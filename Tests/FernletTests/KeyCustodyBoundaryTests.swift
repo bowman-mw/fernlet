@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import PrivateMediaStore
+import PrivateStoreCore
 import ProximityKit
 import Security
 import Testing
@@ -117,6 +118,28 @@ struct KeyCustodyBoundaryTests {
                     "\(key.rawValue) must be WhenUnlockedThisDeviceOnly")
             #expect(attrs?.synchronizable == false, "\(key.rawValue) must never sync")
         }
+    }
+
+    // MARK: The pending buffer's key (period-data design §6.5, review R1-F5, invariant I21's key
+    // half): an unreadable read must never mint a replacement. `KeychainItem.store` is
+    // delete-then-add, so the old collapsing read + mint destroyed the real key — and every entry
+    // buffered under it — on a single transient failure. Driven through the R5 empty-service guard
+    // (`.unreadable(errSecParam)`), the same way `deviceSealingKeyIsNeverMintedOverAnUnreadableRow`
+    // is; the named error is the proof no mint was attempted (the mint path throws a different one).
+    @Test func bufferKeyIsNeverMintedOverAnUnreadableRow() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fernlet.tests.bufferKeyUnreadable.\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let buffer = PendingNarrativeBuffer(scope: PendingNarrativeStorageScope(directory: directory, keychainService: ""))
+        let payload = PendingNarrativePayload(
+            hkExternalUUID: UUID().uuidString, dateKey: "2026-09-30",
+            noteBytes: Data("held".utf8), symptomFlagsBytes: nil, customSymptomScalesBytes: nil
+        )
+        #expect(throws: PendingNarrativeBufferError.keyUnreadable(status: errSecParam)) {
+            try buffer.append(payload)
+        }
+        #expect(!FileManager.default.fileExists(atPath: PendingNarrativeBuffer.fileURL(in: directory).path),
+                "an append whose key could not be read must write nothing")
     }
 
     // MARK: Proves the no-lock sealing keys (journal + worry device keys) mint as
