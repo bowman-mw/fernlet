@@ -1399,6 +1399,45 @@ struct DuressRecoveryDeviceCustodyTests {
         #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
     }
 
+    /// A recovery-locked phone's entries are sealed under the key its recovery device holds, so
+    /// they are RECOVERABLE — never "entries this iPhone can't open" (review N-U1-1). The read-only
+    /// check says so on both routes instead of `.noEarlierKeySurvives`, the answer the open
+    /// coordinator's removal card rests on; and a setup that did not acknowledge prior data mints
+    /// as it always has here (the enrollment kept, marked superseded) instead of refusing with
+    /// `priorSealedDataPending`, which would route the user to that card. Nothing is deleted, and
+    /// the blob still opens to the key the entries are sealed under.
+    @Test func aRecoveryLockedPhonesEntriesAreRecoverableNeverUnopenable() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        let store = PrivatePersistenceController(inMemory: true)
+        try DeviceCustodyFixture.plantSealedRow(in: store, sealedUnder: SymmetricKey(data: fixture.contentKey))
+        let nextLaunch = FernletLockService(
+            keychainService: fixture.harness.serviceID,
+            sealedContentKeyServices: [fixture.harness.sealedContentKeyServiceID],
+            mediaKeychainServices: [fixture.harness.mediaKeychainServiceID],
+            narrativeBufferScope: fixture.harness.narrativeBufferScope,
+            dateProvider: fixture.harness.clock,
+            uptimeProvider: fixture.harness.uptime,
+            cryptoProvider: fixture.harness.crypto,
+            privatePersistenceController: store
+        )
+        #expect(nextLaunch.isAwaitingCustodianRecovery, "precondition: recovery is owed")
+        #expect(try store.sealedRowCount() == 1, "precondition: an entry sealed under the recovered key")
+
+        for forPasscodeSetup in [false, true] {
+            #expect(try nextLaunch.checkFreshKeyMintIsSafe(forPasscodeSetup: forPasscodeSetup) == .earlierKeyHeldByRecoveryDevice,
+                    "the check called recoverable entries unopenable (setup: \(forPasscodeSetup))")
+        }
+        try await nextLaunch.configure(credential: .pin6("999999"), grantingScope: .privateHub, acknowledgedPriorData: false)
+
+        #expect(nextLaunch.state == .unlocked(scope: .privateHub))
+        #expect(nextLaunch.hasSupersededRecoveryBlob, "the setup must keep the enrollment, marked superseded")
+        #expect(try store.sealedRowCount() == 1, "an entry the recovery device can still open was removed")
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+    }
+
     /// The mint writes the salt LAST, so a re-establish killed after its verifier write leaves
     /// "custodian present, verifier present, salt absent". That must still read as AWAITING
     /// recovery — the verifier-keyed reading called it "not awaiting", and the next setup then

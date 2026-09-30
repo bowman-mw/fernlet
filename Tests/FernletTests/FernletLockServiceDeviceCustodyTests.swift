@@ -213,8 +213,8 @@ extension FernletLockServiceTests {
         dead.plant(.wrappedContentKey, deadWrap)
         let tapping = dead.makeService()
         #expect(tapping.state == .notConfigured)
-        try tapping.checkFreshKeyMintIsSafe(forPasscodeSetup: false)
-        try tapping.checkFreshKeyMintIsSafe(forPasscodeSetup: true)
+        #expect(try tapping.checkFreshKeyMintIsSafe(forPasscodeSetup: false) == .noEarlierKeySurvives)
+        #expect(try tapping.checkFreshKeyMintIsSafe(forPasscodeSetup: true) == .noEarlierKeySurvives)
         try tapping.openWithoutPasscode(for: .privateHub, allowingMint: true)
         #expect(tapping.state == .openedWithoutPasscode(scope: .privateHub))
         #expect(dead.row(.verifier) == nil && dead.row(.wrappedContentKey) == nil, "the tap's sweep must clear the residue")
@@ -245,6 +245,48 @@ extension FernletLockServiceTests {
             #expect(live.row(.verifier) == derived && live.row(.wrappedContentKey) == wrap, "\(label): the rows must survive")
             #expect(live.row(.deviceContentKey) == nil && live.row(.salt) == nil)
         }
+    }
+
+    /// The read-only fresh-key check answers `.noEarlierKeySurvives` — the one answer the open
+    /// coordinator's "can't be opened" card may rest on — only while no key can be reached from this
+    /// iPhone (review N-U1-1). A device row (it holds the key: nothing is minted, nothing is dead), a
+    /// salt (a passcode lock may hold it), or a device row or recovery row that will not answer
+    /// refuses it on BOTH routes, and the check writes nothing whatever it answers.
+    @Test func theReadOnlyCheckNeverClearsTheCardWhileAKeyMayBeReachable() throws {
+        let clean = DeviceCustodyFixture()
+        defer { clean.cleanup() }
+        let opened = DeviceCustodyFixture()
+        defer { opened.cleanup() }
+        let tapping = opened.makeService()
+        try tapping.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        tapping.lock(reason: .manual)
+        let deviceRow = try #require(opened.row(.deviceContentKey))
+        let salted = DeviceCustodyFixture()
+        defer { salted.cleanup() }
+        salted.plant(.salt, Data(repeating: 0x5A, count: FernletLockCrypto.saltLength))
+        let unanswered: [(LockKeychainKey, String)] = [
+            (.deviceContentKey, "read \(LockKeychainKey.deviceContentKey.rawValue)"),
+            (.recoveryBlob, "read recovery material")
+        ]
+
+        for forPasscodeSetup in [false, true] {
+            #expect(try clean.makeService().checkFreshKeyMintIsSafe(forPasscodeSetup: forPasscodeSetup) == .noEarlierKeySurvives)
+            #expect(throws: FernletLockError.deviceCustodyInconsistent, "a device row holds the key (setup: \(forPasscodeSetup))") {
+                try opened.makeService().checkFreshKeyMintIsSafe(forPasscodeSetup: forPasscodeSetup)
+            }
+            #expect(throws: FernletLockError.deviceCustodyInconsistent, "a salt: a passcode lock may hold the key (setup: \(forPasscodeSetup))") {
+                try salted.makeService().checkFreshKeyMintIsSafe(forPasscodeSetup: forPasscodeSetup)
+            }
+            for (row, operation) in unanswered {
+                let service = clean.makeService(unreadableRows: [row: errSecInteractionNotAllowed])
+                #expect(throws: FernletLockError.keychainFailure(operation: operation, status: errSecInteractionNotAllowed),
+                        "\(row.rawValue) unreadable (setup: \(forPasscodeSetup))") {
+                    try service.checkFreshKeyMintIsSafe(forPasscodeSetup: forPasscodeSetup)
+                }
+            }
+        }
+        #expect(opened.row(.deviceContentKey) == deviceRow, "the check changed the device row")
+        #expect(clean.row(.deviceContentKey) == nil && clean.row(.salt) == nil, "the check wrote a row")
     }
 
     /// A fresh passcode setup (no device row) never mints over a copy of an old key that opens

@@ -169,6 +169,11 @@ struct DeviceCustodyFixture {
 
     /// Plants one sealed row in the fixture's store, so `sealedRowCount()` is non-zero.
     func plantSealedRow(sealedUnder contentKey: SymmetricKey) throws {
+        try Self.plantSealedRow(in: persistence, sealedUnder: contentKey)
+    }
+
+    /// Plants one sealed `IntimacyLog` row, sealed under `contentKey`, in `persistence`.
+    static func plantSealedRow(in persistence: PrivatePersistenceController, sealedUnder contentKey: SymmetricKey) throws {
         let context = persistence.container.viewContext
         let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
         object.setValue(UUID(), forKey: "id")

@@ -72,13 +72,16 @@ public enum FernletLockError: Error, LocalizedError, Equatable {
     /// sealed under a key that no longer exists before it asks again with minting allowed.
     case deviceKeyAbsent
     /// A key-bearing lock row is present (or custodian recovery is owed) while the device-custody
-    /// row is absent, so minting a fresh key could strand whatever that row still seals. Nothing was
-    /// written. Retryable from the user's side: it never names a reset.
+    /// row is absent, so minting a fresh key could strand whatever that row still seals. The
+    /// read-only fresh-key check also answers this when the device-custody row itself is present:
+    /// a key is still reachable, so nothing may be called unopenable. Nothing was written.
+    /// Retryable from the user's side: it never names a reset.
     case deviceCustodyInconsistent
     /// A passcode was about to be set with a FRESH key while the private store still holds sealed
     /// entries, and the caller has not yet had them classified. The setup flow routes through the
     /// app's open coordinator, which shows the user what cannot be opened and asks again with the
-    /// acknowledgement. Nothing was written.
+    /// acknowledgement. Nothing was written. Never thrown while a custodian recovery is owed: those
+    /// entries are sealed under the key the recovery device holds, so they are recoverable.
     case priorSealedDataPending
     /// Setting a passcode over existing entries needs a fresh device-owner check (Face ID, Touch ID
     /// or the iPhone passcode), and it was cancelled or failed. Nothing was written.

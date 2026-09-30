@@ -1547,7 +1547,10 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// last copy of a key that still opens everything sealed under it. When sealed rows exist and
     /// `acknowledgedPriorData` is false it throws ``FernletLockError/priorSealedDataPending``
     /// instead, so the app can show the user what the new key cannot open before anything is
-    /// written — and, with the check above, "cannot open" is then true.
+    /// written — and, with the check above, "cannot open" is then true. The one exception is a
+    /// phone awaiting its custodian recovery: its rows are sealed under the key the recovery device
+    /// holds, so they are recoverable, not lost, and the setup mints without asking — keeping the
+    /// enrollment, marked superseded, exactly as it always has (review N-U1-1).
     ///
     /// **Born hard-bound where an enclave exists:** the scrypt wrap is written first (so a key
     /// always exists), the enclave wrap is established and round-trip-verified, and only then —
@@ -1612,7 +1615,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///   ``FernletLockError/ownerVerificationFailed`` when adoption over sealed rows is not confirmed
     ///   by the device owner; ``FernletLockError/deviceCustodyInconsistent`` for a fresh key while a
     ///   copy of an old one survives without the salt; ``FernletLockError/priorSealedDataPending``
-    ///   for a fresh key over unacknowledged sealed rows; the store's count error.
+    ///   for a fresh key over unacknowledged sealed rows — never while a custodian recovery is owed,
+    ///   when those rows are recoverable rather than lost; the store's count error.
     private func deviceContentKeyForAdoption(acknowledgedPriorData: Bool) async throws -> Data? {
         switch keychainLoadDistinguishing(.deviceContentKey, keychainService) {
         case .unreadable(let status):
@@ -1631,6 +1635,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             // passes — the recovery-lock destroyed every such copy, and the custodian's blob is kept
             // and marked by the mint instead — so setup still works while recovery is owed.
             try refuseIfAKeyCopySurvivesWithoutTheSalt(rows: Self.saltIndependentKeyCopyRows)
+            // While recovery is owed, the entries here are sealed under the key the recovery device
+            // holds: recoverable through the ceremony, never "can't be opened", so there is nothing
+            // to acknowledge and the setup mints as it always has here (review N-U1-1). Readable
+            // recovery material first, so a keychain that will not answer never reads as "no
+            // custodian". No audit line: it would say a recovery-lock fired.
+            try refuseIfRecoveryMaterialUnreadable()
+            guard !isAwaitingCustodianRecovery else { return nil }
             if !acknowledgedPriorData, try privatePersistenceController.sealedRowCount() > 0 {
                 FernletAuditLog.log("lock.configureRefused.priorSealedData")
                 throw FernletLockError.priorSealedDataPending
@@ -4370,26 +4381,47 @@ extension FernletLockService {
         }
     }
 
+    /// What a fresh content key would mean for the entries already sealed on this iPhone, as
+    /// answered by ``checkFreshKeyMintIsSafe(forPasscodeSetup:)`` once no copy of an earlier key
+    /// survives ON this iPhone. The two answers differ in whether one survives OFF it.
+    public enum FreshKeyMintVerdict: Equatable, Sendable {
+        /// No copy of an earlier content key survives anywhere — on this iPhone or with a recovery
+        /// device — so the route may mint, and every row sealed under an earlier key is provably
+        /// unopenable: the "entries this iPhone can't open" card (design §4.9) is true.
+        case noEarlierKeySurvives
+        /// A custodian recovery is owed: the enrolled recovery device holds the earlier key, so every
+        /// row sealed under it is RECOVERABLE through the recovery ceremony. Never call such a row
+        /// unopenable or offer to remove it; route to the recovery instead. The tap never mints in
+        /// this state (``openWithoutPasscode(for:allowingMint:)`` refuses); a passcode setup mints
+        /// a new key and keeps the recovery enrollment, marked superseded, as it always has.
+        case earlierKeyHeldByRecoveryDevice
+    }
+
     /// Whether a FRESH content key could be minted right now without destroying a surviving copy of
-    /// an old one — the proof each fresh-key route runs before it writes, exposed READ-ONLY (nothing
-    /// is written, whatever it answers).
+    /// an old one, and what it would mean for the rows already here — the proof each fresh-key route
+    /// runs before it writes, exposed READ-ONLY (nothing is written, whatever it answers).
     ///
     /// For the app's open coordinator (design §4.9): its "entries this iPhone can't open" card is
     /// true only when no copy of the key that sealed them exists, so it runs this BEFORE classifying
-    /// a single row as dead. A throw means a key may still be reachable, and the card must not be
-    /// shown (review L-U1-R1).
+    /// a single row as dead, and shows the card only on ``FreshKeyMintVerdict/noEarlierKeySurvives``.
+    /// A throw means a key may still be reachable here (or a row would not answer), and the card
+    /// must not be shown (review L-U1-R1); ``FreshKeyMintVerdict/earlierKeyHeldByRecoveryDevice``
+    /// means the recovery device can still open them (review N-U1-1).
     ///
-    /// - Parameter forPasscodeSetup: The setup route (a passcode over no device row), which checks
-    ///   the surviving key copies only — a recovery-locked phone may still set up, the custodian's
-    ///   blob being kept by the mint. False for the tap's mint, which also refuses while custodian
-    ///   recovery is owed and while any salt or biometric flag is present.
+    /// Both routes first require the device-custody row and the salt to read definitively absent
+    /// (with either present no fresh key is minted: the tap opens the row, a setup adopts it or
+    /// refuses over the existing lock), every salt-independent key copy to be absent, and the
+    /// recovery material to be readable.
+    ///
+    /// - Parameter forPasscodeSetup: The setup route (a passcode over no device row). False for the
+    ///   tap's mint, which also requires the biometric flag absent.
+    /// - Returns: Whether an earlier key survives with a recovery device.
     /// - Throws: ``FernletLockError/deviceCustodyInconsistent`` or `.keychainFailure`.
-    public func checkFreshKeyMintIsSafe(forPasscodeSetup: Bool) throws {
-        guard forPasscodeSetup else {
-            try proveDeviceKeyMintIsSafe()
-            return
-        }
-        try refuseIfAKeyCopySurvivesWithoutTheSalt(rows: Self.saltIndependentKeyCopyRows)
+    public func checkFreshKeyMintIsSafe(forPasscodeSetup: Bool) throws -> FreshKeyMintVerdict {
+        let localRows = forPasscodeSetup ? [LockKeychainKey.salt] + Self.saltIndependentKeyCopyRows : Self.mintSafetyRows
+        try refuseIfAKeyCopySurvivesWithoutTheSalt(rows: [.deviceContentKey] + localRows)
+        try refuseIfRecoveryMaterialUnreadable()
+        return isAwaitingCustodianRecovery ? .earlierKeyHeldByRecoveryDevice : .noEarlierKeySurvives
     }
 
     /// The mint-safety proof (design §4.3, review R1-F6): a fresh key is minted only when no copy
