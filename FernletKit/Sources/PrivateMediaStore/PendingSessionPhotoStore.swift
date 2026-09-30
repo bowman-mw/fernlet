@@ -434,16 +434,35 @@ public struct PendingSessionPhotoStore {
         now: Date
     ) -> (committed: Bool, PendingSessionPhotoIndex) {
         guard !keys.isEmpty else { return (true, index) }
-        var next = index
-        next.photos.removeAll { keys.contains($0.key) }
-        next.answered.removeAll { keys.contains($0.key) }
-        let expiresAt = now.addingTimeInterval(Self.answeredRetention)
-        let ordered = keys.sorted { ($0.origin, $0.itemID.uuidString) < ($1.origin, $1.itemID.uuidString) }
-        next.answered.append(contentsOf: ordered.map { AnsweredSessionPhoto(key: $0, expiresAt: expiresAt) })
-        next = Self.pruned(next, now: now)
+        let next = Self.answering(keys, in: index, now: now)
         guard prepareDirectory(), let committed = writeIndex(next) else { return (false, index) }
         files.removeOrphanedFiles(keeping: committed.heldLocalIDs)
         return (true, committed)
+    }
+
+    /// The index ``commitAnswers(_:in:now:)`` would write, computed without writing anything: `keys`
+    /// removed from the held photos and tombstoned (an existing tombstone refreshed), expired and
+    /// over-cap tombstones dropped.
+    ///
+    /// The owner uses it when an answer's write FAILED after the person already answered: its mirror
+    /// then reflects the answer (so the review stops offering those photos) and the next write
+    /// that does land — any hold or answer — persists it. A kill before that leaves the file as it
+    /// was: a kept photo is repaired by the owner's launch reconcile (it is on the wall), and a
+    /// discarded one is offered again, never kept.
+    ///
+    /// - Returns: The successor index. Never touches the disk.
+    public static func answering(
+        _ keys: Set<HeldPhotoKey>,
+        in index: PendingSessionPhotoIndex,
+        now: Date
+    ) -> PendingSessionPhotoIndex {
+        var next = index
+        next.photos.removeAll { keys.contains($0.key) }
+        next.answered.removeAll { keys.contains($0.key) }
+        let expiresAt = now.addingTimeInterval(answeredRetention)
+        let ordered = keys.sorted { ($0.origin, $0.itemID.uuidString) < ($1.origin, $1.itemID.uuidString) }
+        next.answered.append(contentsOf: ordered.map { AnsweredSessionPhoto(key: $0, expiresAt: expiresAt) })
+        return pruned(next, now: now)
     }
 
     /// Drops expired tombstones and, past ``maxAnsweredIDs``, the soonest-expiring ones.
