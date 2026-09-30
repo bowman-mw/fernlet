@@ -371,9 +371,14 @@ jobs:
         # re-open rules, the inflected caption) — like the corpus, a change to either compiles clean.
         # The nine suites as written, read off their own result bundle's `totalTestCount` on the F4b
         # tree after a build-for-testing: 112 tests, 0 failed, 0 skipped, no restart line.
+        # RE-MEASURED 112 → 119 at F4b's fix round 1 (2026-09-30): the typical-size table's catalog
+        # categories and the shipped rows the reviews named (two tests), a stand-in's weight kept into
+        # a mass unit, "How many grams is one?", a dropped portion's grams and a saved estimate (four),
+        # and the importer's typical-size line count (one) — the same nine suites, same reading, 119
+        # tests, 0 failed, 0 skipped, no restart line.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh food-search 112 \
+          Scripts/run-gated-suites.sh food-search 119 \
             IngredientSearchCorpusTests \
             CatalogDefaultUnitSweepTests \
             RecipeImportIngredientLineTests \
