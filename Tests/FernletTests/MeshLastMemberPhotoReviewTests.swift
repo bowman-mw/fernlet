@@ -25,6 +25,7 @@
 // rigs' own bounded settles.
 
 import Foundation
+import SwiftUI
 import Testing
 import UIKit
 @testable import FernletCrypto
@@ -381,6 +382,91 @@ struct PendingPhotoReviewScopingTests {
 
         #expect(manager.pendingFriendReview?.entries.isEmpty == true, "the voted-out candidate is purged")
         #expect(manager.pendingReviewPhotos.map(\.id) == captured, "and the photo choice survives the purge")
+    }
+}
+
+// MARK: - The presenter, hosted
+
+/// The SwiftUI half, in a real window on the simulator: `FriendsView` presents the PHOTO review for
+/// an ending that promoted photos — the sheet the owner never saw.
+@MainActor
+@Suite(.serialized)
+struct FriendsViewLastMemberReviewPresentationTests {
+    let store = makeTestStore()
+
+    /// A colored, decodable photo big enough to read in a screenshot of the sheet.
+    private static func swatch(_ color: UIColor) -> Data {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let side = CGSize(width: 480, height: 480)
+        let image = UIGraphicsImageRenderer(size: side, format: format).image { context in
+            color.setFill()
+            context.fill(CGRect(origin: .zero, size: side))
+        }
+        return image.jpegData(compressionQuality: 0.8) ?? MeshRoutedPhotoFixtures.tinyJPEG()
+    }
+
+    /// The owner's ending on the store's own manager — photos taken, then a teardown the person
+    /// did not start (`leaveSession()`, which a verified termination runs) — and then the Friends
+    /// surface appears: its model-state presenter must put up the photo review, every photo in it.
+    ///
+    /// `TEST_RUNNER_FERNLET_TEST_EVIDENCE_DIR` (optional) makes the cell write what the window shows
+    /// as a PNG there — evidence for a review, never an assertion.
+    @Test func theFriendsSurfacePresentsThePhotoReviewAfterAnEndingNobodyReviewed() async throws {
+        let windowScene = try #require(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "Expected an active window scene for SwiftUI lifecycle testing"
+        )
+        let manager = store.meshNetworkManager
+        manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            for color in [UIColor.systemTeal, .systemOrange, .systemPink] { manager.addPhoto(Self.swatch(color)) }
+        }
+        let captured = Set(manager.sessionPhotos.map(\.id))
+        try #require(captured.count == 3)
+        manager.leaveSession()
+        try #require(!manager.isSessionLive && Set(manager.pendingReviewPhotos.map(\.id)) == captured)
+
+        let hosting = UIHostingController(rootView: FriendsView(
+            store: store, activeSheet: .constant(nil), isTabBarCompact: .constant(false),
+            tabResetToken: .constant(0)
+        ))
+        var window: UIWindow? = UIWindow(windowScene: windowScene)
+        window?.frame = windowScene.screen.bounds
+        window?.rootViewController = hosting
+        window?.makeKeyAndVisible()
+        defer {
+            hosting.dismiss(animated: false)
+            window?.isHidden = true
+            window?.rootViewController = nil
+            window = nil
+        }
+        // R2: bounded — at most 60 polls of 100 ms for the sheet's presentation to land.
+        for _ in 0..<60 where hosting.presentedViewController == nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try await Task.sleep(for: .milliseconds(800))   // let the sheet's slide-up settle for the capture
+
+        #expect(hosting.presentedViewController != nil,
+                "the Friends surface presented a sheet for the promoted batch — the photo review")
+        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured,
+                "and nothing was consumed or kept on the way: the choice is still the person's")
+        if let window { Self.writeEvidence(of: window) }
+    }
+
+    /// Renders the window (the presented sheet included) to a PNG in the evidence directory, when
+    /// one was named. Evidence only; a failed write changes no verdict.
+    private static func writeEvidence(of window: UIWindow) {
+        guard let directory = ProcessInfo.processInfo.environment["FERNLET_TEST_EVIDENCE_DIR"] else { return }
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("last-member-photo-review.png")
+        do {
+            try image.pngData()?.write(to: url)
+        } catch {
+            print("evidence not written: \(error)")
+        }
     }
 }
 
