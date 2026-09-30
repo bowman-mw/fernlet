@@ -31,7 +31,8 @@ import Testing
 ///   (`FernletMessagesCardCopy`) are compiled into the app too, for the recipe Share screen's "Send in
 ///   Messages", so `MessagesRecipeCardParityTests` exercises the very code the extension inserts
 ///   with; here it is held that the controller builds its recipe card through it, that the app builds
-///   no card of its own, and that the two files really are members of the app target;
+///   no card of its own, that the two files really are members of the app target, and that the
+///   card's copy is read from the extension's catalog alone, in the app too;
 /// - so is its privacy manifest's required-reason declaration, against every source file that is
 ///   compiled into the appex binary (the target plus the package modules it links).
 struct MessagesExtensionBoundaryTests {
@@ -263,68 +264,80 @@ struct MessagesExtensionBoundaryTests {
         )
     }
 
-    /// Every key of the shared card copy is ALSO in the app's catalog (2026-09-30).
+    /// The shared card copy is read from ONE catalog, the iMessage app's (review C-F1/L-F1, fix
+    /// round 2, 2026-09-30).
     ///
     /// `FernletMessagesCardCopy` is compiled into the app for the recipe Share screen's "Send in
-    /// Messages", and there `String(localized:)` resolves against `App/Fernlet/Localizable.xcstrings`.
-    /// A key missing from it fails the same silent way as above: the card the app composes reads its
-    /// English `defaultValue` in every language. `Scripts/sync-string-catalogs.sh` harvests the keys
-    /// from the app target's build; the three counts' plural blocks are hand-authored
-    /// (`LocalizationBoundaryTests.countBearingKeysCarryPluralVariations()`).
-    @Test func theSharedCardCopyReachedTheAppCatalog() throws {
-        let cardKeys = Self.localizedKeys(in: try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesCardCopy.swift"))
+    /// Messages". Round 1 let it resolve against each process's `Bundle.main`, so in the app it read
+    /// `App/Fernlet/Localizable.xcstrings`, which carried none of the keys and so none of the counts'
+    /// hand-authored `one`/`other` blocks: the app's card read "1 servings · 1 ingredients · 1 steps"
+    /// where the iMessage app's reads "1 serving · 1 ingredient · 1 step", and even a hand copy of the
+    /// blocks would have left two catalogs to part with every translation. Every string now passes
+    /// `bundle: catalog`, the iMessage app's own bundle in either process
+    /// (`MessagesRecipeCardParityTests` holds that it IS the embedded appex in the app, and that the
+    /// resolved card matches it). Held here: every `String(localized:` in the file passes exactly
+    /// that argument, and the app catalog carries none of the keys. An entry there would be dead —
+    /// nothing reads it — yet a translator would still translate it, a second place to edit that
+    /// changes no card.
+    @Test func theSharedCardCopyIsReadOnlyFromTheExtensionsCatalog() throws {
+        let source = try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesCardCopy.swift")
+        let cardKeys = Self.localizedKeys(in: source)
         #expect(cardKeys.count >= Self.minimumCardCopyKeys, "found only \(cardKeys.count) keys in FernletMessagesCardCopy")
-        let appData = try Data(contentsOf: RepoRoot.url("App/Fernlet/Localizable.xcstrings"))
-        let appJSON = try JSONSerialization.jsonObject(with: appData) as? [String: Any]
-        let appCatalogued = Set((appJSON?["strings"] as? [String: Any] ?? [:]).keys)
-        let missingInApp = cardKeys.subtracting(appCatalogued)
-        #expect(
-            missingInApp.isEmpty,
-            """
-            \(missingInApp.count) key(s) of the shared card copy are not in App/Fernlet/Localizable.xcstrings, \
-            so a card the app composes ("Send in Messages") renders them English forever. Run \
-            Scripts/sync-string-catalogs.sh, hand-author the three counts' plural blocks, and commit:
-            \(missingInApp.sorted().joined(separator: "\n"))
-            """
-        )
+        let code = PrivacyWipeCoverageTests.strippingCommentsAndStringLiteralBodies(source)
+        let calls = code.components(separatedBy: "String(localized:").count - 1
+        let redirected = code.components(separatedBy: "bundle: catalog,").count - 1
+        #expect(calls == cardKeys.count, "FernletMessagesCardCopy makes \(calls) String(localized:) calls for \(cardKeys.count) keys")
+        #expect(redirected == calls, """
+            \(calls - redirected) of FernletMessagesCardCopy's \(calls) strings do not pass `bundle: catalog`. \
+            In the app such a string resolves against the app's catalog, which does not carry the card's \
+            keys, so "Send in Messages" composes a card that reads differently from the iMessage app's.
+            """)
+        let appStrings = try Self.catalogStrings("App/Fernlet/Localizable.xcstrings")
+        let duplicated = cardKeys.filter { appStrings[$0] != nil }
+        #expect(duplicated.isEmpty, """
+            App/Fernlet/Localizable.xcstrings carries \(duplicated.count) key(s) of the shared card copy. \
+            The app reads that copy from the embedded extension's catalog, so these entries are dead: \
+            translating them changes no card. Delete them, and translate the card in \
+            App/FernletMessagesExtension/Localizable.xcstrings:
+            \(duplicated.sorted().joined(separator: "\n"))
+            """)
     }
 
-    /// The shared card copy reads the SAME in both catalogs, in every language and plural form
-    /// (review C-F1/L-F1, 2026-09-30).
+    /// `Scripts/sync-string-catalogs.sh` keeps the shared card files' strings out of the APP's
+    /// harvest, and only the app's (fix round 2, 2026-09-30).
     ///
-    /// The card is one builder but two catalogs: the extension resolves its copy against its own, the
-    /// app ("Send in Messages") against `App/Fernlet/Localizable.xcstrings`. Each key's
-    /// `localizations` block must therefore be identical in the two — the hand-authored `one`/`other`
-    /// blocks of the three counts, and every translation once es/fr/de land — or the two cards part
-    /// silently ("1 servings" from one, "1 serving" from the other). Only the per-unit `state` is
-    /// ignored; it records review progress and never reaches a bubble. A key absent from the app
-    /// catalog is ``theSharedCardCopyReachedTheAppCatalog()``'s to report, not this test's. The fix
-    /// for a mismatch is to copy the extension's block into the app catalog verbatim.
-    @Test func theSharedCardCopyReadsTheSameInBothCatalogs() throws {
-        let cardKeys = Self.localizedKeys(in: try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesCardCopy.swift"))
-        #expect(cardKeys.count >= Self.minimumCardCopyKeys, "found only \(cardKeys.count) keys in FernletMessagesCardCopy")
-        let extensionStrings = try Self.catalogStrings("App/FernletMessagesExtension/Localizable.xcstrings")
-        let appStrings = try Self.catalogStrings("App/Fernlet/Localizable.xcstrings")
-        var differing: [String] = []
-        for key in cardKeys.sorted() {
-            guard let appEntry = appStrings[key] as? [String: Any] else { continue }
-            let extensionEntry = extensionStrings[key] as? [String: Any]
-            #expect(extensionEntry != nil, "\(key) is missing from the extension's own catalog")
-            let appReading = try Self.renderingJSON(appEntry["localizations"])
-            let extensionReading = try Self.renderingJSON(extensionEntry?["localizations"])
-            if appReading != extensionReading {
-                differing.append("\(key)\n  app:       \(appReading)\n  extension: \(extensionReading)")
-            }
+    /// The app target compiles both shared files, so its build emits their `.stringsdata`; synced,
+    /// the eight keys would land in the app catalog as the dead entries
+    /// ``theSharedCardCopyIsReadOnlyFromTheExtensionsCatalog()`` refuses. The script excludes them by
+    /// file-name pattern for the `Fernlet` target alone: the extension's own harvest must keep them.
+    /// The pattern must cover both shared files and no app-only file, or an app file's strings
+    /// would silently stop reaching the app catalog.
+    @Test func theSyncScriptKeepsTheCardCopyOutOfTheAppCatalog() throws {
+        let script = try RepoRoot.source("Scripts/sync-string-catalogs.sh")
+        let pattern = "FernletMessagesCard*.stringsdata"
+        #expect(script.contains("""
+                if [[ "$target" == "Fernlet" ]]; then
+                    excluded='\(pattern)'
+                fi
+            """), "the sync script no longer excludes the shared card files from the Fernlet target's harvest")
+        #expect(script.contains(#"-name '*.stringsdata' -not -name "$excluded" -print"#),
+                "the sync script's find no longer applies the exclusion")
+        let prefix = "FernletMessagesCard"
+        let suffix = ".stringsdata"
+        #expect(pattern == prefix + "*" + suffix)
+        for file in Self.sharedCardFiles {
+            let name = file.replacingOccurrences(of: ".swift", with: suffix)
+            #expect(name.hasPrefix(prefix) && name.hasSuffix(suffix), "\(name) escapes the exclusion pattern")
         }
-        #expect(
-            differing.isEmpty,
-            """
-            \(differing.count) key(s) of the shared card copy read differently in the two catalogs, so the \
-            card "Send in Messages" composes is not the iMessage app's card. Copy each extension block \
-            into App/Fernlet/Localizable.xcstrings verbatim:
-            \(differing.joined(separator: "\n"))
-            """
-        )
+        let walker = try #require(FileManager.default.enumerator(atPath: RepoRoot.url("App/Fernlet").path))
+        var appOnly: [String] = []
+        var scanned = 0
+        for case let path as String in walker where path.hasSuffix(".swift") {
+            scanned += 1
+            if (path as NSString).lastPathComponent.hasPrefix(prefix) { appOnly.append(path) }
+        }
+        #expect(scanned >= 150, "scanned only \(scanned) app Swift files — App/Fernlet moved")
+        #expect(appOnly.isEmpty, "\(appOnly) under App/Fernlet would be kept out of the app catalog by the card pattern")
     }
 
     /// A catalog's `strings` object, keyed by string key.
@@ -334,14 +347,6 @@ struct MessagesExtensionBoundaryTests {
         let strings = json?["strings"] as? [String: Any] ?? [:]
         #expect(!strings.isEmpty, "\(path) parsed to zero keys — it moved or broke")
         return strings
-    }
-
-    /// A `localizations` block as canonical JSON with every `"state"` dropped: what a bubble renders.
-    static func renderingJSON(_ localizations: Any?) throws -> String {
-        guard let localizations else { return "(none)" }
-        let data = try JSONSerialization.data(withJSONObject: localizations, options: [.sortedKeys])
-        let json = String(decoding: data, as: UTF8.self)
-        return json.replacingOccurrences(of: #""state":"[^"]*",?"#, with: "", options: .regularExpression)
     }
 
     /// Floor for the copy-vault scan: 57 keys in one vault until 2026-09-30, when the card's eight

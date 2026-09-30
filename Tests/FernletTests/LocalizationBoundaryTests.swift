@@ -130,8 +130,8 @@
 // extension one, which retired the argument rather than answering it. Everything inside `#if DEBUG`
 // is still exempt, skipped structurally rather than by list — copy that is not in the shipping
 // binary cannot be read in the wrong language. `FernletLockError.invalidCredential`'s pass-through
-// carries no literal at all. The one live allowlist is H2's token inventory: five symbol names,
-// defaults keys and wire strings that translating would BREAK, each with that argument attached.
+// carries no literal at all. The one live allowlist is H2's token inventory: symbol names, wire
+// strings and bundle names that translating would BREAK, each with that argument attached.
 //
 // Nothing in this file enforces the deferred list — a grep cannot tell a display string from a token
 // without knowing what the string is FOR, which is the whole reason the localization wall is a
@@ -2258,20 +2258,10 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/FernletMessagesExtension/Localizable.xcstrings",
                      key: "messages.workout.sessionCount",
                      source: "the session count on a shared workout plan"),
-        // The recipe card's three counts AGAIN, in the app's catalog (2026-09-30): the card builder
-        // and its copy (`FernletMessagesCardCopy`) are compiled into the app for the recipe Share
-        // screen's "Send in Messages", and there they resolve against the app bundle. Sync harvests
-        // the keys; the `one`/`other` blocks are hand-authored here too, or a card the app composes
-        // reads "1 servings" in English and worse elsewhere.
-        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
-                     key: "messages.recipe.servingCount",
-                     source: "the serving count on a recipe card the app composes"),
-        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
-                     key: "messages.recipe.ingredientCount",
-                     source: "the ingredient count on a recipe card the app composes"),
-        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
-                     key: "messages.recipe.stepCount",
-                     source: "the step count on a recipe card the app composes"),
+        // The recipe card's counts are listed ONCE, above, in the extension's catalog, although the
+        // app compiles `FernletMessagesCardCopy` too (2026-09-30, "Send in Messages"): the app reads
+        // that copy from the embedded extension's catalog (`FernletMessagesCardCopy.catalog`, fix
+        // round 2), so there is no second set of plural blocks to hand-author or to lose.
         // Network migration P8 item 4's continued-processing card. The key is a BARE LITERAL —
         // `LocalizedStringResource("\(count) friends connected")` — so the key IS the English
         // default and `xcstringstool sync` harvested it with a `%lld` in it and nothing else.
@@ -3352,6 +3342,20 @@ struct LocalizationBoundaryTests {
             path: "App/FernletMessagesExtension/FernletMessagesCard.swift",
             literal: "fork.knife",
             reason: "SF Symbol name drawn into the recipe card's artwork — see the first `fork.knife` entry."
+        ),
+        UIKitTargetToken(
+            path: "App/FernletMessagesExtension/FernletMessagesCardCopy.swift",
+            literal: "FernletMessagesExtension.appex",
+            reason: """
+                The iMessage app's bundle directory name inside the app's `PlugIns` folder — the \
+                product name Xcode gives the embedded appex. The app finds the card's catalog by it; \
+                translated, the lookup finds no bundle and every card string falls back to English.
+                """
+        ),
+        UIKitTargetToken(
+            path: "App/FernletMessagesExtension/FernletMessagesCardCopy.swift",
+            literal: "appex",
+            reason: "The path extension of an app extension's bundle, compared with `URL.pathExtension`."
         ),
         UIKitTargetToken(
             path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",

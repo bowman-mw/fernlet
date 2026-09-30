@@ -173,11 +173,24 @@ for entry in "${TARGETS[@]}"; do
     # the test bundle's strings as well, and silently synced foreign keys into the app
     # catalog. Requiring `<target>.build/Objects-normal/` selects the compile outputs
     # of that target and nothing else.
+    #
+    # One exception, by file: the recipe card's builder and copy
+    # (App/FernletMessagesExtension/FernletMessagesCard*.swift) are compiled into the app
+    # as well as the Messages extension, for the recipe Share screen's "Send in Messages",
+    # so the app's build emits their .stringsdata too. But the app reads that copy from the
+    # EMBEDDED extension's catalog (`FernletMessagesCardCopy.catalog`), so its keys belong
+    # to the extension catalog alone; harvested into the app catalog they would be dead
+    # entries that a translator still translates. `-not -name` keeps them out of the app's
+    # set only (MessagesExtensionBoundaryTests.theSyncScriptKeepsTheCardCopyOutOfTheAppCatalog).
+    excluded='(none)'   # a pattern no .stringsdata name matches
+    if [[ "$target" == "Fernlet" ]]; then
+        excluded='FernletMessagesCard*.stringsdata'
+    fi
     stringsdata=()
     while IFS= read -r line; do
         [[ -n "$line" ]] && stringsdata+=("$line")
     done < <(find "$INTERMEDIATES" -path "*/${target}.build/Objects-normal/*" \
-        -name '*.stringsdata' -print 2>/dev/null | sort -u)
+        -name '*.stringsdata' -not -name "$excluded" -print 2>/dev/null | sort -u)
 
     if [[ ${#stringsdata[@]} -eq 0 ]]; then
         echo "!! $target: no .stringsdata found under $INTERMEDIATES — skipping" >&2

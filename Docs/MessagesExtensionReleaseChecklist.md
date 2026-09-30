@@ -37,7 +37,8 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
   and send. The simulator can never check this row — `canSendText` is false on every simulator and
   the composer cannot be presented there — so it is hardware-only. Confirm: the draft shows the card
   (picture, name, counts, "Opens in Fernlet on iPhone") and no body text; the bubble matches one
-  inserted from the iMessage app for the same recipe; tapping it on the receiving iPhone opens
+  inserted from the iMessage app for the same recipe, and a one-serving, one-ingredient, one-step
+  recipe reads "1 serving · 1 ingredient · 1 step" from both; tapping it on the receiving iPhone opens
   **Review in Fernlet** like any other card; the Share screen then says "Sent in Messages." (and
   nothing after Cancel). Then record what an SMS (green-bubble) recipient and a recipient without
   Fernlet each see, and whether "Include notes" off really sent no notes and no steps.

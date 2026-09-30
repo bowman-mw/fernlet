@@ -134,10 +134,17 @@ slots from the Home Screen icon and is the set's source of truth — never hand-
 Every sentence lives in ``FernletMessagesCopy`` — or, for what a recipe card carries, in
 ``FernletMessagesCardCopy`` — and this target's `Localizable.xcstrings`, synced by
 `Scripts/sync-string-catalogs.sh`; `LocalizationBoundaryTests` rules H1 and H2 hold every literal
-here to "catalogued, or an argued token". No `bundle:` argument appears: an appex's `Bundle.main` is
-its own bundle, and in the app, where the card copy is compiled too, `Bundle.main` is the app's, so
-the same eight keys also live in `App/Fernlet/Localizable.xcstrings`, the three counts with
-hand-authored plural blocks in both catalogs. Either way a card reads in the sender's language. Labels scale with Dynamic Type, each catalog card is one accessibility element whose
+here to "catalogued, or an argued token". ``FernletMessagesCopy`` passes no `bundle:` argument: an
+appex's `Bundle.main` is its own bundle. The card copy passes `bundle: catalog`, because it is
+compiled into the app too, where `Bundle.main` is the app's: ``FernletMessagesCardCopy/catalog`` is
+this extension's bundle in either process — `Bundle.main` here, the embedded
+`PlugIns/FernletMessagesExtension.appex` in the app — so a card composed by "Send in Messages" reads
+out of this catalog, the three counts' hand-authored plural blocks included, and cannot read
+differently from one inserted here in any language (fix round 2, 2026-09-30; round 1's app-side
+lookup sent "1 servings"). The eight keys live in this catalog only: `Scripts/sync-string-catalogs.sh`
+keeps them out of the app's harvest, and `MessagesExtensionBoundaryTests` keeps the app catalog free
+of them. Either way a card reads in the sender's language, because the lookup runs in the sender's
+process. Labels scale with Dynamic Type, each catalog card is one accessibility element whose
 label is the item's title, and the target is inside the accessibility wall's scan.
 
 ### Concurrency

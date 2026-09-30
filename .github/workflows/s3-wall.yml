@@ -320,7 +320,10 @@ jobs:
         # ("Send in Messages"): the composer builds through it, the app builds no card of its own, the
         # two files are app-target members, and the card copy reached the app's catalog too; and
         # 10 → 11 (measured, fix round 1), for the pin that the card copy reads the same in both
-        # catalogs, every language and plural form.
+        # catalogs, every language and plural form. Fix round 2 (2026-09-30) replaced those last two
+        # with ONE catalog — the app reads the card copy from the embedded extension's — and two pins
+        # (every card string passes `bundle: catalog` and the app catalog carries none of the keys; the
+        # sync script keeps them out of the app's harvest): 11 stays 11 (measured).
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh messages-extension 11 MessagesExtensionBoundaryTests
@@ -372,7 +375,8 @@ jobs:
       # grows; never lower it in passing. RAISED 2026-09-30: messages-envelope 46 → 53 in 4 suites, for
       # MessagesReceivedItemTests, measured the same way; and 53 → 57 in 5 suites, for
       # MessagesRecipeCardParityTests (the app's "Send in Messages"), measured the same way; and
-      # 57 → 58, for that suite's one-of-each parity against the extension bundle (fix round 1).
+      # 57 → 58, for that suite's one-of-each parity against the extension bundle (fix round 1); and
+      # 58 → 59, for its pin that the app reads the card copy from the embedded extension (fix round 2).
       - name: Messages envelope (ExchangeMessageEnvelopeV2Tests + ExchangeMultipartRecipeTests + FernletExchangeTests + MessagesReceivedItemTests + MessagesRecipeCardParityTests)
         # The Messages wire: the inflate-bomb bound checked before a byte is inflated, the tight
         # 3,719-byte frame bound under Apple's 5,000-character URL limit, the two version-1 cards minted
@@ -387,7 +391,7 @@ jobs:
         # into both targets), its URL is exactly the envelope's and opens as the same packet.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh messages-envelope 58 \
+          Scripts/run-gated-suites.sh messages-envelope 59 \
             ExchangeMessageEnvelopeV2Tests \
             ExchangeMultipartRecipeTests \
             FernletExchangeTests \
