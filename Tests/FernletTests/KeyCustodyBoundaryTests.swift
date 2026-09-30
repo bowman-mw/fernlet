@@ -161,6 +161,64 @@ struct KeyCustodyBoundaryTests {
         #expect(relaunched.contentKey(for: .privateHub).map { $0.withUnsafeBytes { Data($0) } } == key)
     }
 
+    // MARK: One REAL enclave key, two custodies (review C-U1-R3): on enclave hardware the hard-bound
+    // passcode custody and the `FDS1` device row are wrapped under the SAME enclave key, so a
+    // removal must delete the passcode's wrap BLOB and keep the KEY the device row needs. Every
+    // other adoption/removal test injects a fake enclave for the device row; this one runs tap →
+    // setup (hard-bound) → relaunch + unlock → removal → relaunch + tap through the production
+    // wrapper, and fails if any step deletes or rotates the enclave key.
+    @MainActor
+    @Test func theRealEnclaveCarriesOneKeyThroughAddingAndRemovingAPasscode() async throws {
+        let service = "com.fernlet.lock.test.custody.roundTrip.\(UUID().uuidString)"
+        let bufferScope = uniqueNarrativeBufferScope()
+        defer {
+            KeychainItem.deleteAll(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            KeychainItem.deleteAll(service: bufferScope.keychainService)
+        }
+        let crypto = FakeLockCryptoProvider()
+        let persistence = PrivatePersistenceController(inMemory: true)
+        let makeService = {
+            FernletLockService(
+                keychainService: service,
+                sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+                narrativeBufferScope: bufferScope,
+                cryptoProvider: crypto,
+                privatePersistenceController: persistence
+            )
+        }
+        let hubKey: (FernletLockService) -> Data? = { $0.contentKey(for: .privateHub).map { $0.withUnsafeBytes { Data($0) } } }
+        let enclave = SecureEnclaveContentKeyWrap.isAvailable
+        let first = makeService()
+        try first.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        let key = try #require(hubKey(first))
+        first.lock(reason: .manual)
+
+        try await first.configure(credential: .pin6("123456"), grantingScope: .privateHub, acknowledgedPriorData: false)
+        #expect(hubKey(first) == key, "setup must adopt the device key")
+        #expect(KeychainItem.load(for: .deviceContentKey, service: service) == nil, "the proven custody retires the row")
+        #expect((KeychainItem.load(for: .seWrappedContentKey, service: service) != nil) == enclave)
+        #expect((KeychainItem.load(for: .wrappedContentKey, service: service) == nil) == enclave, "born hard-bound where an enclave exists")
+
+        let locked = makeService()
+        _ = try await locked.unlock(passcode: "123456", for: .privateHub)
+        #expect(hubKey(locked) == key)
+        try await locked.removeCredential(current: "123456")
+        #expect(KeychainItem.load(for: .seWrappedContentKey, service: service) == nil, "the passcode's wrap blob goes")
+        let row = try #require(KeychainItem.load(for: .deviceContentKey, service: service))
+        #expect(row.starts(with: Data((enclave ? "FDS1" : "FDR1").utf8)))
+        if enclave {
+            var enclaveKeySurvived = false
+            if case .loaded = SecureEnclaveContentKeyWrap.loadKeyResult(service: service) { enclaveKeySurvived = true }
+            #expect(enclaveKeySurvived, "the removal deleted the enclave key the FDS1 row is wrapped under")
+        }
+
+        let relaunched = makeService()
+        #expect(relaunched.state == .notConfigured)
+        try relaunched.openWithoutPasscode(for: .privateHub, allowingMint: false)
+        #expect(hubKey(relaunched) == key, "the device row must open to the same key after the round trip")
+    }
+
     // MARK: The pending buffer's key (period-data design §6.5, review R1-F5, invariant I21's key
     // half): an unreadable read must never mint a replacement. `KeychainItem.store` is
     // delete-then-add, so the old collapsing read + mint destroyed the real key — and every entry

@@ -161,6 +161,12 @@ struct DeviceCustodyFixture {
         KeychainItem.load(for: key, service: harness.serviceID)
     }
 
+    /// Raw write of one lock row — a leftover or a lost-salt shape no public flow leaves on demand.
+    func plant(_ key: LockKeychainKey, _ value: Data) {
+        #expect(KeychainItem.store(value, for: key, service: harness.serviceID) == errSecSuccess,
+                "could not plant \(key.rawValue)")
+    }
+
     /// Plants one sealed row in the fixture's store, so `sealedRowCount()` is non-zero.
     func plantSealedRow(sealedUnder contentKey: SymmetricKey) throws {
         let context = persistence.container.viewContext

@@ -83,6 +83,11 @@ public enum FernletLockError: Error, LocalizedError, Equatable {
     /// Setting a passcode over existing entries needs a fresh device-owner check (Face ID, Touch ID
     /// or the iPhone passcode), and it was cancelled or failed. Nothing was written.
     case ownerVerificationFailed
+    /// The passcode was CORRECT, but turning it off would also remove the recovery device, and that
+    /// device still holds the only key to the entries written before the current app lock (a
+    /// SUPERSEDED recovery enrollment). Nothing was written. Removing the recovery device is its own
+    /// deliberate step, so the user takes it there — never as a side effect of this one.
+    case recoveryDeviceHoldsEarlierKey
 
     /// User-facing description for each case, suitable for direct display in the lock UI.
     ///
@@ -151,13 +156,13 @@ public enum FernletLockError: Error, LocalizedError, Equatable {
                           defaultValue: "This phone's saved key is in an older format Fernlet no longer opens. Reset app lock to continue.",
                           bundle: .module,
                           comment: "Shown when the passcode was CORRECT but the stored content-key wrap is in a retired at-rest format this build no longer reads. Must NOT suggest retrying the passcode — nothing about the entry was wrong — and must name the destructive reset as the only way forward.")
-        case .deviceKeyAbsent, .deviceCustodyInconsistent, .priorSealedDataPending, .ownerVerificationFailed:
+        case .deviceKeyAbsent, .deviceCustodyInconsistent, .priorSealedDataPending, .ownerVerificationFailed, .recoveryDeviceHoldsEarlierKey:
             return Self.deviceCustodyDescription(for: self)
         }
     }
 
-    /// The four device-custody wordings (period-data design 2026-09-30, §4.3 and §4.4), lifted out
-    /// of ``errorDescription`` so that switch stays one screen long. `nil` for every other case.
+    /// The five device-custody wordings (period-data design 2026-09-30, §4.3–§4.5), lifted out of
+    /// ``errorDescription`` so that switch stays one screen long. `nil` for every other case.
     ///
     /// None of them says "locked", "protected" or "secured" about the no-passcode state, and none
     /// names a reset: each describes a state the user can retry or answer.
@@ -183,6 +188,11 @@ public enum FernletLockError: Error, LocalizedError, Equatable {
                           defaultValue: "Fernlet couldn't confirm it's you, so the passcode wasn't set.",
                           bundle: .module,
                           comment: "Shown when the Face ID or iPhone passcode check before setting an app passcode over existing entries was cancelled or failed.")
+        case .recoveryDeviceHoldsEarlierKey:
+            return String(localized: "lock.error.recoveryDeviceHoldsEarlierKey",
+                          defaultValue: "Turning off the passcode would remove your recovery device, and it holds the only key to your entries from before this app lock. To go ahead, remove the recovery device first.",
+                          bundle: .module,
+                          comment: "Shown after the correct passcode is entered to turn the app passcode off, when the enrolled recovery device still holds the key to entries written before the current app lock. Removing the recovery device is a separate, deliberate step in App lock settings; this message must not say the entries are already lost.")
         default:
             return nil
         }

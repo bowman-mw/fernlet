@@ -173,7 +173,8 @@ extension FernletLockServiceTests {
 
     /// With the device row absent, ANY present key-bearing row refuses the mint as an inconsistency
     /// and any unreadable one as a keychain failure — nothing is written either way — and an
-    /// unreadable device row is never minted over.
+    /// unreadable device row is never minted over. The salt-bound residue rows refuse when
+    /// unreadable too (their presence is `saltlessResidueIsSweptUnlessAPreSplitVerifierOpensIt`'s).
     @Test func theMintSafetyProofRefusesEveryKeyBearingRow() throws {
         for key in FernletLockService.mintSafetyRows {
             let fixture = DeviceCustodyFixture()
@@ -185,7 +186,7 @@ extension FernletLockServiceTests {
             }
             #expect(fixture.row(.deviceContentKey) == nil)
         }
-        for key in FernletLockService.mintSafetyRows + [.deviceContentKey] {
+        for key in FernletLockService.mintSafetyRows + FernletLockService.saltBoundResidueRows + [.deviceContentKey] {
             let fixture = DeviceCustodyFixture()
             defer { fixture.cleanup() }
             let service = fixture.makeService(unreadableRows: [key: errSecInteractionNotAllowed])
@@ -195,6 +196,88 @@ extension FernletLockServiceTests {
             #expect(fixture.row(.deviceContentKey) == nil, "\(key.rawValue) unreadable: nothing may be minted")
             #expect(!service.hasResidentContentKey)
         }
+    }
+
+    /// A verifier and a scrypt wrap with NO salt open nothing — the verifier is a digest of a key
+    /// only the salt re-derives — so they are residue: the tap mints over them and its sweep
+    /// deletes them (review C-U1-R2). The one exception is a PRE-SPLIT verifier, which stored the
+    /// raw wrapping key itself; the proof tries it, and one that opens the wrap (or one this build
+    /// cannot try against a retired wrap format) refuses both fresh-key routes with nothing written.
+    @Test func saltlessResidueIsSweptUnlessAPreSplitVerifierOpensIt() async throws {
+        let key = Data(repeating: 0x5A, count: 32)
+        let derived = Data(repeating: 0xD1, count: 32)
+        let dead = DeviceCustodyFixture()
+        defer { dead.cleanup() }
+        let deadWrap = try dead.harness.crypto.wrapContentKey(key, using: derived)
+        dead.plant(.verifier, FernletLockCrypto.verifierDigest(of: derived))
+        dead.plant(.wrappedContentKey, deadWrap)
+        let tapping = dead.makeService()
+        #expect(tapping.state == .notConfigured)
+        try tapping.checkFreshKeyMintIsSafe(forPasscodeSetup: false)
+        try tapping.checkFreshKeyMintIsSafe(forPasscodeSetup: true)
+        try tapping.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        #expect(tapping.state == .openedWithoutPasscode(scope: .privateHub))
+        #expect(dead.row(.verifier) == nil && dead.row(.wrappedContentKey) == nil, "the tap's sweep must clear the residue")
+        #expect(dead.row(.deviceContentKey) != nil)
+
+        let legacyWraps: [(String, (DeviceCustodyFixture) throws -> Data)] = [
+            ("a pre-split verifier that opens the wrap", { try $0.harness.crypto.wrapContentKey(key, using: derived) }),
+            ("a retired wrap this build cannot try", { $0.harness.crypto.makeLegacyWrap(contentKey: key, wrappingKey: derived) })
+        ]
+        for (label, makeWrap) in legacyWraps {
+            let live = DeviceCustodyFixture()
+            defer { live.cleanup() }
+            let wrap = try makeWrap(live)
+            live.plant(.verifier, derived)
+            live.plant(.wrappedContentKey, wrap)
+            let service = live.makeService()
+            for forPasscodeSetup in [false, true] {
+                #expect(throws: FernletLockError.deviceCustodyInconsistent, "\(label): the read-only check must refuse") {
+                    try service.checkFreshKeyMintIsSafe(forPasscodeSetup: forPasscodeSetup)
+                }
+            }
+            #expect(throws: FernletLockError.deviceCustodyInconsistent, "\(label): the tap must refuse") {
+                try service.openWithoutPasscode(for: .privateHub, allowingMint: true)
+            }
+            await #expect(throws: FernletLockError.deviceCustodyInconsistent, "\(label): setup must refuse") {
+                try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+            }
+            #expect(live.row(.verifier) == derived && live.row(.wrappedContentKey) == wrap, "\(label): the rows must survive")
+            #expect(live.row(.deviceContentKey) == nil && live.row(.salt) == nil)
+        }
+    }
+
+    /// A fresh passcode setup (no device row) never mints over a copy of an old key that opens
+    /// WITHOUT the salt (review L-U1-R1): the mint's pre-deletes would destroy the last copy of a
+    /// key that still opens every entry sealed under it. Planted row by row, and then the real
+    /// shape — a hard-bound lock that lost only its salt keeps its key in the enclave wrap.
+    @Test func aFreshSetupNeverMintsOverASaltIndependentKeyCopy() async throws {
+        for row in FernletLockService.saltIndependentKeyCopyRows {
+            let fixture = DeviceCustodyFixture()
+            defer { fixture.cleanup() }
+            fixture.plant(row, Data([0x0C]))
+            let service = fixture.makeService()
+            await #expect(throws: FernletLockError.deviceCustodyInconsistent, "\(row.rawValue) must refuse setup") {
+                try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+            }
+            #expect(fixture.row(row) == Data([0x0C]), "\(row.rawValue) must survive the refused setup")
+            #expect(fixture.row(.salt) == nil && fixture.row(.verifier) == nil)
+        }
+        guard SecureEnclaveContentKeyWrap.isAvailable else { return }
+        let fixture = DeviceCustodyFixture()
+        defer { fixture.cleanup() }
+        let first = fixture.makeService()
+        try await first.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        let key = try #require(hubKeyBytes(first))
+        let enclaveCopy = try #require(fixture.row(.seWrappedContentKey), "precondition: born hard-bound on this host")
+        KeychainItem.delete(for: .salt, service: fixture.harness.serviceID)
+        let saltLost = fixture.makeService()
+        #expect(saltLost.state == .notConfigured)
+        await #expect(throws: FernletLockError.deviceCustodyInconsistent) {
+            try await saltLost.configure(credential: .pin6("654321"), grantingScope: .privateHub)
+        }
+        #expect(fixture.row(.seWrappedContentKey) == enclaveCopy, "setup destroyed the only copy of a live key")
+        #expect(SecureEnclaveContentKeyWrap.unwrapResult(enclaveCopy, service: fixture.harness.serviceID) == .recovered(key))
     }
 
     // MARK: - I9: adding and removing a passcode keep ONE key
@@ -431,7 +514,9 @@ extension FernletLockServiceTests {
 
     /// A FRESH setup (no device row) killed or failed at every write never leaves the
     /// `.locked`-with-no-verifier dead end the salt-first order produced: the next launch either
-    /// reads `.notConfigured` and can set up again, or holds a complete lock the passcode opens.
+    /// holds a complete lock the passcode opens, or reads `.notConfigured` — and then BOTH routes
+    /// out work: the tap opens (the salt-less residue does not refuse the mint; review C-U1-R2) and
+    /// its sweep clears the residue, and a passcode set afterwards adopts the tap's key.
     @Test func aFreshSetupInterruptedAtEveryStepCanAlwaysBeFinishedOrOpened() async throws {
         let operations = try await countOperations { fixture, keychain in
             try await fixture.makeService(keychain: keychain)
@@ -451,8 +536,15 @@ extension FernletLockServiceTests {
                 let next = fixture.makeService()
                 switch next.state {
                 case .notConfigured:
+                    try next.openWithoutPasscode(for: .privateHub, allowingMint: true)
+                    let tapKey = try #require(hubKeyBytes(next), "the tap could not open after op \(index)")
+                    for row in [LockKeychainKey.verifier, .kind, .scryptN, .wrappedContentKey] {
+                        #expect(fixture.row(row) == nil, "op \(index): the tap's sweep left \(row.rawValue)")
+                    }
+                    next.lock(reason: .manual)
                     try await next.configure(credential: .pin6("654321"), grantingScope: .privateHub, acknowledgedPriorData: true)
                     #expect(next.state == .unlocked(scope: .privateHub), "setup could not be retried after op \(index)")
+                    #expect(hubKeyBytes(next) == tapKey, "op \(index): the retried setup must adopt the tap's key")
                 default:
                     _ = try await next.unlock(passcode: "123456", for: .privateHub)
                     #expect(hubKeyBytes(next) != nil, "a salt-bearing lock must open after op \(index)")
@@ -474,6 +566,39 @@ extension FernletLockServiceTests {
         service.onResetCompleted = { firings.states.append(service.state) }
         try service.reset()
         #expect(firings.states == [.notConfigured])
+        #expect(fixture.row(.deviceContentKey) == nil)
+    }
+
+    /// Once `reset()`'s keychain sweep has run the keys are gone, so its tail is owed even when a
+    /// later step fails (review C-U1-R1): a buffer file that cannot be removed still leaves the
+    /// state `.notConfigured`, the key scrubbed, and the hook fired once — and the failure is
+    /// still thrown, after all of that, never swallowed.
+    @Test func resetFiresItsHookEvenWhenTheBufferPurgeFails() throws {
+        let fixture = DeviceCustodyFixture()
+        defer { fixture.cleanup() }
+        let service = fixture.makeService()
+        try service.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        let directory = fixture.harness.narrativeBufferScope.directory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("held".utf8).write(to: PendingNarrativeBuffer.fileURL(in: directory))
+        // A read-only directory: the file inside it cannot be unlinked, so `buffer.purge()` throws.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+        defer {
+            do {
+                try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+            } catch {
+                Issue.record("could not restore the buffer directory's permissions: \(error)")
+            }
+        }
+        let firings = ResetHookRecorder()
+        service.onResetCompleted = { firings.states.append(service.state) }
+
+        #expect(throws: (any Error).self, "the purge failure must still be reported") {
+            try service.reset()
+        }
+        #expect(firings.states == [.notConfigured], "the keys are gone, so the hook is owed")
+        #expect(service.state == .notConfigured)
+        #expect(!service.hasResidentContentKey)
         #expect(fixture.row(.deviceContentKey) == nil)
     }
 

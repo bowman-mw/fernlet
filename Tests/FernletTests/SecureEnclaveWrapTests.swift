@@ -4,6 +4,7 @@ import LocalAuthentication
 import Security
 import Testing
 import FernletFoundation
+import PrivateStoreCore
 @testable import FernletLock
 
 /// Proves the Secure-Enclave wrap of the lock content key behaves correctly in BOTH custody
@@ -758,6 +759,11 @@ struct SecureEnclaveWrapTests {
     // credential. Ordering is the property: a throw (or an app kill) between the first write and a
     // trailing delete would leave a stale biometric bypass — holding the previous content key —
     // paired with the new passcode, i.e. a Face ID unlock that installs the wrong key.
+    //
+    // Driven through an ADOPTION (the key is in a device-custody row, so the bypass beside it is
+    // residue). With NO device row and no salt, the same bypass may be the last copy of a key that
+    // still opens every sealed entry, so a fresh setup refuses rather than deleting it (period-data
+    // design review L-U1-R1) — pinned first, below.
     @MainActor
     @Test func configureClearsStaleKeyCopiesBeforeWritingTheNewCredential() async throws {
         let service = "com.fernlet.lock.test.se.configorder.\(UUID().uuidString)"
@@ -770,9 +776,27 @@ struct SecureEnclaveWrapTests {
                                   service: service) == errSecSuccess)
         #expect(KeychainItem.store(Data([1]), for: .biometricEnabledFlag, service: service) == errSecSuccess)
 
-        // A configure that dies at its very FIRST write — the verifier, since the mint writes the
-        // salt LAST (period-data design §4.3).
-        let failing = makeService(keychainService: service, refusingWritesFor: [.verifier])
+        // No device row: a fresh key would destroy the bypass's copy, so setup refuses and keeps it.
+        do {
+            try await makeService(keychainService: service).configure(credential: .pin6("414243"), grantingScope: .privateHub)
+            Issue.record("a fresh setup minted over a surviving bypass copy of a key")
+        } catch FernletLockError.deviceCustodyInconsistent { }
+        #expect(KeychainItem.load(for: .biometricBypass, service: service) != nil, "a refused setup must delete nothing")
+
+        // The device row holds the key: an adoption that dies at its very FIRST write — the
+        // verifier, since the mint writes the salt LAST (period-data design §4.3).
+        #expect(KeychainItem.store(Data("FDR1".utf8) + Data(repeating: 0x22, count: 32), for: .deviceContentKey,
+                                  service: service) == errSecSuccess)
+        let failing = FernletLockService(
+            keychainService: service,
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+            narrativeBufferScope: uniqueNarrativeBufferScope(),
+            keychainStore: { data, key, service in
+                key == .verifier ? errSecSuccess : KeychainItem.store(data, for: key, service: service)
+            },
+            deviceOwnerVerifier: ScriptedDeviceOwnerVerifier(answer: .verified),
+            privatePersistenceController: PrivatePersistenceController(inMemory: true)
+        )
         do {
             try await failing.configure(credential: .pin6("414243"), grantingScope: .privateHub)
             Issue.record("configure succeeded although the verifier write was refused")
@@ -782,6 +806,7 @@ struct SecureEnclaveWrapTests {
                 "the stale bypass must already be gone when the first write is attempted")
         #expect(KeychainItem.load(for: .biometricEnabledFlag, service: service) == nil)
         #expect(KeychainItem.load(for: .salt, service: service) == nil)
+        #expect(KeychainItem.load(for: .deviceContentKey, service: service) != nil, "the key's home must survive the failed adoption")
     }
 
     // MARK: The salt-LAST mint with rollback (period-data design §4.3, review R1-F1): a setup whose

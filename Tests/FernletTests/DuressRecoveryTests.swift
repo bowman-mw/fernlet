@@ -1435,6 +1435,62 @@ struct DuressRecoveryDeviceCustodyTests {
         #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
     }
 
+    /// A recovery-locked phone whose user set a new passcode before reaching their custodian holds a
+    /// SUPERSEDED recovery blob: the only route back to everything written before the lock fired.
+    /// Turning the passcode off would take the recovery device with it (Q8), so the removal refuses —
+    /// only after the passcode is proven (a wrong one is still just a mistype), with nothing written
+    /// — the blob still opens to the original key, and removing the recovery device stays the
+    /// user's own explicit step, after which the removal goes through (review L-U1-R2).
+    @Test func turningOffThePasscodeNeverTakesASupersededRecoveryBlob() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        let relaunched = fixture.harness.makeService()
+        try await relaunched.configure(credential: .pin6("999999"), grantingScope: .privateHub)
+        #expect(relaunched.hasSupersededRecoveryBlob, "precondition: a superseded enrollment")
+        let salt = try #require(recoveryRow(.salt, fixture.harness))
+
+        await #expect(throws: FernletLockError.invalidPasscode) {
+            try await relaunched.removeCredential(current: "000000")
+        }
+        await #expect(throws: FernletLockError.recoveryDeviceHoldsEarlierKey) {
+            try await relaunched.removeCredential(current: "999999")
+        }
+        #expect(recoveryRow(.salt, fixture.harness) == salt, "the refused removal changed the passcode lock")
+        #expect(recoveryRow(.deviceContentKey, fixture.harness) == nil, "the refused removal wrote a device row")
+        #expect(relaunched.hasSupersededRecoveryBlob, "the refused removal deleted the recovery set")
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+
+        try relaunched.removeRecoveryCustodian()
+        try await relaunched.removeCredential(current: "999999")
+        #expect(relaunched.state == .notConfigured)
+    }
+
+    /// The belt to that brace: a superseded recovery set found beside a live device row (the removal
+    /// above now refuses to produce one) is never swept by the tap. The key in hand from the device
+    /// row is not the key that blob protects, so "the key is safe" says nothing about it.
+    @Test func theTapSweepNeverDeletesASupersededRecoverySet() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        let relaunched = fixture.harness.makeService()
+        try await relaunched.configure(credential: .pin6("999999"), grantingScope: .privateHub)
+        let interimKey = try #require(relaunched.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
+        // An interrupted removal's shape, planted: the device row holds the interim key, the salt is gone.
+        plantDeviceRow(interimKey, fixture.harness)
+        KeychainItem.delete(for: .salt, service: fixture.harness.serviceID)
+
+        let tapping = fixture.harness.makeService()
+        #expect(tapping.state == .notConfigured)
+        try tapping.openWithoutPasscode(for: .privateHub, allowingMint: false)
+        #expect(tapping.contentKey(for: .privateHub).map { $0.withUnsafeBytes { Data($0) } } == interimKey)
+        #expect(recoveryRow(.verifier, fixture.harness) == nil, "the passcode leftovers are still swept")
+        #expect(tapping.hasSupersededRecoveryBlob, "the tap's sweep deleted a superseded recovery set")
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+    }
+
     /// A re-establish retires a leftover device row holding the SAME key once the new passcode
     /// custody is proven, and never deletes one holding a different key.
     @Test func reestablishingRetiresOnlyADeviceRowHoldingTheSameKey() async throws {

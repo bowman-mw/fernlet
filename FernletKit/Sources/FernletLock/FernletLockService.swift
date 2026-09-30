@@ -377,7 +377,11 @@ enum FernletLockCrypto {
     /// keep reporting "no legacy wraps" on the day the marker changed — and that report is what
     /// gates deleting the legacy reader (Docs/Plan-Crypto-Standardization-2026-08-27.md, Phase 0/3).
     nonisolated static let wrappedContentKeyFormatV2 = Data("FLW2".utf8)
-    private nonisolated static let verifierFormatV2 = Data("FLV2".utf8)
+    /// The four-byte cleartext marker every purpose-separated digest verifier carries at offset 0 —
+    /// stamped by ``verifierDigest(of:)``. Module-internal rather than `private` so the mint-safety
+    /// proof can tell, from these same bytes, a verifier that is a digest by construction from a
+    /// pre-split one that might be the raw wrapping key itself.
+    nonisolated static let verifierFormatV2 = Data("FLV2".utf8)
 
     /// Derives the 32-byte scrypt key for a passcode and salt, off the main actor.
     ///
@@ -1535,10 +1539,15 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// proves the passcode custody opens to the same key — so every crash point leaves either
     /// `.notConfigured` with the key in the device row, or a complete passcode lock.
     ///
-    /// **A fresh key over prior data needs an acknowledgement.** With no device row, a fresh key is
-    /// minted; when sealed rows exist and `acknowledgedPriorData` is false this throws
-    /// ``FernletLockError/priorSealedDataPending`` instead, so the app can show the user what the
-    /// new key cannot open before anything is written.
+    /// **A fresh key over prior data needs an acknowledgement, and never destroys a live key.** With
+    /// no device row, a fresh key is minted — but first the salt-independent copies of an old key
+    /// (the enclave wrap, the re-wrap staging slot, the biometric bypass, a pre-split verifier that
+    /// opens the scrypt wrap) must read definitively absent, or this throws
+    /// ``FernletLockError/deviceCustodyInconsistent`` with nothing written: the mint would delete the
+    /// last copy of a key that still opens everything sealed under it. When sealed rows exist and
+    /// `acknowledgedPriorData` is false it throws ``FernletLockError/priorSealedDataPending``
+    /// instead, so the app can show the user what the new key cannot open before anything is
+    /// written — and, with the check above, "cannot open" is then true.
     ///
     /// **Born hard-bound where an enclave exists:** the scrypt wrap is written first (so a key
     /// always exists), the enclave wrap is established and round-trip-verified, and only then —
@@ -1598,9 +1607,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// fresh one is to be minted.
     ///
     /// - Returns: The device-custody key (adoption), or nil (no device row).
-    /// - Throws: `.keychainFailure` for an unreadable device row; the device row's own terminal or
-    ///   retryable open errors; ``FernletLockError/ownerVerificationFailed`` when adoption over
-    ///   sealed rows is not confirmed by the device owner; ``FernletLockError/priorSealedDataPending``
+    /// - Throws: `.keychainFailure` for an unreadable device row (or an unreadable key-copy row);
+    ///   the device row's own terminal or retryable open errors;
+    ///   ``FernletLockError/ownerVerificationFailed`` when adoption over sealed rows is not confirmed
+    ///   by the device owner; ``FernletLockError/deviceCustodyInconsistent`` for a fresh key while a
+    ///   copy of an old one survives without the salt; ``FernletLockError/priorSealedDataPending``
     ///   for a fresh key over unacknowledged sealed rows; the store's count error.
     private func deviceContentKeyForAdoption(acknowledgedPriorData: Bool) async throws -> Data? {
         switch keychainLoadDistinguishing(.deviceContentKey, keychainService) {
@@ -1615,6 +1626,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             FernletAuditLog.log("lock.deviceCustodyAdopting")
             return contentKeyData
         case .absent:
+            // No device row, so a FRESH key: first prove no copy of an old key survives that the
+            // mint's pre-deletes and writes would destroy (review L-U1-R1). A recovery-locked phone
+            // passes — the recovery-lock destroyed every such copy, and the custodian's blob is kept
+            // and marked by the mint instead — so setup still works while recovery is owed.
+            try refuseIfAKeyCopySurvivesWithoutTheSalt(rows: Self.saltIndependentKeyCopyRows)
             if !acknowledgedPriorData, try privatePersistenceController.sealedRowCount() > 0 {
                 FernletAuditLog.log("lock.configureRefused.priorSealedData")
                 throw FernletLockError.priorSealedDataPending
@@ -2312,13 +2328,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// removing it is a tracked owner call (the duress WIPE does destroy it).
     ///
     /// Fires ``onResetCompleted`` at the end — after the in-memory state is back to
-    /// `.notConfigured`, and even when the store rebuild failed — so the app can drop the backup
-    /// bookkeeping that spoke for the destroyed key.
+    /// `.notConfigured`, and even when the buffer purge, the row purge or the store rebuild failed —
+    /// so the app can drop the backup bookkeeping that spoke for the destroyed key. Once the keychain
+    /// sweep has run, the keys ARE gone, so the tail that follows it is owed whatever fails after.
     ///
-    /// Ordering: rows first, then the rebuild, so a rebuild failure still leaves the rows deleted.
-    /// A rebuild failure is rethrown, but only AFTER the in-memory state has been returned to
-    /// `.notConfigured` — the keychain rows are already gone by then, so bailing early would leave
-    /// the service claiming an unlock it can no longer honor.
+    /// Ordering: keys first, then the buffer file, the rows and the rebuild, so a failure in any of
+    /// the three still leaves the keys destroyed and the other two attempted. Each failure is
+    /// captured, not thrown on the spot; the first is rethrown, but only AFTER the in-memory state
+    /// has been returned to `.notConfigured` and the hook has fired — bailing early would leave the
+    /// service claiming an unlock it can no longer honor, and the app's bookkeeping speaking for a
+    /// key that no longer exists.
     ///
     /// - Important: Sealed content is unrecoverable afterward — the content key is gone.
     public func reset() throws {
@@ -2341,16 +2360,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         for service in sealedContentKeyServices {
             KeychainItem.deleteAll(service: service)
         }
-        try buffer.purge()
-        try privatePersistenceController.purgeEncryptedEntities()
-        // Keyless by invariant (no contentKey, no decrypt): the rebuild must stay usable from every
-        // locked deletion path, and this one has just destroyed the key anyway.
-        var rebuildError: (any Error)?
-        do {
-            try privatePersistenceController.rebuildStore()
-        } catch {
-            rebuildError = error
-        }
+        let residueError = purgeSealedResidueAfterKeySweep()
         scrubContentKey()
         state = .notConfigured
         hasAutoPromptedBiometricForCurrentLockSession = false
@@ -2365,9 +2375,40 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         interruptedTransitionPending = false
         FernletAuditLog.log("lock.reset")
         onResetCompleted?()
-        // Nothing-silent: the rows are gone, but the file they lived in could not be rebuilt, so
-        // the caller must be able to say so rather than promise a clean store.
-        if let rebuildError { throw rebuildError }
+        // Nothing-silent: the keys are gone, but the buffer file, the rows or the file they lived in
+        // could not be cleared, so the caller must be able to say so rather than promise a clean store.
+        if let residueError { throw residueError }
+    }
+
+    /// ``reset()``'s residue pass, run only AFTER its keychain sweep: the pending-buffer file, the
+    /// sealed rows, then the store-file rebuild. Every step is attempted whatever an earlier one
+    /// did — the keys that opened this residue are already destroyed, so a failed purge must not
+    /// cost the rebuild, nor either of them cost `reset()`'s own tail (design §4.3, review C-U1-R1).
+    ///
+    /// - Returns: The FIRST failure, for `reset()` to rethrow once its tail has run; nil when all
+    ///   three succeeded.
+    private func purgeSealedResidueAfterKeySweep() -> (any Error)? {
+        var firstError: (any Error)?
+        do {
+            try buffer.purge()
+        } catch {
+            FernletAuditLog.log("lock.reset.bufferPurgeFailed")
+            firstError = error
+        }
+        do {
+            try privatePersistenceController.purgeEncryptedEntities()
+        } catch {
+            FernletAuditLog.log("lock.reset.rowPurgeFailed")
+            firstError = firstError ?? error
+        }
+        // Keyless by invariant (no contentKey, no decrypt): the rebuild must stay usable from every
+        // locked deletion path, and this one has just destroyed the key anyway.
+        do {
+            try privatePersistenceController.rebuildStore()
+        } catch {
+            firstError = firstError ?? error
+        }
+        return firstError
     }
 
     /// Enables or disables biometric unlock.
@@ -4116,12 +4157,27 @@ extension FernletLockService {
     ]
 
     /// The rows the mint-safety proof requires to be DEFINITIVELY absent before a fresh device key
-    /// may be minted: every row that holds, wraps or gates a content key (design §4.3, review
-    /// R1-F6). `.biometricBypass` is probed separately, by attributes only.
-    static let mintSafetyRows: [LockKeychainKey] = [
-        .salt, .verifier, .wrappedContentKey, .wrappedContentKeyRewrapStaging, .seWrappedContentKey,
-        .biometricEnabledFlag
-    ]
+    /// may be minted (design §4.3, review R1-F6): the salt, which is what makes every scrypt-wrapped
+    /// row openable; the rows that hold a copy of a content key WITHOUT it
+    /// (``saltIndependentKeyCopyRows``); and the biometric flag. `.biometricBypass` is probed
+    /// separately, by attributes only. `.verifier` and `.wrappedContentKey` are NOT here: without
+    /// the salt they are residue no one can open, except under one legacy shape that
+    /// `refuseIfSaltBoundRowsStillOpen()` tests for by trying it (review C-U1-R2, L-U1-R1).
+    static let mintSafetyRows: [LockKeychainKey] = [.salt, .biometricEnabledFlag] + saltIndependentKeyCopyRows
+
+    /// The generic-password rows that can still yield a content key with the salt gone: the enclave
+    /// wrap (the enclave needs no salt) and the re-wrap staging slot (a scrypt copy the residue probe
+    /// does not try, so it is refused outright rather than reasoned about). Required
+    /// absent before ANY fresh key — the tap's mint and a fresh passcode setup alike — because a
+    /// mint's pre-deletes and writes would destroy the last copy of a key that still opens
+    /// everything sealed under it (review L-U1-R1).
+    static let saltIndependentKeyCopyRows: [LockKeychainKey] = [.wrappedContentKeyRewrapStaging, .seWrappedContentKey]
+
+    /// The passcode rows that are dead without the salt: the verifier is a digest of a key only the
+    /// salt re-derives, and the scrypt wrap opens only under that key. Their presence beside an
+    /// absent salt is what an interrupted FRESH setup leaves (salt written last), and what a salt
+    /// lost mid-re-key leaves on a legacy install whose key is then gone with it.
+    static let saltBoundResidueRows: [LockKeychainKey] = [.verifier, .wrappedContentKey]
 
     /// Opens the Private tab WITHOUT a passcode: one deliberate tap releases the content key from
     /// its device-custody row into `.openedWithoutPasscode(.privateHub)`, through the one existing
@@ -4172,7 +4228,11 @@ extension FernletLockService {
     ///    NOT `changeCredential`'s silent success: removal is observable (the status would flip and
     ///    Private would open with a tap), so a reported success that removed nothing would be a tell.
     /// 3. `requiresReset`, the cooldown and a wrong passcode behave exactly as ``unlock(passcode:for:)``
-    ///    (the same attempt ladder). The key is recovered through the custody in force.
+    ///    (the same attempt ladder). Then, with the passcode proven — so only its holder learns why —
+    ///    a SUPERSEDED recovery enrollment refuses with
+    ///    ``FernletLockError/recoveryDeviceHoldsEarlierKey``: that blob is the only route back to every
+    ///    entry written before a recovery-lock fired, and removing it is its own deliberate step
+    ///    (review L-U1-R2). The key is recovered through the custody in force.
     /// 4. The device row is written and proven to open to the key. On failure it is deleted and the
     ///    call stops with the passcode lock untouched.
     /// 5. **Commit point**: the salt is deleted and re-read ABSENT, or the call stops with the
@@ -4199,6 +4259,7 @@ extension FernletLockService {
             FernletAuditLog.log("lock.failedAttempt", context: ["cooldownLevel": "\(loadCooldownLevel())"])
             throw FernletLockError.invalidPasscode
         }
+        try refuseRemovalWhileRecoveryDeviceHoldsEarlierKey()
         let contentKeyData = try recoverPasscodeCustodyKey(custody, derivedKey: derivedKey)
         try writeDeviceCustodyRow(contentKeyData)
         try commitPasscodeRemoval()
@@ -4227,6 +4288,30 @@ extension FernletLockService {
             throw FernletLockError.notConfigured
         }
         return (salt, verifier)
+    }
+
+    /// A removal takes the recovery device with the passcode (owner question Q8), which loses
+    /// nothing while the recovery blob seals the LIVE key — that key moves to the device row. A
+    /// SUPERSEDED blob is different: `settleRecoveryMaterialForMint` kept it, marked, as the only
+    /// route back to everything written before a recovery-lock fired, so deleting it here would
+    /// silently make those entries unopenable forever. The removal refuses instead, and the user
+    /// removes the recovery device through its own confirmed action if that is what they want.
+    ///
+    /// Reads that would not answer refuse too (nothing may be deleted on a guess). Deliberately not
+    /// audited: a superseded blob says a recovery-lock once fired, and the duress API stays silent.
+    ///
+    /// - Throws: ``FernletLockError/recoveryDeviceHoldsEarlierKey``, or `.keychainFailure`.
+    private func refuseRemovalWhileRecoveryDeviceHoldsEarlierKey() throws {
+        try refuseIfRecoveryMaterialUnreadable()
+        switch keychainLoadDistinguishing(.recoveryBlobSuperseded, keychainService) {
+        case .absent:
+            return
+        case .unreadable(let status):
+            throw FernletLockError.keychainFailure(operation: "read recovery material", status: status)
+        case .found:
+            guard hasRecoveryCustodian else { return }
+            throw FernletLockError.recoveryDeviceHoldsEarlierKey
+        }
     }
 
     /// The content key under whichever passcode custody is in force, for a caller that has already
@@ -4285,13 +4370,59 @@ extension FernletLockService {
         }
     }
 
-    /// The mint-safety proof (design §4.3, review R1-F6): a fresh key is minted only when NO row
-    /// that holds, wraps or gates a key reads present or unreadable, the recovery material is
-    /// readable, and no custodian recovery is owed. A found row means a key may still be reachable
-    /// through it (`.deviceCustodyInconsistent`, a retry state); an unreadable one means nobody knows
-    /// (`.keychainFailure`). Either way nothing is written.
+    /// Whether a FRESH content key could be minted right now without destroying a surviving copy of
+    /// an old one — the proof each fresh-key route runs before it writes, exposed READ-ONLY (nothing
+    /// is written, whatever it answers).
+    ///
+    /// For the app's open coordinator (design §4.9): its "entries this iPhone can't open" card is
+    /// true only when no copy of the key that sealed them exists, so it runs this BEFORE classifying
+    /// a single row as dead. A throw means a key may still be reachable, and the card must not be
+    /// shown (review L-U1-R1).
+    ///
+    /// - Parameter forPasscodeSetup: The setup route (a passcode over no device row), which checks
+    ///   the surviving key copies only — a recovery-locked phone may still set up, the custodian's
+    ///   blob being kept by the mint. False for the tap's mint, which also refuses while custodian
+    ///   recovery is owed and while any salt or biometric flag is present.
+    /// - Throws: ``FernletLockError/deviceCustodyInconsistent`` or `.keychainFailure`.
+    public func checkFreshKeyMintIsSafe(forPasscodeSetup: Bool) throws {
+        guard forPasscodeSetup else {
+            try proveDeviceKeyMintIsSafe()
+            return
+        }
+        try refuseIfAKeyCopySurvivesWithoutTheSalt(rows: Self.saltIndependentKeyCopyRows)
+    }
+
+    /// The mint-safety proof (design §4.3, review R1-F6): a fresh key is minted only when no copy
+    /// of any content key can survive it — the salt and every salt-independent copy read
+    /// definitively absent, the salt-bound residue provably opens nothing, the recovery material is
+    /// readable, and no custodian recovery is owed. A found copy means a key may still be reachable
+    /// through it (`.deviceCustodyInconsistent`, a retry state); an unreadable row means nobody
+    /// knows (`.keychainFailure`). Either way nothing is written.
+    ///
+    /// Salt-bound residue (`.verifier`, `.wrappedContentKey` with no salt) does NOT refuse: it is
+    /// what a fresh setup interrupted before its salt write leaves, and refusing on it made that
+    /// install's tap fail forever with a "try again" no retry could satisfy (review C-U1-R2). The
+    /// tap's sweep deletes it once the fresh key is in its own row.
     private func proveDeviceKeyMintIsSafe() throws {
-        for key in Self.mintSafetyRows {
+        try refuseIfAKeyCopySurvivesWithoutTheSalt(rows: Self.mintSafetyRows)
+        try refuseIfRecoveryMaterialUnreadable()
+        guard !isAwaitingCustodianRecovery else {
+            FernletAuditLog.log("lock.mintRefused.awaitingRecovery")
+            throw FernletLockError.deviceCustodyInconsistent
+        }
+    }
+
+    /// The half of the mint-safety proof BOTH fresh-key routes run — the tap's mint and a passcode
+    /// setup with no device row (review L-U1-R1): `rows` read definitively absent, the biometric
+    /// bypass is absent by an attributes-only probe (no data, no Face ID prompt), and the
+    /// salt-bound residue opens nothing. A mint's pre-deletes and writes would otherwise destroy the
+    /// last copy of a key that still opens every entry sealed under it — a hard-bound install that
+    /// lost only its salt keeps its key in `.seWrappedContentKey`, which needs no salt.
+    ///
+    /// - Throws: ``FernletLockError/deviceCustodyInconsistent`` for a surviving copy;
+    ///   `.keychainFailure` for a row that would not answer.
+    private func refuseIfAKeyCopySurvivesWithoutTheSalt(rows: [LockKeychainKey]) throws {
+        for key in rows {
             switch keychainLoadDistinguishing(key, keychainService) {
             case .absent:
                 continue
@@ -4311,10 +4442,51 @@ extension FernletLockService {
         case .unknown(let status):
             throw FernletLockError.keychainFailure(operation: "probe biometric bypass", status: status)
         }
-        try refuseIfRecoveryMaterialUnreadable()
-        guard !isAwaitingCustodianRecovery else {
-            FernletAuditLog.log("lock.mintRefused.awaitingRecovery")
-            throw FernletLockError.deviceCustodyInconsistent
+        try refuseIfSaltBoundRowsStillOpen()
+    }
+
+    /// Proves the salt-bound residue opens nothing. Without the salt, the scrypt wrap opens only
+    /// under the derived key, and the only place that key was ever persisted is a PRE-SPLIT
+    /// verifier (builds before the verifier/wrapping-key split stored the raw derived key, and
+    /// `unlock` accepts it until it migrates). So the residue is dead unless the stored verifier
+    /// might BE that key — which is tested by trying it: a `FLV2`-marked verifier is a digest by
+    /// construction; any other is handed to the unwrap, and one that opens the wrap, or one this
+    /// build cannot try against a retired wrap format, refuses.
+    ///
+    /// - Throws: ``FernletLockError/deviceCustodyInconsistent`` when the residue may still open;
+    ///   `.keychainFailure` when either row would not answer.
+    private func refuseIfSaltBoundRowsStillOpen() throws {
+        var found: [LockKeychainKey: Data] = [:]
+        for key in Self.saltBoundResidueRows {
+            switch keychainLoadDistinguishing(key, keychainService) {
+            case .absent:
+                continue
+            case .found(let value):
+                found[key] = value
+            case .unreadable(let status):
+                throw FernletLockError.keychainFailure(operation: "read \(key.rawValue)", status: status)
+            }
+        }
+        guard let verifier = found[.verifier], let wrapped = found[.wrappedContentKey],
+              storedVerifierMayOpen(wrapped, verifier: verifier) else { return }
+        FernletAuditLog.log("lock.mintRefused.rowPresent", context: ["row": LockKeychainKey.wrappedContentKey.rawValue])
+        throw FernletLockError.deviceCustodyInconsistent
+    }
+
+    /// Whether a stored verifier might be the raw wrapping key of `wrapped` (see
+    /// `refuseIfSaltBoundRowsStillOpen()`). True when the unwrap opens under it, or when this build
+    /// cannot try (a retired wrap format): the answer that keeps the rows.
+    private func storedVerifierMayOpen(_ wrapped: Data, verifier: Data) -> Bool {
+        guard !verifier.starts(with: FernletLockCrypto.verifierFormatV2) else { return false }
+        do {
+            _ = try cryptoProvider.unwrapContentKey(wrapped, using: verifier)
+            return true
+        } catch FernletLockError.contentKeyWrapFormatRetired {
+            return true
+        } catch {
+            // The expected answer, not a swallowed failure: an authentication failure under the
+            // stored verifier is the proof that the verifier is a digest and the wrap is dead.
+            return false
         }
     }
 
@@ -4432,10 +4604,13 @@ extension FernletLockService {
     /// makes a state read as configured), then the recovery rows blob-first, then the rest (design
     /// §4.6). Runs only from ``openWithoutPasscode(for:allowingMint:)`` AFTER the key is in hand
     /// from the device row, so it can never delete the last route to it.
+    ///
+    /// A SUPERSEDED recovery set is never swept (see `sweepableRecoveryRows()`): it seals a key the
+    /// device row does NOT hold, so "the key is in hand" says nothing about what it protects.
     private func sweepInterruptedTransitionIfNeeded() {
         guard interruptedTransitionPending || lingeringPasscodeRowFound() else { return }
         var lingering = 0
-        for key in [LockKeychainKey.salt] + Self.recoveryRowsBlobFirst + Self.passcodeRowsAfterRecovery
+        for key in [LockKeychainKey.salt] + sweepableRecoveryRows() + Self.passcodeRowsAfterRecovery
         where keychainDelete(key, keychainService) != errSecSuccess {
             lingering += 1
         }
@@ -4445,15 +4620,27 @@ extension FernletLockService {
 
     /// Whether any passcode row is present beside a salt-less lock — the leftovers of an interrupted
     /// adoption or removal. The biometric bypass is probed by attributes only (a data read would
-    /// raise Face ID); an unreadable row does not count (the sweep retries at the next open).
+    /// raise Face ID); an unreadable row does not count (the sweep retries at the next open). A kept
+    /// superseded recovery set is not a leftover, so it does not re-arm the sweep at every tap.
     private func lingeringPasscodeRowFound() -> Bool {
         if case .present = KeychainItem.presenceWithoutAuthentication(of: .biometricBypass, service: keychainService) {
             return true
         }
-        for key in Self.recoveryRowsBlobFirst + Self.passcodeRowsAfterRecovery where key != .biometricBypass {
+        for key in sweepableRecoveryRows() + Self.passcodeRowsAfterRecovery where key != .biometricBypass {
             if case .found = keychainLoadDistinguishing(key, keychainService) { return true }
         }
         return false
+    }
+
+    /// The recovery rows the sweep may delete: all of them — an interrupted removal's leftovers,
+    /// whose blob seals the very key the device row now holds (Q8: the recovery device goes with the
+    /// passcode) — unless the `.recoveryBlobSuperseded` marker is present or unreadable. A
+    /// superseded blob is the only route back to the entries written before a recovery-lock fired,
+    /// and deleting it is the user's own explicit act, never a sweep's (review L-U1-R2). The
+    /// removal refuses to produce this state; this is the belt to that brace.
+    private func sweepableRecoveryRows() -> [LockKeychainKey] {
+        guard case .absent = keychainLoadDistinguishing(.recoveryBlobSuperseded, keychainService) else { return [] }
+        return Self.recoveryRowsBlobFirst
     }
 
     /// Retires the device-custody row once the passcode custody is PROVEN to open to the same key
