@@ -11,7 +11,10 @@
 // after the first comma — and classifies what is left: a unit word (cup, tbsp, tsp, fl oz → volume;
 // oz, lb → mass; slice, piece, each), a reference serving (RACC, NLEA, serving), or a NAMED COUNT —
 // a size word ("medium", "extra large") or one of a closed list of count nouns ("egg", "clove",
-// "fruit", "stick", "pepper", "tortilla", …).
+// "fruit", "stick", "pepper", "tortilla", …). What a count word leads is set aside when it is not one
+// of anything (fix round 1): a count unit on a yield ("piece, cooked, excluding refuse (yield from 1 lb
+// raw meat with refuse)" is a pound's cooked yield, 283 g of pork roast), and a named count holding a
+// part or packaging word ("apricot half with liquid", "small box (1.5 oz)" of raisins).
 //
 // Every word it matches is a FROZEN ENGLISH TOKEN: USDA writes its portion text in English, so these
 // are matching inputs, never display text, and translating one matches nothing
@@ -68,6 +71,25 @@ public nonisolated enum FoodPortionReader {
     /// Words that lead a reference serving rather than a household measure. Frozen matching tokens.
     public static let referenceWords: Set<String> = ["nlea", "portion", "racc", "serving", "servings"]
 
+    /// Words that make a count portion a PART of one ("apricot half with liquid" is half an apricot):
+    /// a named count holding one is not "one" of the food (fix round 1, finding u2-L-M1). Frozen
+    /// matching tokens.
+    public static let partWords: Set<String> = ["half", "halves", "quarter", "quarters", "wedge", "wedges"]
+
+    /// Packaging words: "small box (1.5 oz)" of raisins is a box, not a small raisin, so a named count
+    /// holding one is not "one" of the food (u2-L-M1). Frozen matching tokens.
+    public static let packagingWords: Set<String> = [
+        "bag", "bottle", "box", "can", "carton", "container", "envelope", "jar", "package", "packet", "pkg",
+        "pouch", "tub"
+    ]
+
+    /// Words that mark a portion as a YIELD — "piece, cooked, excluding refuse (yield from 1 lb raw meat
+    /// with refuse)" is the whole cooked yield of a pound of raw meat (283 g of a pork roast), not one
+    /// piece — so a count UNIT word leading one is not read (u2-L-H1). A named count keeps its yield
+    /// ("lemon yields" 48 g is the juice of one lemon). Read over the whole text, parentheticals
+    /// included. Frozen matching tokens.
+    public static let yieldWords: Set<String> = ["yield", "yields"]
+
     /// How far (as a fraction of their median) several portions of ONE named count may spread and
     /// still be one size — "clove" (3 g) and "3 cloves" (9 g) are one size; a lemon's two "fruit"
     /// portions (58 g and 84 g) are two.
@@ -83,9 +105,26 @@ public nonisolated enum FoodPortionReader {
     /// Most portions of one food read when choosing "each" (Rule 2); far above USDA's longest list.
     public static let maxPortionsRead = 64
 
-    /// The measure `portion` states, or nil when its leading word is none this reader knows.
+    /// The measure `portion` states, or nil when its leading word is none this reader knows — or when
+    /// what it leads is not one of anything: a count unit on a yield ("piece … (yield from 1 lb raw
+    /// meat)"), or a named count holding a part or packaging word ("apricot half", "small box").
     public static func measure(of portion: FoodPortion) -> FoodPortionMeasure? {
         let (head, tail) = measureWords(portion)
+        guard let read = leadingMeasure(head: head, tail: tail) else { return nil }
+        switch read {
+        case .unit(let unit) where unit.isCount:
+            return statesYield(portion) ? nil : read
+        case .count:
+            let words = head + tail
+            return words.contains { partWords.contains($0) || packagingWords.contains($0) } ? nil : read
+        default:
+            return read
+        }
+    }
+
+    /// The measure the leading words state, before ``measure(of:)`` sets aside yields, parts and
+    /// packaging.
+    private static func leadingMeasure(head: [String], tail: [String]) -> FoodPortionMeasure? {
         guard let first = head.first else { return nil }
         if let whole = RecipeUnit.normalized(head.joined(separator: " ")) {
             return whole == .serving ? .reference : .unit(whole)
@@ -150,6 +189,12 @@ public nonisolated enum FoodPortionReader {
             FoodItemSearch.normalized(String(part ?? "")).split(separator: " ").map(String.init)
         }
         return (words(parts.first), words(parts.count > 1 ? parts[1] : nil))
+    }
+
+    /// Whether `portion`'s text — unit and description, parentheticals included — names a yield.
+    private static func statesYield(_ portion: FoodPortion) -> Bool {
+        let text = "\(portion.unit.prefix(maxMeasureCharacters)) \((portion.description ?? "").prefix(maxMeasureCharacters))"
+        return FoodItemSearch.normalized(text).split(separator: " ").contains { yieldWords.contains(String($0)) }
     }
 
     /// `text` without its first whitespace-separated token when that token is a number.

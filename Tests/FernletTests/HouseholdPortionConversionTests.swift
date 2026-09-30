@@ -18,7 +18,9 @@
 // F4a, "1 each": `FoodPortionReader` reads a portion's leading measure word and drops its qualifiers,
 // so "medium (7" to 7-7/8" long)" is a size, "clove" a count noun and "cup, sliced" a cup. "Each" is
 // the one medium portion among several sizes, else the single named count, else the named count that
-// is the food's own reference serving. Every gram weight is USDA's; the reader invents none.
+// is the food's own reference serving. Every gram weight is USDA's; the reader invents none. Fix round
+// 1: a count unit on a USDA yield (a pound's cooked yield) and a named count holding a part or
+// packaging word (half an apricot, a box of raisins) are not "one".
 
 import Foundation
 import Testing
@@ -212,7 +214,15 @@ struct HouseholdPortionConversionTests {
             (Self.portion("package (5 oz)"), nil),
             (Self.portion("wedge (1/4 of medium tomato)"), nil),
             (Self.portion("undetermined", description: "1 banana"), .count(noun: "banana", size: nil)),
-            (Self.portion("undetermined", description: "1 piece, NFS"), .unit(.piece))
+            (Self.portion("undetermined", description: "1 piece, NFS"), .unit(.piece)),
+            // Fix round 1: a yield is not one piece or one unit; a part or a package is not one of anything.
+            (Self.portion("piece, cooked, excluding refuse (yield from 1 lb raw meat with refuse)"), nil),
+            (Self.portion("unit (yield from 1 lb ready-to-cook chicken)"), nil),
+            (Self.portion("lemon yields"), .count(noun: "lemon", size: nil)),
+            (Self.portion("cup, dry, yields"), .unit(.cup)),
+            (Self.portion("apricot half with liquid"), nil),
+            (Self.portion("small box (1.5 oz)"), nil),
+            (Self.portion("plum with liquid"), .count(noun: "plum", size: nil))
         ]
         for (portion, expected) in cases {
             #expect(portion.measure == expected, "\(portion.unit) / \(portion.description ?? "")")
@@ -332,5 +342,27 @@ struct HouseholdPortionConversionTests {
         #expect(Self.grams(try Self.shipped(173_242), 1, "each") == nil, "four flour-tortilla sizes: ambiguous")
         #expect(Self.grams(try Self.shipped(2_710_824), 1, "each") == nil, "Avocado, Hass: USDA states RACC only")
         #expect(Self.grams(try Self.shipped(173_944), 1, "cup") == nil, "a banana's two cups still disagree")
+    }
+
+    /// Fix round 1 (u2-L-H1, u2-L-M1): what a count word leads is set aside when it is not one of
+    /// anything. USDA's "piece, cooked, excluding refuse (yield from 1 lb raw meat with refuse)" is a
+    /// pound's cooked yield — 283 g of pork roast, 326 g of top round — and "1 piece" refused before
+    /// the tolerant reader; it refuses again. Half an apricot and a box of raisins are not "1 each".
+    @Test func yieldsPartsAndPackagesAreNotOne() throws {
+        let pork = try Self.shipped(167_894)        // Pork, loin, center rib roast, cooked: oz, piece (yield)
+        #expect(Self.grams(pork, 1, "piece") == nil)
+        #expect(Self.grams(pork, 2, "piece") == nil)
+        #expect(Self.grams(pork, 3, "oz") != nil, "its ounces still convert")
+        let steak = try Self.shipped(169_531)       // Beef, round, top round steak, broiled: piece (yield), oz
+        #expect(Self.grams(steak, 1, "piece") == nil)
+        #expect(steak.preferredRecipeUnit == .gram)
+        let apricots = try Self.shipped(171_699)    // Apricots, canned, heavy syrup: apricot half with liquid 40 g
+        #expect(Self.grams(apricots, 1, "each") == nil, "\"apricot half\" is half of one")
+        #expect(apricots.preferredRecipeUnit != .each)
+        let raisins = try Self.shipped(168_165)     // Raisins, dark, seedless: small box (1.5 oz) 43 g
+        #expect(Self.grams(raisins, 1, "each") == nil, "a small box is packaging, not one raisin")
+        #expect(raisins.preferredRecipeUnit != .each)
+        let juice = try Self.shipped(167_747)       // Lemon juice, raw: "lemon yields" 48 g — one lemon's juice
+        #expect(Self.grams(juice, 1, "each") == 48)
     }
 }

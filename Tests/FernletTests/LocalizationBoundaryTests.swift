@@ -660,6 +660,16 @@ struct LocalizationBoundaryTests {
             quick-log counts) and measure it; never localize one.
             """
         )
+        #expect(FoodPortionReader.partWords == ["half", "halves", "quarter", "quarters", "wedge", "wedges"])
+        #expect(
+            FoodPortionReader.packagingWords == [
+                "bag", "bottle", "box", "can", "carton", "container", "envelope", "jar", "package", "packet",
+                "pkg", "pouch", "tub"
+            ],
+            "matched against USDA's portion text (\"small box (1.5 oz)\"); a translated word lets a box count as one"
+        )
+        #expect(FoodPortionReader.yieldWords == ["yield", "yields"],
+                "matched against USDA's \"(yield from 1 lb raw meat)\"; a translated word reads a pound's yield as one piece")
         let measure = RecipeHouseholdMeasure(label: "medium", gramsPerUnit: 118)
         let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(measure))
         #expect(Set(try #require(object as? [String: Any]).keys) == ["label", "gramsPerUnit"],

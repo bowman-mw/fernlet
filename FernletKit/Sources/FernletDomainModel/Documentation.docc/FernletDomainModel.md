@@ -242,7 +242,11 @@ a closed list of frozen English nouns), else the named count its own NLEA/RACC s
 lemon's 58 g fruit) — always a USDA weight, never an estimate. The reader only ADDS conversions: a
 portion stated exactly (``FoodPortion/exactRecipeUnit``) answers first, and every exactly stated
 answer an earlier build gave is kept. "Each" leads the tap default, so a banana taps to one medium
-banana (118 g) and a bare "2 eggs" logs two eggs, not two cups.
+banana (118 g) and a bare "2 eggs" logs two eggs, not two cups. What a count word leads is set aside
+when it is not one of anything (fix round 1): a count unit on a USDA yield ("piece, cooked, excluding
+refuse (yield from 1 lb raw meat with refuse)" is a pound's cooked yield, 283 g of pork roast, so
+"1 piece" refuses as it did before the round) and a named count holding a part or packaging word
+("apricot half with liquid", "small box (1.5 oz)" of raisins) — frozen tokens beside the nouns.
 
 ``FoodItemSource`` gained its fourth frozen token, `openFoodFacts`, on 2026-09-24: a barcode product
 the user looked up on Open Food Facts (behind the web-nutrition-lookup consent, one explicit tap per
