@@ -7,9 +7,10 @@ import Testing
 /// Owner decision 2026-09-29: the drawing screen does not scroll. The layout gives the canvas what
 /// the header and tool row leave of the visible page, and scrolling is switched off whenever that
 /// is at least the minimum canvas; only where the controls genuinely cannot fit (the largest
-/// accessibility sizes on the smallest iPhones) does it fall back to a scrolling page. The first
-/// two cases use heights measured on the simulator, so a change to the threshold that would turn
-/// scrolling back on for an iPhone SE at the default text size fails here.
+/// accessibility sizes on small iPhones, and landscape) does it fall back to a scrolling page.
+/// Every device case uses the viewport, header and tool-row heights measured on the simulator
+/// (settled values, traced from the running studio 2026-09-29/30), so a change to the threshold
+/// that would turn scrolling back on for an iPhone SE at the default text size fails here.
 struct CreationStudioLayoutTests {
 
     private let spacing: CGFloat = 12
@@ -29,14 +30,42 @@ struct CreationStudioLayoutTests {
         #expect(result.canvasHeight == 227)
     }
 
-    /// iPhone SE at `accessibility-extra-extra-extra-large`: the chips wrap into three tall rows,
-    /// so no canvas of the minimum height fits. The page scrolls (from the chips and margins only),
-    /// and the canvas is sized so the tool row and canvas fill one screen at the bottom.
-    @Test func iPhoneSEAtTheLargestAccessibilitySizeScrollsWithAScreenfulCanvas() {
-        let result = layout(viewport: 400, header: 226, tools: 44)
-        let screenfulBelowTheHeader: CGFloat = 400 - 44 - spacing - 2 * padding
+    /// iPhone SE at `accessibility-extra-extra-extra-large` (AX5), measured 2026-09-30: the chips
+    /// wrap into three tall rows (a 224.5pt header) and the tool row is a column (161.8pt), in a
+    /// 381.5pt page. Nothing close to a canvas fits beside them, so the page scrolls (from the
+    /// controls only). Even the screenful below the header is under the minimum here, so the
+    /// canvas gets the minimum — which the page can still show whole.
+    @Test func iPhoneSEAtTheLargestAccessibilitySizeScrollsWithAWholeMinimumCanvas() {
+        let result = layout(viewport: 381.5, header: 224.5, tools: 161.8)
         #expect(!result.fits)
-        #expect(result.canvasHeight == screenfulBelowTheHeader)
+        #expect(result.canvasHeight == CreationStudioLayout.minimumCanvasHeight)
+        #expect(2 * padding + result.canvasHeight <= 381.5)
+    }
+
+    /// iPhone 17 at AX5, measured 2026-09-30: a 225pt header and a 161.5pt tool column in a
+    /// 522.3pt page. It does not fit, and the canvas is sized so that, scrolled to the bottom, the
+    /// tool row and the canvas fill one screen.
+    @Test func iPhone17AtTheLargestAccessibilitySizeScrollsWithAScreenfulCanvas() {
+        let result = layout(viewport: 522.3, header: 225, tools: 161.5)
+        #expect(!result.fits)
+        #expect(result.canvasHeight == 324)
+        let screenful = 2 * padding + 161.5 + spacing + result.canvasHeight
+        #expect(screenful <= 522.3)
+        #expect(522.3 - screenful < 1)
+    }
+
+    /// Landscape, at the default text size, measured 2026-09-30: the pinned palette and Next bar
+    /// leave the page 160pt on an iPhone 17 and 145pt on an iPhone SE — less than the minimum
+    /// canvas alone. The page scrolls (from the controls and margins only), and the canvas is
+    /// capped at what the page shows in one piece rather than held at a minimum that could never
+    /// be on screen whole: a canvas cannot be scrolled from the canvas.
+    @Test func landscapeScrollsWithACanvasThePageShowsWhole() {
+        for (viewport, expected) in [(CGFloat(160), CGFloat(136)), (145, 121)] {
+            let result = layout(viewport: viewport, header: 88, tools: 44)
+            #expect(!result.fits, "viewport \(viewport)")
+            #expect(result.canvasHeight == expected, "viewport \(viewport)")
+            #expect(2 * padding + result.canvasHeight <= viewport, "viewport \(viewport)")
+        }
     }
 
     /// The threshold is inclusive, and a fraction of a point short of it scrolls.
@@ -65,8 +94,9 @@ struct CreationStudioLayoutTests {
         #expect(viewport - content < 1)
     }
 
-    /// A tool row taller than the whole page still leaves the canvas its minimum.
-    @Test func theScrollingCanvasNeverShrinksBelowTheMinimum() {
+    /// A tool row taller than the whole page still leaves the canvas its minimum, when the page is
+    /// tall enough to show a minimum canvas whole.
+    @Test func theScrollingCanvasKeepsTheMinimumWhereThePageCanShowIt() {
         let result = layout(viewport: 300, header: 400, tools: 400)
         #expect(!result.fits)
         #expect(result.canvasHeight == CreationStudioLayout.minimumCanvasHeight)

@@ -8,12 +8,22 @@ import CoreGraphics
 /// take what they measure, and the canvas card is given exactly what is left. When that leftover
 /// is at least ``minimumCanvasHeight`` the layout ``fits`` and the page's scrolling is switched off.
 ///
-/// When it is not — the largest accessibility text sizes on an iPhone SE, where the four slot
-/// chips alone wrap into three or four rows, or a Display Zoom SE — there is no layout that keeps
-/// every control on one screen, so the page scrolls, and the canvas is sized so that the tool row
-/// and the canvas fill one screen when scrolled to the bottom. That scroll is started only from
-/// the chips, buttons and margins: ``ZoomablePixelCanvas`` owns every touch that begins on it, so
-/// a stroke never moves the page in either mode.
+/// It fits on every iPhone in portrait at the default text size and standard Display Zoom
+/// (measured down to an iPhone SE: a 227pt canvas slot). It does not fit — and the page scrolls —
+/// in three places, even though no control is then out of reach:
+///
+/// - **Accessibility text sizes on small iPhones**, where the slot chips wrap into three rows and
+///   the tool row becomes a column (an SE from accessibility-medium up; an iPhone 17 at AX5).
+/// - **Display Zoom on an SE-class phone** (320×568pt): the header and tools leave roughly 90pt.
+///   Estimated from the standard-zoom SE measurements (2026-09-30), not measured.
+/// - **Landscape**, which the app allows on iPhone: the pinned palette and Next bar leave the page
+///   about 160pt (measured on an iPhone 17), less than the minimum canvas alone.
+///
+/// There the canvas is sized so that the tool row and the canvas fill one screen when scrolled to
+/// the bottom — or, where even that is under ``minimumCanvasHeight``, the canvas is capped at what
+/// the page can show in one piece, so the whole drawing is always on screen at once. That scroll
+/// is started only from the chips, buttons and margins: ``ZoomablePixelCanvas`` owns every touch
+/// that begins on it, so a stroke never moves the page in either mode.
 ///
 /// A pure value so the threshold is testable without a view; ``CreationStudioView`` feeds it the
 /// measured viewport and the measured header and tool-row heights. Those two blocks never depend
@@ -27,7 +37,9 @@ nonisolated struct CreationStudioLayout: Equatable {
     /// the visible page: scrolling is off.
     let fits: Bool
     /// The height of the slot the canvas card is fitted into (the card keeps its slot's aspect
-    /// ratio inside it). Whole points, so the fitted content never exceeds the viewport.
+    /// ratio inside it). Whole points, so the fitted content never exceeds the viewport; and once
+    /// the viewport is measured, never taller than it is inside its padding, so the whole canvas
+    /// can be on screen at once.
     let canvasHeight: CGFloat
 
     /// - Parameters:
@@ -53,9 +65,13 @@ nonisolated struct CreationStudioLayout: Equatable {
             canvasHeight = fitted
         } else {
             // Scrolled to the bottom, the tool row and the canvas fill one screen: the header is
-            // the only thing that scrolls away.
+            // the only thing that scrolls away. Where that screenful is under the minimum (a
+            // short landscape page), the canvas gets the minimum — but never more than the page
+            // shows in one piece, since a canvas cannot be scrolled from the canvas itself.
             fits = false
-            canvasHeight = max(minimum, (viewportHeight - toolsHeight - spacing - 2 * padding).rounded(.down))
+            let screenful = (viewportHeight - toolsHeight - spacing - 2 * padding).rounded(.down)
+            let wholeOnScreen = max(0, (viewportHeight - 2 * padding).rounded(.down))
+            canvasHeight = screenful >= minimum ? screenful : min(minimum, wholeOnScreen)
         }
     }
 }

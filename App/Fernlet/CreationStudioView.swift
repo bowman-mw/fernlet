@@ -15,9 +15,9 @@ import FernletUI
 /// The drawing screen does not scroll (owner decision 2026-09-29): the live preview sits beside
 /// the slot chips, Clear joins Undo and Mirror in one tool row, and the canvas takes the height
 /// that is left, as ``CreationStudioLayout`` decides from measured heights. Only where the controls
-/// cannot fit at all (the largest accessibility text sizes on the smallest iPhones) does the page
-/// scroll, and then only from touches outside the canvas — the canvas owns every touch that starts
-/// on it (``ZoomablePixelCanvas``). Pushed within the
+/// cannot fit at all — accessibility text sizes on small iPhones, Display Zoom on an SE-class
+/// phone, and landscape — does the page scroll, and then only from touches outside the canvas:
+/// the canvas owns every touch that starts on it (``ZoomablePixelCanvas``). Pushed within the
 /// Wardrobe's navigation stack; pass `editingItem` to edit an existing item in place (id /
 /// createdAt / designer preserved, with cross-dimension textures resampled via
 /// ``CreationStudioView/editorPixels(for:palette:)``).
@@ -153,8 +153,10 @@ struct CreationStudioView: View {
             .padding(Self.pagePadding)
         }
         // Owner decision 2026-09-29: drawing on a page that moves is what made this screen hard to
-        // use, so it does not scroll whenever everything fits — which is every iPhone at the
-        // default text size. See `CreationStudioLayout` for the accessibility-size exception.
+        // use, so it does not scroll whenever everything fits — every iPhone in portrait at the
+        // default text size and standard Display Zoom (measured down to an iPhone SE). See
+        // `CreationStudioLayout` for where it cannot fit: accessibility sizes on small phones,
+        // a Display-Zoomed SE, and landscape.
         .scrollDisabled(layout.fits)
         .scrollBounceBehavior(.basedOnSize, axes: .vertical)
         .scrollPosition($scrollPosition)
@@ -387,6 +389,12 @@ struct CreationStudioView: View {
                 Text("Drag to paint · pinch to zoom")
                     .font(.fernlet(.body))
                     .italic()
+                    // The canvas the layout leaves can be small (about 220×180pt at the largest
+                    // text size on an iPhone SE), so the hint shrinks to fit rather than truncate
+                    // to "pinc…" — it is the only on-screen word about pinch-to-zoom.
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.5)
+                    .padding(8)
                     .foregroundStyle(Color.slate.opacity(0.6))
                     .allowsHitTesting(false)
                     // Decorative; hidden from a11y so it doesn't also carry the canvas's `studio.canvas` id.

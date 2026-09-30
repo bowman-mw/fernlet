@@ -171,6 +171,13 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
         /// plain tap still paints, because the tap recognizes rather than fails. This is the half
         /// that makes the outcome certain: refusing to share (above) is a request another delegate
         /// can overrule, whereas a failure requirement set up here always holds.
+        ///
+        /// "Every recognizer outside" means every one UIKit pairs with a canvas stroke, and it
+        /// pairs only recognizers that receive the stroke's own touch — those on the canvas's
+        /// ancestors. Traced on an iPhone 17 (2026-09-30): the page's scroll view, the sheet's
+        /// drag, the navigation stack's swipe-back and the window's system gates, and nothing
+        /// else. A second finger on a palette swatch is never asked about, and its tap lands
+        /// mid-stroke (`CreationStudioCanvasUITests` replays exactly that).
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             !isCanvasOwn(other)
