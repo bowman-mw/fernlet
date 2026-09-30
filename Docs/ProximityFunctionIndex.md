@@ -1770,7 +1770,7 @@ frame.
 
 | Function | What It Does |
 | --- | --- |
-| `body` | An always-present `ZStack` switching between `pickerContent` and `RecipeShareConfirmationPanel`, carrying the lifecycle hooks, the outcome and scene-phase observers, and the success/error haptic. |
+| `body` | An always-present `ZStack` switching between `pickerContent` and `RecipeShareConfirmationPanel`, carrying the lifecycle hooks, the outcome observer, and the success/error haptic. |
 | `pickerContent` | Renders nearby recipient picker, notes toggle, status line, diagnostics, fallback share link, and the toolbar Done. |
 | `searchingView` | Shows initial discovery progress UI. |
 | `noNearbyView` | Shows empty discovery UI and search-again action. |
@@ -1779,8 +1779,9 @@ frame.
 | `send(to:)` | Tells the latch which row a share began for, then calls `sendRecipeShare`. |
 | `receive(_:)` | Latches an outcome this sheet began into a confirmation, cross-fades to the panel (no motion under Reduce Motion), announces it, and after a success schedules the radio hand back. Replaces the old auto-dismiss. |
 | `retryShare()` | "Try again": re-sends to the same row with the current toggles if it is listed and not locked out, else returns to the picker. |
-| `scheduleRadioHandBack()` | 1.4 s after a successful send (`radioHandBackDelay`, today's post-send pairing lifetime), runs the gated stop-and-restart and gives up the radio, so an open panel never holds the pairing. Reads the scene through a live `@State` mirror, not the captured environment snapshot. |
-| `restartPassiveListening(sceneIsActive:)` | Stops the manager and restarts passive listening behind the opt-in + active-scene + lock gates (the go-dark-after-share fix), shared by the disappearance and the hand back. |
+| `handleDisappear()` | Resets the latch first (a cancelled share raises nothing), then, only while the sheet still holds `RecipeShareRadioCustody`, stops the radio and restarts passive listening behind the opt-in + active-scene + lock gates. A pending post-send hand back is never cancelled here. |
+| `startRadioHandBack(after:)` | On a successful send, moves radio custody to a `RecipeShareRadioHandBack` and starts an uncancellable task that, 1.4 s after the send (`RecipeShareRadioHandBack.delay`), stands the radio down for that share only and restarts passive listening when the store's live run-policy verdict, the opt-in and the lock allow it. Captures the manager, store and lock service, so it runs the same whether the panel is still open or was closed inside the window (the drain rule: an early Done must not cut an undrained text frame). |
+| `standDown(_:thenListen:)` | Static: stops the manager and, when asked, starts passive listening again (the go-dark-after-share fix), shared by the disappearance and the hand back. |
 | `outgoingPayload` | Returns payload with or without notes based on UI toggle. |
 | `statusText` | Maps manager send state to the progress line (localized connecting/sending; nothing for `sent`, which the panel owns; the manager's English failure message verbatim, a recorded residual). |
 
@@ -1788,8 +1789,10 @@ frame.
 
 | Function | What It Does |
 | --- | --- |
-| `RecipeShareConfirmation.init(_:)` | Maps a `RecipeShareOutcome` to tone, headline, detail, announcement and `offersRetry`. Exhaustive per cause; "sent" never becomes "delivered". |
+| `RecipeShareConfirmation.init(_:)` | Maps a `RecipeShareOutcome` to tone, headline, detail, announcement and `offersRetry`. Exhaustive per cause; "sent" never becomes "delivered", and the success copy says what the other person can do only on the condition that it reached them. |
 | `RecipeShareOutcomeLatch.beganShare(to:)` / `receive(_:)` / `retry()` / `reset()` | Latches only the outcome of a share the sheet began, once, for the tapped row; retry clears a failure panel and returns the row; reset forgets everything (appear, disappear). |
+| `RecipeShareRadioHandBack.step(currentOutcomeID:listeningWanted:)` | After the delay: leave the radio alone if the manager has moved on to a newer share (or a delete-all), else stop, and listen again only when wanted. |
+| `RecipeShareRadioCustody.handOff(afterSendOf:)` / `sheetStopsRadioOnDisappear` | Custody of the radio moves from the sheet to the hand back once, on a successful send; from then on the sheet's disappearance leaves the radio alone. |
 | `RecipeShareConfirmationPanel.body` | The confirmation panel: decorative glyph, header-trait heading, detail, and Try again / Done pills, scrolling at AX5. |
 
 ### `ProximityRecipeShareReviewSheet.swift`

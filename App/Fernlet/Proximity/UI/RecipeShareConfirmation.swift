@@ -11,8 +11,9 @@ import SwiftUI
 ///
 /// The strongest thing the sender can truthfully know is that the recipe was **sent**: handed to the
 /// transport over the private connection. Nothing comes back from the other device (its Import and
-/// Decline send nothing), so no sentence here says delivered, received, accepted or saved, and the
-/// success copy says outright that no notice will follow. Recipe sharing has no queued or held path,
+/// Decline send nothing, and it drops some shares without a word), so no sentence here says
+/// delivered, received, accepted or saved, none says what the other person can now do except on the
+/// condition that it reached them, and the success copy says outright that no notice will follow. Recipe sharing has no queued or held path,
 /// so there is no "will be delivered later" either. `RecipeShareConfirmationTests` resolves every
 /// sentence and pins both halves of that.
 ///
@@ -90,6 +91,11 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
     }
 
     /// The success panel. Says "sent" and nothing stronger (see the type's discussion).
+    ///
+    /// The one sentence about the other person is CONDITIONAL on purpose. Their phone can drop a
+    /// share without a word back (a different app version, eight shares already waiting for review,
+    /// a second share inside its per-sender rate limit), so "they can look it over" would be a
+    /// delivery claim in everything but the word.
     private static func sent(_ outcome: RecipeShareOutcome) -> RecipeShareConfirmation {
         let name = outcome.recipientName
         let title = outcome.recipeTitle
@@ -100,8 +106,8 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
                 "Sent to \(name)",
                 comment: "Recipe share confirmation heading. %@ is the name of the nearby person the recipe was sent to."),
             detail: LocalizedStringResource(
-                "Fernlet sent “\(title)” over your private connection. \(name) can look it over and choose whether to save it. You won't get a notice either way.",
-                comment: "Recipe share confirmation. The first %@ is the recipe's name, the second is the person's name. The app only knows the recipe left this phone; never say it was received or saved."),
+                "Fernlet sent “\(title)” to \(name) over your private connection. If it reaches them, they can choose whether to save it. You won't get a notice either way.",
+                comment: "Recipe share confirmation. The first %@ is the recipe's name, the second is the person's name. The app only knows the recipe left this phone, not that it arrived: keep the sentence about the other person conditional, and never say it was received or saved."),
             announcement: LocalizedStringResource(
                 "Sent “\(title)” to \(name).",
                 comment: "Spoken by VoiceOver when a recipe share finishes. The first %@ is the recipe's name, the second is the person's name.")
@@ -243,6 +249,83 @@ struct RecipeShareOutcomeLatch: Equatable {
     mutating func reset() {
         awaitingRecipientID = nil
         confirmation = nil
+    }
+}
+
+// MARK: - RecipeShareRadioHandBack
+
+/// The share sheet's post-send hand back of the recipe radio: when it runs, and what it does then.
+///
+/// ## The drain rule
+///
+/// A text recipe's frame is handed to QUIC when the send returns, which is not the other phone
+/// reading it, and stopping the radio tears the tunnel down with anything still undrained. So after
+/// a successful send the radio is kept for ``delay``, measured from the send, **whatever the sheet
+/// does meanwhile**. The confirmation panel's Done appears at exactly that moment, and a Done or a
+/// swipe-down inside the window closes the sheet but leaves the hand back pending
+/// (``RecipeShareRadioCustody``); the hand back then runs on its own clock and does not read the
+/// sheet, which may be gone.
+///
+/// ## What it does when the delay has passed
+///
+/// ``step(currentOutcomeID:listeningWanted:)``: nothing if the manager has moved on to a newer share
+/// (or a delete-all cleared it), since that share's own sheet owns the radio now; otherwise stop,
+/// and start passive listening again only when it is wanted, which is the go-dark-after-share fix.
+/// "Wanted" is decided by the caller from live sources only: the store's run-policy verdict (the
+/// same authority that starts the listener on every scene and tab edge), the opt-in, and the lock.
+///
+/// Pure value, no clock, no radio, so every rule is a unit-test cell.
+struct RecipeShareRadioHandBack: Equatable {
+
+    /// How long the radio is kept after a successful send before it goes back to passive listening:
+    /// the post-send pairing lifetime the old auto-dismiss gave. Not shorter, for the drain rule.
+    static let delay: Duration = .milliseconds(1_400)
+
+    /// What the hand back does once ``delay`` has passed.
+    enum Step: Equatable {
+        /// A newer share has begun (or a delete-all cleared the outcome): its owner has the radio.
+        case leaveAlone
+        /// Stand the radio down; passive listening is not wanted now, so the next policy edge decides.
+        case stop
+        /// Stand the radio down and start passive listening again.
+        case stopAndListen
+    }
+
+    /// The outcome of the successful send this hand back follows.
+    let outcomeID: UUID
+
+    /// The step for the manager's current outcome and whether passive listening is wanted now.
+    func step(currentOutcomeID: UUID?, listeningWanted: Bool) -> Step {
+        guard currentOutcomeID == outcomeID else { return .leaveAlone }
+        return listeningWanted ? .stopAndListen : .stop
+    }
+}
+
+// MARK: - RecipeShareRadioCustody
+
+/// Who gives the recipe radio back when the share sheet is done with it: the sheet itself, or the
+/// post-send ``RecipeShareRadioHandBack``.
+///
+/// The sheet starts the radio on appear and, while it holds custody, stops it (and restarts passive
+/// listening) on disappear. A successful send moves custody to a hand back, once, and from then on
+/// the sheet's disappearance leaves the radio alone: that is what keeps a Done tapped the moment
+/// the confirmation appears from cutting an undrained frame.
+enum RecipeShareRadioCustody: Equatable {
+    /// The sheet: its disappearance runs the gated stop-and-restart.
+    case sheet
+    /// The hand back after a successful send; the sheet's disappearance does not touch the radio.
+    case handBack(RecipeShareRadioHandBack)
+
+    /// Whether the sheet's disappearance stops the radio.
+    var sheetStopsRadioOnDisappear: Bool { self == .sheet }
+
+    /// A send succeeded: moves custody to a hand back for `outcomeID` and returns it to be run, or
+    /// nil (and no change) when a hand back already has the radio.
+    mutating func handOff(afterSendOf outcomeID: UUID) -> RecipeShareRadioHandBack? {
+        guard self == .sheet else { return nil }
+        let handBack = RecipeShareRadioHandBack(outcomeID: outcomeID)
+        self = .handBack(handBack)
+        return handBack
     }
 }
 

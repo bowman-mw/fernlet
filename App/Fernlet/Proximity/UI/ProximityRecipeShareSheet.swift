@@ -41,10 +41,13 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// VoiceOver, with a success or error haptic. It stays until Done. What the panel may claim is
 /// "sent", never "delivered": see ``RecipeShareConfirmation``.
 ///
-/// The radio's timeline after a successful send is unchanged: 1.4 s later (`radioHandBackDelay`,
-/// the same post-send pairing lifetime the auto-dismiss gave) the sheet runs the same gated
-/// stop-and-restart its disappearance would have, and gives up the radio, so a panel left open
-/// never holds the pairing (or keeps the other phone's radio closed to others).
+/// The radio's timeline after a successful send is unchanged: 1.4 s later
+/// (``RecipeShareRadioHandBack/delay``, the same post-send pairing lifetime the auto-dismiss gave) a
+/// hand back runs the same gated stop-and-restart the sheet's disappearance would have, so a panel
+/// left open never holds the pairing (or keeps the other phone's radio closed to others). The
+/// success moves custody of the radio to that hand back (``RecipeShareRadioCustody``), so a Done
+/// or a swipe-down inside the window closes the sheet without stopping the radio early: a text
+/// recipe's frame may still be draining.
 struct ProximityRecipeShareSheet: View {
     var draft: ProximityRecipeShareDraft
     var manager: ProximityRecipeShareManager
@@ -63,22 +66,9 @@ struct ProximityRecipeShareSheet: View {
     @State private var searchDelayTask: Task<Void, Never>?
     /// Which share's outcome this sheet is waiting for, and the confirmation on screen.
     @State private var latch = RecipeShareOutcomeLatch()
-    /// Whether this sheet still owns the recipe radio: true from appear until the post-send hand
-    /// back. Once false, the sheet's disappearance leaves the radio to ContentView's gates.
-    @State private var ownsRadio = true
-    /// The pending post-send hand back of the radio (see `scheduleRadioHandBack`).
-    @State private var handBackTask: Task<Void, Never>?
-    /// A mirror of `scenePhase` the hand-back task can read LIVE. The task runs 1.4 s after it is
-    /// created, and an environment value read through the view it captured is that moment's
-    /// snapshot, so restarting the radio on it could broadcast from a scene that has since gone
-    /// inactive, which is the privacy line every listener holds.
-    @State private var isSceneActive = true
-
-    /// How long the pairing is kept after a successful send before the radio goes back to passive
-    /// listening: the post-send pairing lifetime the old auto-dismiss gave. Not shorter: a text
-    /// recipe's frame is handed to QUIC when `sendPayload` returns, and an earlier `stop()` could
-    /// cancel the tunnel before it drains.
-    static let radioHandBackDelay: Duration = .seconds(1.4)
+    /// Who stops the recipe radio when the sheet is done: the sheet from appear until a successful
+    /// send, then the post-send hand back (see `startRadioHandBack(after:)`).
+    @State private var custody = RecipeShareRadioCustody.sheet
 
     var body: some View {
         NavigationStack {
@@ -101,7 +91,6 @@ struct ProximityRecipeShareSheet: View {
             .onAppear { handleAppear() }
             .onDisappear { handleDisappear() }
             .onChange(of: manager.lastShareOutcome) { _, outcome in receive(outcome) }
-            .onChange(of: scenePhase) { _, phase in isSceneActive = phase == .active }
             .onChange(of: manager.nearbyRecipients) { _, recipients in
                 if recipients.isEmpty {
                     scheduleNoNearbyState()
@@ -274,41 +263,44 @@ struct ProximityRecipeShareSheet: View {
     /// Starts the recipe radio and arms the "nothing nearby" timeout.
     private func handleAppear() {
         latch.reset()
-        ownsRadio = true
-        isSceneActive = scenePhase == .active
+        custody = .sheet
         manager.start()
         scheduleNoNearbyState()
     }
 
     /// Tears the sheet's work down and — the go-dark-after-share fix — restarts passive listening
-    /// behind the same gates ContentView enforces, unless the post-send hand back already did.
+    /// behind the same gates ContentView enforces, unless a post-send hand back has the radio.
     ///
     /// The latch is reset FIRST: `stop()` publishes `interrupted` for a share still in flight, and a
     /// share the user cancelled by closing the sheet must raise nothing (not even an announcement
-    /// from a sheet on its way out).
+    /// from a sheet on its way out). A pending hand back is deliberately NOT cancelled: closing the
+    /// panel inside its window must not stop the radio before the sent frame has had time to drain.
     private func handleDisappear() {
         searchDelayTask?.cancel()
-        handBackTask?.cancel()
         latch.reset()
-        guard ownsRadio else { return }
-        restartPassiveListening(sceneIsActive: scenePhase == .active)
+        guard custody.sheetStopsRadioOnDisappear else { return }
+        let listen = scenePhase == .active
+            && store.settings.allowNearbyRecipeShares
+            && Self.allowsListening(lockService.state)
+        Self.standDown(manager, thenListen: listen)
     }
 
-    /// Stops the sheet's use of the radio and restarts passive listening behind ContentView's gates.
+    /// Stops the radio and, when `thenListen`, restarts passive listening.
     ///
     /// Go-dark-after-share fix (mesh redesign Phase 3b): stop() tears the recipe radio down, and
     /// historically nothing restarted passive listening until the next tab/scene/lock event — after
-    /// one share the device silently stopped being discoverable for inbound recipes. Restart it here
-    /// behind the same opt-in + scene + lock gates ContentView enforces. The scene check is NOT
-    /// implicit: the post-send hand back (or a dismissal) can race a backgrounding, and restarting
-    /// there would broadcast while backgrounded — the privacy line every listener holds. No unit
-    /// seam reaches this view closure; ContentView's updateRecipeShareListener chain remains the
-    /// authoritative gate — any later scene/tab/lock/opt-out change re-evaluates and stops the
-    /// manager again (an inactive-scene stop is then restarted by the next scene-active event, not
-    /// left dark). Tab is implicitly satisfied (the sheet only presents over recipe-share tabs).
-    private func restartPassiveListening(sceneIsActive: Bool) {
+    /// one share the device silently stopped being discoverable for inbound recipes. Both callers
+    /// restart it behind the opt-in + scene + lock gates. The scene check is NOT implicit: a
+    /// dismissal (or the post-send hand back) can race a backgrounding, and restarting there would
+    /// broadcast while backgrounded — the privacy line every listener holds. No unit seam reaches
+    /// this view code; the store's run policy remains the authoritative gate — any later
+    /// scene/tab/lock/opt-out edge re-evaluates, stops the manager again, or restarts a listener its
+    /// verdict wants up (so a stop here is never left dark).
+    ///
+    /// Static, taking the manager, so the hand back can run it after the sheet has gone.
+    private static func standDown(_ manager: ProximityRecipeShareManager, thenListen: Bool) {
         manager.stop()
-        guard sceneIsActive, store.settings.allowNearbyRecipeShares, isUnlockedForListening else { return }
+        guard thenListen else { return }
         manager.start()
     }
 
@@ -331,7 +323,7 @@ struct ProximityRecipeShareSheet: View {
         // which would speak the panel twice.
         FernletAnnouncer.system.announce(confirmation.announcementKind, confirmation.announcement)
         if confirmation.tone == .sent {
-            scheduleRadioHandBack()
+            startRadioHandBack(after: confirmation.id)
         }
     }
 
@@ -349,22 +341,38 @@ struct ProximityRecipeShareSheet: View {
         send(to: row)
     }
 
-    /// After a successful send, gives the radio back to passive listening once the pairing's
-    /// post-send lifetime has passed, while the panel stays until Done.
-    private func scheduleRadioHandBack() {
-        handBackTask?.cancel()
-        guard ownsRadio else { return }
-        handBackTask = Task { @MainActor in
-            // A cancelled wait (the sheet went away first) must not hand back: `handleDisappear`
-            // has already run the same stop-and-restart.
+    /// After a successful send, takes custody of the radio away from the sheet and gives it back to
+    /// passive listening once ``RecipeShareRadioHandBack/delay`` has passed, whether the panel is
+    /// still open or was closed inside the window (the drain rule).
+    ///
+    /// The task outlives the sheet when the user closes the panel early, so it reads nothing through
+    /// the view: the manager, store and lock service are captured here, while the sheet is on
+    /// screen, and the scene comes from the store's live run-policy verdict (the authority that
+    /// starts the listener on every scene and tab edge), never from this view's environment, which
+    /// is a snapshot and is gone with the sheet. Its handle is not kept: nothing may cancel it, and
+    /// it ends on its own after one bounded sleep.
+    private func startRadioHandBack(after outcomeID: UUID) {
+        guard let handBack = custody.handOff(afterSendOf: outcomeID) else { return }
+        let manager = manager
+        let store = store
+        let lockService = lockService
+        Task { @MainActor in
             do {
-                try await Task.sleep(for: Self.radioHandBackDelay)
+                try await Task.sleep(for: RecipeShareRadioHandBack.delay)
             } catch {
                 return
             }
-            guard ownsRadio else { return }
-            ownsRadio = false
-            restartPassiveListening(sceneIsActive: isSceneActive)
+            let listen = store.proximityRunVerdict?.recipeShare.isRunning == true
+                && store.settings.allowNearbyRecipeShares
+                && Self.allowsListening(lockService.state)
+            switch handBack.step(currentOutcomeID: manager.lastShareOutcome?.id, listeningWanted: listen) {
+            case .leaveAlone:
+                return
+            case .stop:
+                Self.standDown(manager, thenListen: false)
+            case .stopAndListen:
+                Self.standDown(manager, thenListen: true)
+            }
         }
     }
 
@@ -450,8 +458,11 @@ struct ProximityRecipeShareSheet: View {
         }
     }
 
-    private var isUnlockedForListening: Bool {
-        switch lockService.state {
+    /// The sheet's lock gate on restarting passive listening: a lock that is not configured, or is
+    /// unlocked. Takes the state rather than reading the environment, so the hand back can ask it
+    /// after the sheet has gone.
+    private static func allowsListening(_ state: FernletLockState) -> Bool {
+        switch state {
         case .notConfigured, .unlocked: true
         case .locked: false
         }
