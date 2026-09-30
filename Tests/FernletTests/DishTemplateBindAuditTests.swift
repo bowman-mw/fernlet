@@ -471,7 +471,10 @@ struct DishTemplateBindAuditTests {
         let rejected = Set(Self.auditedDescriptions.filter {
             DishTemplateLexicon.resolve(description: $0, mealType: nil, catalog: catalog) == nil
         })
-        #expect(rejected == ["ramen"], "unsupported household units must fall through: \(rejected)")
+        // `ramen` fell through here until the ingredient-search round's F1(a) (2026-09-30): its pork
+        // belly row ("Fully Cooked Pork Belly") serves in USDA's raw `GRM` code, which the converter
+        // could not read, so 80 g had no conversion. The load-time alias reads it as grams now.
+        #expect(rejected.isEmpty, "unsupported household units must fall through: \(rejected)")
         for description in Self.auditedDescriptions {
             let resolved = DishTemplateLexicon.resolve(description: description, mealType: nil, catalog: catalog)
             guard rejected.contains(description) == false else {
@@ -495,8 +498,9 @@ struct DishTemplateBindAuditTests {
     /// already downgraded some template resolutions to `.low` while the tier was still asserting
     /// `.high` — so "11 of the 31 non-confident descriptions newly pause at review" would have
     /// over-claimed fix 1.1's effect. This replays the PRE-fix path (hardcoded `.high` → merge → gate)
-    /// for every safely buildable audited description and pins the split. `ramen` now falls through
-    /// before this historical comparison: its unsupported bowl measure has no source-backed conversion.
+    /// for every safely buildable audited description and pins the split. `ramen` joined the
+    /// comparison with the ingredient-search round's F1(a), once its `GRM`-served pork belly converted
+    /// (16 → 17 newly reviewed; it binds below `confidentBindScore`, so it reviews).
     @MainActor
     @Test func preFixReviewRoutingIsAttributedCorrectly() throws {
         let catalog = FoodCatalog.bundled()
@@ -518,7 +522,7 @@ struct DishTemplateBindAuditTests {
         }
         #expect(alreadyReviewed.isEmpty,
                 "no safely buildable description was already caught by the old calorie gate: \(alreadyReviewed.sorted())")
-        #expect(newlyReviewed.count == 16, "newly routed to review by the calibrated bind floor: \(newlyReviewed.sorted())")
+        #expect(newlyReviewed.count == 17, "newly routed to review by the calibrated bind floor: \(newlyReviewed.sorted())")
         #expect(Self.confidentDescriptions.count == 14)
         #expect(Self.fallThroughDescriptions.count == 0)
     }
@@ -762,8 +766,15 @@ struct DishTemplateBindAuditTests {
 
     /// A candidate-constrained plan cannot use an unsafe household conversion to mint a high-confidence meal.
     ///
-    /// The selected fries row has no source-backed conversion for the plan's household unit, so the
-    /// plan construction fails closed and the fallback remains reviewable rather than inventing a scale.
+    /// Until the ingredient-search round's F1(a) (2026-09-30) this plan failed closed: its burger bind,
+    /// *Hamburger (Burger King)*, is a survey row served "per hamburger", and the converter refused even
+    /// "1 serving" of a unit it could not read, so the keyword fallback answered. "N servings" is now
+    /// answered before the serving unit is read — one serving of a row that declares its serving as one
+    /// hamburger is exactly source-backed — so the plan builds, derived-`.low` and reviewed. What
+    /// returns with it is the relevance defect this suite's header already names: *Potato, french
+    /// fries, with chili* is a confident-but-wrong-VARIETY bind for "fries", which needs a ranking fix
+    /// (§26 fix 1.7 option (b), or a `formSpecificityBias` that knows "with chili" is an extraneous
+    /// qualifier), not a unit one. Pinned as it stands so that fix flips it deliberately.
     @MainActor
     @Test func planTierRoutesBurgerAndFriesToReviewWithoutUnsafeConversion() async throws {
         let store = makeTestStore(foodCatalog: FoodCatalog.bundled())
@@ -775,7 +786,11 @@ struct DishTemplateBindAuditTests {
         let resolved = await store.resolveMeals(from: "burger and fries")
         #expect(resolved.confidence == .low, "an unconvertible plan must not claim high confidence")
         #expect(resolved.needsReview)
-        #expect(resolved.meals.first?.name.contains("chili") == false, "the unsafe chili-fries bind must not survive")
+        #expect(resolved.isFallback == false, "the plan tier answers now that 1 serving of the burger converts")
+        let components = resolved.meals.first?.componentSnapshots ?? []
+        #expect(components.map(\.name) == ["Hamburger (Burger King)", "Potato, french fries, with chili"],
+                "the wrong-variety fries bind is back, at review — the relevance fix will flip this")
+        #expect(components.map(\.unit) == ["serving", "cup"])
     }
 
     /// An item the lexicon does not know at all still hands the WHOLE description to the next tier,

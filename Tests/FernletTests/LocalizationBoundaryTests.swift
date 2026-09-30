@@ -145,6 +145,7 @@ import FernletDomainModel
 import FernletFoundation
 import LocalPersistence
 import PrivateHealthStore
+@testable import FoodCatalog
 @testable import Fernlet
 
 /// Grep-wall enforcing the token/display separation that makes localization safe.
@@ -599,6 +600,20 @@ struct LocalizationBoundaryTests {
         for unit in RecipeUnit.allCases {
             #expect(RecipeUnit.normalized(unit.rawValue) == unit, "\(unit.rawValue) no longer round-trips")
         }
+    }
+
+    /// The catalog's raw FDC serving-unit aliases (ingredient-search round, F1(a)). The keys are
+    /// matching inputs — USDA's own unit codes as they sit in the committed SQLite files — and the
+    /// values are persisted `RecipeUnit` tokens; neither side is display text.
+    @Test func frozenRawServingUnitAliases() {
+        #expect(
+            BundledRowCorrection.rawServingUnitAliases == ["GRM": "g", "GM": "g", "MLT": "ml"],
+            """
+            The raw FDC serving-unit alias map changed. Its keys are the codes USDA writes into the \
+            catalog files (translating them matches nothing, and every GRM/MLT row fails on tap \
+            again); its values are RecipeUnit tokens a recipe line persists.
+            """
+        )
     }
 
     /// Coach-plan wire tokens.

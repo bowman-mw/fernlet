@@ -4,7 +4,7 @@ import FernletDomainModel
 /// Load-time corrections applied to every row the SQLite read path hydrates, so a known defect in
 /// the committed `FoodCatalog.sqlite` is fixed without regenerating (and re-committing) the binary.
 ///
-/// Docs/Ingredient-Search-Deep-Research-2026-09-29.md §6.5 / §8 F2. Each correction is a pure,
+/// Docs/Ingredient-Search-Deep-Research-2026-09-29.md §3.4, §6.5 / §8 F1(a), F2. Each correction is a pure,
 /// per-row, O(1) function of the hydrated `FoodItem` — no lookups, no loops beyond a row's own
 /// portion list — so it costs nothing measurable on the ~9,000-row broad-prefix fetches and cannot
 /// change which rows a query retrieves, only what a retrieved row says.
@@ -32,6 +32,13 @@ import FernletDomainModel
 /// MEASURED on the label basis (its "String Cheese" says P8 for 28 g; 0.14% of its gram rows exceed
 /// 900 kcal per 100 g, against 49% of the rows rebased here) and carries none of these ids, so the
 /// id guard leaves it untouched.
+///
+/// **Raw FDC unit codes (F1(a)).** 14,600 rows (and 86,651 in the On-Demand-Resource catalog) carry
+/// USDA's raw serving-unit codes — `GRM` and `GM` for grams, `MLT` for milliliters — which
+/// `RecipeUnit.normalized` does not read, so those rows converted nothing, not even grams, and failed
+/// the moment they were tapped. They are rewritten to the canonical `g` / `ml` tokens at load. `IU`,
+/// `MC` and the survey units ("sandwich") name no mass or volume and are left as they are; the
+/// converter now lets them resolve "1 serving" (`RecipeServingConversion`).
 nonisolated enum BundledRowCorrection {
     /// The id prefix the catalog generator mints for rows decoded from the compact USDA source JSON
     /// (`00000000-0000-5000-8000-<12-digit fdcId>`, see `USDAFoodItemRecord.stableUSDAID`). A frozen
@@ -41,9 +48,28 @@ nonisolated enum BundledRowCorrection {
     /// The basis the compact source's branded nutrients are stated on, in grams or milliliters.
     static let brandedNutrientBasis: Double = 100
 
+    /// USDA's raw FDC serving-unit codes and the canonical `RecipeUnit` token each one means. Both
+    /// sides are FROZEN tokens (localization wall): the keys are matching inputs read from the
+    /// committed files, the values are persisted `RecipeUnit` raw values.
+    static let rawServingUnitAliases: [String: String] = [
+        "GRM": RecipeUnit.gram.rawValue,
+        "GM": RecipeUnit.gram.rawValue,
+        "MLT": RecipeUnit.milliliter.rawValue
+    ]
+
     /// Every load-time correction, in order, applied to one hydrated row.
     static func corrected(_ item: FoodItem) -> FoodItem {
-        rebasingBrandedNutrients(item)
+        rebasingBrandedNutrients(aliasingRawServingUnit(item))
+    }
+
+    /// F1(a): rewrites a raw FDC serving-unit code (`GRM`, `GM`, `MLT`) to the token it means.
+    /// Every other row is returned unchanged.
+    static func aliasingRawServingUnit(_ item: FoodItem) -> FoodItem {
+        let code = item.servingUnit.trimmingCharacters(in: .whitespaces).uppercased()
+        guard let canonical = rawServingUnitAliases[code] else { return item }
+        var aliased = item
+        aliased.servingUnit = canonical
+        return aliased
     }
 
     /// F2: puts a compact-source branded row on the per-100 g (ml) basis its macros are stated on,

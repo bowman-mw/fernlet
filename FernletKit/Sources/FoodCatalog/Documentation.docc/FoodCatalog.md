@@ -77,7 +77,9 @@ compact-source branded rows (ids `00000000-0000-5000-…`), whose USDA per-100 g
 read against the product's label serving, onto a 100 g (100 ml) serving with the macros unchanged,
 keeping a gram label serving as a count portion ("1 serving (28 g)", unit `each`) so a bare count
 still means one label serving. The attachable On-Demand-Resource catalog is on the label basis
-already and carries none of those ids, so it passes through untouched.
+already and carries none of those ids, so it passes through untouched. It also reads USDA's raw
+serving-unit codes — `GRM`/`GM` as `g`, `MLT` as `ml` — in both catalogs, so those rows convert in
+grams or milliliters instead of refusing every amount.
 
 The module also owns the ambient nutrient-nudge data path: ``CuratedNutrientSources``
 loads the hand-authored good-sources table (`Resources/CuratedNutrientSources.json`,

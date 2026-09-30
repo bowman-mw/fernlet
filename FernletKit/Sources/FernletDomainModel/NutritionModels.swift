@@ -2046,10 +2046,14 @@ extension RecipeUnit {
 extension RecipeServingConversion {
     fileprivate static func resolve(quantity: Double, unit: String, foodItem: FoodItem) -> RecipeServingConversion? {
         guard let requestedUnit = RecipeUnit.normalized(unit), validRequest(quantity, unit: requestedUnit),
-              validServing(foodItem), let servingUnit = RecipeUnit.normalized(foodItem.servingUnit) else { return nil }
+              validServing(foodItem) else { return nil }
+        // "N servings" is a multiplier on the food's own declared serving and needs no unit arithmetic,
+        // so it is answered BEFORE the serving unit has to be one this converter reads: an IU, MC or
+        // survey-unit serving ("1 sandwich") still means one serving (ingredient-search round, F1(a)).
         if requestedUnit == .serving {
             return declaredServing(quantity: quantity, foodItem: foodItem)
         }
+        guard let servingUnit = RecipeUnit.normalized(foodItem.servingUnit) else { return nil }
         if requestedUnit == servingUnit {
             return exactBasis(quantity: quantity, foodItem: foodItem, unit: requestedUnit)
         }
@@ -2724,12 +2728,16 @@ extension FoodItem {
         return RecipeUnit.normalized(servingUnit) ?? .serving
     }
 
+    /// The amount a tap (or a bare-count quick log) binds in `unit`: the serving itself when `unit` IS
+    /// the serving's unit, otherwise one of `unit`. A volume unit used to take the serving's size in
+    /// whatever volume unit the serving had, so an oil served as 15 ml tapped to "15 tbsp" (221 ml) —
+    /// and to "100 tbsp" once the ingredient-search round's F2 put branded rows on a 100 ml basis.
     public func defaultRecipeQuantity(for unit: RecipeUnit) -> Double {
         switch unit {
         case .milligram, .gram, .kilogram:
             servingUnit.caseInsensitiveCompare(RecipeUnit.gram.rawValue) == .orderedSame ? servingSize : 1
         case .milliliter, .fluidOunce, .liter, .cup, .tablespoon, .teaspoon, .glass:
-            RecipeUnit.normalized(servingUnit)?.isVolume == true ? servingSize : 1
+            RecipeUnit.normalized(servingUnit) == unit ? servingSize : 1
         case .ounce, .pound, .slice, .piece, .each, .serving:
             1
         }
