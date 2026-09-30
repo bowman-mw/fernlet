@@ -42,8 +42,9 @@ import FernletFoundation
 public struct PrivateMediaStore {
     private let indexURL: URL
     private let sealedIndexURL: URL
-    private let imageDirectoryURL: URL
-    private let thumbnailDirectoryURL: URL
+    /// The wall's photo and thumbnail files: `MeshPhotos/` + `MeshPhotoThumbnails/`, the wall's
+    /// purposes, legacy plaintext allowed. Shared machinery with ``PendingSessionPhotoStore``.
+    private let files: FriendPhotoCorpusFiles
     private let keyProvider: PrivateMediaKeyProviding
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -59,7 +60,6 @@ public struct PrivateMediaStore {
     /// the visibility of a byte bound inside it. Two restatements of "10 MB" that could drift is the
     /// larger risk; see `MeshRoutedItemSealFormat.maxResidentBlobByteCount`.
     public static let maxIncomingPhotoBytes = 10 * 1024 * 1024  // 10 MB
-    private static let thumbnailMaxPixelSize = 400
     // A small, highly-compressed JPEG can decode to a multi-gigabyte bitmap, so the byte cap
     // above is not sufficient. Reject by pixel dimensions/area before the full-resolution bytes
     // are ever persisted (and therefore before any display/library-save sink decodes them).
@@ -92,8 +92,15 @@ public struct PrivateMediaStore {
         self.sealedIndexURL = indexURL.deletingPathExtension()
             .appendingPathExtension(Self.sealedIndexExtension)
         let baseURL = indexURL.deletingLastPathComponent()
-        self.imageDirectoryURL = baseURL.appendingPathComponent("MeshPhotos", isDirectory: true)
-        self.thumbnailDirectoryURL = baseURL.appendingPathComponent("MeshPhotoThumbnails", isDirectory: true)
+        self.files = FriendPhotoCorpusFiles(
+            imageDirectoryURL: baseURL.appendingPathComponent("MeshPhotos", isDirectory: true),
+            thumbnailDirectoryURL: baseURL.appendingPathComponent("MeshPhotoThumbnails", isDirectory: true),
+            imagePurpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2,
+            thumbnailPurpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
+            allowsLegacyPlaintext: true,
+            keyProvider: keyProvider,
+            auditCorpus: "friendWall"
+        )
         self.keyProvider = keyProvider
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
@@ -137,8 +144,8 @@ public struct PrivateMediaStore {
             // holding entries the file manifest no longer names would re-save photos whose bytes
             // were just swept (a legacy index could carry more than the cap).
             return .entries(Self.cappedNewestFirst(photos).map { $0.withoutImageData() })
-        case .deferred:
-            FernletAuditLog.log("privateMedia.indexDeferred", context: ["reason": "noKey"])
+        case .deferred(let reason):
+            FernletAuditLog.log("privateMedia.indexDeferred", context: ["reason": reason])
             return .deferred
         case .unrecoverable:
             FernletAuditLog.log("privateMedia.indexUnrecoverable")
@@ -160,49 +167,105 @@ public struct PrivateMediaStore {
     ///   from an index that ``loadIndex()`` reported as ``IndexLoad/deferred``.
     public func save(_ photos: [FriendPhotoPayload]) {
         let capped = Self.cappedNewestFirst(photos)
-        createDirectories()
+        // A directory that cannot be created is audited inside; every write below then fails and
+        // is audited on its own, and the index still commits the metadata (the wall's standing rule).
+        _ = files.createDirectories()
         for photo in capped {
             guard let imageData = photo.imageData else { continue }
-            guard imageData.count <= Self.maxIncomingPhotoBytes else {
-                print("[Fernlet] Dropped oversized peer photo (\(imageData.count) bytes)")
-                continue
-            }
-            guard Self.isWithinSafePixelBounds(imageData) else {
-                print("[Fernlet] Dropped peer photo exceeding safe pixel dimensions")
-                continue
-            }
-            // Encrypt the plaintext bytes (post-validation) before they touch disk. If no key is
-            // available we skip persisting bytes rather than write plaintext; the metadata index
-            // is still saved and the photo rehydrates from the mesh on demand. Deliberately
-            // two-step (seal, then best-effort write) rather than `sealAndWrite`: a failed image
-            // write still proceeds to the thumbnail write, while a nil key skips both.
-            guard let sealedImage = keyProvider.gcmSeal(
-                imageData,
-                purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2
-            ) else { continue }
-            do {
-                try sealedImage.write(to: imageURL(for: photo.id), options: [.atomic, .completeFileProtection])
-            } catch {
-                // Recovery: continue to the thumbnail write (the documented behaviour) — but the
-                // failure is named, so a wall entry whose full-size bytes never persisted is not silent.
-                FernletAuditLog.log(
-                    "privateMedia.imageWriteFailed",
-                    context: ["id": photo.id.uuidString, "error": "\(error)"]
-                )
-            }
-            if let thumbnailData = Self.safeThumbnailData(from: imageData) {
-                keyProvider.sealAndWriteBestEffort(
-                    thumbnailData,
-                    to: thumbnailURL(for: photo.id),
-                    purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
-                    reason: "thumbnail"
-                )
-            }
+            // Refused bytes (cap, pixel bounds) and a keyless or failed write leave the index entry
+            // in place, and the photo rehydrates from the mesh on demand — this store's contract
+            // since before sealing. Only ``commitKept(_:onto:)`` must know which photos landed.
+            _ = files.writeSealedImage(imageData, for: photo.id)
         }
         // NEVER sweep against an index that was not committed: the on-disk index still names the
         // OLD photo set, so a sweep keyed on the NEW set would delete files it still references.
         guard writeSealedIndex(capped) else { return }
-        removeOrphanedFiles(keeping: Set(capped.map(\.id)))
+        files.removeOrphanedFiles(keeping: Set(capped.map(\.id)))
+    }
+
+    /// What ``commitKept(_:onto:)`` actually put on the wall.
+    ///
+    /// Concurrency: an immutable `Sendable` value.
+    public struct WallKeepResult: Equatable, Sendable {
+        /// Ids whose sealed image write landed AND that the committed index names — the only ids a
+        /// caller may treat as kept, and the only ones an export may read back.
+        public let keptOnWall: Set<UUID>
+        /// Whether the wall index was rewritten. False when nothing landed (there was nothing to
+        /// commit) or when the write failed (the files just written were removed again).
+        public let indexCommitted: Bool
+
+        /// Creates a result; the store is the only producer outside tests.
+        public init(keptOnWall: Set<UUID>, indexCommitted: Bool) {
+            self.keptOnWall = keptOnWall
+            self.indexCommitted = indexCommitted
+        }
+    }
+
+    /// Adds chosen photos to the wall and reports, per photo, which ones are really on it.
+    ///
+    /// ``save(_:)`` answers "did the index get written", which cannot say whether a given photo is
+    /// on the wall: it skips bytes it refuses or cannot seal, only audits a failed image write, and
+    /// trims to the newest ``maxCachedPhotos`` by a peer-signed `addedAt`. A keep must never lose a
+    /// photo the person ticked, so this is the one wall write an answer uses:
+    ///
+    /// 1. Each kept photo passes the byte cap and pixel bounds, is sealed and written; only a photo
+    ///    whose full-size write landed joins `written` (the thumbnail stays best-effort). A kept id
+    ///    already on `wall`, or repeated in `kept`, is refused.
+    /// 2. Room is made by evicting only photos ALREADY on the wall, oldest `addedAt` first, so the
+    ///    index is `written` plus the newest `maxCachedPhotos - written.count` wall photos: a kept
+    ///    photo is never evicted by its own keep, whatever its `addedAt`.
+    /// 3. The index is written. On failure the files just written are removed (the old index never
+    ///    named them) and nothing is reported kept.
+    /// 4. Only after a committed index, the orphan sweep removes the evicted wall photos' files.
+    ///
+    /// - Parameters:
+    ///   - kept: The photos to add, each carrying its plaintext bytes (`imageData`).
+    ///   - wall: The COMPLETE current wall, metadata only — never a set derived from a
+    ///     ``IndexLoad/deferred`` read, for the same reason as ``save(_:)``.
+    public func commitKept(_ kept: [FriendPhotoPayload], onto wall: [FriendPhotoPayload]) -> WallKeepResult {
+        let written = writeKeptPhotos(kept, besides: wall)
+        guard !written.isEmpty else { return WallKeepResult(keptOnWall: [], indexCommitted: false) }
+        let room = max(0, Self.maxCachedPhotos - written.count)
+        let survivors = wall.sorted { $0.addedAt > $1.addedAt }.prefix(room)
+        let committed = written + survivors
+        assert(committed.count <= Self.maxCachedPhotos, "a keep must never be trimmed by the cap")
+        guard writeSealedIndex(Self.cappedNewestFirst(committed)) else {
+            for photo in written { files.removeFiles(for: photo.id) }
+            return WallKeepResult(keptOnWall: [], indexCommitted: false)
+        }
+        files.removeOrphanedFiles(keeping: Set(committed.map(\.id)))
+        return WallKeepResult(keptOnWall: Set(written.map(\.id)), indexCommitted: true)
+    }
+
+    /// Step 1 of ``commitKept(_:onto:)``: writes each keepable photo's sealed bytes and returns the
+    /// metadata of exactly those whose full-size write landed. Bounded by ``maxCachedPhotos``.
+    private func writeKeptPhotos(
+        _ kept: [FriendPhotoPayload],
+        besides wall: [FriendPhotoPayload]
+    ) -> [FriendPhotoPayload] {
+        guard files.createDirectories() else { return [] }
+        let wallIDs = Set(wall.map(\.id))
+        var seen: Set<UUID> = []
+        var written: [FriendPhotoPayload] = []
+        for photo in kept.prefix(Self.maxCachedPhotos) {
+            // Unreachable while a keep's ids are the pending corpus's local ids (never a wall id);
+            // defended because writing over a wall photo's file would replace a kept photo's bytes.
+            guard !wallIDs.contains(photo.id), seen.insert(photo.id).inserted else {
+                FernletAuditLog.log("privateMedia.keepRefused", context: ["reason": "idOnWallOrRepeated"])
+                continue
+            }
+            guard let imageData = photo.imageData else {
+                FernletAuditLog.log("privateMedia.keepRefused", context: ["reason": "noBytes"])
+                continue
+            }
+            guard files.writeSealedImage(imageData, for: photo.id) == .written else {
+                // A thumbnail can land beside a failed full-size write; nothing names it.
+                files.removeFiles(for: photo.id)
+                continue
+            }
+            written.append(photo.withoutImageData())
+        }
+        return written
     }
 
     /// The canonical index view: newest first, capped at ``maxCachedPhotos``. ``save(_:)`` commits
@@ -274,22 +337,7 @@ public struct PrivateMediaStore {
     /// corruption) — never ciphertext or garbage.
     public func imageData(for photo: FriendPhotoPayload) -> Data? {
         if let inMemory = photo.imageData { return inMemory }
-        guard let stored = try? Data(contentsOf: imageURL(for: photo.id)) else { return nil }
-        switch openSealed(stored, purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2) {
-        case .opened(let data):
-            return data
-        case .legacyPlaintext(let data):
-            // Upgrade a pre-encryption plaintext file to ciphertext on first access (spec §11).
-            keyProvider.sealAndWriteBestEffort(
-                data,
-                to: imageURL(for: photo.id),
-                purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2,
-                reason: "legacyPlaintextUpgrade"
-            )
-            return data
-        case .unreadable:
-            return nil
-        }
+        return files.imageData(forID: photo.id)
     }
 
     /// Returns plaintext thumbnail bytes for a photo, decrypting the cached thumbnail or
@@ -298,31 +346,7 @@ public struct PrivateMediaStore {
     /// Like ``imageData(for:)``, a legacy plaintext thumbnail is re-sealed in place on first
     /// access. Returns nil only when neither a thumbnail nor the full image can be opened.
     public func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
-        if let stored = try? Data(contentsOf: thumbnailURL(for: photo.id)) {
-            switch openSealed(stored, purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2) {
-            case .opened(let data):
-                return data
-            case .legacyPlaintext(let data):
-                keyProvider.sealAndWriteBestEffort(
-                    data,
-                    to: thumbnailURL(for: photo.id),
-                    purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
-                    reason: "legacyThumbnailUpgrade"
-                )
-                return data
-            case .unreadable:
-                break  // corrupt/unopenable thumbnail — regenerate from the full image below
-            }
-        }
-        guard let data = imageData(for: photo),
-              let thumbnailData = Self.safeThumbnailData(from: data) else { return nil }
-        keyProvider.sealAndWriteBestEffort(
-            thumbnailData,
-            to: thumbnailURL(for: photo.id),
-            purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
-            reason: "regeneratedThumbnail"
-        )
-        return thumbnailData
+        files.thumbnailData(forID: photo.id, inMemoryImage: photo.imageData)
     }
 
     /// Rebuilds a byte-less index payload into one carrying its decrypted image bytes
@@ -355,8 +379,10 @@ public struct PrivateMediaStore {
     public enum IndexLoad: Equatable {
         /// The index was read. An absent index is an empty wall — genuinely no photos.
         case entries([FriendPhotoPayload])
-        /// A sealed index exists but no media key is available right now (an `AfterFirstUnlock`
-        /// keychain row before the first post-boot unlock). Transient: retry, never write over it.
+        /// An index exists but cannot be read right now: no media key is available (an
+        /// `AfterFirstUnlock` keychain row before the first post-boot unlock), or the FILE itself
+        /// cannot be read (a `.completeFileProtection` file while the device is locked, or any I/O
+        /// error). Transient: retry, never write over it.
         case deferred
         /// The index exists, a key IS available, and the bytes still neither open nor decode —
         /// corruption, or a key row swept by the duress wipe. Nothing can recover these entries;
@@ -369,16 +395,31 @@ public struct PrivateMediaStore {
     private enum IndexReadResult {
         case absent
         case entries([FriendPhotoPayload], legacyPlaintext: Bool)
-        case deferred
+        /// Carries the audit reason: `noKey` or `fileUnreadable`.
+        case deferred(reason: String)
         case unrecoverable
+    }
+
+    /// One index file on disk, read without conflating "absent" and "cannot be read".
+    private enum IndexFileRead {
+        case absent
+        case bytes(Data)
+        case unreadable
     }
 
     /// Reads the index, sealed generation first, and classifies what it found.
     ///
     /// The sealed file wins whenever it exists: once migration has written it, a plaintext file
-    /// left behind by a failed delete is stale by construction and must never be preferred.
+    /// left behind by a failed delete is stale by construction and must never be preferred. A file
+    /// that EXISTS but cannot be read is a deferral, never absence: the key row is
+    /// `AfterFirstUnlock` while the file is `.completeFileProtection`, so a background launch on a
+    /// locked device has the key and still cannot read the file — reading that as an empty wall
+    /// would let the next save sweep every kept photo.
     private func readIndex() -> IndexReadResult {
-        if let stored = try? Data(contentsOf: sealedIndexURL), !stored.isEmpty {
+        switch readIndexFile(at: sealedIndexURL) {
+        case .unreadable:
+            return .deferred(reason: "fileUnreadable")
+        case .bytes(let stored) where !stored.isEmpty:
             guard let opened = keyProvider.gcmOpen(
                 stored,
                 purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2
@@ -386,49 +427,47 @@ public struct PrivateMediaStore {
                   let photos = try? decoder.decode([FriendPhotoPayload].self, from: opened) else {
                 // No key at all is transient (the row is `AfterFirstUnlock`); a key that is present
                 // and still does not open these bytes is not.
-                return keyProvider.mediaKey() == nil ? .deferred : .unrecoverable
+                return keyProvider.mediaKey() == nil ? .deferred(reason: "noKey") : .unrecoverable
             }
             return .entries(photos, legacyPlaintext: false)
+        case .absent, .bytes:
+            break
         }
-        guard let legacy = try? Data(contentsOf: indexURL), !legacy.isEmpty else { return .absent }
-        // Pre-sealing generation. Deliberately NOT gated on a key being available, unlike the photo
-        // bytes in `openSealed`: these bytes are already plaintext on disk, so reading them
-        // discloses nothing new, while refusing would strand the wall's whole index — and its file
-        // manifest — behind a locked keychain. Sealing is retried on the next load.
-        guard let photos = try? decoder.decode([FriendPhotoPayload].self, from: legacy) else {
-            return .unrecoverable
-        }
-        return .entries(photos, legacyPlaintext: true)
+        return readLegacyIndex()
     }
 
-    // MARK: - At-rest encryption
-
-    /// Three-way outcome of opening an on-disk media file via `openSealed(_:)`.
+    /// The pre-sealing generation of ``readIndex()``.
     ///
-    /// Read paths branch on this to keep the seal seam fail-closed: only `.opened` and
-    /// `.legacyPlaintext` ever hand bytes to a caller, and `.legacyPlaintext` additionally
-    /// triggers an in-place re-seal so the plaintext generation shrinks over time.
-    private enum OpenResult {
-        case opened(Data)           // decrypted from ciphertext
-        case legacyPlaintext(Data)  // a pre-encryption plaintext file (re-encrypted in place on access)
-        case unreadable             // no key, or bytes that are neither openable nor a valid image
+    /// Deliberately NOT gated on a key being available, unlike the photo bytes: these bytes are
+    /// already plaintext on disk, so reading them discloses nothing new, while refusing would strand
+    /// the wall's whole index — and its file manifest — behind a locked keychain. Sealing is retried
+    /// on the next load.
+    private func readLegacyIndex() -> IndexReadResult {
+        switch readIndexFile(at: indexURL) {
+        case .absent:
+            return .absent
+        case .unreadable:
+            return .deferred(reason: "fileUnreadable")
+        case .bytes(let legacy):
+            guard !legacy.isEmpty else { return .absent }
+            guard let photos = try? decoder.decode([FriendPhotoPayload].self, from: legacy) else {
+                return .unrecoverable
+            }
+            return .entries(photos, legacyPlaintext: true)
+        }
     }
 
-    /// Opens AES-256-GCM bytes. GCM open fails both for legacy pre-encryption plaintext files and
-    /// for genuinely undecodable bytes (wrong/lost key, corruption). We distinguish the two by
-    /// checking whether the raw bytes are themselves a valid image — so a wrong key or a corrupt
-    /// file resolves to `.unreadable` (treated as missing) rather than handing ciphertext/garbage
-    /// back as if it were a photo. Files that predate encryption passed the same pixel-bounds gate
-    /// at save time, so they are recognised as `.legacyPlaintext` and upgraded on access.
-    private func openSealed(_ stored: Data, purpose: CryptographicPurpose) -> OpenResult {
-        // The explicit nil-key guard is load-bearing: without a key NOTHING opens — a legacy
-        // plaintext file is `.unreadable` here, never handed back as a photo.
-        guard keyProvider.mediaKey() != nil else { return .unreadable }
-        if let plaintext = keyProvider.gcmOpen(stored, purpose: purpose) {
-            return .opened(plaintext)
+    /// Reads one index file, keeping "not there" and "there but unreadable" apart.
+    private func readIndexFile(at url: URL) -> IndexFileRead {
+        guard FileManager.default.fileExists(atPath: url.path) else { return .absent }
+        do {
+            return .bytes(try Data(contentsOf: url))
+        } catch {
+            return .unreadable
         }
-        return Self.isWithinSafePixelBounds(stored) ? .legacyPlaintext(stored) : .unreadable
     }
+
+    // MARK: - Decompression-bomb bounds
 
     /// Reads pixel dimensions via ImageIO (without decoding the pixels) and rejects images whose
     /// dimensions or total area would decompress to an unreasonable bitmap, independent of the
@@ -444,75 +483,5 @@ public struct PrivateMediaStore {
         return width <= maxImagePixelDimension
             && height <= maxImagePixelDimension
             && width * height <= maxImagePixelCount
-    }
-
-    // MARK: - Safe thumbnail generation
-
-    /// Generates a thumbnail using ImageIO to avoid fully decompressing untrusted image data.
-    /// Checks pixel dimensions before decode and caps output at thumbnailMaxPixelSize.
-    private static func safeThumbnailData(from imageData: Data) -> Data? {
-        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
-
-        // Check dimensions without full decode.
-        if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
-            let width = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
-            let height = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
-            // Reject unreasonably large images that would OOM even as thumbnails.
-            if width > 20_000 || height > 20_000 { return nil }
-        }
-
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: thumbnailMaxPixelSize,
-            kCGImageSourceCreateThumbnailWithTransform: true
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        let uiImage = UIImage(cgImage: cgImage)
-        return uiImage.jpegData(compressionQuality: 0.7)
-    }
-
-    /// Creates the image and thumbnail directories. A failure is logged rather than dropped: every
-    /// later photo write would otherwise fail with a misleading error and no recorded root cause.
-    private func createDirectories() {
-        for directory in [imageDirectoryURL, thumbnailDirectoryURL] {
-            do {
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            } catch {
-                FernletAuditLog.log(
-                    "privateMedia.directoryCreateFailed",
-                    context: ["directory": directory.lastPathComponent, "error": "\(error)"]
-                )
-            }
-        }
-    }
-
-    private func imageURL(for id: UUID) -> URL {
-        imageDirectoryURL.appendingPathComponent("\(id.uuidString).jpg")
-    }
-
-    private func thumbnailURL(for id: UUID) -> URL {
-        thumbnailDirectoryURL.appendingPathComponent("\(id.uuidString).jpg")
-    }
-
-    /// Deletes files whose id is no longer in the committed index. Only ever called after the index
-    /// write succeeded (see ``save(_:)``). A file that cannot be removed is logged: it holds a friend
-    /// photo the wall has already evicted past its cap.
-    private func removeOrphanedFiles(keeping ids: Set<UUID>) {
-        for directoryURL in [imageDirectoryURL, thumbnailDirectoryURL] {
-            guard let urls = try? FileManager.default.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil) else { continue }
-            for url in urls {
-                guard let id = UUID(uuidString: url.deletingPathExtension().lastPathComponent),
-                      !ids.contains(id) else { continue }
-                do {
-                    try FileManager.default.removeItem(at: url)
-                } catch {
-                    // Recovery: continue the sweep — one stuck file must not abandon the rest.
-                    FernletAuditLog.log(
-                        "privateMedia.orphanRemoveFailed",
-                        context: ["file": url.lastPathComponent, "error": "\(error)"]
-                    )
-                }
-            }
-        }
     }
 }

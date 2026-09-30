@@ -227,4 +227,126 @@ struct MeshPhotoCacheSealingTests {
         #expect(otherKey.loadIndex() == .unrecoverable)
         #expect(otherKey.load().isEmpty)
     }
+
+    // MARK: - An index that exists is never read as empty
+
+    /// The `.completeFileProtection` hazard: the key row is `AfterFirstUnlock`, so a background
+    /// launch on a locked device HAS the key and still cannot read the index file. That used to fall
+    /// through to "no legacy index either" and come back as an empty wall — which the next save
+    /// then wrote over, sweeping every kept photo. A file that exists but cannot be read (a mode-000
+    /// file, or a directory at the path) is a deferral, for the sealed index and the legacy one.
+    @Test func aSealedIndexThatCannotBeReadDefersInsteadOfReadingAsEmpty() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = PrivateMediaStore(
+            indexURL: legacyIndexURL(in: directory),
+            keyProvider: InMemoryPrivateMediaKeyProvider()
+        )
+        let kept = photo(named: "Alice", fingerprint: "fp-alice", at: Date())
+        store.save([kept])
+        let sealed = sealedIndexURL(in: directory)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: sealed.path)
+        #expect(store.loadIndex() == .deferred, "an unreadable sealed index read as an empty wall")
+        #expect(store.load().isEmpty)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: sealed.path)
+        #expect(FileManager.default.fileExists(atPath: imageFileURL(in: directory, id: kept.id).path))
+        #expect(store.load().count == 1, "the index did not survive the deferred read")
+
+        // The pre-sealing generation has the same hazard.
+        try FileManager.default.removeItem(at: sealed)
+        try FileManager.default.createDirectory(at: legacyIndexURL(in: directory), withIntermediateDirectories: true)
+        #expect(store.loadIndex() == .deferred, "an unreadable legacy index read as an empty wall")
+    }
+
+    // MARK: - commitKept: a keep never loses a photo
+
+    /// Only photos whose sealed bytes LANDED are reported kept and named by the index: one whose
+    /// image write fails (a directory planted at its file path) and one the pixel bounds refuse
+    /// are neither in `keptOnWall` nor on the wall, and leave no file behind.
+    @Test func commitKeptReportsOnlyPhotosWhoseBytesLanded() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = PrivateMediaStore(
+            indexURL: legacyIndexURL(in: directory),
+            keyProvider: InMemoryPrivateMediaKeyProvider()
+        )
+        let onWall = photo(named: "Wall", fingerprint: "fp-wall", at: Date(timeIntervalSince1970: 1_000))
+        store.save([onWall])
+        let landed = photo(named: "Landed", fingerprint: "fp-a", at: Date(timeIntervalSince1970: 2_000))
+        let blocked = photo(named: "Blocked", fingerprint: "fp-b", at: Date(timeIntervalSince1970: 2_001))
+        let unsafe = FriendPhotoPayload(imageData: jpeg(width: 7_000, height: 4), senderName: "Unsafe")
+        // Read the wall FIRST: a load normalizes the index and sweeps unnamed files, which would
+        // take the planted directory with it.
+        let wallBefore = store.load()
+        try FileManager.default.createDirectory(
+            at: imageFileURL(in: directory, id: blocked.id),
+            withIntermediateDirectories: true
+        )
+
+        let result = store.commitKept([landed, blocked, unsafe], onto: wallBefore)
+
+        #expect(result.keptOnWall == [landed.id])
+        #expect(result.indexCommitted)
+        #expect(Set(store.load().map(\.id)) == [onWall.id, landed.id])
+        #expect(store.imageData(for: landed.withoutImageData()) == landed.imageData)
+        for refused in [blocked.id, unsafe.id] {
+            #expect(!FileManager.default.fileExists(atPath: imageFileURL(in: directory, id: refused).path))
+            #expect(!FileManager.default.fileExists(
+                atPath: directory.appendingPathComponent("MeshPhotoThumbnails/\(refused.uuidString).jpg").path
+            ))
+        }
+    }
+
+    /// A keep into a FULL wall evicts the oldest photo already on the wall — never the photo being
+    /// kept, however old its peer-signed `addedAt` claims to be.
+    @Test func commitKeptNeverEvictsAPhotoBeingKept() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = PrivateMediaStore(
+            indexURL: legacyIndexURL(in: directory),
+            keyProvider: InMemoryPrivateMediaKeyProvider()
+        )
+        let base = Date(timeIntervalSince1970: 1_000_000)
+        let wall = (1...PrivateMediaStore.maxCachedPhotos).map { offset in
+            FriendPhotoPayload(
+                imageData: Data(),
+                addedAt: base.addingTimeInterval(Double(offset)),
+                senderName: "Wall \(offset)"
+            ).withoutImageData()
+        }
+        store.save(wall)
+        let oldest = try #require(wall.first)
+        let kept = photo(named: "Kept", fingerprint: "fp-kept", at: base)  // older than the whole wall
+
+        let result = store.commitKept([kept], onto: store.load())
+
+        #expect(result.keptOnWall == [kept.id])
+        let after = store.load()
+        #expect(after.count == PrivateMediaStore.maxCachedPhotos)
+        #expect(after.contains { $0.id == kept.id }, "the keep evicted the photo it was keeping")
+        #expect(!after.contains { $0.id == oldest.id }, "room was not made by evicting the oldest wall photo")
+    }
+
+    /// An index write that fails after the bytes landed removes those bytes (the old index never
+    /// named them) and reports nothing kept.
+    @Test func commitKeptRemovesItsFilesWhenTheIndexWriteFails() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = PrivateMediaStore(
+            indexURL: legacyIndexURL(in: directory),
+            keyProvider: InMemoryPrivateMediaKeyProvider()
+        )
+        try FileManager.default.createDirectory(at: sealedIndexURL(in: directory), withIntermediateDirectories: true)
+        let kept = photo(named: "Kept", fingerprint: "fp-kept", at: Date())
+
+        let result = store.commitKept([kept], onto: [])
+
+        #expect(result == PrivateMediaStore.WallKeepResult(keptOnWall: [], indexCommitted: false))
+        #expect(!FileManager.default.fileExists(atPath: imageFileURL(in: directory, id: kept.id).path),
+                "a keep whose index never committed left its bytes on the wall")
+        #expect(!FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("MeshPhotoThumbnails/\(kept.id.uuidString).jpg").path
+        ))
+    }
 }
