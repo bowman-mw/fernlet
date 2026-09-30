@@ -3,6 +3,7 @@ import Foundation
 import Testing
 import FernletFoundation
 import FernletDomainModel
+import FernletExchange
 import AIProviders
 import AppServices
 @testable import Fernlet
@@ -425,6 +426,97 @@ struct RecipeShareCodecTests {
         #expect(webImport.macros.protein == SharedRecipeLimits.maxMacroGrams)
         #expect(webImport.macros.calories == SharedRecipeLimits.maxMacroGrams * 17)
         #expect(webImport.micronutrients.sodium == nil)
+    }
+
+    // MARK: - Decimal ingredient grams (2026-09-29)
+
+    @MainActor
+    @Test func decimalGramsSurviveTheShareTextAndThePasteImport() throws {
+        let fixture = makeDecimalRecipeFixture()
+        let text = RecipeShareCodec.shareText(for: fixture.recipe, foodItems: fixture.foodItems)
+        #expect(text.contains("- 40 g House granola (P3.4 C24.5 F0.5)"))
+        #expect(text.contains("- 80 g Rolled oats (P10 C54 F6)"))   // whole grams read exactly as before
+
+        let payload = try RecipeShareCodec.decodePayload(from: text)
+        let granola = try #require(payload.ingredients.first { $0.name == "House granola" })
+        #expect(granola.protein == 3 && granola.carbs == 25 && granola.fat == 1)
+        #expect(granola.preciseMacros == PreciseMacros(protein: 3.4, carbs: 24.5, fat: 0.5))
+        #expect(payload.ingredients.first { $0.name == "Rolled oats" }?.preciseMacros == nil)
+
+        let store = makeTestStore()
+        let imported = try store.importRecipe(from: text)
+        let foods = store.foodItems.filter { food in imported.ingredients.contains { $0.foodItemId == food.id } }
+        #expect(foods.first { $0.name == "House granola" }?.exactMacros == PreciseMacros(protein: 3.4, carbs: 24.5, fat: 0.5))
+        #expect(foods.first { $0.name == "Rolled oats" }?.preciseMacros == nil)
+    }
+
+    @MainActor
+    @Test func decimalGramsSurviveAMeshShare() throws {
+        let fixture = makeDecimalRecipeFixture()
+        let store = makeTestStore()
+        let share = RecipeShareCodec.proximityPayload(for: fixture.recipe, foodItems: fixture.foodItems)
+        let received = try JSONDecoder().decode(ProximityRecipeSharePayload.self, from: JSONEncoder().encode(share))
+
+        #expect(try store.importProximityRecipeShare(received).name == "Granola bowl")
+        let imported = try #require(store.recipes.first)
+        let granola = try #require(store.foodItems.first { food in
+            food.name == "House granola" && imported.ingredients.contains { $0.foodItemId == food.id }
+        })
+        #expect(granola.exactMacros.protein == 3.4)
+        #expect(granola.macros == Macros(protein: 3, carbs: 25, fat: 1))
+    }
+
+    @MainActor
+    @Test func hostileOrInconsistentFractionsAreRefused() throws {
+        let fixture = makeDecimalRecipeFixture()
+        let payload = RecipeShareCodec.payload(for: fixture.recipe, foodItems: fixture.foodItems)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let json = String(decoding: try encoder.encode(payload), as: UTF8.self)
+        let precise = #""preciseMacros":{"carbs":24.5,"fat":0.5,"protein":3.4}"#
+        try #require(json.contains(precise))
+
+        let hostile = [
+            // Disagrees with the whole-gram fields an older reader sees (7.4 would round to 7, not 3).
+            json.replacingOccurrences(of: precise, with: #""preciseMacros":{"carbs":24.5,"fat":0.5,"protein":7.4}"#),
+            // Negative.
+            json.replacingOccurrences(of: precise, with: #""preciseMacros":{"carbs":24.5,"fat":0.5,"protein":-3.4}"#),
+            // Over the ceiling, even with whole grams that agree.
+            json.replacingOccurrences(of: precise, with: #""preciseMacros":{"carbs":24.5,"fat":0.5,"protein":10000.4}"#)
+                .replacingOccurrences(of: #""protein":3,"quantity":40"#, with: #""protein":10000,"quantity":40"#),
+            // Not numbers at all.
+            json.replacingOccurrences(of: precise, with: #""preciseMacros":{"carbs":"lots","fat":0.5,"protein":3.4}"#)
+        ]
+        for text in hostile {
+            #expect(text != json)
+            #expect(throws: RecipeImportError.invalidPayload) { try RecipeShareCodec.decodePayload(from: text) }
+        }
+        var inProcess = payload
+        inProcess.ingredients[0].preciseMacros = PreciseMacros(protein: 9.4, carbs: 24.5, fat: 0.5)
+        #expect(throws: ExchangePacketError.invalidPayload) { try ExchangeRecipePayloadValidator.validate(inProcess) }
+    }
+
+    /// A custom granola typed as 3.4 g protein / 24.5 g carbs / 0.5 g fat per 40 g, beside whole-gram oats.
+    private func makeDecimalRecipeFixture() -> (recipe: RecipeDefinition, foodItems: [FoodItem]) {
+        let granola = FoodItem(name: "House granola", servingSize: 40, servingUnit: RecipeUnit.gram.rawValue,
+                               macros: Macros(protein: 0, carbs: 0, fat: 0), micronutrients: Micronutrients(),
+                               category: "custom ingredient", source: .manual, tags: ["recipe", "custom"],
+                               preciseMacros: PreciseMacros(protein: 3.4, carbs: 24.5, fat: 0.5))
+        let oats = foodItem(name: "Rolled oats", servingSize: 40, servingUnit: RecipeUnit.gram.rawValue,
+                            macros: Macros(protein: 5, carbs: 27, fat: 3))
+        let recipe = RecipeDefinition(
+            name: "Granola bowl",
+            servings: 1,
+            ingredients: [
+                RecipeIngredient(foodItemId: granola.id, quantity: 40, unit: RecipeUnit.gram.rawValue),
+                RecipeIngredient(foodItemId: oats.id, quantity: 80, unit: RecipeUnit.gram.rawValue)
+            ],
+            notes: "",
+            source: "manual",
+            createdAt: Date(timeIntervalSince1970: 1_779_664_800),
+            updatedAt: Date(timeIntervalSince1970: 1_779_664_800)
+        )
+        return (recipe, [granola, oats])
     }
 
     private func makeRecipeFixture() -> (recipe: RecipeDefinition, foodItems: [FoodItem]) {

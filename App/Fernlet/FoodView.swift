@@ -1792,14 +1792,15 @@ struct RecipeSheet: View {
     /// list, bound to the item exactly as `RecipeIngredientEditor.select` would bind a search pick.
     private func appendIngredient(for foodItem: FoodItem) {
         let unit = foodItem.preferredRecipeUnit
+        let grams = foodItem.exactMacros
         let input = ManualRecipeIngredientInput(
             name: foodItem.name,
             selectedFoodItemId: foodItem.id,
             quantity: foodItem.defaultRecipeQuantity(for: unit),
             unit: unit.rawValue,
-            protein: foodItem.macros.protein,
-            carbs: foodItem.macros.carbs,
-            fat: foodItem.macros.fat
+            protein: grams.protein,
+            carbs: grams.carbs,
+            fat: grams.fat
         )
         if partsDraft.isMultipart {
             // A part's Scan button aimed the scanner at that part.
@@ -1921,9 +1922,9 @@ struct RecipeSheet: View {
         ingredient.quantity = 1
         ingredient.unit = RecipeUnit.serving.rawValue
         ingredient.selectedFoodItemId = nil
-        ingredient.protein = result.protein ?? ingredient.protein
-        ingredient.carbs = result.carbs ?? ingredient.carbs
-        ingredient.fat = result.fat ?? ingredient.fat
+        ingredient.protein = result.protein.map(Double.init) ?? ingredient.protein
+        ingredient.carbs = result.carbs.map(Double.init) ?? ingredient.carbs
+        ingredient.fat = result.fat.map(Double.init) ?? ingredient.fat
         ingredient.scannedMicronutrients = result.micronutrients().hasAnyValue ? result.micronutrients() : ingredient.scannedMicronutrients
         ingredients[0] = ingredient
         expandedId = ingredient.id
@@ -1970,19 +1971,24 @@ struct CollapsedIngredientRow: View {
     var onExpand: () -> Void
     var onRemove: () -> Void
 
-    private var macros: Macros? {
-        ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))
+    /// The row's grams before rounding, so a typed 3.4 g reads "P3.4g" (whole grams read as before).
+    private var grams: PreciseMacros? {
+        ingredient.resolvedPreciseMacros(foodItems: catalog.resolved(for: ingredient))
     }
 
+    /// Calories stay whole: derived from the rounded grams, as every total is.
     private var calories: Int? {
-        macros?.calories
+        grams?.rounded.calories
     }
 
     private var summaryLine: String {
-        guard let macros else {
+        guard let grams else {
             return "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · Conversion unavailable"
         }
-        var line = "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · P\(macros.protein)g C\(macros.carbs)g F\(macros.fat)g"
+        let protein = MacroGramEntry.display(grams.protein)
+        let carbs = MacroGramEntry.display(grams.carbs)
+        let fat = MacroGramEntry.display(grams.fat)
+        var line = "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · P\(protein)g C\(carbs)g F\(fat)g"
         if showCalories, let calories {
             line += " · \(calories) cal"
         }
@@ -2092,6 +2098,14 @@ private struct CatalogSuggestionRow: View {
     var trailingSystemImage = "plus.circle"
     var onSelect: (() -> Void)?
 
+    /// The reference serving's grams as a row reads them: a custom food typed as 3.4 g shows "3.4",
+    /// and every whole-gram food reads exactly as before.
+    private var grams: (protein: String, carbs: String, fat: String) {
+        let exact = foodItem.exactMacros
+        return (MacroGramEntry.display(exact.protein), MacroGramEntry.display(exact.carbs),
+                MacroGramEntry.display(exact.fat))
+    }
+
     @ViewBuilder
     var body: some View {
         if let onSelect {
@@ -2116,7 +2130,7 @@ private struct CatalogSuggestionRow: View {
                         .padding(.vertical, 1)
                         .background(Color.parchment, in: Capsule())
                 }
-                Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
+                Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(grams.protein)g C\(grams.carbs)g F\(grams.fat)g")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
@@ -2311,29 +2325,23 @@ struct RecipeIngredientEditor: View {
     /// item; the three editable macro rows when it isn't.
     @ViewBuilder private var macroSection: some View {
         if let selectedFoodItem {
-            if let macros = ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient)) {
-                LockedMacroSummary(foodItem: selectedFoodItem, macros: macros) {
-                    ingredient.selectedFoodItemId = nil
-                    ingredient.protein = selectedFoodItem.macros.protein
-                    ingredient.carbs = selectedFoodItem.macros.carbs
-                    ingredient.fat = selectedFoodItem.macros.fat
+            if let grams = ingredient.resolvedPreciseMacros(foodItems: catalog.resolved(for: ingredient)) {
+                LockedMacroSummary(foodItem: selectedFoodItem, grams: grams) {
+                    useManualNutrition(seededFrom: selectedFoodItem)
                 }
             } else {
                 Text("This amount needs an exact serving basis or one source-backed portion.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.sun)
                 Button("Use manual nutrition") {
-                    ingredient.selectedFoodItemId = nil
-                    ingredient.protein = selectedFoodItem.macros.protein
-                    ingredient.carbs = selectedFoodItem.macros.carbs
-                    ingredient.fat = selectedFoodItem.macros.fat
+                    useManualNutrition(seededFrom: selectedFoodItem)
                 }
                 .buttonStyle(ActionPillButtonStyle(.secondary))
             }
         } else {
-            MacroInputRow(label: "Protein", unit: "g", value: $ingredient.protein, range: 0...250)
-            MacroInputRow(label: "Carbs", unit: "g", value: $ingredient.carbs, range: 0...300)
-            MacroInputRow(label: "Fat", unit: "g", value: $ingredient.fat, range: 0...200)
+            MacroInputRow(label: "Protein", unit: "g", value: $ingredient.protein, range: 0.0...250.0)
+            MacroInputRow(label: "Carbs", unit: "g", value: $ingredient.carbs, range: 0.0...300.0)
+            MacroInputRow(label: "Fat", unit: "g", value: $ingredient.fat, range: 0.0...200.0)
         }
     }
 
@@ -2373,10 +2381,24 @@ struct RecipeIngredientEditor: View {
         ingredient.selectedFoodItemId = foodItem.id
         ingredient.quantity = foodItem.defaultRecipeQuantity(for: unit)
         ingredient.unit = unit.rawValue
-        ingredient.protein = foodItem.macros.protein
-        ingredient.carbs = foodItem.macros.carbs
-        ingredient.fat = foodItem.macros.fat
+        seedManualGrams(from: foodItem)
         isCreatingCustomIngredient = false
+    }
+
+    /// The "Manual" / "Use manual nutrition" escape: unbinds the row and seeds its editable grams from
+    /// the food it was bound to.
+    private func useManualNutrition(seededFrom foodItem: FoodItem) {
+        ingredient.selectedFoodItemId = nil
+        seedManualGrams(from: foodItem)
+    }
+
+    /// Seeds the row's editable grams from `foodItem`'s EXACT grams, so a 3.4 g custom food never
+    /// becomes 3 on its way back into an editable row.
+    private func seedManualGrams(from foodItem: FoodItem) {
+        let grams = foodItem.exactMacros
+        ingredient.protein = grams.protein
+        ingredient.carbs = grams.carbs
+        ingredient.fat = grams.fat
     }
 
     private func syncSelection(for name: String) {
@@ -2395,10 +2417,11 @@ struct RecipeIngredientEditor: View {
 /// The locked-macros panel shown when an ingredient is bound to a catalog food item.
 ///
 /// Displays the resolved macros and the item's reference serving, with a "Manual" escape hatch that
-/// unbinds the ingredient and seeds the editable fields from the item's macros.
+/// unbinds the ingredient and seeds the editable fields from the item's macros. The grams read at
+/// one decimal place when the food carries a fraction ("P 3.4g"), whole otherwise.
 private struct LockedMacroSummary: View {
     var foodItem: FoodItem
-    var macros: Macros
+    var grams: PreciseMacros
     var onUseManual: () -> Void
 
     var body: some View {
@@ -2413,7 +2436,7 @@ private struct LockedMacroSummary: View {
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.slate)
             }
-            Text("P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
+            Text("P \(MacroGramEntry.display(grams.protein))g · C \(MacroGramEntry.display(grams.carbs))g · F \(MacroGramEntry.display(grams.fat))g")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
             // The licence notice for an attributed source (Open Food Facts, ODbL).
@@ -4777,9 +4800,10 @@ private struct CatalogCustomFoodEditor: View {
     var name: String
     var onSave: (ManualRecipeIngredientInput) -> FoodItem?
     var onCreated: (FoodItem) -> Void
-    @State private var protein = 0
-    @State private var carbs = 0
-    @State private var fat = 0
+    // Grams, to a tenth: a custom food is an ingredient, and "3.4 g" is a value a label prints.
+    @State private var protein = 0.0
+    @State private var carbs = 0.0
+    @State private var fat = 0.0
     @State private var showingPlausibilityReview = false
     @State private var pendingReviewInput: ManualRecipeIngredientInput?
     @State private var reviewReport = NutritionPlausibilityReport.clean
@@ -4789,9 +4813,9 @@ private struct CatalogCustomFoodEditor: View {
             Text("Add macros for this custom food.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
-            MacroInputRow(label: "Protein", unit: "g", value: $protein, range: 0...300)
-            MacroInputRow(label: "Carbs", unit: "g", value: $carbs, range: 0...500)
-            MacroInputRow(label: "Fat", unit: "g", value: $fat, range: 0...300)
+            MacroInputRow(label: "Protein", unit: "g", value: $protein, range: 0.0...300.0)
+            MacroInputRow(label: "Carbs", unit: "g", value: $carbs, range: 0.0...500.0)
+            MacroInputRow(label: "Fat", unit: "g", value: $fat, range: 0.0...300.0)
             Button("Save custom food", action: attemptSave)
                 .buttonStyle(ActionPillButtonStyle(.primary))
                 .disabled(!canSave)
@@ -6194,16 +6218,53 @@ struct RecipeDetailView: View {
 /// One macro entry row: a tappable value that flips into a focused numeric text field, plus a
 /// stepper.
 ///
-/// Commits on focus loss (clamped to `range`); nudging the stepper while editing commits its value
-/// and closes the field. Used across the ingredient, correction, and review editors.
+/// Commits on focus loss (an entry `range` rejects reverts to the current value); nudging the stepper
+/// while editing commits its value and closes the field. Two modes, one control:
+/// - **Decimal grams** (`Binding<Double>`): the ingredient editors — a recipe's manual rows and
+///   Adjust meal's custom food. A decimal pad; "3.4" and "3,4" both commit 3.4 (``MacroGramEntry``,
+///   tenths of a gram); the stepper moves a whole gram and keeps the fraction.
+/// - **Whole grams** (`Binding<Int>`): the meal-level editors (quick log, correction, pre-log review),
+///   which write `Meal.macros`. A number pad, whole grams only, exactly as before.
+///
+/// The field opens prefilled with the current value in the same form the row shows it ("3", never
+/// "3.0"); there is no placeholder.
 private struct MacroInputRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let unit: String
-    @Binding var value: Int
-    let range: ClosedRange<Int>
+    @Binding var grams: Double
+    let range: ClosedRange<Double>
+    let allowsDecimals: Bool
     @State private var isEditing = false
     @State private var textValue = ""
     @FocusState private var isFocused: Bool
+
+    /// Decimal grams, to a tenth (the ingredient editors). Every write is quantized to a tenth and held
+    /// inside `range`, so a stepper nudge's floating-point residue (or a step below 0 from 0.4) never
+    /// reaches the model: what is stored is what shows.
+    init(label: LocalizedStringKey, unit: String, value: Binding<Double>, range: ClosedRange<Double>) {
+        self.label = label
+        self.unit = unit
+        _grams = Binding(
+            get: { value.wrappedValue },
+            set: { value.wrappedValue = min(max(MacroGramEntry.quantized($0), range.lowerBound), range.upperBound) }
+        )
+        self.range = range
+        allowsDecimals = true
+    }
+
+    /// Whole grams (the meal-level editors), bridged onto the same control. A value only ever reaches
+    /// the binding from the stepper or a whole-number parse, both inside `range`, and
+    /// ``Macros/clampedInt(_:)`` makes the conversion total anyway.
+    init(label: LocalizedStringKey, unit: String, value: Binding<Int>, range: ClosedRange<Int>) {
+        self.label = label
+        self.unit = unit
+        _grams = Binding(
+            get: { Double(value.wrappedValue) },
+            set: { value.wrappedValue = Macros.clampedInt($0) }
+        )
+        self.range = Double(range.lowerBound)...Double(range.upperBound)
+        allowsDecimals = false
+    }
 
     var body: some View {
         HStack {
@@ -6213,15 +6274,15 @@ private struct MacroInputRow: View {
             Spacer()
             if isEditing {
                 TextField("", text: $textValue)
-                    .keyboardType(.numberPad)
+                    .keyboardType(allowsDecimals ? .decimalPad : .numberPad)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .textContentType(.none)
                     .multilineTextAlignment(.trailing)
                     // Same DM Sans figures the tapped value shows, so the number doesn't change
-                    // typeface the moment it becomes editable.
+                    // typeface the moment it becomes editable. Wide enough for "250.5".
                     .font(.fernlet(.stat))
-                    .frame(width: 52)
+                    .frame(width: 64)
                     .focused($isFocused)
                     .onAppear {
                         isFocused = true
@@ -6231,19 +6292,19 @@ private struct MacroInputRow: View {
                     }
             } else {
                 Button {
-                    textValue = String(value)
+                    textValue = MacroGramEntry.display(grams)
                     isEditing = true
                 } label: {
-                    Text("\(value)\(unit)")
+                    Text("\(MacroGramEntry.display(grams))\(unit)")
                         .font(.fernlet(.stat))
                         .foregroundStyle(Color.moss)
                         .underline()
                 }
                 .buttonStyle(.plain)
             }
-            Stepper("", value: $value, in: range)
+            Stepper("", value: $grams, in: range, step: 1)
                 .labelsHidden()
-                .onChange(of: value) { _, _ in
+                .onChange(of: grams) { _, _ in
                     if isEditing {
                         isFocused = false
                         isEditing = false
@@ -6253,7 +6314,9 @@ private struct MacroInputRow: View {
     }
 
     private func commit() {
-        if let n = LocaleTolerantNumber.int(from: textValue), range.contains(n) { value = n }
+        if let parsed = MacroGramEntry.parse(textValue, in: range, allowsDecimals: allowsDecimals) {
+            grams = parsed
+        }
         isEditing = false
     }
 }

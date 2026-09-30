@@ -213,6 +213,50 @@ struct SnapshotModelsDecodeCompatTests {
         #expect(openFoodFacts.unknownSourceToken == nil)
     }
 
+    // MARK: - FoodItem.preciseMacros (decimal ingredient grams, 2026-09-29)
+
+    @Test func anOlderWholeGramFoodItemDecodesWithNoFraction() throws {
+        let item = try decode(FoodItem.self, """
+        {
+          "name": "House granola", "servingSize": 40, "servingUnit": "g",
+          "macros": {"protein": 3, "carbs": 24, "fat": 5}, "category": "custom ingredient",
+          "source": "manual", "tags": ["recipe", "custom"]
+        }
+        """)
+        #expect(item.preciseMacros == nil)
+        #expect(item.exactMacros == PreciseMacros(protein: 3, carbs: 24, fat: 5))
+        #expect(try encodeToObject(item)["preciseMacros"] == nil)
+    }
+
+    @Test func aFractionRoundTripsAndOnlyAnAgreeingValidOneIsKept() throws {
+        let kept = try decode(FoodItem.self, foodItemJSON(protein: 3, precise: #"{"protein":3.4,"carbs":24,"fat":5}"#))
+        #expect(kept.exactMacros.protein == 3.4)
+        #expect(try decode(FoodItem.self, JSONEncoder().encode(kept)) == kept)
+
+        // Disagrees with `macros` (7.4 rounds to 7, not 3): dropped, the whole grams stand.
+        let disagreeing = try decode(FoodItem.self, foodItemJSON(protein: 3, precise: #"{"protein":7.4,"carbs":24,"fat":5}"#))
+        #expect(disagreeing.preciseMacros == nil)
+        #expect(disagreeing.exactMacros.protein == 3)
+        // Negative, whole, or over the ceiling: dropped too, never a decode failure.
+        let negative = try decode(FoodItem.self, foodItemJSON(protein: 0, precise: #"{"protein":-0.4,"carbs":24,"fat":5}"#))
+        #expect(negative.preciseMacros == nil)
+        let whole = try decode(FoodItem.self, foodItemJSON(protein: 3, precise: #"{"protein":3,"carbs":24,"fat":5}"#))
+        #expect(whole.preciseMacros == nil)
+        let huge = try decode(FoodItem.self, foodItemJSON(protein: 20000, precise: #"{"protein":20000.4,"carbs":24,"fat":5}"#))
+        #expect(huge.preciseMacros == nil)
+        #expect(huge.macros.protein == 20000)
+    }
+
+    private func foodItemJSON(protein: Int, precise: String) -> String {
+        """
+        {
+          "name": "House granola", "servingSize": 40, "servingUnit": "g",
+          "macros": {"protein": \(protein), "carbs": 24, "fat": 5}, "category": "custom ingredient",
+          "source": "manual", "tags": [], "preciseMacros": \(precise)
+        }
+        """
+    }
+
     // MARK: - DailyHealthScore (blob dailyScores; recomputable)
 
     @Test func unknownCompanionStateFreezesAndParks() throws {

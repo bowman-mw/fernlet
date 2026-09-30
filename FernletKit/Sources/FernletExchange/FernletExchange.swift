@@ -59,9 +59,13 @@ public nonisolated enum ExchangeLimits {
 /// - ``componentPayload(for:foodItems:)`` is the same payload plus the `components` partition, for the
 ///   wires where an unknown key is ignored (pasted share text, the mesh `.local` arm) and for the
 ///   exchange packet, which versions its own hash (version 2 for a recipe in parts).
+///
+/// An ingredient whose food carries fractional grams (``FoodItem/preciseMacros``) also carries them as
+/// ``SharedRecipeIngredient/preciseMacros`` in ``componentPayload(for:foodItems:)`` — another key an
+/// older paste/mesh reader ignores. The old-reader form and the hash-covered packet strip it.
 public nonisolated enum ExchangeRecipePayloadBuilder {
     public static func payload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
-        componentPayload(for: recipe, foodItems: foodItems).droppingComponents()
+        componentPayload(for: recipe, foodItems: foodItems).droppingComponents().droppingPreciseMacros()
     }
 
     /// The payload with the multipart partition. A one-part recipe (or one whose parts resolve to fewer
@@ -97,8 +101,19 @@ public nonisolated enum ExchangeRecipePayloadBuilder {
                   let conversion = ingredient.servingConversion(using: foodItem) else { return nil }
             let macros = conversion.scaledMacros(for: foodItem)
             return SharedRecipeIngredient(name: foodItem.name, quantity: ingredient.quantity, unit: ingredient.unit,
-                                          protein: macros.protein, carbs: macros.carbs, fat: macros.fat)
+                                          protein: macros.protein, carbs: macros.carbs, fat: macros.fat,
+                                          preciseMacros: wirePreciseMacros(for: foodItem, conversion: conversion))
         }
+    }
+
+    /// The exact grams to send for one ingredient: only when its food carries a fraction and the scaled
+    /// value still has one, so a whole-gram ingredient's bytes are identical to earlier builds. Its
+    /// rounding is the ingredient's whole-gram fields by construction (both come from one exact value).
+    private static func wirePreciseMacros(for foodItem: FoodItem, conversion: RecipeServingConversion) -> PreciseMacros? {
+        guard foodItem.hasFractionalMacros else { return nil }
+        let precise = conversion.scaledPreciseMacros(for: foodItem)
+        guard precise.hasFractionalPart, precise.isValid else { return nil }
+        return precise
     }
 }
 
@@ -133,6 +148,7 @@ public nonisolated enum ExchangeRecipePayloadValidator {
         ingredients.allSatisfy { ingredient in
             ingredient.quantity.isFinite && ingredient.quantity > 0 && ingredient.quantity <= 10_000
                 && ingredient.protein >= 0 && ingredient.carbs >= 0 && ingredient.fat >= 0
+                && ingredient.preciseMacrosAgreeWithWholeGrams
         }
     }
 
@@ -184,6 +200,12 @@ public nonisolated enum ExchangeWorkoutPlanBuilder {
 /// version, so a digest under one scheme can never verify a packet of the other. Each version may carry
 /// only its own shape: scheme 1's pre-image never holds `components`, scheme 2's always does, and
 /// ``decode(_:)`` refuses the two crossed even when the hash verifies.
+///
+/// **No fractional grams (2026-09-29).** Neither version carries ``SharedRecipeIngredient/preciseMacros``:
+/// an older reader of either scheme would re-hash without that key and call an honest file corrupt. The
+/// initializer strips it before hashing, and ``decode(_:)`` refuses a packet that carries it. A file,
+/// Shortcut or Messages card therefore rounds a 3.4 g ingredient to 3 g; the paste text and the mesh
+/// keep the fraction.
 public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
     public static let format = "fernlet.exchange.recipe"
     /// A one-part recipe: every packet written before 2026-09-24, and every one-part recipe since.
@@ -200,7 +222,10 @@ public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
     public var contentHash: String
 
     public init(recipe definition: RecipeDefinition, foodItems: [FoodItem], includesNotes: Bool) throws {
+        // Fractional grams are stripped BEFORE hashing: `RecipeHashInput` is frozen, and an older
+        // reader re-hashes the payload it decoded — without the key it does not know.
         var payload = ExchangeRecipePayloadBuilder.componentPayload(for: definition, foodItems: foodItems)
+            .droppingPreciseMacros()
         if !includesNotes { payload.notes = "" }
         format = Self.format
         formatVersion = payload.components == nil ? Self.formatVersion : Self.multipartFormatVersion
@@ -229,7 +254,8 @@ public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
         let expected = try hash(format: packet.format, version: packet.formatVersion, packetID: packet.packetID,
                                 originContentID: packet.originContentID, includesNotes: packet.includesNotes, recipe: packet.recipe)
         guard packet.contentHash == expected else { throw ExchangePacketError.invalidHash }
-        guard packet.includesNotes == !packet.recipe.notes.isEmpty, packet.carriesItsVersionsShape else {
+        guard packet.includesNotes == !packet.recipe.notes.isEmpty, packet.carriesItsVersionsShape,
+              !packet.recipe.carriesPreciseMacros else {
             throw ExchangePacketError.invalidPayload
         }
         try ExchangeRecipePayloadValidator.validate(packet.recipe)

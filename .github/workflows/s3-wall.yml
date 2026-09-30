@@ -352,10 +352,12 @@ jobs:
         # The `fernlet.recipe` payload a recipe made in parts travels as on the paste text and the mesh's
         # `.local` arm: the salad-and-dressing golden, one-part payloads byte-identical to every earlier
         # build, and mirrors of the older readers, which must still read a flat recipe. A failing golden
-        # is a WIRE decision, never re-pinned from Swift's output.
+        # is a WIRE decision, never re-pinned from Swift's output. 2026-09-29: floor 19 -> 23, MEASURED on the
+        # decimal-grams round's build (the four tests that keep an ingredient's `preciseMacros` on its
+        # own row, readable as whole grams by an older build, and out of the hash-covered exchange packet).
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh recipe-wire 19 RecipeMultipartWireTests
+          Scripts/run-gated-suites.sh recipe-wire 23 RecipeMultipartWireTests
 
       - name: Mesh acceptance batteries (P3 – P9) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md

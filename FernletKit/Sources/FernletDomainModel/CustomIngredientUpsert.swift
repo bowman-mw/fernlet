@@ -17,7 +17,7 @@ public nonisolated struct CustomIngredientUpsert {
     /// user save anyway if they want to.
     ///
     /// - Important: only the ARITHMETIC half of the gate runs here, and that is deliberate.
-    ///   ``ManualRecipeIngredientInput`` stores protein/carbs/fat as non-optional `Int`, so by the
+    ///   ``ManualRecipeIngredientInput`` stores protein/carbs/fat as non-optional grams, so by the
     ///   time a value arrives the absent-versus-zero distinction is already gone and all three
     ///   always read as *reported*; calories are never collected by this form at all; and
     ///   `quantity` is the RECIPE amount (defaulting to 1), not a nutrition-panel serving size.
@@ -38,8 +38,9 @@ public nonisolated struct CustomIngredientUpsert {
         of ingredient: ManualRecipeIngredientInput,
         declaredCalories: Double? = nil
     ) -> NutritionPlausibilityReport {
+        // The typed grams, not their rounding: a 0.4 g-fat-only entry is not "all zero".
         let facts = NutritionFacts(
-            macros: ingredient.macros,
+            preciseMacros: ingredient.preciseMacros,
             micronutrients: ingredient.scannedMicronutrients ?? Micronutrients(),
             declaredCalories: declaredCalories,
             hasServingSize: false
@@ -68,7 +69,9 @@ public nonisolated struct CustomIngredientUpsert {
             source: .manual,
             lastVerified: verifiedAt,
             tags: ["recipe", "custom"],
-            barcode: FoodBarcode.normalized(ingredient.barcode)
+            barcode: FoodBarcode.normalized(ingredient.barcode),
+            // Kept only when fractional, so re-saving whole grams under the same name clears it.
+            preciseMacros: ingredient.preciseMacros
         )
         let normalizedName = FoodItemSearch.normalized(foodItem.name)
         if let existingIndex = foodItems.firstIndex(where: { existing in

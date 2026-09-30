@@ -274,8 +274,8 @@ struct FernletTests {
         ingredient.selectedFoodItemId = chicken.id
         ingredient.quantity = 150
         ingredient.unit = RecipeUnit.gram.rawValue
-        ingredient.protein = chicken.macros.protein
-        ingredient.fat = chicken.macros.fat
+        ingredient.protein = Double(chicken.macros.protein)
+        ingredient.fat = Double(chicken.macros.fat)
 
         let recipe = store.addRecipe(
             name: "Chicken bowl",

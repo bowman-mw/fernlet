@@ -95,7 +95,7 @@ struct BarcodeServingStepView: View {
         return min(max(servings, 0), Self.maxServings)
     }
 
-    private var scaledMacros: Macros { foodItem.macros.scaled(by: sanitizedServings) }
+    private var scaledMacros: Macros { foodItem.scaledMacros(by: sanitizedServings) }
 
     /// One-serving reference line for context (e.g. "2 cookies (30g)"), falling back to the item's
     /// serving size/unit when no descriptive string was captured.

@@ -5291,7 +5291,10 @@ final class FernletStore {
                     category: "recipe ingredient",
                     source: .manual,
                     lastVerified: now,
-                    tags: ["recipe", "imported"]
+                    tags: ["recipe", "imported"],
+                    // The sender's fractional grams (paste text, mesh `.local`), already checked at
+                    // decode to round to exactly the whole-gram fields above. Absent from older senders.
+                    preciseMacros: ingredient.preciseMacros
                 )
                 foodItems.append(foodItem)
                 return RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit)

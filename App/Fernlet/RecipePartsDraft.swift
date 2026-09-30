@@ -154,19 +154,21 @@ struct RecipePartsDraft: Equatable {
 /// of a multipart one.
 enum RecipeEditorInputs {
     /// One editor row per ingredient whose food still resolves. A manual (custom) food re-opens as a
-    /// hand-typed row with its macros, and a catalog food re-opens bound to its id.
+    /// hand-typed row with its macros — its EXACT grams (``FoodItem/exactMacros``), so re-saving a
+    /// 3.4 g food never rounds it to 3 — and a catalog food re-opens bound to its id.
     static func inputs(for ingredients: [RecipeIngredient], foodItems: [FoodItem]) -> [ManualRecipeIngredientInput] {
         ingredients.compactMap { recipeIngredient -> ManualRecipeIngredientInput? in
             guard let foodItem = foodItems.first(where: { $0.id == recipeIngredient.foodItemId }) else { return nil }
             let selectedFoodItemId = foodItem.source == .manual ? nil : foodItem.id
+            let grams = foodItem.exactMacros
             return ManualRecipeIngredientInput(
                 name: foodItem.name,
                 selectedFoodItemId: selectedFoodItemId,
                 quantity: recipeIngredient.quantity,
                 unit: recipeIngredient.unit,
-                protein: foodItem.macros.protein,
-                carbs: foodItem.macros.carbs,
-                fat: foodItem.macros.fat,
+                protein: grams.protein,
+                carbs: grams.carbs,
+                fat: grams.fat,
                 scannedMicronutrients: foodItem.source == .manual && foodItem.micronutrients.hasAnyValue ? foodItem.micronutrients : nil
             )
         }

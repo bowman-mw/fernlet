@@ -899,7 +899,7 @@ public final class DiaryStore {
             // because its save bar disables at <= 0, so the invariant belongs here, where the data
             // is written (review finding, 2026-07-27).
             let count = Self.normalizedServings(servings)
-            loggedMacros = foodItem.macros.scaled(by: count)
+            loggedMacros = foodItem.scaledMacros(by: count)
             loggedMicros = foodItem.micronutrients.scaled(by: count)
             components = [
                 MealComponentSnapshot(

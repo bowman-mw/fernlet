@@ -1022,8 +1022,8 @@ struct BarcodeNotFoundView: View {
             return
         }
         // The `?? 0`s below are the collapse the gate exists to warn about — and they stay, because
-        // `ManualRecipeIngredientInput` and `Macros` store the macros as non-optional `Int` and this
-        // round does not change that schema. What the gate buys is that the collapse is no longer
+        // `ManualRecipeIngredientInput` and `Macros` store the macros as non-optional grams (the scan
+        // itself reads whole grams) and this round does not change that schema. What the gate buys is that the collapse is no longer
         // SILENT: whichever nudge applies has already named the fields about to be stored as zero
         // (`missingMacrosMessage`) and the user chose "Remember it anyway". Naming-then-storing is
         // what §26 asks for; making absence representable all the way to disk is a schema question
@@ -1033,9 +1033,9 @@ struct BarcodeNotFoundView: View {
             name: trimmedName,
             quantity: 1,
             unit: RecipeUnit.serving.rawValue,
-            protein: scanResult?.protein ?? 0,
-            carbs: scanResult?.carbs ?? 0,
-            fat: scanResult?.fat ?? 0,
+            protein: Double(scanResult?.protein ?? 0),
+            carbs: Double(scanResult?.carbs ?? 0),
+            fat: Double(scanResult?.fat ?? 0),
             scannedMicronutrients: micros?.hasAnyValue == true ? micros : nil,
             barcode: barcode
         )

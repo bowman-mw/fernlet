@@ -171,6 +171,18 @@ states the value in effect on the goal card. Evidence and options:
 
 ### Meals and macros
 
+``Macros`` is whole grams everywhere it is stored and summed: meals, day records, HealthKit, the widget,
+exports and targets. Decimal grams (2026-09-29) exist only where a person types an ingredient's
+macros ("3.4 g protein"), in ``PreciseMacros``. A ``FoodItem`` keeps them in the additive optional
+blob key `preciseMacros`, only while they are valid, fractional, and round to exactly its `macros`
+(read them through ``FoodItem/exactMacros``). The invariant that keeps every existing number still:
+``PreciseMacros/scaled(by:)`` and ``PreciseMacros/rounded`` reproduce ``Macros/scaled(by:)``
+exactly, so a whole-gram food scales to the same integers as before and each consumer rounds ONCE
+per ingredient from the exact value (``RecipeServingConversion/scaledMacros(for:)``). Totals stay whole
+grams. On the `fernlet.recipe` wire the fraction rides ``SharedRecipeIngredient/preciseMacros``, an
+optional key on version 1 that must round to the whole-gram fields; the hash-covered exchange packet
+never carries it.
+
 - ``Meal``
 - ``MealComponentSnapshot``
 - ``MealType``
@@ -179,6 +191,7 @@ states the value in effect on the goal card. Evidence and options:
 - ``MealSource``
 - ``MealLogSource``
 - ``Macros``
+- ``PreciseMacros``
 - ``MacroTotals``
 - ``Micronutrients``
 
@@ -483,6 +496,10 @@ what actually happened.
 ### Localization and typed input
 
 The display halves of the forked enums are documented on their own types (see the third hard rule
-above); this section holds the module-level helper that has no other home.
+above); this section holds the module-level helpers that have no other home.
+``MacroGramEntry`` is the typed-grams rule for macro fields: it parses through
+``LocaleTolerantNumber`` (either separator), stores tenths of a gram, and displays in the locale's
+separator with no grouping, so every prefill parses back to the value it came from.
 
 - ``LocaleTolerantNumber``
+- ``MacroGramEntry``

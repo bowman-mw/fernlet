@@ -81,7 +81,7 @@ struct CatalogTypeaheadResultSetTests {
         return results
     }
 
-    private func customInput(protein: Int, carbs: Int, fat: Int) -> ManualRecipeIngredientInput {
+    private func customInput(protein: Double, carbs: Double, fat: Double) -> ManualRecipeIngredientInput {
         ManualRecipeIngredientInput(
             name: "House test food",
             quantity: 1,

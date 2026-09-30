@@ -820,4 +820,28 @@ extension NutritionFacts {
             hasServingSize: hasServingSize
         )
     }
+
+    /// The facts behind a row a person typed at full precision (``PreciseMacros``), so a 0.4 g value
+    /// reads as reported rather than rounding to zero. Same contract as
+    /// ``init(macros:micronutrients:declaredCalories:hasServingSize:)``; that overload stays separate
+    /// so its whole-gram inputs pass through unsanitized, exactly as before.
+    public init(
+        preciseMacros: PreciseMacros,
+        micronutrients: Micronutrients,
+        declaredCalories: Double? = nil,
+        hasServingSize: Bool = false
+    ) {
+        self.init(
+            calories: declaredCalories,
+            protein: preciseMacros.protein,
+            carbs: preciseMacros.carbs,
+            fat: preciseMacros.fat,
+            saturatedFat: micronutrients.saturatedFat,
+            fiber: micronutrients.fiber,
+            sugar: micronutrients.sugar,
+            sodium: micronutrients.sodium,
+            cholesterol: micronutrients.cholesterol,
+            hasServingSize: hasServingSize
+        )
+    }
 }

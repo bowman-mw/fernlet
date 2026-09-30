@@ -61,7 +61,11 @@ read: byte-identical to earlier builds for a one-part recipe, and a multipart re
 (whole recipe, section-labelled steps, no `components` key) — what an older reader makes of a multipart
 share; no shipping wire sends it any more. ``ExchangeRecipePayloadBuilder/componentPayload(for:foodItems:)``
 adds the partition. It is the form for the paste text, the mesh, and ``RecipeExchangePacket``, which
-versions its own hash (above). A web-imported recipe
+versions its own hash (above). It also carries an ingredient's fractional grams
+(`SharedRecipeIngredient.preciseMacros`, 2026-09-29) when its food has them. That key is ignorable
+on the paste text and the mesh, but not inside a hash: ``RecipeExchangePacket`` strips it before
+hashing in both versions and refuses a packet that carries it, and `payload(for:foodItems:)` strips it
+too. A file, Shortcut or Messages card therefore rounds a 3.4 g ingredient to whole grams. A web-imported recipe
 currently exchanges with **no ingredients** — its ingredient lines live in `webImport`, which the
 builder does not read — and `FernletExchangeTests.webImportedRecipesShareWithNoIngredientsAPinnedDefect`
 pins that as a known defect awaiting an owner decision, not a specification.

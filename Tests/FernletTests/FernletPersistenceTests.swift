@@ -363,6 +363,38 @@ struct FernletPersistenceTests {
         #expect(store.recipes.first?.ingredients.first?.foodItemId == savedIngredient?.id)
     }
 
+    /// Decimal ingredient grams (2026-09-29): 3.4 g survives the synced blob, and reopening the recipe
+    /// in the editor and saving it again does not round it to 3.
+    @MainActor
+    @Test func test_decimalIngredientGrams_surviveReloadAndReopenResave() throws {
+        let controller = makeController()
+        let store = makeStore(controller: controller)
+        let ingredient = ManualRecipeIngredientInput(name: "House granola", quantity: 40, unit: "g",
+                                                     protein: 3.4, carbs: 24.5, fat: 5)
+        #expect(store.saveCustomIngredient(ingredient)?.exactMacros.protein == 3.4)
+        let recipe = store.addRecipe(name: "Granola bowl", servings: 1, ingredients: [ingredient])
+        store.flushPendingSnapshotSave()
+
+        let reloaded = makeStore(controller: controller)
+        let food = try #require(reloaded.foodItems.first { $0.name == "House granola" })
+        #expect(food.exactMacros == PreciseMacros(protein: 3.4, carbs: 24.5, fat: 5))
+        #expect(food.macros == Macros(protein: 3, carbs: 25, fat: 5))
+
+        let reloadedRecipe = try #require(reloaded.recipes.first { $0.id == recipe.id })
+        let rows = RecipeEditorInputs.inputs(for: reloadedRecipe.ingredients, foodItems: reloaded.foodItems)
+        #expect(rows.first?.protein == 3.4)
+        #expect(rows.first?.carbs == 24.5)
+        reloaded.updateRecipe(reloadedRecipe, name: "Granola bowl", servings: 1, ingredients: rows, steps: nil)
+        reloaded.flushPendingSnapshotSave()
+
+        let again = makeStore(controller: controller)
+        let matching = again.foodItems.filter { $0.name == "House granola" }
+        #expect(matching.count == 1)
+        #expect(matching.first?.exactMacros.protein == 3.4)
+        let totals = again.macroTotals(for: try #require(again.recipes.first { $0.id == recipe.id }))
+        #expect(totals.protein == 3)   // totals stay whole grams
+    }
+
     // MARK: - Security: NEW-1
 
     /// Journal text must never appear in the iCloud-synced blob, even when no lock is configured.

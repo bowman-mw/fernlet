@@ -74,9 +74,19 @@ struct RecipeShareCodec {
         return lines.joined(separator: "\n")
     }
 
-    /// One readable ingredient line of the share text: "- 3 tbsp Olive oil (P0 C0 F42)".
+    /// One readable ingredient line of the share text: "- 3 tbsp Olive oil (P0 C0 F42)". An ingredient
+    /// carrying fractional grams reads them at one decimal place ("P3.4"), with a POSIX "." like the
+    /// quantity beside it; the JSON payload below is what an importer parses, never this line.
     private static func ingredientLine(_ ingredient: SharedRecipeIngredient) -> String {
-        "- \(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name) (P\(ingredient.protein) C\(ingredient.carbs) F\(ingredient.fat))"
+        let lead = "- \(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name)"
+        guard let precise = ingredient.preciseMacros else {
+            return "\(lead) (P\(ingredient.protein) C\(ingredient.carbs) F\(ingredient.fat))"
+        }
+        let posix = Locale(identifier: "en_US_POSIX")
+        let protein = MacroGramEntry.display(precise.protein, locale: posix)
+        let carbs = MacroGramEntry.display(precise.carbs, locale: posix)
+        let fat = MacroGramEntry.display(precise.fat, locale: posix)
+        return "\(lead) (P\(protein) C\(carbs) F\(fat))"
     }
 
     /// The self-contained `SharedRecipePayload` for a structured recipe: each ingredient resolved

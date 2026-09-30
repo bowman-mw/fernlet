@@ -893,6 +893,24 @@ struct MealBuilderTests {
         #expect(MealItemSplitter.items(from: "a burger with 2 patties and cottage cheese") == ["a burger with 2 patties", "cottage cheese"])
     }
 
+    /// Decimal ingredient grams (2026-09-29): a recipe rounds each ingredient ONCE from its exact
+    /// grams — 3 servings of a 3.4 g food count 10 g, not 3 × 3 = 9 — and totals stay whole grams.
+    @Test func aDecimalIngredientRoundsOnceFromItsExactGramsInRecipeTotals() {
+        let granola = FoodItem(name: "House granola", servingSize: 1, servingUnit: RecipeUnit.serving.rawValue,
+                               macros: Macros(protein: 3, carbs: 0, fat: 0), micronutrients: Micronutrients(),
+                               category: "custom ingredient", source: .manual, tags: [],
+                               preciseMacros: PreciseMacros(protein: 3.4, carbs: 0.5, fat: 0.2))
+        let oats = foodItem(name: "Rolled oats", source: .manual, macros: Macros(protein: 5, carbs: 27, fat: 3))
+        let recipe = RecipeDefinition(
+            name: "Granola bowl", servings: 1,
+            ingredients: [RecipeIngredient(foodItemId: granola.id, quantity: 3, unit: RecipeUnit.serving.rawValue),
+                          RecipeIngredient(foodItemId: oats.id, quantity: 2, unit: RecipeUnit.serving.rawValue)],
+            notes: "", source: "manual", createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
+
+        let totals = MealBuilder.macroTotals(for: recipe, foodItems: [granola, oats])
+        #expect(totals == MacroTotals(protein: 10 + 10, carbs: 2 + 54, fat: 1 + 6))
+    }
+
     private func foodItem(
         name: String,
         source: FoodItemSource,

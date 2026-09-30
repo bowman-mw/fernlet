@@ -54,6 +54,39 @@ struct RecipeMultipartWireTests {
         var recipe: PreMultipartPayload
     }
 
+    /// The PRE-decimal `SharedRecipeIngredient` (before 2026-09-29): whole grams only, no
+    /// `preciseMacros` property, exactly what every earlier build's paste import and mesh receive decode.
+    private struct PreDecimalIngredient: Codable, Equatable {
+        var name: String
+        var quantity: Double
+        var unit: String
+        var protein: Int
+        var carbs: Int
+        var fat: Int
+    }
+
+    /// The PRE-decimal payload an older build decodes a share into.
+    private struct PreDecimalPayload: Codable {
+        var format: String
+        var version: Int
+        var name: String
+        var servings: Int
+        var notes: String
+        var ingredients: [PreDecimalIngredient]
+        var steps: [RecipeStep]?
+    }
+
+    /// The packet hash pre-image as THIS build computes it (both schemes), used only to forge a packet
+    /// whose hash verifies so the decode's own shape gate is what refuses it.
+    private struct CurrentHashInput: Codable {
+        var format: String
+        var version: Int
+        var packetID: UUID
+        var originContentID: UUID
+        var includesNotes: Bool
+        var recipe: SharedRecipePayload
+    }
+
     // MARK: - Goldens: the published schema, byte for byte
 
     @Test func theSaladComponentPayloadMatchesThePublishedGolden() throws {
@@ -303,7 +336,98 @@ struct RecipeMultipartWireTests {
         #expect(try RecipeShareCodec.decodePayload(from: text) == RecipeMultipartFixtures.saladPayload())
     }
 
+    // MARK: - Decimal ingredient grams (2026-09-29): an optional key on version 1, never in the packet
+
+    @Test func aDecimalIngredientCarriesItsFractionOnItsOwnRowOnly() throws {
+        let salad = saladWithDecimalLemonJuice()
+        let built = ExchangeRecipePayloadBuilder.componentPayload(for: salad.recipe, foodItems: salad.foodItems)
+
+        let lemon = built.ingredients[1]
+        #expect(lemon.name == "Lemon juice")
+        #expect(lemon.carbs == 3)   // 2 tbsp × 1.4 g = 2.8 g, rounded once
+        #expect(lemon.preciseMacros == PreciseMacros(protein: 0, carbs: 2.8, fat: 0))
+        #expect(built.ingredients.filter { $0.preciseMacros != nil }.count == 1)
+        let json = try canonicalJSON(built)
+        #expect(json.contains(#""preciseMacros":{"carbs":2.8,"fat":0,"protein":0}"#))
+        #expect(json.components(separatedBy: "preciseMacros").count == 2)
+        // Everything but that row is the published golden's: same parts, same other rows.
+        #expect(built.components == RecipeMultipartFixtures.saladPayload().components)
+        #expect(built.ingredients.enumerated().filter { $0.offset != 1 }.map(\.element)
+                == RecipeMultipartFixtures.saladPayload().ingredients.enumerated().filter { $0.offset != 1 }.map(\.element))
+        #expect(try RecipeShareCodec.decodePayload(from: json) == built)
+    }
+
+    @Test func anOlderBuildReadsADecimalShareAsWholeGrams() throws {
+        let salad = saladWithDecimalLemonJuice()
+        let built = ExchangeRecipePayloadBuilder.componentPayload(for: salad.recipe, foodItems: salad.foodItems)
+        let old = try JSONDecoder().decode(PreDecimalPayload.self, from: JSONEncoder().encode(built))
+
+        #expect(old.version == 1)
+        #expect(old.ingredients.count == 9)
+        #expect(old.ingredients[1] == PreDecimalIngredient(name: "Lemon juice", quantity: 2, unit: "tbsp",
+                                                            protein: 0, carbs: 3, fat: 0))
+        // The older validator's checks (unchanged; the fraction is invisible to it) accept it too.
+        let olderView = SharedRecipePayload(
+            name: old.name, servings: old.servings, notes: old.notes,
+            ingredients: old.ingredients.map { SharedRecipeIngredient(name: $0.name, quantity: $0.quantity, unit: $0.unit,
+                                                                      protein: $0.protein, carbs: $0.carbs, fat: $0.fat) },
+            steps: old.steps)
+        #expect(throws: Never.self) { try ExchangeRecipePayloadValidator.validate(olderView) }
+    }
+
+    @Test func theExchangePacketStripsTheFractionAndOlderBuildsStillVerifyIt() throws {
+        let salad = saladWithDecimalLemonJuice()
+        var onePart = salad.recipe
+        onePart.components = nil
+        for recipe in [onePart, salad.recipe] {
+            let packet = try RecipeExchangePacket(recipe: recipe, foodItems: salad.foodItems, includesNotes: true)
+            let data = try packet.encodedData()
+            #expect(!String(decoding: data, as: UTF8.self).contains("preciseMacros"))
+            #expect(!packet.recipe.carriesPreciseMacros)
+            #expect(packet.recipe.ingredients[1].carbs == 3)
+            #expect(try RecipeExchangePacket.decode(data) == packet)
+        }
+        let v1 = try RecipeExchangePacket(recipe: onePart, foodItems: salad.foodItems, includesNotes: true)
+        #expect(v1.formatVersion == RecipeExchangePacket.formatVersion)
+        #expect(try olderBuildRehash(v1.encodedData()) == v1.contentHash)
+        #expect(!ExchangeRecipePayloadBuilder.payload(for: salad.recipe, foodItems: salad.foodItems).carriesPreciseMacros)
+    }
+
+    @Test func aPacketCarryingAFractionIsRefusedEvenWhenItsHashVerifies() throws {
+        let salad = saladWithDecimalLemonJuice()
+        var onePart = salad.recipe
+        onePart.components = nil
+        var forged = try RecipeExchangePacket(recipe: onePart, foodItems: salad.foodItems, includesNotes: true)
+        forged.recipe.ingredients[1].preciseMacros = PreciseMacros(protein: 0, carbs: 2.8, fat: 0)
+        forged.contentHash = try currentSchemeHash(of: forged)
+
+        #expect(throws: ExchangePacketError.invalidPayload) { try RecipeExchangePacket.decode(forged.encodedData()) }
+    }
+
     // MARK: - Helpers
+
+    /// The salad with its lemon juice typed as 1.4 g carbs per tablespoon: the dressing's 2 tbsp carry
+    /// 2.8 g, which the whole-gram fields round to 3.
+    private func saladWithDecimalLemonJuice() -> RecipeMultipartFixtures.Salad {
+        let salad = RecipeMultipartFixtures.saladWithHomemadeDressing()
+        let foods = salad.foodItems.map { food -> FoodItem in
+            guard food.name == "Lemon juice" else { return food }
+            return FoodItem(id: food.id, name: food.name, servingSize: food.servingSize, servingUnit: food.servingUnit,
+                            macros: food.macros, micronutrients: food.micronutrients, category: food.category,
+                            source: food.source, tags: food.tags, preciseMacros: PreciseMacros(protein: 0, carbs: 1.4, fat: 0))
+        }
+        return RecipeMultipartFixtures.Salad(recipe: salad.recipe, foodItems: foods)
+    }
+
+    /// This build's content hash for `packet`, so a forged packet verifies and its SHAPE is what is tested.
+    private func currentSchemeHash(of packet: RecipeExchangePacket) throws -> String {
+        let input = CurrentHashInput(format: packet.format, version: packet.formatVersion, packetID: packet.packetID,
+                                     originContentID: packet.originContentID, includesNotes: packet.includesNotes,
+                                     recipe: packet.recipe)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return SHA256.hash(data: try encoder.encode(input)).map { String(format: "%02x", $0) }.joined()
+    }
 
     /// The imported copy of the salad: two parts, each with its own rows, labels gone, fresh step ids,
     /// nutrition identical to the sender's.
