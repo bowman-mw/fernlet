@@ -36,6 +36,21 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
   are rejected before any inbox write.
 - [ ] Receiver does not have Fernlet: confirm Messages shows the standard app-install path and no
   Fernlet data is exposed outside the card.
+  *2026-09-30: the owner reported that receiving a recipe "pops up and is blank". The diagnosis (not
+  yet confirmed on the device that showed it) is this row: a device with no Fernlet iMessage extension
+  able to open the card — no Fernlet, a Fernlet build older than 24 (build 24 is the first TestFlight
+  build that carries the extension), or an iPad or Mac (the extension is iPhone-only) — gets Messages'
+  install sheet, which is empty while Fernlet has no public App Store page, and the card's `data:` URL
+  gets no browser fallback. What to record: which device and Fernlet build tapped the card, and
+  whether the sheet is empty. Every card now carries "Opens in Fernlet on iPhone" as its trailing
+  subcaption so that recipient can read why; confirm the line is visible on the receiving device and
+  not truncated. If a phone WITH build 24 or later shows a blank panel instead, the diagnosis is wrong:
+  capture `log stream` (or Console) filtered on `process == "FernletMessagesExtension" OR process ==
+  "MobileSMS"` while tapping the card, pull that phone's crash logs (`devicectl device copy from
+  --domain-type systemCrashLogs`), and note how long the panel stays blank — Messages shows its own
+  blank panel with a spinner until the extension draws its first frame.*
+- [ ] TestFlight note for testers: Fernlet cards open only on an iPhone with build 24 or later;
+  anyone on an older build sees an empty sheet until they update.
 - [ ] Forward each card, then open it on a second recipient device. Confirm the packet UUID/hash
   survive forwarding and the replay ledger prevents a second canonical import.
 - [ ] Delete the source recipe/workout after sending. Confirm the received packet remains

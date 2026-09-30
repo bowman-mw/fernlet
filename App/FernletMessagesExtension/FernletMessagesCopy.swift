@@ -267,6 +267,18 @@ enum FernletMessagesCopy {
                comment: "Trailing caption on a sent workout card when the sender set no display name of their own. Keep it short — Messages truncates this corner hard.")
     }
 
+    /// The one line on a sent card aimed at a recipient who CANNOT open it (2026-09-30). The card is a
+    /// serverless `data:` URL bound to Fernlet's iMessage extension, so on a device without that
+    /// extension — no Fernlet, a Fernlet build older than 24, an iPad or a Mac — Messages answers a tap
+    /// with its own install sheet, which has nothing to show while Fernlet has no public App Store page
+    /// (the 2026-09-29 diagnosis of the owner's "pops up and is blank" report; not yet seen on
+    /// hardware). The template layout travels with the message and renders without the extension, so
+    /// this line is what that recipient can read. Fernlet users see it too, hence the neutral wording.
+    static var cardOpensInFernlet: String {
+        String(localized: "messages.card.opensInFernlet", defaultValue: "Opens in Fernlet on iPhone",
+               comment: "Small line in the lower-right corner of every sent recipe or workout card. Every recipient reads it, including one whose device cannot open the card (no Fernlet, an older Fernlet, an iPad or a Mac), so it says where the card opens, neutrally, without instructions. 'Fernlet' is the product name and must NOT be translated; 'iPhone' is Apple's product name. Keep it short — Messages truncates this corner hard.")
+    }
+
     static var recipeWordmark: String {
         String(localized: "messages.card.wordmark.recipe", defaultValue: "FERNLET RECIPE",
                comment: "Wordmark DRAWN INTO the card artwork the recipient sees in the conversation. Rendered at 28pt into a 1200×630 image, so a much longer translation will not fit; upper case matches the mark. 'Fernlet' is the product name and must not be translated.")

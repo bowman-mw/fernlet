@@ -66,7 +66,16 @@ replay ledger and the calendar and safety checks, and saves only when the person
 
 A card minted by this extension belongs to Fernlet, so a recipient without Fernlet gets Messages'
 standard install prompt for Fernlet itself — the property that made an `MSMessage` card the wrong
-transport for the separate Coach app, and the right one here.
+transport for the separate Coach app, and the right one here. Messages matches the card to
+`MSMessageExtensionBalloonPlugin:3RTUPF8FFH:MBO.Fernlet.MessagesExtension`, so the prompt also appears
+on any device whose Fernlet has no such extension — a build older than 24 (the first TestFlight build
+to carry it) — and on an iPad or a Mac, since the extension is iPhone-only. **That prompt is empty while Fernlet
+has no public App Store page**, and a `data:` URL gets no browser fallback (Apple loads only an HTTP(S)
+message URL when no app can open it) — the 2026-09-29 diagnosis of the owner's "pops up and is blank"
+report, not yet confirmed on the device that showed it. Since 2026-09-30 every card therefore carries
+one line meant for that recipient, the layout's `trailingSubcaption` "Opens in Fernlet on iPhone"
+(`FernletMessagesCopy.cardOpensInFernlet`): the template layout travels with the message and renders
+without the extension.
 
 ### What it keeps
 

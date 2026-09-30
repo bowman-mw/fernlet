@@ -626,6 +626,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         layout.caption = packet.recipe.name
         layout.subcaption = recipeSummary(for: packet)
         layout.trailingCaption = packet.includesNotes ? FernletMessagesCopy.cardNotesIncluded : FernletMessagesCopy.cardRecipe
+        layout.trailingSubcaption = FernletMessagesCopy.cardOpensInFernlet
         return layout
     }
 
@@ -680,6 +681,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         layout.caption = entry.card.title
         layout.subcaption = workoutSummary(for: entry)
         layout.trailingCaption = entry.card.senderLabel ?? FernletMessagesCopy.cardPlan
+        layout.trailingSubcaption = FernletMessagesCopy.cardOpensInFernlet
         return layout
     }
 
