@@ -219,10 +219,13 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     ///   `.machineGenerated` and see every row, unaliased. Required so every caller states which
     ///   surface it serves.
     /// - Parameter ranking: ``FoodSearchRanking/ingredientIdentity`` for the recipe ingredient surfaces
-    ///   only (ingredient-search round F5): a row that IS the typed ingredient ranks first. Independent of
-    ///   `context` — the swap sheet's pool is machine-generated and still ranks by identity. The default
-    ///   keeps every other surface (quick-log, the meal composer, Adjust meal, the resolver) on the
-    ///   standard order.
+    ///   only (ingredient-search round F5): a row that IS the typed ingredient ranks first, and among
+    ///   those this person's own and logged rows still lead — the compound level ("Milk, whole" for
+    ///   "whole milk") orders only the catalog's USDA rows beneath them (F5 fix round 2). The personal
+    ///   order above therefore holds inside the identity group; a personal row that is NOT the
+    ///   ingredient sits below every row that is. Independent of `context` — the swap sheet's pool is
+    ///   machine-generated and still ranks by identity. The default keeps every other surface
+    ///   (quick-log, the meal composer, Adjust meal, the resolver) on the standard order.
     public func results(
         for query: String,
         limit: Int = 6,

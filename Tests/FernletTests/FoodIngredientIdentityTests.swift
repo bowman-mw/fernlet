@@ -15,9 +15,13 @@ import FoodCatalog
 @Suite
 struct FoodIngredientIdentityTests {
 
-    private static func heads(_ name: String, usda: Bool = true, modifiers: [String] = []) -> Set<String> {
+    private static func heads(
+        _ name: String, usda: Bool = true, personNamed: Bool = false, modifiers: [String] = []
+    ) -> Set<String> {
         let modifierForms = modifiers.reduce(into: Set<String>()) { $0.formUnion(FoodIngredientIdentity.forms(of: $1)) }
-        return FoodIngredientIdentity.heads(ofName: name, referenceNaming: usda, modifierForms: modifierForms)
+        return FoodIngredientIdentity.heads(
+            ofName: name, referenceNaming: usda, personNamed: personNamed, modifierForms: modifierForms
+        )
     }
 
     private static func query(_ text: String) throws -> FoodIngredientIdentity.QueryHead {
@@ -83,6 +87,36 @@ struct FoodIngredientIdentityTests {
         #expect(Self.heads("Tater Chips, Milk Chocolate", usda: false).isEmpty)
         #expect(Self.heads("Dark Chocolate Chips, Dark", usda: false) == ["chips"], "the catalog's ', <flavor>' echo")
         #expect(Self.heads("Pork with chili and tomatoes") == ["pork"], "a reference name still ends its phrase there")
+    }
+
+    /// A later segment of variant words is no flavor list — the first segment is still the product (fix
+    /// round 2: the plain chips, salsas and breadcrumbs the echo rule alone dropped) — while a later
+    /// segment that names anything else still is one.
+    @Test func aVariantIsNotAFlavor() {
+        #expect(Self.heads("Chocolate Chips, Semi-sweet", usda: false) == ["chips"])
+        #expect(Self.heads("Chocolate Chips, Semisweet Morsels", usda: false) == ["chips"])
+        #expect(Self.heads("Salsa, Chunky Medium", usda: false) == ["salsa"])
+        #expect(Self.heads("Almonds, Roasted Salted", usda: false) == ["almonds"])
+        #expect(Self.heads("Breadcrumbs, Plain", usda: false) == ["breadcrumbs"])
+        #expect(Self.heads("Chocolate Chips, Milk Chocolate", usda: false).isEmpty, "'milk' is a flavor, not a variant")
+        #expect(Self.heads("Lemon, Ginger Drink, Lemon, Ginger", usda: false).isEmpty)
+        #expect(Self.heads("Zucchini With Marinara, Mild", usda: false).isEmpty, "a variant never rescues a composite")
+    }
+
+    /// A person's own food is read by its first segment: they named it, so "Chicken breast, grilled" is
+    /// chicken breast, while the same words on a product label are a flavor list (fix round 2). A
+    /// preposition still makes a composite, and a scanned product keeps the product reading.
+    @Test func aPersonsOwnNameIsReadByItsFirstSegment() throws {
+        #expect(Self.heads("Chicken breast, grilled", usda: false, personNamed: true) == ["breast"])
+        #expect(Self.heads("Chicken breast, grilled", usda: false).isEmpty)
+        #expect(Self.heads("Chicken with rice, leftovers", usda: false, personNamed: true).isEmpty)
+        let breast = try Self.query("chicken breast")
+        let own = FoodSearchHistoryRankingTests.food("Chicken breast, grilled", source: .manual, dataType: .branded)
+        let scanned = FoodSearchHistoryRankingTests.food("Chicken breast, grilled", source: .openFoodFacts, dataType: .branded)
+        #expect(FoodIngredientIdentity.isNamedByPerson(own))
+        #expect(!FoodIngredientIdentity.isNamedByPerson(scanned))
+        #expect(breast.level(of: own, brandQuery: false) == FoodIngredientIdentity.ingredientLevel)
+        #expect(breast.level(of: scanned, brandQuery: false) == 0, "a scanned label is a product name")
     }
 
     /// A part that is the food, and a one-word parenthetical, name the ingredient; leaves do not.
@@ -210,6 +244,26 @@ struct FoodIngredientIdentityTests {
         let baking = FoodCatalog(source: InMemoryBundledFoodSource([tater, chips]))
         #expect(baking.results(for: "milk chocolate chips", context: .userTyped, ranking: .ingredientIdentity)
                 .map(\.id) == [chips.id, tater.id])
+    }
+
+    /// The compound level never outranks the person (fix round 2): their own "Ground beef" leads USDA's
+    /// "Beef, ground, …", and a branded "Whole Milk" they log leads "Milk, whole, …" — while with no
+    /// personal signal the compound row still leads the other USDA rows.
+    @Test func aPersonsOwnOrLoggedFoodLeadsTheCompound() {
+        let usdaBeef = Self.food("Beef, ground, 93% lean meat / 7% fat, raw")
+        let ownBeef = FoodSearchHistoryRankingTests.food("Ground beef", source: .manual, dataType: .branded)
+        let beef = FoodCatalog(source: InMemoryBundledFoodSource([usdaBeef]))
+        beef.setUserItems([ownBeef])
+        #expect(beef.results(for: "ground beef", context: .userTyped, ranking: .ingredientIdentity).map(\.id)
+                == [ownBeef.id, usdaBeef.id])
+        let fluid = Self.food("Milk, whole, 3.25% milkfat, with added vitamin D")
+        let branded = Self.food("Whole Milk", .branded)
+        let milk = FoodCatalog(source: InMemoryBundledFoodSource([branded, fluid]))
+        #expect(milk.results(for: "whole milk", context: .userTyped, ranking: .ingredientIdentity).map(\.id)
+                == [fluid.id, branded.id], "cold, the compound row leads")
+        milk.setSearchHistory(FoodSearchHistory(weights: [branded.id: 693]))
+        #expect(milk.results(for: "whole milk", context: .userTyped, ranking: .ingredientIdentity).map(\.id)
+                == [branded.id, fluid.id], "logged, the person's own milk leads")
     }
 
     /// Among rows that ARE the ingredient, the standard keys still order them: the generic tier first.

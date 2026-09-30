@@ -126,10 +126,12 @@ public nonisolated enum FoodBrandLexicon {
 /// 1b. **the ingredient-identity key, recipe surfaces only** (ingredient-search round F5, 2026-09-30)
 ///    — ABOVE 1a, and only for a caller that passes ``FoodSearchRanking/ingredientIdentity``: a row
 ///    whose name IS the typed ingredient (``FoodIngredientIdentity``) outranks every row that only
-///    contains its words — and, for a typed compound, a USDA reference row that names it ("Milk,
-///    whole" for "whole milk") leads that group — and the keys below order each level. Like history
-///    it re-ranks rows the floors already admitted and never adds one; unlike history it reaches no
-///    resolver pool and no confidence gate (`scoredResults` passes ``FoodSearchRanking/standard``);
+///    contains its words, and the keys below order each side. For a typed compound a USDA reference
+///    row that names it ("Milk, whole" for "whole milk") is a higher identity level, read AFTER history
+///    and source (between step 2's two halves), so it orders USDA rows and never outranks the person's
+///    own or logged food. Like history it re-ranks rows the floors already admitted and never adds
+///    one; unlike history it reaches no resolver pool and no confidence gate (`scoredResults` passes
+///    ``FoodSearchRanking/standard``);
 /// 2. `sourcePriority` (manual > Open Food Facts > USDA > AI), then brand-aware `dataTypePriority`,
 ///    ABOVE the score.
 ///    A plain ingredient query therefore keeps generic USDA rows above commercial titles whose
@@ -288,7 +290,8 @@ public nonisolated enum FoodItemSearch {
         /// The row's ``FoodIngredientIdentity`` level: ``FoodIngredientIdentity/compoundLevel`` (2) for a
         /// USDA reference row naming the typed compound, ``FoodIngredientIdentity/ingredientLevel`` (1)
         /// for any other row that IS the typed ingredient, 0 otherwise — and 0 for every row under
-        /// ``FoodSearchRanking/standard``, which makes the key inert there.
+        /// ``FoodSearchRanking/standard``, which makes the key inert there. `ranksAhead` reads it twice:
+        /// non-zero first, above history; the level itself after history and source.
         var identity = 0
 
         init(entry: Index.Entry, score: Int, history: Int) {
@@ -539,18 +542,27 @@ public nonisolated enum FoodItemSearch {
     /// once per row instead of once per comparison.
     ///
     /// **F5 (2026-09-30) added a key above history, for the recipe surfaces only**: a row that IS the
-    /// typed ingredient (`identity` 1) ranks ahead of every row that is not, a USDA reference row that
-    /// names the typed compound (`identity` 2, "Oil, olive" for "olive oil") ahead of both, and the keys
-    /// below order each level — so among plain rows your own logged food still comes first, then
-    /// source, the generic-first data type and the score. The owner's call: "for the recipe it's more important to
-    /// rank the plain ingredients first". Under ``FoodSearchRanking/standard`` every row carries 0, the
-    /// key compares equal, and this function is the one it was before.
+    /// typed ingredient (`identity` above 0) ranks ahead of every row that is not, and the keys below
+    /// order each side — so among plain rows your own logged food still comes first, then source (a food
+    /// you made or scanned before the catalog's), then the generic-first data type and the score. The
+    /// owner's call: "for the recipe it's more important to rank the plain ingredients first".
+    ///
+    /// **The compound level sits after history and source** (F5 fix round 2). A USDA reference row that
+    /// names the typed compound (`identity` 2, "Oil, olive" for "olive oil") leads the other rows of its
+    /// history and source — the other USDA rows, reference or branded — and nothing else. Read first, as
+    /// fix round 1 built it, it sank a person's own "Ground beef" to #46 and every logged branded "Whole
+    /// Milk" under each "Milk, whole" row: 32 of 158 multi-word queries carry six or more of those rows,
+    /// enough to fill the list. Only a `.usda` row can reach level 2, so the key never reorders two
+    /// sources. Under ``FoodSearchRanking/standard`` every row carries 0, both identity comparisons are
+    /// equal, and this function is the one it was before.
     fileprivate static func ranksAhead(_ first: RankedRow, _ second: RankedRow, isBrandQuery: Bool) -> Bool {
-        if first.identity != second.identity { return first.identity > second.identity }
+        let firstIsIngredient = first.identity > 0, secondIsIngredient = second.identity > 0
+        if firstIsIngredient != secondIsIngredient { return firstIsIngredient }
         if first.history != second.history { return first.history > second.history }
         if first.foodItem.source != second.foodItem.source {
             return sourcePriority(first.foodItem.source) > sourcePriority(second.foodItem.source)
         }
+        if first.identity != second.identity { return first.identity > second.identity }
         let firstType = dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
         let secondType = dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
         if firstType != secondType { return firstType > secondType }

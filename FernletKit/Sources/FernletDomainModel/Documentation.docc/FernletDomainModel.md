@@ -286,11 +286,14 @@ passing ``FoodSearchRanking/ingredientIdentity`` — the recipe editor's typeahe
 nothing else — gets ``FoodIngredientIdentity``'s key above every other: a row whose name IS the typed
 ingredient (its head noun, plural-aware, read the way USDA and branded names are written) ranks ahead
 of a row that only contains the words, so "Sugars, brown" leads the cereals that mention brown sugar.
-The standard keys order each side. For a typed compound ("whole milk", "olive oil") a USDA reference
-row that writes the modifier as its kind ("Milk, whole", "Oil, olive") leads the identity group. A
-product name (branded, restaurant, a person's own) is read as one phrase: a preposition makes it a
-composite and a first segment followed by anything but an echo of its words is a flavor list, so "Lemon,
-Ginger Drink" is not a lemon. Every entry point defaults to ``FoodSearchRanking/standard``, and
+The standard keys order each side, so a person's own and logged foods still lead the identity group.
+For a typed compound ("whole milk", "olive oil") a USDA reference row that writes the modifier as its
+kind ("Milk, whole", "Oil, olive") leads the other USDA rows — a level read after history and source,
+never above a personal row. A product name (branded, restaurant, scanned) is read as one phrase: a
+preposition makes it a composite and a first segment followed by anything but an echo of its words or a
+variant word ("Salsa, Mild", "Chocolate Chips, Semi-sweet") is a flavor list, so "Lemon, Ginger Drink"
+is not a lemon; a person's own food is read by its first segment ("Chicken breast, grilled"). Every
+entry point defaults to ``FoodSearchRanking/standard``, and
 ``FoodItemSearch/scoredResults(for:in:limit:stripsStopwords:)`` passes it explicitly, so quick-log, the
 meal composer, Adjust meal, the resolver and every confidence gate rank exactly as before. The key is
 off, and the order standard, while the head noun is still being typed.

@@ -728,6 +728,15 @@ struct LocalizationBoundaryTests {
             re-measure the ingredient corpus after adding one ("brisket" would make "Beef, brisket, flat \
             half" a half-and-half).
             """)
+        #expect(FoodIngredientIdentity.variantDescriptors == [
+            "plain", "original", "mild", "medium", "hot", "salted", "unsalted", "semi", "sweet", "semisweet",
+            "morsels", "classic", "regular", "natural", "organic", "raw", "roasted", "smooth", "creamy", "chunky"
+        ], """
+            English variant words read in the catalog's product names: "Salsa, Mild" is salsa only while \
+            "mild" matches the name's own token. A variant only KEEPS a first segment's head, so a new one \
+            can turn a flavor-first name into the ingredient — re-measure the ingredient corpus and the \
+            held-out dumps before adding one.
+            """)
     }
 
     /// The dish heuristic's carrier-use phrases (ingredient-search round, F3): matched against USDA's

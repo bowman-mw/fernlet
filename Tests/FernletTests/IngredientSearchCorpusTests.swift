@@ -18,7 +18,10 @@
 // research's `replay/accept.py`. Those patterns were written from the query's recipe meaning before
 // the probe output was read, and judge NAMES only. One was tightened here, as the report's verifiers
 // asked: "carrot"/"carrots" no longer accept "Carrots, raw, salad" (an FNDDS coleslaw). One was
-// widened by F6: "water" accepts SR Legacy's "Water, bottled, …" rows, which F6 restored.
+// widened by F6: "water" accepts SR Legacy's "Water, bottled, …" rows, which F6 restored. Two were
+// widened by F5's fix round 2: "semisweet chocolate chips" and "semi sweet chocolate chips" accept
+// "Chocolate Chips, Semi-sweet" — the catalog's inverted spelling, which the pattern read only in
+// word order — as "milk chocolate chips" already accepted "Chocolate Chips, Milk Chocolate".
 //
 // …AND A PLAIN ROW MUST ALSO BE PHYSICALLY POSSIBLE. §4.1a found six #1 answers landing on branded
 // rows whose macros cannot exist (per-100 g values stored against a 15 g label serving: 3,767 kcal
@@ -236,7 +239,12 @@ struct IngredientSearchCorpusTests {
     /// the reviewers' measurement: 366 on the standard order, 438 with F5 as first built, when branded
     /// flavor lists and composites filled the lists behind a first plain row that never moved; 449
     /// once a product name is read as one phrase and a qualified USDA class names its member third).
-    static let plainRowsInSixBaseline = 449
+    /// 455 with fix round 2, when a later segment of variant words ("Chocolate Chips, Semi-sweet",
+    /// "Chocolate Chips, Semisweet Morsels") stopped reading as a flavor list: chocolate chips 3 → 5 and
+    /// chocolate chip 2 → 4 (the baking query and the typing prefix). The two semi-sweet judges were
+    /// widened in the same commit to accept "Chocolate Chips, Semi-sweet" (see the file header);
+    /// without that, "semi sweet chocolate chips" would have read 6 → 5 for a row that is plainly one.
+    static let plainRowsInSixBaseline = 455
 
     /// The description `BundledRowCorrection.rebasingBrandedNutrients` gives a branded label serving
     /// it keeps as the row's count portion — a serving, not an item.
@@ -244,7 +252,10 @@ struct IngredientSearchCorpusTests {
 
     /// The named rows (fix round 1 of F5): the flavor-first product lists and composites identity once
     /// counted as the ingredient (hidden), the canonical USDA rows they pushed out of view (shown), and
-    /// the typed compounds' own rows (leading). Exact catalog names — the catalog is never regenerated.
+    /// the typed compounds' own rows (leading). Fix round 2 adds the plain products whose later segment
+    /// is a variant, not a flavor ("Chocolate Chips, Semi-sweet", "Salsa, Mild", "Breadcrumbs, Plain"),
+    /// which round 1's echo rule dropped — salsa and breadcrumbs are held-out ingredients, outside the
+    /// corpus. Exact catalog names — the catalog is never regenerated.
     static let sixPins: [IngredientCorpusSixPin] = [
         .init(query: "lemon", leads: "Lemons, raw, without peel", shows: [], hides: [
             "Lemon, Ginger Drink, Lemon, Ginger", "Lemon, Lime Gelatin Mix, Lemon, Lime",
@@ -274,6 +285,11 @@ struct IngredientSearchCorpusTests {
         .init(query: "olive oil", leads: "Oil, olive, salad or cooking", shows: [], hides: []),
         .init(query: "milk chocolate chips", leads: "Milk Chocolate Premium Baking Chips, Milk Chocolate", shows: [], hides: []),
         .init(query: "black beans", leads: "Beans, black, mature seeds, raw", shows: [], hides: []),
+        .init(query: "chocolate chips", leads: "Candies, semisweet chocolate",
+              shows: ["Chocolate Chips, Semi-sweet", "Chocolate Chips, Semisweet Morsels"],
+              hides: ["100% Cacao Organic Baking Chocolate Chips, 100% Cacao"]),
+        .init(query: "salsa", leads: "Salsa", shows: ["Salsa, Mild", "Salsa, Medium", "Salsa, Hot"], hides: []),
+        .init(query: "breadcrumbs", leads: "Breadcrumbs, Plain", shows: [], hides: []),
     ]
 
     /// The count-noun queries — the research's `replay/units.py` list. Frozen English matching inputs.
@@ -310,8 +326,8 @@ struct IngredientSearchCorpusTests {
         .init(.baking, "cocoa powder", #"^cocoa, dry powder, unsweetened|^(100% |natural |unsweetened |dutch[- ]process(ed)? |baking |pure )*(cocoa|cacao)( powder)?$"#, #"mix|drink|hot|beverage|(?<!un)sweetened"#),
         .init(.baking, "chocolate chips", #"^candies, semisweet chocolate$|^(organic |premium |real |pure )*(mini |big |mega )*(semi[- ]*sweet |bittersweet |dark |milk |white )?(chocolate )?(flavored )?(baking )?(chips|morsels)\b"#, chipExclusion, chocolate: true),
         .init(.baking, "chocolate chip", #"^candies, semisweet chocolate$|^(organic |premium |real |pure )*(mini |big |mega )*(semi[- ]*sweet |bittersweet |dark |milk |white )?(chocolate )?(flavored )?(baking )?(chips|morsels)\b"#, chipExclusion, chocolate: true),
-        .init(.baking, "semisweet chocolate chips", #"^candies, semisweet chocolate$|(semi[- ]*sweet).*(chips|morsels)"#, chipExclusion, chocolate: true),
-        .init(.baking, "semi sweet chocolate chips", #"^candies, semisweet chocolate$|(semi[- ]*sweet).*(chips|morsels)"#, chipExclusion, chocolate: true),
+        .init(.baking, "semisweet chocolate chips", #"^candies, semisweet chocolate$|(semi[- ]*sweet).*(chips|morsels)|^chocolate chips, semi[- ]*sweet"#, chipExclusion, chocolate: true),
+        .init(.baking, "semi sweet chocolate chips", #"^candies, semisweet chocolate$|(semi[- ]*sweet).*(chips|morsels)|^chocolate chips, semi[- ]*sweet"#, chipExclusion, chocolate: true),
         .init(.baking, "dark chocolate chips", #"(dark|bittersweet).*chocolate.*(chips|morsels)|^candies, semisweet chocolate$"#, chipExclusion, chocolate: true),
         .init(.baking, "milk chocolate chips", #"^candies, milk chocolate$|milk chocolate.*(chips|morsels)|^chocolate chips, milk chocolate"#, chipExclusion, chocolate: true),
         .init(.baking, "white chocolate chips", #"^candies, white chocolate$|white (chocolate |baking )?.*(chips|morsels)"#, chipExclusion, chocolate: true),
@@ -475,8 +491,8 @@ struct IngredientSearchCorpusTests {
         .init("baking powder", 1, 1, plain: 4),
         .init("vanilla extract", 1, 1, plain: 4),
         .init("cocoa powder", 1, 1, plain: 4),
-        .init("chocolate chips", 1, 1, plain: 3),
-        .init("chocolate chip", 1, 1, plain: 2),
+        .init("chocolate chips", 1, 1, plain: 5),
+        .init("chocolate chip", 1, 1, plain: 4),
         .init("semisweet chocolate chips", 1, 1, plain: 4),
         .init("semi sweet chocolate chips", 1, 1, plain: 6),
         .init("dark chocolate chips", 1, 1, plain: 3),
@@ -615,7 +631,7 @@ struct IngredientSearchCorpusTests {
         .init("chocolate c", 1, 1, plain: 1),
         .init("chocolate ch", 1, 1, plain: 1),
         .init("chocolate chi", 1, 1, plain: 1),
-        .init("chocolate chip", 1, 1, plain: 2),
+        .init("chocolate chip", 1, 1, plain: 4),
         .init("ban", 1, 1, plain: 3),
         .init("bana", 1, 1, plain: 3),
         .init("banan", 1, 1, plain: 3),
@@ -689,8 +705,9 @@ struct IngredientSearchCorpusTests {
 
     /// The tuples are measured facts derived from the pins, and the pins cover the probe's corpus
     /// exactly, in its order — so neither can drift from the other.
-    /// The named rows of fix round 1: the canonical USDA rows identity must keep in view, the compound
-    /// rows it must lead with, and the flavored products it must no longer count as the ingredient.
+    /// The named rows of fix rounds 1 and 2: the canonical USDA rows identity must keep in view, the
+    /// compound rows it must lead with, the flavored products it must no longer count as the ingredient,
+    /// and the variant-named plain products it must count again.
     @Test func theSixShowTheNamedRows() throws {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount >= FoodSearchCorpusTests.shippedRowCount,
