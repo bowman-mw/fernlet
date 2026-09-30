@@ -4789,8 +4789,10 @@ final class FernletStore {
     /// The numbered catalog candidate pool a substitution is chosen from — the same seam the meal
     /// resolver uses (`FoodCatalog.candidates`), seeded here with the name of the ingredient being
     /// replaced. Numbered so the model can pick BY NUMBER and code binds; never a source of quantities.
+    /// Ranked for a recipe line (`.ingredientIdentity`, ingredient-search round F5): rows that ARE an
+    /// ingredient lead each sub-phrase, where the meal resolver's own pool keeps the standard order.
     func substitutionCandidates(forIngredientNamed name: String, limit: Int = 12) -> [FoodSelectionCandidate] {
-        foodCatalog.candidates(for: name, limit: limit)
+        foodCatalog.candidates(for: name, limit: limit, ranking: .ingredientIdentity)
     }
 
     /// On-device AI substitution suggestions (standard tier, USER-INVOKED), routed through the shipped
@@ -4812,7 +4814,7 @@ final class FernletStore {
         return (try? await FoundationIngredientSubstitutionModel.suggest(
             payload,
             gate: aiGate,
-            resolve: { catalog.candidates(for: $0, limit: 3) }
+            resolve: { catalog.candidates(for: $0, limit: 3, ranking: .ingredientIdentity) }
         )) ?? nil
     }
 

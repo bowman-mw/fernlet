@@ -7,8 +7,9 @@
 // WHAT THIS SUITE IS. It replays the 160-query recipe-ingredient corpus of
 // `IngredientSearchReplayProbeTests` (55 baking, 45 produce, 47 pantry, 13 typing prefixes) through
 // the exact call the recipe ingredient editor makes — `FoodCatalog.bundled()`'s
-// `results(for:context: .userTyped)` at its default limit of SIX, the whole list the person sees —
-// and pins, per query, where the first PLAIN form of the ingredient sits in those six rows.
+// `results(for:context: .userTyped, ranking: .ingredientIdentity)` at its default limit of SIX, the
+// whole list the person sees (the identity-first order is F5's, 2026-09-30) — and pins, per query,
+// where the first PLAIN form of the ingredient sits in those six rows.
 //
 // "PLAIN" IS A JUDGEMENT, AND IT IS WRITTEN DOWN. Each query carries an include regex, an optional
 // exclude regex and (for the chocolate family) a "must name chocolate" guard, ported verbatim from the
@@ -173,11 +174,19 @@ struct IngredientSearchCorpusTests {
     /// chocolate chip(s) and the four typing prefixes "chocolate c/ch/chi/chip", "Spices, pepper, red
     /// or cayenne" for red pepper flakes, the soybean salad or cooking oil for vegetable oil, and the
     /// SR "Garlic, raw" for garlic clove (2 → 1).
-    static let measuredBaseline = (plainAtOne: 112, plainVisible: 144)
+    /// 136 / 151 with F5 (2026-09-30), when the recipe editor's call began ranking by ingredient
+    /// identity (`FoodIngredientIdentity`): 36 pins moved, every one up and none down — brown sugar,
+    /// brown rice and green beans from out of view to #1; butter, yeast, lemon, corn, shrimp, canola oil,
+    /// cheddar, mozzarella, parmesan, cinnamon, chicken broth, water, bread flour, cocoa powder, dark
+    /// chocolate chips, graham crackers, tomato, black beans, white rice, bread and "chocolate" to #1;
+    /// whole milk, apple, apples and rice into view; sugar, milk chocolate chips, olive oil, tomatoes,
+    /// bacon, salmon, tofu and mayonnaise up within it.
+    static let measuredBaseline = (plainAtOne: 136, plainVisible: 151)
 
     /// The names-only baseline beside it — the report's §4.1 table (97 at #1, 132 visible on
     /// cf46b8eb), which judged names without nutrition. Kept so the gap between the two is visible.
-    static let nameOnlyBaseline = (plainAtOne: 113, plainVisible: 145)
+    /// 113 / 145 before F5, 137 / 152 with it (the gap is still white chocolate chips).
+    static let nameOnlyBaseline = (plainAtOne: 137, plainVisible: 152)
 
     /// Count-noun queries whose first plausible plain VISIBLE row takes "1 each". Zero on cf46b8eb:
     /// the report's §4.3 "1 of 26" counted "1 each" OR "1 piece" on the first plain row of the top
@@ -188,8 +197,9 @@ struct IngredientSearchCorpusTests {
     /// Foundation row's 50.3 g egg, lemon to the fruit its NLEA serving names, lime, orange, carrot(s),
     /// cucumber, jalapeno, grape tomatoes, corn tortillas and zucchini. Still refused: apple(s), egg,
     /// potato, sweet potato (no plain row in view), avocado and tomato (RACC-only rows), bell
-    /// peppers, chicken, graham crackers and marshmallows.
-    static let eachBaseline = 17
+    /// peppers, chicken, graham crackers and marshmallows. Eighteen with F5: graham crackers' first
+    /// plain row is now the branded "Graham Crackers" #1, whose label serving is its "each".
+    static let eachBaseline = 18
 
     /// The count-noun queries — the research's `replay/units.py` list. Frozen English matching inputs.
     static let countNouns: Set<String> = [
@@ -380,29 +390,29 @@ struct IngredientSearchCorpusTests {
     static let pins: [IngredientCorpusPin] = [
         .init("all-purpose flour", 1, 1),
         .init("flour", nil, nil),
-        .init("bread flour", 2, 2),
+        .init("bread flour", 1, 1),
         .init("whole wheat flour", 1, 1),
-        .init("sugar", 5, 5),
+        .init("sugar", 4, 4),
         .init("granulated sugar", 1, 1),
-        .init("brown sugar", nil, nil),
+        .init("brown sugar", 1, 1),
         .init("powdered sugar", 1, 1),
         .init("baking soda", 1, 1),
         .init("baking powder", 1, 1),
         .init("vanilla extract", 1, 1),
-        .init("cocoa powder", 2, 2),
+        .init("cocoa powder", 1, 1),
         .init("chocolate chips", 1, 1),
         .init("chocolate chip", 1, 1),
         .init("semisweet chocolate chips", 1, 1),
         .init("semi sweet chocolate chips", 1, 1),
-        .init("dark chocolate chips", 2, 2),
-        .init("milk chocolate chips", 3, 3),
+        .init("dark chocolate chips", 1, 1),
+        .init("milk chocolate chips", 2, 2),
         .init("white chocolate chips", 1, nil),
-        .init("butter", 2, 2),
+        .init("butter", 1, 1),
         .init("unsalted butter", 1, 1),
         .init("eggs", 1, 1, each: true),
         .init("egg", nil, nil, each: false),
         .init("egg whites", 1, 1),
-        .init("yeast", 5, 5),
+        .init("yeast", 1, 1),
         .init("cornstarch", 1, 1),
         .init("honey", 1, 1),
         .init("maple syrup", 1, 1),
@@ -420,24 +430,24 @@ struct IngredientSearchCorpusTests {
         .init("sour cream", 1, 1),
         .init("buttermilk", 1, 1),
         .init("milk", nil, nil),
-        .init("whole milk", nil, nil),
+        .init("whole milk", 4, 4),
         .init("almond milk", 1, 1),
         .init("oat milk", 1, 1),
         .init("sweetened condensed milk", 1, 1),
-        .init("graham crackers", 2, 2, each: false),
+        .init("graham crackers", 1, 1, each: true),
         .init("marshmallows", 1, 1, each: false),
         .init("peanut butter", 1, 1),
         .init("almond flour", 1, 1),
         .init("coconut oil", 1, 1),
         .init("vegetable oil", 1, 1),
-        .init("canola oil", 3, 3),
-        .init("olive oil", 4, 4),
+        .init("canola oil", 1, 1),
+        .init("olive oil", 2, 2),
         .init("extra virgin olive oil", 1, 1),
         .init("banana", 1, 1, each: true),
         .init("bananas", 1, 1, each: true),
-        .init("apple", nil, nil, each: false),
-        .init("apples", nil, nil, each: false),
-        .init("lemon", 4, 4, each: true),
+        .init("apple", 4, 4, each: false),
+        .init("apples", 4, 4, each: false),
+        .init("lemon", 1, 1, each: true),
         .init("lemon juice", 1, 1),
         .init("lime", 1, 1, each: true),
         .init("orange", 1, 1, each: true),
@@ -445,8 +455,8 @@ struct IngredientSearchCorpusTests {
         .init("blueberries", 1, 1),
         .init("raspberries", 1, 1),
         .init("avocado", 1, 1, each: false),
-        .init("tomato", 2, 2, each: false),
-        .init("tomatoes", 3, 3, each: true),
+        .init("tomato", 1, 1, each: false),
+        .init("tomatoes", 2, 2, each: true),
         .init("cherry tomatoes", 1, 1),
         .init("onion", 1, 1, each: true),
         .init("red onion", 1, 1, each: true),
@@ -470,9 +480,9 @@ struct IngredientSearchCorpusTests {
         .init("cauliflower", 1, 1),
         .init("zucchini", 1, 1, each: true),
         .init("mushrooms", 1, 1),
-        .init("corn", 5, 5),
+        .init("corn", 1, 1),
         .init("peas", 1, 1),
-        .init("green beans", nil, nil),
+        .init("green beans", 1, 1),
         .init("cilantro", 1, 1),
         .init("parsley", 1, 1),
         .init("basil", 1, 1),
@@ -482,31 +492,31 @@ struct IngredientSearchCorpusTests {
         .init("chicken thighs", 2, 2, each: false),
         .init("ground beef", 1, 1),
         .init("ground turkey", 1, 1),
-        .init("bacon", 6, 6),
-        .init("salmon", 6, 6),
-        .init("shrimp", 3, 3),
-        .init("tofu", 3, 3),
-        .init("black beans", 2, 2),
+        .init("bacon", 5, 5),
+        .init("salmon", 4, 4),
+        .init("shrimp", 1, 1),
+        .init("tofu", 2, 2),
+        .init("black beans", 1, 1),
         .init("chickpeas", 1, 1),
         .init("lentils", 1, 1),
-        .init("rice", nil, nil),
-        .init("white rice", 2, 2),
-        .init("brown rice", nil, nil),
+        .init("rice", 6, 6),
+        .init("white rice", 1, 1),
+        .init("brown rice", 1, 1),
         .init("pasta", 1, 1),
         .init("spaghetti", nil, nil),
         .init("quinoa", 1, 1),
-        .init("bread", 2, 2),
+        .init("bread", 1, 1),
         .init("tortillas", 1, 1, each: true),
-        .init("cheddar cheese", 6, 6),
-        .init("mozzarella", 2, 2),
-        .init("parmesan", 2, 2),
+        .init("cheddar cheese", 1, 1),
+        .init("mozzarella", 1, 1),
+        .init("parmesan", 1, 1),
         .init("feta", 1, 1),
         .init("greek yogurt", 1, 1),
         .init("yogurt", 1, 1),
         .init("soy sauce", 1, 1),
         .init("salt", 1, 1),
         .init("black pepper", 1, 1),
-        .init("cinnamon", 3, 3),
+        .init("cinnamon", 1, 1),
         .init("cumin", 1, 1),
         .init("paprika", 1, 1),
         .init("chili powder", 1, 1),
@@ -519,14 +529,14 @@ struct IngredientSearchCorpusTests {
         .init("balsamic vinegar", 1, 1),
         .init("dijon mustard", 1, 1),
         .init("ketchup", 1, 1),
-        .init("mayonnaise", 6, 6),
-        .init("chicken broth", 4, 4),
+        .init("mayonnaise", 5, 5),
+        .init("chicken broth", 1, 1),
         .init("tomato paste", 1, 1),
         .init("canned tomatoes", 1, 1),
         .init("coconut milk", 1, 1),
-        .init("water", 2, 2),
+        .init("water", 1, 1),
         .init("choc", 2, 2),
-        .init("chocolate", 2, 2),
+        .init("chocolate", 1, 1),
         .init("chocolate c", 1, 1),
         .init("chocolate ch", 1, 1),
         .init("chocolate chi", 1, 1),
@@ -560,7 +570,7 @@ struct IngredientSearchCorpusTests {
     /// Replays one query through the editor's call and reads its pin off the six rows.
     static func measure(_ matcher: IngredientCorpusMatcher, catalog: FoodCatalog) -> IngredientCorpusPin {
         let query = matcher.judge.query
-        let visible = catalog.results(for: query, context: .userTyped)
+        let visible = catalog.results(for: query, context: .userTyped, ranking: .ingredientIdentity)
         let nameIndex = visible.firstIndex { matcher.accepts($0.name) }
         let plausibleIndex = visible.firstIndex { matcher.accepts($0.name) && isPlausible($0) }
         var each: Bool?

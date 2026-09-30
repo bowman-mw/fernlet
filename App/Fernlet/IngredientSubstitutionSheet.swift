@@ -96,8 +96,9 @@ struct IngredientSubstitutionSheet: View {
                 return
             }
             let catalog = store.foodCatalog
+            // A replacement for a recipe ingredient: the ingredient itself first (F5).
             let results = await Task.detached(priority: .userInitiated) {
-                catalog.candidates(for: trimmed, limit: 12)
+                catalog.candidates(for: trimmed, limit: 12, ranking: .ingredientIdentity)
             }.value
             guard !Task.isCancelled else { return }
             searchResults = results

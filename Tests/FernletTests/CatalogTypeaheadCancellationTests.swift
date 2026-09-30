@@ -52,10 +52,12 @@ struct CatalogTypeaheadCancellationTests {
     /// The editor's own call: superseded before or during its settle, it applies nothing.
     @Test func aSupersededTypeaheadReturnsNil() async {
         let catalog = Self.catalog()
-        let keystroke = Task { await CatalogTypeahead.matches(for: "chocolate", catalog: catalog) }
+        let keystroke = Task {
+            await CatalogTypeahead.matches(for: "chocolate", catalog: catalog, ranking: .ingredientIdentity)
+        }
         keystroke.cancel()
         #expect(await keystroke.value == nil)
-        let settled = await CatalogTypeahead.matches(for: "chocolate", catalog: catalog)
+        let settled = await CatalogTypeahead.matches(for: "chocolate", catalog: catalog, ranking: .ingredientIdentity)
         #expect(settled?.count == 1, "an unsuperseded keystroke still answers")
     }
 }

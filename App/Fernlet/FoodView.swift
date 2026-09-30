@@ -2040,9 +2040,13 @@ struct CollapsedIngredientRow: View {
 /// work nobody will read.
 /// An empty query returns `[]` immediately. Callers must invoke it from `.task(id:)` keyed on the
 /// live text, never synchronously in `body`.
+///
+/// `ranking` has no default, so each field states its order: the recipe editor passes
+/// `.ingredientIdentity` (ingredient-search round F5 — the plain ingredient first, the owner's call
+/// for recipes), while the meal composer and Adjust meal keep `.standard`.
 enum CatalogTypeahead {
     /// One settled-keystroke query. nil = this call was superseded; apply nothing.
-    static func matches(for text: String, catalog: FoodCatalog) async -> [FoodItem]? {
+    static func matches(for text: String, catalog: FoodCatalog, ranking: FoodSearchRanking) async -> [FoodItem]? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         // Debounce; a newer keystroke cancels this sleep and we bail before doing any work.
@@ -2053,7 +2057,7 @@ enum CatalogTypeahead {
         }
         // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
         let search = Task.detached { [catalog] in
-            catalog.results(for: trimmed, context: .userTyped)
+            catalog.results(for: trimmed, context: .userTyped, ranking: ranking)
         }
         let hits = await withTaskCancellationHandler {
             await search.value
@@ -2392,8 +2396,11 @@ struct RecipeIngredientEditor: View {
             typeaheadResults.clear()
             return
         }
-        // nil = superseded by a newer keystroke: keep the current list rather than a stale one.
-        guard let hits = await CatalogTypeahead.matches(for: text, catalog: catalog) else { return }
+        // nil = superseded by a newer keystroke: keep the current list rather than a stale one. A
+        // recipe line wants the ingredient itself first (F5).
+        guard let hits = await CatalogTypeahead.matches(for: text, catalog: catalog, ranking: .ingredientIdentity) else {
+            return
+        }
         typeaheadResults.bind(hits, to: text)
     }
 
@@ -3053,7 +3060,10 @@ struct MealSheet: View {
             catalogResults.clear()
             return
         }
-        guard let hits = await CatalogTypeahead.matches(for: query, catalog: store.foodCatalog) else { return }
+        // A meal keeps the standard order (F5 is the recipe surfaces' ranking only).
+        guard let hits = await CatalogTypeahead.matches(for: query, catalog: store.foodCatalog, ranking: .standard) else {
+            return
+        }
         catalogResults.bind(hits, to: query)
     }
 
@@ -4818,7 +4828,8 @@ private struct MealItemSearchField: View {
                 typeaheadResults.clear()
                 return
             }
-            guard let hits = await CatalogTypeahead.matches(for: query, catalog: catalog) else { return }
+            // Adjust meal corrects a logged meal: the standard order (F5 is recipes only).
+            guard let hits = await CatalogTypeahead.matches(for: query, catalog: catalog, ranking: .standard) else { return }
             typeaheadResults.bind(hits, to: query)
         }
     }

@@ -620,12 +620,15 @@ struct FoodSearchHistoryStoreTests {
     }
 
     /// The concrete FoodView typeahead opts into typed context, so its detached/debounced path sees
-    /// the same warm ranking as direct interactive search.
-    @Test func foodViewTypeaheadRemainsWarm() async throws {
+    /// the same warm ranking as direct interactive search — on the meal fields' standard order and on
+    /// the recipe editor's ingredient-identity order alike (F5 keeps history below identity, and
+    /// neither granola row is more the ingredient than the other).
+    @Test(arguments: [FoodSearchRanking.standard, .ingredientIdentity])
+    func foodViewTypeaheadRemainsWarm(ranking: FoodSearchRanking) async throws {
         let (alpha, bravo) = Self.granolaPair()
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource([alpha, bravo]))
         catalog.setSearchHistory(FoodSearchHistory(weights: [bravo.id: 3_000]))
-        let matches = try #require(await CatalogTypeahead.matches(for: "granola", catalog: catalog))
+        let matches = try #require(await CatalogTypeahead.matches(for: "granola", catalog: catalog, ranking: ranking))
         #expect(matches.first?.id == bravo.id)
     }
 

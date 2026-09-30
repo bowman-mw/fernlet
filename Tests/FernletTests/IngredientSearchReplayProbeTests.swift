@@ -6,9 +6,11 @@
 // answers, so a fix round can re-run it before and after a change and diff the two outputs.
 //
 // THE CALL IT REPLICATES. `RecipeIngredientEditor.refreshTypeahead()` (App/Fernlet/FoodView.swift)
-// hands the trimmed field text to `CatalogTypeahead.matches(for:catalog:)`, which (after a 220 ms
-// debounce) runs `catalog.results(for: trimmed, context: .userTyped)` — the default `limit: 6` and
-// `stripsStopwords: true` — and the editor renders every returned row, unfiltered, in a VStack.
+// hands the trimmed field text to `CatalogTypeahead.matches(for:catalog:ranking:)`, which (after a
+// 220 ms debounce) runs `catalog.results(for: trimmed, context: .userTyped, ranking:
+// .ingredientIdentity)` — the default `limit: 6` and `stripsStopwords: true`, and since the
+// ingredient-search round's F5 (2026-09-30) the recipe surfaces' identity-first order — and the
+// editor renders every returned row, unfiltered, in a VStack.
 // So the user's whole list is at most SIX rows. The probe records that exact list (`visible`) and,
 // separately, the same call at `limit: 10` (`top10`) so a fix round can see what sits just below the
 // fold. Both calls share the demotion window (`FoodItemSearch.demotionWindow` = 60 > 10), so the
@@ -85,7 +87,8 @@ struct IngredientReplayQuery: Codable, Equatable {
     let category: String
     /// The typed text.
     let query: String
-    /// The editor's own list: `results(for:context: .userTyped)` at the default limit.
+    /// The editor's own list: `results(for:context: .userTyped, ranking: .ingredientIdentity)` at the
+    /// default limit.
     let visible: [String]
     /// The same call at `limit: 10`, fully described.
     let top10: [IngredientReplayRow]
@@ -155,13 +158,14 @@ struct IngredientSearchReplayProbeTests {
 
     private static func measure(_ query: String, category: String, catalog: FoodCatalog) -> IngredientReplayQuery {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The editor's exact call (CatalogTypeahead.matches): default limit, typed context.
-        let visible = catalog.results(for: trimmed, context: .userTyped)
+        // The editor's exact call (CatalogTypeahead.matches): default limit, typed context, recipe order.
+        let visible = catalog.results(for: trimmed, context: .userTyped, ranking: .ingredientIdentity)
         let started = Date()
-        let top = catalog.results(for: trimmed, limit: 10, context: .userTyped)
+        let top = catalog.results(for: trimmed, limit: 10, context: .userTyped, ranking: .ingredientIdentity)
         let elapsed = Int(Date().timeIntervalSince(started) * 1_000)
-        // Cold `scoredResults` ranks exactly like the typed call on a catalog with no history or
-        // aliases; it returns nothing on the partial (leave-one-out) path, so those rows get no score.
+        // Cold `scoredResults` scores each row exactly as the typed call does (its ORDER is the standard
+        // one, but only the per-row score is read here); it returns nothing on the partial
+        // (leave-one-out) path, so those rows get no score.
         let scores = Dictionary(
             catalog.scoredResults(for: trimmed, limit: FoodItemSearchWindow.deep).map { ($0.item.id, $0.score) },
             uniquingKeysWith: { first, _ in first }
@@ -169,7 +173,9 @@ struct IngredientSearchReplayProbeTests {
         let rows = top.enumerated().map { offset, item in
             row(item, rank: offset + 1, score: scores[item.id])
         }
-        let deep = catalog.results(for: trimmed, limit: FoodItemSearchWindow.deep, context: .userTyped)
+        let deep = catalog.results(
+            for: trimmed, limit: FoodItemSearchWindow.deep, context: .userTyped, ranking: .ingredientIdentity
+        )
         return IngredientReplayQuery(
             category: category, query: query, visible: visible.map(\.name), top10: rows,
             visibleIsPrefixOfTop10: Array(top.prefix(visible.count)).map(\.id) == visible.map(\.id),

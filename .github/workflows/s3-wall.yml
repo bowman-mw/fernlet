@@ -354,16 +354,21 @@ jobs:
         # (2026-09-30) on the round's fix-round-1 tree after a build-for-testing, the six suites run
         # as written and read off their own result bundle: 70 tests in 6 suites, 0 failed, 0 skipped,
         # no `Restarting after unexpected exit` line, 22 s on the Mac. RAISE it when a pin is added;
-        # never lower it in passing.
+        # never lower it in passing. RE-MEASURED 70 → 90 at the round's F5 (2026-09-30), which adds
+        # `FoodIngredientIdentityTests` (the recipe surfaces' identity-first ranking rules; like the
+        # corpus, a change to them compiles clean) and flips 36 corpus pins upward: the seven suites
+        # as written, read off their own result bundle on the F5 tree after a build-for-testing — 90 tests,
+        # 0 failed, 0 skipped, no restart line.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh food-search 70 \
+          Scripts/run-gated-suites.sh food-search 90 \
             IngredientSearchCorpusTests \
             CatalogDefaultUnitSweepTests \
             RecipeImportIngredientLineTests \
             BundledRowCorrectionTests \
             CatalogHygieneTests \
-            DishTemplateBindAuditTests
+            DishTemplateBindAuditTests \
+            FoodIngredientIdentityTests
 
       # The two exchange-wire lines below are the 2026-09-24 round's (the version-2 Messages card, and
       # recipes made in parts). Each pins a WIRE — bytes that an older build, or a card already sitting

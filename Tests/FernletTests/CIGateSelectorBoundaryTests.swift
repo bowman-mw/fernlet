@@ -157,6 +157,10 @@ import Testing
     /// suites, and the dish-template/plan-tier bind audit). The measuring stick every later search fix
     /// is gated on had run on no line. Its corpus and sweep are also pinned by name in ``wallLines``.
     /// Counted off the line.
+    ///
+    /// RE-MEASURED at the ingredient-search round's F5 (2026-09-30): `food-search` 6 → 7, for
+    /// `FoodIngredientIdentityTests` — the recipe surfaces' identity-first ranking rules, which move
+    /// only the corpus pins and compile clean when they change. Pinned by name in ``wallLines`` too.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 8,
         "no-tracking": 1,
@@ -171,7 +175,7 @@ import Testing
         "codeowners": 1,
         "messages-envelope": 5,
         "recipe-wire": 1,
-        "food-search": 6,
+        "food-search": 7,
         "mesh-batteries": 154
     ]
 
@@ -201,7 +205,7 @@ import Testing
                               "FernletExchangeTests", "MessagesReceivedItemTests",
                               "MessagesRecipeCardParityTests"],
         "recipe-wire": ["RecipeMultipartWireTests"],
-        "food-search": ["IngredientSearchCorpusTests", "CatalogDefaultUnitSweepTests"]
+        "food-search": ["IngredientSearchCorpusTests", "CatalogDefaultUnitSweepTests", "FoodIngredientIdentityTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
