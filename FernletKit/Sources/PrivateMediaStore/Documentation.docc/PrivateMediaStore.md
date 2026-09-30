@@ -1,17 +1,24 @@
 # ``PrivateMediaStore``
 
-At-rest AES-256-GCM-sealed photo storage for Fernlet's most personal images — friends' shared photos, meal photos, and gym progress (body) photos.
+At-rest AES-256-GCM-sealed photo storage for Fernlet's most personal images — friends' shared photos, session photos nobody has chosen yet, meal photos, and gym progress (body) photos.
 
 ## Overview
 
 PrivateMediaStore is one of Fernlet's sealed Layer-3 "S3" stores: the on-device home for photo
 bytes that must never sit on disk in the clear and must never be reachable by the walled modules.
-It holds three kinds of media, each with its own store type but one shared at-rest scheme:
+It holds four kinds of media, each with its own store type but one shared at-rest scheme:
 
 - ``PrivateMediaStore`` — the friend **photowall cache**: photos peers share over the proximity
   mesh, owned by `MeshNetworkManager` in `ProximityKit`. Because its input is peer-supplied, this
   store carries the decompression-bomb defenses (a byte cap plus an ImageIO pixel-bounds check,
   ``PrivateMediaStore/isWithinSafePixelBounds(_:)``, that never decodes the full bitmap).
+  ``PrivateMediaStore/commitKept(_:onto:)`` is the per-photo keep commit a review answer uses: it
+  reports exactly which photos landed (see "The pending session-photo corpus" below).
+- ``PendingSessionPhotoStore`` — the **pending corpus**: session photos (taken here or received
+  from a peer) held from the moment they exist until the person answers the review, and never on
+  the wall before that. Its own directory, its own device-bound key, excluded from the device
+  backup. It shares the wall's file machinery (bomb checks, thumbnails, orphan sweep) through the
+  internal `FriendPhotoCorpusFiles`, so those exist once.
 - ``MealPhotoStore`` — the user's **own photos**, keyed by caller-owned ids: meal photos
   (referenced from `Meal.photoID`) and, in a second instance, recipe photos keyed by recipe id.
   Photos are normalized on the way in (ImageIO thumbnail-path downscale to a bounded JPEG, so a
@@ -32,7 +39,7 @@ decision stays at its own call site. Note this module does NOT use `FernletCrypt
 it seals via CryptoKit directly with its own keychain key. `UIImage` helpers for outbound
 friend-photo sizing round out the module.
 
-### Two media keys, not one (security-hardening Phase 5)
+### Three media keys, not one (security-hardening Phase 5; the pending row 2026-09-30)
 
 There used to be exactly one media key behind all four corpora, deliberately backup-restorable, so
 the user's own meal and body photos were readable by anyone who could restore the device backup.
@@ -42,6 +49,7 @@ Phase 5 splits custody in two while leaving the friend wall byte-for-byte alone:
 | --- | --- | --- | --- |
 | ``KeychainPrivateMediaKeyProvider/Role/friendWall`` | `…private-media.contentKey` (original) | `AfterFirstUnlock`, non-sync — **backup-restorable, permanently** | the friend photowall cache |
 | ``KeychainPrivateMediaKeyProvider/Role/ownPhotos`` | `…private-media.ownContentKey` (new) | minted `AfterFirstUnlock`, **re-bound in place to `AfterFirstUnlockThisDeviceOnly`** once its gate holds (step 5c) | meal, recipe, progress bytes + the progress index |
+| ``KeychainPrivateMediaKeyProvider/Role/pendingSessionPhotos`` | `…private-media.pendingContentKey` (2026-09-30) | **born `AfterFirstUnlockThisDeviceOnly`**, non-sync — no gate, because nothing pending is escrowed or meant to travel | the pending corpus: held photos, thumbnails, and its index |
 
 The wall keeps the original row precisely so nothing about it changes: no re-encryption, no
 migration, and the survives-delete-all / never-deleted-by-wipe properties hold verbatim. The
@@ -72,6 +80,66 @@ one thing it costs, pinned rather than left as a surprise.
 Until the key is bound, the own read paths (``MealPhotoStore`` and ``ProgressPhotoStore``, via an injected `legacyKeyProvider`) **dual-open**: own key first, then the pre-split key, re-sealing under the own key on access. That fallback only ever trusts bytes that GCM-open under a key this app owns, so it is not a widening of the legacy-plaintext rule below — plaintext is still refused exactly where it was before. Since Phase 3 it reaches only files carrying the `FMA2` marker, which in practice means it no longer recovers anything: every file the pre-split key actually sealed predates the marker. Those photos are unopenable — a consequence of the deletion recorded here rather than left to be rediscovered. Dropping the fallback is the BINDING's decision (``OwnPhotoKeyBinder``) and not a read path's, which is why it is still wired.
 
 Where that KEY migration used to sit, the **format** migration now stands alone: ``MediaAtRestFormatMigrator`` (crypto-standardization Phase 2.3, cut back by Phase 3) — a `FormatMigrator` conformer on the same shared `FernletCrypto` contract. It ran second, after the key pass, under an ordering contract that no longer has two sides; it now runs FIRST in the launch task, and the binder follows it, because ``OwnPhotoKeyBinder``'s first gate half reads this pass's latch. **Phase 3 deleted `gcmOpen`'s legacy-read branch, and the migrator's ciphertext conversion went with it**: an unmarked box has no reader left, so re-sealing one is not a thing that can be attempted, and the pass now classifies it into ``MediaAtRestFormatMigrationResult/unopenableUnprefixed`` and leaves it byte-identical forever (non-blocking — a latch that waited for that count to fall would wait forever). What it still converts is the **pre-sealing plaintext JPEG** generation, exactly where the read paths' upgrade branches exist (meal corpus, wall photos, wall thumbnails) — a generation that never went near the deleted branch and is the more urgent one anyway, since those bytes are photographs sitting on disk in the clear. Classification goes through ``MediaAtRestFormatCensus``'s own shared classifier, so the counter and the converter can never disagree about what a blob is, and every seal goes through the existing `sealAndWrite` path binding the existing per-location purposes — no new purpose, no new crypto call shape, and nothing is ever deleted. ``MediaAtRestFormatMigrationResult/refusedPlaintext`` (parseable plaintext the pass refuses to seal, in the born-sealed corpora where sealing would be laundering) is the other non-blocking bucket. The two mutable index manifests are no longer writable by this pass at all — neither sits inside a plaintext-eligible directory — so the compare-before-write guard that bounded their stale-write race went with the arm it guarded; they are still enumerated and classified, simply never replaced.
+
+### The pending session-photo corpus
+
+Session photos never touch the wall until the person chooses them (owner decision, 2026-09-30:
+"None of the photos should be saved to the camera roll until this selection has been made").
+``PendingSessionPhotoStore`` holds them in the meantime, under
+`<proximitySupportDirectory>/PendingSessionPhotos/` (`Photos/`, `Thumbnails/`,
+`PendingSessionPhotoIndex.sealed` — frozen names), and its sealed ``PendingSessionPhotoIndex`` is
+the durable truth a review is rebuilt from after a process kill. The store is built for one owner,
+`MeshNetworkManager`, which keeps the in-memory mirror and passes it into every write.
+
+- **Why not the wall with a flag.** The wall's index is its file manifest with a FIFO cap (a
+  pending photo could evict a kept one, or be evicted unseen), every wall reader would need a
+  filter, the wall key and files are backup-restorable by product decision, and delete-all keeps
+  the wall. None of that is right for photos nobody chose. A subdirectory, not siblings of
+  `MeshPhotos/`, because each store sweeps orphans by directory.
+- **Identity is split.** Dedup and tombstones key on ``HeldPhotoKey`` — the origin fingerprint AND
+  the origin's item id — because an item id alone is published to the whole roster before delivery
+  and a member can mint an item reusing another's. Files, the review selection and the wall use the
+  held photo's LOCAL id (`payload.id`), which the owner mints fresh on a collision, so two origins'
+  same-id photos coexist. The store refuses a hold that would reuse another held photo's local id.
+- **Answers are tombstoned, not recorded.** ``PendingSessionPhotoStore/commitAnswers(_:in:now:)``
+  removes answered photos and writes an ``AnsweredSessionPhoto`` per key in ONE sealed index write,
+  sweeping files only after it commits. A tombstone lives 24 h (well past the latest instant a
+  routed copy can still arrive) and records no verdict. Capped at 1024; past it the
+  soonest-expiring goes, whose worst case is a re-OFFER, never a silent keep.
+- **No timer, ever.** A held photo leaves only through an answer, ``PendingSessionPhotoStore/purgeAll()``
+  (delete-all), the duress crypto-erase, or an index whose AEAD open fails under a present key.
+  `heldAt` orders the review and is never an expiry. The 200-photo cap is a refusal
+  (``PendingSessionPhotoStore/Hold/full``), never an eviction.
+- **Deferral versus purge.** An index that exists but cannot be read (no key, a file read error) is
+  deferred and never written over. A present key that does not OPEN it purges the corpus at once —
+  unlike the wall, because an unopenable pending file is corruption or a duress-swept key and has
+  nothing to preserve. A file that opens but is not this build's `schemaVersion` (an older TestFlight
+  build over a newer one) is deferred as ``PendingSessionPhotoStore/Deferral/unsupportedFormat``:
+  never written, never purged.
+- **Outside the format census and migrator, on purpose.** ``MediaAtRestFormatCensus`` and
+  ``MediaAtRestFormatMigrator`` do not walk `PendingSessionPhotos/`: it is born sealed in the
+  current `FMA2` format by its only writer, it is ephemeral, and nothing in it predates the format.
+  It is not an unswept location.
+- **Delete-all and duress.** ``PendingSessionPhotoStore/purgeAll()`` is the delete-all seam (keyless;
+  the whole directory). The key row survives delete-all like the other two (an emptied store's key
+  protects nothing). The duress silent wipe sweeps the whole `com.fernlet.private-media` service,
+  so the pending row goes with it; a kill before the purge leaves files that the next load finds
+  unopenable under the freshly minted key, and removes.
+
+The wall side of the answer is ``PrivateMediaStore/commitKept(_:onto:)``, the only wall write a
+keep uses. ``PrivateMediaStore/save(_:)`` cannot say whether a given photo is on the wall (it skips
+refused or unsealable bytes, only audits a failed image write, and trims by a peer-signed
+`addedAt`), so `commitKept` reports ``PrivateMediaStore/WallKeepResult/keptOnWall`` — ids whose
+sealed bytes landed AND that the committed index names — makes room only by evicting photos already
+on the wall, and removes its own files if the index write fails. A photo reaches the wall only by
+being re-sealed under the wall key through that path: pending and wall bytes use different keys and
+different AEAD purposes, so no file can be moved between corpora.
+
+The wall's ``PrivateMediaStore/loadIndex()`` also treats an index file that EXISTS but cannot be
+read as ``PrivateMediaStore/IndexLoad/deferred``, never as an empty wall: the key row is
+`AfterFirstUnlock` while the file is `.completeFileProtection`, so a locked background launch has
+the key and still cannot read the file, and an empty read there let the next save sweep every kept
+photo.
 
 ### The binding gate (step 5c)
 
@@ -181,13 +249,15 @@ Every store here fails **closed**, and changes must preserve that:
   restore seam, not a general write path: it skips normalization, so the only thing standing between
   it and laundering is the caller's obligation to pass bytes that opened from an escrow-sealed
   record whose manifest content hash matched. The image-bounds check it makes is a backstop.
-- **Delete-all coverage.** Meal, recipe, and progress photos are wiped by "delete everything";
-  the friend photowall deliberately survives it (friends' photos are the friends' gift, removed
-  one at a time) — which is why
+- **Delete-all coverage.** Meal, recipe, and progress photos are wiped by "delete everything",
+  and the pending corpus has its keyless ``PendingSessionPhotoStore/purgeAll()`` seam for it; the
+  friend photowall deliberately survives it (friends' photos are the friends' gift, removed one at
+  a time) — which is why
   ``KeychainPrivateMediaKeyProvider/deleteKeychainRowForWipe()`` intentionally has no callers.
-  **Neither** keychain row is deleted by the wipe: the friend key because the wall it protects
-  survives, the own key because its stores are emptied instead (an empty store's key protects
-  nothing, and deleting the row would strand anything captured between the wipe and relaunch).
+  **No** keychain row is deleted by the wipe: the friend key because the wall it protects
+  survives, the own and pending keys because their stores are emptied instead (an empty store's
+  key protects nothing, and deleting the row would strand anything captured between the wipe and
+  relaunch).
   The `invalidateEncryptionKeyCache()` seams drop provider-cached keys after a wipe so RAM
   matches the keychain (see `Docs/PrivacyWipeCoverage.md`).
 
@@ -204,9 +274,18 @@ provider instance across isolation domains.
 ### Sealed photo stores
 
 - ``PrivateMediaStore/PrivateMediaStore``
+- ``PrivateMediaStore/WallKeepResult``
 - ``MealPhotoStore``
 - ``ProgressPhotoStore``
 - ``ProgressPhotoRecord``
+
+### Pending session photos
+
+- ``PendingSessionPhotoStore``
+- ``PendingSessionPhotoIndex``
+- ``HeldSessionPhoto``
+- ``HeldPhotoKey``
+- ``AnsweredSessionPhoto``
 
 ### At-rest key management
 
