@@ -144,7 +144,7 @@ struct RecipeShareElsewhereCard: View {
             )
         } label: {
             rowLabel(title: "Share as text",
-                     caption: "Readable text for Mail, Notes or any other app.",
+                     caption: "Readable text for Mail, Notes or any other app. It doesn't import into Fernlet.",
                      systemImage: "text.alignleft")
         }
         .buttonStyle(.plain)

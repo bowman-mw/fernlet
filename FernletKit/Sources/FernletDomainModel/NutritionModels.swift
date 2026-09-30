@@ -2661,7 +2661,10 @@ extension SharedRecipePayload {
 
 /// Why pasted/shared recipe text failed to import, with user-facing copy.
 ///
-/// `message` is the friendly sentence surfaced directly in the import sheet.
+/// `message` is the friendly sentence surfaced directly in the import sheet, resolved against this
+/// module's catalog (it was bare English until 2026-09-30). Since that date the text Fernlet shares
+/// ("Share as text") carries no recipe data, so `missingPayload` is what a person meets when they
+/// paste one; its copy says that text is for reading and names the routes that do import.
 public nonisolated enum RecipeImportError: Error, Equatable {
     case missingPayload
     case invalidPayload
@@ -2671,13 +2674,22 @@ public nonisolated enum RecipeImportError: Error, Equatable {
     public var message: String {
         switch self {
         case .missingPayload:
-            "I could not find Fernlet recipe data in that text."
+            String(localized: "recipeImport.error.missingPayload",
+                   defaultValue: "I could not find Fernlet recipe data in that text. Recipes shared as text are for reading. To save one, have it sent with Send in Messages or shared nearby, or copy its Source link and tap Paste URL.",
+                   bundle: .module,
+                   comment: "Shown on the Import recipe screen when the pasted text holds no Fernlet recipe data, which is always the case for a recipe another Fernlet shared as readable text. 'Send in Messages' and 'Paste URL' are the exact labels of Fernlet buttons; 'Source' is the label of the web link line in shared recipe text. 'Fernlet' is the product name and must not be translated.")
         case .invalidPayload:
-            "That recipe data is a little tangled. Paste the full shared recipe and try again."
+            String(localized: "recipeImport.error.invalidPayload",
+                   defaultValue: "That recipe data is a little tangled. Paste the full shared recipe and try again.",
+                   bundle: .module, comment: "Import recipe screen: the pasted Fernlet recipe data is damaged or cut off.")
         case .unsupportedFormat:
-            "That recipe came from a format this Fernlet does not know yet."
+            String(localized: "recipeImport.error.unsupportedFormat",
+                   defaultValue: "That recipe came from a format this Fernlet does not know yet.",
+                   bundle: .module, comment: "Import recipe screen: the recipe data came from a newer Fernlet format. 'Fernlet' is the product name.")
         case .emptyRecipe:
-            "That recipe needs a name and at least one ingredient."
+            String(localized: "recipeImport.error.emptyRecipe",
+                   defaultValue: "That recipe needs a name and at least one ingredient.",
+                   bundle: .module, comment: "Import recipe screen: the pasted recipe has no name or no ingredients.")
         }
     }
 }

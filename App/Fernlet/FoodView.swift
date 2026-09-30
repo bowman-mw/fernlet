@@ -753,12 +753,17 @@ struct NutritionPill: View {
     }
 }
 
-/// The "Import recipe" sheet: paste a Fernlet recipe share (text payload) or pull a recipe URL from
-/// the pasteboard.
+/// The "Import recipe" sheet: paste Fernlet recipe data or pull a recipe URL from the pasteboard.
 ///
 /// Text imports decode through `FernletStore.importRecipe(from:)` (the ``RecipeShareCodec`` payload);
 /// the Paste-URL button runs `RecipeWebImporter` and lands the result in the saved-recipe store.
 /// Reached from ``RecipeCreationOptionsView``.
+///
+/// What the field still imports (2026-09-30): the text older Fernlet builds shared, which ends in a
+/// "Fernlet recipe data:" line, and bare recipe JSON. The text a current build shares ("Share as
+/// text", ``RecipeShareText``) carries no data and is for reading, so the field's caption says so up
+/// front and `RecipeImportError.missingPayload` names the routes that do carry a recipe into
+/// Fernlet: Send in Messages, a nearby share, or a web recipe's Source link through Paste URL.
 private struct RecipeImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -803,10 +808,15 @@ private struct RecipeImportSheet: View {
                     SheetField("Shared recipe text") {
                         SheetTextEditor(
                             text: $importText,
-                            placeholder: "Paste a Fernlet recipe share here",
+                            placeholder: "Paste Fernlet recipe data here",
                             minHeight: 180
                         )
                     }
+
+                    Text("A recipe shared as text is for reading and won't import here. To save one, have it sent with Send in Messages or shared nearby.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
 
                     if let notice {
                         Text(notice)
@@ -6405,7 +6415,7 @@ private struct RecipeCreationOptionsView: View {
                     Button { step = .importing } label: {
                         RecipeCreationOptionRow(
                             title: "Import recipe",
-                            subtitle: "Paste a recipe URL or Fernlet recipe text.",
+                            subtitle: "Paste a recipe link or Fernlet recipe data.",
                             systemImage: "tray.and.arrow.down"
                         )
                     }
@@ -6446,8 +6456,10 @@ private struct RecipeCreationOptionsView: View {
 /// Purely presentational — the wrapping `Button` (which sets the chooser's `step`) provides the
 /// behavior.
 private struct RecipeCreationOptionRow: View {
-    var title: String
-    var subtitle: String
+    /// Display text, so `LocalizedStringKey`: a `String` here bound `Text`'s verbatim overload and
+    /// left both rows English in every language (fixed 2026-09-30).
+    var title: LocalizedStringKey
+    var subtitle: LocalizedStringKey
     var systemImage: String
 
     var body: some View {
