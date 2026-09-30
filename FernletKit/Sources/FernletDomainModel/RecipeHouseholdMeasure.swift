@@ -58,6 +58,40 @@ public nonisolated struct RecipeHouseholdMeasure: Codable, Equatable, Sendable {
     public var recipeUnit: RecipeUnit {
         RecipeUnit.normalized(label) ?? .each
     }
+
+    /// Nouns a household label may end in that take a plural ("2 sticks", "2 thighs"), beyond the
+    /// portion reader's count nouns and the recipe units' own spellings. Frozen English matching inputs
+    /// (USDA's portion words), compared with a label's last word; never displayed on their own.
+    public static let pluralNouns: Set<String> = [
+        "bar", "breast", "bunch", "can", "container", "cracker", "cube", "drumstick", "fillet", "half",
+        "head", "leaf", "link", "package", "packet", "pat", "patty", "ring", "sheet", "sprig", "strip",
+        "thigh", "wedge", "wing"
+    ]
+
+    /// What one is, before the label's first comma ("cup" of "cup, sliced"; the whole of "medium stalk").
+    public var labelHead: String {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let comma = trimmed.firstIndex(of: ",") else { return trimmed }
+        return String(trimmed[..<comma]).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// What qualifies it, from the first comma on (", sliced"), or empty.
+    public var labelQualifier: String {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let comma = trimmed.firstIndex(of: ",") else { return "" }
+        return String(trimmed[comma...])
+    }
+
+    /// Whether ``labelHead`` ends in a noun a count agrees with ("2 eggs", "2 medium stalks", "2 cups,
+    /// sliced"), so a display may inflect it. A size word ("medium", "extra large") or a word the
+    /// portion reader does not know ("regular") is not: "2 medium", never "2 mediums" (fix of the F4a
+    /// caption, which read "Counted as 2 egg").
+    public var headTakesPlural: Bool {
+        let words = FoodItemSearch.normalized(labelHead).split(separator: " ").map(String.init)
+        guard let last = words.last, !FoodPortionReader.sizeWords.contains(last) else { return false }
+        if FoodPortionReader.countNoun(last) != nil || Self.pluralNouns.contains(last) { return true }
+        return RecipeUnit.normalized(last) != nil
+    }
 }
 
 extension RecipeIngredient {

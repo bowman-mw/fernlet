@@ -156,22 +156,29 @@ enum RecipeEditorInputs {
     /// One editor row per ingredient whose food still resolves. A manual (custom) food re-opens as a
     /// hand-typed row with its macros — its EXACT grams (``FoodItem/exactMacros``), so re-saving a
     /// 3.4 g food never rounds it to 3 — and a catalog food re-opens bound to its id.
+    ///
+    /// A household choice saved as grams re-opens as the choice (``RecipePortionPicker/reopened(_:foodItem:choices:)``):
+    /// "118 g" saved from "1 each" of a banana as "1 each" (F4a), "150 g" saved from "cup, sliced" as
+    /// one "cup, sliced (150 g)", a typical size as that size (F4b).
     static func inputs(for ingredients: [RecipeIngredient], foodItems: [FoodItem]) -> [ManualRecipeIngredientInput] {
-        // A household choice saved as grams ("118 g", medium) re-opens as the choice ("1 each") — F4a.
-        let editorLines = ingredients.map { $0.restoringHouseholdAmount(using: foodItems) }
-        return editorLines.compactMap { recipeIngredient -> ManualRecipeIngredientInput? in
+        ingredients.compactMap { recipeIngredient -> ManualRecipeIngredientInput? in
             guard let foodItem = foodItems.first(where: { $0.id == recipeIngredient.foodItemId }) else { return nil }
-            let selectedFoodItemId = foodItem.source == .manual ? nil : foodItem.id
+            let isCustom = foodItem.source == .manual
+            let amount = isCustom
+                ? RecipePortionPicker.Reopened(quantity: recipeIngredient.quantity, unit: recipeIngredient.unit, portion: nil)
+                : RecipePortionPicker.reopened(recipeIngredient, foodItem: foodItem,
+                                               choices: RecipePortionPicker.choices(for: foodItem))
             let grams = foodItem.exactMacros
             return ManualRecipeIngredientInput(
                 name: foodItem.name,
-                selectedFoodItemId: selectedFoodItemId,
-                quantity: recipeIngredient.quantity,
-                unit: recipeIngredient.unit,
+                selectedFoodItemId: isCustom ? nil : foodItem.id,
+                quantity: amount.quantity,
+                unit: amount.unit,
                 protein: grams.protein,
                 carbs: grams.carbs,
                 fat: grams.fat,
-                scannedMicronutrients: foodItem.source == .manual && foodItem.micronutrients.hasAnyValue ? foodItem.micronutrients : nil
+                scannedMicronutrients: isCustom && foodItem.micronutrients.hasAnyValue ? foodItem.micronutrients : nil,
+                portion: amount.portion
             )
         }
     }

@@ -1916,7 +1916,7 @@ public nonisolated enum RecipeStepSanitizer {
 ///
 /// Un-normalizable unit strings return nil and are treated as incompatible — quantity math never
 /// silently mixes units (see ``GroceryAggregation``'s merge rules).
-public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
+public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable, Sendable {
     case milligram = "mg"
     case gram = "g"
     case kilogram = "kg"
@@ -2704,9 +2704,13 @@ public nonisolated enum RecipeImportError: Error, Equatable {
 /// ``preciseMacros`` is that value at tenths of a gram (the precision it is typed, stored and shown
 /// at); ``macros`` is its whole-gram rounding, the form every total and every stored meal uses. The
 /// saved ``FoodItem`` keeps the fraction in ``FoodItem/preciseMacros``.
+///
+/// A bound row's amount is either `quantity` `unit`, or — when ``portion`` holds a named choice from
+/// the per-food picker (ingredient-search round, F4b: "medium (118 g)", "cup, sliced (150 g)", a USDA
+/// typical size) — `quantity` of that portion, which ``recipeLine(for:)`` turns into its grams.
 public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
 
-    public init(id: UUID = UUID(), name: String = "", selectedFoodItemId: UUID? = nil, quantity: Double = 1, unit: String = "serving", protein: Double = 0, carbs: Double = 0, fat: Double = 0, scannedMicronutrients: Micronutrients? = nil, barcode: String? = nil) {
+    public init(id: UUID = UUID(), name: String = "", selectedFoodItemId: UUID? = nil, quantity: Double = 1, unit: String = "serving", protein: Double = 0, carbs: Double = 0, fat: Double = 0, scannedMicronutrients: Micronutrients? = nil, barcode: String? = nil, portion: RecipePortionOption? = nil) {
         self.id = id
         self.name = name
         self.selectedFoodItemId = selectedFoodItemId
@@ -2717,6 +2721,7 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
         self.fat = fat
         self.scannedMicronutrients = scannedMicronutrients
         self.barcode = barcode
+        self.portion = portion
     }
     public var id = UUID()
     public var name: String = ""
@@ -2730,6 +2735,11 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
     /// Product barcode to remember on the created/updated user food item (barcode-scan flow), so
     /// the next scan of the same code resolves instantly. Normalized at upsert time.
     public var barcode: String?
+    /// The named portion the amount is counted in (F4b) — one of the bound food's USDA portions, a
+    /// USDA typical size or the person's own grams for one — or nil when `unit` is the amount's unit.
+    /// Read only while the row is bound to a catalog food; never persisted itself (the saved line is
+    /// its grams, ``recipeLine(for:)``).
+    public var portion: RecipePortionOption?
 
     /// The typed grams, whole-gram rounded (``PreciseMacros/rounded``).
     public var macros: Macros {
@@ -2751,8 +2761,24 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
     public func resolvedMacros(foodItems: [FoodItem]) -> Macros? {
         guard selectedFoodItemId != nil else { return macros }
         guard let selectedFoodItem = selectedFoodItem(in: foodItems) else { return nil }
-        let ingredient = RecipeIngredient(foodItemId: selectedFoodItem.id, quantity: quantity, unit: unit)
+        let ingredient = recipeLine(for: selectedFoodItem)
         return ingredient.servingConversion(using: selectedFoodItem)?.scaledMacros(for: selectedFoodItem)
+    }
+
+    /// The recipe line this row stands for on `foodItem`, before the save rule
+    /// (``RecipeIngredient/savingHouseholdAsGrams(using:)``): `quantity` of a named ``portion`` is its
+    /// grams, with the portion beside them as the line's ``RecipeIngredient/householdMeasure``
+    /// ("2 × medium (118 g)" is `236 g`, "medium"); anything else is `quantity` `unit`. The portion is
+    /// read only when this row is bound to `foodItem` — an unbound (custom) row's amount is its own
+    /// serving.
+    public func recipeLine(for foodItem: FoodItem) -> RecipeIngredient {
+        let typed = RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit)
+        guard selectedFoodItemId == foodItem.id, let measure = portion?.householdMeasure,
+              quantity.isFinite, quantity > 0 else { return typed }
+        let grams = quantity * measure.gramsPerUnit
+        guard grams.isFinite, grams > 0 else { return typed }
+        return RecipeIngredient(foodItemId: foodItem.id, quantity: grams, unit: RecipeUnit.gram.rawValue,
+                                householdMeasure: measure)
     }
 
     /// ``resolvedMacros(foodItems:)`` before rounding, for the editor's ingredient-level displays.
@@ -2765,7 +2791,7 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
     public func resolvedPreciseMacros(foodItems: [FoodItem]) -> PreciseMacros? {
         guard selectedFoodItemId != nil else { return preciseMacros }
         guard let selectedFoodItem = selectedFoodItem(in: foodItems) else { return nil }
-        let ingredient = RecipeIngredient(foodItemId: selectedFoodItem.id, quantity: quantity, unit: unit)
+        let ingredient = recipeLine(for: selectedFoodItem)
         guard let conversion = ingredient.servingConversion(using: selectedFoodItem) else { return nil }
         guard selectedFoodItem.hasFractionalMacros else {
             return PreciseMacros(conversion.scaledMacros(for: selectedFoodItem))

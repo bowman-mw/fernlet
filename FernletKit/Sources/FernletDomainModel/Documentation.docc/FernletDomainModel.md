@@ -361,6 +361,24 @@ The measure is display metadata: nutrition never reads it, the recipe page shows
 plain grams, so its bytes and keys are unchanged. No new ``RecipeUnit`` token exists or may be added
 for it.
 
+The recipe editor's unit menu is built per food (2026-09-30, F4b, the owner's call that the picker may
+list USDA's named portions and a badged, editable typical-size table): ``RecipePortionPicker`` lists
+the food's own USDA household portions first, each as what ONE is with its grams ("1 medium (118 g)",
+"1 cup, sliced (150 g)" — ``FoodPortionReader/householdLabel(of:)``), then the person's own sizes,
+then ``TypicalPortionTable``'s USDA typical sizes where the food's data states none of that kind
+(a count where it has no count, a cup where it has no volume — "fruit (136 g)" for a Hass avocado,
+every weight read from a cited SR Legacy row), then only the units that convert. A unit whose one IS a
+listed portion ("each" of a banana is its medium) is folded into it, and the editor holds that choice
+as the unit, so the line saves exactly as F4a saves "1 each". Any other named choice is held in
+``ManualRecipeIngredientInput/portion`` and saved by ``ManualRecipeIngredientInput/recipeLine(for:)``
+as its grams beside a ``RecipeHouseholdMeasure`` — the same encoding, no new token, the wire
+unchanged — and re-opens as that choice (``RecipePortionPicker/reopened(_:foodItem:choices:)``). So a
+banana's disagreeing cups are a choice between sliced and mashed, not a refusal. The converter never
+reads the typical table: quick log, the meal composer and the resolver weigh amounts exactly as before;
+only the recipe editor and the web importer's fallback read it. A caption's count agrees with its noun
+where the label ends in one (``RecipeHouseholdMeasure/headTakesPlural``: "2 eggs", "2 cups, sliced",
+but "2 medium").
+
 - ``RecipeDefinition``
 - ``RecipeIngredient``
 - ``RecipeStep``
@@ -374,6 +392,11 @@ for it.
 - ``RecipeCookingStep``
 - ``RecipeUnit``
 - ``RecipeHouseholdMeasure``
+- ``RecipePortionPicker``
+- ``RecipePortionOption``
+- ``TypicalPortionTable``
+- ``TypicalPortionEntry``
+- ``TypicalPortion``
 - ``RecipeWebImport``
 - ``RecipeSourceURLMatcher``
 - ``RecipeScaling``

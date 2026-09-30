@@ -116,11 +116,12 @@ public nonisolated struct CustomIngredientUpsert {
             )
             // A household choice ("1 each" of a banana) is saved as the grams it converts to, with the
             // choice kept as display metadata, so every build totals it (F4a; see RecipeHouseholdMeasure).
-            recipeIngredients.append(RecipeIngredient(
-                foodItemId: foodItem.id,
-                quantity: max(ingredient.quantity, 0.01),
-                unit: ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "serving" : ingredient.unit
-            ).savingHouseholdAsGrams(using: foodItem))
+            // A named portion from the picker ("medium (118 g)", a typical size) is its grams already
+            // (F4b, `recipeLine(for:)`); only a bound row reads it.
+            var typed = ingredient
+            typed.quantity = max(ingredient.quantity, 0.01)
+            typed.unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "serving" : ingredient.unit
+            recipeIngredients.append(typed.recipeLine(for: foodItem).savingHouseholdAsGrams(using: foodItem))
         }
         return recipeIngredients
     }

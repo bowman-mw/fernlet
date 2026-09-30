@@ -84,6 +84,69 @@ final class FoodComposerSearchUITests: XCTestCase {
         enterCustomIngredientProtein("3,4", expecting: "3,4g", app: app)
     }
 
+    // MARK: - Per-food unit menu (ingredient-search round F4b, 2026-09-30)
+
+    /// A banana taps to one medium (118 g), and its cup is a CHOICE in the unit menu — USDA's sliced
+    /// (150 g) or mashed (225 g) — where the editor used to refuse "1 cup" outright.
+    @MainActor
+    func testRecipeBananaCupIsAChoiceInTheUnitMenu() {
+        let app = UXTestApp.launch(openSheet: "recipe")
+        let search = app.descendants(matching: .any)["recipeIngredient.search"].firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 8))
+        enter("banana", in: search, app: app)
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Bananas, raw")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        row.tap()
+
+        let caption = app.staticTexts["recipeIngredient.householdAmount"].firstMatch
+        XCTAssertTrue(caption.waitForExistence(timeout: 3))
+        XCTAssertEqual(caption.label, "Counted as 1 medium (118 g)")
+
+        let menu = app.descendants(matching: .any)["recipeIngredient.unit"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 3))
+        menu.tap()
+        let sliced = app.buttons["1 cup, sliced (150 g)"].firstMatch
+        XCTAssertTrue(sliced.waitForExistence(timeout: 3), "the banana's own cups are listed")
+        XCTAssertTrue(app.buttons["1 cup, mashed (225 g)"].firstMatch.exists)
+        XCTAssertFalse(app.buttons["Cups"].firstMatch.exists, "a cup that cannot convert on its own is hidden")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "banana-unit-menu"
+        shot.lifetime = .keepAlways
+        add(shot)
+        sliced.tap()
+        XCTAssertTrue(caption.waitForExistence(timeout: 3))
+        XCTAssertEqual(caption.label, "Counted as 1 cup, sliced (150 g)")
+    }
+
+    /// USDA's Hass avocado row states only a reference amount, so the menu offers USDA's typical
+    /// California avocado (136 g, SR 171706) — badged as an estimate, with its grams editable.
+    @MainActor
+    func testRecipeAvocadoOffersATypicalSizeEstimate() {
+        let app = UXTestApp.launch(openSheet: "recipe")
+        let search = app.descendants(matching: .any)["recipeIngredient.search"].firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 8))
+        enter("avocado", in: search, app: app)
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Avocado, Hass, peeled, raw")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        row.tap()
+
+        let menu = app.descendants(matching: .any)["recipeIngredient.unit"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 3))
+        menu.tap()
+        let fruit = app.buttons["1 fruit (136 g)"].firstMatch
+        XCTAssertTrue(fruit.waitForExistence(timeout: 3), "the typical size is offered where the row states none")
+        fruit.tap()
+
+        XCTAssertTrue(app.staticTexts["recipeIngredient.portionBadge"].firstMatch.waitForExistence(timeout: 3))
+        XCTAssertEqual(app.staticTexts["recipeIngredient.portionBadge"].firstMatch.label, "USDA typical size, estimate")
+        XCTAssertTrue(app.textFields["recipeIngredient.portionGrams"].firstMatch.exists, "the estimate's grams are editable")
+        XCTAssertEqual(app.staticTexts["recipeIngredient.householdAmount"].firstMatch.label, "Counted as 1 fruit (136 g)")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "avocado-typical-size"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     /// Settles a catalog miss in the recipe editor's first ingredient, types `typed` into Protein, and
     /// moves focus to Carbs (focus loss is when a macro row commits).
     @MainActor

@@ -192,13 +192,13 @@ public nonisolated enum FoodPortionReader {
     }
 
     /// Whether `portion`'s text — unit and description, parentheticals included — names a yield.
-    private static func statesYield(_ portion: FoodPortion) -> Bool {
+    static func statesYield(_ portion: FoodPortion) -> Bool {
         let text = "\(portion.unit.prefix(maxMeasureCharacters)) \((portion.description ?? "").prefix(maxMeasureCharacters))"
         return FoodItemSearch.normalized(text).split(separator: " ").contains { yieldWords.contains(String($0)) }
     }
 
     /// `text` without its first whitespace-separated token when that token is a number.
-    private static func droppingLeadingAmount(_ text: String) -> String {
+    static func droppingLeadingAmount(_ text: String) -> String {
         let parts = text.split(separator: " ", maxSplits: 1)
         guard parts.count == 2, LocaleTolerantNumber.double(from: String(parts[0])) != nil else { return text }
         return String(parts[1])
@@ -206,7 +206,7 @@ public nonisolated enum FoodPortionReader {
 
     /// `text` with every parenthetical group removed; an unmatched ")" is ignored. Bounded by the
     /// text's length.
-    private static func removingParentheticals(_ text: String) -> String {
+    static func removingParentheticals(_ text: String) -> String {
         var depth = 0
         var kept = ""
         for character in text {

@@ -79,6 +79,10 @@ struct IngredientReplayRow: Codable, Equatable {
     let defaultResolves: Bool
     /// Probe amount → whether it resolves (`1 each`, `1 cup`, `1 tbsp`, `100 g`, …).
     let resolves: [String: Bool]
+    /// The recipe editor's unit menu for the row (ingredient-search round F4b,
+    /// `RecipePortionPicker.choices`, no personal sizes) as `source|label|grams|dimension` — grams empty
+    /// for a unit option.
+    let picker: [String]
 }
 
 /// One query's measured answer.
@@ -203,7 +207,11 @@ struct IngredientSearchReplayProbeTests {
             portions: item.portions.map(describe),
             defaultUnit: unit.rawValue, defaultQuantity: quantity,
             defaultResolves: converts(item, quantity: quantity, unit: unit.rawValue),
-            resolves: resolves
+            resolves: resolves,
+            picker: RecipePortionPicker.choices(for: item).options.map { option in
+                let grams = option.gramsPerOne.map { String(format: "%g", $0) } ?? ""
+                return "\(option.source.rawValue)|\(option.label)|\(grams)|\(option.dimension.rawValue)"
+            }
         )
     }
 

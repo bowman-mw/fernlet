@@ -739,6 +739,44 @@ struct LocalizationBoundaryTests {
             """)
     }
 
+    /// The curated USDA typical sizes (ingredient-search round, F4b). A key and its excluded words are
+    /// matched against the catalog's English names; a label is saved beside a recipe line's grams as
+    /// its `householdMeasure` label and re-opened by matching it — so none of them is display text to
+    /// translate. (A spoon the table derives from a stated cup keeps that cup's qualifier: "tbsp,
+    /// packed".) The plural nouns are matched against a saved label's last word.
+    @Test func frozenTypicalPortionTokens() {
+        #expect(TypicalPortionTable.entries.map(\.key) == [
+            "roma tomato", "plum tomato", "cherry tomato", "tomato", "sweet potato", "potato", "banana", "apple",
+            "egg white", "egg", "garlic", "onion", "lemon", "lime", "orange", "avocado", "carrot", "celery",
+            "bell pepper", "jalapeno", "cucumber", "zucchini", "mushroom", "strawberry", "peach", "pear",
+            "chicken thigh", "chicken breast", "butter", "all purpose flour", "bread flour", "whole wheat flour",
+            "brown sugar", "powdered sugar", "sugar", "white chocolate chips", "milk chocolate chips",
+            "chocolate chips", "oats", "brown rice", "rice", "quinoa", "almond milk", "buttermilk", "heavy cream",
+            "sour cream", "cream cheese", "milk", "yogurt", "shredded coconut", "cocoa powder", "cornstarch",
+            "baking powder", "vanilla extract", "olive oil", "vegetable oil", "canola oil", "coconut oil", "honey",
+            "maple syrup", "molasses", "peanut butter", "cinnamon", "ketchup", "mayonnaise", "mustard",
+            "balsamic vinegar", "vinegar", "soy sauce", "tomato paste", "chicken broth", "spinach", "chickpeas",
+            "lentils", "parmesan", "cheddar"
+        ], """
+            The typical-size keys changed. Each is matched against the catalog's English names ("Avocado, \
+            Hass, peeled, raw" is the avocado); a translated or re-spelled key matches nothing and the \
+            recipe editor loses its estimate. Order is precedence — the specific before the general.
+            """)
+        #expect(Set(TypicalPortionTable.entries.flatMap { $0.portions.map(\.label) }) == [
+            "Italian tomato", "breast half", "cherry tomato", "clove", "cup", "cup, packed", "cup, shredded",
+            "extra large", "fruit", "large", "large fruit", "large stalk", "medium", "medium stalk", "pepper",
+            "small", "small stalk", "stick", "sweet potato", "tbsp", "thigh", "tsp", "tsp, packed"
+        ], "a label is saved on recipe lines and matched when one re-opens; a renamed label re-opens as the person's own size")
+        #expect(TypicalPortionTable.preparedWords == ["boiled", "cooked", "fried", "instant", "mix", "prepared", "steamed"])
+        #expect(TypicalPortionTable.processedWords.count == 55 && TypicalPortionTable.processedWords.contains("dehydrated"),
+                "matched against USDA's names; a translated word gives a dried banana a fresh banana's weight")
+        #expect(RecipeHouseholdMeasure.pluralNouns == [
+            "bar", "breast", "bunch", "can", "container", "cracker", "cube", "drumstick", "fillet", "half",
+            "head", "leaf", "link", "package", "packet", "pat", "patty", "ring", "sheet", "sprig", "strip",
+            "thigh", "wedge", "wing"
+        ])
+    }
+
     /// The dish heuristic's carrier-use phrases (ingredient-search round, F3): matched against USDA's
     /// English names ("Oil, olive, salad or cooking"), never display text.
     @Test func frozenCarrierUsePhrases() {

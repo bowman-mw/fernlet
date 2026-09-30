@@ -1985,13 +1985,15 @@ struct CollapsedIngredientRow: View {
     /// quantity goes through ``RecipeQuantityDisplay`` rather than a POSIX `%g`.
     private var summaryLine: String {
         let quantity = RecipeQuantityDisplay.display(ingredient.quantity)
+        // A named portion (F4b) reads as its words ("2 cup, sliced"); a unit as its token, as before.
+        let measure = ingredient.portion?.label ?? ingredient.unit
         guard let grams else {
-            return "\(quantity) \(ingredient.unit) · Conversion unavailable"
+            return "\(quantity) \(measure) · Conversion unavailable"
         }
         let protein = MacroGramEntry.display(grams.protein)
         let carbs = MacroGramEntry.display(grams.carbs)
         let fat = MacroGramEntry.display(grams.fat)
-        var line = "\(quantity) \(ingredient.unit) · P\(protein)g C\(carbs)g F\(fat)g"
+        var line = "\(quantity) \(measure) · P\(protein)g C\(carbs)g F\(fat)g"
         if showCalories, let calories {
             line += " · \(calories) cal"
         }
@@ -2204,6 +2206,9 @@ struct RecipeIngredientEditor: View {
     var onSaveCustomIngredient: (ManualRecipeIngredientInput) -> FoodItem?
     var onCollapse: (() -> Void)?
     var onRemove: () -> Void
+    /// The person's own "grams in one" for a food (F4b, `RecipePortionGramsMemory`), offered in the
+    /// unit menu under "Your size".
+    var rememberedPortions: (UUID) -> [RecipeHouseholdMeasure] = { _ in [] }
 
     /// Typeahead matches, computed off the main thread and debounced (see `.task` below).
     /// The `catalog.results(for:)` call does real work (SQLite + hydrate + index + score) and the
@@ -2218,6 +2223,7 @@ struct RecipeIngredientEditor: View {
             searchHeaderRow
             suggestionList
             quantityUnitRow
+            RecipePortionGramsRow(ingredient: $ingredient)
             householdCaption
             macroSection
             saveCustomIngredientButton
@@ -2277,11 +2283,11 @@ struct RecipeIngredientEditor: View {
     }
 
     /// What a household amount counts as, when the line will be saved as grams (ingredient-search
-    /// round, F4a): "1 each" of a banana reads "Counted as 1 medium (118 g)", so the size the USDA
-    /// portion supplies is never silent.
+    /// round, F4a/F4b): "1 each" of a banana reads "Counted as 1 medium (118 g)", two eggs "Counted as
+    /// 2 eggs (100.6 g)", so the size a USDA portion or typical size supplies is never silent.
     @ViewBuilder private var householdCaption: some View {
-        if let counted = householdAmount {
-            Text("Counted as \(counted)")
+        if let counted = householdCaptionText {
+            Text(counted)
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -2289,12 +2295,11 @@ struct RecipeIngredientEditor: View {
         }
     }
 
-    /// The saved form's amount text ("1 medium (118 g)") when this line is a household choice.
-    private var householdAmount: String? {
+    /// The caption for the line as it will be saved, when it is a household choice.
+    private var householdCaptionText: AttributedString? {
         guard let selectedFoodItem else { return nil }
-        let line = RecipeIngredient(foodItemId: selectedFoodItem.id, quantity: ingredient.quantity, unit: ingredient.unit)
-        let saved = line.savingHouseholdAsGrams(using: selectedFoodItem)
-        return saved.householdMeasure == nil ? nil : saved.amountText
+        let saved = ingredient.recipeLine(for: selectedFoodItem).savingHouseholdAsGrams(using: selectedFoodItem)
+        return RecipeHouseholdCaption.caption(for: saved)
     }
 
     @ViewBuilder private var suggestionList: some View {
@@ -2352,6 +2357,19 @@ struct RecipeIngredientEditor: View {
                 // serif placeholders in the same card.
                 .font(.fernlet(.label))
                 .frame(maxWidth: 80)
+            unitMenu
+        }
+    }
+
+    /// A bound food's own menu (F4b: its USDA portions, typical sizes, and only the units that
+    /// convert); an unbound (custom) row keeps every unit, since its amount is its own serving.
+    @ViewBuilder private var unitMenu: some View {
+        if let selectedFoodItem {
+            RecipePortionMenu(
+                ingredient: $ingredient,
+                choices: RecipePortionPicker.choices(for: selectedFoodItem, personal: rememberedPortions(selectedFoodItem.id))
+            )
+        } else {
             Picker("Unit", selection: $ingredient.unit) {
                 ForEach(RecipeUnit.allCases) { unit in
                     Text(unit.label).tag(unit.rawValue)
@@ -2425,6 +2443,7 @@ struct RecipeIngredientEditor: View {
         ingredient.selectedFoodItemId = foodItem.id
         ingredient.quantity = foodItem.defaultRecipeQuantity(for: unit)
         ingredient.unit = unit.rawValue
+        ingredient.portion = nil
         seedManualGrams(from: foodItem)
         isCreatingCustomIngredient = false
     }
@@ -2433,6 +2452,7 @@ struct RecipeIngredientEditor: View {
     /// the food it was bound to.
     private func useManualNutrition(seededFrom foodItem: FoodItem) {
         ingredient.selectedFoodItemId = nil
+        ingredient.portion = nil
         seedManualGrams(from: foodItem)
     }
 
@@ -2453,6 +2473,7 @@ struct RecipeIngredientEditor: View {
         // product and hiding the suggestion list. Binding happens only when the user taps a suggestion.
         if let selectedFoodItem, selectedFoodItem.name != name {
             ingredient.selectedFoodItemId = nil
+            ingredient.portion = nil
         }
         isCreatingCustomIngredient = false
     }

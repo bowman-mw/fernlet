@@ -116,14 +116,22 @@ struct IngredientCorpusPin: Sendable, Equatable {
     /// serving ("1 serving (35 g)", `BundledRowCorrection.rebasingBrandedNutrients`) converts but is a
     /// serving, not a count, so it reads false. False when no plausible plain row is visible.
     let eachConverts: Bool?
+    /// Count nouns only (nil otherwise): whether the recipe editor's unit menu offers a count for that
+    /// plausible plain row (ingredient-search round F4b, `RecipePortionPicker`) — "1 each" converting,
+    /// one of the row's own USDA counts ("regular" marshmallow, "sweetpotato, 5" long"), or a USDA
+    /// typical size where the row states none ("fruit" of a Hass avocado, an estimate). A label
+    /// serving is a serving, not a count, as for `eachConverts`. False when no plausible plain row is
+    /// visible.
+    let offersCount: Bool?
 
-    /// Builds one pin; `each` is given only for the count-noun queries.
-    init(_ query: String, _ nameRank: Int?, _ plausibleRank: Int?, plain: Int, each: Bool? = nil) {
+    /// Builds one pin; `each` and `count` are given only for the count-noun queries.
+    init(_ query: String, _ nameRank: Int?, _ plausibleRank: Int?, plain: Int, each: Bool? = nil, count: Bool? = nil) {
         self.query = query
         self.nameRank = nameRank
         self.plausibleRank = plausibleRank
         self.plainInSix = plain
         self.eachConverts = each
+        self.offersCount = count
     }
 
     /// The pin in the literal form this file declares it, for the dump.
@@ -131,7 +139,8 @@ struct IngredientCorpusPin: Sendable, Equatable {
         let name = nameRank.map(String.init) ?? "nil"
         let plausible = plausibleRank.map(String.init) ?? "nil"
         let each = eachConverts.map { ", each: \($0)" } ?? ""
-        return "        .init(\"\(query)\", \(name), \(plausible), plain: \(plainInSix)\(each)),"
+        let count = offersCount.map { ", count: \($0)" } ?? ""
+        return "        .init(\"\(query)\", \(name), \(plausible), plain: \(plainInSix)\(each)\(count)),"
     }
 }
 
@@ -233,6 +242,14 @@ struct IngredientSearchCorpusTests {
     /// (`countsOneItem`): "9 graham crackers" on that row is nine 35 g servings, not nine crackers, so
     /// the F5 "gain" was a unit regression, now named in the round's worsened list.
     static let eachBaseline = 17
+
+    /// Count-noun queries whose first plausible plain VISIBLE row the recipe editor lets a person count
+    /// (F4b, ``IngredientCorpusPin/offersCount``) — the 17 "1 each" rows above plus nine whose menu lists
+    /// the row's own USDA count (marshmallows' "regular", chicken breast's "piece") or a USDA typical
+    /// size where the row states none (apple(s), avocado, roma tomato, bell pepper(s), chicken thighs —
+    /// estimates, badged). Still false: egg, potato and sweet potato (no plausible plain row in the six)
+    /// and graham crackers (its only count is a label serving).
+    static let menuCountBaseline = 26
 
     /// How many of the 960 visible rows (160 queries × six) the judges accept by name — the six
     /// lists' composition in one number, derived from the pins' `plainInSix` (fix round 1 of F5, from
@@ -500,8 +517,8 @@ struct IngredientSearchCorpusTests {
         .init("white chocolate chips", 1, nil, plain: 2),
         .init("butter", 1, 1, plain: 5),
         .init("unsalted butter", 1, 1, plain: 2),
-        .init("eggs", 1, 1, plain: 1, each: true),
-        .init("egg", nil, nil, plain: 0, each: false),
+        .init("eggs", 1, 1, plain: 1, each: true, count: true),
+        .init("egg", nil, nil, plain: 0, each: false, count: false),
         .init("egg whites", 1, 1, plain: 4),
         .init("yeast", 1, 1, plain: 3),
         .init("cornstarch", 1, 1, plain: 2),
@@ -525,8 +542,8 @@ struct IngredientSearchCorpusTests {
         .init("almond milk", 1, 1, plain: 4),
         .init("oat milk", 1, 1, plain: 3),
         .init("sweetened condensed milk", 1, 1, plain: 2),
-        .init("graham crackers", 1, 1, plain: 1, each: false),
-        .init("marshmallows", 1, 1, plain: 4, each: false),
+        .init("graham crackers", 1, 1, plain: 1, each: false, count: false),
+        .init("marshmallows", 1, 1, plain: 4, each: false, count: true),
         .init("peanut butter", 1, 1, plain: 4),
         .init("almond flour", 1, 1, plain: 6),
         .init("coconut oil", 1, 1, plain: 2),
@@ -534,42 +551,42 @@ struct IngredientSearchCorpusTests {
         .init("canola oil", 1, 1, plain: 2),
         .init("olive oil", 1, 1, plain: 2),
         .init("extra virgin olive oil", 1, 1, plain: 1),
-        .init("banana", 1, 1, plain: 4, each: true),
-        .init("bananas", 1, 1, plain: 3, each: true),
-        .init("apple", 4, 4, plain: 3, each: false),
-        .init("apples", 4, 4, plain: 3, each: false),
-        .init("lemon", 1, 1, plain: 1, each: true),
+        .init("banana", 1, 1, plain: 4, each: true, count: true),
+        .init("bananas", 1, 1, plain: 3, each: true, count: true),
+        .init("apple", 4, 4, plain: 3, each: false, count: true),
+        .init("apples", 4, 4, plain: 3, each: false, count: true),
+        .init("lemon", 1, 1, plain: 1, each: true, count: true),
         .init("lemon juice", 1, 1, plain: 1),
-        .init("lime", 1, 1, plain: 1, each: true),
-        .init("orange", 1, 1, plain: 6, each: true),
+        .init("lime", 1, 1, plain: 1, each: true, count: true),
+        .init("orange", 1, 1, plain: 6, each: true, count: true),
         .init("strawberries", 1, 1, plain: 2),
         .init("blueberries", 1, 1, plain: 1),
         .init("raspberries", 1, 1, plain: 2),
-        .init("avocado", 1, 1, plain: 5, each: false),
-        .init("tomato", 1, 1, plain: 4, each: false),
-        .init("tomatoes", 2, 2, plain: 3, each: true),
+        .init("avocado", 1, 1, plain: 5, each: false, count: true),
+        .init("tomato", 1, 1, plain: 4, each: false, count: true),
+        .init("tomatoes", 2, 2, plain: 3, each: true, count: true),
         .init("cherry tomatoes", 1, 1, plain: 2),
-        .init("onion", 1, 1, plain: 4, each: true),
-        .init("red onion", 1, 1, plain: 2, each: true),
-        .init("yellow onion", 1, 1, plain: 2, each: true),
+        .init("onion", 1, 1, plain: 4, each: true, count: true),
+        .init("red onion", 1, 1, plain: 2, each: true, count: true),
+        .init("yellow onion", 1, 1, plain: 2, each: true, count: true),
         .init("garlic", 1, 1, plain: 3),
-        .init("garlic clove", 1, 1, plain: 2, each: true),
+        .init("garlic clove", 1, 1, plain: 2, each: true, count: true),
         .init("ginger", 1, 1, plain: 2),
-        .init("carrot", 1, 1, plain: 2, each: true),
-        .init("carrots", 1, 1, plain: 2, each: true),
+        .init("carrot", 1, 1, plain: 2, each: true, count: true),
+        .init("carrots", 1, 1, plain: 2, each: true, count: true),
         .init("celery", 1, 1, plain: 2),
-        .init("potato", nil, nil, plain: 0, each: false),
-        .init("sweet potato", nil, nil, plain: 0, each: false),
+        .init("potato", nil, nil, plain: 0, each: false, count: false),
+        .init("sweet potato", nil, nil, plain: 0, each: false, count: false),
         .init("spinach", 1, 1, plain: 3),
         .init("kale", 1, 1, plain: 1),
         .init("lettuce", 1, 1, plain: 6),
-        .init("cucumber", 1, 1, plain: 2, each: true),
-        .init("bell pepper", 1, 1, plain: 4, each: false),
-        .init("red bell pepper", 1, 1, plain: 1, each: false),
-        .init("jalapeno", 1, 1, plain: 2, each: true),
+        .init("cucumber", 1, 1, plain: 2, each: true, count: true),
+        .init("bell pepper", 1, 1, plain: 4, each: false, count: true),
+        .init("red bell pepper", 1, 1, plain: 1, each: false, count: true),
+        .init("jalapeno", 1, 1, plain: 2, each: true, count: true),
         .init("broccoli", 1, 1, plain: 1),
         .init("cauliflower", 1, 1, plain: 2),
-        .init("zucchini", 1, 1, plain: 2, each: true),
+        .init("zucchini", 1, 1, plain: 2, each: true, count: true),
         .init("mushrooms", 1, 1, plain: 4),
         .init("corn", 1, 1, plain: 5),
         .init("peas", 1, 1, plain: 1),
@@ -579,8 +596,8 @@ struct IngredientSearchCorpusTests {
         .init("basil", 1, 1, plain: 2),
         .init("green onions", 1, 1, plain: 2),
         .init("scallions", 1, 1, plain: 1),
-        .init("chicken breast", 2, 2, plain: 2, each: false),
-        .init("chicken thighs", 2, 2, plain: 3, each: false),
+        .init("chicken breast", 2, 2, plain: 2, each: false, count: true),
+        .init("chicken thighs", 2, 2, plain: 3, each: false, count: true),
         .init("ground beef", 1, 1, plain: 6),
         .init("ground turkey", 1, 1, plain: 6),
         .init("bacon", 5, 5, plain: 1),
@@ -597,7 +614,7 @@ struct IngredientSearchCorpusTests {
         .init("spaghetti", nil, nil, plain: 0),
         .init("quinoa", 1, 1, plain: 3),
         .init("bread", 1, 1, plain: 6),
-        .init("tortillas", 1, 1, plain: 5, each: true),
+        .init("tortillas", 1, 1, plain: 5, each: true, count: true),
         .init("cheddar cheese", 1, 1, plain: 3),
         .init("mozzarella", 1, 1, plain: 6),
         .init("parmesan", 1, 1, plain: 6),
@@ -666,10 +683,23 @@ struct IngredientSearchCorpusTests {
         let plausibleIndex = visible.firstIndex { matcher.accepts($0.name) && isPlausible($0) }
         let plain = visible.filter { matcher.accepts($0.name) }.count
         var each: Bool?
+        var count: Bool?
         if countNouns.contains(query) {
             each = plausibleIndex.map { countsOneItem(visible[$0]) } ?? false
+            count = plausibleIndex.map { menuOffersCount(visible[$0]) } ?? false
         }
-        return IngredientCorpusPin(query, nameIndex.map { $0 + 1 }, plausibleIndex.map { $0 + 1 }, plain: plain, each: each)
+        return IngredientCorpusPin(query, nameIndex.map { $0 + 1 }, plausibleIndex.map { $0 + 1 }, plain: plain,
+                                   each: each, count: count)
+    }
+
+    /// Whether the recipe editor's unit menu offers a count for `item` (F4b): "1 each" converting
+    /// through one item, or a named count option — the row's own USDA count or a USDA typical size —
+    /// that is not a label serving.
+    static func menuOffersCount(_ item: FoodItem) -> Bool {
+        guard !countsOneItem(item) else { return true }
+        return RecipePortionPicker.choices(for: item).options.contains { option in
+            option.source != .unit && option.dimension == .count && RecipeUnit.normalized(option.label) != .serving
+        }
     }
 
     /// Whether "1 each" of `item` converts through a portion that is one item — not a branded label
@@ -733,6 +763,8 @@ struct IngredientSearchCorpusTests {
         let nameVisible = Self.pins.filter { $0.nameRank != nil }.count
         #expect((nameAtOne, nameVisible) == Self.nameOnlyBaseline)
         #expect(Self.pins.filter { $0.eachConverts == true }.count == Self.eachBaseline)
+        #expect(Self.pins.filter { $0.offersCount == true }.count == Self.menuCountBaseline)
+        #expect(Set(Self.pins.filter { $0.offersCount != nil }.map(\.query)) == Self.countNouns)
         #expect(Self.pins.map(\.plainInSix).reduce(0, +) == Self.plainRowsInSixBaseline)
         #expect(Set(Self.pins.filter { $0.eachConverts != nil }.map(\.query)) == Self.countNouns)
     }
@@ -787,11 +819,13 @@ struct IngredientSearchCorpusTests {
         let nameAtOne = measured.filter { $0.nameRank == 1 }.count
         let nameVisible = measured.filter { $0.nameRank != nil }.count
         let each = measured.filter { $0.eachConverts == true }.count
+        let menuCount = measured.filter { $0.offersCount == true }.count
         let plainRows = measured.map(\.plainInSix).reduce(0, +)
         let text = """
             measuredBaseline = (plainAtOne: \(atOne), plainVisible: \(visible))
             nameOnlyBaseline = (plainAtOne: \(nameAtOne), plainVisible: \(nameVisible))
             eachBaseline = \(each)
+            menuCountBaseline = \(menuCount)
             plainRowsInSixBaseline = \(plainRows)
             \(measured.map(\.literal).joined(separator: "\n"))
 
