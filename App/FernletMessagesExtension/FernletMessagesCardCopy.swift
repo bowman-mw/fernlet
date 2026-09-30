@@ -19,7 +19,12 @@
 //  reads in the SENDER's language, as it always has. The three counts carry `one`/`other` plural
 //  blocks that `xcstringstool sync` never invents, so they are hand-authored in BOTH catalogs;
 //  `LocalizationBoundaryTests.countBearingKeysCarryPluralVariations()` pins both, and
-//  `MessagesExtensionBoundaryTests.everyCopyVaultKeyReachedTheCatalog()` pins every key in both.
+//  every key is pinned in the extension catalog by `MessagesExtensionBoundaryTests
+//  .everyCopyVaultKeyReachedTheCatalog()` and in the app catalog by `.theSharedCardCopyReachedTheAppCatalog()`.
+//  Two catalogs can also part silently, so each key's whole `localizations` block must be identical
+//  in the two (`MessagesExtensionBoundaryTests.theSharedCardCopyReadsTheSameInBothCatalogs()`, every
+//  language and plural form), and `MessagesRecipeCardParityTests.aOneOfEachCardReadsAsTheIMessageAppsCard()`
+//  holds the app's resolved card, at one of each and at four, to the embedded extension bundle's.
 //
 //  Members are COMPUTED, never stored, so the lookup happens at use time under the current locale.
 //

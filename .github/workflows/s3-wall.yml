@@ -318,10 +318,12 @@ jobs:
         # 5 → 6 (measured), for the pin that an opened card is drawn without the composer's catalog;
         # RAISED again 2026-09-30, 6 → 10 (measured), for the recipe-card builder the app now shares
         # ("Send in Messages"): the composer builds through it, the app builds no card of its own, the
-        # two files are app-target members, and the card copy reached the app's catalog too.
+        # two files are app-target members, and the card copy reached the app's catalog too; and
+        # 10 → 11 (measured, fix round 1), for the pin that the card copy reads the same in both
+        # catalogs, every language and plural form.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh messages-extension 10 MessagesExtensionBoundaryTests
+          Scripts/run-gated-suites.sh messages-extension 11 MessagesExtensionBoundaryTests
 
       - name: CODEOWNERS resolution (CodeOwnersResolutionTests)
         # GitHub never complains about a CODEOWNERS pattern that matches nothing — it silently stops
@@ -369,7 +371,8 @@ jobs:
       # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. RAISE a floor when its wire
       # grows; never lower it in passing. RAISED 2026-09-30: messages-envelope 46 → 53 in 4 suites, for
       # MessagesReceivedItemTests, measured the same way; and 53 → 57 in 5 suites, for
-      # MessagesRecipeCardParityTests (the app's "Send in Messages"), measured the same way.
+      # MessagesRecipeCardParityTests (the app's "Send in Messages"), measured the same way; and
+      # 57 → 58, for that suite's one-of-each parity against the extension bundle (fix round 1).
       - name: Messages envelope (ExchangeMessageEnvelopeV2Tests + ExchangeMultipartRecipeTests + FernletExchangeTests + MessagesReceivedItemTests + MessagesRecipeCardParityTests)
         # The Messages wire: the inflate-bomb bound checked before a byte is inflated, the tight
         # 3,719-byte frame bound under Apple's 5,000-character URL limit, the two version-1 cards minted
@@ -384,7 +387,7 @@ jobs:
         # into both targets), its URL is exactly the envelope's and opens as the same packet.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh messages-envelope 57 \
+          Scripts/run-gated-suites.sh messages-envelope 58 \
             ExchangeMessageEnvelopeV2Tests \
             ExchangeMultipartRecipeTests \
             FernletExchangeTests \

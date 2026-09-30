@@ -289,6 +289,61 @@ struct MessagesExtensionBoundaryTests {
         )
     }
 
+    /// The shared card copy reads the SAME in both catalogs, in every language and plural form
+    /// (review C-F1/L-F1, 2026-09-30).
+    ///
+    /// The card is one builder but two catalogs: the extension resolves its copy against its own, the
+    /// app ("Send in Messages") against `App/Fernlet/Localizable.xcstrings`. Each key's
+    /// `localizations` block must therefore be identical in the two — the hand-authored `one`/`other`
+    /// blocks of the three counts, and every translation once es/fr/de land — or the two cards part
+    /// silently ("1 servings" from one, "1 serving" from the other). Only the per-unit `state` is
+    /// ignored; it records review progress and never reaches a bubble. A key absent from the app
+    /// catalog is ``theSharedCardCopyReachedTheAppCatalog()``'s to report, not this test's. The fix
+    /// for a mismatch is to copy the extension's block into the app catalog verbatim.
+    @Test func theSharedCardCopyReadsTheSameInBothCatalogs() throws {
+        let cardKeys = Self.localizedKeys(in: try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesCardCopy.swift"))
+        #expect(cardKeys.count >= Self.minimumCardCopyKeys, "found only \(cardKeys.count) keys in FernletMessagesCardCopy")
+        let extensionStrings = try Self.catalogStrings("App/FernletMessagesExtension/Localizable.xcstrings")
+        let appStrings = try Self.catalogStrings("App/Fernlet/Localizable.xcstrings")
+        var differing: [String] = []
+        for key in cardKeys.sorted() {
+            guard let appEntry = appStrings[key] as? [String: Any] else { continue }
+            let extensionEntry = extensionStrings[key] as? [String: Any]
+            #expect(extensionEntry != nil, "\(key) is missing from the extension's own catalog")
+            let appReading = try Self.renderingJSON(appEntry["localizations"])
+            let extensionReading = try Self.renderingJSON(extensionEntry?["localizations"])
+            if appReading != extensionReading {
+                differing.append("\(key)\n  app:       \(appReading)\n  extension: \(extensionReading)")
+            }
+        }
+        #expect(
+            differing.isEmpty,
+            """
+            \(differing.count) key(s) of the shared card copy read differently in the two catalogs, so the \
+            card "Send in Messages" composes is not the iMessage app's card. Copy each extension block \
+            into App/Fernlet/Localizable.xcstrings verbatim:
+            \(differing.joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// A catalog's `strings` object, keyed by string key.
+    static func catalogStrings(_ path: String) throws -> [String: Any] {
+        let data = try Data(contentsOf: RepoRoot.url(path))
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        #expect(!strings.isEmpty, "\(path) parsed to zero keys — it moved or broke")
+        return strings
+    }
+
+    /// A `localizations` block as canonical JSON with every `"state"` dropped: what a bubble renders.
+    static func renderingJSON(_ localizations: Any?) throws -> String {
+        guard let localizations else { return "(none)" }
+        let data = try JSONSerialization.data(withJSONObject: localizations, options: [.sortedKeys])
+        let json = String(decoding: data, as: UTF8.self)
+        return json.replacingOccurrences(of: #""state":"[^"]*",?"#, with: "", options: .regularExpression)
+    }
+
     /// Floor for the copy-vault scan: 57 keys in one vault until 2026-09-30, when the card's eight
     /// moved to `FernletMessagesCardCopy` (the target's other three are the probe's).
     static let minimumCopyVaultKeys = 45
