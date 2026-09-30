@@ -17,7 +17,8 @@
 // Every path that MINTS a recipe line applies it (fix round 1, finding u2-C-U2-3): the editor
 // (`CustomIngredientUpsert`), a substitution fork (`RecipeSubstitution.substitutedIngredient`), and a
 // recipe a meal log creates (`FernletStore.commitResolution`, via `RecipeDefinition.savingHouseholdAsGrams`).
-// A fork saved as grams saves the ORIGINAL line's grams, not its rounded count's (fix round 2, N-1).
+// A fork saved as grams saves the ORIGINAL line's grams, not its rounded count's (fix round 2, N-1),
+// beside the measure of ONE unit, so a count past the conversion bound still has one (N-2).
 
 import Foundation
 
@@ -89,7 +90,7 @@ extension RecipeIngredient {
     /// food that converts through one of its USDA portions — whether or not an older build reads it
     /// too; nil for every other line. ``savingHouseholdAsGrams(using:)`` keeps a line an older build
     /// reads; a substitution fork whose computed count is not a cook's amount ("0.027 cup") takes
-    /// this form regardless (fix round 2, finding N-1).
+    /// this form regardless (fix round 2, finding N-1), its measure read off one unit (N-2).
     func householdGrams(using foodItem: FoodItem) -> RecipeIngredient? {
         guard foodItem.id == foodItemId,
               let requested = RecipeUnit.normalized(unit), requested.isCount || requested.isVolume,

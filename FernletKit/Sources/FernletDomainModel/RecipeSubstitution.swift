@@ -50,6 +50,8 @@ public nonisolated enum RecipeSubstitution {
     /// either side has no gram mapping (a `.serving`/`.each`-only food with no portion table, or an
     /// unresolved original), fall back to the substitute's natural `defaultRecipeQuantity` at its
     /// `preferredRecipeUnit` — a sane "1 serving / 1 each" default rather than a fabricated weight.
+    /// The count may exceed what a reader converts (106.7 cloves of garlic); the saved fork line is
+    /// ``substitutedIngredient(replacing:originalFoodItem:with:)``'s, which never keeps such a count.
     ///
     /// The amount is rounded to one decimal when that stays within ``roundingTolerance`` of the gram
     /// match, else to two or three decimals, and never to zero (fix round 2 of the ingredient-search
@@ -68,12 +70,10 @@ public nonisolated enum RecipeSubstitution {
         substitute: FoodItem
     ) -> (quantity: Double, unit: String) {
         let unit = substitute.preferredRecipeUnit
-        let fallback = (max(substitute.defaultRecipeQuantity(for: unit), 0.01), unit.rawValue)
-
         guard let originalGrams = matchedGrams(of: original, on: originalFoodItem),
               let gramsPerUnit = substitute.gramsEquivalent(quantity: 1, unit: unit.rawValue),
               gramsPerUnit > 0 else {
-            return fallback
+            return defaultAmount(of: substitute)
         }
 
         let raw = originalGrams / gramsPerUnit
@@ -92,6 +92,16 @@ public nonisolated enum RecipeSubstitution {
     /// `118 g` of apple, shown "0.65 medium (118 g)". A count that is not a one-decimal cook's amount
     /// ("0.032 cup" of rice for a teaspoon of something) is saved the same way even where an older
     /// build reads the unit; a one-decimal count an older build reads ("1 cup", "2 slice") stays as is.
+    ///
+    /// The measure beside the grams is read off ONE of the unit, never off the computed count (fix
+    /// round 2, finding N-2): a count converts only up to ``RecipeConversionLimits/maxCount``, and
+    /// since F4a many small items prefer "each" — 320 g of chopped onion is 106.7 cloves of garlic,
+    /// 680 g of chicken 113.3 medium shrimp — so a count past it found no measure and was saved raw,
+    /// a line no build converts, which zeroed the fork. Where no grams form exists (a substitute served
+    /// by count, not by mass) and the gram-matched count does not convert either, the fork takes the
+    /// substitute's tap default ("1 each") — the amount
+    /// ``replacementQuantity(for:originalFoodItem:substitute:)`` gives when there is no gram match,
+    /// shown as such in the preview — never a line that totals the fork at zero.
     public static func substitutedIngredient(
         replacing original: RecipeIngredient,
         originalFoodItem: FoodItem?,
@@ -106,12 +116,34 @@ public nonisolated enum RecipeSubstitution {
         let saved = line.savingHouseholdAsGrams(using: substitute)
         let tenths = quantity * 10
         let isCooksAmount = abs(tenths - tenths.rounded()) < 1e-9
-        guard saved.householdMeasure != nil || !isCooksAmount,
-              let originalGrams = matchedGrams(of: original, on: originalFoodItem),
-              let household = line.householdGrams(using: substitute) else { return saved }
-        let grams = roundedQuantity(min(originalGrams, RecipeConversionLimits.maxGrams))
-        return RecipeIngredient(id: household.id, foodItemId: household.foodItemId, quantity: grams,
-                                unit: household.unit, householdMeasure: household.householdMeasure)
+        // Kept as typed only where the household rule converted the count AND kept it: an older build
+        // reads it to the same grams. A count past the conversion bound converts nowhere.
+        let keptAsTyped = isCooksAmount && saved == line && line.householdGrams(using: substitute) != nil
+        if !keptAsTyped, let originalGrams = matchedGrams(of: original, on: originalFoodItem),
+           let measure = oneUnitMeasure(unit, of: substitute) {
+            let grams = roundedQuantity(min(originalGrams, RecipeConversionLimits.maxGrams))
+            return RecipeIngredient(id: line.id, foodItemId: substitute.id, quantity: grams,
+                                    unit: RecipeUnit.gram.rawValue, householdMeasure: measure)
+        }
+        guard saved.servingConversion(using: substitute) == nil else { return saved }
+        let tapDefault = defaultAmount(of: substitute)
+        return RecipeIngredient(id: line.id, foodItemId: substitute.id, quantity: tapDefault.quantity,
+                                unit: tapDefault.unit).savingHouseholdAsGrams(using: substitute)
+    }
+
+    /// The substitute's tap default — ``FoodItem/defaultRecipeQuantity(for:)`` of its
+    /// ``FoodItem/preferredRecipeUnit``, which F1(c) makes convert — floored above zero: the amount a
+    /// fork takes when there is no gram match to make.
+    private static func defaultAmount(of substitute: FoodItem) -> (quantity: Double, unit: String) {
+        let unit = substitute.preferredRecipeUnit
+        return (max(substitute.defaultRecipeQuantity(for: unit), 0.01), unit.rawValue)
+    }
+
+    /// What ONE `unit` of `substitute` is as a household measure ("clove", 3 g; "medium", 182 g), or
+    /// nil where the substitute has no grams form for it (not mass-served, or no USDA portion).
+    private static func oneUnitMeasure(_ unit: String, of substitute: FoodItem) -> RecipeHouseholdMeasure? {
+        RecipeIngredient(foodItemId: substitute.id, quantity: 1, unit: unit)
+            .householdGrams(using: substitute)?.householdMeasure
     }
 
     /// The grams `original` weighs on its own food, or nil when the food is unresolved or the line

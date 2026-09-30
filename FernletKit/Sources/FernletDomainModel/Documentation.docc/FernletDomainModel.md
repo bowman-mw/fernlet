@@ -331,7 +331,10 @@ that mints a recipe line applies the rule: the editor, a substitution fork
 log creates (``RecipeDefinition/savingHouseholdAsGrams(using:)``, applied where the store commits it).
 A fork saved as grams keeps the ORIGINAL line's grams (118 g of banana swaps for 118 g of apple,
 "0.65 medium"), and its count is rounded finer than one decimal where one decimal would move it more
-than ``RecipeSubstitution/roundingTolerance`` — never to zero (fix round 2).
+than ``RecipeSubstitution/roundingTolerance`` — never to zero (fix round 2). Its measure is read
+off ONE unit, not the count: 320 g of onion is 106.7 cloves of garlic, past
+``RecipeConversionLimits/maxCount``, and is saved as `320 g` beside "clove" (N-2). A substitute
+served by count with no grams form whose matched count does not convert takes its tap default.
 The measure is display metadata: nutrition never reads it, the recipe page shows "1 medium (118 g)"
 (``RecipeIngredient/amountText``), the editor re-opens the line as "1 each"
 (``RecipeIngredient/restoringHouseholdAmount(using:)``), and the `fernlet.recipe` wire carries the

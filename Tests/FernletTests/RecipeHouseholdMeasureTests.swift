@@ -195,6 +195,69 @@ struct RecipeHouseholdMeasureTests {
         #expect(crumb.servingConversion(using: bagel) != nil)
     }
 
+    /// USDA's raw shrimp row (FDC 174210's portions): "medium" is one, 6 g.
+    static func shrimp() -> FoodItem {
+        food("Crustaceans, shrimp, mixed species, raw", [
+            FoodPortion(amount: 4, unit: "large", gramWeight: 28), FoodPortion(amount: 1, unit: "medium", gramWeight: 6),
+            FoodPortion(amount: 1, unit: "small", gramWeight: 5), FoodPortion(amount: 3, unit: "oz", gramWeight: 85)
+        ])
+    }
+
+    /// Fix round 2 (N-2): the measure beside a fork's grams is read off ONE unit. Since F4a small items
+    /// prefer "each", and a gram match past `RecipeConversionLimits.maxCount` items (2 cups of chopped
+    /// onion = 106.7 cloves of garlic, 680 g of chicken = 113.3 medium shrimp, a pound of mushrooms =
+    /// 151.2 enoki) converts nowhere — it was saved raw, and the fork totalled zero.
+    @MainActor
+    @Test func aForkPastAHundredItemsIsSavedAsGrams() throws {
+        let onion = Self.onion()
+        let chicken = Self.food("Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",
+                                [FoodPortion(amount: 4, unit: "oz", gramWeight: 113), FoodPortion(amount: 1, unit: "piece", gramWeight: 272)])
+        let mushrooms = Self.food("Mushrooms, white, raw", [FoodPortion(amount: 1, unit: "medium", gramWeight: 18),
+                                                           FoodPortion(amount: 1, unit: "large", gramWeight: 23)])
+        let enoki = Self.food("Mushrooms, enoki, raw", [FoodPortion(amount: 1, unit: "large", gramWeight: 5),
+                                                       FoodPortion(amount: 1, unit: "medium", gramWeight: 3)])
+        let cases: [(original: RecipeIngredient, food: FoodItem, substitute: FoodItem, grams: Double, label: String, each: Double)] = [
+            (Self.line(onion, 2, "cup"), onion, Self.garlic(), 320, "clove", 3),
+            (Self.line(chicken, 680, "g"), chicken, Self.shrimp(), 680, "medium", 6),
+            (Self.line(mushrooms, 1, "lb"), mushrooms, enoki, 453.6, "medium", 3)
+        ]
+        for (original, food, substitute, grams, label, each) in cases {
+            #expect(substitute.preferredRecipeUnit == .each)
+            let (count, _) = RecipeSubstitution.replacementQuantity(for: original, originalFoodItem: food, substitute: substitute)
+            #expect(count > RecipeConversionLimits.maxCount, "\(substitute.name): the gram match is past the count bound")
+            let swapped = RecipeSubstitution.substitutedIngredient(replacing: original, originalFoodItem: food, with: substitute)
+            #expect(swapped.unit == "g" && swapped.quantity == grams, "\(substitute.name): \(swapped.quantity) \(swapped.unit)")
+            #expect(swapped.householdMeasure == RecipeHouseholdMeasure(label: label, gramsPerUnit: each))
+            let fork = try #require(RecipeSubstitution.fork(source: Self.recipe("Stir fry", [original]),
+                                                            replacing: original.id, with: swapped))
+            #expect(MealBuilder.macroTotals(for: fork, foodItems: [substitute]) != MacroTotals(),
+                    "\(substitute.name): a raw \(count) each zeroed the fork")
+        }
+    }
+
+    /// Fix round 2 (N-2): a substitute served by COUNT has no grams form, and a gram match past
+    /// `RecipeConversionLimits.maxCount` of it converts nowhere. The fork takes the substitute's tap
+    /// default ("1 each", what a swap with no gram match takes) rather than a line totalling zero.
+    @MainActor
+    @Test func aCountServedForkPastAHundredTakesTheTapDefault() throws {
+        let onion = Self.onion()
+        let almonds = FoodItem(name: "Almonds", servingSize: 1, servingUnit: "each", macros: Macros(protein: 1, carbs: 1, fat: 1),
+                               micronutrients: Micronutrients(), category: "Nuts", source: .manual, tags: [],
+                               portions: [FoodPortion(amount: 1, unit: "each", gramWeight: 1.2)])
+        #expect(almonds.preferredRecipeUnit == .each)
+        let original = Self.line(onion, 2, "cup")
+        let (count, _) = RecipeSubstitution.replacementQuantity(for: original, originalFoodItem: onion, substitute: almonds)
+        #expect(count == 266.7, "320 g over 1.2 g an almond")
+        let swapped = RecipeSubstitution.substitutedIngredient(replacing: original, originalFoodItem: onion, with: almonds)
+        #expect(swapped.unit == "each" && swapped.quantity == 1 && swapped.householdMeasure == nil)
+        #expect(swapped.servingConversion(using: almonds) != nil)
+        let fork = try #require(RecipeSubstitution.fork(source: Self.recipe("Salad", [original]), replacing: original.id, with: swapped))
+        #expect(MealBuilder.macroTotals(for: fork, foodItems: [almonds]) != MacroTotals())
+        let handful = RecipeSubstitution.substitutedIngredient(
+            replacing: Self.line(onion, 36, "g"), originalFoodItem: onion, with: almonds)
+        #expect(handful.unit == "each" && handful.quantity == 30, "a count within the bound stays the gram match")
+    }
+
     /// A recipe a quick log mints reaches the book through `FernletStore.commitResolution`, which saves
     /// its lines as the editor does.
     @MainActor
