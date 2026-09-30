@@ -53,6 +53,11 @@ public nonisolated struct ImportedRecipe: Equatable {
     /// recipe keeps it (`RecipeWebImport.uncountedIngredientLines`) so a partial estimate is never
     /// shown as a whole one.
     public var uncountedIngredientCount: Int
+    /// How many counted ingredient lines the USDA estimate weighed by a curated USDA typical size
+    /// because the matched row's own data could not ("3 cloves garlic" on a row with no clove; F4b fix
+    /// round 1). 0 for a label-sourced import. The recipe keeps it
+    /// (`RecipeWebImport.estimatedIngredientLines`) so an estimate leaning on typical sizes says so.
+    public var estimatedIngredientCount: Int
 
     public init(
         sourceURL: URL,
@@ -66,7 +71,8 @@ public nonisolated struct ImportedRecipe: Equatable {
         micronutrients: Micronutrients = Micronutrients(),
         steps: [RecipeStep]? = nil,
         imageURL: URL? = nil,
-        uncountedIngredientCount: Int = 0
+        uncountedIngredientCount: Int = 0,
+        estimatedIngredientCount: Int = 0
     ) {
         self.sourceURL = sourceURL
         self.name = name
@@ -80,6 +86,7 @@ public nonisolated struct ImportedRecipe: Equatable {
         self.steps = steps
         self.imageURL = imageURL
         self.uncountedIngredientCount = max(uncountedIngredientCount, 0)
+        self.estimatedIngredientCount = max(estimatedIngredientCount, 0)
     }
 }
 
@@ -97,6 +104,10 @@ nonisolated struct IngredientMacroEstimate: Equatable {
     /// unit word the reader cannot use, no food name), no catalog row matched its name, or its amount
     /// does not convert on the row it bound.
     let uncountedLines: Int
+    /// Counted lines weighed by a curated USDA typical size (`TypicalPortionTable`) because the bound
+    /// row's own data could not weigh them — "3 cloves garlic" on a row with no clove (F4b fix round 1,
+    /// finding s2-L-F4b-DT-3), so the recipe can say its estimate leans on typical sizes.
+    var estimatedLines: Int = 0
 }
 
 /// One ingredient line as the web importer's USDA fallback reads it (ingredient-search round, F11):
@@ -108,8 +119,9 @@ nonisolated struct ParsedIngredientLine: Equatable {
         /// A `RecipeUnit` spelling ("cups", "g", "tbsp", "each"): only that unit is tried.
         case stated
         /// A count or size word ("3 cloves garlic", "1 medium onion", "2 large eggs"): "each" is tried
-        /// and nothing else, so it counts only on a row that has a count portion — never as a 100 g
-        /// serving, and never voiding the page when it does not.
+        /// and nothing else, so it counts only on a row that has a count portion or whose ingredient
+        /// has a USDA typical count (F4b, counted as an estimate) — never as a 100 g serving, and never
+        /// voiding the page when it does not.
         case countWord
         /// No unit ("1 lemon", "2 eggs"): "each" first, where the row has a count portion (a lemon is
         /// its 58 g fruit, not a 100 g serving); otherwise one serving, but only where that serving
@@ -817,6 +829,7 @@ public enum RecipeWebImporter {
         let fat: Int
         let micronutrients: Micronutrients
         var uncounted = 0
+        var estimated = 0
         if let siteNutrition = nutritionMacros(from: dictionary) {
             protein = siteNutrition.protein
             carbs = siteNutrition.carbs
@@ -828,6 +841,7 @@ public enum RecipeWebImporter {
             }
             (protein, carbs, fat) = (estimate.protein, estimate.carbs, estimate.fat)
             uncounted = estimate.uncountedLines
+            estimated = estimate.estimatedLines
             micronutrients = Micronutrients()
         }
 
@@ -842,7 +856,8 @@ public enum RecipeWebImporter {
             fat: fat,
             micronutrients: micronutrients,
             steps: steps.isEmpty ? nil : steps,
-            uncountedIngredientCount: uncounted
+            uncountedIngredientCount: uncounted,
+            estimatedIngredientCount: estimated
         )
     }
 
@@ -964,8 +979,12 @@ public enum RecipeWebImporter {
     /// "1 cup chocolate chips" (a chip cookie with only a bar portion) or "3 cloves garlic" lost every
     /// other line's nutrition. A line with no leading amount ("salt to taste", a "For the sauce:"
     /// header) is not an amount to count and joins neither side; a line that STARTS with an amount but
-    /// cannot be read past it is counted as left out (fix round 1, u3-L-U3-2). The estimate still
-    /// UNDERestimates rather than invents: nothing is guessed for a skipped line.
+    /// cannot be read past it is counted as left out (fix round 1, u3-L-U3-2). A skipped line is never
+    /// guessed. A line the bound row's own data cannot weigh but whose ingredient has a curated USDA
+    /// typical size is counted by that size (F4b) and COUNTED AS ESTIMATED
+    /// (``IngredientMacroEstimate/estimatedLines``), which the recipe shows beside the estimate too (F4b
+    /// fix round 1, finding s2-L-F4b-DT-3) — so an estimate built partly on typical sizes never reads
+    /// as one built on the rows' own data.
     ///
     /// Returns nil only when no line counted at all.
     ///
@@ -976,16 +995,18 @@ public enum RecipeWebImporter {
         var totalProtein = 0.0, totalCarbs = 0.0, totalFat = 0.0
         var counted = 0
         var uncounted = 0
+        var estimated = 0
         for text in ingredients {
             guard let line = parseIngredientLine(text) else {
                 if startsWithAmount(text) { uncounted += 1 }
                 continue
             }
-            guard let macros = estimatedMacros(for: line, catalog: catalog) else {
+            guard let (macros, byTypicalSize) = lineEstimate(for: line, catalog: catalog) else {
                 uncounted += 1
                 continue
             }
             counted += 1
+            if byTypicalSize { estimated += 1 }
             totalProtein += Double(macros.protein)
             totalCarbs += Double(macros.carbs)
             totalFat += Double(macros.fat)
@@ -996,7 +1017,8 @@ public enum RecipeWebImporter {
             protein: Macros.clampedInt(totalProtein / d),
             carbs: Macros.clampedInt(totalCarbs / d),
             fat: Macros.clampedInt(totalFat / d),
-            uncountedLines: uncounted
+            uncountedLines: uncounted,
+            estimatedLines: estimated
         )
     }
 
@@ -1007,6 +1029,14 @@ public enum RecipeWebImporter {
     /// "3 cloves garlic" on a row with no clove is 3 × 3 g, "2 cups all-purpose flour" on a row with no
     /// cup 2 × 125 g). Machine-generated context — cold, unaliased, one row.
     nonisolated static func estimatedMacros(for line: ParsedIngredientLine, catalog: FoodCatalog) -> Macros? {
+        lineEstimate(for: line, catalog: catalog)?.macros
+    }
+
+    /// ``estimatedMacros(for:catalog:)``, and whether a typical size weighed the line
+    /// (``IngredientMacroEstimate/estimatedLines``).
+    nonisolated static func lineEstimate(
+        for line: ParsedIngredientLine, catalog: FoodCatalog
+    ) -> (macros: Macros, byTypicalSize: Bool)? {
         guard let match = catalog.results(for: line.name, limit: 1, context: .machineGenerated).first else {
             return nil
         }
@@ -1014,7 +1044,7 @@ public enum RecipeWebImporter {
         for unit in units {
             let ingredient = RecipeIngredient(foodItemId: match.id, quantity: line.quantity, unit: unit)
             if let conversion = ingredient.servingConversion(using: match) {
-                return conversion.scaledMacros(for: match)
+                return (conversion.scaledMacros(for: match), false)
             }
         }
         for unit in units {
@@ -1022,7 +1052,7 @@ public enum RecipeWebImporter {
                   let grams = TypicalPortionTable.grams(quantity: line.quantity, unit: recipeUnit, for: match),
                   let conversion = RecipeIngredient(foodItemId: match.id, quantity: grams, unit: RecipeUnit.gram.rawValue)
                     .servingConversion(using: match) else { continue }
-            return conversion.scaledMacros(for: match)
+            return (conversion.scaledMacros(for: match), true)
         }
         return nil
     }
@@ -1058,8 +1088,9 @@ public enum RecipeWebImporter {
     ]
 
     /// Count and size words that mean "this many of the food" rather than a measure: they bind "each",
-    /// and only on a row that has a count portion (never a 100 g "serving"). FROZEN English matching
-    /// inputs, compared after lowercasing and collapsing inner whitespace.
+    /// and count only on a row that has a count portion or whose ingredient has a USDA typical count
+    /// (F4b, counted as an estimate) — never a 100 g "serving". FROZEN English matching inputs,
+    /// compared after lowercasing and collapsing inner whitespace.
     nonisolated static let countWords: Set<String> = [
         "clove", "cloves", "extra large", "extra small", "large", "medium", "small", "whole"
     ]
@@ -1387,7 +1418,8 @@ struct ExtractedRecipe {
             protein: estimate.protein,
             carbs: estimate.carbs,
             fat: estimate.fat,
-            uncountedIngredientCount: estimate.uncountedLines
+            uncountedIngredientCount: estimate.uncountedLines,
+            estimatedIngredientCount: estimate.estimatedLines
         )
     }
 }

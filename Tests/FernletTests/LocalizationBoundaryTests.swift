@@ -768,8 +768,18 @@ struct LocalizationBoundaryTests {
             "small", "small stalk", "stick", "sweet potato", "tbsp", "thigh", "tsp", "tsp, packed"
         ], "a label is saved on recipe lines and matched when one re-opens; a renamed label re-opens as the person's own size")
         #expect(TypicalPortionTable.preparedWords == ["boiled", "cooked", "fried", "instant", "mix", "prepared", "steamed"])
-        #expect(TypicalPortionTable.processedWords.count == 55 && TypicalPortionTable.processedWords.contains("dehydrated"),
+        #expect(TypicalPortionTable.processedWords.count == 67 && TypicalPortionTable.processedWords.contains("dehydrated"),
                 "matched against USDA's names; a translated word gives a dried banana a fresh banana's weight")
+        #expect(TypicalPortionTable.productWords.count == 33 && TypicalPortionTable.productWords.contains("chocolate"),
+                "matched against the catalog's names; a translated word gives a chocolate egg an egg's weight")
+        #expect(TypicalPortionTable.cutWords == ["bone", "ground", "shaved", "skin", "split"])
+        let categories = Set(TypicalPortionTable.entries.flatMap(\.categories))
+        #expect(categories.count == 75 && categories.contains("Pre-Packaged Fruit & Vegetables"), """
+            The typical-size categories are compared with the catalog's own English category strings \
+            (FoodItem.category); a translated or re-spelled one admits no row and the estimate disappears.
+            """)
+        #expect(RecipePortionPicker.gramsForOneLabel == "item",
+                "Rung E's label is saved beside a recipe line's grams and re-opened by matching it")
         #expect(RecipeHouseholdMeasure.pluralNouns == [
             "bar", "breast", "bunch", "can", "container", "cracker", "cube", "drumstick", "fillet", "half",
             "head", "leaf", "link", "package", "packet", "pat", "patty", "ring", "sheet", "sprig", "strip",

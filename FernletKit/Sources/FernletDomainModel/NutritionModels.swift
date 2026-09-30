@@ -2283,6 +2283,14 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
     /// and tolerant-decoded; an un-updated paired device re-encoding the synced blob strips it, which
     /// loses only the note, never the macros.
     public var uncountedIngredientLines: Int?
+    /// How many of `ingredientLines` the USDA estimate in `macros` weighed by a curated USDA TYPICAL
+    /// SIZE because the matched food's own data could not (ingredient-search round F4b, fix round 1:
+    /// "3 cloves garlic" on a garlic row that states no clove is 3 × USDA's typical 3 g clove). The
+    /// recipe shows it beside the estimate, so a total leaning on typical sizes never reads as one built
+    /// on the foods' own data. `nil` in every case `uncountedIngredientLines` is, and when no line needed
+    /// a typical size. Additive and tolerant-decoded, with the same blob-strip landmine: an un-updated
+    /// paired device re-encoding the synced blob strips it, which loses only the note.
+    public var estimatedIngredientLines: Int?
 
     /// The parsed source link, or `nil` when there's no usable one. An absent or unparseable
     /// `sourceURLString` (e.g. the decode default of `""`) returns `nil` rather than fabricating a
@@ -2302,7 +2310,8 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         imageURLString: String? = nil,
         webImageSuppressed: Bool? = nil,
         sourceIsPeerSupplied: Bool? = nil,
-        uncountedIngredientLines: Int? = nil
+        uncountedIngredientLines: Int? = nil,
+        estimatedIngredientLines: Int? = nil
     ) {
         self.sourceURLString = sourceURLString
         self.ingredientLines = ingredientLines
@@ -2312,6 +2321,7 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         self.webImageSuppressed = webImageSuppressed
         self.sourceIsPeerSupplied = sourceIsPeerSupplied
         self.uncountedIngredientLines = uncountedIngredientLines
+        self.estimatedIngredientLines = estimatedIngredientLines
     }
 
     public init(from decoder: Decoder) throws {
@@ -2329,6 +2339,8 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         sourceIsPeerSupplied = try container.decodeIfPresent(Bool.self, forKey: .sourceIsPeerSupplied)
         // Same additive + tolerant rule (ingredient-search round, F11): absent on every older blob.
         uncountedIngredientLines = try container.decodeIfPresent(Int.self, forKey: .uncountedIngredientLines)
+        // Same additive + tolerant rule (F4b fix round 1): absent on every older blob.
+        estimatedIngredientLines = try container.decodeIfPresent(Int.self, forKey: .estimatedIngredientLines)
     }
 }
 
@@ -2779,6 +2791,23 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
         guard grams.isFinite, grams > 0 else { return typed }
         return RecipeIngredient(foodItemId: foodItem.id, quantity: grams, unit: RecipeUnit.gram.rawValue,
                                 householdMeasure: measure)
+    }
+
+    /// The row with its named ``portion`` folded into its amount: `quantity` of a portion that states
+    /// its grams becomes those grams, in "g" — for every path that stops reading the portion (the
+    /// Manual escape, unbinding, a save whose bound food is gone). Fix round 1 (finding s2-C-F4B-C2):
+    /// those paths cleared the portion and left its COUNT under the unit "g", so "2 fruit (272 g)" of an
+    /// avocado became "2 g" — and a custom food minted from it a 2 g serving carrying 100 g of
+    /// nutrition. A row without a portion (or whose portion states no grams) keeps its amount.
+    public func droppingPortion() -> ManualRecipeIngredientInput {
+        var row = self
+        row.portion = nil
+        guard let measure = portion?.householdMeasure, quantity.isFinite, quantity > 0 else { return row }
+        let grams = quantity * measure.gramsPerUnit
+        guard grams.isFinite, grams > 0 else { return row }
+        row.quantity = grams
+        row.unit = RecipeUnit.gram.rawValue
+        return row
     }
 
     /// ``resolvedMacros(foodItems:)`` before rounding, for the editor's ingredient-level displays.

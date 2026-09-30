@@ -1062,7 +1062,7 @@ private struct SavedRecipeRow: View {
                 }
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
-                WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines)
+                WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines, estimatedLines: webImport?.estimatedIngredientLines)
             }
         }
         .padding(.vertical, 6)
@@ -1169,14 +1169,14 @@ struct SavedRecipeNotesSheet: View {
                 }
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
-                WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines)
+                WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines, estimatedLines: webImport?.estimatedIngredientLines)
             }
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         } else {
             // An estimate that rounds to all zeros hides the card, not the lines it left out.
-            WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines)
+            WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines, estimatedLines: webImport?.estimatedIngredientLines)
         }
     }
 
@@ -2217,6 +2217,9 @@ struct RecipeIngredientEditor: View {
     /// True after the user takes the explicit create-it escape — from a settled catalog miss, or from
     /// beneath a list that holds nothing right (ingredient-search round, F9).
     @State private var isCreatingCustomIngredient = false
+    /// The label the editor is asking the grams of — "How many grams is one?" (F4b fix round 1, report
+    /// §6.3 Rung E) — or nil when it is not asking.
+    @State private var askingGramsFor: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2224,6 +2227,7 @@ struct RecipeIngredientEditor: View {
             suggestionList
             quantityUnitRow
             RecipePortionGramsRow(ingredient: $ingredient)
+            RecipePortionAskGramsRow(ingredient: $ingredient, askingGramsFor: $askingGramsFor)
             householdCaption
             macroSection
             saveCustomIngredientButton
@@ -2367,7 +2371,8 @@ struct RecipeIngredientEditor: View {
         if let selectedFoodItem {
             RecipePortionMenu(
                 ingredient: $ingredient,
-                choices: RecipePortionPicker.choices(for: selectedFoodItem, personal: rememberedPortions(selectedFoodItem.id))
+                choices: RecipePortionPicker.choices(for: selectedFoodItem, personal: rememberedPortions(selectedFoodItem.id)),
+                askingGramsFor: $askingGramsFor
             )
         } else {
             Picker("Unit", selection: $ingredient.unit) {
@@ -2389,19 +2394,34 @@ struct RecipeIngredientEditor: View {
                     useManualNutrition(seededFrom: selectedFoodItem)
                 }
             } else {
-                Text("This amount needs an exact serving basis or one source-backed portion.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.sun)
-                Button("Use manual nutrition") {
-                    useManualNutrition(seededFrom: selectedFoodItem)
-                }
-                .buttonStyle(ActionPillButtonStyle(.secondary))
+                unweighedAmountPrompt(for: selectedFoodItem)
             }
         } else {
             MacroInputRow(label: "Protein", unit: "g", value: $ingredient.protein, range: 0.0...250.0)
             MacroInputRow(label: "Carbs", unit: "g", value: $ingredient.carbs, range: 0.0...300.0)
             MacroInputRow(label: "Fat", unit: "g", value: $ingredient.fat, range: 0.0...200.0)
         }
+    }
+
+    /// A bound amount the food cannot weigh (F4b fix round 1, report §6.3 Rung E): plain words instead of
+    /// the old "exact serving basis or one source-backed portion", the "How many grams is one?"
+    /// question where the line's own unit is a count or volume (``RecipePortionAskGramsRow``), and the
+    /// Manual escape.
+    @ViewBuilder private func unweighedAmountPrompt(for foodItem: FoodItem) -> some View {
+        Text("Fernlet can't weigh this amount. Choose another unit, or say how many grams one is.")
+            .font(.fernlet(.bodySmall))
+            .foregroundStyle(Color.sun)
+            .fernletWrappingText()
+        if askingGramsFor == nil,
+           let label = RecipePortionPicker.labelAskingGrams(heldUnit: ingredient.unit, portion: ingredient.portion) {
+            Button("How many grams is one?") { askingGramsFor = label }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
+                .accessibilityIdentifier("recipeIngredient.askGramsForUnit")
+        }
+        Button("Use manual nutrition") {
+            useManualNutrition(seededFrom: foodItem)
+        }
+        .buttonStyle(ActionPillButtonStyle(.secondary))
     }
 
     /// The debounced typeahead query behind `.task(id: ingredient.name)`: the shared
@@ -2444,22 +2464,29 @@ struct RecipeIngredientEditor: View {
         ingredient.quantity = foodItem.defaultRecipeQuantity(for: unit)
         ingredient.unit = unit.rawValue
         ingredient.portion = nil
-        seedManualGrams(from: foodItem)
+        askingGramsFor = nil
+        seedManualGrams(foodItem.exactMacros)
         isCreatingCustomIngredient = false
     }
 
-    /// The "Manual" / "Use manual nutrition" escape: unbinds the row and seeds its editable grams from
-    /// the food it was bound to.
+    /// The "Manual" / "Use manual nutrition" escape: unbinds the row and seeds its editable grams.
+    ///
+    /// F4b fix round 1 (finding s2-C-F4B-C2, report §6.3 item 0d): the row keeps the amount it showed
+    /// — a named portion folded into its grams ("2 fruit (272 g)" becomes 272 g, never "2 g") — and the
+    /// grams it seeds are the ones the locked panel showed FOR THAT AMOUNT, so the custom food a save
+    /// mints from it ("272 g" carrying 272 g of nutrition) is as dense as the food. Only an amount the
+    /// food cannot weigh seeds the food's own serving, as before.
     private func useManualNutrition(seededFrom foodItem: FoodItem) {
+        let shown = ingredient.resolvedPreciseMacros(foodItems: [foodItem])
+        ingredient = ingredient.droppingPortion()
         ingredient.selectedFoodItemId = nil
-        ingredient.portion = nil
-        seedManualGrams(from: foodItem)
+        askingGramsFor = nil
+        seedManualGrams(shown ?? foodItem.exactMacros)
     }
 
-    /// Seeds the row's editable grams from `foodItem`'s EXACT grams, so a 3.4 g custom food never
-    /// becomes 3 on its way back into an editable row.
-    private func seedManualGrams(from foodItem: FoodItem) {
-        let grams = foodItem.exactMacros
+    /// Seeds the row's editable grams with `grams` as given (a food's EXACT grams, or the amount shown at
+    /// tenths), so a 3.4 g custom food never becomes 3 on its way back into an editable row.
+    private func seedManualGrams(_ grams: PreciseMacros) {
         ingredient.protein = grams.protein
         ingredient.carbs = grams.carbs
         ingredient.fat = grams.fat
@@ -2472,8 +2499,10 @@ struct RecipeIngredientEditor: View {
         // product names, so auto-binding would silently hijack the field — locking macros to a random
         // product and hiding the suggestion list. Binding happens only when the user taps a suggestion.
         if let selectedFoodItem, selectedFoodItem.name != name {
+            // A named portion's count becomes its grams, never "2 g" (F4b fix round 1).
+            ingredient = ingredient.droppingPortion()
             ingredient.selectedFoodItemId = nil
-            ingredient.portion = nil
+            askingGramsFor = nil
         }
         isCreatingCustomIngredient = false
     }
@@ -5892,7 +5921,10 @@ struct RecipeDetailView: View {
                 Text("Makes \(effectiveYield) serving\(effectiveYield == 1 ? "" : "s"): P \(displayTotals.protein)g · C \(displayTotals.carbs)g · F \(displayTotals.fat)g\(store.settings.showCalories ? " · \(displayTotals.calories) cal" : "")")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
-                WebImportEstimateNote(uncountedLines: recipe.webImport?.uncountedIngredientLines)
+                WebImportEstimateNote(
+                    uncountedLines: recipe.webImport?.uncountedIngredientLines,
+                    estimatedLines: recipe.webImport?.estimatedIngredientLines
+                )
             }
         }
     }
@@ -5994,10 +6026,17 @@ struct RecipeDetailView: View {
     private func structuredIngredientRow(_ ingredient: RecipeIngredient) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
-            Text(ingredientLine(ingredient))
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ingredientLine(ingredient))
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                // A household amount read from the curated typical-size table stays marked as an
+                // estimate after the editor closes (F4b fix round 1, finding s2-L-F4b-DT-2).
+                if isTypicalSizeEstimate(ingredient) {
+                    RecipeTypicalSizeEstimateNote()
+                }
+            }
             // Swap targets the STORED base ingredient (matched by id), not the scaled
             // display copy — a fork is built from saved quantities. Structured recipes
             // only; web imports have no swappable structured ingredients.
@@ -6204,6 +6243,11 @@ struct RecipeDetailView: View {
     private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
         let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
         return "\(ingredient.amountText) · \(name)"
+    }
+
+    /// Whether the line's household amount is a USDA typical size rather than the food's own portion.
+    private func isTypicalSizeEstimate(_ ingredient: RecipeIngredient) -> Bool {
+        resolvedItems[ingredient.foodItemId].map(ingredient.isTypicalSizeEstimate(using:)) ?? false
     }
 
     private func save(_ image: UIImage) {

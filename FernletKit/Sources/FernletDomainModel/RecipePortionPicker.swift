@@ -151,10 +151,31 @@ public nonisolated enum RecipePortionPicker {
         /// Each unit folded into a listed portion, and the portion that stands for one of it — so a tap
         /// default of "1 each" on a banana selects "medium (118 g)".
         public let standIns: [RecipeUnit: RecipePortionOption]
+        /// What ONE of each converting unit weighs on the food, where the converter says (fix round 1:
+        /// so a pick of a mass unit can keep an amount's weight — "2 tbsp" of garlic becomes its grams).
+        public let unitGrams: [RecipeUnit: Double]
 
-        public init(options: [RecipePortionOption], standIns: [RecipeUnit: RecipePortionOption]) {
+        public init(
+            options: [RecipePortionOption], standIns: [RecipeUnit: RecipePortionOption], unitGrams: [RecipeUnit: Double] = [:]
+        ) {
             self.options = options
             self.standIns = standIns
+            self.unitGrams = unitGrams
+        }
+
+        /// Whether the menu offers nothing to count — no portion, size or unit of the ``RecipePortionOption/Dimension/count``
+        /// dimension — so the editor asks the person what one weighs (report §6.3 Rung E, "How many
+        /// grams is one?").
+        public var asksGramsForOne: Bool {
+            !options.contains { $0.dimension == .count }
+        }
+
+        /// What ONE of the amount a row holds weighs: its named `portion`'s grams, else the portion its
+        /// unit is folded into, else the converter's grams for one of the unit; nil when none is known.
+        public func gramsPerOne(heldAs unit: String, portion: RecipePortionOption?) -> Double? {
+            if let portion { return portion.gramsPerOne }
+            guard let held = RecipeUnit.normalized(unit) else { return nil }
+            return standIns[held]?.gramsPerOne ?? unitGrams[held]
         }
 
         /// The option shown for an amount held as `unit`: the portion the unit is folded into, else the
@@ -216,26 +237,56 @@ public nonisolated enum RecipePortionPicker {
 
     /// The amount a row keeps when the person picks `option` from the menu while holding `quantity` in
     /// `unit` (and `portion`, when the amount is counted in a named portion). `standIn` is the unit the
-    /// option stands for, if any (``Choices/unit(standingIn:)``).
-    /// - From a named portion to a mass unit, the same grams: one fruit (136 g) becomes 136 g, 4.8 oz.
+    /// option stands for, if any (``Choices/unit(standingIn:)``); `heldGramsPerOne` is what one of the
+    /// held amount weighs (``Choices/gramsPerOne(heldAs:portion:)``).
+    /// - Into a mass unit from a count, a volume or a serving, the same grams — whether the count is a
+    ///   named portion ("1 fruit (136 g)" of a Hass avocado) or a unit that stands for one (a banana's
+    ///   "1 each", shown as "1 medium (118 g)"): both become 136 g and 118 g, 4.8 oz and 4.16 oz. Before
+    ///   fix round 1 the stand-in kept its number, so a banana's medium picked as Grams read "1 g".
+    /// - From one mass unit to another, the typed number stays, as it always has: "5" typed while the
+    ///   row read grams, then Ounces picked, is 5 oz — the number was typed for the unit about to be picked.
     /// - From grams, a mass unit or servings to a count or volume, ONE: a tap default of 100 g of a Hass
     ///   avocado becomes one fruit (136 g), not a hundred (13,600 g, which no line converts).
     /// - Anything else keeps the typed amount ("2 medium" becomes "2 large").
     public static func quantity(
         afterChoosing option: RecipePortionOption, standingIn standIn: RecipeUnit?,
-        from quantity: Double, unit: String, portion: RecipePortionOption?
+        from quantity: Double, unit: String, portion: RecipePortionOption?, heldGramsPerOne: Double?
     ) -> Double {
         guard quantity.isFinite, quantity > 0 else { return 1 }
-        let target = option.unit ?? standIn
-        if let portion, let perOne = portion.gramsPerOne {
-            guard let target, target.dimension == .mass, let one = target.baseAmount(for: 1) else { return quantity }
+        let held = portion == nil ? RecipeUnit.normalized(unit) : nil
+        let heldIsMass = held?.dimension == .mass
+        if let target = option.unit ?? standIn, target.dimension == .mass {
+            guard !heldIsMass, let perOne = heldGramsPerOne, perOne.isFinite, perOne > 0,
+                  let one = target.baseAmount(for: 1) else { return quantity }
             return (quantity * perOne / one * 100).rounded() / 100
         }
-        let held = RecipeUnit.normalized(unit)
-        let fromMassOrServing = held == nil || held?.dimension == .mass || held == .serving
+        guard portion == nil else { return quantity }
+        let fromMassOrServing = held == nil || heldIsMass || held == .serving
         let toCountOrVolume = option.dimension == .count || option.dimension == .volume
         guard fromMassOrServing, toCountOrVolume else { return quantity }
         return 1
+    }
+
+    /// The frozen label a count the person weighs themselves is saved under (report §6.3 Rung E): "1
+    /// item = 150 g", remembered as their own size for that food. A frozen English token — it is saved
+    /// beside the line's grams as its household label and re-opened by matching it — which the recipe
+    /// converter also reads as one of something ("item" is a spelling of "each").
+    public static let gramsForOneLabel = "item"
+
+    /// The label Rung E asks the grams of when a bound line does not convert: the line's own count or
+    /// volume unit ("cup", "slice", a legacy "handful" — the person's or the recipe's own word; "item" for
+    /// a bare "each", which reads "1 item = 150 g"), or nil for a
+    /// named portion, a mass or a serving, which already weigh and fail for another reason (past the
+    /// conversion bound), not for want of a weight.
+    public static func labelAskingGrams(heldUnit unit: String, portion: RecipePortionOption?) -> String? {
+        guard portion == nil else { return nil }
+        let trimmed = unit.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let held = RecipeUnit.normalized(trimmed) else {
+            let valid = RecipeHouseholdMeasure(label: trimmed, gramsPerUnit: 1).isValid
+            return valid ? trimmed : gramsForOneLabel
+        }
+        guard held.isCount || held.isVolume else { return nil }
+        return held == .each ? gramsForOneLabel : held.rawValue
     }
 
     /// Units in menu order: mass, then volume, then count, then the food's own serving.
@@ -259,8 +310,10 @@ public nonisolated enum RecipePortionPicker {
         let named = usdaOptions(for: foodItem)
         let units = convertingUnits(for: foodItem)
         var standIns: [RecipeUnit: RecipePortionOption] = [:]
+        var unitGrams: [RecipeUnit: Double] = [:]
         var unitOptions: [RecipePortionOption] = []
         for (unit, conversion) in units {
+            if let grams = conversion.grams, grams.isFinite, grams > 0 { unitGrams[unit] = grams }
             if let standIn = portionStandingIn(for: conversion, among: named, foodItem: foodItem) {
                 standIns[unit] = standIn
             } else {
@@ -273,7 +326,7 @@ public nonisolated enum RecipePortionPicker {
                                 dimension: RecipePortionOption.dimension(ofLabel: $0.label))
         }
         let typical = TypicalPortionTable.options(for: foodItem, lacking: missingDimensions(in: own))
-        return Choices(options: named + personalOptions + typical + unitOptions, standIns: standIns)
+        return Choices(options: named + personalOptions + typical + unitOptions, standIns: standIns, unitGrams: unitGrams)
     }
 
     /// The food's own USDA household portions as named options — counts by weight, then the rest by
@@ -358,6 +411,25 @@ public nonisolated enum RecipePortionPicker {
         let secondGrams = second.gramsPerOne ?? 0
         guard firstGrams == secondGrams else { return firstGrams < secondGrams }
         return first.label < second.label
+    }
+}
+
+extension RecipeIngredient {
+    /// Whether this saved line's household amount is a curated USDA typical size — an ESTIMATE — rather
+    /// than one of `foodItem`'s own USDA portions (fix round 1, finding s2-L-F4b-DT-2). The editor
+    /// badges a typical size "USDA typical size, estimate", but the saved line keeps only its label and
+    /// grams (``RecipeHouseholdMeasure``, no wire change), so the recipe page and cooking mode work the
+    /// status out again here: the measure matches a size ``TypicalPortionTable`` offers for the food and
+    /// none of the food's own portions. A size the person corrected is their own, not an estimate.
+    public func isTypicalSizeEstimate(using foodItem: FoodItem) -> Bool {
+        guard foodItem.id == foodItemId, let measure = householdMeasure, measure.isValid,
+              RecipeUnit.normalized(unit) == .gram else { return false }
+        let saved = RecipePortionOption(source: .personal, label: measure.label, gramsPerOne: measure.gramsPerUnit,
+                                        dimension: RecipePortionOption.dimension(ofLabel: measure.label))
+        let own = RecipePortionPicker.usdaOptions(for: foodItem)
+        guard !own.contains(where: { RecipePortionPicker.sameAmount($0, saved) }) else { return false }
+        let typical = TypicalPortionTable.options(for: foodItem, lacking: [.count, .volume])
+        return typical.contains { RecipePortionPicker.sameAmount($0, saved) }
     }
 }
 

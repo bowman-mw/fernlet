@@ -24,10 +24,16 @@ import FernletUI
 /// The row holds a choice one of two ways (``ManualRecipeIngredientInput/portion``): a unit — including
 /// a portion that is one of a unit, such as a banana's "medium" for "each", held as that unit so the
 /// line saves exactly as a typed "1 each" always has — or a named portion, whose amount is saved as its
-/// grams.
+/// grams. Where nothing on the menu counts, it also asks "How many grams is one?" (report §6.3 Rung E,
+/// fix round 1), which ``RecipePortionAskGramsRow`` answers.
+///
+/// VoiceOver reads the control as "Unit" with the current choice as its value — "1 fruit (136 g),
+/// USDA typical size, estimate" — as the `Picker` it replaced did (fix round 1).
 struct RecipePortionMenu: View {
     @Binding var ingredient: ManualRecipeIngredientInput
     let choices: RecipePortionPicker.Choices
+    /// The label the editor is asking the grams of (Rung E), or nil.
+    @Binding var askingGramsFor: String?
 
     var body: some View {
         Menu {
@@ -46,6 +52,12 @@ struct RecipePortionMenu: View {
                     }
                 }
             }
+            if offersGramsForOne {
+                Section {
+                    Button("How many grams is one?") { askingGramsFor = RecipePortionPicker.gramsForOneLabel }
+                        .accessibilityIdentifier("recipeIngredient.askGramsForOne")
+                }
+            }
         } label: {
             HStack(spacing: 4) {
                 RecipePortionMenuLabel(option: currentOption)
@@ -57,8 +69,14 @@ struct RecipePortionMenu: View {
             .frame(minHeight: 44)
         }
         .accessibilityLabel("Unit")
+        .accessibilityValue(RecipePortionMenuItem.spokenValue(for: currentOption, heldUnit: ingredient.unit))
         .accessibilityIdentifier("recipeIngredient.unit")
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Rung E: nothing on the menu counts, and the row is not already counted in the person's own size.
+    private var offersGramsForOne: Bool {
+        choices.asksGramsForOne && ingredient.portion?.source != .personal
     }
 
     /// The options in menu order, plus the row's current choice when the menu no longer lists it (a
@@ -93,13 +111,16 @@ struct RecipePortionMenu: View {
 
     /// Applies a menu pick: a unit, or a portion that is one of a unit, is held as that unit; any other
     /// named portion is held as the portion (its amount counted in it, saved as grams). The amount is
-    /// carried over by ``RecipePortionPicker/quantity(afterChoosing:standingIn:from:unit:portion:)``.
+    /// carried over by ``RecipePortionPicker/quantity(afterChoosing:standingIn:from:unit:portion:heldGramsPerOne:)``,
+    /// which keeps a count's weight when a mass unit is picked. A pick ends any Rung E question.
     private func choose(_ id: String) {
         guard let option = options.first(where: { $0.id == id }), option != currentOption else { return }
         let standIn = choices.unit(standingIn: option)
+        askingGramsFor = nil
         ingredient.quantity = RecipePortionPicker.quantity(
-            afterChoosing: option, standingIn: standIn, from: ingredient.quantity,
-            unit: ingredient.unit, portion: ingredient.portion
+            afterChoosing: option, standingIn: standIn, from: ingredient.quantity, unit: ingredient.unit,
+            portion: ingredient.portion,
+            heldGramsPerOne: choices.gramsPerOne(heldAs: ingredient.unit, portion: ingredient.portion)
         )
         if let unit = option.unit ?? standIn {
             ingredient.portion = nil
@@ -131,6 +152,22 @@ struct RecipePortionMenuItem: View {
             Text(unit.label)
         } else if let grams = option.gramsPerOne {
             Text("1 \(option.label) (\(grams, format: .number.precision(.fractionLength(0...1))) g)")
+        }
+    }
+
+    /// What VoiceOver reads as the closed menu's value (fix round 1, findings s2-C-F4B-C5 and
+    /// s2-L-F4b-DT-4): the unit's name, or one of the portion with its grams — and, for a typical size
+    /// or the person's own, which it is, since the badge beneath is a separate element. A unit the menu
+    /// does not know (a legacy line's own word) is read as saved.
+    static func spokenValue(for option: RecipePortionOption?, heldUnit: String) -> Text {
+        guard let option else { return Text(verbatim: heldUnit) }
+        if let unit = option.unit { return Text(unit.label) }
+        guard let grams = option.gramsPerOne else { return Text(verbatim: option.label) }
+        let rounded = grams.formatted(.number.precision(.fractionLength(0...1)))
+        switch option.source {
+        case .typicalSize: return Text("1 \(option.label) (\(rounded) g), USDA typical size, estimate")
+        case .personal: return Text("1 \(option.label) (\(rounded) g), your size")
+        case .unit, .usdaPortion: return Text("1 \(option.label) (\(rounded) g)")
         }
     }
 }
@@ -174,7 +211,7 @@ struct RecipePortionGramsRow: View {
                     TextField("Grams", value: grams, format: .number)
                         .keyboardType(.decimalPad)
                         .font(.fernlet(.label))
-                        .frame(maxWidth: 80)
+                        .frame(maxWidth: 80, minHeight: 44)
                         .accessibilityLabel("Grams in one \(portion.label)")
                         .accessibilityIdentifier("recipeIngredient.portionGrams")
                     Text("g")
@@ -198,6 +235,90 @@ struct RecipePortionGramsRow: View {
                                                          gramsPerOne: newValue, dimension: portion.dimension)
             }
         )
+    }
+}
+
+/// The note beneath a SAVED recipe line whose household amount is a curated USDA typical size (fix
+/// round 1, finding s2-L-F4b-DT-2): the recipe page and cooking mode keep the editor's "USDA typical
+/// size, estimate" badge, so "1 fruit (136 g)" of a Hass avocado never reads like the food's own USDA
+/// portion. Worked out when the line is shown (``RecipeIngredient/isTypicalSizeEstimate(using:)``); the
+/// saved line itself is unchanged.
+struct RecipeTypicalSizeEstimateNote: View {
+    var body: some View {
+        Text("USDA typical size, estimate")
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .accessibilityIdentifier("recipe.ingredient.typicalSizeEstimate")
+    }
+}
+
+/// Report §6.3 Rung E (fix round 1, findings s2-C-F4B-C6 and s2-L-F4b-DT-5): "How many grams is
+/// one?" — where a food states nothing to count, or a line's unit does not convert, the person says what
+/// one weighs. The row is then counted in that size as their own ("1 item = 150 g"), and the recipe's
+/// save remembers it for the food (``RecipePortionGramsMemory``), so the next recipe offers it under
+/// "Your size". Nothing changes until the person finishes typing a usable weight — the answer is read
+/// when the field loses focus or is submitted, never per keystroke (typing "150" must not count "1").
+struct RecipePortionAskGramsRow: View {
+    @Binding var ingredient: ManualRecipeIngredientInput
+    /// The label being asked about, or nil when the row is not asking.
+    @Binding var askingGramsFor: String?
+    /// The typed grams, applied when the field is left with a usable weight.
+    @State private var grams: Double?
+    /// Whether the grams field has focus; leaving it applies the answer.
+    @FocusState private var isEditing: Bool
+
+    var body: some View {
+        if let label = askingGramsFor {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("How many grams is one?")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                HStack(spacing: 8) {
+                    Text("1 \(label) =")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.bark)
+                    TextField("Grams", value: $grams, format: .number)
+                        .keyboardType(.decimalPad)
+                        .font(.fernlet(.label))
+                        .frame(maxWidth: 80, minHeight: 44)
+                        .focused($isEditing)
+                        .onSubmit { apply(grams, label: label) }
+                        .accessibilityLabel("Grams in one \(label)")
+                        .accessibilityIdentifier("recipeIngredient.askGrams")
+                    Text("g")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                    Button("Cancel") {
+                        grams = nil
+                        askingGramsFor = nil
+                    }
+                        .buttonStyle(.plain)
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+            }
+            .onChange(of: isEditing) { _, editing in
+                if !editing { apply(grams, label: label) }
+            }
+        }
+    }
+
+    /// Counts the row in the person's own size once `typed` is a usable weight: one of it, from a mass
+    /// or serving amount; the same count, from a count or volume ("2 cup" stays two cups).
+    private func apply(_ typed: Double?, label: String) {
+        guard let typed, typed.isFinite, typed > 0, typed <= RecipeConversionLimits.maxGrams else { return }
+        let size = RecipePortionOption(source: .personal, label: label, gramsPerOne: typed,
+                                       dimension: RecipePortionOption.dimension(ofLabel: label))
+        ingredient.quantity = RecipePortionPicker.quantity(
+            afterChoosing: size, standingIn: nil, from: ingredient.quantity, unit: ingredient.unit,
+            portion: ingredient.portion, heldGramsPerOne: nil
+        )
+        ingredient.portion = size
+        ingredient.unit = RecipeUnit.gram.rawValue
+        askingGramsFor = nil
+        grams = nil
     }
 }
 

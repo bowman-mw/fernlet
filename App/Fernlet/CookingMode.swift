@@ -393,11 +393,11 @@ struct CookingModeView: View {
         } else if miseParts.count > 1 {
             // A multipart recipe lays each part's ingredients out under its own heading.
             RecipePartsIngredientList(parts: miseParts) { ingredient in
-                ingredientRow(ingredientLine(ingredient))
+                ingredientRow(ingredientLine(ingredient), isEstimate: isTypicalSizeEstimate(ingredient))
             }
         } else if !displayIngredients.isEmpty {
             ForEach(displayIngredients) { ingredient in
-                ingredientRow(ingredientLine(ingredient))
+                ingredientRow(ingredientLine(ingredient), isEstimate: isTypicalSizeEstimate(ingredient))
             }
         } else {
             Text("No ingredients listed.")
@@ -406,13 +406,20 @@ struct CookingModeView: View {
         }
     }
 
-    private func ingredientRow(_ text: String) -> some View {
+    /// One ingredient line; `isEstimate` adds the "USDA typical size, estimate" note beneath a household
+    /// amount read from the curated table (F4b fix round 1, finding s2-L-F4b-DT-2).
+    private func ingredientRow(_ text: String, isEstimate: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
-            Text(text)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(text)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                if isEstimate {
+                    RecipeTypicalSizeEstimateNote()
+                }
+            }
         }
     }
 
@@ -420,6 +427,11 @@ struct CookingModeView: View {
     private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
         let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
         return "\(ingredient.amountText) · \(name)"
+    }
+
+    /// Whether the line's household amount is a USDA typical size rather than the food's own portion.
+    private func isTypicalSizeEstimate(_ ingredient: RecipeIngredient) -> Bool {
+        resolvedItems[ingredient.foodItemId].map(ingredient.isTypicalSizeEstimate(using:)) ?? false
     }
 
     // MARK: Cooking walker

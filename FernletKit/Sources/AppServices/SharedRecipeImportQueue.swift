@@ -411,7 +411,10 @@ extension RecipeDefinition {
                 // A partial USDA estimate keeps how many lines it left out (ingredient-search round,
                 // F11), so the recipe can say so; nil when every amount counted.
                 uncountedIngredientLines: importedRecipe.uncountedIngredientCount > 0
-                    ? importedRecipe.uncountedIngredientCount : nil
+                    ? importedRecipe.uncountedIngredientCount : nil,
+                // …and how many it weighed by a USDA typical size (F4b fix round 1); nil when none.
+                estimatedIngredientLines: importedRecipe.estimatedIngredientCount > 0
+                    ? importedRecipe.estimatedIngredientCount : nil
             ),
             // F5: preserve JSON-LD-parsed ordered cooking steps. Persisted per-row via the
             // `SavedRecipeRecord.payloadData` blob (STEP 0), so they survive on this path.

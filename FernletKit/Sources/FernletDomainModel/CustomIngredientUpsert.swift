@@ -109,8 +109,13 @@ public nonisolated struct CustomIngredientUpsert {
         let selectableFoodItems = selectionCatalog ?? foodItems
         var recipeIngredients: [RecipeIngredient] = []
         for ingredient in validIngredients {
-            let foodItem = ingredient.selectedFoodItem(in: selectableFoodItems) ?? resolve(
-                ingredient: ingredient,
+            let bound = ingredient.selectedFoodItem(in: selectableFoodItems)
+            // A row whose bound food is gone is saved as its own custom food, which reads no portion: a
+            // named portion's count becomes its grams first, or "2 fruit (272 g)" would mint a 2 g
+            // serving (F4b fix round 1, `ManualRecipeIngredientInput.droppingPortion()`).
+            let row = bound == nil ? ingredient.droppingPortion() : ingredient
+            let foodItem = bound ?? resolve(
+                ingredient: row,
                 in: &foodItems,
                 verifiedAt: verifiedAt
             )
@@ -118,9 +123,9 @@ public nonisolated struct CustomIngredientUpsert {
             // choice kept as display metadata, so every build totals it (F4a; see RecipeHouseholdMeasure).
             // A named portion from the picker ("medium (118 g)", a typical size) is its grams already
             // (F4b, `recipeLine(for:)`); only a bound row reads it.
-            var typed = ingredient
-            typed.quantity = max(ingredient.quantity, 0.01)
-            typed.unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "serving" : ingredient.unit
+            var typed = row
+            typed.quantity = max(row.quantity, 0.01)
+            typed.unit = row.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "serving" : row.unit
             recipeIngredients.append(typed.recipeLine(for: foodItem).savingHouseholdAsGrams(using: foodItem))
         }
         return recipeIngredients

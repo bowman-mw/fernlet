@@ -18,9 +18,12 @@ import FoodCatalog
 
 /// Pins the per-food amount menu, its save and re-open rules, and the counted caption.
 struct RecipePortionPickerTests {
-    static func food(_ name: String, _ portions: [FoodPortion], type: FoodDataType = .srLegacy) -> FoodItem {
+    /// A USDA fixture row; `category` is where the catalog files it, which the typical-size table reads
+    /// (F4b fix round 1).
+    static func food(_ name: String, _ portions: [FoodPortion], type: FoodDataType = .srLegacy,
+                     category: String = "Fruits and Fruit Juices") -> FoodItem {
         FoodItem(name: name, servingSize: 100, servingUnit: "g", macros: Macros(protein: 1, carbs: 23, fat: 0),
-                 micronutrients: Micronutrients(), category: "Fixtures", source: .usda, dataType: type, tags: [],
+                 micronutrients: Micronutrients(), category: category, source: .usda, dataType: type, tags: [],
                  portions: portions)
     }
 
@@ -128,16 +131,18 @@ struct RecipePortionPickerTests {
     }
 
     /// The amount a pick keeps: a gram tap default becomes ONE of a count or volume (never a hundred
-    /// avocados), a named portion becomes its grams in a mass unit, and a count stays a count.
+    /// avocados), a count or volume becomes its grams in a mass unit — a named portion and a unit that
+    /// stands for one alike — and a count stays a count.
     @Test func aPickKeepsASensibleAmount() {
         let fruit = RecipePortionOption(source: .typicalSize, label: "fruit", gramsPerOne: 136, dimension: .count)
         let large = RecipePortionOption(source: .usdaPortion, label: "large", gramsPerOne: 136, dimension: .count)
         let medium = RecipePortionOption(source: .usdaPortion, label: "medium", gramsPerOne: 118, dimension: .count)
         let grams = RecipePortionOption(unit: .gram)
         let ounces = RecipePortionOption(unit: .ounce)
-        func kept(_ option: RecipePortionOption, _ quantity: Double, _ unit: String,
-                  portion: RecipePortionOption? = nil, standIn: RecipeUnit? = nil) -> Double {
-            RecipePortionPicker.quantity(afterChoosing: option, standingIn: standIn, from: quantity, unit: unit, portion: portion)
+        func kept(_ option: RecipePortionOption, _ quantity: Double, _ unit: String, portion: RecipePortionOption? = nil,
+                  standIn: RecipeUnit? = nil, perOne: Double? = nil) -> Double {
+            RecipePortionPicker.quantity(afterChoosing: option, standingIn: standIn, from: quantity, unit: unit,
+                                         portion: portion, heldGramsPerOne: perOne ?? portion?.gramsPerOne)
         }
         #expect(kept(fruit, 100, "g") == 1, "100 g tap default → one fruit, not 13,600 g")
         #expect(kept(RecipePortionOption(unit: .cup), 1, "serving") == 1)
@@ -146,7 +151,105 @@ struct RecipePortionPickerTests {
         #expect(kept(large, 2, "g", portion: medium) == 2, "2 medium → 2 large")
         #expect(kept(medium, 3, "g", portion: large, standIn: .each) == 3)
         #expect(kept(large, 2, "each") == 2, "a count stays a count")
-        #expect(kept(ounces, 150, "g") == 150, "a mass stays as typed, as before")
+        #expect(kept(ounces, 150, "g", perOne: 1) == 150, "a number typed in one mass unit follows it to the next, as before")
+        #expect(kept(grams, 1, "serving", perOne: 100) == 100, "one 100 g serving → 100 g")
+        #expect(kept(grams, 2, "tbsp", perOne: 8.5) == 17, "two tablespoons → their grams")
+        #expect(kept(grams, 2, "each") == 2, "a count whose weight is unknown keeps its number")
+    }
+
+    /// Fix round 1 (finding s2-C-F4B-C1): a banana tapped to "1 each" shows "1 medium (118 g)", and
+    /// picking Grams keeps that weight — 118 g, as the Hass avocado's "1 fruit (136 g)" becomes 136 g —
+    /// where it used to become "1 g".
+    @Test func aStandInPickedAsAMassUnitKeepsItsWeight() throws {
+        let banana = Self.banana()
+        let choices = RecipePortionPicker.choices(for: banana)
+        let perOne = try #require(choices.gramsPerOne(heldAs: "each", portion: nil))
+        #expect(perOne == 118, "each IS the medium banana")
+        let grams = RecipePortionOption(unit: .gram)
+        #expect(RecipePortionPicker.quantity(afterChoosing: grams, standingIn: nil, from: 1, unit: "each",
+                                             portion: nil, heldGramsPerOne: perOne) == 118)
+        #expect(RecipePortionPicker.quantity(afterChoosing: RecipePortionOption(unit: .ounce), standingIn: nil, from: 2,
+                                             unit: "each", portion: nil, heldGramsPerOne: perOne) == 8.32)
+        let garlic = Self.garlic()
+        let garlicChoices = RecipePortionPicker.choices(for: garlic)
+        let tablespoon = try #require(garlicChoices.gramsPerOne(heldAs: "tbsp", portion: nil))
+        #expect(abs(tablespoon - 8.5) < 0.1, "a tablespoon of garlic weighs by its stated cup's density: \(tablespoon)")
+        #expect(choices.gramsPerOne(heldAs: "g", portion: nil) == 1)
+    }
+
+    // MARK: - Rung E: how many grams is one?
+
+    /// Fix round 1 (findings s2-C-F4B-C6, s2-L-F4b-DT-5): a food whose menu offers nothing to count asks
+    /// "How many grams is one?"; one that counts does not. The asked label is "item" for the menu, and
+    /// a line's own count or volume unit where that unit does not convert — never a mass or serving.
+    @Test func aFoodWithNothingToCountAsksWhatOneWeighs() {
+        let almondFlour = Self.food("Flour, almond", [FoodPortion(amount: 1, unit: "RACC", gramWeight: 28)],
+                                    category: "Nut and Seed Products")
+        #expect(RecipePortionPicker.choices(for: almondFlour).asksGramsForOne)
+        #expect(!RecipePortionPicker.choices(for: Self.banana()).asksGramsForOne, "a banana counts")
+        let remembered = RecipePortionPicker.choices(
+            for: almondFlour, personal: [RecipeHouseholdMeasure(label: RecipePortionPicker.gramsForOneLabel, gramsPerUnit: 150)]
+        )
+        #expect(!remembered.asksGramsForOne, "the person's own size answers it")
+        #expect(RecipePortionPicker.gramsForOneLabel == "item" && RecipeUnit.normalized("item") == .each)
+        #expect(RecipePortionPicker.labelAskingGrams(heldUnit: "cup", portion: nil) == "cup")
+        #expect(RecipePortionPicker.labelAskingGrams(heldUnit: "each", portion: nil) == "item")
+        #expect(RecipePortionPicker.labelAskingGrams(heldUnit: "slice", portion: nil) == "slice")
+        #expect(RecipePortionPicker.labelAskingGrams(heldUnit: "handful", portion: nil) == "handful")
+        #expect(RecipePortionPicker.labelAskingGrams(heldUnit: "g", portion: nil) == nil)
+        #expect(RecipePortionPicker.labelAskingGrams(heldUnit: "serving", portion: nil) == nil)
+        let fruit = RecipePortionOption(source: .typicalSize, label: "fruit", gramsPerOne: 136, dimension: .count)
+        #expect(RecipePortionPicker.labelAskingGrams(heldUnit: "g", portion: fruit) == nil)
+        let answered = RecipePortionOption(source: .personal, label: "item", gramsPerOne: 150, dimension: .count)
+        #expect(RecipePortionPicker.quantity(afterChoosing: answered, standingIn: nil, from: 100, unit: "g",
+                                             portion: nil, heldGramsPerOne: nil) == 1, "100 g asked → one item")
+        let row = ManualRecipeIngredientInput(name: almondFlour.name, selectedFoodItemId: almondFlour.id, quantity: 2,
+                                              unit: "g", portion: answered)
+        let saved = row.recipeLine(for: almondFlour)
+        #expect(saved.quantity == 300 && saved.unit == "g", "saved as grams…")
+        #expect(saved.householdMeasure == RecipeHouseholdMeasure(label: "item", gramsPerUnit: 150), "…beside the size")
+    }
+
+    // MARK: - Dropping a portion
+
+    /// Fix round 1 (finding s2-C-F4B-C2): a path that stops reading the portion folds it into grams —
+    /// "2 fruit (272 g)" becomes 272 g, never "2 g" — and a save whose bound food is gone mints a custom
+    /// food whose serving is those grams.
+    @Test func droppingAPortionKeepsItsGrams() throws {
+        let fruit = RecipePortionOption(source: .typicalSize, label: "fruit", gramsPerOne: 136, dimension: .count)
+        let hass = Self.food("Avocado, Hass, peeled, raw", [FoodPortion(amount: 1, unit: "RACC", gramWeight: 140)])
+        let row = ManualRecipeIngredientInput(name: hass.name, selectedFoodItemId: hass.id, quantity: 2, unit: "g",
+                                              protein: 2, carbs: 8.5, fat: 15, portion: fruit)
+        let dropped = row.droppingPortion()
+        #expect(dropped.quantity == 272 && dropped.unit == "g" && dropped.portion == nil)
+        #expect(dropped.selectedFoodItemId == hass.id, "binding is the caller's call")
+        let plain = ManualRecipeIngredientInput(name: "x", quantity: 3, unit: "cup")
+        #expect(plain.droppingPortion() == plain)
+        var foods: [FoodItem] = []
+        let saved = try #require(CustomIngredientUpsert.recipeIngredients(from: [row], selectionCatalog: [], in: &foods,
+                                                                          verifiedAt: Date()).first)
+        let minted = try #require(foods.first)
+        #expect(minted.servingSize == 272 && minted.servingUnit == "g", "never a 2 g serving")
+        #expect(saved.quantity == 272 && saved.unit == "g" && saved.foodItemId == minted.id)
+    }
+
+    // MARK: - The estimate after save
+
+    /// Fix round 1 (finding s2-L-F4b-DT-2): a saved line counted in a curated typical size is still an
+    /// estimate on the recipe page — worked out from the food, with no wire change — while the food's
+    /// own portion, the person's corrected size and a plain grams line are not.
+    @Test func aSavedTypicalSizeIsStillAnEstimate() {
+        let hass = Self.food("Avocado, Hass, peeled, raw", [FoodPortion(amount: 1, unit: "RACC", gramWeight: 140)])
+        func line(_ food: FoodItem, _ label: String?, _ perOne: Double, _ grams: Double) -> RecipeIngredient {
+            RecipeIngredient(foodItemId: food.id, quantity: grams, unit: "g",
+                             householdMeasure: label.map { RecipeHouseholdMeasure(label: $0, gramsPerUnit: perOne) })
+        }
+        #expect(line(hass, "fruit", 136, 272).isTypicalSizeEstimate(using: hass))
+        #expect(!line(hass, "fruit", 150, 300).isTypicalSizeEstimate(using: hass), "the person's own size")
+        #expect(!line(hass, nil, 1, 272).isTypicalSizeEstimate(using: hass))
+        let banana = Self.banana()
+        #expect(!line(banana, "medium", 118, 236).isTypicalSizeEstimate(using: banana), "the banana's own USDA medium")
+        #expect(!line(hass, "fruit", 136, 272).isTypicalSizeEstimate(using: banana), "another food's line")
     }
 
     // MARK: - Save and re-open

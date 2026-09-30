@@ -78,7 +78,9 @@ cannot weigh (2026-09-30, F4b) is weighed by the USDA typical size of the ingred
 (`TypicalPortionTable`): "3 cloves garlic" on the RACC-only raw garlic row is 3 × 3 g, "2 cups
 all-purpose flour" on the RACC-only flour row 2 × 125 g. A row that is not the ingredient (a chip
 cookie for "chocolate chips", a cereal bar for "milk") gets no typical size, and the line stays left
-out.
+out. Such a line is COUNTED AS ESTIMATED (F4b fix round 1): ``ImportedRecipe/estimatedIngredientCount``
+carries how many lines leaned on a typical size, and the saved recipe says so beside its macros, so an
+estimate built partly on curated sizes never reads as one built on the rows' own data.
 
 Two pieces of that guard are deliberately PUBLIC so the app-target product importer can reuse them
 rather than grow a second, drifting copy (2026-08-18): ``RecipeWebImporter/isSafePublicHTTPSURL(_:)``

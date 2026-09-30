@@ -379,6 +379,21 @@ only the recipe editor and the web importer's fallback read it. A caption's coun
 where the label ends in one (``RecipeHouseholdMeasure/headTakesPlural``: "2 eggs", "2 cups, sliced",
 but "2 medium").
 
+F4b fix round 1 tightened four invariants. A row IS a typical-size entry's ingredient only where
+USDA files it with that ingredient — a USDA row must sit in one of the entry's
+``TypicalPortionEntry/categories`` (fail-closed: a chocolate egg, a sesame or hazelnut butter, an oat
+milk, a pasta sauce, a canned potato get no estimate; a person's own food carries no USDA category and
+is read by its words alone). A pick of a mass unit keeps the weight of a count, volume or serving —
+the banana's "1 each" shown as "1 medium (118 g)" becomes 118 g, exactly as a named portion does
+(``RecipePortionPicker/quantity(afterChoosing:standingIn:from:unit:portion:heldGramsPerOne:)``), while
+a number typed in one mass unit still follows it to the next. Every path that stops reading a named
+portion folds it into grams first (``ManualRecipeIngredientInput/droppingPortion()``), so a portion's
+count is never read as grams. And where nothing on the menu counts, the editor asks "How many grams is
+one?" (report §6.3 Rung E, ``RecipePortionPicker/Choices/asksGramsForOne``), saving the answer as the
+person's own size under the frozen label ``RecipePortionPicker/gramsForOneLabel``. A saved line's
+estimate status is worked out again where it is shown (``RecipeIngredient/isTypicalSizeEstimate(using:)``),
+so the recipe page and cooking mode keep the editor's "USDA typical size, estimate" with no wire change.
+
 - ``RecipeDefinition``
 - ``RecipeIngredient``
 - ``RecipeStep``

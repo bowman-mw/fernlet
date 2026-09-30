@@ -27,6 +27,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 import FoodCatalog
+import AppServices
 @testable import AIProviders
 
 /// The web importer's parse, bind and count of everyday recipe lines through its USDA fallback.
@@ -139,6 +140,29 @@ struct RecipeImportIngredientLineTests {
         // chips cup alone voided the estimate).
         let estimate = try #require(RecipeWebImporter.ingredientEstimate(Self.pins.map(\.line), servings: 4, catalog: catalog))
         #expect(estimate.uncountedLines == Self.pins.filter { $0.countedUnit == nil }.count)
+        // …and how many it weighed by a USDA typical size, which the recipe now says too (F4b fix round
+        // 1, finding s2-L-F4b-DT-3): those lines used to be left out and noted.
+        #expect(estimate.estimatedLines == Self.pins.filter(\.byTypicalSize).count)
+        #expect(estimate.estimatedLines > 0, "the pins include typical-size lines")
+    }
+
+    /// The typical-size count rides the import to the saved recipe's note (F4b fix round 1): an
+    /// estimate built partly on typical sizes says so; one built on the rows' own data does not.
+    @Test func aTypicalSizeLineIsCountedAsEstimated() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount > 100_000, "the shipped catalog must be loaded")
+        let estimate = try #require(RecipeWebImporter.ingredientEstimate(
+            ["3 cloves garlic, minced", "2 cups all-purpose flour", "2 large eggs"], servings: 1, catalog: catalog))
+        #expect(estimate.uncountedLines == 0 && estimate.estimatedLines == 2, "\(estimate)")
+        let imported = ImportedRecipe(sourceURL: try #require(URL(string: "https://example.com/r")), name: "Bread",
+                                      ingredients: ["3 cloves garlic"], summary: "", servings: 1, protein: 1, carbs: 1, fat: 1,
+                                      estimatedIngredientCount: estimate.estimatedLines)
+        #expect(RecipeDefinition(importedRecipe: imported).webImport?.estimatedIngredientLines == 2)
+        let own = try #require(RecipeWebImporter.ingredientEstimate(["2 large eggs"], servings: 1, catalog: catalog))
+        #expect(own.estimatedLines == 0)
+        let noTypical = ImportedRecipe(sourceURL: try #require(URL(string: "https://example.com/r")), name: "Eggs",
+                                       ingredients: ["2 large eggs"], summary: "", servings: 1, protein: 1, carbs: 1, fat: 1)
+        #expect(RecipeDefinition(importedRecipe: noTypical).webImport?.estimatedIngredientLines == nil, "no key written")
     }
 
     /// A unit word must end where it ends: "g" never takes the "g" of "garlic", "l" never the "l" of
