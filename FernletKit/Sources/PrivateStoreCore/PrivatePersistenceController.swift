@@ -168,7 +168,7 @@ public final class PrivatePersistenceController {
     public func purgeEncryptedEntities() throws {
         let context = container.viewContext
         try context.performAndWait {
-            for entityName in ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"] {
+            for entityName in Self.sealedEntityNames {
                 let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
                 try context.fetch(request).forEach(context.delete)
             }
@@ -176,6 +176,31 @@ public final class PrivatePersistenceController {
                 try context.saveSealed()
             }
             try PrivatePersistentHistoryPruner.prune(context: context)
+        }
+    }
+
+    /// Every entity whose rows carry sealed columns — the one list ``purgeEncryptedEntities()``
+    /// deletes and ``sealedRowCount()`` counts, so the two can never disagree about what "sealed"
+    /// covers. A new sealed entity joins here in the same commit that adds it to the model.
+    public static let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"]
+
+    /// How many rows the sealed entities hold between them — KEYLESS: a `count(for:)` per entity,
+    /// never a fetch of a column, so it answers with the app lock closed and decrypts nothing.
+    ///
+    /// Read by `FernletLockService.configure(credential:grantingScope:acknowledgedPriorData:)`
+    /// before a passcode takes custody of a key (the period-data design, §4.4): a fresh key minted
+    /// over rows sealed under a key that no longer exists would leave them unopenable without the
+    /// user ever being told, and adopting an existing key over live rows needs a device-owner check.
+    ///
+    /// - Throws: The Core Data fetch error; callers treat an unanswerable count as "rows may exist".
+    public func sealedRowCount() throws -> Int {
+        let context = container.viewContext
+        return try context.performAndWait {
+            var total = 0
+            for entityName in Self.sealedEntityNames {
+                total += try context.count(for: NSFetchRequest<NSManagedObject>(entityName: entityName))
+            }
+            return total
         }
     }
 

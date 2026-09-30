@@ -650,3 +650,57 @@ private final class DuressAuditCapture {
         return events.contains { $0.event.localizedCaseInsensitiveContains(needle) }
     }
 }
+
+// MARK: - Turning the passcode off under duress (period-data design 2026-09-30, §4.5, invariant I23)
+
+extension DuressLockTests {
+
+    /// `removeCredential` consults the duress verifier FIRST, runs the armed response, and then
+    /// throws `invalidPasscode` — the `unlock`-on-App-lock-settings shape, never `changeCredential`'s
+    /// silent success. Removal is observable (the status would flip and Private would open with a
+    /// tap), so a reported success that removed nothing would be the tell. Nothing about the real lock
+    /// moves: every credential row is exactly as the response left it, no device-custody row appears,
+    /// and the service sits in the LOCKED decoy, counter- and audit-identical to a mistype.
+    @Test func removingThePasscodeWithTheDuressPINRunsTheResponseAndRemovesNothing() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .appLockSettings)
+        try await service.configureDuress(pin: "654321", mode: .decoy)
+        let rows: [LockKeychainKey] = [.salt, .verifier, .kind, .scryptN, .wrappedContentKey,
+                                       .seWrappedContentKey, .duressSalt, .duressVerifier, .duressMode]
+        let before = rows.map { duressRow($0, harness) }
+
+        await #expect(throws: FernletLockError.invalidPasscode) {
+            try await service.removeCredential(current: "654321")
+        }
+
+        #expect(rows.map { duressRow($0, harness) } == before, "a duress removal must leave every row as it was")
+        #expect(duressRow(.deviceContentKey, harness) == nil, "a duress removal must never write device custody")
+        #expect(service.isDuressSessionActive)
+        #expect(service.state == .locked(cooldownDeadline: nil), "the App-lock page must close exactly as on a mistype")
+        #expect(!service.hasResidentContentKey)
+        #expect(service.hasDuressConfigured)
+    }
+
+    /// The same entry point under an armed SILENT WIPE: the wipe runs (the throwaway lock replaces
+    /// the real records) and the removal still reports a mistype — it never turns the passcode off.
+    @Test func removingThePasscodeWithASilentWipeDuressPINWipesAndStillRefuses() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .appLockSettings)
+        try await service.configureDuress(pin: "654321", mode: .silentWipe)
+        let realVerifier = try #require(duressRow(.verifier, harness))
+
+        await #expect(throws: FernletLockError.invalidPasscode) {
+            try await service.removeCredential(current: "654321")
+        }
+
+        let throwawayVerifier = try #require(duressRow(.verifier, harness), "the wipe re-mints a throwaway lock")
+        #expect(throwawayVerifier != realVerifier, "the silent wipe must have run")
+        #expect(duressRow(.salt, harness) != nil, "a duress removal must never leave the passcode off")
+        #expect(duressRow(.deviceContentKey, harness) == nil)
+        #expect(service.isDuressSessionActive)
+    }
+}

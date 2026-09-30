@@ -2695,7 +2695,9 @@ struct AppLockSettingsView: View {
 
     private var statusLabel: String {
         switch lockService.state {
-        case .notConfigured: return "Not configured"
+        // The tap-opened Private tab is a no-passcode state; the no-passcode copy lands with the
+        // Settings work that makes it reachable (period-data design §10.3).
+        case .notConfigured, .openedWithoutPasscode: return "Not configured"
         case .locked(let d):
             if let d { return "Locked (cooldown until \(d.formatted(.dateTime.hour().minute())))" }
             return lockService.requiresReset ? "Locked (reset required)" : "Locked"
@@ -2705,7 +2707,7 @@ struct AppLockSettingsView: View {
 
     private var statusColor: Color {
         switch lockService.state {
-        case .notConfigured: Color.softTaupe
+        case .notConfigured, .openedWithoutPasscode: Color.softTaupe
         case .locked: Color.terracotta
         case .unlocked: Color.moss
         }

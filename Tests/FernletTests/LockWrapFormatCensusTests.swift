@@ -242,3 +242,28 @@ struct LockWrapFormatCensusTests {
         )
     }
 }
+
+// MARK: - The device-custody row (period-data design 2026-09-30, §4.2)
+
+extension LockWrapFormatCensusTests {
+
+    /// The device row is classified by the SAME marker constants its writer stamps, never by an
+    /// open: `FDS1` enclave-wrapped, `FDR1` raw, anything else unknown (retryable, never terminal),
+    /// empty malformed, a failed read unreadable — and an unnamed slot is indeterminate, not absent.
+    @Test func theDeviceCustodyRowIsClassifiedByItsMarkerOnly() {
+        let body = Data(repeating: 0x5A, count: 32)
+        #expect(LockWrapFormatCensus.classifyDeviceCustody(.found(Data("FDS1".utf8) + body)) == .enclaveWrapped)
+        #expect(LockWrapFormatCensus.classifyDeviceCustody(.found(Data("FDR1".utf8) + body)) == .raw)
+        #expect(LockWrapFormatCensus.classifyDeviceCustody(.found(Data("FDS2".utf8) + body)) == .unknownMarker)
+        #expect(LockWrapFormatCensus.classifyDeviceCustody(.found(Data("FDS1".utf8))) == .unknownMarker,
+                "a marker with no body is not a row this build can open")
+        #expect(LockWrapFormatCensus.classifyDeviceCustody(.found(Data())) == .malformedEmpty)
+        #expect(LockWrapFormatCensus.classifyDeviceCustody(.absent) == .absent)
+        #expect(LockWrapFormatCensus.classifyDeviceCustody(.unreadable(errSecInteractionNotAllowed))
+                == .unreadable(errSecInteractionNotAllowed))
+        #expect(LockWrapFormatCensus.inspectDeviceCustody(service: "", loadingRow: { _, _ in .absent })
+                == .unreadable(errSecParam))
+        #expect(LockWrapFormatCensus.deviceCustodyAccount == "com.fernlet.lock.deviceContentKey",
+                "the account is a frozen at-rest token")
+    }
+}

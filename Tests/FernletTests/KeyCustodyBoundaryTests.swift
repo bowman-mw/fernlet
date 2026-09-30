@@ -58,8 +58,10 @@ struct KeyCustodyBoundaryTests {
         // scrypt-openable copy of the content key for its whole (bounded) lifetime, so a staging
         // copy under a weaker class than the live row would out-expose it — the inheritance is
         // asserted through the REAL store path here, not assumed (T-26).
+        // `.deviceContentKey` is the no-passcode home of the content key (period-data design §4.2):
+        // it rides the same store path, so it must land in the same class.
         for key in [LockKeychainKey.salt, .verifier, .wrappedContentKey,
-                    .wrappedContentKeyRewrapStaging, .seWrappedContentKey] {
+                    .wrappedContentKeyRewrapStaging, .seWrappedContentKey, .deviceContentKey] {
             #expect(KeychainItem.store(Data([0xAB]), for: key, service: service) == errSecSuccess)
             let attrs = rowAttributes(account: key.rawValue, service: service)
             #expect(attrs?.accessible == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String,
@@ -118,6 +120,45 @@ struct KeyCustodyBoundaryTests {
                     "\(key.rawValue) must be WhenUnlockedThisDeviceOnly")
             #expect(attrs?.synchronizable == false, "\(key.rawValue) must never sync")
         }
+    }
+
+    // MARK: The device-custody row through the REAL tap (period-data design §4.2, invariant I7):
+    // the production enclave wrapper, the production store path, the production keychain. On
+    // enclave hardware (Apple-silicon simulators included) the row is `FDS1` and nothing else; either
+    // way it is WhenUnlockedThisDeviceOnly and never synchronizable, and the key it holds opens the
+    // same Private tab after a relaunch.
+    @MainActor
+    @Test func theDeviceCustodyRowIsWhenUnlockedThisDeviceOnlyThroughTheRealTap() throws {
+        let service = "com.fernlet.lock.test.custody.device.\(UUID().uuidString)"
+        defer {
+            KeychainItem.deleteAll(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+        let makeService = {
+            FernletLockService(
+                keychainService: service,
+                sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+                narrativeBufferScope: uniqueNarrativeBufferScope(),
+                privatePersistenceController: PrivatePersistenceController(inMemory: true)
+            )
+        }
+        let lockService = makeService()
+        try lockService.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        let key = try #require(lockService.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
+
+        let row = try #require(KeychainItem.load(for: .deviceContentKey, service: service))
+        let expectedMarker = SecureEnclaveContentKeyWrap.isAvailable ? "FDS1" : "FDR1"
+        #expect(row.starts(with: Data(expectedMarker.utf8)), "the device row must be \(expectedMarker) on this host")
+        if SecureEnclaveContentKeyWrap.isAvailable {
+            #expect(row.range(of: key) == nil, "an enclave device must never hold the raw key in the row")
+        }
+        let attrs = rowAttributes(account: LockKeychainKey.deviceContentKey.rawValue, service: service)
+        #expect(attrs?.accessible == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
+        #expect(attrs?.synchronizable == false, "the device-custody row must never sync")
+
+        let relaunched = makeService()
+        try relaunched.openWithoutPasscode(for: .privateHub, allowingMint: false)
+        #expect(relaunched.contentKey(for: .privateHub).map { $0.withUnsafeBytes { Data($0) } } == key)
     }
 
     // MARK: The pending buffer's key (period-data design §6.5, review R1-F5, invariant I21's key

@@ -1385,7 +1385,9 @@ struct ContentView: View {
             }
         case .unlocked, .locked:
             store.deactivateSealedJournals()
-        case .notConfigured:
+        // `.openedWithoutPasscode` is mapped like `.notConfigured` until the tap-opened Private tab
+        // is reachable (period-data design §13 unit 2, which activates it with the hub key).
+        case .notConfigured, .openedWithoutPasscode:
             store.activateNoLockJournals()
         }
     }

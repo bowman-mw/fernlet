@@ -148,3 +148,4 @@ escape hatch for off-main readers that need the live persisted value.
 ### App-Lock Errors
 
 - ``FernletLockError``
+- ``FernletLockPromptCopy``

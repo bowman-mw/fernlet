@@ -465,7 +465,7 @@ struct ProximityRecipeShareSheet: View {
     /// after the sheet has gone.
     private static func allowsListening(_ state: FernletLockState) -> Bool {
         switch state {
-        case .notConfigured, .unlocked: true
+        case .notConfigured, .unlocked, .openedWithoutPasscode: true
         case .locked: false
         }
     }

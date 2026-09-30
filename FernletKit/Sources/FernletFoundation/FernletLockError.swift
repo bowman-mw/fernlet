@@ -67,6 +67,22 @@ public enum FernletLockError: Error, LocalizedError, Equatable {
     /// has written or deleted a row, so the wrap, the verifier, the salt, the enclave wrap and the
     /// biometric bypass all survive the refusal untouched.
     case contentKeyWrapFormatRetired
+    /// No passcode is set and this iPhone holds no device-custody key yet, and the caller did not
+    /// allow one to be minted. Routing, not a failure: the app's open coordinator checks for entries
+    /// sealed under a key that no longer exists before it asks again with minting allowed.
+    case deviceKeyAbsent
+    /// A key-bearing lock row is present (or custodian recovery is owed) while the device-custody
+    /// row is absent, so minting a fresh key could strand whatever that row still seals. Nothing was
+    /// written. Retryable from the user's side: it never names a reset.
+    case deviceCustodyInconsistent
+    /// A passcode was about to be set with a FRESH key while the private store still holds sealed
+    /// entries, and the caller has not yet had them classified. The setup flow routes through the
+    /// app's open coordinator, which shows the user what cannot be opened and asks again with the
+    /// acknowledgement. Nothing was written.
+    case priorSealedDataPending
+    /// Setting a passcode over existing entries needs a fresh device-owner check (Face ID, Touch ID
+    /// or the iPhone passcode), and it was cancelled or failed. Nothing was written.
+    case ownerVerificationFailed
 
     /// User-facing description for each case, suitable for direct display in the lock UI.
     ///
@@ -135,6 +151,40 @@ public enum FernletLockError: Error, LocalizedError, Equatable {
                           defaultValue: "This phone's saved key is in an older format Fernlet no longer opens. Reset app lock to continue.",
                           bundle: .module,
                           comment: "Shown when the passcode was CORRECT but the stored content-key wrap is in a retired at-rest format this build no longer reads. Must NOT suggest retrying the passcode — nothing about the entry was wrong — and must name the destructive reset as the only way forward.")
+        case .deviceKeyAbsent, .deviceCustodyInconsistent, .priorSealedDataPending, .ownerVerificationFailed:
+            return Self.deviceCustodyDescription(for: self)
+        }
+    }
+
+    /// The four device-custody wordings (period-data design 2026-09-30, §4.3 and §4.4), lifted out
+    /// of ``errorDescription`` so that switch stays one screen long. `nil` for every other case.
+    ///
+    /// None of them says "locked", "protected" or "secured" about the no-passcode state, and none
+    /// names a reset: each describes a state the user can retry or answer.
+    nonisolated static func deviceCustodyDescription(for error: FernletLockError) -> String? {
+        switch error {
+        case .deviceKeyAbsent:
+            return String(localized: "lock.error.deviceKeyAbsent",
+                          defaultValue: "Private isn't set up on this iPhone yet.",
+                          bundle: .module,
+                          comment: "Shown if the Private tab is opened before this iPhone has its own key for private entries. Routing state; the app normally handles it before anything is shown.")
+        case .deviceCustodyInconsistent:
+            return String(localized: "lock.error.deviceCustodyInconsistent",
+                          defaultValue: "Fernlet can't open this right now. Try again in a moment.",
+                          bundle: .module,
+                          comment: "Shown on the Private tab's Unlock screen when the saved key records disagree with each other. Must never mention resetting: nothing is lost and a retry can succeed.")
+        case .priorSealedDataPending:
+            return String(localized: "lock.error.priorSealedDataPending",
+                          defaultValue: "Fernlet needs to check the private entries on this iPhone before it sets a passcode.",
+                          bundle: .module,
+                          comment: "Shown if a passcode is being set while the private store still holds entries that have not been checked yet. The app normally answers this with a review screen.")
+        case .ownerVerificationFailed:
+            return String(localized: "lock.error.ownerVerificationFailed",
+                          defaultValue: "Fernlet couldn't confirm it's you, so the passcode wasn't set.",
+                          bundle: .module,
+                          comment: "Shown when the Face ID or iPhone passcode check before setting an app passcode over existing entries was cancelled or failed.")
+        default:
+            return nil
         }
     }
 
@@ -187,5 +237,22 @@ public enum FernletLockError: Error, LocalizedError, Equatable {
                       defaultValue: "Keychain \(operation) failed with status \(status).",
                       bundle: .module,
                       comment: "Diagnostic for a failed keychain call whose OSStatus has no system message. First argument is an untranslated internal operation name ('add', 'read'), second the raw OSStatus.")
+    }
+}
+
+/// System-sheet copy the lock stack hands to LocalAuthentication, kept beside ``FernletLockError``
+/// because this is the lowest module both the lock service and the lock UI can reach, and the only
+/// one of the two with a string catalog of its own.
+///
+/// Package source, so every lookup passes `bundle: .module`. Concurrency: a caseless namespace of
+/// computed members; no state.
+public enum FernletLockPromptCopy {
+    /// The reason shown under the Face ID / iPhone passcode sheet before a new app passcode adopts
+    /// the key that already opens this iPhone's private entries (period-data design §4.4 step 3).
+    public static var deviceOwnerCheckReason: String {
+        String(localized: "lock.ownerCheck.reason",
+               defaultValue: "Confirm it's you before setting a passcode.",
+               bundle: .module,
+               comment: "Reason line on the system Face ID or iPhone passcode sheet shown before an app passcode is set over existing private entries.")
     }
 }

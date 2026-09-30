@@ -96,7 +96,9 @@ final class WorryBoxService {
     /// merely because the caller happened to hand us a nil key.
     func updateActivation(lockState: FernletLockState, contentKey: SymmetricKey?) {
         switch lockState {
-        case .notConfigured:
+        // `.openedWithoutPasscode` is mapped like `.notConfigured` until the tap-opened Private tab
+        // is reachable (period-data design §13 unit 2).
+        case .notConfigured, .openedWithoutPasscode:
             mode = .noLock
             userContentKey = nil
         case .unlocked(.privateHub):
