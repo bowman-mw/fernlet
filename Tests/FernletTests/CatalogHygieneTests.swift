@@ -8,8 +8,9 @@
 //       served beside the file from `FoodCatalogSupplement.json` (`BundledFoodSupplement`), which
 //       `Scripts/food-catalog/sr_zero_energy_supplement.py` regenerates by rule from USDA's SR
 //       Legacy file;
-//   (2) 763 branded products the source filed as SR Legacy retyped `branded` by category
-//       (`BundledRowCorrection.retypingMisfiledBrandedProducts`);
+//   (2) 773 branded products the source filed as SR Legacy retyped `branded` — 763 by category, ten
+//       filed under an SR food group by FDC id (`BundledRowCorrection.retypingMisfiledBrandedProducts`;
+//       `Scripts/food-catalog/misfiled_branded_audit.py` checks both rules against FDC's `food.csv`);
 //   (3) identical-name catalog rows collapsed to one in a TYPED search (`TypeaheadDuplicateCollapse`),
 //       never touching a person's own rows.
 
@@ -30,6 +31,11 @@ struct CatalogHygieneTests {
     static let annieCookieBitesID = UUID(uuidString: "00000000-0000-5000-8000-000000349170")
     /// FDC 746761, a beef top round — a REAL generic in the same FDC-id range as the misfiled products.
     static let beefRoundID = UUID(uuidString: "00000000-0000-5000-8000-000000746761")
+    /// "Chex Mix Popped! Sweet and Salty Snack Mix", FDC 610514 — a branded product filed as SR Legacy
+    /// UNDER an SR food group ("Snacks"), on a 31 g label serving with per-100 g macros.
+    static let chexMixID = UUID(uuidString: "00000000-0000-5000-8000-000000610514")
+    /// "Ritz Crackers Smoky Bacon", FDC 770436 — filed "Snacks" too, on a 100 g serving.
+    static let ritzBaconID = UUID(uuidString: "00000000-0000-5000-8000-000000770436")
 
     static func shippedCatalog() throws -> FoodCatalog {
         let catalog = FoodCatalog.bundled()
@@ -143,7 +149,30 @@ struct CatalogHygieneTests {
         #expect(beef.dataType == .srLegacy, "a real generic in the same id range keeps its SR Legacy food group")
     }
 
-    /// The guard: only a compact-source `srLegacy` row outside SR Legacy's food groups moves.
+    /// The ten products filed under an SR food group, which no category rule can see, are retyped by
+    /// FDC id — and Chex Mix, on a label serving, is rebased with it: 31 g of it was P7 C77 F11
+    /// (about 1,400 kcal per 100 g); it is now 100 g of that, with the 31 g bag as an "each".
+    @Test func productsFiledUnderAnSRFoodGroupAreRetypedByID() throws {
+        let catalog = try Self.shippedCatalog()
+        let chex = try Self.shipped(catalog, Self.chexMixID)
+        #expect(chex.category == "Snacks" && BundledRowCorrection.srLegacyFoodGroups.contains(chex.category))
+        #expect(chex.dataType == .branded)
+        #expect(chex.servingSize == 100 && chex.macros == Macros(protein: 7, carbs: 77, fat: 11))
+        #expect(chex.portions.map(\.gramWeight) == [31] && chex.preferredRecipeUnit == .each)
+        let ritz = try Self.shipped(catalog, Self.ritzBaconID)
+        #expect(ritz.dataType == .branded && ritz.servingSize == 100 && ritz.portions.isEmpty,
+                "a 100 g row is retyped and left on its basis")
+        #expect(BundledRowCorrection.brandedFDCIDsInSRFoodGroups.count == 10)
+        let ids = try BundledRowCorrection.brandedFDCIDsInSRFoodGroups.sorted().map { fdcID in
+            try #require(UUID(uuidString: String(format: "00000000-0000-5000-8000-%012d", fdcID)))
+        }
+        let rows = catalog.items(ids: ids)
+        #expect(rows.count == 10 && rows.allSatisfy { $0.dataType == .branded && $0.category == "Snacks" },
+                "every frozen id is a shipped Snacks row, retyped")
+    }
+
+    /// The guard: only a compact-source `srLegacy` row outside SR Legacy's food groups, or one of the
+    /// ten frozen FDC ids, moves.
     @Test func onlyNonSRCategoriesAreRetyped() throws {
         func row(_ id: String, _ type: FoodDataType, _ category: String) throws -> FoodItem {
             FoodItem(id: try #require(UUID(uuidString: id)), name: "Row", servingSize: 100, servingUnit: "g",
@@ -157,6 +186,14 @@ struct CatalogHygieneTests {
         let gtin = "88C4EB4B-4E4E-41FA-91A4-811533FD52C6"
         #expect(BundledRowCorrection.corrected(try row(gtin, .srLegacy, "Confectionery Products")).dataType == .srLegacy)
         #expect(BundledRowCorrection.srLegacyFoodGroups.count == 25)
+        // The id rule: a frozen FDC id moves even under an SR food group; the same group under any
+        // other id stays; a non-compact id never parses to an FDC id at all.
+        let chex = "00000000-0000-5000-8000-000000610514"
+        #expect(BundledRowCorrection.corrected(try row(chex, .srLegacy, "Snacks")).dataType == .branded)
+        #expect(BundledRowCorrection.corrected(try row(compact, .srLegacy, "Snacks")).dataType == .srLegacy)
+        #expect(BundledRowCorrection.corrected(try row(chex, .survey, "Snacks")).dataType == .survey)
+        #expect(BundledRowCorrection.compactSourceFDCID(try #require(UUID(uuidString: chex))) == 610_514)
+        #expect(BundledRowCorrection.compactSourceFDCID(try #require(UUID(uuidString: gtin))) == nil)
     }
 
     // MARK: - (3) Identical-name collapse

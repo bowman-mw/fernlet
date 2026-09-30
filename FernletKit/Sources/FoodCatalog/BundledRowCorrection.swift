@@ -47,7 +47,13 @@ import FernletDomainModel
 /// an SR Legacy food, and every one carries a branded-food category ("Confectionery Products",
 /// "Cheese/Cheese Substitutes") rather than one of SR Legacy's 25 food groups, so they are retyped
 /// `branded` BY CATEGORY — not by FDC-id range, which also holds real generics (FDC 746761, a beef
-/// round). Retyped before the F2 rebase, so the 46 of them on a label serving are rebased too.
+/// round). Ten more sit under an SR food group ("Snacks": Chex Mix, two fruit snacks, seven Ritz
+/// rows), where no category rule can see them, so they are retyped by FDC id
+/// (``brandedFDCIDsInSRFoodGroups``). FDC's own `food.csv` is the referee for both halves: it types
+/// exactly these 773 compact `srLegacy` rows `branded_food` and every other one `sr_legacy_food` or
+/// `foundation_food` (`Scripts/food-catalog/misfiled_branded_audit.py` re-checks that against the
+/// manifest-pinned archive). Retyped before the F2 rebase, so the 49 of them on a label serving are
+/// rebased too.
 nonisolated enum BundledRowCorrection {
     /// The id prefix the catalog generator mints for rows decoded from the compact USDA source JSON
     /// (`00000000-0000-5000-8000-<12-digit fdcId>`, see `USDAFoodItemRecord.stableUSDAID`). A frozen
@@ -80,20 +86,40 @@ nonisolated enum BundledRowCorrection {
         "Vegetables and Vegetable Products"
     ]
 
+    /// The branded products the source filed as SR Legacy UNDER one of SR Legacy's food groups, so the
+    /// category rule cannot see them: "Chex Mix Popped! Sweet and Salty Snack Mix" (610514), two fruit
+    /// snacks (610498, 759352) — all three on a label serving with per-100 g macros — and seven Ritz
+    /// rows (769386 … 770888), all filed "Snacks". Keyed by FDC id, the stable id's last 12 digits.
+    /// FROZEN: the committed catalog is never regenerated, and FDC's `food.csv` types these ten, and no
+    /// other compact `srLegacy` row in an SR food group, `branded_food`
+    /// (`Scripts/food-catalog/misfiled_branded_audit.py` reads this literal and re-checks it).
+    static let brandedFDCIDsInSRFoodGroups: Set<Int> = [
+        610498, 610514, 759352, 769386, 770136, 770372, 770410, 770436, 770678, 770888
+    ]
+
     /// Every load-time correction, in order, applied to one hydrated row.
     static func corrected(_ item: FoodItem) -> FoodItem {
         rebasingBrandedNutrients(retypingMisfiledBrandedProducts(aliasingRawServingUnit(item)))
     }
 
     /// F6: types a compact-source `srLegacy` row `branded` when its category is not an SR Legacy food
-    /// group. Every other row is returned unchanged.
+    /// group, or when it is one of the ``brandedFDCIDsInSRFoodGroups``. Every other row is returned
+    /// unchanged.
     static func retypingMisfiledBrandedProducts(_ item: FoodItem) -> FoodItem {
-        guard item.dataType == .srLegacy,
-              item.id.uuidString.hasPrefix(compactSourceIDPrefix),
-              !srLegacyFoodGroups.contains(item.category) else { return item }
+        guard item.dataType == .srLegacy, let fdcID = compactSourceFDCID(item.id),
+              !srLegacyFoodGroups.contains(item.category) || brandedFDCIDsInSRFoodGroups.contains(fdcID)
+        else { return item }
         var retyped = item
         retyped.dataType = .branded
         return retyped
+    }
+
+    /// The FDC id a compact-source stable id carries (`00000000-0000-5000-8000-<12-digit fdcId>`), or
+    /// nil for any other id.
+    static func compactSourceFDCID(_ id: UUID) -> Int? {
+        let text = id.uuidString
+        guard text.hasPrefix(compactSourceIDPrefix) else { return nil }
+        return Int(text.suffix(12))
     }
 
     /// F1(a): rewrites a raw FDC serving-unit code (`GRM`, `GM`, `MLT`) to the token it means.

@@ -79,9 +79,12 @@ keeping a gram label serving as a count portion ("1 serving (28 g)", unit `each`
 still means one label serving. The attachable On-Demand-Resource catalog is on the label basis
 already and carries none of those ids, so it passes through untouched. It also reads USDA's raw
 serving-unit codes — `GRM`/`GM` as `g`, `MLT` as `ml` — in both catalogs, so those rows convert in
-grams or milliliters instead of refusing every amount, and it types the 763 packaged products the
-source filed as SR Legacy (a category outside SR Legacy's 25 food groups) as `branded`, so they no
-longer sit in the generic tier.
+grams or milliliters instead of refusing every amount, and it types the 773 packaged products the
+source filed as SR Legacy as `branded`, so they no longer sit in the generic tier: 763 by category (a
+category outside SR Legacy's 25 food groups) and ten filed under one of those groups by FDC id
+(Chex Mix, two fruit snacks and seven Ritz rows, all "Snacks"). FDC's own `food.csv` types exactly
+those 773 `branded_food`; `Scripts/food-catalog/misfiled_branded_audit.py` re-checks both rules
+against the manifest-pinned archive.
 
 Three more hygiene fixes ride the same no-regeneration rule. The catalog build dropped every SR
 Legacy food with zero protein, carbohydrate and fat, which is why "salt" found nothing: the 26 of
