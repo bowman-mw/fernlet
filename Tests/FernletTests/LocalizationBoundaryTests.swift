@@ -727,6 +727,8 @@ struct LocalizationBoundaryTests {
         #expect(RecipeWebImporter.countWords == [
             "clove", "cloves", "extra large", "extra small", "large", "medium", "small", "whole"
         ])
+        #expect(RecipeWebImporter.unitSpellingFolds == ["tbsps": "tbsp", "tsps": "tsp"],
+                "plural abbreviations read out of English recipe lines — matching inputs, never display text")
     }
 
     /// Coach-plan wire tokens.

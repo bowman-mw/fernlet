@@ -67,9 +67,13 @@ When a page publishes no nutrition label, the importer estimates macros from its
 against the local USDA catalog (a cold, machine-generated search — no history, no curated alias). Since
 the ingredient-search round's F11 the line reader takes its unit words longest first and requires a
 unit to end where it ends ("2 large eggs" is two eggs, not two liters of "arge eggs"); a count or size
-word binds "each" only on a row with a count portion; and a line that still cannot be counted is
-skipped and counted, never silently and never voiding the page: ``ImportedRecipe/uncountedIngredientCount``
-carries how many lines the estimate left out, and the saved recipe shows it beside its macros.
+word binds "each" only on a row with a count portion; a bare count ("1 lemon") tries "each" too and
+otherwise counts one serving only where that serving is one item (a label serving, FNDDS "1
+sandwich"), never an SR row's 100 g reference amount; a Unicode fraction ("½ cup", "1½ cups") folds
+to ASCII before the amount is read; and a line that still cannot be counted — including one that opens
+with an amount but whose unit word or name cannot be read — is skipped and counted, never silently
+and never voiding the page: ``ImportedRecipe/uncountedIngredientCount`` carries how many lines the
+estimate left out, and the saved recipe shows it beside its macros.
 
 Two pieces of that guard are deliberately PUBLIC so the app-target product importer can reuse them
 rather than grow a second, drifting copy (2026-08-18): ``RecipeWebImporter/isSafePublicHTTPSURL(_:)``

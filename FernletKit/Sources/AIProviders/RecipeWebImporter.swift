@@ -93,8 +93,9 @@ nonisolated struct IngredientMacroEstimate: Equatable {
     let carbs: Int
     /// Per-serving grams of fat.
     let fat: Int
-    /// Lines with an amount that contributed nothing: no catalog row matched their name, or their
-    /// amount does not convert on the row it bound.
+    /// Lines with an amount that contributed nothing: the line could not be read past its amount (a
+    /// unit word the reader cannot use, no food name), no catalog row matched its name, or its amount
+    /// does not convert on the row it bound.
     let uncountedLines: Int
 }
 
@@ -111,7 +112,9 @@ nonisolated struct ParsedIngredientLine: Equatable {
         /// serving, and never voiding the page when it does not.
         case countWord
         /// No unit ("1 lemon", "2 eggs"): "each" first, where the row has a count portion (a lemon is
-        /// its 58 g fruit, not a 100 g serving), otherwise one serving, as before F11.
+        /// its 58 g fruit, not a 100 g serving); otherwise one serving, but only where that serving
+        /// is one item (``servingIsAnItem(_:)``) — never USDA's 100 g reference amount (fix round 1,
+        /// u3-L-U3-4: "1 bay leaf" counted 100 g of the spice, 404 kcal, and "6 strawberries" 600 g).
         case bareCount
     }
 
@@ -125,13 +128,27 @@ nonisolated struct ParsedIngredientLine: Equatable {
     /// How ``unit`` was read.
     let unitReading: UnitReading
 
-    /// The unit tokens tried on the bound row, in order; the first that converts counts the line.
-    var candidateUnits: [String] {
+    /// The unit tokens tried on `row`, the row the line bound, in order; the first that converts
+    /// counts the line, and none converting leaves it out.
+    func candidateUnits(on row: FoodItem) -> [String] {
         switch unitReading {
         case .stated: [unit]
         case .countWord: [RecipeUnit.each.rawValue]
-        case .bareCount: [RecipeUnit.each.rawValue, RecipeUnit.serving.rawValue]
+        case .bareCount: Self.servingIsAnItem(row)
+            ? [RecipeUnit.each.rawValue, RecipeUnit.serving.rawValue] : [RecipeUnit.each.rawValue]
         }
+    }
+
+    /// Whether `row`'s own serving is ONE ITEM, so a bare count with no count portion to read ("3
+    /// bagels") may count servings of it: a serving someone declared — a branded or restaurant label,
+    /// the person's own food, an Open Food Facts or AI row — or a USDA serving stated in a unit that is
+    /// neither a mass nor a volume (FNDDS "1 sandwich", "1 piece"). Not an SR Legacy or Foundation row's
+    /// 100 g reference amount, which is a basis for the numbers and not a portion anyone eats as
+    /// "one", and not a survey dish's "1 cup".
+    static func servingIsAnItem(_ row: FoodItem) -> Bool {
+        guard row.source == .usda, row.dataType != .branded, row.dataType != .restaurant else { return true }
+        guard let unit = RecipeUnit.normalized(row.servingUnit) else { return true }
+        return unit.dimension != .mass && unit.dimension != .volume
     }
 }
 
@@ -946,8 +963,9 @@ public enum RecipeWebImporter {
     /// F11 one such line voided the WHOLE estimate — and with it the page's import — which is how
     /// "1 cup chocolate chips" (a chip cookie with only a bar portion) or "3 cloves garlic" lost every
     /// other line's nutrition. A line with no leading amount ("salt to taste", a "For the sauce:"
-    /// header) is not an amount to count and joins neither side. The estimate still UNDERestimates
-    /// rather than invents: nothing is guessed for a skipped line.
+    /// header) is not an amount to count and joins neither side; a line that STARTS with an amount but
+    /// cannot be read past it is counted as left out (fix round 1, u3-L-U3-2). The estimate still
+    /// UNDERestimates rather than invents: nothing is guessed for a skipped line.
     ///
     /// Returns nil only when no line counted at all.
     ///
@@ -959,7 +977,10 @@ public enum RecipeWebImporter {
         var counted = 0
         var uncounted = 0
         for text in ingredients {
-            guard let line = parseIngredientLine(text) else { continue }
+            guard let line = parseIngredientLine(text) else {
+                if startsWithAmount(text) { uncounted += 1 }
+                continue
+            }
             guard let macros = estimatedMacros(for: line, catalog: catalog) else {
                 uncounted += 1
                 continue
@@ -980,13 +1001,13 @@ public enum RecipeWebImporter {
     }
 
     /// One parsed line's macros on the row its name binds, or nil when the line is not counted: its
-    /// name matches nothing, or none of its ``ParsedIngredientLine/candidateUnits`` converts on the row.
-    /// Machine-generated context — cold, unaliased, one row.
+    /// name matches nothing, or none of its ``ParsedIngredientLine/candidateUnits(on:)`` converts on
+    /// the row. Machine-generated context — cold, unaliased, one row.
     nonisolated static func estimatedMacros(for line: ParsedIngredientLine, catalog: FoodCatalog) -> Macros? {
         guard let match = catalog.results(for: line.name, limit: 1, context: .machineGenerated).first else {
             return nil
         }
-        for unit in line.candidateUnits {
+        for unit in line.candidateUnits(on: match) {
             let ingredient = RecipeIngredient(foodItemId: match.id, quantity: line.quantity, unit: unit)
             if let conversion = ingredient.servingConversion(using: match) {
                 return conversion.scaledMacros(for: match)
@@ -1009,6 +1030,22 @@ public enum RecipeWebImporter {
         "small", "whole", "tbsps?", "tsps?", "cups?", "each", "lbs?", "mg", "kg", "ml", "oz", "g", "l"
     ]
 
+    /// Plural abbreviations ``unitAlternatives`` matches ("tbsps?", "tsps?") that
+    /// `RecipeUnit.normalized` does not spell, each mapped to the spelling it does (fix round 1,
+    /// u3-L-U3-3: "2 tbsps olive oil" was read as a bare count — two 100 g servings of oil). FROZEN
+    /// English matching inputs, compared after lowercasing and collapsing inner whitespace.
+    nonisolated static let unitSpellingFolds: [String: String] = ["tbsps": "tbsp", "tsps": "tsp"]
+
+    /// Unicode vulgar fractions recipe pages write amounts with ("½ cup butter", "1½ cups flour"), and
+    /// the ASCII fraction each folds to before a line is read. ICU's `\d` matches none of them (they
+    /// are `No`, not `Nd`), so before the fold (fix round 1, u3-L-U3-2) "½ cup butter" had no leading
+    /// amount and was dropped without being counted. Numeric symbols, not words.
+    nonisolated static let vulgarFractions: [Character: String] = [
+        "¼": "1/4", "½": "1/2", "¾": "3/4", "⅐": "1/7", "⅑": "1/9", "⅒": "1/10", "⅓": "1/3", "⅔": "2/3",
+        "⅕": "1/5", "⅖": "2/5", "⅗": "3/5", "⅘": "4/5", "⅙": "1/6", "⅚": "5/6", "⅛": "1/8", "⅜": "3/8",
+        "⅝": "5/8", "⅞": "7/8"
+    ]
+
     /// Count and size words that mean "this many of the food" rather than a measure: they bind "each",
     /// and only on a row that has a count portion (never a 100 g "serving"). FROZEN English matching
     /// inputs, compared after lowercasing and collapsing inner whitespace.
@@ -1024,11 +1061,12 @@ public enum RecipeWebImporter {
     }
 
     /// One line as the USDA fallback reads it: a leading amount (mixed fraction "1 1/2", fraction
-    /// "3/4", decimal or integer), an optional unit from ``unitAlternatives`` that must END there
-    /// (whitespace, a comma, the line's end, or a period then one of those — "2 tbsp. butter"), then
-    /// the food name, cleaned. nil when there is no leading amount or no name.
+    /// "3/4", decimal or integer — a Unicode "½" or "1½" folds to those first), an optional unit from
+    /// ``unitAlternatives`` that must END there (whitespace, a comma, the line's end, or a period then
+    /// one of those — "2 tbsp. butter"), then the food name, cleaned. nil when there is no leading
+    /// amount, no name, or a unit word the reader matched but cannot use.
     nonisolated static func parseIngredientLine(_ text: String) -> ParsedIngredientLine? {
-        let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let s = foldingVulgarFractions(text).trimmingCharacters(in: .whitespacesAndNewlines)
         let units = unitAlternatives.joined(separator: "|")
         let pattern = #"^(\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)\s*(?:("# + units + #")\.?(?=[\s,]|$))?[\s,]*(.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
@@ -1049,8 +1087,33 @@ public enum RecipeWebImporter {
         let name = cleanFoodName(String(s[nRange]))
         guard name.count >= 3 else { return nil }
 
-        let (unit, reading) = resolveUnit(unitStr)
+        guard let (unit, reading) = resolveUnit(unitStr) else { return nil }
         return ParsedIngredientLine(quantity: quantity, unit: unit, name: name, unitReading: reading)
+    }
+
+    /// `text` with each ``vulgarFractions`` character folded to ASCII — "1½" and "1 ½" both read
+    /// "1 1/2", a lone "½" reads "1/2" — and the fraction slash (U+2044, "1⁄2") to "/". One pass over
+    /// at most ``maxImportedIngredientLineCharacters`` characters, the cap every page line enters at.
+    nonisolated static func foldingVulgarFractions(_ text: String) -> String {
+        var folded = ""
+        var previous: Character?
+        for character in text.prefix(maxImportedIngredientLineCharacters) {
+            if let ascii = vulgarFractions[character] {
+                if let previous, previous.isASCII, previous.isNumber { folded.append(" ") }
+                folded += ascii
+            } else {
+                folded.append(character == "\u{2044}" ? "/" : character)
+            }
+            previous = character
+        }
+        return folded
+    }
+
+    /// Whether `text` opens with an amount — any numeral, a Unicode fraction included. Such a line is
+    /// a quantity of something, so when it cannot be read it is counted as left out rather than
+    /// passed over like "salt to taste".
+    nonisolated static func startsWithAmount(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).first?.isNumber == true
     }
 
     nonisolated private static func parseQuantity(_ text: String) -> Double? {
@@ -1075,14 +1138,17 @@ public enum RecipeWebImporter {
         return num / den
     }
 
-    /// The unit token a parsed unit word binds, and how it was read: a `RecipeUnit` spelling is
-    /// stated; a ``countWords`` word binds "each" as a count; no word at all is a bare count ("1
-    /// lemon"), tried as "each" and then as one serving.
-    nonisolated private static func resolveUnit(_ unitString: String) -> (String, ParsedIngredientLine.UnitReading) {
-        if let unit = RecipeUnit.normalized(unitString) { return (unit.rawValue, .stated) }
+    /// The unit token a parsed unit word binds, and how it was read: a `RecipeUnit` spelling (after
+    /// collapsing inner whitespace and ``unitSpellingFolds``) is stated; a ``countWords`` word binds
+    /// "each" as a count; no word at all is a bare count ("1 lemon"), tried as "each" and then as one
+    /// serving. nil for a word the unit pattern matched but neither list reads — such a line is left
+    /// out and counted, never read as a bare count (fix round 1, u3-L-U3-3).
+    nonisolated private static func resolveUnit(_ unitString: String) -> (String, ParsedIngredientLine.UnitReading)? {
         let word = unitString.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !word.isEmpty else { return (RecipeUnit.serving.rawValue, .bareCount) }
+        if let unit = RecipeUnit.normalized(unitSpellingFolds[word] ?? word) { return (unit.rawValue, .stated) }
         if countWords.contains(word) { return (RecipeUnit.each.rawValue, .countWord) }
-        return (RecipeUnit.serving.rawValue, .bareCount)
+        return nil
     }
 
     nonisolated private static func cleanFoodName(_ text: String) -> String {

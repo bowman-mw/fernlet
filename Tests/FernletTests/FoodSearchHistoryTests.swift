@@ -461,8 +461,10 @@ struct FoodSearchHistoryCatalogTests {
         #expect(catalog.results(for: "flour", limit: 1, context: .userTyped).first?.id == bravo.id,
                 "precondition: the warm profile did not discriminate the importer test")
 
+        // "100 g", not "1": since the ingredient-search round's fix round 1 a bare count counts no
+        // 100 g reference serving, and this pin is about which row binds, not the count rule.
         let estimate = try #require(RecipeWebImporter.ingredientEstimate(
-            ["1 flour"], servings: 1, catalog: catalog
+            ["100 g flour"], servings: 1, catalog: catalog
         ))
         #expect((estimate.protein, estimate.carbs, estimate.fat) == (1, 2, 3),
                 "recipe estimation consumed the typed history tier")

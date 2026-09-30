@@ -13,9 +13,10 @@
 //
 // F11: the alternation is longest first and a unit must END (whitespace, comma, the line's end, or a
 // period before one of those); a count or size word ("large", "cloves", "medium") binds "each" only on
-// a row with a count portion, and a bare count ("1 lemon") tries "each" before one 100 g serving; and
-// a line that still cannot be counted is skipped AND COUNTED, so the page keeps every other line's
-// nutrition and says how many it left out. Against the shipped catalog, cold.
+// a row with a count portion, and a bare count ("1 lemon") tries "each" and then one serving only
+// where that serving is one item (fix round 1: never an SR row's 100 g reference amount); and a line
+// that still cannot be counted is skipped AND COUNTED, so the page keeps every other line's nutrition
+// and says how many it left out. Against the shipped catalog, cold.
 
 import Foundation
 import Testing
@@ -49,8 +50,11 @@ struct RecipeImportIngredientLineTests {
                 boundName: "Eggs, Grade A, Large, egg whole", countedUnit: "each"),
         LinePin(line: "100 grams flour", quantity: 100, unit: "g", name: "flour", reading: .stated,
                 boundName: "Flour, 00", countedUnit: "g"),
+        // The machine bind is lemongrass (report F5), which has no count portion; its serving is SR's
+        // 100 g reference amount, not one item, so the line is left out and counted (fix round 1,
+        // u3-L-U3-4) rather than adding 100 g of lemongrass.
         LinePin(line: "1 lemon", quantity: 1, unit: "serving", name: "lemon", reading: .bareCount,
-                boundName: "Lemon grass (citronella), raw", countedUnit: "serving"),
+                boundName: "Lemon grass (citronella), raw", countedUnit: nil),
         LinePin(line: "2 garlic cloves", quantity: 2, unit: "serving", name: "garlic cloves", reading: .bareCount,
                 boundName: "Garlic Cloves With Fine Herbs", countedUnit: "each"),
         LinePin(line: "1 cup chocolate chips", quantity: 1, unit: "cup", name: "chocolate chips", reading: .stated,
@@ -87,7 +91,7 @@ struct RecipeImportIngredientLineTests {
             let bound = catalog.results(for: parsed.name, limit: 1, context: .machineGenerated).first
             #expect(bound?.name == pin.boundName, "\(pin.line) now binds \(bound?.name ?? "nothing")")
             let counted = bound.flatMap { row in
-                parsed.candidateUnits.first {
+                parsed.candidateUnits(on: row).first {
                     RecipeIngredient(foodItemId: row.id, quantity: parsed.quantity, unit: $0).servingConversion(using: row) != nil
                 }
             }
@@ -124,12 +128,97 @@ struct RecipeImportIngredientLineTests {
                              category: "Fixtures", source: .usda, tags: [])
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource([ramen]))
         let line = RecipeWebImporter.parseIngredientLine("2 large ramen")
-        #expect(line?.candidateUnits == ["each"])
+        #expect(line?.candidateUnits(on: ramen) == ["each"])
         #expect(line.flatMap { RecipeWebImporter.estimatedMacros(for: $0, catalog: catalog) } == nil)
         let estimate = RecipeWebImporter.ingredientEstimate(["2 large ramen", "200 g ramen", "salt to taste"],
                                                             servings: 2, catalog: catalog)
         #expect(estimate == IngredientMacroEstimate(protein: 5, carbs: 10, fat: 2, uncountedLines: 1),
                 "the size-word line is left out and counted; a line with no amount joins neither side")
+    }
+
+    /// A bare count counts one serving only where that serving is one item (fix round 1, u3-L-U3-4):
+    /// a label serving or a serving stated as a count, never SR's 100 g reference amount — "1 bay
+    /// leaf" used to count 100 g of the spice (404 kcal) and "6 strawberries" 600 g.
+    @Test func aBareCountCountsAServingOnlyWhereTheServingIsOneItem() {
+        func row(_ name: String, _ size: Double, _ unit: String, _ type: FoodDataType,
+                 _ source: FoodItemSource = .usda) -> FoodItem {
+            var item = FoodItem(name: name, servingSize: size, servingUnit: unit,
+                                macros: Macros(protein: 1, carbs: 20, fat: 4), micronutrients: Micronutrients(),
+                                category: "Fixtures", source: source, tags: [])
+            item.dataType = type
+            return item
+        }
+        let reference = row("Spices, bay leaf", 100, "g", .srLegacy)
+        let label = row("Bagels, branded", 95, "g", .branded)
+        let sandwich = row("Sandwich, survey", 1, "sandwich", .survey)
+        let dishCup = row("Stew, survey", 1, "cup", .survey)
+        let own = row("My granola bar", 40, "g", .srLegacy, .manual)
+        #expect(!ParsedIngredientLine.servingIsAnItem(reference))
+        #expect(!ParsedIngredientLine.servingIsAnItem(dishCup))
+        #expect(ParsedIngredientLine.servingIsAnItem(label))
+        #expect(ParsedIngredientLine.servingIsAnItem(sandwich))
+        #expect(ParsedIngredientLine.servingIsAnItem(own))
+        let line = RecipeWebImporter.parseIngredientLine("1 bay leaf")
+        #expect(line?.candidateUnits(on: reference) == ["each"])
+        #expect(line?.candidateUnits(on: label) == ["each", "serving"])
+        let catalog = FoodCatalog(source: InMemoryBundledFoodSource([reference]))
+        #expect(RecipeWebImporter.ingredientEstimate(["1 bay leaf"], servings: 1, catalog: catalog) == nil,
+                "no line counted — the estimate is nil, not 100 g of bay leaf")
+    }
+
+    /// A Unicode fraction is an amount (fix round 1, u3-L-U3-2): ICU's `\d` never matched "½", so
+    /// "½ cup butter" had no leading amount and was dropped without being counted.
+    @Test func aUnicodeFractionReadsAsItsAmount() throws {
+        let cases: [(line: String, quantity: Double, unit: String, name: String)] = [
+            ("½ cup butter", 0.5, "cup", "butter"), ("¾ cup sugar", 0.75, "cup", "sugar"),
+            ("1½ cups flour", 1.5, "cup", "flour"), ("1 ½ cups flour", 1.5, "cup", "flour"),
+            ("⅓ cup milk", 1.0 / 3.0, "cup", "milk"), ("1⁄2 tsp salt", 0.5, "tsp", "salt"),
+            ("2¼ cups oats", 2.25, "cup", "oats"),
+        ]
+        for (line, quantity, unit, name) in cases {
+            let parsed = try #require(RecipeWebImporter.parseIngredientLine(line), "\(line) no longer parses")
+            #expect(abs(parsed.quantity - quantity) < 1e-9, "\(line): quantity is now \(parsed.quantity)")
+            #expect(parsed.unit == unit, "\(line): unit is now \(parsed.unit)")
+            #expect(parsed.name == name, "\(line): name is now \(parsed.name)")
+        }
+    }
+
+    /// Every unit spelling the pattern matches is one the reader can use (fix round 1, u3-L-U3-3):
+    /// "tbsps", "tsps" and a spaced-out "fl  oz" used to fall through to a bare count — two 100 g
+    /// servings of oil for "2 tbsps olive oil".
+    @Test func everyUnitSpellingThePatternMatchesIsRead() throws {
+        let spellings = [
+            "fluid ounce", "fluid  ounces", "extra large", "extra  small", "milliliter", "millilitres",
+            "tablespoons", "kilogram", "milligrams", "teaspoon", "fl oz", "floz", "fl  oz", "FL OZ", "glass",
+            "glasses", "ounces", "pound", "liters", "litre", "gram", "slices", "piece", "cloves", "medium",
+            "large", "small", "whole", "tbsp", "tbsps", "Tbsps", "tsp", "tsps", "cup", "cups", "each", "lb",
+            "lbs", "mg", "kg", "ml", "oz", "g", "l",
+        ]
+        for spelling in spellings {
+            let parsed = try #require(RecipeWebImporter.parseIngredientLine("2 \(spelling) butter"), "\(spelling) no longer parses")
+            #expect(parsed.unitReading != .bareCount, "\(spelling) is read as a bare count")
+            #expect(parsed.name == "butter", "\(spelling): the name is now \(parsed.name)")
+        }
+        #expect(RecipeWebImporter.parseIngredientLine("2 tbsps olive oil")?.unit == "tbsp")
+        #expect(RecipeWebImporter.parseIngredientLine("3 tsps baking powder")?.unit == "tsp")
+        #expect(RecipeWebImporter.parseIngredientLine("8 fl  oz milk")?.unit == "fl oz")
+        #expect(RecipeWebImporter.parseIngredientLine("8 fluid  ounces milk")?.unit == "fl oz")
+    }
+
+    /// A line that opens with an amount but cannot be read past it is counted as left out; a line with
+    /// no amount still joins neither side (fix round 1, u3-L-U3-2).
+    @Test func anAmountTheReaderCannotFinishIsCountedAsLeftOut() {
+        let ramen = FoodItem(name: "Ramen", servingSize: 100, servingUnit: "g",
+                             macros: Macros(protein: 5, carbs: 10, fat: 2), micronutrients: Micronutrients(),
+                             category: "Fixtures", source: .usda, tags: [])
+        let catalog = FoodCatalog(source: InMemoryBundledFoodSource([ramen]))
+        #expect(RecipeWebImporter.parseIngredientLine("10 oz") == nil, "no name to search")
+        #expect(RecipeWebImporter.startsWithAmount("  ½ something"))
+        #expect(!RecipeWebImporter.startsWithAmount("salt to taste"))
+        let estimate = RecipeWebImporter.ingredientEstimate(["200 g ramen", "10 oz", "½ cup ramen", "salt to taste"],
+                                                            servings: 1, catalog: catalog)
+        #expect(estimate?.uncountedLines == 2, "\"10 oz\" is an amount of nothing; \"½ cup\" of a row with no cup")
+        #expect(estimate?.protein == 10)
     }
 
     /// The control: a clean line still estimates, with nothing left out.
