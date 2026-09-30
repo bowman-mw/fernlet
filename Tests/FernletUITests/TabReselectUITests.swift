@@ -8,7 +8,8 @@ import XCTest
 /// asserts that every pushed page's navigation bar is gone and the tab's main page is back.
 /// ``testFoodTabPopsCreateFlowAndBookReopensAtItsRoot()`` also proves the pages pushed from INSIDE a
 /// pushed page (the book's create chooser and editor, driven by the book's own state) came off with
-/// it rather than waiting to reappear.
+/// it rather than waiting to reappear; ``testFoodTabAsksBeforeDiscardingATypedRecipe()`` proves the
+/// same pop asks first when the editor holds a typed recipe.
 final class TabReselectUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -54,18 +55,12 @@ final class TabReselectUITests: XCTestCase {
     func testFoodTabPopsCreateFlowAndBookReopensAtItsRoot() {
         let app = UXTestApp.launch()
         openTab("Food", page: "screen.food", in: app)
-        openRecipeBook(in: app)
-        let create = app.buttons["Create"].firstMatch
-        XCTAssertTrue(create.waitForExistence(timeout: 6), "the book has no Create button")
-        create.tap()
-        XCTAssertTrue(app.navigationBars["Create recipe"].waitForExistence(timeout: 6), "the create chooser did not open")
-        let manual = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Manual entry")).firstMatch
-        XCTAssertTrue(manual.waitForExistence(timeout: 6), "the chooser has no Manual entry option")
-        manual.tap()
-        XCTAssertTrue(app.navigationBars["New recipe"].waitForExistence(timeout: 6), "the manual editor did not open")
+        openManualRecipeEditor(in: app)
 
+        // Nothing typed, so nothing to lose: the pop goes straight through, no discard alert.
         tabItem("Food", in: app).tap()
 
+        XCTAssertFalse(app.alerts["Discard your changes?"].exists, "a clean editor raised the discard alert")
         XCTAssertTrue(waitForGone(app.navigationBars["New recipe"]), "re-tapping Food left the editor pushed")
         XCTAssertTrue(waitForGone(app.navigationBars["Create recipe"]), "re-tapping Food left the chooser pushed")
         XCTAssertTrue(waitForGone(app.navigationBars["Recipe book"]), "re-tapping Food stopped at the recipe book")
@@ -75,6 +70,39 @@ final class TabReselectUITests: XCTestCase {
         openRecipeBook(in: app)
         XCTAssertFalse(app.navigationBars["Create recipe"].exists, "the book reopened with the chooser still pushed")
         XCTAssertFalse(app.navigationBars["New recipe"].exists, "the book reopened with the editor still pushed")
+    }
+
+    /// A pushed editor holding typed input is not popped straight away: the re-tap raises the shared
+    /// discard alert. "Keep editing" leaves the draft where it was; "Discard" pops the whole stack.
+    /// (A CLEAN editor pops without asking — ``testFoodTabPopsCreateFlowAndBookReopensAtItsRoot()``.)
+    @MainActor
+    func testFoodTabAsksBeforeDiscardingATypedRecipe() {
+        let app = UXTestApp.launch()
+        openTab("Food", page: "screen.food", in: app)
+        openManualRecipeEditor(in: app)
+        let name = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "black bean bowls")).firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 6), "the manual editor has no recipe name field")
+        name.tapAndType("Tab test soup\n")
+        XCTAssertTrue(waitForGone(app.keyboards.firstMatch), "the keyboard did not go away after Return")
+
+        tabItem("Food", in: app).tap()
+
+        let alert = app.alerts["Discard your changes?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 6), "re-tapping Food over a typed recipe did not ask first")
+        XCTAssertTrue(app.navigationBars["New recipe"].exists, "the editor popped before the user answered")
+        alert.buttons["Keep editing"].tap()
+        XCTAssertTrue(waitForGone(alert), "Keep editing did not close the alert")
+        XCTAssertTrue(app.navigationBars["New recipe"].exists, "Keep editing did not keep the editor")
+        XCTAssertEqual(name.value as? String, "Tab test soup", "Keep editing lost the typed name")
+
+        tabItem("Food", in: app).tap()
+
+        XCTAssertTrue(alert.waitForExistence(timeout: 6), "the second re-tap did not ask again")
+        alert.buttons["Discard"].tap()
+        XCTAssertTrue(waitForGone(app.navigationBars["New recipe"]), "Discard left the editor pushed")
+        XCTAssertTrue(waitForGone(app.navigationBars["Recipe book"]), "Discard stopped at the recipe book")
+        XCTAssertTrue(app.descendants(matching: .any)["screen.food"].waitForExistence(timeout: 6),
+                      "Discard did not bring the Food page back")
     }
 
     /// The Food page's own Recipes card pushes the same detail from the root, as a path value too.
@@ -174,6 +202,30 @@ final class TabReselectUITests: XCTestCase {
                       "re-tapping Private did not bring the Journal back")
     }
 
+    /// The Cycle section pops differently from the others — its day detail is an item destination
+    /// (`navigationDestination(item:)`), cleared by setting the selected day to nil, not a path.
+    @MainActor
+    func testPrivateTabPopsCycleDayDetail() {
+        let app = UXTestApp.launch(bypassPrivateLock: true)
+        openTab("Private", page: "screen.journal", in: app)
+        let cycle = app.buttons["Cycle"].firstMatch
+        XCTAssertTrue(cycle.waitForExistence(timeout: 6), "the Private hub has no Cycle section")
+        cycle.tap()
+        let cyclePage = app.descendants(matching: .any)["screen.cycle"].firstMatch
+        XCTAssertTrue(cyclePage.waitForExistence(timeout: 8), "the Cycle section never came up")
+        let today = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Today, day")).firstMatch
+        XCTAssertTrue(today.waitForExistence(timeout: 6), "the Cycle calendar has no cell for today")
+        XCTAssertTrue(scrollClearOfTabBar(today, in: app), "today's calendar cell not reachable on Cycle")
+        today.tap()
+        let dayDetail = app.staticTexts["Health samples"].firstMatch
+        XCTAssertTrue(dayDetail.waitForExistence(timeout: 6), "today's cycle day detail did not open")
+
+        tabItem("Private", in: app).tap()
+
+        XCTAssertTrue(waitForGone(dayDetail), "re-tapping Private left the cycle day detail pushed")
+        XCTAssertTrue(cyclePage.waitForExistence(timeout: 6), "re-tapping Private did not bring the Cycle page back")
+    }
+
     // MARK: - Helpers
 
     /// Switches to tab `title` and waits for its main page, `identifier`. One retry: a tab tap in the
@@ -204,6 +256,22 @@ final class TabReselectUITests: XCTestCase {
         XCTAssertTrue(scrollClearOfTabBar(recipeBook, in: app), "Recipe book button not reachable on Food", file: file, line: line)
         recipeBook.tap()
         XCTAssertTrue(app.navigationBars["Recipe book"].waitForExistence(timeout: 6), "the recipe book did not open",
+                      file: file, line: line)
+    }
+
+    /// Opens Food → Recipe book → Create → Manual entry and waits for the empty editor.
+    @MainActor
+    private func openManualRecipeEditor(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        openRecipeBook(in: app, file: file, line: line)
+        let create = app.buttons["Create"].firstMatch
+        XCTAssertTrue(create.waitForExistence(timeout: 6), "the book has no Create button", file: file, line: line)
+        create.tap()
+        XCTAssertTrue(app.navigationBars["Create recipe"].waitForExistence(timeout: 6), "the create chooser did not open",
+                      file: file, line: line)
+        let manual = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Manual entry")).firstMatch
+        XCTAssertTrue(manual.waitForExistence(timeout: 6), "the chooser has no Manual entry option", file: file, line: line)
+        manual.tap()
+        XCTAssertTrue(app.navigationBars["New recipe"].waitForExistence(timeout: 6), "the manual editor did not open",
                       file: file, line: line)
     }
 
