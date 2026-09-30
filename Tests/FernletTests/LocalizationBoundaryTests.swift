@@ -700,6 +700,27 @@ struct LocalizationBoundaryTests {
         #expect(CuratedSearchAlias.spellingFolds.map { "\($0.first) \($0.second)>\($0.folded)" } == ["semi sweet>semisweet"])
     }
 
+    /// The ingredient-identity key's word lists (ingredient-search round, F5): matched against the
+    /// catalog's English names after `FoodItemSearch.normalized`, never displayed.
+    @Test func frozenIngredientIdentityWords() {
+        #expect(FoodIngredientIdentity.phraseEndWords == [
+            "with", "in", "on", "from", "made", "without", "over", "served", "topped", "containing", "no", "for"
+        ], "a translated preposition ends no phrase, and 'Pork with chili and tomatoes' is tomatoes again")
+        #expect(FoodIngredientIdentity.partNouns == ["root", "roots", "clove", "cloves"])
+        #expect(FoodIngredientIdentity.memberPartNouns == ["seed", "seeds"])
+        #expect(FoodIngredientIdentity.coordinators == ["or", "and"])
+        #expect(FoodIngredientIdentity.classNames == [
+            "alcoholic beverage", "beef", "beverages", "cabbage", "candies", "cereals", "cheese", "chicken",
+            "crustaceans", "duck", "egg", "fish", "game meat", "lamb", "leavening agents", "lettuce",
+            "melons", "mollusks", "mushroom", "mushrooms", "nuts", "onions", "peppers", "pork", "seaweed", "seeds",
+            "spices", "squash", "turkey", "veal"
+        ], """
+            USDA's English class categories: "Cheese, parmesan" is parmesan only while "cheese" matches \
+            the name's first segment. Add a class deliberately (a taxonomic group whose member names the \
+            food alone, never a dish or product category) and re-measure the ingredient corpus.
+            """)
+    }
+
     /// The dish heuristic's carrier-use phrases (ingredient-search round, F3): matched against USDA's
     /// English names ("Oil, olive, salad or cooking"), never display text.
     @Test func frozenCarrierUsePhrases() {

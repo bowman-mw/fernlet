@@ -123,6 +123,12 @@ public nonisolated enum FoodBrandLexicon {
 ///    history weight can never present a row the cold pipeline refused. `history` defaults to
 ///    ``FoodSearchHistory/empty`` on every entry point, and ``scoredResults(for:in:limit:stripsStopwords:)``
 ///    has no parameter for it at all — so every confidence gate is cold by construction;
+/// 1b. **the ingredient-identity key, recipe surfaces only** (ingredient-search round F5, 2026-09-30)
+///    — ABOVE 1a, and only for a caller that passes ``FoodSearchRanking/ingredientIdentity``: a row
+///    whose name IS the typed ingredient (``FoodIngredientIdentity``) outranks every row that only
+///    contains its words, and the keys below order each side. Like history it re-ranks rows the
+///    floors already admitted and never adds one; unlike history it reaches no resolver pool and no
+///    confidence gate (`scoredResults` passes ``FoodSearchRanking/standard``);
 /// 2. `sourcePriority` (manual > Open Food Facts > USDA > AI), then brand-aware `dataTypePriority`,
 ///    ABOVE the score.
 ///    A plain ingredient query therefore keeps generic USDA rows above commercial titles whose
@@ -199,8 +205,10 @@ public nonisolated enum FoodItemSearch {
         /// is assigned once in `init`, so the constant is concurrency-safe by construction.
         public static let empty = Index(foodItems: [])
 
-        fileprivate func matches(_ query: SearchQuery, limit: Int, history: FoodSearchHistory, now: Date) -> [FoodItem] {
-            scoredMatches(query, limit: limit, history: history, now: now).map(\.foodItem)
+        fileprivate func matches(
+            _ query: SearchQuery, limit: Int, history: FoodSearchHistory, now: Date, ranking: FoodSearchRanking
+        ) -> [FoodItem] {
+            scoredMatches(query, limit: limit, history: history, now: now, ranking: ranking).map(\.foodItem)
         }
 
         /// Scores, ranks, floors and demotes — steps 1–5 of the ordering documented on
@@ -209,12 +217,14 @@ public nonisolated enum FoodItemSearch {
         ///
         /// `history` has NO default here on purpose (fix 1.9): both call sites state which path they
         /// are on, so `scoredResults`' cold guarantee is visible at the call site rather than inferred
-        /// from an omitted argument.
+        /// from an omitted argument. `ranking` has none for the same reason (F5): `scoredResults` passes
+        /// ``FoodSearchRanking/standard`` explicitly, so no confidence gate ever reads identity.
         fileprivate func scoredMatches(
             _ query: SearchQuery,
             limit: Int,
             history: FoodSearchHistory,
-            now: Date
+            now: Date,
+            ranking: FoodSearchRanking
         ) -> [(foodItem: FoodItem, score: Int)] {
             let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(query.normalized)
             // Fix 1.8's BOTH floors, applied as part of scoring so a floored row never enters the
@@ -224,14 +234,15 @@ public nonisolated enum FoodItemSearch {
             // Fix 1.9's weight is resolved ONCE PER ROW here, not inside the comparator. A broad prefix
             // hydrates up to `candidateFetchLimit` (10,000) rows, so a lookup inside `ranksAhead` would
             // run O(n log n) times — a six-figure count of dictionary probes on a per-keystroke path —
-            // to answer a question with only n distinct answers.
-            let ranked = entries
-                .compactMap { entry -> (foodItem: FoodItem, score: Int, history: Int)? in
-                    guard FoodItemSearch.carries(query.tokens, nameTokens: entry.nameTokens, name: entry.normalizedName),
-                          let score = FoodItemSearch.score(entry, query: query),
-                          score >= FoodItemSearch.minimumBindScore else { return nil }
-                    return (entry.foodItem, score, history.weight(for: entry.foodItem.id, now: now))
-                }
+            // to answer a question with only n distinct answers. F5's identity key is resolved the
+            // same way, once per row, by `markingIdentity` — and only on the recipe surfaces.
+            let scored = entries.compactMap { entry -> RankedRow? in
+                guard FoodItemSearch.carries(query.tokens, nameTokens: entry.nameTokens, name: entry.normalizedName),
+                      let score = FoodItemSearch.score(entry, query: query),
+                      score >= FoodItemSearch.minimumBindScore else { return nil }
+                return RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
+            }
+            let ranked = FoodItemSearch.markingIdentity(scored, query: query, ranking: ranking)
                 .sorted { first, second in
                     FoodItemSearch.ranksAhead(first, second, isBrandQuery: isBrandQuery)
                 }
@@ -262,6 +273,48 @@ public nonisolated enum FoodItemSearch {
             var normalizedName: String
             var nameTokens: Set<String>
             var searchableTokens: [String]
+        }
+    }
+
+    /// One row that passed the gate and both floors, with every per-row ranking input already resolved
+    /// — the history weight (fix 1.9) and, on the recipe surfaces, the ingredient-identity flag (F5) —
+    /// so the comparator only compares integers.
+    fileprivate struct RankedRow {
+        let foodItem: FoodItem
+        let score: Int
+        let history: Int
+        let nameTokens: Set<String>
+        /// 1 when the row IS the typed ingredient (``FoodIngredientIdentity``); 0 otherwise, and 0 for
+        /// every row under ``FoodSearchRanking/standard``, which makes the key inert there.
+        var identity = 0
+
+        init(entry: Index.Entry, score: Int, history: Int) {
+            self.foodItem = entry.foodItem
+            self.score = score
+            self.history = history
+            self.nameTokens = entry.nameTokens
+        }
+    }
+
+    /// Resolves F5's identity key once per row, for ``FoodSearchRanking/ingredientIdentity`` only.
+    ///
+    /// Inert — every row stays 0, so the standard order stands byte for byte — when the ranking is
+    /// standard, when the head noun has not been typed yet (``FoodIngredientIdentity/QueryHead``), or
+    /// when too few ranked rows say the head whole for it to be a finished word
+    /// (``FoodIngredientIdentity/QueryHead/sharesHead(_:)``). A row whose name does not say a head
+    /// noun as a whole word is never parsed, which keeps a broad prefix's cost to one set test per row.
+    /// R2: two bounded passes over `rows`.
+    fileprivate static func markingIdentity(
+        _ rows: [RankedRow], query: SearchQuery, ranking: FoodSearchRanking
+    ) -> [RankedRow] {
+        guard ranking == .ingredientIdentity, !rows.isEmpty,
+              let head = FoodIngredientIdentity.QueryHead(searchTokens: query.tokens, normalizedQuery: query.normalized),
+              head.sharesHead(rows.map(\.nameTokens)) else { return rows }
+        return rows.map { row in
+            guard head.isSaid(in: row.nameTokens), head.isNamed(by: row.foodItem) else { return row }
+            var marked = row
+            marked.identity = 1
+            return marked
         }
     }
 
@@ -313,11 +366,12 @@ public nonisolated enum FoodItemSearch {
         limit: Int = 6,
         stripsStopwords: Bool = true,
         history: FoodSearchHistory = .empty,
-        now: Date = Date()
+        now: Date = Date(),
+        ranking: FoodSearchRanking = .standard
     ) -> [FoodItem] {
         results(
             for: query, in: Index(foodItems: foodItems), limit: limit,
-            stripsStopwords: stripsStopwords, history: history, now: now
+            stripsStopwords: stripsStopwords, history: history, now: now, ranking: ranking
         )
     }
 
@@ -332,18 +386,21 @@ public nonisolated enum FoodItemSearch {
     /// - Parameter history: research §26 fix 1.9's history tier. Defaults to
     ///   ``FoodSearchHistory/empty``, so a caller that says nothing measures the cold pipeline.
     ///   `FoodCatalog` passes a real profile ONLY on the typed-query surface — see its `results`.
+    /// - Parameter ranking: ``FoodSearchRanking/ingredientIdentity`` puts the rows that ARE the typed
+    ///   ingredient first (F5, the recipe surfaces only); the default keeps the standard order.
     public static func results(
         for query: String,
         in index: Index,
         limit: Int = 6,
         stripsStopwords: Bool = true,
         history: FoodSearchHistory = .empty,
-        now: Date = Date()
+        now: Date = Date(),
+        ranking: FoodSearchRanking = .standard
     ) -> [FoodItem] {
         // R5: `limit` reaches `prefix(_:)`, which traps on a negative length. Asking for no results
         // is answered with no results.
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
-        return index.matches(prepared, limit: limit, history: history, now: now)
+        return index.matches(prepared, limit: limit, history: history, now: now, ranking: ranking)
     }
 
     /// Bounded leave-one-out fallback for a typed query whose normal AND result was empty.
@@ -357,13 +414,14 @@ public nonisolated enum FoodItemSearch {
         limit: Int,
         stripsStopwords: Bool,
         history: FoodSearchHistory,
-        now: Date
+        now: Date,
+        ranking: FoodSearchRanking = .standard
     ) -> [FoodItem] {
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords),
               partialQueryVariants(for: prepared).isEmpty == false else { return [] }
         let requiredMatches = prepared.tokens.count - 1
         let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(prepared.normalized)
-        let ranked = index.entries.compactMap { entry -> (foodItem: FoodItem, score: Int, history: Int)? in
+        let scored = index.entries.compactMap { entry -> RankedRow? in
             let nameMatches = prepared.tokens.filter { token in
                 carries([token], nameTokens: entry.nameTokens, name: entry.normalizedName)
             }
@@ -371,8 +429,9 @@ public nonisolated enum FoodItemSearch {
             let score = nameMatches.count * 100 + phraseScore(
                 name: entry.normalizedName, phrase: nameMatches.joined(separator: " ")
             )
-            return (entry.foodItem, score, history.weight(for: entry.foodItem.id, now: now))
+            return RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
         }
+        let ranked = markingIdentity(scored, query: prepared, ranking: ranking)
         .sorted { ranksAhead($0, $1, isBrandQuery: isBrandQuery) }
         .map { (foodItem: $0.foodItem, score: $0.score) }
         let window = ranked.prefix(max(limit, demotionWindow))
@@ -417,7 +476,7 @@ public nonisolated enum FoodItemSearch {
     /// argument, but a signature that will not accept the profile.
     public static func scoredResults(for query: String, in index: Index, limit: Int = 6, stripsStopwords: Bool = true) -> [(item: FoodItem, score: Int)] {
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
-        return index.scoredMatches(prepared, limit: limit, history: .empty, now: Date())
+        return index.scoredMatches(prepared, limit: limit, history: .empty, now: Date(), ranking: .standard)
             .map { (item: $0.foodItem, score: $0.score) }
     }
 
@@ -474,11 +533,15 @@ public nonisolated enum FoodItemSearch {
     /// Each row arrives with its history weight already resolved (`history`, 0 for a food never
     /// logged) rather than with the profile to look it up in — see `scoredMatches`, which resolves it
     /// once per row instead of once per comparison.
-    private static func ranksAhead(
-        _ first: (foodItem: FoodItem, score: Int, history: Int),
-        _ second: (foodItem: FoodItem, score: Int, history: Int),
-        isBrandQuery: Bool
-    ) -> Bool {
+    ///
+    /// **F5 (2026-09-30) added a key above history, for the recipe surfaces only**: a row that IS the
+    /// typed ingredient (`identity` 1) ranks ahead of every row that is not, and the keys below order
+    /// each side — so among plain rows your own logged food still comes first, then source, the
+    /// generic-first data type and the score. The owner's call: "for the recipe it's more important to
+    /// rank the plain ingredients first". Under ``FoodSearchRanking/standard`` every row carries 0, the
+    /// key compares equal, and this function is the one it was before.
+    fileprivate static func ranksAhead(_ first: RankedRow, _ second: RankedRow, isBrandQuery: Bool) -> Bool {
+        if first.identity != second.identity { return first.identity > second.identity }
         if first.history != second.history { return first.history > second.history }
         if first.foodItem.source != second.foodItem.source {
             return sourcePriority(first.foodItem.source) > sourcePriority(second.foodItem.source)

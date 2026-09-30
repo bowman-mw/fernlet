@@ -15,13 +15,13 @@ the user's own foods are held as a small locked snapshot that the app keeps in s
 `FernletDomainModel` — over the candidates plus user items, so the SQLite path preserves
 the legacy preparation / form / data-type ranking exactly. Point lookups (by id, by
 normalized GTIN barcode, by recipe ingredient set) resolve straight from SQLite, and
-``FoodCatalog/candidates(for:limit:)`` builds the capped candidate pool the deterministic
+``FoodCatalog/candidates(for:limit:ranking:)`` builds the capped candidate pool the deterministic
 and AI meal resolvers draw from.
 
 Search carries two pieces of per-user state. The first, added for research §26 fix 1.10, is the
 **local correction memory**. `FoodCatalog.setSearchAliases(_:)` publishes a normalized query →
 food-id map — the searches this person corrected once in "Adjust meal" — and
-``FoodCatalog/results(for:limit:stripsStopwords:context:)`` puts that food first, ahead of the FTS
+``FoodCatalog/results(for:limit:stripsStopwords:context:ranking:)`` puts that food first, ahead of the FTS
 gate rather than through it, so a query the gate answers wrongly (or not at all) can be
 taught. The map holds no nutrition data, is empty on any catalog the app has not hydrated
 (which is what keeps the measured cold pipeline deterministic), and deliberately does NOT
@@ -42,7 +42,7 @@ moves already passed the FTS gate and both of fix 1.8's floors, which is the str
 difference from the correction alias above, and it means a stale profile can only reorder
 right answers, never surface a wrong one. It applies to a **TYPED query only**, expressed by
 ``FoodSearchContext/userTyped`` rather than inferred from stopword policy, so
-``FoodCatalog/candidates(for:limit:)`` and recipe-import estimation explicitly use
+``FoodCatalog/candidates(for:limit:ranking:)`` and recipe-import estimation explicitly use
 ``FoodSearchContext/machineGenerated`` and keep cold ranking. The profile retains count/latest-use
 statistics and calculates decay once per query, so it cannot go stale while the diary is idle. And it
 has **no durable copy anywhere**: `DiaryStore` derives it from `recentMeals` (already in the
@@ -110,9 +110,17 @@ or cayenne", and "vegetable oil" names the soybean salad or cooking oil. A phras
 word is still being typed ("chocolate chi"), never on one word, and "semi sweet" folds to "semisweet".
 The row is inserted, never substituted: it sits beneath this person's own and logged rows and beneath a
 correction, above the cold list, and the list keeps its limit. It is typed-only by construction —
-``FoodCatalog/candidates(for:limit:)``, the importer's bind and
+``FoodCatalog/candidates(for:limit:ranking:)``, the importer's bind and
 ``FoodCatalog/scoredResults(for:limit:stripsStopwords:)`` never see it — so no alias reaches a
 meal-resolution pool or a bind-confidence gate. Targets are the rows' deterministic catalog ids.
+
+**The recipe order.** ``FoodCatalog/results(for:limit:stripsStopwords:context:ranking:)`` and
+``FoodCatalog/candidates(for:limit:ranking:)`` take a `FoodSearchRanking` (ingredient-search round F5),
+independent of the context: the recipe editor's typeahead (typed) and the swap sheet's pool
+(machine-generated sub-phrases) pass `.ingredientIdentity`, which puts the rows that ARE the typed
+ingredient first (`FoodIngredientIdentity`, in `FernletDomainModel`), while every other caller keeps
+the `.standard` default. It re-ranks rows the gate and floors admitted, before the one-row-per-name
+collapse and the alias; ``FoodCatalog/scoredResults(for:limit:stripsStopwords:)`` has no ranking.
 
 The module also owns the ambient nutrient-nudge data path: ``CuratedNutrientSources``
 loads the hand-authored good-sources table (`Resources/CuratedNutrientSources.json`,

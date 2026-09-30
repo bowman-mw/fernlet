@@ -280,7 +280,20 @@ tier guessed — a recipe tap's default — must be one serving the data vouches
 ``FoodItem/guessedItemMaxGrams`` and ``FoodItem/guessedItemMaxCalories`` (one banana, not a 905 g
 pineapple or an 828 kcal stick of butter). Otherwise the plan pauses for review with the bind in place.
 
+The recipe surfaces order their rows differently (2026-09-30, the ingredient-search round's F5, the
+owner's call that "for the recipe it's more important to rank the plain ingredients first"). A caller
+passing ``FoodSearchRanking/ingredientIdentity`` — the recipe editor's typeahead and the swap sheet,
+nothing else — gets ``FoodIngredientIdentity``'s key above every other: a row whose name IS the typed
+ingredient (its head noun, plural-aware, read the way USDA and branded names are written) ranks ahead
+of a row that only contains the words, so "Sugars, brown" leads the cereals that mention brown sugar.
+The standard keys order each side. Every entry point defaults to ``FoodSearchRanking/standard``, and
+``FoodItemSearch/scoredResults(for:in:limit:stripsStopwords:)`` passes it explicitly, so quick-log, the
+meal composer, Adjust meal, the resolver and every confidence gate rank exactly as before. The key is
+off, and the order standard, while the head noun is still being typed.
+
 - ``FoodItemSearch``
+- ``FoodSearchRanking``
+- ``FoodIngredientIdentity``
 - ``FoodSearchHistory``
 - ``FoodBrandLexicon``
 - ``CustomIngredientUpsert``

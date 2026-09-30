@@ -13,10 +13,10 @@ import FernletDomainModel
 /// rows anyway (§8 F7). So a handful of phrases name their row directly.
 ///
 /// The rules, all deliberate:
-/// - **Typed search only.** ``FoodCatalog`` applies it inside `results(for:limit:stripsStopwords:context:)`
+/// - **Typed search only.** ``FoodCatalog`` applies it inside `results(for:limit:stripsStopwords:context:ranking:)`
 ///   for ``FoodSearchContext/userTyped`` alone. It is NOT built on the correction memory's
 ///   `promotingCorrection`, which runs for every context — including the resolver's
-///   `candidates(for:limit:)` and the web importer's limit-1 bind — and would inject these rows into
+///   `candidates(for:limit:ranking:)` and the web importer's limit-1 bind — and would inject these rows into
 ///   meal-resolution pools. The resolver and importer never see an alias.
 /// - **Additive.** The target is inserted; nothing is filtered out of the ranked list (the list is
 ///   re-capped at the caller's limit, so the last row falls below the fold, exactly as a correction

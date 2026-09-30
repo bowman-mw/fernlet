@@ -34,7 +34,7 @@ public nonisolated enum FoodSearchContext: Sendable, Equatable {
 ///
 /// A fourth, added for research §26 fix 1.9, is the **history profile**: the foods this user has
 /// actually logged, weighted by frequency and recency (``setSearchHistory(_:)``). It is the top key
-/// of the search comparator on ``results(for:limit:stripsStopwords:context:)`` for a TYPED query only, is
+/// of the search comparator on ``results(for:limit:stripsStopwords:context:ranking:)`` for a TYPED query only, is
 /// derived from `DiaryStore.recentMeals` rather than persisted anywhere new, and — like the alias
 /// snapshot — is empty on any catalog the app has not hydrated.
 ///
@@ -175,7 +175,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// bundled + branded candidates plus the user items.
     ///
     /// As of research §26 fixes 1.6/1.7a/1.8 the two floors and the prepared-dish demotion apply
-    /// here AND on the resolver's ``candidates(for:limit:)``, so the two surfaces no longer disagree
+    /// here AND on the resolver's ``candidates(for:limit:ranking:)``, so the two surfaces no longer disagree
     /// about whether a dish outranks an ingredient or whether a tag-only row is presentable.
     ///
     /// They still differ in two ways, both deliberate. `candidates` splits the description into
@@ -184,13 +184,13 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// rather than leading noise. Fix 1.6 applies to the query a PERSON TYPED, which is this one.
     /// A third difference exists as of research §26 fix 1.10: a query the user has already corrected
     /// once returns their own choice first, ahead of — and independently of — the FTS gate. See
-    /// ``promotingCorrection(_:for:limit:)``. `candidates(for:limit:)` inherits it by construction,
+    /// ``promotingCorrection(_:for:limit:)``. `candidates(for:limit:ranking:)` inherits it by construction,
     /// because it draws its pool from this method; ``scoredResults(for:limit:stripsStopwords:)``
     /// deliberately does NOT (see its doc).
     ///
     /// **A fourth difference, research §26 fix 1.9: the history tier applies to a TYPED query only.**
     /// ``FoodSearchContext`` is the explicit discriminator; `stripsStopwords` remains solely a token-
-    /// retrieval policy. `candidates(for:limit:)` passes `.machineGenerated` and gets cold ranking.
+    /// retrieval policy. `candidates(for:limit:ranking:)` passes `.machineGenerated` and gets cold ranking.
     /// That is a deliberate narrowing of §26's "add a tier to the comparator", for three measured
     /// reasons. (1) A sub-phrase is a FRAGMENT of a description, so promoting on it applies a
     /// whole-food signal to one word: an alias-style promotion on the sub-phrase `cheese` of
@@ -218,11 +218,17 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     ///   "Candies, semisweet chocolate"); synthesized resolver/import queries pass
     ///   `.machineGenerated` and see every row, unaliased. Required so every caller states which
     ///   surface it serves.
+    /// - Parameter ranking: ``FoodSearchRanking/ingredientIdentity`` for the recipe ingredient surfaces
+    ///   only (ingredient-search round F5): a row that IS the typed ingredient ranks first. Independent of
+    ///   `context` — the swap sheet's pool is machine-generated and still ranks by identity. The default
+    ///   keeps every other surface (quick-log, the meal composer, Adjust meal, the resolver) on the
+    ///   standard order.
     public func results(
         for query: String,
         limit: Int = 6,
         stripsStopwords: Bool = true,
-        context: FoodSearchContext
+        context: FoodSearchContext,
+        ranking: FoodSearchRanking = .standard
     ) -> [FoodItem] {
         let rankingNow = Date()
         let typed = context == .userTyped
@@ -235,7 +241,8 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
             limit: fetchLimit,
             stripsStopwords: stripsStopwords,
             history: typed ? searchHistory : .empty,
-            now: rankingNow
+            now: rankingNow,
+            ranking: ranking
         )
         guard !isSuperseded(typed) else { return [] }
         let ranked: [FoodItem]
@@ -247,7 +254,8 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
                 limit: fetchLimit,
                 stripsStopwords: stripsStopwords,
                 history: searchHistory,
-                now: rankingNow
+                now: rankingNow,
+                ranking: ranking
             )
         } else {
             ranked = normal
@@ -276,7 +284,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     }
 
     /// Inserts the row a ``CuratedSearchAlias`` phrase names (ingredient-search round, F7) — typed
-    /// search only, so the resolver's `candidates(for:limit:)` and the importer's bind never see it.
+    /// search only, so the resolver's `candidates(for:limit:ranking:)` and the importer's bind never see it.
     ///
     /// The row goes directly beneath the leading run of this person's own rows (their items and the
     /// rows they have logged), so on a cold catalog it is first; a correction is prepended afterwards
@@ -337,7 +345,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// list is re-truncated to `limit`, so a caller asking for one row still gets one.
     ///
     /// **That truncation DISPLACES a row, and the displacement compounds through
-    /// ``candidates(for:limit:)``.** The promoted food takes rank 1 and the previous last row of the
+    /// ``candidates(for:limit:ranking:)``.** The promoted food takes rank 1 and the previous last row of the
     /// window falls off — per FIRED PHRASE, so a resolver pool assembled from several sub-phrases loses
     /// one row for each phrase an alias answers (measured during the 2026-08-23 review: an alias on the
     /// SUB-PHRASE `cheese`, resolving the description `cheese pizza slice`, evicted
@@ -380,12 +388,19 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
 
     /// Builds the candidate pool a meal description should be resolved against, mirroring the legacy
     /// `FoodSelectionCandidateBuilder.candidates(for:foodItems:)` but sourcing matches from SQLite.
-    public func candidates(for description: String, limit: Int = 18) -> [FoodSelectionCandidate] {
+    ///
+    /// - Parameter ranking: how each sub-phrase's rows are ordered before they join the pool. The meal
+    ///   resolver keeps the default; the recipe swap sheet passes
+    ///   ``FoodSearchRanking/ingredientIdentity`` (F5), so a pool built from an ingredient's name leads
+    ///   with rows that ARE that ingredient.
+    public func candidates(
+        for description: String, limit: Int = 18, ranking: FoodSearchRanking = .standard
+    ) -> [FoodSelectionCandidate] {
         var selected: [FoodItem] = []
         for phrase in FoodSelectionCandidateBuilder.searchPhrases(from: description) {
             // These are synthesized SUB-PHRASES: keep quantity tokens and keep history cold.
             for match in results(
-                for: phrase, limit: 4, stripsStopwords: false, context: .machineGenerated
+                for: phrase, limit: 4, stripsStopwords: false, context: .machineGenerated, ranking: ranking
             ) where !selected.contains(where: { $0.id == match.id }) {
                 selected.append(match)
                 if selected.count >= limit { break }
