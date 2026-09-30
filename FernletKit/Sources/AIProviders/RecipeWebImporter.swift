@@ -47,6 +47,12 @@ public nonisolated struct ImportedRecipe: Equatable {
     /// ``RecipeWebImporter/downloadImage(from:userAgent:maxBytes:)`` — never during the
     /// share-extension background drain.
     public var imageURL: URL?
+    /// How many ingredient lines the USDA estimate LEFT OUT (ingredient-search round, F11): a line
+    /// with an amount that matched no catalog row, or bound one its amount does not convert on. 0
+    /// when the site's own nutrition label supplied the macros, or when every amount counted. The
+    /// recipe keeps it (`RecipeWebImport.uncountedIngredientLines`) so a partial estimate is never
+    /// shown as a whole one.
+    public var uncountedIngredientCount: Int
 
     public init(
         sourceURL: URL,
@@ -59,7 +65,8 @@ public nonisolated struct ImportedRecipe: Equatable {
         fat: Int,
         micronutrients: Micronutrients = Micronutrients(),
         steps: [RecipeStep]? = nil,
-        imageURL: URL? = nil
+        imageURL: URL? = nil,
+        uncountedIngredientCount: Int = 0
     ) {
         self.sourceURL = sourceURL
         self.name = name
@@ -72,6 +79,59 @@ public nonisolated struct ImportedRecipe: Equatable {
         self.micronutrients = micronutrients
         self.steps = steps
         self.imageURL = imageURL
+        self.uncountedIngredientCount = max(uncountedIngredientCount, 0)
+    }
+}
+
+/// The USDA fallback's per-serving estimate for a page's ingredient lines, with how many lines it
+/// left out (ingredient-search round, F11). Produced by ``RecipeWebImporter``'s ingredient
+/// estimation; a value type in a MainActor-default module, hence `nonisolated`.
+nonisolated struct IngredientMacroEstimate: Equatable {
+    /// Per-serving grams of protein.
+    let protein: Int
+    /// Per-serving grams of carbohydrate.
+    let carbs: Int
+    /// Per-serving grams of fat.
+    let fat: Int
+    /// Lines with an amount that contributed nothing: no catalog row matched their name, or their
+    /// amount does not convert on the row it bound.
+    let uncountedLines: Int
+}
+
+/// One ingredient line as the web importer's USDA fallback reads it (ingredient-search round, F11):
+/// the leading amount, the unit token it binds, the cleaned food name, and how the unit was read —
+/// which decides the units the estimator may try on the bound row.
+nonisolated struct ParsedIngredientLine: Equatable {
+    /// How a line's unit was read.
+    enum UnitReading: Equatable {
+        /// A `RecipeUnit` spelling ("cups", "g", "tbsp", "each"): only that unit is tried.
+        case stated
+        /// A count or size word ("3 cloves garlic", "1 medium onion", "2 large eggs"): "each" is tried
+        /// and nothing else, so it counts only on a row that has a count portion — never as a 100 g
+        /// serving, and never voiding the page when it does not.
+        case countWord
+        /// No unit ("1 lemon", "2 eggs"): "each" first, where the row has a count portion (a lemon is
+        /// its 58 g fruit, not a 100 g serving), otherwise one serving, as before F11.
+        case bareCount
+    }
+
+    /// The leading amount.
+    let quantity: Double
+    /// The `RecipeUnit` token the unit binds: its own for a stated unit, "each" for a count word,
+    /// "serving" for a bare count.
+    let unit: String
+    /// The cleaned food name the catalog is searched for.
+    let name: String
+    /// How ``unit`` was read.
+    let unitReading: UnitReading
+
+    /// The unit tokens tried on the bound row, in order; the first that converts counts the line.
+    var candidateUnits: [String] {
+        switch unitReading {
+        case .stated: [unit]
+        case .countWord: [RecipeUnit.each.rawValue]
+        case .bareCount: [RecipeUnit.each.rawValue, RecipeUnit.serving.rawValue]
+        }
     }
 }
 
@@ -722,7 +782,7 @@ public enum RecipeWebImporter {
     private static func importedRecipe(from dictionary: [String: Any], sourceURL: URL, catalog: FoodCatalog) -> ImportedRecipe? {
         let name = stringValue(dictionary["name"]).map { String($0.prefix(maxImportedNameCharacters)) }
         // R3: `recipeIngredient` is page-controlled and otherwise bounded only by the 3 MB HTML cap;
-        // every kept line costs one main-actor catalog search in estimateMacrosFromIngredients.
+        // every kept line costs one main-actor catalog search in ingredientEstimate.
         let ingredients = Array(stringArrayValue(dictionary["recipeIngredient"]).prefix(maxImportedIngredients))
         let fullSummary = instructionsText(from: dictionary["recipeInstructions"])
         let summary = briefSummary(from: fullSummary)
@@ -739,16 +799,18 @@ public enum RecipeWebImporter {
         let carbs: Int
         let fat: Int
         let micronutrients: Micronutrients
+        var uncounted = 0
         if let siteNutrition = nutritionMacros(from: dictionary) {
             protein = siteNutrition.protein
             carbs = siteNutrition.carbs
             fat = siteNutrition.fat
             micronutrients = siteNutrition.micronutrients
         } else {
-            guard let estimate = estimateMacrosFromIngredients(ingredients, servings: servings, catalog: catalog) else {
+            guard let estimate = ingredientEstimate(ingredients, servings: servings, catalog: catalog) else {
                 return nil
             }
-            (protein, carbs, fat) = estimate
+            (protein, carbs, fat) = (estimate.protein, estimate.carbs, estimate.fat)
+            uncounted = estimate.uncountedLines
             micronutrients = Micronutrients()
         }
 
@@ -762,7 +824,8 @@ public enum RecipeWebImporter {
             carbs: carbs,
             fat: fat,
             micronutrients: micronutrients,
-            steps: steps.isEmpty ? nil : steps
+            steps: steps.isEmpty ? nil : steps,
+            uncountedIngredientCount: uncounted
         )
     }
 
@@ -874,49 +937,100 @@ public enum RecipeWebImporter {
 
     /// USDA fallback when the site publishes no nutrition label: parses each ingredient line, matches
     /// its cleaned name against the catalog's top result, sums scaled macros, and divides by servings.
-    /// Unparseable or unmatched lines contribute nothing, so this UNDERestimates rather than invents.
-    /// A matched line with an unsupported conversion invalidates the entire fallback rather than
-    /// silently publishing a partial nutrition estimate.
+    ///
+    /// **A line that cannot be counted is skipped and COUNTED AS SKIPPED, never silent**
+    /// (ingredient-search round, F11). A line with an amount that matches no row, or binds a row its
+    /// amount does not convert on ("1 cup" of a row that has no cup), contributes nothing and adds one
+    /// to ``IngredientMacroEstimate/uncountedLines``; the import carries that count
+    /// (``ImportedRecipe/uncountedIngredientCount``) and the recipe shows it beside the estimate. Until
+    /// F11 one such line voided the WHOLE estimate — and with it the page's import — which is how
+    /// "1 cup chocolate chips" (a chip cookie with only a bar portion) or "3 cloves garlic" lost every
+    /// other line's nutrition. A line with no leading amount ("salt to taste", a "For the sauce:"
+    /// header) is not an amount to count and joins neither side. The estimate still UNDERestimates
+    /// rather than invents: nothing is guessed for a skipped line.
+    ///
+    /// Returns nil only when no line counted at all.
     ///
     /// - Important: one catalog search per line, on the main actor. Callers cap `ingredients` at
     ///   ``maxImportedIngredients`` where the page's list enters (R3); do not hand it an uncapped
     ///   page-controlled array.
-    nonisolated static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> (Int, Int, Int)? {
+    nonisolated static func ingredientEstimate(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> IngredientMacroEstimate? {
         var totalProtein = 0.0, totalCarbs = 0.0, totalFat = 0.0
-        var matchedIngredient = false
-
+        var counted = 0
+        var uncounted = 0
         for text in ingredients {
-            guard let parsed = parseIngredient(text),
-                  let match = catalog.results(
-                    for: parsed.name, limit: 1, context: .machineGenerated
-                  ).first else { continue }
-            matchedIngredient = true
-            let ri = RecipeIngredient(foodItemId: match.id, quantity: parsed.quantity, unit: parsed.unit)
-            guard let conversion = ri.servingConversion(using: match) else { return nil }
-            let macros = conversion.scaledMacros(for: match)
+            guard let line = parseIngredientLine(text) else { continue }
+            guard let macros = estimatedMacros(for: line, catalog: catalog) else {
+                uncounted += 1
+                continue
+            }
+            counted += 1
             totalProtein += Double(macros.protein)
             totalCarbs += Double(macros.carbs)
             totalFat += Double(macros.fat)
         }
-
-        guard matchedIngredient else { return nil }
+        guard counted > 0 else { return nil }
         let d = max(Double(servings), 1.0)
-        return (
-            Int((totalProtein / d).rounded()),
-            Int((totalCarbs / d).rounded()),
-            Int((totalFat / d).rounded())
+        return IngredientMacroEstimate(
+            protein: Macros.clampedInt(totalProtein / d),
+            carbs: Macros.clampedInt(totalCarbs / d),
+            fat: Macros.clampedInt(totalFat / d),
+            uncountedLines: uncounted
         )
+    }
+
+    /// One parsed line's macros on the row its name binds, or nil when the line is not counted: its
+    /// name matches nothing, or none of its ``ParsedIngredientLine/candidateUnits`` converts on the row.
+    /// Machine-generated context — cold, unaliased, one row.
+    nonisolated static func estimatedMacros(for line: ParsedIngredientLine, catalog: FoodCatalog) -> Macros? {
+        guard let match = catalog.results(for: line.name, limit: 1, context: .machineGenerated).first else {
+            return nil
+        }
+        for unit in line.candidateUnits {
+            let ingredient = RecipeIngredient(foodItemId: match.id, quantity: line.quantity, unit: unit)
+            if let conversion = ingredient.servingConversion(using: match) {
+                return conversion.scaledMacros(for: match)
+            }
+        }
+        return nil
     }
 
     // MARK: - Ingredient parsing
 
-    // Parses "2 cups all-purpose flour" → (quantity: 2.0, unit: "cup", name: "flour")
-    // Internal (not private) only so `RecipeImportIngredientLineTests` can pin its answers.
+    /// The unit words the line parser reads after a leading amount, LONGEST FIRST, as regex
+    /// alternatives. Order matters twice: an alternation takes its first match, so "grams" must be
+    /// tried before "g" and "large" before "l"; and the pattern requires a word end after the unit, so
+    /// "g" can no longer take the first letter of "garlic" (before F11, "2 large eggs" read as 2 liters
+    /// of "arge eggs" and "1 lemon" as a liter of "emon"). FROZEN English matching inputs.
+    nonisolated static let unitAlternatives = [
+        #"fluid\s+ounces?"#, #"extra\s+large"#, #"extra\s+small"#, "milliliters?", "millilitres?",
+        "tablespoons?", "kilograms?", "milligrams?", "teaspoons?", #"fl\s*oz"#, "glass(?:es)?", "ounces?",
+        "pounds?", "liters?", "litres?", "grams?", "slices?", "pieces?", "cloves?", "medium", "large",
+        "small", "whole", "tbsps?", "tsps?", "cups?", "each", "lbs?", "mg", "kg", "ml", "oz", "g", "l"
+    ]
+
+    /// Count and size words that mean "this many of the food" rather than a measure: they bind "each",
+    /// and only on a row that has a count portion (never a 100 g "serving"). FROZEN English matching
+    /// inputs, compared after lowercasing and collapsing inner whitespace.
+    nonisolated static let countWords: Set<String> = [
+        "clove", "cloves", "extra large", "extra small", "large", "medium", "small", "whole"
+    ]
+
+    /// Parses "2 cups all-purpose flour" → (quantity: 2.0, unit: "cup", name: "all-purpose flour").
+    /// Internal (not private) only so `RecipeImportIngredientLineTests` can pin its answers; the
+    /// estimator reads ``parseIngredientLine(_:)``, which also says how the unit was read.
     nonisolated static func parseIngredient(_ text: String) -> (quantity: Double, unit: String, name: String)? {
+        parseIngredientLine(text).map { (quantity: $0.quantity, unit: $0.unit, name: $0.name) }
+    }
+
+    /// One line as the USDA fallback reads it: a leading amount (mixed fraction "1 1/2", fraction
+    /// "3/4", decimal or integer), an optional unit from ``unitAlternatives`` that must END there
+    /// (whitespace, a comma, the line's end, or a period then one of those — "2 tbsp. butter"), then
+    /// the food name, cleaned. nil when there is no leading amount or no name.
+    nonisolated static func parseIngredientLine(_ text: String) -> ParsedIngredientLine? {
         let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Leading quantity: mixed fraction "1 1/2", pure fraction "3/4", or decimal/integer "2"
-        // Followed by optional unit, then food name
-        let pattern = #"^(\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)\s*(fluid\s+ounces?|fl\s*oz|floz|tablespoons?|teaspoons?|cups?|ounces?|pounds?|tbsps?|tsps?|oz|lbs?|milligrams?|mg|kilograms?|kg|g|grams?|liters?|litres?|l|ml|milliliters?|millilitres?|glasses?|slices?|pieces?|cloves?|large|medium|small|whole|each)?\s*(.+)$"#
+        let units = unitAlternatives.joined(separator: "|")
+        let pattern = #"^(\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)\s*(?:("# + units + #")\.?(?=[\s,]|$))?[\s,]*(.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
               let match = regex.firstMatch(in: s, range: NSRange(s.startIndex..<s.endIndex, in: s)),
               match.numberOfRanges >= 4 else { return nil }
@@ -935,8 +1049,8 @@ public enum RecipeWebImporter {
         let name = cleanFoodName(String(s[nRange]))
         guard name.count >= 3 else { return nil }
 
-        let (resolvedQty, resolvedUnit) = resolveUnit(quantity: quantity, unitString: unitStr)
-        return (quantity: resolvedQty, unit: resolvedUnit, name: name)
+        let (unit, reading) = resolveUnit(unitStr)
+        return ParsedIngredientLine(quantity: quantity, unit: unit, name: name, unitReading: reading)
     }
 
     nonisolated private static func parseQuantity(_ text: String) -> Double? {
@@ -961,14 +1075,14 @@ public enum RecipeWebImporter {
         return num / den
     }
 
-    nonisolated private static func resolveUnit(quantity: Double, unitString: String) -> (Double, String) {
-        if let unit = RecipeUnit.normalized(unitString) { return (quantity, unit.rawValue) }
-        switch unitString.lowercased().trimmingCharacters(in: .whitespaces) {
-        case "clove", "cloves", "large", "medium", "small", "whole":
-            return (quantity, RecipeUnit.each.rawValue)
-        default:
-            return (quantity, RecipeUnit.serving.rawValue)
-        }
+    /// The unit token a parsed unit word binds, and how it was read: a `RecipeUnit` spelling is
+    /// stated; a ``countWords`` word binds "each" as a count; no word at all is a bare count ("1
+    /// lemon"), tried as "each" and then as one serving.
+    nonisolated private static func resolveUnit(_ unitString: String) -> (String, ParsedIngredientLine.UnitReading) {
+        if let unit = RecipeUnit.normalized(unitString) { return (unit.rawValue, .stated) }
+        let word = unitString.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        if countWords.contains(word) { return (RecipeUnit.each.rawValue, .countWord) }
+        return (RecipeUnit.serving.rawValue, .bareCount)
     }
 
     nonisolated private static func cleanFoodName(_ text: String) -> String {
@@ -1183,10 +1297,9 @@ struct ExtractedRecipe {
             throw RecipeWebImportError.incompleteRecipe
         }
 
-        guard let estimate = RecipeWebImporter.estimateMacrosFromIngredients(
+        guard let estimate = RecipeWebImporter.ingredientEstimate(
             trimmedIngredients, servings: 1, catalog: catalog
         ) else { throw RecipeWebImportError.incompleteRecipe }
-        let (protein, carbs, fat) = estimate
 
         return ImportedRecipe(
             sourceURL: sourceURL,
@@ -1194,9 +1307,10 @@ struct ExtractedRecipe {
             ingredients: trimmedIngredients,
             summary: trimmedSummary.isEmpty ? "Imported with on-device extraction." : trimmedSummary,
             servings: 1,
-            protein: protein,
-            carbs: carbs,
-            fat: fat
+            protein: estimate.protein,
+            carbs: estimate.carbs,
+            fat: estimate.fat,
+            uncountedIngredientCount: estimate.uncountedLines
         )
     }
 }

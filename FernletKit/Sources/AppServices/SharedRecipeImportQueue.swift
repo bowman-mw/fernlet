@@ -407,7 +407,11 @@ extension RecipeDefinition {
                 micronutrients: importedRecipe.micronutrients,
                 // The page's main-picture URL rides along so user-present paths can download it
                 // later (owner decision 2026-08-09); the background drain itself never fetches it.
-                imageURLString: importedRecipe.imageURL?.absoluteString
+                imageURLString: importedRecipe.imageURL?.absoluteString,
+                // A partial USDA estimate keeps how many lines it left out (ingredient-search round,
+                // F11), so the recipe can say so; nil when every amount counted.
+                uncountedIngredientLines: importedRecipe.uncountedIngredientCount > 0
+                    ? importedRecipe.uncountedIngredientCount : nil
             ),
             // F5: preserve JSON-LD-parsed ordered cooking steps. Persisted per-row via the
             // `SavedRecipeRecord.payloadData` blob (STEP 0), so they survive on this path.
@@ -419,7 +423,7 @@ extension RecipeDefinition {
     /// 2026-08-09): the fresh import's content over the existing row's user-owned state.
     ///
     /// **Fresh** (from `reimported`): name, servings, ingredient lines, macros, micronutrients,
-    /// steps, source URL, and the page's image URL. **Preserved** (from `existing`): the `id` —
+    /// steps, source URL, the page's image URL, and how many lines a USDA estimate left out. **Preserved** (from `existing`): the `id` —
     /// deliberate, because the sealed recipe photo is keyed by it, so reusing the id carries the
     /// photo across the refresh with no migration — plus the user's `notes` verbatim (the import
     /// summary only seeds notes on FIRST import; a refresh never overwrites what the user may

@@ -146,6 +146,7 @@ import FernletFoundation
 import LocalPersistence
 import PrivateHealthStore
 @testable import FoodCatalog
+@testable import AIProviders
 @testable import Fernlet
 
 /// Grep-wall enforcing the token/display separation that makes localization safe.
@@ -697,6 +698,28 @@ struct LocalizationBoundaryTests {
             """
         )
         #expect(CuratedSearchAlias.spellingFolds.map { "\($0.first) \($0.second)>\($0.folded)" } == ["semi sweet>semisweet"])
+    }
+
+    /// The web importer's ingredient-line unit words (ingredient-search round, F11). They are read out
+    /// of the English lines a recipe page publishes, and the count words decide that a line binds
+    /// "each" — matching inputs, never display text.
+    @Test func frozenRecipeImportUnitWords() {
+        #expect(
+            RecipeWebImporter.unitAlternatives == [
+                #"fluid\s+ounces?"#, #"extra\s+large"#, #"extra\s+small"#, "milliliters?", "millilitres?",
+                "tablespoons?", "kilograms?", "milligrams?", "teaspoons?", #"fl\s*oz"#, "glass(?:es)?", "ounces?",
+                "pounds?", "liters?", "litres?", "grams?", "slices?", "pieces?", "cloves?", "medium", "large",
+                "small", "whole", "tbsps?", "tsps?", "cups?", "each", "lbs?", "mg", "kg", "ml", "oz", "g", "l"
+            ],
+            """
+            The importer's unit alternatives changed. They are matched against the English ingredient \
+            lines recipe pages publish, LONGEST FIRST — a short unit placed before a longer one that \
+            starts the same way ("g" before "grams") takes the wrong word again.
+            """
+        )
+        #expect(RecipeWebImporter.countWords == [
+            "clove", "cloves", "extra large", "extra small", "large", "medium", "small", "whole"
+        ])
     }
 
     /// Coach-plan wire tokens.

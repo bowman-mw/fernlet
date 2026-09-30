@@ -461,18 +461,27 @@ struct FoodSearchHistoryCatalogTests {
         #expect(catalog.results(for: "flour", limit: 1, context: .userTyped).first?.id == bravo.id,
                 "precondition: the warm profile did not discriminate the importer test")
 
-        let estimate = try #require(RecipeWebImporter.estimateMacrosFromIngredients(
+        let estimate = try #require(RecipeWebImporter.ingredientEstimate(
             ["1 flour"], servings: 1, catalog: catalog
         ))
-        #expect(estimate == (1, 2, 3), "recipe estimation consumed the typed history tier")
+        #expect((estimate.protein, estimate.carbs, estimate.fat) == (1, 2, 3),
+                "recipe estimation consumed the typed history tier")
     }
 
+    /// A matched line whose amount does not convert contributes nothing — and since F11 of the
+    /// ingredient-search round it is skipped and counted rather than voiding the page; with no other
+    /// line there is still no estimate at all.
     @Test func recipeImportEstimationRejectsMatchedUnsupportedConversion() {
         let ramen = FoodSearchHistoryRankingTests.food("Ramen")
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource([ramen]))
-        #expect(RecipeWebImporter.estimateMacrosFromIngredients(
+        #expect(RecipeWebImporter.ingredientEstimate(
             ["1 each ramen"], servings: 1, catalog: catalog
         ) == nil)
+        let flour = FoodSearchHistoryRankingTests.food("Flour")
+        let both = FoodCatalog(source: InMemoryBundledFoodSource([ramen, flour]))
+        let estimate = RecipeWebImporter.ingredientEstimate(["1 each ramen", "100 g flour"], servings: 1, catalog: both)
+        #expect(estimate == IngredientMacroEstimate(protein: 5, carbs: 10, fat: 2, uncountedLines: 1),
+                "the unconvertible line is skipped and counted, the rest still estimates")
     }
 
     /// **Boundary 2 — `scoredResults` is cold, structurally.** `FoodItemSearch.scoredResults` has no

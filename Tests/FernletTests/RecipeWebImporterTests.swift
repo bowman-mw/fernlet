@@ -316,6 +316,39 @@ struct RecipeWebImporterTests {
         #expect(RecipeDefinition(importedRecipe: imported).webImport?.imageURLString == nil)
     }
 
+    /// Ingredient-search round F11: a partial USDA estimate keeps how many lines it left out, on the
+    /// saved recipe, so the detail can say so; a whole estimate (or a label) stores nothing.
+    @MainActor
+    @Test func bridgeCarriesTheUncountedLineCountIntoWebImport() {
+        func imported(uncounted: Int) -> ImportedRecipe {
+            ImportedRecipe(
+                sourceURL: URL(string: "https://example.com/recipes/cookies")!,
+                name: "Cookies", ingredients: ["1 cup chocolate chips", "2 cups flour"], summary: "Bake.",
+                servings: 12, protein: 3, carbs: 20, fat: 8, uncountedIngredientCount: uncounted
+            )
+        }
+        #expect(RecipeDefinition(importedRecipe: imported(uncounted: 1)).webImport?.uncountedIngredientLines == 1)
+        #expect(RecipeDefinition(importedRecipe: imported(uncounted: 0)).webImport?.uncountedIngredientLines == nil)
+        #expect(imported(uncounted: -3).uncountedIngredientCount == 0, "a count is never negative")
+        let existing = RecipeDefinition(importedRecipe: imported(uncounted: 2))
+        let refreshed = RecipeDefinition(reimported: imported(uncounted: 0), preserving: existing)
+        #expect(refreshed.webImport?.uncountedIngredientLines == nil, "a re-import's count is the fresh one")
+    }
+
+    /// The count is additive and tolerant-decoded: an older blob without it decodes to nil, and a
+    /// stored count round-trips.
+    @Test func webImportUncountedLinesDecodeTolerantly() throws {
+        let legacy = Data(#"{"sourceURLString":"https://example.com/r","ingredientLines":["1 cup oats"],"macros":{"protein":1,"carbs":2,"fat":3}}"#.utf8)
+        #expect(try JSONDecoder().decode(RecipeWebImport.self, from: legacy).uncountedIngredientLines == nil)
+        let stored = RecipeWebImport(sourceURLString: "https://example.com/r", ingredientLines: ["1 cup oats"],
+                                     uncountedIngredientLines: 2)
+        let decoded = try JSONDecoder().decode(RecipeWebImport.self, from: JSONEncoder().encode(stored))
+        #expect(decoded.uncountedIngredientLines == 2)
+        let bare = RecipeWebImport(sourceURLString: "https://example.com/r", ingredientLines: [])
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(bare)) as? [String: Any])
+        #expect(object["uncountedIngredientLines"] == nil, "a nil count writes no key, so older blobs stay byte-identical")
+    }
+
     // MARK: - Hostile page numbers (M9) and over-long page strings (M16)
 
     /// R5: `Int(d.rounded())` traps for a `Double` outside `Int`'s range, and `recipeYield` is a

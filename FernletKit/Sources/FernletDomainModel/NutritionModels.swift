@@ -2247,6 +2247,14 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
     /// otherwise turn every open of that recipe into a DNS+TLS beacon to the sender. Additive and
     /// tolerant-decoded; `nil` (legacy blobs) means "not known to be peer-supplied".
     public var sourceIsPeerSupplied: Bool?
+    /// How many of `ingredientLines` the USDA estimate in `macros` LEFT OUT (ingredient-search round,
+    /// F11): lines with an amount the importer could not match to a food or convert. The recipe shows
+    /// it beside the estimate, so a partial estimate never reads as a whole one. `nil` when the site's
+    /// own nutrition label supplied `macros`, when every amount counted, and on every recipe imported
+    /// before this field existed or received from a peer (the share wire does not carry it). Additive
+    /// and tolerant-decoded; an un-updated paired device re-encoding the synced blob strips it, which
+    /// loses only the note, never the macros.
+    public var uncountedIngredientLines: Int?
 
     /// The parsed source link, or `nil` when there's no usable one. An absent or unparseable
     /// `sourceURLString` (e.g. the decode default of `""`) returns `nil` rather than fabricating a
@@ -2265,7 +2273,8 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         micronutrients: Micronutrients = Micronutrients(),
         imageURLString: String? = nil,
         webImageSuppressed: Bool? = nil,
-        sourceIsPeerSupplied: Bool? = nil
+        sourceIsPeerSupplied: Bool? = nil,
+        uncountedIngredientLines: Int? = nil
     ) {
         self.sourceURLString = sourceURLString
         self.ingredientLines = ingredientLines
@@ -2274,6 +2283,7 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         self.imageURLString = imageURLString
         self.webImageSuppressed = webImageSuppressed
         self.sourceIsPeerSupplied = sourceIsPeerSupplied
+        self.uncountedIngredientLines = uncountedIngredientLines
     }
 
     public init(from decoder: Decoder) throws {
@@ -2289,6 +2299,8 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         // Same additive + tolerant rule: absent on every blob written before the provenance flag
         // existed, and an absent flag must degrade to "pre-warm as before", never to a decode error.
         sourceIsPeerSupplied = try container.decodeIfPresent(Bool.self, forKey: .sourceIsPeerSupplied)
+        // Same additive + tolerant rule (ingredient-search round, F11): absent on every older blob.
+        uncountedIngredientLines = try container.decodeIfPresent(Int.self, forKey: .uncountedIngredientLines)
     }
 }
 

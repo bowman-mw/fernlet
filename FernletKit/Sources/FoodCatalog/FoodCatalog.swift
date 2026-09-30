@@ -303,7 +303,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// `MealResolutionService.fallbackMicronutrients` borrows the top row's micronutrient profile for a
     /// keyword-parsed meal — an ESTIMATE on a meal that is already `.low`/reviewed, where the user's
     /// own correction is a better guess than the scorer's — and
-    /// `RecipeWebImporter.estimateMacrosFromIngredients` binds imported ingredient lines the same way,
+    /// `RecipeWebImporter.ingredientEstimate` binds imported ingredient lines the same way,
     /// on a recipe the user reviews before saving.
     /// Neither gates auto-commit, so neither needs the floor above.
     ///

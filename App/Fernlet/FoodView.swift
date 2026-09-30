@@ -1173,6 +1173,7 @@ struct SavedRecipeNotesSheet: View {
                 }
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
+                WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines)
             }
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))

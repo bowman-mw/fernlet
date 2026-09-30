@@ -63,6 +63,14 @@ downloads image bytes under the same SSRF/redirect guard plus an `image/*` MIME 
 oversize-aborting byte cap. Import itself never downloads the image — only user-present app paths
 do (see `Docs/No-Tracking-Wall.md` §4b), and the app-side caller owns sealing and storage.
 
+When a page publishes no nutrition label, the importer estimates macros from its ingredient lines
+against the local USDA catalog (a cold, machine-generated search — no history, no curated alias). Since
+the ingredient-search round's F11 the line reader takes its unit words longest first and requires a
+unit to end where it ends ("2 large eggs" is two eggs, not two liters of "arge eggs"); a count or size
+word binds "each" only on a row with a count portion; and a line that still cannot be counted is
+skipped and counted, never silently and never voiding the page: ``ImportedRecipe/uncountedIngredientCount``
+carries how many lines the estimate left out, and the saved recipe shows it beside its macros.
+
 Two pieces of that guard are deliberately PUBLIC so the app-target product importer can reuse them
 rather than grow a second, drifting copy (2026-08-18): ``RecipeWebImporter/isSafePublicHTTPSURL(_:)``
 classifies a host (private/loopback/link-local literals rejected in every spelling — decimal, hex,
