@@ -1669,6 +1669,54 @@
         }
       }
     },
+    "recipeImport.error.emptyRecipe" : {
+      "comment" : "Import recipe screen: the pasted recipe has no name or no ingredients.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That recipe needs a name and at least one ingredient."
+          }
+        }
+      }
+    },
+    "recipeImport.error.invalidPayload" : {
+      "comment" : "Import recipe screen: the pasted Fernlet recipe data is damaged or cut off.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That recipe data is a little tangled. Paste the full shared recipe and try again."
+          }
+        }
+      }
+    },
+    "recipeImport.error.missingPayload" : {
+      "comment" : "Shown on the Import recipe screen when the pasted text holds no Fernlet recipe data, which is always the case for a recipe another Fernlet shared as readable text. 'Send in Messages' and 'Paste URL' are the exact labels of Fernlet buttons; 'Source' is the label of the web link line in shared recipe text. 'Fernlet' is the product name and must not be translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I could not find Fernlet recipe data in that text. Recipes shared as text are for reading. To save one, have it sent with Send in Messages or shared nearby, or copy its Source link and tap Paste URL."
+          }
+        }
+      }
+    },
+    "recipeImport.error.unsupportedFormat" : {
+      "comment" : "Import recipe screen: the recipe data came from a newer Fernlet format. 'Fernlet' is the product name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That recipe came from a format this Fernlet does not know yet."
+          }
+        }
+      }
+    },
     "recipePart.fallbackName" : {
       "comment" : "Name given to a part of a multipart recipe the user left unnamed, e.g. Part 2",
       "extractionState" : "extracted_with_value",

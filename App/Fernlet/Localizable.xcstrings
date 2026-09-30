@@ -942,6 +942,9 @@
     "8-12" : {
 
     },
+    "A Fernlet card they can open and save in Fernlet on iPhone." : {
+
+    },
     "A couple of readings looked close. Pick the one that fits." : {
 
     },
@@ -967,6 +970,9 @@
 
     },
     "A quiet minute, whenever" : {
+
+    },
+    "A recipe shared as text is for reading and won't import here. To save one, have it sent with Send in Messages or shared nearby." : {
 
     },
     "A recovery device is enrolled." : {
@@ -2296,6 +2302,9 @@
     "Enter details by hand" : {
 
     },
+    "Enter ingredients, macros, servings, and notes yourself." : {
+
+    },
     "Enter it again" : {
 
     },
@@ -3425,6 +3434,9 @@
     "Manual" : {
 
     },
+    "Manual entry" : {
+
+    },
     "Manual plan exchange" : {
 
     },
@@ -3504,6 +3516,12 @@
 
     },
     "Messages are turned off for this account." : {
+
+    },
+    "Messages couldn't send the recipe. Try again, or share it as text." : {
+
+    },
+    "Messages isn't set up on this iPhone, so share the recipe as text." : {
 
     },
     "Messages stay in this session only — they disappear for everyone when the session ends." : {
@@ -4159,16 +4177,19 @@
     "Parts: %@" : {
 
     },
-    "Paste URL" : {
+    "Paste Fernlet recipe data here" : {
 
     },
-    "Paste a Fernlet recipe share here" : {
+    "Paste URL" : {
 
     },
     "Paste a plan" : {
 
     },
     "Paste a plan…" : {
+
+    },
+    "Paste a recipe link or Fernlet recipe data." : {
 
     },
     "Paste the reply" : {
@@ -4507,6 +4528,9 @@
     "Read plan" : {
 
     },
+    "Readable text for Mail, Notes or any other app. It doesn't import into Fernlet." : {
+
+    },
     "Reading a nutrition page" : {
 
     },
@@ -4574,6 +4598,9 @@
 
     },
     "Recipes and saved products, A–Z." : {
+
+    },
+    "Recipes saved from a web page share as text." : {
 
     },
     "Recipes, plans, your photos" : {
@@ -5085,6 +5112,9 @@
     "Send good vibes to %@" : {
 
     },
+    "Send in Messages" : {
+
+    },
     "Send message" : {
 
     },
@@ -5106,6 +5136,9 @@
       }
     },
     "Sent %@ some good vibes." : {
+
+    },
+    "Sent in Messages." : {
 
     },
     "Sent to" : {
@@ -5205,6 +5238,9 @@
 
     },
     "Share again" : {
+
+    },
+    "Share as text" : {
 
     },
     "Share outside Fernlet" : {
@@ -5777,6 +5813,12 @@
 
     },
     "This puts back the key your recovery device was given. If you have set up a new app lock since then, anything you wrote under it will be lost — everything from before is recovered." : {
+
+    },
+    "This recipe can't go on a Messages card. Share it as text instead." : {
+
+    },
+    "This recipe is too long for a Messages card. Share it as text, or with someone nearby." : {
 
     },
     "This removes Fernlet's records from your iCloud account." : {
@@ -7677,6 +7719,102 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Could not re-import this recipe."
+          }
+        }
+      }
+    },
+    "recipeShareText.ingredients" : {
+      "comment" : "Heading above the ingredient list in a recipe shared as text.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ingredients"
+          }
+        }
+      }
+    },
+    "recipeShareText.notes" : {
+      "comment" : "Heading above the person's own notes in a recipe shared as text.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Notes"
+          }
+        }
+      }
+    },
+    "recipeShareText.perServing" : {
+      "comment" : "A recipe shared as text: its macros for one serving, in grams. The three numbers are protein, carbs and fat. Calories are left out on purpose (the person has calories hidden).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Per serving: %1$lld g protein, %2$lld g carbs, %3$lld g fat"
+          }
+        }
+      }
+    },
+    "recipeShareText.perServingWithCalories" : {
+      "comment" : "A recipe shared as text: calories and macros for one serving. The first number is calories ('cal', as the app writes it elsewhere), then grams of protein, carbs and fat.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Per serving: %1$lld cal, %2$lld g protein, %3$lld g carbs, %4$lld g fat"
+          }
+        }
+      }
+    },
+    "recipeShareText.servings" : {
+      "comment" : "Second line of a recipe shared as text from the recipe's Share screen, e.g. 'Servings: 4'. A label and a number, so no plural form is needed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Servings: %lld"
+          }
+        }
+      }
+    },
+    "recipeShareText.source" : {
+      "comment" : "Last line of a recipe shared as text, for a recipe saved from a web page. %@ is the page's address, shown verbatim.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Source: %@"
+          }
+        }
+      }
+    },
+    "recipeShareText.step" : {
+      "comment" : "One numbered cooking step in a recipe shared as text, e.g. '2. Whisk the dressing.'. The number comes first; the %@ is the person's own step text, shown verbatim. Keep or change the punctuation after the number to suit this language's numbered lists.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld. %2$@"
+          }
+        }
+      }
+    },
+    "recipeShareText.steps" : {
+      "comment" : "Heading above the numbered cooking steps in a recipe shared as text.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steps"
           }
         }
       }
