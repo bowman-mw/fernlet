@@ -2709,7 +2709,34 @@ extension Macros {
 }
 
 extension FoodItem {
+    /// The unit a tap in the recipe editor (and a bare-count quick log) binds, with
+    /// ``defaultRecipeQuantity(for:)`` of it.
+    ///
+    /// INVARIANT (ingredient-search round, F1(c)): the answer's default amount CONVERTS. The unit the
+    /// food's data suggests (``preferredRecipeUnitCandidate``) is returned only when
+    /// ``tapDefaultConverts(_:)`` holds for it; otherwise grams, and — for a serving the converter
+    /// cannot weigh (IU, a survey "sandwich") — "1 serving". A tap used to land on an amount the editor
+    /// then refused with Save disabled: 1,030 "oil" rows served by mass with no portions defaulted
+    /// to "1 cup", which nothing can convert. Only a row where nothing converts at all (a serving past
+    /// the conversion bound) falls through to `.gram` unconverted.
     public var preferredRecipeUnit: RecipeUnit {
+        let candidates: [RecipeUnit] = [preferredRecipeUnitCandidate, .gram, .serving]
+        return candidates.first(where: tapDefaultConverts) ?? .gram
+    }
+
+    /// Whether ``defaultRecipeQuantity(for:)`` of `unit` resolves to nutrition for this food — the
+    /// test every tap default must pass (F1(c)).
+    public func tapDefaultConverts(_ unit: RecipeUnit) -> Bool {
+        let amount = defaultRecipeQuantity(for: unit)
+        guard amount.isFinite, amount > 0 else { return false }
+        return RecipeIngredient(foodItemId: id, quantity: amount, unit: unit.rawValue).servingConversion(using: self) != nil
+    }
+
+    /// The unit the food's data suggests for a tap, before the F1(c) conversion check: grams for a
+    /// flour, a cup or count portion when the food states exactly one, a spoon or cup for an oil with
+    /// no portions, else the serving's own unit. "Oil" matches as a WORD ("oil" or "oils"), not a
+    /// substring — "Chicken, boiled" and "broiled" names are not oils.
+    private var preferredRecipeUnitCandidate: RecipeUnit {
         let nameText = FoodItemSearch.normalized(name)
         if nameText.contains("flour") {
             return .gram
@@ -2720,7 +2747,8 @@ extension FoodItem {
         if portion(for: .each) != nil {
             return .each
         }
-        if nameText.contains("oil") && portions.isEmpty {
+        let nameWords = nameText.split(separator: " ")
+        if (nameWords.contains("oil") || nameWords.contains("oils")) && portions.isEmpty {
             return RecipeUnit.normalized(servingUnit) == .milliliter ? .tablespoon : .cup
         }
         if servingUnit.caseInsensitiveCompare(RecipeUnit.gram.rawValue) == .orderedSame {

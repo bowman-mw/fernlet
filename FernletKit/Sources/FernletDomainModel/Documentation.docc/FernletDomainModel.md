@@ -228,7 +228,10 @@ stated in the requested unit when there is exactly one, and otherwise the food's
 agreed density: ``FoodPortion/densityAgreement(among:)`` answers with the median-density portion
 only when every portion's g/ml lies within ``FoodPortion/densityAgreementTolerance`` (15%) of it, so
 butter's cup and tablespoon convert a teaspoon while a banana's sliced and mashed cups refuse. A
-COUNT stays strict — exactly one portion of that count unit.
+COUNT stays strict — exactly one portion of that count unit. The amount a tap binds,
+``FoodItem/preferredRecipeUnit`` × ``FoodItem/defaultRecipeQuantity(for:)``, carries an invariant
+(F1(c)): it converts. The unit the data suggests is kept only when ``FoodItem/tapDefaultConverts(_:)``
+holds, else grams, else "1 serving" — so no tap lands on an amount the recipe editor then refuses.
 
 ``FoodItemSource`` gained its fourth frozen token, `openFoodFacts`, on 2026-09-24: a barcode product
 the user looked up on Open Food Facts (behind the web-nutrition-lookup consent, one explicit tap per

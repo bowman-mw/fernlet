@@ -34,19 +34,22 @@ struct CatalogDefaultUnitSweepTests {
     /// the 3,000 conversion bound. F1(b) cleared the other readable mechanism: the 437 srLegacy rows
     /// (and F6's restored "Salt, table" and "Water, bottled, generic") whose "1 cup" default sat beside
     /// other volume portions now convert through the stated cup.
+    ///
+    /// F1(c) made the pin what it should always have been: a tap default is returned only when it
+    /// converts (else grams, else "1 serving"), so the "oil" rows tap to their grams and the IU/MC/
+    /// survey rows to "1 serving". The one row left is the 4,320 ml drink, where nothing converts —
+    /// not its serving, not a gram, not "1 serving" — and the rule's last resort is grams.
     static let measuredFailures: [String: Int] = [
-        "unreadable → cup": 4,
-        "unreadable → g": 1,
-        "readable → cup": 609,
-        "readable → ml": 1
+        "readable → g": 1
     ]
 
     /// The headline, derived from the pin above. History: 16,310 on cf46b8eb (the report's figure);
     /// 15,771 with F2 — 539 branded rows on the no-portion "oil" branch gained their label serving
     /// as an "each" portion, which is now their tap default; 1,052 with F1(a); 1,054 with F6's 26
     /// restored SR foods (salt and bottled water among them); 615 with F1(b) — a stated cup answers
-    /// "1 cup" beside other volume portions, which cleared those 437 srLegacy rows plus salt and water.
-    static let measuredFailureTotal = 615
+    /// "1 cup" beside other volume portions, which cleared those 437 srLegacy rows plus salt and water;
+    /// 1 with F1(c) — a tap default must convert.
+    static let measuredFailureTotal = 1
 
     /// Upper bound on the rows one sweep reads — comfortably above the catalog, so a catalog that
     /// grew past it fails the row-count check instead of being silently truncated.

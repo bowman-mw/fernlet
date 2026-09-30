@@ -9,6 +9,11 @@
 // butter) refused every volume amount as ambiguous. The portion stated in the requested unit now
 // answers first, and otherwise the portions' implied densities must agree within 15% (the median is
 // used). Counts stay strict.
+//
+// F1(c), the tap default: `preferredRecipeUnit` × `defaultRecipeQuantity(for:)` is what a tap in the
+// recipe editor (and a bare-count quick log) binds, and it must convert — the unit the data suggests
+// is kept only when it does, else grams, else "1 serving". "Oil" is a word ("oil", "oils"), not a
+// substring of "boiled".
 
 import Foundation
 import Testing
@@ -115,5 +120,56 @@ struct HouseholdPortionConversionTests {
         #expect(Self.grams(garlic, 1, "tsp") == 2.8)
         let banana = try Self.shipped(173_944)      // Bananas, raw: cup sliced 150, cup mashed 225
         #expect(Self.grams(banana, 1, "cup") == nil)
+    }
+
+    // MARK: - F1(c): the tap default converts
+
+    static func tapConverts(_ item: FoodItem) -> Bool {
+        let unit = item.preferredRecipeUnit
+        return RecipeIngredient(foodItemId: item.id, quantity: item.defaultRecipeQuantity(for: unit), unit: unit.rawValue)
+            .servingConversion(using: item) != nil
+    }
+
+    /// An oil served by mass with no portions used to tap to "1 cup", which cannot convert; it now
+    /// taps to its serving in grams. Served by volume it still taps to a tablespoon.
+    @Test func anOilWithNoDensityTapsToGrams() {
+        let massOil = Self.food("Oil, coconut, virgin", portions: [], size: 14, unit: "g")
+        #expect(massOil.preferredRecipeUnit == .gram)
+        #expect(massOil.defaultRecipeQuantity(for: .gram) == 14)
+        #expect(massOil.tapDefaultConverts(.gram) && !massOil.tapDefaultConverts(.cup))
+        let volumeOils = Self.food("Oils, vegetable blend", portions: [], size: 15, unit: "ml")
+        #expect(volumeOils.preferredRecipeUnit == .tablespoon, "plural \"oils\" is still an oil")
+        #expect(Self.tapConverts(volumeOils))
+    }
+
+    /// "Oil" is a word: a boiled or broiled food served by volume taps to its own milliliters, not a
+    /// tablespoon (it matched the substring before).
+    @Test func boiledIsNotAnOil() {
+        let broth = Self.food("Chicken broth, boiled", portions: [], size: 240, unit: "ml")
+        #expect(broth.preferredRecipeUnit == .milliliter)
+        #expect(broth.defaultRecipeQuantity(for: .milliliter) == 240)
+    }
+
+    /// A serving the converter cannot weigh (IU, a survey unit) falls back to "1 serving", which
+    /// resolves; a unit the data suggests is never returned when it cannot convert.
+    @Test func anUnweighableServingTapsToOneServing() {
+        let iuOil = Self.food("Oil, fish, cod liver", portions: [], size: 1, unit: "IU")
+        #expect(iuOil.preferredRecipeUnit == .serving)
+        #expect(Self.tapConverts(iuOil))
+        let flour = Self.food("Flour, rice", portions: [], size: 30, unit: "sandwich")
+        #expect(flour.preferredRecipeUnit == .serving, "grams cannot convert against a sandwich")
+        let pastBound = Self.food("Punch, party size", portions: [], size: 4_320, unit: "ml")
+        #expect(pastBound.preferredRecipeUnit == .gram, "nothing converts past the bound; grams by rule")
+        #expect(!Self.tapConverts(pastBound))
+    }
+
+    /// A cup default that converts is kept (butter's stated cup); one that cannot — a cup portion on
+    /// a serving the converter cannot weigh — is not, and the tap lands on "1 serving".
+    @Test func aCandidateIsKeptOnlyWhenItConverts() throws {
+        let butter = try Self.shipped(173_410)
+        #expect(butter.preferredRecipeUnit == .cup && Self.tapConverts(butter))
+        let syrup = Self.food("Syrup", portions: [FoodPortion(amount: 1, unit: "cup", gramWeight: 300)], size: 1, unit: "IU")
+        #expect(!syrup.tapDefaultConverts(.cup))
+        #expect(syrup.preferredRecipeUnit == .serving && Self.tapConverts(syrup))
     }
 }
