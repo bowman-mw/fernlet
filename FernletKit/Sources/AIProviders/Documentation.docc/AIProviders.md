@@ -73,7 +73,12 @@ sandwich"), never an SR row's 100 g reference amount; a Unicode fraction ("½ cu
 to ASCII before the amount is read; and a line that still cannot be counted — including one that opens
 with an amount but whose unit word or name cannot be read — is skipped and counted, never silently
 and never voiding the page: ``ImportedRecipe/uncountedIngredientCount`` carries how many lines the
-estimate left out, and the saved recipe shows it beside its macros.
+estimate left out, and the saved recipe shows it beside its macros. A line the bound row's own data
+cannot weigh (2026-09-30, F4b) is weighed by the USDA typical size of the ingredient that row IS
+(`TypicalPortionTable`): "3 cloves garlic" on the RACC-only raw garlic row is 3 × 3 g, "2 cups
+all-purpose flour" on the RACC-only flour row 2 × 125 g. A row that is not the ingredient (a chip
+cookie for "chocolate chips", a cereal bar for "milk") gets no typical size, and the line stays left
+out.
 
 Two pieces of that guard are deliberately PUBLIC so the app-target product importer can reuse them
 rather than grow a second, drifting copy (2026-08-18): ``RecipeWebImporter/isSafePublicHTTPSURL(_:)``

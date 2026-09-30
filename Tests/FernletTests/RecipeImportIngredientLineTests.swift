@@ -17,6 +17,11 @@
 // where that serving is one item (fix round 1: never an SR row's 100 g reference amount); and a line
 // that still cannot be counted is skipped AND COUNTED, so the page keeps every other line's nutrition
 // and says how many it left out. Against the shipped catalog, cold.
+//
+// F4b (2026-09-30): a line the bound row's own data cannot weigh is counted by the USDA typical size of
+// the ingredient that row IS (`TypicalPortionTable`) — "3 cloves garlic" on the RACC-only raw garlic
+// row is 3 × 3 g, "2 cups all-purpose flour" on the RACC-only flour row 2 × 125 g. A row that is not the
+// ingredient ("1 cup chocolate chips" still binds a chip cookie) gets no typical size and stays left out.
 
 import Foundation
 import Testing
@@ -43,6 +48,9 @@ struct RecipeImportIngredientLineTests {
         let boundName: String?
         /// The unit token the line was counted in on that row; nil when it was left out.
         let countedUnit: String?
+        /// Whether it was counted by the USDA typical size of the ingredient the row IS
+        /// (`TypicalPortionTable`, F4b) because the row's own data cannot weigh it.
+        var byTypicalSize = false
     }
 
     static let pins: [LinePin] = [
@@ -60,9 +68,31 @@ struct RecipeImportIngredientLineTests {
         LinePin(line: "1 cup chocolate chips", quantity: 1, unit: "cup", name: "chocolate chips", reading: .stated,
                 boundName: "Cookies, marshmallow, with rice cereal and chocolate chips", countedUnit: nil),
         // The machine bind lands on the RACC-only "Garlic, raw" twin (the typed list's one-row-per-name
-        // collapse is typed-only), which has no clove: left out and counted, not a 100 g "serving".
+        // collapse is typed-only), which has no clove of its own. F4b counts it by USDA's typical clove
+        // (3 g, SR 169230) — 9 g, not a 100 g "serving"; before F4b it was left out and counted.
         LinePin(line: "3 cloves garlic, minced", quantity: 3, unit: "each", name: "garlic", reading: .countWord,
-                boundName: "Garlic, raw", countedUnit: nil),
+                boundName: "Garlic, raw", countedUnit: "each", byTypicalSize: true),
+        // F4b: the RACC-only all-purpose flour row has no cup; USDA's typical cup (125 g, SR 168894)
+        // counts it — 250 g.
+        LinePin(line: "2 cups all-purpose flour", quantity: 2, unit: "cup", name: "all-purpose flour", reading: .stated,
+                boundName: "Flour, wheat, all-purpose, enriched, bleached", countedUnit: "cup", byTypicalSize: true),
+        LinePin(line: "1 banana", quantity: 1, unit: "serving", name: "banana", reading: .bareCount,
+                boundName: "Bananas, raw", countedUnit: "each"),
+        // F4b: the branded chips row states only its label serving; USDA's typical cup of semisweet chips
+        // (168 g, SR 167976) counts it.
+        LinePin(line: "1 cup semisweet chocolate chips", quantity: 1, unit: "cup", name: "semisweet chocolate chips",
+                reading: .stated, boundName: "Akoma Extra Semisweet Chocolate Chips, Akoma Extra Semisweet",
+                countedUnit: "cup", byTypicalSize: true),
+        // F4b: the Hass row states only its RACC; USDA's typical avocado (136 g, SR 171706) counts one.
+        LinePin(line: "1 avocado", quantity: 1, unit: "serving", name: "avocado", reading: .bareCount,
+                boundName: "Avocado, Hass, peeled, raw", countedUnit: "each", byTypicalSize: true),
+        // F4b: the Foundation creamy row states no portion; USDA's tablespoon (16 g, SR 174265) counts it.
+        LinePin(line: "2 tbsp peanut butter", quantity: 2, unit: "tbsp", name: "peanut butter", reading: .stated,
+                boundName: "Peanut butter, creamy", countedUnit: "tbsp", byTypicalSize: true),
+        // The machine bind for "milk" is a cereal bar (its identity is "bar", not milk), so no typical size
+        // applies and the line stays left out — a typical size never weighs a row that is not the ingredient.
+        LinePin(line: "1 cup milk", quantity: 1, unit: "cup", name: "milk", reading: .stated,
+                boundName: "Milk and cereal bar", countedUnit: nil),
         LinePin(line: "1 medium onion, diced", quantity: 1, unit: "each", name: "onion", reading: .countWord,
                 boundName: "Onions, raw", countedUnit: "each"),
         LinePin(line: "2 tbsp. butter", quantity: 2, unit: "tbsp", name: "butter", reading: .stated,
@@ -90,12 +120,19 @@ struct RecipeImportIngredientLineTests {
             let parsed = try #require(RecipeWebImporter.parseIngredientLine(pin.line))
             let bound = catalog.results(for: parsed.name, limit: 1, context: .machineGenerated).first
             #expect(bound?.name == pin.boundName, "\(pin.line) now binds \(bound?.name ?? "nothing")")
-            let counted = bound.flatMap { row in
+            let own = bound.flatMap { row in
                 parsed.candidateUnits(on: row).first {
                     RecipeIngredient(foodItemId: row.id, quantity: parsed.quantity, unit: $0).servingConversion(using: row) != nil
                 }
             }
+            let typical = own == nil ? bound.flatMap { row in
+                parsed.candidateUnits(on: row).first { unit in
+                    RecipeUnit.normalized(unit).flatMap { TypicalPortionTable.grams(quantity: parsed.quantity, unit: $0, for: row) } != nil
+                }
+            } : nil
+            let counted = own ?? typical
             #expect(counted == pin.countedUnit, "\(pin.line): counted in \(counted ?? "nothing")")
+            #expect((typical != nil) == pin.byTypicalSize, "\(pin.line): by typical size \(typical != nil)")
             #expect((RecipeWebImporter.estimatedMacros(for: parsed, catalog: catalog) != nil) == (pin.countedUnit != nil))
         }
         // Together: the page keeps every line that counts and says how many it left out (before F11 the

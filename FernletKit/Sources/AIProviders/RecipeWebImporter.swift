@@ -1002,16 +1002,27 @@ public enum RecipeWebImporter {
 
     /// One parsed line's macros on the row its name binds, or nil when the line is not counted: its
     /// name matches nothing, or none of its ``ParsedIngredientLine/candidateUnits(on:)`` converts on
-    /// the row. Machine-generated context — cold, unaliased, one row.
+    /// the row — by the row's own data, or, where that data cannot weigh the amount, by the USDA
+    /// typical size of the ingredient the row IS (ingredient-search round F4b, `TypicalPortionTable`:
+    /// "3 cloves garlic" on a row with no clove is 3 × 3 g, "2 cups all-purpose flour" on a row with no
+    /// cup 2 × 125 g). Machine-generated context — cold, unaliased, one row.
     nonisolated static func estimatedMacros(for line: ParsedIngredientLine, catalog: FoodCatalog) -> Macros? {
         guard let match = catalog.results(for: line.name, limit: 1, context: .machineGenerated).first else {
             return nil
         }
-        for unit in line.candidateUnits(on: match) {
+        let units = line.candidateUnits(on: match)
+        for unit in units {
             let ingredient = RecipeIngredient(foodItemId: match.id, quantity: line.quantity, unit: unit)
             if let conversion = ingredient.servingConversion(using: match) {
                 return conversion.scaledMacros(for: match)
             }
+        }
+        for unit in units {
+            guard let recipeUnit = RecipeUnit.normalized(unit),
+                  let grams = TypicalPortionTable.grams(quantity: line.quantity, unit: recipeUnit, for: match),
+                  let conversion = RecipeIngredient(foodItemId: match.id, quantity: grams, unit: RecipeUnit.gram.rawValue)
+                    .servingConversion(using: match) else { continue }
+            return conversion.scaledMacros(for: match)
         }
         return nil
     }
