@@ -272,7 +272,13 @@ inside a longer one ("apple" scores *APPLEBEE'S, chili* past ``FoodItemSearch/co
 So a confidence stamp asks one more question the score cannot:
 ``FoodItemSearch/nameStatesQueryAsWords(_:query:stripsStopwords:)`` — does the name say every typed
 word whole, or its regular plural? The quick-log plan tier (`MealResolutionService.bindConfidence`)
-requires both before it auto-commits (2026-09-30, the ingredient-search round's fix round 1).
+requires both before it auto-commits (2026-09-30, the ingredient-search round's fix round 1). It asks
+one more about the AMOUNT when the text named a food and no unit ("honey", "pineapple"): the unit the
+tier guessed — a recipe tap's default — must be one serving the data vouches for,
+``FoodItem/guessedUnitIsOneServing(_:)``: a volume only on a food stating a single volume measure
+(cooked rice's cup, not honey's cup beside its tablespoon), a named item within
+``FoodItem/guessedItemMaxGrams`` and ``FoodItem/guessedItemMaxCalories`` (one banana, not a 905 g
+pineapple or an 828 kcal stick of butter). Otherwise the plan pauses for review with the bind in place.
 
 - ``FoodItemSearch``
 - ``FoodSearchHistory``

@@ -290,6 +290,14 @@ final class MealResolutionService {
     /// whether the name says the word (or its regular plural/singular), and a bind that only carries
     /// it inside another word pauses at review (fix round 1, finding u1-L-R1).
     ///
+    /// **And a GUESSED amount must be one serving.** When the item names a food and no unit
+    /// ("honey", "pineapple", "3 bananas"), the tier binds `preferredRecipeUnit` — a recipe tap's
+    /// default — and after the 2026-09-29 round's F1(b) and F4a that default converts where it used
+    /// to fail: "honey" auto-committed a cup (1,112 kcal), "salt" a cup of salt, "pineapple" a whole
+    /// one. `FoodItem.guessedUnitIsOneServing` says whether the guess is one serving the data vouches
+    /// for (a single stated volume measure, a named item within 350 g and 500 kcal); when it is not,
+    /// the plan pauses for review with the bind in place (fix round 1, findings u2-C-U2-1, u2-L-M3).
+    ///
     /// **What this does NOT catch, measured:** a bind that states every word and is still the wrong
     /// VARIETY — the category `DishTemplateBindAuditTests`' header already names and `verdict` has no
     /// word for. `burger and fries` binds *Potato, french fries, with chili*, which says "fries" whole;
@@ -358,10 +366,21 @@ final class MealResolutionService {
                 guard let bound = candidates.first(where: { $0.id == ingredient.candidateId }),
                       let score = scores[bound.foodItem.id],
                       score >= FoodItemSearch.confidentBindScore,
-                      FoodItemSearch.nameStatesQueryAsWords(bound.foodItem.name, query: item.name) else { return .low }
+                      FoodItemSearch.nameStatesQueryAsWords(bound.foodItem.name, query: item.name),
+                      guessedAmountIsOneServing(ingredient, of: bound.foodItem, itemName: item.name) else { return .low }
             }
         }
         return .high
+    }
+
+    /// Whether a bind's AMOUNT is the person's or one serving the data vouches for: the item spelled
+    /// out a unit, or the unit the tier guessed passes `FoodItem.guessedUnitIsOneServing`.
+    private static func guessedAmountIsOneServing(
+        _ ingredient: FoodSelectionIngredient, of foodItem: FoodItem, itemName: String
+    ) -> Bool {
+        guard !FoundationFoodSelectionModel.statesUnit(in: itemName),
+              let unit = RecipeUnit.normalized(ingredient.unit) else { return true }
+        return foodItem.guessedUnitIsOneServing(unit)
     }
 
     /// A single quick-log is ONE meal. The AI-selection, lexicon, and deterministic tiers each split a

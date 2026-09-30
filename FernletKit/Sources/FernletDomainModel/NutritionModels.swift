@@ -2778,6 +2778,44 @@ extension FoodItem {
         return RecipeIngredient(foodItemId: id, quantity: amount, unit: unit.rawValue).servingConversion(using: self) != nil
     }
 
+    /// Most grams one item a meal log GUESSED may weigh and still commit without review
+    /// (``guessedUnitIsOneServing(_:)``): a banana (118 g), an onion (110 g), a cucumber (301 g) or a
+    /// Florida avocado (304 g) is one serving; a pineapple's "fruit" (905 g), a coconut's "medium"
+    /// (397 g) or a casaba melon (1,640 g) is not.
+    public static let guessedItemMaxGrams: Double = 350
+
+    /// Most calories one guessed item may carry and still commit without review — a stick of butter
+    /// (113 g, 828 kcal) is not one serving.
+    public static let guessedItemMaxCalories = 500
+
+    /// Whether a meal log that GUESSED `unit` for this food — its text named the food and no measure
+    /// ("banana", "honey", "3 bananas") — may commit ``defaultRecipeQuantity(for:)`` of it per count
+    /// without review (fix round 1 of the ingredient-search round, findings u2-C-U2-1 and u2-L-M3).
+    ///
+    /// The round taught the CONVERTER what a cup of honey weighs (F1(b)) and what one banana is (F4a);
+    /// it did not teach the quick log how much honey someone ate. Before it, a guessed "1 cup" of a
+    /// food stating a cup and a spoon failed to convert, so the log paused for review; after it the
+    /// same guess converted and auto-committed — a cup of salt, a cup of honey (1,112 kcal), a whole
+    /// pineapple. A guessed amount is one serving only when it is:
+    /// - a VOLUME through a source portion, on a food stating exactly one volume measure (cooked
+    ///   rice's cup) — the reading every earlier build committed on. A cup and a spoon (honey, oil,
+    ///   salt, sugar, vinegar) say the food is measured both ways, and which one was eaten is not in
+    ///   the data;
+    /// - `each` read from a named count (F4a): one item within ``guessedItemMaxGrams`` and
+    ///   ``guessedItemMaxCalories``. A portion stated exactly `each` (a sandwich, a label serving) is
+    ///   the food's own one and always is;
+    /// - anything else — grams, a serving, a physical conversion: the food's own serving, as before.
+    /// A unit that does not convert is not this question's (the meal builder refuses it): true.
+    public func guessedUnitIsOneServing(_ unit: RecipeUnit) -> Bool {
+        let one = RecipeIngredient(foodItemId: id, quantity: defaultRecipeQuantity(for: unit), unit: unit.rawValue)
+        guard let conversion = one.servingConversion(using: self), conversion.provenance == .sourcePortion,
+              let portion = conversion.sourcePortion else { return true }
+        if unit.isVolume { return uniquePortion(in: .volume) != nil }
+        guard unit == .each, portion.exactRecipeUnit != .each else { return true }
+        return (conversion.grams ?? .infinity) <= Self.guessedItemMaxGrams
+            && conversion.scaledMacros(for: self).calories <= Self.guessedItemMaxCalories
+    }
+
     /// The unit the food's data suggests for a tap, before the F1(c) conversion check: grams for a
     /// flour; "each" when the food's portions say what one is (F4a — a banana taps to one medium
     /// banana, garlic to one clove, an egg to one egg, ahead of any cup); a cup when the food states

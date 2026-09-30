@@ -280,10 +280,17 @@ public enum FoundationFoodSelectionModel {
             .first
     }
 
+    /// Whether `itemName` spells out a measurement unit ("100 g", "2 cups", "3 slices"), so the unit a
+    /// deterministic bind carries is the person's rather than a guess. `MealResolutionService`'s
+    /// confidence stamp asks before it weighs a GUESSED amount (`FoodItem.guessedUnitIsOneServing`).
+    nonisolated public static func statesUnit(in itemName: String) -> Bool {
+        explicitUnit(in: itemName) != nil
+    }
+
     /// The first measurement unit the person spelled out ("100 g", "2 cups", "3 slices"), mapped to a
     /// `RecipeUnit`, or nil when the text carries no unit token (a bare count like "2 eggs", or no
     /// number at all). `piece` and `slice` retain their distinct source-backed count meanings.
-    private static func explicitUnit(in itemName: String) -> RecipeUnit? {
+    nonisolated private static func explicitUnit(in itemName: String) -> RecipeUnit? {
         let normalized = FoodItemSearch.normalized(itemName)
         if normalized.contains("fl oz") || normalized.contains("fluid ounce") { return .fluidOunce }
         for token in normalized.split(separator: " ") {

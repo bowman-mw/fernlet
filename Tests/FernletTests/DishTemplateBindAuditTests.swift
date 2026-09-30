@@ -838,6 +838,55 @@ struct DishTemplateBindAuditTests {
         #expect(resolved.confidence == .low && resolved.needsReview, "and it opens the review sheet")
     }
 
+    /// Fix round 1 of the ingredient-search round (u2-C-U2-1, u2-L-M3): a GUESSED amount must be one
+    /// serving. With no unit typed, the plan tier binds the food's recipe tap default, and after F1(b)
+    /// and F4a that default converts where it used to fail — quick-log "honey" (AI off) auto-committed
+    /// a cup (1,112 kcal), "salt" a cup of salt, "vegetable oil" a cup of oil, and a bare "pineapple"
+    /// would have bound the whole 905 g fruit. `FoodItem.guessedUnitIsOneServing` holds a guessed volume
+    /// to the food's ONE stated volume measure and a guessed named item to 350 g and 500 kcal; past
+    /// that, the plan pauses for review with the bind in place. A typed unit ("2 cups honey") is the
+    /// person's amount and is not second-guessed; "banana" still commits one banana.
+    @MainActor
+    @Test func planTierReviewsAGuessedAmountThatIsNotOneServing() async throws {
+        let shipped = HouseholdPortionConversionTests.shipped
+        #expect(try shipped(169_640).guessedUnitIsOneServing(.cup) == false, "Honey: cup and tbsp")
+        #expect(try shipped(169_099).guessedUnitIsOneServing(.cup) == false, "Orange juice: cup and fl oz")
+        #expect(try shipped(168_878).guessedUnitIsOneServing(.cup), "Rice, cooked: its one cup")
+        #expect(try shipped(169_124).guessedUnitIsOneServing(.each) == false, "Pineapple: a 905 g fruit")
+        #expect(try shipped(170_169).guessedUnitIsOneServing(.each) == false, "Coconut meat: a 397 g medium")
+        #expect(try shipped(173_410).guessedUnitIsOneServing(.each) == false, "Butter: a 113 g stick is 828 kcal")
+        #expect(try shipped(173_944).guessedUnitIsOneServing(.each), "Banana: one medium, 118 g")
+        #expect(try shipped(168_409).guessedUnitIsOneServing(.each), "Cucumber: one, 301 g")
+        #expect(try shipped(170_727).guessedUnitIsOneServing(.each), "Whopper: a stated item, 291 g")
+        #expect(try shipped(169_640).guessedUnitIsOneServing(.gram), "grams are the food's own serving")
+
+        let honey = FoodItem(name: "Honey", servingSize: 100, servingUnit: "g", macros: Macros(protein: 0, carbs: 82, fat: 0),
+                             micronutrients: Micronutrients(), category: "Sweets", source: .usda, dataType: .srLegacy, tags: [],
+                             portions: [FoodPortion(amount: 1, unit: "cup", gramWeight: 339),
+                                        FoodPortion(amount: 1, unit: "tbsp", gramWeight: 21)])
+        let plan = { (name: String, quantity: Double) in
+            FoodSelectionPlan(mealName: "x", mealType: .snack, items: [FoodSelectionMealItem(name: name, ingredients: [
+                FoodSelectionIngredient(candidateId: 1, foodName: honey.name, quantity: quantity, unit: "cup")])], unmatchedItems: [])
+        }
+        let candidates = [FoodSelectionCandidate(id: 1, foodItem: honey)]
+        #expect(MealResolutionService.bindConfidence(for: plan("Honey", 1), candidates: candidates) == .low)
+        #expect(MealResolutionService.bindConfidence(for: plan("2 cups honey", 2), candidates: candidates) == .high,
+                "a typed unit is the person's amount")
+
+        let store = makeTestStore(foodCatalog: FoodCatalog.bundled())
+        try #require(store.settings.aiStatus == AIStatus.off, "the deterministic tiers must be the rungs under test")
+        try #require(store.foodCatalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+        for word in ["honey", "salt", "vegetable oil"] {
+            let resolved = await store.resolveMeals(from: word)
+            let component = resolved.meals.first?.componentSnapshots.first
+            #expect(component?.unit == "cup", "\(word): the cup bind stands (\(component?.name ?? "none"))")
+            #expect(resolved.confidence == .low && resolved.needsReview, "\(word): a guessed cup opens the review sheet")
+        }
+        let banana = await store.resolveMeals(from: "banana")
+        #expect(banana.meals.first?.componentSnapshots.map(\.unit) == ["each"])
+        #expect(banana.confidence == .high && !banana.needsReview, "one banana is one serving")
+    }
+
     /// An item the lexicon does not know at all still hands the WHOLE description to the next tier,
     /// unchanged by this fix: there is no good half to preserve, and a later tier can see all of it.
     @Test func unknownItemStillFallsThroughWithTheWholeDescription() throws {
