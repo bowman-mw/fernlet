@@ -68,6 +68,17 @@ one code path serves both. The private `FDC*` structs in FoodDataCatalog.swift a
 raw-envelope decoding helpers, and the free functions ``sqliteBindText(_:_:_:)`` /
 ``sqliteColumnText(_:_:)`` are the C-interop glue shared by generator and reader.
 
+**Load-time corrections.** A defect in the committed `FoodCatalog.sqlite` is fixed where the
+row is read, not by regenerating the file (a regenerated catalog binary is never committed):
+``SQLiteBundledFoodSource`` passes every hydrated row through the internal `BundledRowCorrection`,
+a pure per-row function that can change what a retrieved row says but never which rows a query
+retrieves (Docs/Ingredient-Search-Deep-Research-2026-09-29.md §8). Today it rebases the 59,227
+compact-source branded rows (ids `00000000-0000-5000-…`), whose USDA per-100 g nutrients had been
+read against the product's label serving, onto a 100 g (100 ml) serving with the macros unchanged,
+keeping a gram label serving as a count portion ("1 serving (28 g)", unit `each`) so a bare count
+still means one label serving. The attachable On-Demand-Resource catalog is on the label basis
+already and carries none of those ids, so it passes through untouched.
+
 The module also owns the ambient nutrient-nudge data path: ``CuratedNutrientSources``
 loads the hand-authored good-sources table (`Resources/CuratedNutrientSources.json`,
 ~55 ``CuratedFoodSource`` rows pinned to real catalog ids with a normalized-name

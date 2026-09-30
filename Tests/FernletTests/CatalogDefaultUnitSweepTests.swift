@@ -29,16 +29,18 @@ struct CatalogDefaultUnitSweepTests {
     /// converter cannot read (GRM 12,376, MLT 2,193, IU 193, GM 31, MC 2, survey units 48 = 14,843),
     /// refused before any unit is tried; most default to "1 serving", the "oil" names to "1 cup" and
     /// the "flour" names to grams. READABLE: a "cup" default the converter cannot honour (437 rows
-    /// with two or more volume portions, the rest from the no-portion "oil" branch).
+    /// with two or more volume portions, the rest from the no-portion "oil" branch; 1,467 before F2).
     static let measuredFailures: [String: Int] = [
         "unreadable → serving": 14_480,
         "unreadable → cup": 183,
         "unreadable → g": 180,
-        "readable → cup": 1_467
+        "readable → cup": 928
     ]
 
-    /// The report's headline, derived from the pin above.
-    static let measuredFailureTotal = 16_310
+    /// The headline, derived from the pin above. History: 16,310 on cf46b8eb (the report's figure);
+    /// 15,771 with F2 — 539 branded rows on the no-portion "oil" branch gained their label serving
+    /// as an "each" portion, which is now their tap default.
+    static let measuredFailureTotal = 15_771
 
     /// Upper bound on the rows one sweep reads — comfortably above the catalog, so a catalog that
     /// grew past it fails the row-count check instead of being silently truncated.

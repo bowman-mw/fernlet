@@ -398,7 +398,8 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     }
 
     /// Builds a `FoodItem` from a result row. Column order must match `FoodCatalogSchema.selectColumns`
-    /// (+ trailing `gtin_upc` at index 17 when `includesBarcode`).
+    /// (+ trailing `gtin_upc` at index 17 when `includesBarcode`). The row then passes through
+    /// ``BundledRowCorrection`` — the load-time fixes for defects in the committed file.
     private static func hydrate(_ stmt: OpaquePointer?, includesBarcode: Bool) -> FoodItem? {
         guard let idString = sqliteColumnText(stmt, 0), let id = UUID(uuidString: idString) else { return nil }
         let decoder = JSONDecoder()
@@ -409,7 +410,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
 
         let source = sqliteColumnText(stmt, 9).flatMap(FoodItemSource.init(rawValue:)) ?? .usda
         let dataType = sqliteColumnText(stmt, 10).flatMap(FoodDataType.init(rawValue:)) ?? .srLegacy
-        return FoodItem(
+        let item = FoodItem(
             id: id,
             name: sqliteColumnText(stmt, 1) ?? "",
             brandSource: sqliteColumnText(stmt, 2),
@@ -431,6 +432,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
             portions: decodeJSON([FoodPortion].self, 16) ?? [],
             barcode: includesBarcode ? sqliteColumnText(stmt, 17) : nil
         )
+        return BundledRowCorrection.corrected(item)
     }
 }
 

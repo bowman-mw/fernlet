@@ -847,7 +847,7 @@ struct DishTemplateBindAuditTests {
     /// `needsReview`, and the MEAL's own persisted stamp reflects it too (review finding F6).
     ///
     /// **The honest accounting that remains, stated plainly.** The meal's OWN numbers (`calorieSnapshot`,
-    /// pinned below) still run roughly **HALF** of what a real Costco food-court slice actually is —
+    /// pinned below) still run well under **HALF** of what a real Costco food-court slice actually is —
     /// §31's own table puts three independent sources at 699–760 kcal/slice, and this template's
     /// generic-USDA components (raw dough + part-skim mozzarella + plain tomato sauce, no Costco-scale
     /// cheese and oil) land far short of that. Fix 1.5 does not correct THAT number — no government
@@ -876,10 +876,13 @@ struct DishTemplateBindAuditTests {
         #expect(resolved.meals.first?.confidence == MealConfidence.roughEstimate.token,
                 "review finding F6: the meal's own stamp must fold in the brand flag, not just component binds")
 
-        // The honest number this WOULD commit if the user pushes through review: roughly HALF a real
-        // Costco slice (699–760 kcal per §31) — 1.5 does not fix the number, only the disclosure.
+        // The honest number this WOULD commit if the user pushes through review: well under half a
+        // real Costco slice (699–760 kcal per §31) — 1.5 does not fix the number, only the disclosure.
+        // It was 390 until the ingredient-search round's F2 (2026-09-30): "Pizza Dough" is a
+        // compact-source branded row whose per-100 g macros had been read against its 55 g label,
+        // so 60 g of dough counted 262 kcal; on the corrected basis it is 141, and the slice 269.
         let kcal = resolved.meals.first?.calorieSnapshot ?? -1
-        #expect((350...430).contains(kcal), "committed slice calories: \(kcal) — roughly half a real Costco slice, pinned so this claim stays measured, not asserted")
+        #expect((250...290).contains(kcal), "committed slice calories: \(kcal) — about 38% of a real Costco slice, pinned so this claim stays measured, not asserted")
 
         let resolution = MealResolution(meals: resolved.meals, createdRecipes: [], confidence: resolved.confidence, isFallback: false, unmatchedItems: resolved.unmatchedItems)
         #expect(resolution.needsReview == true,

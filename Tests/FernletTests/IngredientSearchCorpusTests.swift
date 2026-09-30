@@ -159,16 +159,21 @@ struct IngredientSearchCorpusTests {
     /// **The measured baseline** (plausible plain row at #1, plausible plain row anywhere in the six).
     /// Derived from `pins` by `baselineTuplesAreDerivedFromThePins`; this is the only place the
     /// headline appears. A fix edits the pins it moves and this tuple, in the same commit.
-    static let measuredBaseline = (plainAtOne: 91, plainVisible: 127)
+    /// History: 91 / 127 on cf46b8eb; 96 / 131 with F2 (the branded per-100 g rebase made six
+    /// names-only answers — semi sweet chips, sprinkles, both olive oils, cherry tomatoes, cider
+    /// vinegar, dijon — physically possible).
+    static let measuredBaseline = (plainAtOne: 96, plainVisible: 131)
 
     /// The names-only baseline beside it — the report's §4.1 table (97 at #1, 132 visible), which
     /// judged names without nutrition. Kept so the gap between the two is visible at a glance.
     static let nameOnlyBaseline = (plainAtOne: 97, plainVisible: 132)
 
-    /// Count-noun queries whose first plausible plain VISIBLE row takes "1 each". Zero today: the
-    /// report's §4.3 "1 of 26" counted "1 each" OR "1 piece" on the first plain row of the top 10
-    /// ("Chicken breast, roasted" takes "1 piece" only). F4a is expected to raise it.
-    static let eachBaseline = 0
+    /// Count-noun queries whose first plausible plain VISIBLE row takes "1 each". Zero on cf46b8eb:
+    /// the report's §4.3 "1 of 26" counted "1 each" OR "1 piece" on the first plain row of the top
+    /// 10 ("Chicken breast, roasted" takes "1 piece" only). One with F2: "garlic clove" lands on a
+    /// branded jar whose label serving became its "each" (15 g — a serving, not a clove). F4a is
+    /// expected to raise it with the rows' own USDA counts.
+    static let eachBaseline = 1
 
     /// The count-noun queries — the research's `replay/units.py` list. Frozen English matching inputs.
     static let countNouns: Set<String> = [
@@ -370,7 +375,7 @@ struct IngredientSearchCorpusTests {
         .init("chocolate chips", nil, nil),
         .init("chocolate chip", nil, nil),
         .init("semisweet chocolate chips", 1, 1),
-        .init("semi sweet chocolate chips", 1, 2),
+        .init("semi sweet chocolate chips", 1, 1),
         .init("dark chocolate chips", 2, 2),
         .init("milk chocolate chips", 3, 3),
         .init("white chocolate chips", 1, nil),
@@ -391,7 +396,7 @@ struct IngredientSearchCorpusTests {
         .init("almonds", 1, 1),
         .init("raisins", 1, 1),
         .init("shredded coconut", 1, 1),
-        .init("sprinkles", 2, nil),
+        .init("sprinkles", 2, 2),
         .init("cream cheese", 1, 1),
         .init("heavy cream", 1, 1),
         .init("sour cream", 1, 1),
@@ -408,8 +413,8 @@ struct IngredientSearchCorpusTests {
         .init("coconut oil", 1, 1),
         .init("vegetable oil", nil, nil),
         .init("canola oil", 3, 3),
-        .init("olive oil", 5, nil),
-        .init("extra virgin olive oil", 1, nil),
+        .init("olive oil", 5, 5),
+        .init("extra virgin olive oil", 1, 1),
         .init("banana", 1, 1, each: false),
         .init("bananas", 1, 1, each: false),
         .init("apple", nil, nil, each: false),
@@ -424,12 +429,12 @@ struct IngredientSearchCorpusTests {
         .init("avocado", 1, 1, each: false),
         .init("tomato", 2, 2, each: false),
         .init("tomatoes", 4, 4, each: false),
-        .init("cherry tomatoes", 1, 2),
+        .init("cherry tomatoes", 1, 1),
         .init("onion", 4, 4, each: false),
         .init("red onion", 1, 1, each: false),
         .init("yellow onion", 1, 1, each: false),
         .init("garlic", 1, 1),
-        .init("garlic clove", 2, 2, each: false),
+        .init("garlic clove", 2, 2, each: true),
         .init("ginger", 1, 1),
         .init("carrot", 1, 1, each: false),
         .init("carrots", 1, 1, each: false),
@@ -492,9 +497,9 @@ struct IngredientSearchCorpusTests {
         .init("onion powder", 1, 1),
         .init("red pepper flakes", nil, nil),
         .init("vinegar", 1, 1),
-        .init("apple cider vinegar", 1, 2),
+        .init("apple cider vinegar", 1, 1),
         .init("balsamic vinegar", 1, 1),
-        .init("dijon mustard", 1, nil),
+        .init("dijon mustard", 1, 1),
         .init("ketchup", 1, 1),
         .init("mayonnaise", nil, nil),
         .init("chicken broth", 4, 4),
