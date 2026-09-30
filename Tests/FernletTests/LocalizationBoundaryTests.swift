@@ -576,6 +576,31 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// Recipe units (Docs/Ingredient-Search-Deep-Research-2026-09-29.md §6.6, fix F10).
+    ///
+    /// `RecipeUnit` raw values are the `unit` string on every persisted `RecipeIngredient`, they ride
+    /// the recipe share wire, and a receiver rebuilds its line from that string through
+    /// `RecipeUnit.normalized` — a token an older peer does not know fails to convert and the recipe
+    /// totals zero there. The English spellings `normalized` accepts ("grams", "tablespoons") are
+    /// matching inputs of the same kind. Localize `label` (with `bundle: .module`), never these.
+    @Test func frozenRecipeUnitTokens() {
+        #expect(
+            RecipeUnit.allCases.map(\.rawValue) == [
+                "mg", "g", "kg", "ml", "oz", "lb", "fl oz", "l", "cup", "tbsp", "tsp", "glass",
+                "slice", "piece", "each", "serving"
+            ],
+            """
+            RecipeUnit raw values changed. They are persisted on every recipe ingredient and shared \
+            to peers, whose converter re-reads them with `RecipeUnit.normalized`: a renamed or added \
+            token does not fail loudly, it stops converting and the recipe totals zero on any build \
+            that does not know it. Fork a display label; never the rawValue.
+            """
+        )
+        for unit in RecipeUnit.allCases {
+            #expect(RecipeUnit.normalized(unit.rawValue) == unit, "\(unit.rawValue) no longer round-trips")
+        }
+    }
+
     /// Coach-plan wire tokens.
     ///
     /// `MuscleGroup` and `Equipment` raw values are persisted in day rows, persisted in the

@@ -58,6 +58,13 @@ struct IngredientReplayRow: Codable, Equatable {
     let servingSize: Double
     /// Reference serving unit.
     let servingUnit: String
+    /// Protein grams for that serving, as the catalog hands it to the app (after any load-time shim),
+    /// so a fix round can judge nutrition plausibility on the measured row itself.
+    let protein: Int
+    /// Carbohydrate grams for that serving.
+    let carbs: Int
+    /// Fat grams for that serving.
+    let fat: Int
     /// Whether `PreparedDishHeuristic` classes this row as an assembled dish.
     let isPreparedDish: Bool
     /// Every portion as `unit|description|grams → recipeUnit` (recipeUnit `-` when unrecognised).
@@ -185,6 +192,7 @@ struct IngredientSearchReplayProbeTests {
             rank: rank, name: item.name, dataType: item.dataType.rawValue, source: item.source.rawValue,
             brand: item.brandSource, category: item.category, score: score,
             servingSize: item.servingSize, servingUnit: item.servingUnit,
+            protein: item.macros.protein, carbs: item.macros.carbs, fat: item.macros.fat,
             isPreparedDish: PreparedDishHeuristic.isPreparedDish(item),
             portions: item.portions.map(describe),
             defaultUnit: unit.rawValue, defaultQuantity: quantity,

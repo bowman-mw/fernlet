@@ -911,7 +911,8 @@ public enum RecipeWebImporter {
     // MARK: - Ingredient parsing
 
     // Parses "2 cups all-purpose flour" → (quantity: 2.0, unit: "cup", name: "flour")
-    nonisolated private static func parseIngredient(_ text: String) -> (quantity: Double, unit: String, name: String)? {
+    // Internal (not private) only so `RecipeImportIngredientLineTests` can pin its answers.
+    nonisolated static func parseIngredient(_ text: String) -> (quantity: Double, unit: String, name: String)? {
         let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Leading quantity: mixed fraction "1 1/2", pure fraction "3/4", or decimal/integer "2"
         // Followed by optional unit, then food name
