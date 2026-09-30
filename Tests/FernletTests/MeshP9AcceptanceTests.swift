@@ -857,12 +857,14 @@ struct MeshP9RecipeSwapAcceptanceTests {
         #expect(mints == 1, "the exchange record is constructed in \(mints) places; the helper is the one")
 
         let subtree = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit/RecipeSharing")
-        #expect(subtree.count == 3, """
-            the RecipeSharing subtree holds \(subtree.count) files, not the three it held when this \
-            was measured (the manager, the advertisement and the transfer record). A fourth is a \
-            file this cell's retired-radio walk has never been read against; a third gone is a \
-            scan that lost its root. EXACT on purpose — `>= 3` was satisfied by the tree it was \
-            written against and by every tree that could ever follow it
+        // Four since 2026-09-29: `RecipeShareOutcome.swift` (the share's frozen outcome tokens) was
+        // added and read against the needle walk below, which it passes — it names no radio at all.
+        #expect(subtree.count == 4, """
+            the RecipeSharing subtree holds \(subtree.count) files, not the four it held when this \
+            was measured (the manager, the advertisement, the transfer record and the share \
+            outcome). A fifth is a file this cell's retired-radio walk has never been read against; \
+            a fourth gone is a scan that lost its root. EXACT on purpose — `>= 4` was satisfied by \
+            the tree it was written against and by every tree that could ever follow it
             """)
         // R2: bounded by the retired-radio spellings × the subtree's files.
         for needle in ["MeshMultipeerSession", "MCPeerID", "MCSession", "MultipeerConnectivity",

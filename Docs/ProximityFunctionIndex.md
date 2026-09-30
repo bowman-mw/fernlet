@@ -1737,9 +1737,10 @@ frame.
 | `init(store:)` / `init(store:makeSession:)` | Provisions identity, builds the radio and configures its callbacks. `makeSession` is the **test seam** (pass 2): an optional closure resolved in the init body — a `@MainActor` type cannot be a default-argument value — so a unit test hands in an in-memory `RecipeShareRadioSession` and every gate, pause and discovery callback is reachable with no Bonjour. Shipping code calls `init(store:)`. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
 | `start()` | Starts recipe-share discovery/advertising and observation if not already running. The radio's `start(advertisement:)` THROWS (pass 2), and a failure goes straight through `handleTransportError(_:)`'s stand-down door so `isListening` tells the truth. |
-| `stop()` | Stops discovery/session, cancels tasks, clears recipients/connections/status. |
-| `refreshDiscovery()` | Restarts discovery while clearing peer and connection state. |
-| `sendRecipeShare(_:to:)` | Starts discovery, queues outgoing payload, reuses verified connection or invites recipient. |
+| `stop()` | Stops discovery/session, cancels tasks, clears recipients/connections/status. A share still in flight is published first (`finishShareEndedByTeardown()`): `interrupted` before its send began, `sendIncomplete` after. |
+| `refreshDiscovery()` | Restarts discovery while clearing peer and connection state (publishing a cut-off share's outcome exactly as `stop()` does). While paired it refuses with a status line and publishes NO share outcome — that is a search refusal, not a share. |
+| `sendRecipeShare(_:to:)` | Starts discovery, queues outgoing payload, reuses verified connection or invites recipient. Clears `lastShareOutcome`, then mints the transfer record and the live share (`LiveRecipeShare`: row, recipe title, token, `pairingSeen`). |
+| `refuseWhilePaired(with:payload:recipient:)` | The outbound-cap refusal, before any share is minted: status line plus a directly published `pairedWithAnother` outcome naming the Fernlet that holds the link. Never touches the live pairing or its share. |
 | `dismissRecipeShare(_:)` | Removes a pending inbound share. |
 | `dismissRecipeShare(id:)` | Removes a pending inbound share by ID. |
 | `proximityCoordinator(_:didReceive:plaintext:from:)` | Accepts valid `recipeShare` envelopes and inserts pending review items. |
@@ -1756,9 +1757,13 @@ frame.
 | `startObserving()` | Observes connection coordinator states through the shared `ObservationLoop.start(on:tracking:onChange:)` and calls `checkCoordinatorStates()` after each observed change. |
 | `checkCoordinatorStates()` | Captures verified fingerprints/KA keys, ensures recipients, sends pending payloads, and drops stale connections. |
 | `ensureRecipient(for:identity:)` | Adds/updates a recipient from verified identity. |
-| `sendPendingPayload(via:)` | Encodes, seals, sends queued recipe payload, updates send state, and records diagnostics. The send is gated on the exchange's once-only `sendBegan` (belt-and-braces beside `pendingOutgoing = nil`, and the half a pass-2 session cannot quietly lose); a refusal is surfaced as a visible failure, never swallowed. |
+| `sendPendingPayload(via:)` | Encodes, seals, sends queued recipe payload, updates send state, and records diagnostics. The send is gated on the exchange's once-only `sendBegan` (belt-and-braces beside `pendingOutgoing = nil`, and the half a pass-2 session cannot quietly lose); a refusal is surfaced as a visible failure, never swallowed, and publishes no outcome (whatever reached it owns one). A completion publishes `sent` and a throw `sendIncomplete` (or `interrupted` if the throw came before `sendBegan`), both attributed by token. |
 | `peer(for:)` | Finds a peer from the active connection, the discovered cache, or the radio's connected peers. |
-| `scheduleStatusClear()` | Resets send state to idle after a short delay. |
+| `scheduleStatusClear()` | Resets send state to idle after a short delay. Why nothing that must stay on screen may be derived from `sendState`: read `lastShareOutcome`. |
+| `failLiveShare(_:statusMessage:diagnostic:)` | The one tail of every pre-send failure of the live share (recipient unavailable, connecting window, connect timeout, lost pairing): drops the queued payload, cancels the record, sets the English status line, records the diagnostic, releases the engaged row, and publishes the frozen cause. |
+| `failLiveShareIfItsPairingWasLost()` | Called from `finalizeConnectionRemovals`: fails the live share as `couldNotConnect` when its pairing had come up (`pairingSeen`), it is still pre-send, and no connection with the recipient's device remains. Closes the stuck "Connecting to …" left by a handshake that failed after the channel opened. |
+| `finishShareEndedByTeardown()` | Publishes `interrupted`/`sendIncomplete` for a non-terminal share a teardown ended, then forgets the live share. Runs before the record is discarded. |
+| `finishShare(_:token:)` | The one writer of `lastShareOutcome` for a minted share. A token names the send that produced the result; a superseded share's result is a diagnostic, and a result arriving after a teardown is dropped. |
 | `recordDiagnostic(_:)` | Appends capped diagnostic event. |
 
 ### `ProximityRecipeShareSheet.swift`

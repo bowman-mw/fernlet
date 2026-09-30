@@ -845,4 +845,259 @@ struct ProximityRecipeShareCapTests {
         #expect(manager.engagedRecipientID == recipient.id,
                 "the picked row stays the engaged one — the timeout never cleared the send")
     }
+
+    // MARK: - Share outcome
+
+    // Every share the user begins ends in exactly ONE `lastShareOutcome` — the value the share
+    // sheet's confirmation is built from (owner request 2026-09-29: the sheet used to just clear).
+    // These cells pin which frozen cause each path publishes, that a search refusal publishes none,
+    // and the lost-pairing fix: a pairing that came up and then died before the send used to leave
+    // "Connecting to …" on screen, and every other row locked, until the sheet closed.
+
+    /// A manager over the fake radio, marked running, with Blair discovered; returns her row.
+    ///
+    /// The caller owns `host` (a local of the test), exactly as every other cell here does: the
+    /// manager holds it `unowned`, so the test must keep it alive (invariant HP0).
+    private func managerWithBlair(host: RecipeCapTestHost) throws -> (
+        manager: ProximityRecipeShareManager,
+        radio: FakeRecipeShareRadioSession,
+        blair: PeerHandle,
+        row: ProximityRecipeShareRecipient
+    ) {
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
+        manager.markRunningForTesting()  // keeps sendRecipeShare's start() from touching radios
+        let blair = makePeer(named: "Blair")
+        radio.onPeerDiscovered?(blair)
+        let row = try #require(manager.nearbyRecipients.first)
+        return (manager, radio, blair, row)
+    }
+
+    @Test func outboundCapRefusalPublishesPairedWithAnotherNamingWhoHoldsTheLink() throws {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+        registerConnection(on: manager, peer: makePeer(named: "Alex"))
+        let blair = ProximityRecipeShareRecipient(id: UUID(), displayName: "Blair", fingerprint: nil)
+
+        manager.sendRecipeShare(makePayload(), to: blair)
+
+        let outcome = try #require(manager.lastShareOutcome)
+        #expect(outcome.result == .notSent(.pairedWithAnother))
+        #expect(outcome.otherPeerName == "Alex")
+        #expect(outcome.recipientName == "Blair")
+        #expect(outcome.recipientID == blair.id)
+        #expect(outcome.recipeTitle == "Cap Test Bowl")
+        #expect(manager.transferForTesting == nil, "refused before any share was minted")
+    }
+
+    @Test func connectingWindowRefusalPublishesConnectingToAnother() throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.radio.connectingPeers.append(makePeer(named: "Alex"))
+
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+
+        let outcome = try #require(fixture.manager.lastShareOutcome)
+        #expect(outcome.result == .notSent(.connectingToAnother))
+        #expect(outcome.otherPeerName == nil)
+        #expect(fixture.manager.engagedRecipientID == nil)
+    }
+
+    @Test func sendingToARowThatIsNoLongerDiscoveredPublishesRecipientUnavailable() throws {
+        let host = RecipeCapTestHost()
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
+        manager.markRunningForTesting()
+        let gone = ProximityRecipeShareRecipient(id: UUID(), displayName: "Blair", fingerprint: nil)
+
+        manager.sendRecipeShare(makePayload(), to: gone)
+
+        let outcome = try #require(manager.lastShareOutcome)
+        #expect(outcome.result == .notSent(.recipientUnavailable))
+        #expect(outcome.recipientID == gone.id)
+        #expect(manager.transferForTesting?.phase == .cancelled)
+    }
+
+    @Test func connectTimeoutPublishesNoAnswer() async throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.connectTimeoutSeconds = 0.05
+
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+        #expect(fixture.manager.lastShareOutcome == nil, "nothing is published while connecting")
+
+        let observed = await waitForValue(of: { fixture.manager.lastShareOutcome }) { $0 != nil }
+        #expect(observed?.result == .notSent(.noAnswer))
+        #expect(observed?.recipientID == fixture.row.id)
+    }
+
+    /// The three ways a registered pairing can die before the send, and each must end the share as
+    /// `couldNotConnect`: status line failed, the row released, the record terminal.
+    private func expectLostPairingFailed(_ manager: ProximityRecipeShareManager, row: ProximityRecipeShareRecipient) {
+        #expect(manager.lastShareOutcome?.result == .notSent(.couldNotConnect),
+                "got \(String(describing: manager.lastShareOutcome?.result))")
+        #expect(manager.lastShareOutcome?.recipientID == row.id)
+        if case .failed = manager.sendState {} else {
+            Issue.record("the status line must stop saying Connecting: \(manager.sendState)")
+        }
+        #expect(manager.engagedRecipientID == nil, "every other row must unlock")
+        #expect(manager.transferForTesting?.phase.isTerminal == true)
+    }
+
+    @Test func aPairingThatDisconnectsBeforeTheSendFailsTheShare() throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+        registerConnection(on: fixture.manager, peer: fixture.blair)
+        #expect(fixture.manager.lastShareOutcome == nil)
+
+        fixture.radio.onPeerDisconnected?(fixture.blair, "Peer disconnected")
+
+        expectLostPairingFailed(fixture.manager, row: fixture.row)
+    }
+
+    @Test func aHandshakeThatEndsBeforeTheSendFailsTheShare() async throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+        let transport = MockMultipeerTransport()
+        let coordinator = registerConnection(on: fixture.manager, peer: fixture.blair, transport: transport)
+
+        await coordinator.begin(role: .browser, mode: .friend)
+        transport.simulateDisconnection()
+        await waitUntil { if case .ended = coordinator.state { return true }; return false }
+        fixture.manager.checkCoordinatorStatesForTesting()
+
+        #expect(fixture.manager.connectionCountForTesting == 0)
+        expectLostPairingFailed(fixture.manager, row: fixture.row)
+    }
+
+    @Test func aStalledPairingSweptBeforeTheSendFailsTheShare() async throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+        let coordinator = registerConnection(on: fixture.manager, peer: fixture.blair)
+        await coordinator.begin(role: .browser, mode: .friend)
+
+        let t0 = Date(timeIntervalSince1970: 1_780_000_000)
+        fixture.manager.sweepParkedConnections(now: t0)
+        #expect(fixture.manager.lastShareOutcome == nil, "a first sighting is not an eviction")
+        fixture.manager.sweepParkedConnections(now: t0.addingTimeInterval(31))
+
+        expectLostPairingFailed(fixture.manager, row: fixture.row)
+    }
+
+    /// The guard's other half: a share whose own dial has not been answered is still in flight (the
+    /// connect timeout owns it), so evicting some OTHER device's record must not fail it.
+    @Test func anotherDevicesEvictionDoesNotFailAShareStillDialing() throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+        let alex = makePeer(named: "Alex")
+        registerConnection(on: fixture.manager, peer: alex)
+
+        fixture.radio.onPeerDisconnected?(alex, "Peer disconnected")
+
+        #expect(fixture.manager.lastShareOutcome == nil)
+        #expect(fixture.manager.sendState == .connecting(recipientName: "Blair"))
+        #expect(fixture.manager.transferForTesting?.phase == .connecting)
+    }
+
+    @Test func stoppingMidConnectPublishesInterrupted() throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+
+        fixture.manager.stop()
+
+        #expect(fixture.manager.lastShareOutcome?.result == .notSent(.interrupted))
+        #expect(fixture.manager.lastShareOutcome?.recipientID == fixture.row.id)
+    }
+
+    @Test func stoppingMidSendPublishesSendIncomplete() throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+        let token = try #require(fixture.manager.transferForTesting?.token)
+        fixture.manager.applyTransferForTesting(.peerVerified)
+        #expect(fixture.manager.applyTransferForTesting(.sendBegan(wireByteCount: 64), token: token))
+
+        fixture.manager.stop()
+
+        #expect(fixture.manager.lastShareOutcome?.result == .notSent(.sendIncomplete),
+                "the send had begun, so they may have it — never `interrupted`")
+    }
+
+    @Test func stopPublishesNothingWithoutAShareInFlight() throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.stop()
+        #expect(fixture.manager.lastShareOutcome == nil)
+
+        let againHost = RecipeCapTestHost()
+        let again = try managerWithBlair(host: againHost)
+        again.manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+            id: UUID(), displayName: "Gone", fingerprint: nil))
+        let terminal = try #require(again.manager.lastShareOutcome)
+        again.manager.stop()
+        #expect(again.manager.lastShareOutcome == terminal, "a finished share is not reported twice")
+    }
+
+    /// "Search again" while paired is a SEARCH refusal, not a share: it keeps its status line and
+    /// must raise no confirmation.
+    @Test func aRefreshRefusedWhilePairedPublishesNoOutcome() {
+        let host = RecipeCapTestHost()
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
+        manager.markRunningForTesting()
+        registerConnection(on: manager, peer: makePeer(named: "Alex"))
+
+        manager.refreshDiscovery()
+
+        if case .failed = manager.sendState {} else { Issue.record("expected the visible refusal") }
+        #expect(manager.lastShareOutcome == nil)
+    }
+
+    /// The send's own result is attributed by token, through the production helper: the live share
+    /// publishes, a superseded one does not, and one that lands after a teardown does not either.
+    @Test func aSendResultIsPublishedOnlyForTheLiveShare() throws {
+        let host = RecipeCapTestHost()
+        let fixture = try managerWithBlair(host: host)
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+        let token = try #require(fixture.manager.transferForTesting?.token)
+
+        fixture.manager.finishShareForTesting(.sent, token: UUID())
+        #expect(fixture.manager.lastShareOutcome == nil, "a superseded send's result is never shown")
+        #expect(fixture.manager.diagnosticEvents.contains { $0.message.contains("superseded share") })
+
+        fixture.manager.finishShareForTesting(.sent, token: token)
+        #expect(fixture.manager.lastShareOutcome?.result == .sent)
+        #expect(fixture.manager.lastShareOutcome?.recipeTitle == "Cap Test Bowl")
+
+        fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
+        let second = try #require(fixture.manager.transferForTesting?.token)
+        fixture.manager.stop()
+        let interrupted = try #require(fixture.manager.lastShareOutcome)
+        fixture.manager.finishShareForTesting(.sent, token: second)
+        #expect(fixture.manager.lastShareOutcome == interrupted,
+                "a send that lands after the teardown already reported the share is not reported again")
+    }
+
+    /// Delete-all drops the last outcome (a recipe title and a peer name) from memory.
+    @Test func deleteAllClearsTheLastShareOutcome() throws {
+        let host = RecipeCapTestHost()
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(
+            store: host,
+            makeSession: { radio },
+            identity: IdentityService(keychainService: "test.recipe.outcome.\(UUID().uuidString)"))
+        manager.markRunningForTesting()
+        manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+            id: UUID(), displayName: "Gone", fingerprint: nil))
+        #expect(manager.lastShareOutcome != nil)
+
+        try manager.wipeIdentityForDeleteAll()
+
+        #expect(manager.lastShareOutcome == nil)
+    }
 }
