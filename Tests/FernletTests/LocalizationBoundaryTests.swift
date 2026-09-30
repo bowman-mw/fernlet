@@ -2283,11 +2283,7 @@ struct LocalizationBoundaryTests {
             let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let strings = json?["strings"] as? [String: Any] ?? [:]
-            let localizations = (strings[entry.key] as? [String: Any])?["localizations"] as? [String: Any]
-            let english = localizations?["en"] as? [String: Any]
-            let plural = (english?["variations"] as? [String: Any])?["plural"] as? [String: Any]
-            let forms = Set(plural?.keys ?? [:].keys)
-            if !forms.contains("one") || !forms.contains("other") {
+            if !Self.carriesEnglishOneAndOtherPlural(strings, key: entry.key) {
                 missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
             }
         }
@@ -2300,6 +2296,96 @@ struct LocalizationBoundaryTests {
             \(missing.sorted().joined(separator: "\n"))
             """
         )
+    }
+
+    /// Count-bearing keys that shipping code already reads but whose catalog commit has not landed.
+    ///
+    /// A round that may not touch a `.xcstrings` file lands its code first and leaves the catalog
+    /// commit to integration. Until then the key is ABSENT from its catalog, so it cannot be a
+    /// ``pluralRuledKeys`` row (that test is red on absence). The gap this closes is the NEXT step:
+    /// `Scripts/sync-string-catalogs.sh` harvests the key with a bare `%lld` value and no plural
+    /// block, every other test stays green, and English reads "1 photos couldn't be opened". Here an
+    /// absent key passes and a PRESENT key without an English `one`/`other` block is red, so that
+    /// sync cannot land without the hand-authored block. The catalog commit that authors the block
+    /// moves the row into ``pluralRuledKeys``, where absence is red too.
+    static let pluralRuledKeysAwaitingTheirCatalog: [HarvestedKey] = [
+        HarvestedKey(catalog: "FernletKit/Sources/ProximityKit/Localizable.xcstrings",
+                     key: "proximity.review.unreadable",
+                     source: "the photo review's couldn't-be-opened notice (session photos, 2026-09-30)"),
+    ]
+
+    /// Whether a catalog's `strings` table carries `key` with an English `one` AND `other` plural form.
+    ///
+    /// - Parameters:
+    ///   - strings: The catalog's top-level `strings` object.
+    ///   - key: The key to look up.
+    /// - Returns: `true` only when `localizations.en.variations.plural` names both forms.
+    static func carriesEnglishOneAndOtherPlural(_ strings: [String: Any], key: String) -> Bool {
+        let localizations = (strings[key] as? [String: Any])?["localizations"] as? [String: Any]
+        let english = localizations?["en"] as? [String: Any]
+        let plural = (english?["variations"] as? [String: Any])?["plural"] as? [String: Any]
+        let forms = Set(plural?.keys ?? [:].keys)
+        return forms.contains("one") && forms.contains("other")
+    }
+
+    /// The keys among `keys` that `strings` carries WITHOUT an English `one`/`other` block.
+    ///
+    /// - Parameters:
+    ///   - strings: The catalog's top-level `strings` object.
+    ///   - keys: Count-bearing keys that may not have been synced yet.
+    /// - Returns: Every present key lacking the block; a key the catalog does not carry passes.
+    static func syncedWithoutPluralBlock(_ strings: [String: Any], keys: [String]) -> [String] {
+        keys.filter { strings[$0] != nil && !carriesEnglishOneAndOtherPlural(strings, key: $0) }
+    }
+
+    /// A count-bearing key awaiting its catalog commit is either absent or arrives with its plural block.
+    @Test func countBearingKeysAwaitingTheirCatalogArriveWithPluralVariations() throws {
+        let ruled = Set(Self.pluralRuledKeys.map(\.key))
+        var missing: [String] = []
+        for entry in Self.pluralRuledKeysAwaitingTheirCatalog {
+            #expect(!ruled.contains(entry.key), "\(entry.key) is in both plural lists — drop its awaiting row")
+            let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let strings = json?["strings"] as? [String: Any] ?? [:]
+            #expect(!strings.isEmpty, "\(entry.catalog) parsed to zero keys — the catalog moved or broke")
+            for key in Self.syncedWithoutPluralBlock(strings, keys: [entry.key]) {
+                missing.append("\(entry.catalog): \(key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) count-bearing key(s) reached their catalog with no `one`/`other` plural \
+            variation — a catalog sync harvested a bare `%lld`, which English already gets wrong at \
+            one. Hand-author the English block in the same commit as the sync, then move the row \
+            from pluralRuledKeysAwaitingTheirCatalog into pluralRuledKeys:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The awaiting-catalog guard is not vacuous.
+    ///
+    /// Fed the entry `xcstringstool sync` writes for a `%lld` default (one English `stringUnit`, no
+    /// variations; the shape every harvested key in the repo's catalogs has) it flags the key; fed a
+    /// hand-authored `one`/`other` block, or a catalog without the key, it passes.
+    @Test func theAwaitingCatalogGuardFlagsAHarvestedCountWithNoPluralBlock() {
+        let key = "proximity.review.unreadable"
+        let value = "%lld photos couldn't be opened and were removed."
+        let harvested: [String: Any] = [key: [
+            "extractionState": "extracted_with_value",
+            "localizations": ["en": ["stringUnit": ["state": "new", "value": value]]],
+        ]]
+        let form = { (text: String) -> [String: Any] in ["stringUnit": ["state": "translated", "value": text]] }
+        let authored: [String: Any] = [key: [
+            "localizations": ["en": ["variations": ["plural": [
+                "one": form("%lld photo couldn't be opened and was removed."),
+                "other": form(value),
+            ]]]],
+        ]]
+        #expect(Self.syncedWithoutPluralBlock(harvested, keys: [key]) == [key])
+        #expect(Self.syncedWithoutPluralBlock(authored, keys: [key]).isEmpty)
+        #expect(Self.syncedWithoutPluralBlock([:], keys: [key]).isEmpty)
     }
 
     /// The two package string catalogs added by review §4.0 must keep existing.
