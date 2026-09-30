@@ -36,6 +36,9 @@ struct HomeView: View {
     @Binding var selectedTab: FernletTab
     @Binding var privateHubSection: PrivateHubSection
     @Binding var isTabBarCompact: Bool
+    /// ContentView's Home re-select token, consumed directly as the scroll-to-top token. Home's own
+    /// stack pushes nothing (the customization sheet has its own stack), so a re-tap has nothing to
+    /// pop; a push added to this stack must adopt `tabReselect` like the other tabs.
     @Binding var tabResetToken: Int
     /// Shared period store, threaded from ContentView for the (opt-in) cycle surfaces.
     var periodStore: PeriodTrackerStore? = nil

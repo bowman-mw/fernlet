@@ -26,6 +26,8 @@ struct JournalView: View {
     @Environment(CaptureProtectionState.self) private var captureProtection
     @Environment(FernletLockService.self) private var lockService
     @State private var path = NavigationPath()
+    /// The root page's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
+    @State private var scrollToTopToken = 0
     @State private var displayedMonth: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
     @State private var editingJournal: JournalEntryEditTarget?
@@ -45,7 +47,7 @@ struct JournalView: View {
                 pageContent
                     .fernletTabBarBottomClearance()
             }
-            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
             .background(Color.parchment)
             .navigationTitle("")
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
@@ -53,6 +55,10 @@ struct JournalView: View {
                 DayDetailView(store: store, dateKey: dateKey)
                     .onDisappear { scheduleCalendarRefresh() }
             }
+        }
+        // Re-tapping Private pops a pushed day back to the Journal; at the Journal it scrolls up.
+        .tabReselect(token: $tabResetToken, scrollToTopToken: $scrollToTopToken, isAtRoot: { path.isEmpty }) {
+            path = NavigationPath()
         }
         .onAppear { scheduleCalendarRefresh() }
         .onChange(of: displayedMonth) { scheduleCalendarRefresh() }

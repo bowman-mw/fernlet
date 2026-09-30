@@ -23,6 +23,8 @@ struct MoveView: View {
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
     @State private var path = NavigationPath()
+    /// The root page's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
+    @State private var scrollToTopToken = 0
     @State private var displayedWeek: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
     /// The outer tab host retains this view. Hydrate its repository/index snapshots once instead of
@@ -398,7 +400,7 @@ struct MoveView: View {
                 scrollContent
                     .fernletTabBarBottomClearance()
             }
-            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
             .background(Color.parchment)
             .navigationTitle("")
             .navigationDestination(for: String.self) { dayDetail($0) }
@@ -406,6 +408,10 @@ struct MoveView: View {
             #if canImport(UIKit)
             .navigationDestination(for: ProgressPhotoRecord.self) { photoDetail($0) }
             #endif
+        }
+        // Re-tapping Move pops a pushed day, photo or history page; at the root it scrolls up.
+        .tabReselect(token: $tabResetToken, scrollToTopToken: $scrollToTopToken, isAtRoot: { path.isEmpty }) {
+            path = NavigationPath()
         }
         .onAppear {
             loadInitialSnapshotsIfNeeded()

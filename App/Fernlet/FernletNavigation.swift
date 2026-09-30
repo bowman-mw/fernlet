@@ -131,6 +131,80 @@ nonisolated enum FernletTab: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
+/// What re-tapping the already-selected tab does to that tab's page: the standard iOS pair.
+///
+/// With a page pushed inside the tab (Food → Recipe book → a recipe), the tap unwinds the tab's
+/// whole stack to its main page in one pop. At the main page it scrolls back to the top, which is
+/// all a re-tap did before the owner asked for the first half (2026-09-29). Never both on one tap:
+/// `ContentView.selectTab(_:)` records that a scroll request and a navigation request landing in
+/// the same frame misbehaved, so each tap resolves to exactly one of the two.
+///
+/// `nonisolated` like ``FernletTab``: a pure value, so the decision is unit-testable off the main
+/// actor under the Release configuration's `MainActor` default isolation.
+nonisolated enum TabReselectAction: Equatable {
+    /// Something is pushed: clear the tab's navigation path in one write.
+    case popToRoot
+    /// The main page is showing: scroll it to the top and re-expand the tab bar.
+    case scrollToTop
+
+    /// The action for a re-tap given whether the tab's stack is at its main page.
+    static func forReselect(isAtRoot: Bool) -> TabReselectAction {
+        isAtRoot ? .scrollToTop : .popToRoot
+    }
+}
+
+/// Routes `ContentView`'s per-tab re-select token to either a pop or a scroll-to-top, per
+/// ``TabReselectAction``.
+///
+/// Attach it to the tab page's `NavigationStack` — OUTSIDE the stack, never to the root
+/// `ScrollView` inside it — so the handler belongs to the page that owns the path and stays alive
+/// while other pages are pushed over the root. The page's root scroll view then takes its
+/// `fernletTabBarCompaction` reset token from `scrollToTopToken`, which this modifier bumps only at
+/// the root; ContentView's token itself now means "the tab was re-selected".
+///
+/// `isAtRoot` is a closure read when the tap lands rather than a value captured at the last body
+/// pass, so a path the system back gesture just changed is always seen as it is now.
+struct TabReselectModifier: ViewModifier {
+    /// ContentView's per-tab re-select token; bumped once per re-tap of the active tab.
+    @Binding var reselectToken: Int
+    /// The page's own scroll-to-top token, consumed by its root `fernletTabBarCompaction`.
+    @Binding var scrollToTopToken: Int
+    /// Whether the page's navigation stack is showing its main page (nothing pushed).
+    let isAtRoot: () -> Bool
+    /// Clears the page's navigation state with ONE write; nested pushes above the first entry
+    /// come off with it, together with the view state that drove them.
+    let popToRoot: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onChange(of: reselectToken) { _, _ in
+            switch TabReselectAction.forReselect(isAtRoot: isAtRoot()) {
+            case .popToRoot:
+                popToRoot()
+            case .scrollToTop:
+                scrollToTopToken &+= 1
+            }
+        }
+    }
+}
+
+extension View {
+    /// Makes a re-tap of this page's active tab pop its stack to the main page, or — already there —
+    /// scroll it to the top. See ``TabReselectModifier``.
+    func tabReselect(
+        token: Binding<Int>,
+        scrollToTopToken: Binding<Int>,
+        isAtRoot: @escaping () -> Bool,
+        popToRoot: @escaping () -> Void
+    ) -> some View {
+        modifier(TabReselectModifier(
+            reselectToken: token,
+            scrollToTopToken: scrollToTopToken,
+            isAtRoot: isAtRoot,
+            popToRoot: popToRoot
+        ))
+    }
+}
+
 /// Every modal sheet the app can present, routed through `ContentView`'s single
 /// `activeSheet` slot (one sheet at a time; chained handoffs dismiss-then-represent).
 ///

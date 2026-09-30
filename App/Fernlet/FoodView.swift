@@ -21,6 +21,9 @@ import ImageIO
 /// the recipe book, proximity recipe sharing, meal correction, and resuming an in-progress cooking
 /// run that survives in the app group. On appear and on re-activation it reconciles the cooking run
 /// from the app group so a step advance made from the Live Activity or Siri is picked up.
+///
+/// The recipe book and the recent recipes' details are pushed as ``FoodRoute`` path values, so a
+/// re-tap of the Food tab pops the whole stack back to this page (``TabReselectModifier``).
 struct FoodView: View {
     var store: FernletStore
     /// Reports meals logged from THIS tab's own surfaces (the Planned-today card, recipe rows,
@@ -45,6 +48,10 @@ struct FoodView: View {
     /// an in-progress cooking run whose recipe still exists). Carries whether it's a saved/web recipe so
     /// the completion log routes to the right store method.
     @State private var cookingResume: CookingResumeTarget?
+    /// The Food tab stack's pushed pages. Cleared in one write when the Food tab is re-tapped.
+    @State private var path: [FoodRoute] = []
+    /// The root page's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
+    @State private var scrollToTopToken = 0
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -54,7 +61,7 @@ struct FoodView: View {
     /// The Food root's scrolling content: header, macro card, the cooking-resume and pending-retry
     /// cards, today's meals grouped by type, and the recent-recipes preview.
     private var foodRoot: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     headerRow
@@ -71,15 +78,58 @@ struct FoodView: View {
                 .padding(.bottom, 24)
                 .fernletTabBarBottomClearance()
             }
-            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
             .background(Color.parchment)
             .navigationTitle("")
+            .navigationDestination(for: FoodRoute.self) { foodDestination($0) }
         }
         // One keyboard "Done" for everything pushed inside the Food tab (the recipe book, its create
         // flow, the planner). A tab is not a sheet, so it gets none of `fernletSheetChrome`'s
         // accessories, and the numeric pads in there had no way to dismiss themselves. Declared once,
         // at the stack, so a pushed page never stacks a second Done on top of it.
         .keyboardDoneToolbar()
+        // Re-tapping Food pops everything pushed here back to this page; at this page it scrolls up.
+        .tabReselect(token: $tabResetToken, scrollToTopToken: $scrollToTopToken, isAtRoot: { path.isEmpty }) {
+            path.removeAll()
+        }
+        .onChange(of: store.recipes.map(\.id)) { pruneDeadRecipeRoutes() }
+        .onChange(of: store.savedRecipes.map(\.id)) { pruneDeadRecipeRoutes() }
+    }
+
+    /// Resolves a ``FoodRoute`` pushed from the Food root to its page.
+    @ViewBuilder private func foodDestination(_ route: FoodRoute) -> some View {
+        switch route {
+        case .recipeBook:
+            RecipeBookSheet(
+                store: store,
+                editingRecipe: $editingRecipe,
+                editingSavedRecipe: $editingSavedRecipe,
+                isEmbeddedInNavigationStack: true,
+                onMealsLogged: onMealsLogged
+            )
+        case .recipeDetail(let id, let isSaved):
+            #if canImport(UIKit)
+            // Resolved live, so an edit made from the detail shows at once; nothing renders for the
+            // one update between a delete and `pruneDeadRecipeRoutes` popping the page.
+            if let recipe = (isSaved ? store.savedRecipes : store.recipes).first(where: { $0.id == id }) {
+                recipeDetail(for: recipe, isSaved: isSaved)
+            }
+            #else
+            EmptyView()
+            #endif
+        }
+    }
+
+    /// Pops a recent recipe's detail whose recipe was deleted (from its own editor sheet, or by a
+    /// sync) — the view-destination link this replaced vanished with the recipe and popped the page.
+    private func pruneDeadRecipeRoutes() {
+        let kept = FoodRoute.pruned(
+            path,
+            manualIDs: Set(store.recipes.map(\.id)),
+            savedIDs: Set(store.savedRecipes.map(\.id))
+        )
+        guard kept.count != path.count else { return }
+        path = kept
     }
 
     private var headerRow: some View {
@@ -304,15 +354,7 @@ struct FoodView: View {
                 Spacer()
                 // Pushed, not presented: book → detail → editor then lives in ONE stack, so saving an
                 // edit started from the book returns to that recipe instead of dropping to Food root.
-                NavigationLink {
-                    RecipeBookSheet(
-                        store: store,
-                        editingRecipe: $editingRecipe,
-                        editingSavedRecipe: $editingSavedRecipe,
-                        isEmbeddedInNavigationStack: true,
-                        onMealsLogged: onMealsLogged
-                    )
-                } label: {
+                NavigationLink(value: FoodRoute.recipeBook) {
                     Text("Recipe book")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
@@ -370,9 +412,7 @@ struct FoodView: View {
             // Tapping a recipe pushes the read-only detail (photo, per-serving macros, ingredients,
             // notes); the editor is reachable only via the detail's Edit button — and for a saved/web
             // recipe that Edit opens its notes/delete sheet (no structured ingredients to edit).
-            NavigationLink {
-                recipeDetail(for: recipe, isSaved: isSaved)
-            } label: {
+            NavigationLink(value: FoodRoute.recipeDetail(id: recipe.id, isSaved: isSaved)) {
                 label()
             }
             .buttonStyle(.plain)
@@ -1208,6 +1248,48 @@ private struct SourceLinkRow: View {
                 .foregroundStyle(Color.slate)
                 .lineLimit(1)
         }
+    }
+}
+
+/// The pages the Food tab's root pushes onto its own `NavigationStack`, as path values.
+///
+/// A path — rather than the view-destination links these used to be — is what lets a re-tap of the
+/// Food tab pop everything to the Food page (``TabReselectModifier``): ContentView can only ask, and
+/// only a value path can be cleared from outside the pushed page. Everything a pushed page pushes in
+/// turn (the book's create chooser and editors, the planner, a book row's detail) stays that page's
+/// own navigation and comes off with the entry beneath it.
+///
+/// `recipeDetail` carries the recipe's id, not the recipe: `RecipeDefinition` is not `Hashable`, and
+/// the destination resolves the definition live so an edit shows at once. `isSaved` names the store
+/// half — a manual recipe and a saved/web recipe never match across halves. A route whose recipe is
+/// gone is cut by ``pruned(_:manualIDs:savedIDs:)``, which is what the vanished view link used to do.
+///
+/// The path is typed, so it holds only these values: a pushed page that wants a value link of some
+/// other type needs `navigationDestination(isPresented:)`/`(item:)` instead (as the book's create
+/// branch does), or the tab moves to `NavigationPath`.
+nonisolated enum FoodRoute: Hashable {
+    /// The recipe book, pushed rather than presented so book → detail → editor is one stack.
+    case recipeBook
+    /// A recent recipe's read-only detail, from the Food page's Recipes card.
+    case recipeDetail(id: UUID, isSaved: Bool)
+
+    /// Whether this route's recipe still exists in its own store half.
+    func isLive(manualIDs: Set<UUID>, savedIDs: Set<UUID>) -> Bool {
+        switch self {
+        case .recipeBook:
+            return true
+        case .recipeDetail(let id, let isSaved):
+            return (isSaved ? savedIDs : manualIDs).contains(id)
+        }
+    }
+
+    /// The path cut back to just below the first route whose recipe is gone — everything pushed above a
+    /// dead page goes with it. Returns `path` unchanged when every route is live.
+    static func pruned(_ path: [FoodRoute], manualIDs: Set<UUID>, savedIDs: Set<UUID>) -> [FoodRoute] {
+        guard let firstDead = path.firstIndex(where: { !$0.isLive(manualIDs: manualIDs, savedIDs: savedIDs) }) else {
+            return path
+        }
+        return Array(path[..<firstDead])
     }
 }
 

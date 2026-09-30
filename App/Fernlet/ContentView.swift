@@ -67,6 +67,9 @@ struct ContentView: View {
     /// compact/expand animation, so that animation cannot relayout every tab's scroll content on
     /// each frame. The camera session overrides the published value to zero while hiding the bar.
     @State private var tabBarReservedHeight: CGFloat = 0
+    /// Per-tab re-select tokens: bumped each time the ALREADY-selected tab is tapped again. Each tab
+    /// page decides what that means from its own navigation state (`tabReselect`): pop to its main
+    /// page when something is pushed, otherwise scroll to the top.
     @State private var tabResetTokens: [FernletTab: Int] = Dictionary(uniqueKeysWithValues: FernletTab.allCases.map { ($0, 0) })
     @State private var activeSheet: FernletSheet?
     /// Foreground trainer Shortcuts hand their requested first action to Move's existing local
@@ -359,9 +362,13 @@ struct ContentView: View {
         syncAwayHeartsIfActive()
     }
 
-    /// Preserves each page's scroll position across tabs. Re-selecting its current tab is the
-    /// deliberate scroll-to-top gesture; doing that while changing selection made SwiftUI receive
-    /// a scroll request and a navigation request in the same frame.
+    /// Preserves each page's scroll position and pushed pages across tabs. Re-selecting its current
+    /// tab bumps that tab's re-select token, and the page acts on it (`tabReselect`): with a page
+    /// pushed inside the tab it pops to the tab's main page, and at the main page it scrolls to the
+    /// top — one or the other, never both. Doing either while changing selection made SwiftUI
+    /// receive a scroll request and a navigation request in the same frame, so a switch only
+    /// switches. Home pushes nothing on its own stack, so a re-tap there only scrolls; a push added
+    /// to it must adopt `tabReselect` the way Food, Move, Friends, Journal and Cycle do.
     private func selectTab(_ tab: FernletTab) {
         guard selectedTab == tab else {
             selectedTab = tab

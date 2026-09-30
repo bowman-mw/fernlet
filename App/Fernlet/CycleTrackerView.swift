@@ -150,6 +150,8 @@ struct CycleTrackerView: View {
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @State private var authorization: HealthKitAuthorizationViewModel
     @State private var selectedDay: SelectedCycleDay?
+    /// The root page's own scroll-to-top token; `tabReselect` bumps it only when no day is pushed.
+    @State private var scrollToTopToken = 0
     @State private var displayedMonth: Date = .now
     /// Merged per-day intimacy event counts (sealed logs max-merged with HealthKit). Plaintext-
     /// adjacent view state: scrubbed the moment the derived intimacy gate flips off.
@@ -200,7 +202,7 @@ struct CycleTrackerView: View {
                 pageContent
                     .fernletTabBarBottomClearance()
             }
-            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
             .background(Color.parchment)
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
             .navigationDestination(item: $selectedDay) { day in
@@ -245,6 +247,10 @@ struct CycleTrackerView: View {
             } message: {
                 Text(deleteErrorMessage ?? "")
             }
+        }
+        // Re-tapping Private pops the day detail back to the Cycle page; at the page it scrolls up.
+        .tabReselect(token: $tabResetToken, scrollToTopToken: $scrollToTopToken, isAtRoot: { selectedDay == nil }) {
+            selectedDay = nil
         }
     }
 

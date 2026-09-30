@@ -1494,8 +1494,9 @@ public struct FernletTabBarBottomClearanceModifier: ViewModifier {
 /// never oscillates.
 ///
 /// Installed on each scrollable tab page via `fernletTabBarCompaction(_:resetToken:)`; the tab
-/// container (the app's `ContentView`) owns the shared `isCompact` state and a per-tab
-/// `resetToken`. The modifier observes scroll geometry and flips `isCompact` per the
+/// container (the app's `ContentView`) owns the shared `isCompact` state, and the `resetToken` is
+/// either its per-tab re-select token or — on a page with a navigation stack — the page's own
+/// scroll-to-top token, bumped only when nothing is pushed. The modifier observes scroll geometry and flips `isCompact` per the
 /// ``shouldCompact(isCompact:distanceScrolledPastTop:)`` dead band: compaction begins only after
 /// 48pt of real downward travel and releases only once settled back under 8pt.
 ///
@@ -1507,7 +1508,10 @@ public struct FernletTabBarBottomClearanceModifier: ViewModifier {
 public struct FernletTabBarCompactionModifier: ViewModifier {
     /// Whether the tab bar is currently compacted; owned by the tab container and shared across pages.
     @Binding var isCompact: Bool
-    /// Incremented by the tab container to scroll this page to the top and re-expand the bar.
+    /// Incremented to scroll this page to the top and re-expand the bar. A page with a navigation
+    /// stack passes its own token here, which the app's re-select router bumps only when nothing is
+    /// pushed (a re-tap with a page pushed pops instead); a page without one can take the tab
+    /// container's re-select token directly.
     @Binding var resetToken: Int
     @State private var scrollPosition = ScrollPosition(edge: .top)
 

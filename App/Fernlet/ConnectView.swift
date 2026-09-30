@@ -5,6 +5,24 @@ import FernletDomainModel
 import PrivateMediaStore
 import FernletUI
 
+/// The pages the Friends album pushes onto its own `NavigationStack`, as path values.
+///
+/// A path — rather than the view-destination links these used to be — is what lets a re-tap of the
+/// Friends tab pop them back to the album (``TabReselectModifier``). Pages pushed from these in turn
+/// (Friends & Blocks → Safety & reporting) stay their own navigation and come off with them.
+///
+/// `friendShop` is pushed from the post-session shop-window card. Once pushed it stays until the
+/// user leaves, even if the one-hour window lapses under it; the link used to vanish with the card
+/// and pop the shop at the next minute tick.
+nonisolated enum FriendsRoute: Hashable {
+    /// Group Activities.
+    case activities
+    /// Friends & Blocks — from the header, and from the "You appear as" display-name hint.
+    case friendList
+    /// The friend shops exchanged during the last session.
+    case friendShop
+}
+
 // MARK: - FriendsView
 
 /// The Friends tab root: the shared photo album when idle, the in-session disposable camera when live.
@@ -45,6 +63,12 @@ struct FriendsView: View {
     /// P7 item 5: the restore card is dismissable for this instance of the surface; the value it
     /// presents is the manager's, sampled on appear.
     @State private var sessionResumeDismissed = false
+    /// The album stack's pushed pages. Cleared in one write when the Friends tab is re-tapped, and
+    /// when a session that had swapped the album out for the camera ends (see
+    /// ``handleSessionSurfaceChange(wasInSession:nowInSession:)``).
+    @State private var path: [FriendsRoute] = []
+    /// The album root's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
+    @State private var scrollToTopToken = 0
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
 
@@ -146,6 +170,9 @@ struct FriendsView: View {
     /// launch with no mesh — swaps back to the album.
     private func handleSessionSurfaceChange(wasInSession: Bool, nowInSession: Bool) {
         guard wasInSession, !nowInSession else { return }
+        // The camera swap destroyed the album's stack; the path outlives it here, so clear it or the
+        // album would come back with the page it had pushed before the session.
+        if sessionReady { path.removeAll() }
         sessionReady = false
         showConnectionAnimation = false
     }
@@ -281,24 +308,20 @@ struct FriendsView: View {
     // MARK: - Photo album
 
     private var photoAlbumView: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
                         ScreenHeader(title: "Friends", subtitle: "Together, in person.", identifier: "screen.friends")
                         Spacer()
                         HStack(spacing: 10) {
-                            NavigationLink {
-                                ActivitiesView(store: store)
-                            } label: {
+                            NavigationLink(value: FriendsRoute.activities) {
                                 headerButtonLabel("Activities")
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("friends.activities")
                             .accessibilityLabel("Activities")
-                            NavigationLink {
-                                FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-                            } label: {
+                            NavigationLink(value: FriendsRoute.friendList) {
                                 headerButtonLabel("Friends")
                             }
                             .buttonStyle(.plain)
@@ -335,9 +358,26 @@ struct FriendsView: View {
                 .padding(20)
                 .fernletTabBarBottomClearance()
             }
-            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
             .background(Color.parchment)
             .navigationTitle("")
+            .navigationDestination(for: FriendsRoute.self) { friendsDestination($0) }
+        }
+        // Re-tapping Friends pops everything pushed here back to the album; at the album it scrolls up.
+        .tabReselect(token: $tabResetToken, scrollToTopToken: $scrollToTopToken, isAtRoot: { path.isEmpty }) {
+            path.removeAll()
+        }
+    }
+
+    /// Resolves a ``FriendsRoute`` pushed from the album to its page.
+    @ViewBuilder private func friendsDestination(_ route: FriendsRoute) -> some View {
+        switch route {
+        case .activities:
+            ActivitiesView(store: store)
+        case .friendList:
+            FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $scrollToTopToken)
+        case .friendShop:
+            FriendShopView(store: store, shop: manager.clothingShop)
         }
     }
 
@@ -373,9 +413,7 @@ struct FriendsView: View {
     @ViewBuilder
     private var displayNameHint: some View {
         if store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces).isEmpty {
-            NavigationLink {
-                FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-            } label: {
+            NavigationLink(value: FriendsRoute.friendList) {
                 HStack(spacing: 8) {
                     Text("You appear as \(store.resolvedProximityDisplayName)")
                         .font(.fernlet(.labelSmall))
@@ -409,9 +447,7 @@ struct FriendsView: View {
         if store.settings.allowNearbyClothingShares {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 if let minutesLeft = manager.clothingShop.remainingWindowMinutes(at: context.date) {
-                    NavigationLink {
-                        FriendShopView(store: store, shop: manager.clothingShop)
-                    } label: {
+                    NavigationLink(value: FriendsRoute.friendShop) {
                         HStack(spacing: 12) {
                             Image(systemName: "bag")
                                 .font(.title3.weight(.semibold))
