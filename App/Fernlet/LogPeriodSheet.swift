@@ -3,6 +3,7 @@ import FernletCrypto
 import FernletDomainModel
 import FernletFoundation
 import FernletLock
+import HealthKit
 import PrivateHealthStore
 import HealthKitGateway
 import FernletUI
@@ -49,6 +50,19 @@ extension PeriodTemperatureUnit {
 /// can fail after the clinical half has already landed — gets its own sentence for the same reason,
 /// rather than the Foundation default string. Chrome is the 2026-08-21 template: the draft-guard
 /// header carries Cancel and the Log/Edit title; Save commits bottom-right.
+///
+/// **Apple Health is the only home for the clinical fields** (flow, first day of cycle,
+/// intermenstrual bleeding, temperature, cervical mucus, ovulation test), and the gateway writes
+/// none of them while Fernlet's master Health switch or its Cycle tracking switch is off — both
+/// default to off. Owner report 2026-09-29: "When you click save for period tracking, but you're
+/// not sharing to HealthKit, it doesn't work." It didn't: the whole log was refused (atomically,
+/// note included), and the only sign was a sentence drawn in success green at the very bottom of
+/// the scroll, far below the fold, while the sheet stayed open looking untouched. So the sheet now
+/// says up front, whenever cycle sharing is off, which fields live in Health and that notes and
+/// symptoms still save (``healthNotice``, keyed off the gate's own rule); a refused save says what
+/// happened in a sentence of its own (``refusalSentence(for:isEdit:)``); and every outcome is
+/// pinned directly above the Save bar (``statusLine``) rather than at the end of the scroll. The
+/// refusal itself stays: the sheet never writes to Health, or turns a switch on, on its own.
 struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore
     private let editingEntry: CycleDayEntry?
@@ -71,6 +85,10 @@ struct LogPeriodSheet: View {
     @State private var symptoms: Set<PeriodSymptom>
     @State private var customScales: [PeriodSymptom: Int]
     @State private var statusMessage: String?
+    /// Whether ``statusMessage`` reports something that did NOT happen, so ``statusLine`` draws it
+    /// in the error ink rather than the success one. The line used to be moss for every outcome,
+    /// which dressed "nothing was saved" in the colour of "saved".
+    @State private var statusIsError = false
     @State private var isSaving = false
     /// Set when a write LANDED but not cleanly — the sealed note was buffered until unlock, or
     /// dropped for want of an app lock.
@@ -199,11 +217,10 @@ struct LogPeriodSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    // Frozen once the entry is written — see ``savedWithCaveat``. `statusText` is
-                    // deliberately OUTSIDE the disabled group: the caveat sentence is the reason
-                    // the sheet stayed open, so nothing may dim or mute it.
+                    // Frozen once the entry is written — see ``savedWithCaveat``.
                     Group {
                         lockWarning
+                        healthNotice
                         dateField
                         flowLevelField
                         cycleDetailsField
@@ -214,12 +231,15 @@ struct LogPeriodSheet: View {
                         noteCounter
                     }
                     .disabled(savedWithCaveat)
-
-                    statusText
                 }
                 .padding(20)
                 .padding(.bottom, 10)
             }
+
+            // OUTSIDE the scroll AND the disabled group: the outcome sits beside the button that
+            // produced it, and the caveat sentence is the reason the sheet stayed open, so nothing
+            // may dim, mute or scroll it away.
+            statusLine
 
             SheetSaveBar(label: saveLabel, disabled: isSaving || !(canSave || savedWithCaveat)) {
                 // Once the entry is written the bar is a Done, not a second Save: leaving the sheet
@@ -278,6 +298,33 @@ struct LogPeriodSheet: View {
         }
     }
 
+    /// Whether Fernlet may write this sheet's clinical fields to Apple Health right now — the
+    /// gateway's own rule (``HealthKitService/isWriteSharingEnabled(for:in:)``), evaluated over the
+    /// app's observable preferences so the notice below follows the switches live and can never
+    /// promise a save the write gate will refuse.
+    private var sharesCycleDataWithHealth: Bool {
+        HealthKitService.isWriteSharingEnabled(for: .cycleTracking, in: storagePreferencesStore.preferences)
+    }
+
+    /// Shown whenever cycle sharing with Apple Health is off (the default: both the master switch
+    /// and the Cycle tracking switch start off), BEFORE the user types anything: which fields need
+    /// Health, that notes and symptoms still save without it, and where sharing is turned on.
+    ///
+    /// Up front rather than only after a refused Save, because the refusal is atomic — the note
+    /// typed beside a flow chip is refused with it — and learning that after composing a long note
+    /// is the worst time. `.fernletWrappingText()` so no word of it is clipped at larger sizes.
+    @ViewBuilder
+    private var healthNotice: some View {
+        if !sharesCycleDataWithHealth {
+            Text("Flow, first day of cycle, intermenstrual bleeding, temperature, cervical mucus and ovulation tests are saved in Apple Health, and Fernlet isn't sharing cycle data with Health right now. Notes and symptoms still save privately in Fernlet. You can turn on sharing in Settings › Health.",
+                 comment: "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off. The listed fields are the sheet's own field names; Settings › Health is Fernlet's own Settings page.")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.terracottaInk)
+                .fernletWrappingText()
+                .accessibilityIdentifier("logPeriod.healthNotice")
+        }
+    }
+
     private var flowLevelField: some View {
         SheetField("Flow level") {
             FlowLayout(spacing: 8) {
@@ -286,7 +333,12 @@ struct LogPeriodSheet: View {
                     // which is `rawValue.capitalized` — a storage token wearing paint. The calendar
                     // that READS this value was forked in the same round; leaving the SETTER on
                     // tokens would have shown a French user "Heavy" here and the translation there.
-                    Button(level.displayName) { flowLevel = level }
+                    //
+                    // Tapping the selected chip again clears it (the chip already carries the
+                    // `.isSelected` trait, so VoiceOver says which one is on). Without that a flow
+                    // chip, once touched, could not be taken back, so a user refused for sharing
+                    // had no way to keep just the note and symptoms short of starting over.
+                    Button(level.displayName) { flowLevel = flowLevel == level ? nil : level }
                         .buttonStyle(ChipButtonStyle(selected: flowLevel == level))
                 }
             }
@@ -483,15 +535,43 @@ struct LogPeriodSheet: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
-    /// The save outcome (or a validation message) in the sheet's own voice.
+    /// The save outcome (or a validation message) in the sheet's own voice, pinned directly above
+    /// the Save bar.
+    ///
+    /// It used to be the last child of the scroll content, below nine symptom rows and a 140pt note:
+    /// for anyone who tapped a flow chip at the top and then Save, hundreds of points off-screen, so
+    /// a refused save looked like a button that did nothing. Pinned, it appears beside the button
+    /// the user just pressed at every scroll position. Error ink for a refusal, success ink for a
+    /// save that landed with a caveat — both the contrast-safe text tokens, not the accents.
+    ///
+    /// Capped at 200pt: at accessibility text sizes a long refusal would otherwise push the whole
+    /// form off the screen, so a sentence taller than that scrolls inside its own strip instead.
+    /// ``StatusHeightCap`` rather than `.frame(maxHeight:)`, which grows to the full 200pt and
+    /// centres a two-line sentence in dead space.
     @ViewBuilder
-    private var statusText: some View {
+    private var statusLine: some View {
         if let statusMessage {
-            Text(statusMessage)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.moss)
-                .fernletWrappingText()
+            StatusHeightCap(maxHeight: 200) {
+                ViewThatFits(in: .vertical) {
+                    statusSentence(statusMessage)
+                    ScrollView { statusSentence(statusMessage) }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .background(Color.parchment)
         }
+    }
+
+    /// One rendering of the outcome sentence — `message` is already resolved, so it is drawn
+    /// verbatim rather than looked up a second time.
+    private func statusSentence(_ message: String) -> some View {
+        Text(message)
+            .font(.fernlet(.body))
+            .foregroundStyle(statusIsError ? Color.terracottaInk : Color.mossInk)
+            .fernletWrappingText()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("logPeriod.status")
     }
 
     private func periodToggle(_ title: String, isOn: Binding<Bool>) -> some View {
@@ -526,27 +606,79 @@ struct LogPeriodSheet: View {
         temperatureUnit == .celsius ? Self.celsiusRange : Self.fahrenheitRange
     }
 
-    /// Validates the typed basal body temperature.
+    /// Validates the draft before anything is written: the first-day flag, then the typed basal body
+    /// temperature.
+    ///
+    /// "First day of cycle" is not a sample of its own — HealthKit records it as metadata on the
+    /// day's FLOW sample, and ``CycleDayEntry/isCycleStart`` reads it back from there alone — so the
+    /// flag with no flow level wrote nothing and still reported `.saved`: the sheet dismissed as if
+    /// the day were logged. It is refused here with ``cycleStartProblem(isCycleStart:flowLevel:)``.
     ///
     /// R5: `Double("nan")`, `Double("1e400")` and `-5` all parse (paste or a hardware keyboard) and
     /// would reach HealthKit as a non-finite or absurd clinical sample, so the value is checked here
     /// — nil field is fine, unusable field refuses the save with a message.
-    private func validatedTemperature() -> TemperatureValidation {
+    private func validatedDraft() -> DraftValidation {
+        if let problem = Self.cycleStartProblem(isCycleStart: isCycleStart, flowLevel: flowLevel) {
+            return .invalid(problem)
+        }
         let trimmed = temperatureText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .value(nil) }
+        guard !trimmed.isEmpty else { return .valid(temperature: nil) }
         let range = temperatureRange
         guard let parsed = LocaleTolerantNumber.double(from: trimmed),
               parsed.isFinite, range.contains(parsed) else {
             return .invalid("Enter a temperature between \(Int(range.lowerBound)) and \(Int(range.upperBound)) \(temperatureUnit.symbol), or leave it blank.")
         }
-        return .value(parsed)
+        return .valid(temperature: parsed)
     }
 
-    /// The outcome of validating the typed basal body temperature: a usable value (nil when the
-    /// field is blank), or the message explaining why the save is refused.
-    private enum TemperatureValidation {
-        case value(Double?)
+    /// The outcome of validating the draft: the usable temperature (nil when the field is blank), or
+    /// the message explaining why the save is refused.
+    private enum DraftValidation {
+        case valid(temperature: Double?)
         case invalid(String)
+    }
+
+    /// Why the first-day flag cannot be saved as drafted, or nil when it can: the flag rides on the
+    /// flow sample, so it needs a flow level beside it (see ``validatedDraft()``).
+    static func cycleStartProblem(isCycleStart: Bool, flowLevel: PeriodFlowLevel?) -> String? {
+        guard isCycleStart, flowLevel == nil else { return nil }
+        return String(localized: "logPeriod.validation.cycleStartNeedsFlow",
+                      defaultValue: "Choose a flow level to mark the first day of your cycle.",
+                      comment: "Shown above Save on the period log sheet when 'First day of cycle' is on but no flow level is chosen. The first-day mark is stored with the flow level, so it cannot be saved alone.")
+    }
+
+    /// The sentence a refused save shows above the Save bar, in the sheet's own voice.
+    ///
+    /// The gateway's own text for a closed switch ("…so nothing was saved to Health") implies the
+    /// entry was kept somewhere else. It was not: `PeriodTrackerStore` writes the Health half first
+    /// and refuses the whole log when it is refused, note and symptoms included, so these sentences
+    /// say that nothing was saved, that the entry is still in the sheet, and what would let it save.
+    /// A fresh log can also be saved without its Health details, so its sentence says so; an EDIT
+    /// is delete-then-rewrite and was refused before anything was deleted, so nothing changed.
+    ///
+    /// - Parameters:
+    ///   - error: What `logEvent` / `editEvent` threw.
+    ///   - isEdit: Whether the sheet was editing an existing day.
+    /// - Returns: A resolved sentence; any other error falls back to its `localizedDescription`.
+    static func refusalSentence(for error: any Error, isEdit: Bool) -> String {
+        switch error {
+        case HealthKitServiceError.sharingTurnedOff:
+            guard !isEdit else {
+                return String(localized: "logPeriod.refusal.sharingOff.edit",
+                              defaultValue: "Nothing was changed, because Fernlet isn't sharing cycle data with Apple Health, and this day's cycle details are kept there. Your changes are still here. You can turn on sharing in Settings › Health.",
+                              comment: "Shown above Save when editing a logged period day is refused because Fernlet's cycle sharing with Apple Health is off. Nothing was deleted or saved.")
+            }
+            return String(localized: "logPeriod.refusal.sharingOff",
+                          defaultValue: "Nothing was saved, because Fernlet isn't sharing cycle data with Apple Health. Your entry is still here. Turn on sharing in Settings › Health, or clear the flow and other Health details to save just your notes and symptoms.",
+                          comment: "Shown above Save when a period log is refused because Fernlet's cycle sharing with Apple Health is off. Nothing was saved, including the note. 'Health details' are the fields the notice at the top of the sheet lists.")
+        case let healthError as HKError where healthError.code == .errorAuthorizationDenied
+            || healthError.code == .errorAuthorizationNotDetermined:
+            return String(localized: "logPeriod.refusal.healthDenied",
+                          defaultValue: "Nothing was saved, because Apple Health isn't allowing Fernlet to save cycle data. Your entry is still here. You can allow it for Fernlet in the Health app.",
+                          comment: "Shown above Save when Apple Health itself refused Fernlet's cycle write (the user denied Fernlet cycle data in the Health app). Nothing was saved.")
+        default:
+            return error.localizedDescription
+        }
     }
 
     /// Writes the sheet.
@@ -567,9 +699,9 @@ struct LogPeriodSheet: View {
         isSaving = true
         defer { isSaving = false }
         let basalBodyTemperature: Double?
-        switch validatedTemperature() {
-        case .value(let value):
-            basalBodyTemperature = value
+        switch validatedDraft() {
+        case .valid(let temperature):
+            basalBodyTemperature = temperature
         case .invalid(let message):
             report(message, kind: .error)
             return
@@ -633,7 +765,9 @@ struct LogPeriodSheet: View {
             report(String(localized: "This device couldn't encrypt your note just now, so the note wasn't saved. Nothing you typed is lost, but the rest of the entry already saved, so check the day on your calendar before saving again."),
                    kind: .error)
         } catch {
-            report(error.localizedDescription, kind: .error)
+            // Most often Fernlet's cycle sharing being off, which refuses the whole log — see
+            // `refusalSentence(for:isEdit:)`. The sheet stays open with everything the user typed.
+            report(Self.refusalSentence(for: error, isEdit: editingEntry != nil), kind: .error)
         }
     }
 
@@ -653,6 +787,32 @@ struct LogPeriodSheet: View {
     ///     landed with a caveat the user still has to read.
     private func report(_ message: String, kind: FernletAnnouncementKind = .status) {
         statusMessage = message
+        statusIsError = kind == .error
         FernletAnnouncer.system.announce(kind, resolved: message)
+    }
+}
+
+/// Sizes its one child to the child's OWN height, never taller than `maxHeight` — the cap on
+/// ``LogPeriodSheet``'s pinned outcome line.
+///
+/// `.frame(maxHeight:)` cannot do this: a flexible frame grows to the height it is offered (up to
+/// the cap), so a two-line sentence sat centred in a 200pt box, taking that space from the form
+/// above it. This proposes at most `maxHeight` to the child and reports what the child chose, so a
+/// short sentence costs its own lines and only a taller one is held to the cap (where the sheet's
+/// `ViewThatFits` swaps in a scrolling copy).
+private struct StatusHeightCap: Layout {
+    /// The tallest the child may be.
+    var maxHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let height = min(proposal.height ?? maxHeight, maxHeight)
+        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: height))
+        return CGSize(width: size.width, height: min(size.height, maxHeight))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let child = subviews.first else { return }
+        child.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }

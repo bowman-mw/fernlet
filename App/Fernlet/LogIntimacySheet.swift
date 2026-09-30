@@ -179,9 +179,12 @@ struct LogIntimacySheet: View {
         }
     }
 
+    /// Whether this save will also go to Apple Health — the gateway's own write-sharing rule
+    /// (``HealthKitService/isWriteSharingEnabled(for:in:)``) over the observable preferences, so the
+    /// "sync is on/off" card can never disagree with what the write gate does. It used to restate
+    /// the rule by hand here, without the gate's device check.
     private var writesToHealthKit: Bool {
-        storagePreferencesStore.preferences.healthKitMasterEnabled
-            && (storagePreferencesStore.preferences.healthKitCapabilityEnabled[HealthCapability.intimateLogging.rawValue] ?? false)
+        HealthKitService.isWriteSharingEnabled(for: .intimateLogging, in: storagePreferencesStore.preferences)
     }
 
     private var healthKitSummary: String {

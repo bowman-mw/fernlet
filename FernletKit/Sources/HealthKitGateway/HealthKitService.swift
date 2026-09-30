@@ -1923,10 +1923,35 @@ public final class HealthKitService: HealthKitServicing {
     /// Fernlet's Health switch off, or this kind's switch off, Fernlet writes nothing"), and
     /// HealthKit's own share grant is the other half the callers already check.
     public func isWriteSharingEnabled(for capability: HealthCapability) -> Bool {
-        guard isHealthDataAvailable() else { return false }
-        let preferences = StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService)
-        return preferences.healthKitMasterEnabled
+        Self.isWriteSharingEnabled(
+            for: capability,
+            in: StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService),
+            healthDataAvailable: isHealthDataAvailable()
+        )
+    }
+
+    /// The write-sharing RULE itself, pure: Health exists on this device, the master switch is on,
+    /// and `capability`'s own switch is on. The gate above evaluates it over the live keychain copy;
+    /// a sheet evaluates it over the observable `StoragePreferencesStore.preferences` so what it
+    /// TELLS the user ("cycle sharing with Health is off") re-renders with the switch and can never
+    /// disagree with what the gate will DO. One expression, so the two cannot drift.
+    nonisolated public static func isWriteSharingEnabled(
+        for capability: HealthCapability,
+        in preferences: StoragePreferences,
+        healthDataAvailable: Bool
+    ) -> Bool {
+        healthDataAvailable
+            && preferences.healthKitMasterEnabled
             && preferences.healthKitCapabilityEnabled[capability.rawValue] == true
+    }
+
+    /// ``isWriteSharingEnabled(for:in:healthDataAvailable:)`` on this device — for a caller outside
+    /// the gateway, which may not ask `HKHealthStore` itself (`HealthKitWriteGateTests` scans for it).
+    nonisolated public static func isWriteSharingEnabled(
+        for capability: HealthCapability,
+        in preferences: StoragePreferences
+    ) -> Bool {
+        isWriteSharingEnabled(for: capability, in: preferences, healthDataAvailable: HKHealthStore.isHealthDataAvailable())
     }
 
     /// The write gate every write INTO Apple Health passes before anything is built or sent:
@@ -2727,9 +2752,11 @@ extension HealthKitService: PeriodHealthKitServicing {
     ///
     /// Write-gated on cycle tracking whenever the event has a clinical field to write (2026-09-23;
     /// it used to check the master switch only, via ``save(_:)``). An event with none — symptoms or
-    /// a note only — writes nothing to Health and needs no sharing. Audited on success.
+    /// a note only — writes nothing to Health and needs neither sharing NOR Health itself: the
+    /// device check lives in the gate, after the empty-samples return, so a note-only log saves on
+    /// a device without Health exactly as ``checkPeriodEventWriteAllowed(_:)`` already promised
+    /// (it used to run first and refuse the note too). Audited on success.
     public func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
-        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         let samples = try Self.periodSamples(for: event, externalUUID: externalUUID)
         guard !samples.isEmpty else { return samples }
         try requireWriteSharing(.cycleTracking)
