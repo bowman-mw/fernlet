@@ -1597,6 +1597,26 @@ public nonisolated enum PreparedDishHeuristic {
     // broth, ready-to-serve*, so making `soup` a carrier demoted the RIGHT answer for three shipped
     // dish-template components in favour of branded look-alikes. A soup is not an assembly around an
     // ingredient the way a bun or a wrap is.
+    //
+    // NOT carriers either, measured in the ingredient-search round (F3, 2026-09-30): the sweets words
+    // the chocolate-chips battery suggested. `cookie`, `bar` and `mix` sink USDA's own graham crackers,
+    // shortbread and pudding below branded look-alikes (report §8 F3). The narrow set that was meant
+    // to be safe — `waffle`, `waffles`, `dough` — was built and measured, and each regressed a surface
+    // this list drives: `dough` sank the SR ingredient "Phyllo dough" from #1 for "phyllo" (typed,
+    // import bind and resolver pool) and the pizza-dough rows under pepperoni pizzas and doughnuts in
+    // the resolver pool for the dish template string "pizza dough crust"; `waffle(s)` sank the waffle
+    // mixes under "Soup, onion, dry, mix" in the pool for "waffle mix" and the "Chicken & Waffles"
+    // rows under chicken curry for "chicken and waffles" — the pool's demotion has no score guard.
+    // The typed gain they bought was below the fold (chips rows 7-10) once F7's alias put the plain
+    // chips first. So no sweets word is a carrier.
+
+    /// Phrases in which a carrier word names what a food is FOR rather than what it is assembled into:
+    /// USDA's "Oil, olive, salad or cooking" is an oil for salads and cooking, not a salad, and reading
+    /// its "salad" as a carrier sank the plain olive oil to #60 for "olive oil" (report §4.2 cluster M,
+    /// §8 F3). A carrier inside one of these phrases does not count, like a carrier the name negates
+    /// ("no bun"). FROZEN English matching inputs over USDA's names; never localize one.
+    nonisolated static let carrierUsePhrases: [String] = ["salad or cooking"]
+
     /// Substrings that mark an FNDDS prepared / fast-food composite entry.
     nonisolated static let preparedMarkers: [String] = [
         "fast food", "on wheat", "on white", "with condiments", "double decker", "on bun", "on a bun"
@@ -1613,12 +1633,20 @@ public nonisolated enum PreparedDishHeuristic {
     /// A carrier the name explicitly NEGATES does not count. FNDDS spells the un-assembled form of a
     /// dish by naming the carrier and denying it — *Chili hot dog, no bun*, *Hamburger, no bun* — so a
     /// plain substring test read the row that is LEAST assembled as the most. Measured: `hot dog`
-    /// demoted every no-bun row and surfaced *Pickle relish, hot dog* as its top-1.
+    /// demoted every no-bun row and surfaced *Pickle relish, hot dog* as its top-1. Nor does a carrier
+    /// inside a ``carrierUsePhrases`` phrase: USDA's "…, salad or cooking" oils are oils, and reading
+    /// them as salads sank every plain vegetable oil beneath branded bottles and oil-roasted peanuts.
     public nonisolated static func isPreparedDish(_ foodItem: FoodItem) -> Bool {
         let name = FoodItemSearch.normalized(foodItem.name)
         if preparedMarkers.contains(where: name.contains) { return true }
         let tokens = Set(name.split(separator: " ").map(String.init))
-        return tokens.intersection(carrierTokens).contains { !isNegated($0, in: name) }
+        return tokens.intersection(carrierTokens).contains { !isNegated($0, in: name) && !namesAUse($0, in: name) }
+    }
+
+    /// Whether `carrier` appears in `normalizedName` inside one of ``carrierUsePhrases`` — "salad" in
+    /// "oil olive salad or cooking". `normalizedName` must already be `FoodItemSearch.normalized`.
+    private nonisolated static func namesAUse(_ carrier: String, in normalizedName: String) -> Bool {
+        carrierUsePhrases.contains { $0.hasPrefix(carrier + " ") && normalizedName.contains($0) }
     }
 
     /// Whether `carrier` appears in `normalizedName` only to be denied ("no bun", "without bun").

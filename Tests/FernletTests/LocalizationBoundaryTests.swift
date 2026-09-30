@@ -141,7 +141,7 @@
 
 import Foundation
 import Testing
-import FernletDomainModel
+@testable import FernletDomainModel
 import FernletFoundation
 import LocalPersistence
 import PrivateHealthStore
@@ -698,6 +698,13 @@ struct LocalizationBoundaryTests {
             """
         )
         #expect(CuratedSearchAlias.spellingFolds.map { "\($0.first) \($0.second)>\($0.folded)" } == ["semi sweet>semisweet"])
+    }
+
+    /// The dish heuristic's carrier-use phrases (ingredient-search round, F3): matched against USDA's
+    /// English names ("Oil, olive, salad or cooking"), never display text.
+    @Test func frozenCarrierUsePhrases() {
+        #expect(PreparedDishHeuristic.carrierUsePhrases == ["salad or cooking"],
+                "matched against USDA's oil names; a translated phrase reads every salad or cooking oil as a salad again")
     }
 
     /// The web importer's ingredient-line unit words (ingredient-search round, F11). They are read out
