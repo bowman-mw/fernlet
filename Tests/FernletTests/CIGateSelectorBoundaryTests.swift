@@ -146,6 +146,12 @@ import Testing
     /// the only behavioural pin that no input draws an empty screen; the extension's own wall checks
     /// by source scan only that the controller routes through it. Pinned by name in ``wallLines``
     /// too. Counted off the line.
+    ///
+    /// NEW at the 2026-09-29 ingredient-search round's fix round 1: `food-search` (6: the F10
+    /// ingredient corpus and tap-default sweep, the import-line pins, the two catalog-correction
+    /// suites, and the dish-template/plan-tier bind audit). The measuring stick every later search fix
+    /// is gated on had run on no line. Its corpus and sweep are also pinned by name in ``wallLines``.
+    /// Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 8,
         "no-tracking": 1,
@@ -160,6 +166,7 @@ import Testing
         "codeowners": 1,
         "messages-envelope": 4,
         "recipe-wire": 1,
+        "food-search": 6,
         "mesh-batteries": 154
     ]
 
@@ -187,7 +194,8 @@ import Testing
         "codeowners": ["CodeOwnersResolutionTests"],
         "messages-envelope": ["ExchangeMessageEnvelopeV2Tests", "ExchangeMultipartRecipeTests",
                               "FernletExchangeTests", "MessagesReceivedItemTests"],
-        "recipe-wire": ["RecipeMultipartWireTests"]
+        "recipe-wire": ["RecipeMultipartWireTests"],
+        "food-search": ["IngredientSearchCorpusTests", "CatalogDefaultUnitSweepTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -274,7 +282,7 @@ import Testing
     @Test func everyGatedSelectorNamesADeclaredSuite() throws {
         let steps = Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath))
         let declared = try Self.declaredTopLevelTypes()
-        #expect(steps.count >= 14, "the workflow lost test steps — \(steps.count) floor-script invocations found")
+        #expect(steps.count >= 15, "the workflow lost test steps — \(steps.count) floor-script invocations found")
         var undeclared: [String] = []
         // R2: bounded by the step count × the suite count.
         for step in steps {

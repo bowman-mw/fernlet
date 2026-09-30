@@ -329,6 +329,34 @@ jobs:
           set -euo pipefail
           Scripts/run-gated-suites.sh codeowners 2 CodeOwnersResolutionTests
 
+      - name: Food-search measuring stick (ingredient corpus + catalog corrections)
+        # Docs/Ingredient-Search-Deep-Research-2026-09-29.md F10: the round's measuring stick, which
+        # every later search, unit or catalog fix is gated on, and the load-time corrections it
+        # measures. No compiler half — a ranking or unit change compiles clean and moves only these
+        # pins — so until this line they were green only when somebody ran them by name.
+        # `IngredientSearchCorpusTests` is the 160-query plain-row-in-the-six corpus (names and
+        # nutrition plausibility, "1 each" on the count nouns); `CatalogDefaultUnitSweepTests` the
+        # bounded tap-default sweep of every shipped row (the fail-on-tap count, pinned by mechanism);
+        # `RecipeImportIngredientLineTests` the web importer's line parses; `BundledRowCorrectionTests`
+        # and `CatalogHygieneTests` the committed catalog's load-time shims (the F2 per-100 g rebase,
+        # the F1(a) unit aliases, the F6 supplement, retype and typed-search collapse), which live in
+        # no file a later catalog rebuild would regenerate; `DishTemplateBindAuditTests` the quick-log
+        # binds those shims move, and the plan tier's whole-word confidence rule. All read only the
+        # committed `FoodCatalog.sqlite` (no Git LFS, no On-Demand Resource). Floor MEASURED
+        # (2026-09-30) on the round's fix-round-1 tree after a build-for-testing, the six suites run
+        # as written and read off their own result bundle: 70 tests in 6 suites, 0 failed, 0 skipped,
+        # no `Restarting after unexpected exit` line, 22 s on the Mac. RAISE it when a pin is added;
+        # never lower it in passing.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh food-search 70 \
+            IngredientSearchCorpusTests \
+            CatalogDefaultUnitSweepTests \
+            RecipeImportIngredientLineTests \
+            BundledRowCorrectionTests \
+            CatalogHygieneTests \
+            DishTemplateBindAuditTests
+
       # The two exchange-wire lines below are the 2026-09-24 round's (the version-2 Messages card, and
       # recipes made in parts). Each pins a WIRE — bytes that an older build, or a card already sitting
       # in a conversation, must keep reading — and neither has a compiler half, so until they ran here
