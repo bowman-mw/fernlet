@@ -12,9 +12,10 @@
 //   - behavioral: keeping to the in-app wall succeeds with no Photos-library involvement at all —
 //     it neither requires nor changes the process's PHPhotoLibrary authorization state;
 //   - source wall: `FriendsView`'s review call site must pass `saveToPhotos:` (the split form),
-//     its keep action must call `finishSessionPhotos(keeping:)`, and that keep action must never
-//     touch `FriendPhotoLibrarySaver` — that independence is exactly what makes a Photos
-//     permission denial unable to cost the keep.
+//     its keep action must answer the promoted batch with `finishReviewedPhotos(_:keeping:in:)`
+//     (since 2026-09-30 — the disconnect review reads the batch's photos, never the live list the
+//     ending empties), and that keep action must never touch `FriendPhotoLibrarySaver` — that
+//     independence is exactly what makes a Photos permission denial unable to cost the keep.
 
 import Foundation
 import Photos
@@ -34,10 +35,11 @@ struct ConnectReviewKeepTests {
 
     // MARK: - Keep-on-wall needs no Photos authorization (FRND-12)
 
-    /// The disconnect review's keep path is `finishSessionPhotos(keeping:)` — pure mesh-manager
-    /// state plus the encrypted disk cache. It must succeed with whatever Photos authorization
-    /// state the process has (including none at all), and must not change that state — i.e. it
-    /// never triggers the system prompt whose denial used to cost the keep in this flow.
+    /// The disconnect review's keep path is `finishReviewedPhotos(_:keeping:in:)` over the
+    /// promoted batch — pure mesh-manager state plus the encrypted disk cache. It must succeed with
+    /// whatever Photos authorization state the process has (including none at all), and must not
+    /// change that state — i.e. it never triggers the system prompt whose denial used to cost the
+    /// keep in this flow.
     @Test func disconnectKeepOnWall_succeedsWithoutAnyPhotosAuthorization() throws {
         let statusBefore = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         let manager = MeshNetworkManager(store: store)
@@ -47,8 +49,11 @@ struct ConnectReviewKeepTests {
         let sessionIDs = manager.sessionPhotos.map(\.id)
         try #require(sessionIDs.count == 3)
         let kept = Set(sessionIDs.prefix(2))
+        manager.leaveSession()   // the ending promotes the roll into the batch the review answers
+        let batch = try #require(manager.pendingFriendReview, "the ending promoted the photos")
+        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(sessionIDs))
 
-        manager.finishSessionPhotos(keeping: kept)
+        manager.finishReviewedPhotos(Set(sessionIDs), keeping: kept, in: batch.id)
 
         let wallIDs = Set(manager.meshPhotos.map(\.id))
         #expect(kept.isSubset(of: wallIDs),
@@ -57,8 +62,8 @@ struct ConnectReviewKeepTests {
             #expect(!wallIDs.contains(dropped),
                     "Unkept session photos are removed from the wall")
         }
-        #expect(manager.sessionPhotos.isEmpty,
-                "finishSessionPhotos consumes the session list")
+        #expect(manager.pendingReviewPhotos.isEmpty,
+                "finishReviewedPhotos answers the batch's photo half")
         #expect(PHPhotoLibrary.authorizationStatus(for: .addOnly) == statusBefore,
                 "Keeping must not request Photos authorization (FRND-12: a denial used to also destroy the in-app keep)")
     }
@@ -67,7 +72,7 @@ struct ConnectReviewKeepTests {
 
     /// The defect lived at the CALL SITE, so the behavioral test alone can regress silently: pin
     /// `FriendsView`'s disconnect review (ConnectView.swift) to the split (FRND-12) sheet form,
-    /// its keep action to `finishSessionPhotos(keeping:)`, and that keep action's independence
+    /// its keep action to `finishReviewedPhotos(_:keeping:in:)`, and that keep action's independence
     /// from `FriendPhotoLibrarySaver` (what makes a Photos denial harmless to the keep). Reads
     /// shipping source off disk via ``RepoRoot`` so a vacuous pass is impossible.
     @Test func connectViewSource_passesSaveToPhotos_andKeepsWithoutTheSaver() throws {
@@ -81,9 +86,9 @@ struct ConnectReviewKeepTests {
                 """)
         #expect(source.contains("saveSelected: { await keepSelectedSessionPhotos() }"),
                 "The sheet's primary action must be the keep — in-app wall only, no Photos authorization")
-        #expect(source.contains("manager.hydratedPhotos(manager.sessionPhotos.filter"),
+        #expect(source.contains("manager.hydratedPhotos(reviewPhotos.filter"),
                 """
-                The Photos export must rehydrate the ticked session photos \
+                The Photos export must rehydrate the ticked reviewed photos \
                 (manager.hydratedPhotos(...)) before handing them to FriendPhotoLibrarySaver — \
                 session payloads are metadata-only, so an un-hydrated save throws NothingSavedError.
                 """)
@@ -101,8 +106,8 @@ struct ConnectReviewKeepTests {
                      "Expected the keep action to be declared before the export action — update this scan if they moved")
         let keepBody = source[keepDecl.upperBound..<exportDecl.lowerBound]
 
-        #expect(keepBody.contains("finishSessionPhotos(keeping:"),
-                "The keep action must keep the ticked photos on the in-app wall")
+        #expect(keepBody.contains("finishReviewedPhotos("),
+                "The keep action must keep the ticked photos on the in-app wall, answering the promoted batch")
         #expect(!keepBody.contains("FriendPhotoLibrarySaver"),
                 """
                 The keep action must never touch FriendPhotoLibrarySaver: its authorization gate \

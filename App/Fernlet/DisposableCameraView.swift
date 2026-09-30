@@ -1300,8 +1300,14 @@ struct DisposableCameraView: View {
             // No photos to review here. The keep-as-friend prompt for a photo-less session is
             // presented by FriendsView off the manager's pendingFriendReview batch — teardown
             // promotes the roster into it, so nothing is lost by deferring past leaveSession.
+            // Photos that land during the leave's handoff are promoted into the same batch, and
+            // FriendsView offers them there (2026-09-30); none is kept unasked.
             Task { await manager.leaveSessionAfterNotifyingPeers() }
         } else {
+            // This review reads the LIVE list. If the session ends under it (the other side
+            // developed first, so this device is the last member), the ending promotes the list
+            // into pendingFriendReview and tears this view down; FriendsView then asks again, with
+            // every photo still offered and ticked.
             // Phase 2: friend eligibility is computed at presentation time, against the live
             // trust vault, so peers trusted or blocked mid-session never reach the sheet.
             friendCandidates = FriendMintingReview.eligibleCandidates(

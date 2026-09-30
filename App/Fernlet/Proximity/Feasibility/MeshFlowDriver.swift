@@ -309,19 +309,23 @@ enum MeshFlowDriver {
         echo("run ended: poll budget spent")
     }
 
-    /// Keeps every candidate of a promoted friend-review batch, then consumes the batch.
+    /// Keeps every candidate AND every pending photo of a promoted review batch, then consumes it.
     ///
-    /// Stands in for `ConnectView.finalizeFriendKeeps()`'s one tap: both doors below are the
-    /// shipping ones, and the batch is only ever promoted by a real session end. The trust-vault
-    /// row it writes is what makes a peer heart-eligible in a LATER session — which is why the
-    /// hearts script needs two of them (P6 item 10).
+    /// Stands in for `ConnectView`'s keep tap: the doors below are the shipping ones, and the batch
+    /// is only ever promoted by a real session end. The trust-vault row it writes is what makes a
+    /// peer heart-eligible in a LATER session — which is why the hearts script needs two of them
+    /// (P6 item 10). The photo half is answered too (keep all, the review's default) because
+    /// `completeFriendReview` leaves a batch with unanswered photos standing (2026-09-30); the echo
+    /// counts them, so a run shows the last member's photos reached the review.
     private static func autoKeepFriendsIfDue(manager: MeshNetworkManager, store: FernletStore) {
         guard MeshMatrixDebugOptions.autoKeepsFriends,
               let batch = manager.pendingFriendReview else { return }
         let kept = Set(batch.entries.map(\.fingerprint))
+        let photoIDs = Set(manager.pendingReviewPhotos.map(\.id))
+        manager.finishReviewedPhotos(photoIDs, keeping: photoIDs, in: batch.id)
         store.keepProximityFriends(from: batch.entries, keptFingerprints: kept)
         manager.completeFriendReview(batch.id)
-        echo("friends kept=\(kept.count) vault=\(store.trustedProximityPeers.count)")
+        echo("friends kept=\(kept.count) vault=\(store.trustedProximityPeers.count) reviewedPhotos=\(photoIDs.count)")
     }
 
     // MARK: - Membership roles (P3 item 9)

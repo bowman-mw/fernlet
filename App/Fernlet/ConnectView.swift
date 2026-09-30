@@ -49,12 +49,14 @@ nonisolated enum FriendsRoute: Hashable {
 /// post-session shop-window card, the nearby-peer banner (with the QR verify ceremony on manual
 /// commits), and the searchable photo wall. It also owns the session-end review flow:
 /// `presentDisconnectReviewIfNeeded()` presents either the full photo review or the compact
-/// keep-as-friends prompt off observable model state (`pendingFriendReview` + post-teardown
-/// `sessionPhotos`), gated on `isSessionLive` so it presents once the SESSION has ended and never
-/// on a link blip, and so a review promoted while no instance existed still presents on the next
-/// appearance. Kept friends are minted one-sided via ``FernletStore``'s `keepProximityFriends`,
-/// and the presented batch is consumed with `completeFriendReview` — never by clearing the live
-/// roster, which would clobber the next session's entries.
+/// keep-as-friends prompt off observable model state (`pendingFriendReview` — its candidates and
+/// the ended session's unreviewed photos, which every ending promotes into it), gated on
+/// `isSessionLive` so it presents once the SESSION has ended and never on a link blip, and so a
+/// review promoted while no instance existed (or while the scene was dark) still presents on the
+/// next appearance or activation. Kept photos are answered with `finishReviewedPhotos`, kept
+/// friends are minted one-sided via ``FernletStore``'s `keepProximityFriends`, and the candidate
+/// half is consumed with `completeFriendReview` — never by clearing the live roster, which would
+/// clobber the next session's entries.
 struct FriendsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -72,6 +74,10 @@ struct FriendsView: View {
     // Phase 2 friend minting: the promoted batch this instance is presenting (consumed via
     // completeFriendReview on finalize), candidates snapshotted at presentation time, and keeps.
     @State private var reviewBatch: MeshFriendReviewBatch?
+    /// The batch photos the photo review is showing, snapshotted at presentation: the answer is
+    /// scoped to exactly these, so a photo promoted while the sheet is up stays pending rather than
+    /// being discarded unseen.
+    @State private var reviewPhotos: [FriendPhotoPayload] = []
     @State private var friendCandidates: [MeshSessionRosterEntry] = []
     @State private var keptFriendFingerprints: Set<String> = []
     @State private var keepFriendsPromptPresented = false
@@ -88,6 +94,8 @@ struct FriendsView: View {
     @State private var path: [FriendsRoute] = []
     /// The album root's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
     @State private var scrollToTopToken = 0
+
+    @Environment(\.scenePhase) private var scenePhase
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
 
@@ -124,11 +132,16 @@ struct FriendsView: View {
             // A freshly created FriendsView instance must present a review that predates it:
             // ContentView's Social-tab layout swap destroys the previous instance in the same
             // transaction as the isInSession flip, so its onChange never fires. The review is
-            // model-state (pendingFriendReview / post-teardown sessionPhotos), not a view-event.
+            // model-state (pendingFriendReview, photos included), not a view-event.
             presentDisconnectReviewIfNeeded()
         }
         .onChange(of: manager.pendingFriendReview) { _, _ in
             presentDisconnectReviewIfNeeded()
+        }
+        // A session that ended while the scene was dark (a continuation task carrying the mesh)
+        // is answered when the person comes back, not at the next tab visit.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { presentDisconnectReviewIfNeeded() }
         }
         .onChange(of: manager.isInSession) { wasInSession, nowInSession in
             handleSessionSurfaceChange(wasInSession: wasInSession, nowInSession: nowInSession)
@@ -227,12 +240,13 @@ struct FriendsView: View {
         if !hadPeer && hasPeer {
             if aPresentationIsUp {
                 // A session became live again while a session-end sheet was up: dismiss WITHOUT
-                // consuming — the batch persists and re-presents (merged) at the next real
-                // teardown, and unkept session photos stay in `manager.sessionPhotos`. Clearing
+                // consuming — the batch, its unanswered photos included, persists and re-presents
+                // (merged) at the next real teardown. Clearing
                 // reviewBatch first turns the keep sheet's onDismiss finalize into a no-op, and
                 // skipping the fullScreenCover avoids presenting it in the same transaction as a
                 // sheet dismissal (one of the two would drop).
                 reviewBatch = nil
+                reviewPhotos = []
                 friendCandidates = []
                 keptFriendFingerprints = []
                 keepFriendsPromptPresented = false
@@ -263,7 +277,7 @@ struct FriendsView: View {
     /// so a Photos permission denial can never cost the user the keep.
     private var disconnectReviewSheet: some View {
         FriendPhotoReviewSheet(
-            photos: manager.sessionPhotos,
+            photos: reviewPhotos,
             selectedIDs: $selectedForSave,
             friendCandidates: friendCandidates,
             keptFriendFingerprints: $keptFriendFingerprints,
@@ -277,13 +291,21 @@ struct FriendsView: View {
     }
 
     /// FRND-12: the primary review action of the disconnect flow. Keeps the ticked photos on the
-    /// in-app wall, mints the kept friends, and leaves the session — deliberately with NO
-    /// Photos-library involvement, so a system-permission denial can never cost the user their
-    /// pictures. The optional export is `exportSelectedPhotosToLibrary`.
+    /// in-app wall (the unticked shown ones leave it), mints the kept friends, and leaves the
+    /// session — deliberately with NO Photos-library involvement, so a system-permission denial can
+    /// never cost the user their pictures. The optional export is `exportSelectedPhotosToLibrary`.
+    ///
+    /// The answer is scoped to `reviewPhotos`, the ones this sheet showed (2026-09-30). The leave
+    /// runs only while a mesh is still held — door 3's give-up keeps it for exactly this action;
+    /// after a verified termination, a removal or the ceiling there is nothing left to leave, and a
+    /// second development would only log a refused transition.
     private func keepSelectedSessionPhotos() async {
-        manager.finishSessionPhotos(keeping: selectedForSave)
+        if let batch = reviewBatch {
+            manager.finishReviewedPhotos(Set(reviewPhotos.map(\.id)), keeping: selectedForSave, in: batch.id)
+        }
         finalizeFriendKeeps()
-        await manager.leaveSessionAfterNotifyingPeers()
+        reviewPhotos = []
+        if manager.currentMesh != nil { await manager.leaveSessionAfterNotifyingPeers() }
         disconnectReviewPresented = false
     }
 
@@ -293,7 +315,7 @@ struct FriendsView: View {
     /// Purely additive: a failure (including a Photos permission denial) surfaces on the
     /// still-present sheet and never touches the keep flow.
     private func exportSelectedPhotosToLibrary() async {
-        let toSave = manager.hydratedPhotos(manager.sessionPhotos.filter { selectedForSave.contains($0.id) })
+        let toSave = manager.hydratedPhotos(reviewPhotos.filter { selectedForSave.contains($0.id) })
         // If no bytes could be loaded/decrypted, don't report a false success.
         guard !toSave.isEmpty else {
             photoSaveError = .generic
@@ -307,12 +329,16 @@ struct FriendsView: View {
         }
     }
 
-    /// Discards every session photo, finalizes keeps, and leaves the session.
+    /// Discards every photo this sheet showed, finalizes keeps, and leaves the session — the keep
+    /// action's twin with nothing kept, and the same held-mesh rule for the leave.
     private func discardAllSessionPhotos() {
-        manager.deleteAllSessionPhotos()
+        if let batch = reviewBatch {
+            manager.finishReviewedPhotos(Set(reviewPhotos.map(\.id)), keeping: [], in: batch.id)
+        }
         finalizeFriendKeeps()
+        reviewPhotos = []
         Task { @MainActor in
-            await manager.leaveSessionAfterNotifyingPeers()
+            if manager.currentMesh != nil { await manager.leaveSessionAfterNotifyingPeers() }
             disconnectReviewPresented = false
         }
     }
@@ -896,10 +922,17 @@ struct FriendsView: View {
 
     /// Session-end review, driven off OBSERVABLE MODEL STATE (Phase 2, "Session-end review is
     /// model-state, not view-events"): presents whenever a promoted `pendingFriendReview` batch
-    /// or post-teardown session photos exist, checked from both `.onChange` and `.onAppear`.
-    /// Friend candidates come from the BATCH entries; eligibility is computed here — at
-    /// presentation time, against the live trust vault — so peers trusted or blocked mid-session
-    /// never reach the prompt.
+    /// exists, checked from `.onChange`, `.onAppear` and scene activation. Friend candidates come
+    /// from the BATCH entries; eligibility is computed here — at presentation time, against the live
+    /// trust vault — so peers trusted or blocked mid-session never reach the prompt.
+    ///
+    /// **The photos come from the batch too, never from `sessionPhotos`** (2026-09-30). The last
+    /// device left in a mesh ends through a verified termination whose teardown emptied
+    /// `sessionPhotos` in the same main-actor turn, so this function — which runs after that turn —
+    /// read "no photos" and offered at most the keep-friends prompt, while every photo stayed on the
+    /// wall unasked. Every ending now promotes the unreviewed photos into the batch;
+    /// `manager.pendingReviewPhotos` is that list minus anything deleted since, and all of it starts
+    /// ticked, as the camera's own review does.
     ///
     /// The gate is `isSessionLive` — neither `isInSession` nor `hasCommittedPeer` (P6 item 2 and
     /// its fix): a founded mesh outlives its links, so on `isInSession` this sheet would never
@@ -915,28 +948,28 @@ struct FriendsView: View {
         // `fullScreenCover` is up is one of the two presentations SwiftUI drops (fix review P2-2),
         // and a review that silently never appears is a batch the user never gets to answer.
         guard !aPresentationIsUp else { return }
-        let batch = manager.pendingFriendReview
-        let hasPhotos = !manager.sessionPhotos.isEmpty
-        guard batch != nil || hasPhotos else { return }
+        guard let batch = manager.pendingFriendReview else { return }
         reviewBatch = batch
+        reviewPhotos = manager.pendingReviewPhotos
         friendCandidates = FriendMintingReview.eligibleCandidates(
-            roster: batch?.entries ?? [],
+            roster: batch.entries,
             trustedPeers: store.trustedProximityPeers
         )
         keptFriendFingerprints = []
         switch FriendMintingReview.sessionEndReview(
-            hasPhotos: hasPhotos,
+            hasPhotos: !reviewPhotos.isEmpty,
             eligibleCandidateCount: friendCandidates.count
         ) {
         case .photoReview:
-            selectedForSave = Set(manager.sessionPhotos.map(\.id))
+            selectedForSave = Set(reviewPhotos.map(\.id))
             disconnectReviewPresented = true
         case .friendPromptOnly:
             keepFriendsPromptPresented = true
         case .none:
             // Nothing to review — consume the batch immediately so it can't re-present.
-            if let batch { manager.completeFriendReview(batch.id) }
+            manager.completeFriendReview(batch.id)
             reviewBatch = nil
+            reviewPhotos = []
             friendCandidates = []
         }
     }
