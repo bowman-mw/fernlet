@@ -395,6 +395,73 @@ struct FernletLockScopeTests {
         window = nil
     }
 
+    // MARK: - The no-passcode tap (period-data design 2026-09-30, §4.1, §9.14)
+
+    /// A Private tab opened by the no-passcode tap is `.privateHub`'s alone: an arriving gate for
+    /// another surface revokes it on APPEAR exactly as it revokes a passcode unlock of the hub, and
+    /// the key is scrubbed — back to the closed no-passcode state, never to `.locked`.
+    @MainActor
+    @Test func aTapOpenedHubIsRevokedByAnotherSurfacesGateOnAppear() async throws {
+        let service = freshScopedService()
+        defer { try? service.reset() }
+        guard let windowScene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
+            Issue.record("Expected an active window scene for SwiftUI lifecycle testing")
+            return
+        }
+        try service.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        #expect(service.isUnlocked(for: .privateHub))
+        #expect(!service.isUnlocked(for: .progressPhotos), "a tap opens the Private tab and nothing else")
+
+        var window: UIWindow? = UIWindow(windowScene: windowScene)
+        window?.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        window?.rootViewController = UIHostingController(
+            rootView: Text("photo strip")
+                .fernletLockGate(scope: .progressPhotos)
+                .environment(service)
+        )
+        window?.makeKeyAndVisible()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        #expect(service.state == .notConfigured)
+        #expect(service.contentKey(for: .privateHub) == nil)
+        #expect(!service.hasResidentContentKey, "the revoke scrubs the key, it does not merely withhold it")
+
+        window?.isHidden = true
+        window?.rootViewController = nil
+        window = nil
+    }
+
+    /// The retained Private tab's gate closes a tap-opened session when its explicit activity ends
+    /// (leaving the tab), exactly as it closes a passcode session.
+    @MainActor
+    @Test func aRetainedGateClosesATapOpenedSessionWhenItsActivityEnds() async throws {
+        let service = freshScopedService()
+        defer { try? service.reset() }
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first else {
+            Issue.record("Expected an active window scene for SwiftUI lifecycle testing")
+            return
+        }
+        try service.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        let activity = GateActivityModel()
+        var window: UIWindow? = UIWindow(windowScene: windowScene)
+        window?.rootViewController = UIHostingController(
+            rootView: GateActivityView(activity: activity).environment(service)
+        )
+        window?.makeKeyAndVisible()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(service.state == .openedWithoutPasscode(scope: .privateHub))
+
+        activity.isActive = false
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(service.state == .notConfigured)
+        #expect(service.contentKey(for: .privateHub) == nil)
+
+        window?.isHidden = true
+        window?.rootViewController = nil
+        window = nil
+    }
+
     @MainActor
     @Test func retainedGateLocksWhenItsExplicitActivityEnds() async throws {
         let service = freshScopedService()

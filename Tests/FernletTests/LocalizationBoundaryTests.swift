@@ -429,6 +429,51 @@ struct LocalizationBoundaryTests {
         #expect(Self.localizedCalls(in: fakedBundle).first?.passesBundle == false)
     }
 
+    // MARK: - A2. Retired meanings get new keys (period-data design 2026-09-30, §10.5)
+
+    /// The app-lock loss copy changed MEANING when cycle history started living in Fernlet whether or
+    /// not it was copied to Apple Health ("entries remain in Apple Health" stopped being the promise),
+    /// so each string moved to a NEW key and its old key is retired: a new meaning under an old key
+    /// keeps every translation of the old promise. The same for the period sheet's two "notes need an
+    /// app lock" sentences, which stopped being true when notes began saving without a passcode.
+    ///
+    /// Source half only: no shipping source may name a retired key, and every new key must be named.
+    /// The catalog half (new keys present, retired keys pruned from BOTH catalogs) lands with the
+    /// catalog sync that follows this round — it is asserted there rather than here because this
+    /// round does not edit `.xcstrings` files.
+    @Test func theRetiredLossCopyKeysAreGoneFromSourceAndTheirV2KeysArePresent() throws {
+        let retired = [
+            "\"lock.disclosure.forgottenPasscode\"", "\"lock.reset.required.body\"",
+            "\"lock.reset.confirm.message\"", "\"lock.hardBinding.message\"",
+            "\"logPeriod.refusal.sharingOff.noLock\"", "\"logPeriod.refusal.notesNeedLock\""
+        ]
+        let required = [
+            "\"lock.disclosure.forgottenPasscode.v2\"", "\"lock.reset.required.body.v2\"",
+            "\"lock.reset.confirm.message.v2\"", "\"lock.hardBinding.message.v2\"",
+            "\"settings.appLock.reset.message.v2\""
+        ]
+        var sources = ""
+        var fileCount = 0
+        for root in ["App", "FernletKit/Sources"] {
+            let rootURL = RepoRoot.url(root)
+            guard let walker = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+                Issue.record("could not enumerate \(root)")
+                continue
+            }
+            for case let url as URL in walker where url.pathExtension == "swift" {
+                sources += try String(contentsOf: url, encoding: .utf8)
+                fileCount += 1
+            }
+        }
+        #expect(fileCount > 300, "scanned only \(fileCount) files — the walk broke and this wall reads nothing")
+        for key in retired {
+            #expect(!sources.contains(key), "\(key) is retired (its meaning changed); use its .v2 key")
+        }
+        for key in required {
+            #expect(sources.contains(key), "\(key) is missing — the rewritten loss copy was reverted")
+        }
+    }
+
     // MARK: - B. Frozen token canaries
 
     /// Sealed cycle symptoms. `PeriodSymptom` raw values ride the ChaChaPoly-encrypted

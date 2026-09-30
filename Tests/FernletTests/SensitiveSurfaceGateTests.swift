@@ -131,8 +131,16 @@ struct SensitiveSurfaceGateTests {
         store.settings.intimacyTrackingVisible = true
 
         let all = Set(HealthCapability.allCases)
-        // Baseline: nothing hidden, and the store must be unlocked or the lock gate confounds this.
-        #expect(store.allowedHealthCapabilities(from: all).contains(.cycleTracking) == (store.lockState == .unlocked(scope: .privateHub)))
+        // Baseline: nothing hidden, and the Private tab OPEN — by a passcode or by the no-passcode tap
+        // (period-data design 2026-09-30): the tap opens the same `.privateHub` scope, so it gets the
+        // same cycle reads. The CLOSED no-passcode state is closed here too.
+        store.lockState = .openedWithoutPasscode(scope: .privateHub)
+        #expect(store.allowedHealthCapabilities(from: all).contains(.cycleTracking))
+        store.lockState = .notConfigured
+        #expect(!store.allowedHealthCapabilities(from: all).contains(.cycleTracking),
+                "no passcode is not 'open': the tab is closed until the tap")
+        store.lockState = .unlocked(scope: .privateHub)
+        #expect(store.allowedHealthCapabilities(from: all).contains(.cycleTracking))
 
         store.settings.periodTrackingVisible = false
         #expect(!store.allowedHealthCapabilities(from: all).contains(.cycleTracking))

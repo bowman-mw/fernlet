@@ -3,9 +3,10 @@
 //  Fernlet
 //
 //  App-side owner of the Worry Box: sealed, LOCAL-ONLY worry notes. Mirrors the
-//  JournalSealingCoordinator key model in miniature — user lock content key when
-//  unlocked, a device Keychain key when no lock is configured (or as the write
-//  fallback while locked), with device-key rows folded under the user key at unlock.
+//  JournalSealingCoordinator key model in miniature — the Private tab's content key
+//  while the tab is open (by passcode or by tap), a device Keychain key as the write
+//  fallback while it is closed, with device-key rows folded under the content key when
+//  the tab opens.
 //
 //  Because worries live EXCLUSIVELY in the sealed private store (never in FernletDay,
 //  the synced blob, MemoryNotes, or any SealedBackup payload), none of the journal
@@ -22,10 +23,11 @@ import PrivateMemoryStore
 
 /// App-side owner of the Worry Box: sealed, LOCAL-ONLY worry notes.
 ///
-/// Mirrors the ``JournalSealingCoordinator`` key model in miniature — the user lock content key
-/// when unlocked, a device Keychain key when no lock is configured (or as the write fallback while
-/// locked), with device-key rows folded under the user key at unlock via
-/// ``updateActivation(lockState:contentKey:)``.
+/// Mirrors the ``JournalSealingCoordinator`` key model in miniature — the Private tab's content key
+/// while the tab is open (by passcode or, with no passcode, by the tap), a device Keychain key as the
+/// write fallback while it is closed, with device-key rows folded under the content key when the tab
+/// opens via ``updateActivation(lockState:contentKey:)``. There is no device-key READ mode: with no
+/// passcode the tab still has to be opened deliberately (period-data design 2026-09-30, §9.17).
 ///
 /// Because worries live EXCLUSIVELY in the sealed private store (`WorryNarrativeRepository` —
 /// never in `FernletDay`, the synced blob, MemoryNotes, or any ``SealedBackupService`` payload),
@@ -41,14 +43,13 @@ import PrivateMemoryStore
 @MainActor
 @Observable
 final class WorryBoxService {
-    /// The lock-lifecycle mode the service was last activated into, which decides the active
-    /// read/write key (device Keychain key, user content key, or none while locked/inactive).
+    /// The lock-lifecycle mode the service was last activated into, which decides the active read
+    /// key (the content key while the Private tab is open, none while closed/inactive).
     ///
     /// Set only by ``updateActivation(lockState:contentKey:)``; the `activeKey` computed
     /// property is its sole reader.
     private enum ActivationMode {
         case inactive
-        case noLock
         case unlocked
         case locked
     }
@@ -87,21 +88,17 @@ final class WorryBoxService {
 
     // MARK: - Lock lifecycle (driven by ContentView's lock-state observers)
 
-    /// Call whenever the lock state changes (and once at startup). On unlock, worries written
-    /// under the device fallback key (while locked / before a lock existed) are re-sealed under
-    /// the user content key — the same migration journals perform on activation.
-    /// The Worry Box lives in the Private tab, so it follows the `.privateHub` unlock scope and no
-    /// other. Matched explicitly rather than on a bare `.unlocked` so an unlock held by the
-    /// progress-photo strip or App-lock settings lands in the locked branch by construction — not
-    /// merely because the caller happened to hand us a nil key.
+    /// Call whenever the lock state changes (and once at startup). When the Private tab opens,
+    /// worries written under the device fallback key (while it was closed) are re-sealed under the
+    /// content key — the same fold journals perform on activation.
+    /// The Worry Box lives in the Private tab, so it follows the `.privateHub` scope and no other,
+    /// opened by a passcode or by the no-passcode tap alike. Matched explicitly rather than on a bare
+    /// `.unlocked` so an unlock held by the progress-photo strip or App-lock settings lands in the
+    /// closed branch by construction — not merely because the caller happened to hand us a nil key.
+    /// `.notConfigured` is CLOSED: no passcode no longer means "readable everywhere".
     func updateActivation(lockState: FernletLockState, contentKey: SymmetricKey?) {
         switch lockState {
-        // `.openedWithoutPasscode` is mapped like `.notConfigured` until the tap-opened Private tab
-        // is reachable (period-data design §13 unit 2).
-        case .notConfigured, .openedWithoutPasscode:
-            mode = .noLock
-            userContentKey = nil
-        case .unlocked(.privateHub):
+        case .unlocked(.privateHub), .openedWithoutPasscode(.privateHub):
             if let contentKey {
                 mode = .unlocked
                 userContentKey = contentKey
@@ -110,7 +107,7 @@ final class WorryBoxService {
                 mode = .locked
                 userContentKey = nil
             }
-        case .unlocked, .locked:
+        case .unlocked, .openedWithoutPasscode, .locked, .notConfigured:
             mode = .locked
             userContentKey = nil
         }
@@ -230,7 +227,6 @@ final class WorryBoxService {
     private var activeKey: SymmetricKey? {
         switch mode {
         case .inactive, .locked: nil
-        case .noLock: deviceWorryKey
         case .unlocked: userContentKey
         }
     }

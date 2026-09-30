@@ -191,23 +191,21 @@ struct PeriodLogSharingOffTests {
     // MARK: - What the sheet says
 
     /// A closed switch gets the sheet's own sentence, not the gateway's "…nothing was saved to
-    /// Health", which implied the entry was kept somewhere else. A fresh log, a fresh log with no
-    /// app lock and an edit each get their own: only a fresh log WITH a lock can be saved without
-    /// its Health details, so only that sentence offers the route.
+    /// Health", which implied the entry was kept somewhere else. A fresh log and an edit each get
+    /// their own. Since 2026-09-30 notes and symptoms are kept with or without a passcode (the
+    /// no-passcode hub key), so the fresh log's sentence offers that route to EVERY user — the
+    /// no-lock variant that withheld it is retired.
     @Test func aClosedSwitchGetsThePeriodSentence() {
         let refusal = HealthKitServiceError.sharingTurnedOff
-        let logSentence = LogPeriodSheet.refusalSentence(for: refusal, isEdit: false, lockConfigured: true)
-        let noLockSentence = LogPeriodSheet.refusalSentence(for: refusal, isEdit: false, lockConfigured: false)
-        let editSentence = LogPeriodSheet.refusalSentence(for: refusal, isEdit: true, lockConfigured: true)
+        let logSentence = LogPeriodSheet.refusalSentence(for: refusal, isEdit: false)
+        let editSentence = LogPeriodSheet.refusalSentence(for: refusal, isEdit: true)
 
-        #expect(Set([logSentence, noLockSentence, editSentence, refusal.localizedDescription]).count == 4)
+        #expect(Set([logSentence, editSentence, refusal.localizedDescription]).count == 3)
         #expect(logSentence.contains("Nothing was saved"))
         #expect(logSentence.contains("notes and symptoms"))
-        #expect(noLockSentence.contains("Nothing was saved"))
-        #expect(!noLockSentence.contains("clear the flow"), "with no lock, clearing the flow keeps nothing")
-        #expect(noLockSentence.contains("app lock"))
+        #expect(logSentence.contains("clear the flow"), "notes and symptoms save without a passcode, so the route is always open")
+        #expect(!logSentence.contains("app lock"), "no sentence may still say notes need an app lock")
         #expect(editSentence.contains("Nothing was changed"))
-        #expect(LogPeriodSheet.refusalSentence(for: refusal, isEdit: true, lockConfigured: false) == editSentence)
     }
 
     /// Apple Health's own refusal (Fernlet's switches on, cycle data denied in the Health app) gets
@@ -215,13 +213,13 @@ struct PeriodLogSharingOffTests {
     /// says nothing was saved or changed: a refusal from the re-log's save arrives after the day's
     /// own samples and note were deleted, so it says to save again instead.
     @Test func healthsOwnRefusalGetsTheHealthAppSentence() {
-        let denied = LogPeriodSheet.refusalSentence(for: HKError(.errorAuthorizationDenied), isEdit: false, lockConfigured: true)
-        let undetermined = LogPeriodSheet.refusalSentence(for: HKError(.errorAuthorizationNotDetermined), isEdit: false, lockConfigured: false)
-        let editDenied = LogPeriodSheet.refusalSentence(for: HKError(.errorAuthorizationDenied), isEdit: true, lockConfigured: true)
+        let denied = LogPeriodSheet.refusalSentence(for: HKError(.errorAuthorizationDenied), isEdit: false)
+        let undetermined = LogPeriodSheet.refusalSentence(for: HKError(.errorAuthorizationNotDetermined), isEdit: false)
+        let editDenied = LogPeriodSheet.refusalSentence(for: HKError(.errorAuthorizationDenied), isEdit: true)
 
         #expect(denied == undetermined)
         #expect(denied.contains("Health app"))
-        #expect(denied != LogPeriodSheet.refusalSentence(for: HealthKitServiceError.sharingTurnedOff, isEdit: false, lockConfigured: true))
+        #expect(denied != LogPeriodSheet.refusalSentence(for: HealthKitServiceError.sharingTurnedOff, isEdit: false))
         #expect(editDenied != denied)
         #expect(editDenied.contains("Health app"))
         #expect(editDenied.contains("save again"))
@@ -232,50 +230,33 @@ struct PeriodLogSharingOffTests {
     /// Anything else keeps its own description: the mapping only rewrites what it can explain.
     @Test func anyOtherErrorKeepsItsOwnDescription() {
         let unavailable = HealthKitServiceError.healthDataUnavailable
-        #expect(LogPeriodSheet.refusalSentence(for: unavailable, isEdit: false, lockConfigured: true) == unavailable.localizedDescription)
+        #expect(LogPeriodSheet.refusalSentence(for: unavailable, isEdit: false) == unavailable.localizedDescription)
         let other = HKError(.errorDatabaseInaccessible)
-        #expect(LogPeriodSheet.refusalSentence(for: other, isEdit: true, lockConfigured: false) == other.localizedDescription)
+        #expect(LogPeriodSheet.refusalSentence(for: other, isEdit: true) == other.localizedDescription)
     }
 
-    /// Notes and symptoms with nothing for Health, and no app lock: nothing of that entry can be
-    /// kept, so the sheet refuses before the store is called. Every other combination keeps
-    /// something and goes on to the store.
-    @Test func anEntryNothingOfWhichCanBeKeptIsRefusedUpFront() {
-        #expect(LogPeriodSheet.unkeepableEntryProblem(hasNarrative: true, carriesHealthDetails: false, lockConfigured: false) != nil)
-        for hasNarrative in [false, true] {
-            for carriesHealthDetails in [false, true] {
-                for lockConfigured in [false, true] where hasNarrative == false || carriesHealthDetails || lockConfigured {
-                    #expect(LogPeriodSheet.unkeepableEntryProblem(
-                        hasNarrative: hasNarrative,
-                        carriesHealthDetails: carriesHealthDetails,
-                        lockConfigured: lockConfigured
-                    ) == nil, "narrative \(hasNarrative), health \(carriesHealthDetails), lock \(lockConfigured)")
-                }
-            }
-        }
-    }
-
-    /// Why the sheet must refuse that entry itself: with no app lock the store DROPS the note and
-    /// symptoms and still reports `.savedWithDroppedNarrative`, a "saved" outcome, while nothing
-    /// reached Health and nothing was sealed. The sheet used to announce it as "Health event saved".
-    @Test func withNoLockANotesOnlyLogStoresNothingYetReportsSaved() async throws {
+    /// Notes and symptoms with nothing for Health, and NO passcode: kept, not dropped. With the
+    /// Private tab closed the narrative is buffered until it next opens (the no-passcode hub key is
+    /// what it drains into), and nothing reaches Health. Before 2026-09-30 the store dropped it and
+    /// reported `.savedWithDroppedNarrative`, and the sheet had to refuse the entry up front.
+    @Test func withNoPasscodeANotesOnlyLogIsBufferedNotDropped() async throws {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let harness = WriteGateHarness(masterEnabled: false, enabledCapabilities: [])
         defer { harness.cleanup() }
         let repository = Self.inMemoryRepository()
         let store = Self.visibleStore(over: harness, repository: repository)
-        store.attachLockService(NoLockConfigured())
+        let lock = RecordingBufferNoPasscode()
+        store.attachLockService(lock)
 
         let result = try await store.logEvent(
             UserLoggedCycleEvent(note: "tired today", symptoms: [.fatigue]),
             unlockedContentKey: nil
         )
 
-        #expect(result == .savedWithDroppedNarrative)
-        #expect(harness.controller.writeCount == 0)
-        #expect(try repository.narrativeCount() == 0)
-        let samples = try HealthKitService.periodSamples(for: UserLoggedCycleEvent(note: "tired today", symptoms: [.fatigue]), externalUUID: UUID())
-        #expect(LogPeriodSheet.unkeepableEntryProblem(hasNarrative: true, carriesHealthDetails: !samples.isEmpty, lockConfigured: false) != nil)
+        #expect(result == .savedWithBufferedNarrative)
+        #expect(lock.buffered.count == 1, "the note and symptom are held for the next time Private opens")
+        #expect(harness.controller.writeCount == 0, "nothing of a notes-only entry goes to Health")
+        #expect(try repository.narrativeCount() == 0, "no key was live, so nothing is sealed yet")
     }
 
     /// "First day of cycle" is stored as metadata on the day's flow sample, so the flag alone wrote
@@ -315,11 +296,12 @@ struct PeriodLogSharingOffTests {
     }
 }
 
-/// A lock seam with no app lock configured: the store drops a narrative rather than buffering it.
+/// A lock seam for an install with no passcode whose Private tab is closed: it records what the
+/// store buffers (the seam no longer asks whether a passcode exists — nothing is dropped).
 @MainActor
-private final class NoLockConfigured: PeriodLockContext {
-    var isLockConfigured: Bool { false }
-    func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws { }
-    func drainPendingNarratives() throws -> [PendingNarrativePayload] { [] }
-    func purgePendingNarratives() throws { }
+private final class RecordingBufferNoPasscode: PeriodLockContext {
+    private(set) var buffered: [PendingNarrativePayload] = []
+    func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws { buffered.append(payload) }
+    func drainPendingNarratives() throws -> [PendingNarrativePayload] { buffered }
+    func purgePendingNarratives() throws { buffered = [] }
 }

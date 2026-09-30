@@ -3521,6 +3521,37 @@ final class FernletStore {
     /// Aliased here so existing `FernletStore.SealedBackupWiringError` references resolve.
     typealias SealedBackupWiringError = SealedBackupCoordinator.SealedBackupWiringError
 
+    /// Where the Private tab's content key comes from for the sealed backups — set by `ContentView` to
+    /// `lockService.contentKey(for: .privateHub)`, so it answers the hub key in BOTH passcode modes,
+    /// on every Private section, and nil whenever the tab is closed (period-data design 2026-09-30,
+    /// §9.10 "Key", review R2-F1).
+    ///
+    /// It replaced the journal section's key. That one was nil on the Cycle section (the journal is
+    /// deactivated there), so the Cycle settle's intimacy restore and period/intimacy re-uploads ran
+    /// with no key and deferred as `.locked` on every unlock — a live bug for intimacy before this.
+    /// Nil (unwired: tests, previews) means no key, which fails closed.
+    @ObservationIgnored var hubContentKeyProvider: (() -> SymmetricKey?)?
+
+    /// The persisted "ambient restores wait for the device owner" bit — see ``SealedBackupRestoreHold``.
+    /// Internal-settable ONLY so tests can point it at an isolated defaults suite.
+    @ObservationIgnored var sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: .standard)
+
+    /// The app-lock reset funnel (period-data design 2026-09-30, §9.21), fired by
+    /// `FernletLockService.onResetCompleted` after `reset()` destroyed every key and purged the rows:
+    /// the backup bookkeeping that spoke for the destroyed key is cleared (`clearBookkeeping` — the
+    /// three divergence latches), and ambient restores are held for the device owner (Q14), so the
+    /// cleared latches cannot turn the next hub settle into an automatic restore.
+    ///
+    /// Later design units add their own clears here (the period restore marker, the period
+    /// compare-and-swap record, the import halves). Never called by a duress response.
+    ///
+    /// - Parameter clearBookkeeping: Clears the three divergence latches.
+    func handleAppLockResetCompleted(clearBookkeeping: () -> Void) {
+        sealedBackupRestoreHold.hold()
+        clearBookkeeping()
+        FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "appLockReset"])
+    }
+
     /// Per-payload status of the most recent sealed-backup restore attempt, surfaced (observably) in
     /// Privacy & Data so a deferred/failed restore is VISIBLE and retryable (WS-4) instead of silently
     /// swallowed. Written by `SealedBackupCoordinator` via the `SealedBackupContext` callback.
@@ -6852,10 +6883,10 @@ final class FernletStore {
 // MARK: - Sealed Journal Management (Phase S2) — see JournalSealingCoordinator
 
 extension FernletStore: JournalSealingContext {
-    func activateNoLockJournals() {
-        journalSealingCoordinator.activateNoLockJournals()
-        scrubLeakedPastDayJournalsIfNeeded()
-    }
+    /// Activates the journal under the Private tab's content key — opened by a passcode or, with no
+    /// passcode, by the tap. There is no device-key activation any more: while the tab is closed the
+    /// journal is closed too, and the device key is only the WRITE fallback (period-data design
+    /// 2026-09-30, §9.17).
     func activateSealedJournals(contentKey: SymmetricKey) {
         journalSealingCoordinator.activateSealedJournals(contentKey: contentKey)
         scrubLeakedPastDayJournalsIfNeeded()
@@ -7112,10 +7143,11 @@ extension FernletStore: MealResolutionContext {}
 extension FernletStore: OwnPhotoBackupContext {}
 
 extension FernletStore: SealedBackupContext {
-    /// Narrow read of the (private) journal content key for sealed period-data backup. This is the
-    /// ONE SealedBackupContext member the facade does NOT forward to DiaryStore — the key lives in
-    /// the facade-owned `journalSealingCoordinator` and never enters DiaryStore.
-    var sealedBackupContentKey: SymmetricKey? { journalSealingCoordinator.contentKey }
+    /// The Private tab's content key for every sealed backup payload, from ``hubContentKeyProvider``
+    /// — never the journal section's key (design §9.10, review R2-F1). Nil while the tab is closed.
+    var sealedBackupContentKey: SymmetricKey? { hubContentKeyProvider?() }
+    /// Whether ambient restores wait for the device owner (``SealedBackupRestoreHold``).
+    var sealedBackupRestoreAwaitsOwner: Bool { sealedBackupRestoreHold.isHeld }
     func recordRetiredSealedBackupDeleted(_ payloadType: SealedBackupPayloadType) {
         retiredSealedBackupClearedHook?(payloadType)
     }

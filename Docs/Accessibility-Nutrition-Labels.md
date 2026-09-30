@@ -505,11 +505,15 @@ Because no field telemetry will ever check these claims, it matters exactly wher
 - **Reduce Motion.** No audit type covers it; §2's declaration rests on source enumeration.
 - **Whether an element is hidden from assistive technology at all.** This one is *measured*, and it
   is sharper than expected: **XCUITest queries do not respect `accessibilityHidden`.** The subject is
-  a decorative element inside the app-lock gate itself — `FernletLockGate.swift`'s
-  `Image(systemName: "lock.shield")` carries an unconditional `.accessibilityHidden(true)`, and an
-  XCUITest query run while the gate's overlay is up still finds it, reporting its label as the raw SF
-  Symbol name. So `XCTAssertFalse(app.descendants(…)["screen.journal"].exists)` can never pass while
-  the gate paints, no matter how correct the app is.
+  the content the app-lock gate covers — the gate applies `.accessibilityHidden(true)` to everything
+  under its overlay, and an XCUITest query run while the overlay is up still finds the covered
+  Private hub's "New journal entry" button. So `XCTAssertFalse(app.descendants(…)["screen.journal"].exists)`
+  can never pass while the gate paints, no matter how correct the app is. (Until 2026-09-30 the
+  subject was the setup call to action's decorative `Image(systemName: "lock.shield")`, which XCUITest
+  reported under a label synthesised from the symbol name. The no-passcode tap screen that replaced
+  that overlay puts its decorative `lock.open` inside a `ScrollView`, and there the snapshot reports
+  no image element at all — one data point that the tool's behaviour depends on the container, which
+  is one more reason the grep-wall, not a runtime query, is the enforcement.)
 
   **The proof is committed**, in `Tests/FernletUITests/LockGateObservabilityUITests`. It was
   originally taken with a throwaway probe that was deleted in the same batch, which left this
@@ -525,8 +529,9 @@ Because no field telemetry will ever check these claims, it matters exactly wher
   closed (SwiftUI does not materialise the tree without an attached assistive technology) and the
   out-of-process route is closed too (XCUITest ignores the modifier).
 
-  **`.isHittable` reported `true` for controls under the gate**, and that was triaged here as an
-  observability artifact. A second test in that file now taps the covered journal's "New journal
+  **`.isHittable` reported `true` for controls under the gate** (under the setup call to action;
+  under the no-passcode tap screen's full-screen scroll view it reports `false`, measured
+  2026-09-30), and that was triaged here as an observability artifact. A second test in that file now taps the covered journal's "New journal
   entry" button through the overlay and asserts the gate's call-to-action survives.
 
   **That test does not answer the touch-blocking question, and this document must not be read as

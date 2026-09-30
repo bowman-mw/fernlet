@@ -5,6 +5,7 @@ import FernletFoundation
 import FernletLock
 import HealthKit
 import PrivateHealthStore
+import PrivateStoreCore
 import HealthKitGateway
 import FernletUI
 
@@ -42,10 +43,11 @@ extension PeriodTemperatureUnit {
 /// changed, so unsetting a mis-logged flow chip stays saveable and removes that entry rather than
 /// forcing the user onto the day detail's Delete (see ``canSave`` and ``save()``).
 ///
-/// The clinical fields become HealthKit samples; the note and symptoms
-/// become a sealed narrative, so the sheet warns up front when no app lock is configured and maps
-/// the store's `PeriodLogResult` (saved / narrative buffered until unlock / narrative dropped) to
-/// an honest status message before dismissing. A seal that REFUSES —
+/// The clinical fields become HealthKit samples; the note and symptoms become a sealed narrative —
+/// sealed at once while the Private tab is open, or held in the pending buffer until it next opens,
+/// with or without a passcode (period-data design 2026-09-30: nothing is ever dropped). The sheet
+/// maps the store's `PeriodLogResult` (saved / narrative buffered until Private opens) to an honest
+/// status message before dismissing. A seal that REFUSES —
 /// ``ColumnCrypto/SealedColumnStrictSealError/bindingUnavailable``, the only way the narrative half
 /// can fail after the clinical half has already landed — gets its own sentence for the same reason,
 /// rather than the Foundation default string. Chrome is the 2026-08-21 template: the draft-guard
@@ -58,15 +60,13 @@ extension PeriodTemperatureUnit {
 /// not sharing to HealthKit, it doesn't work." It didn't: the whole log was refused (atomically,
 /// note included), and the only sign was a sentence drawn in success green at the very bottom of
 /// the scroll, far below the fold, while the sheet stayed open looking untouched. So the sheet now
-/// says up front, whenever cycle sharing is off, which fields live in Health and whether notes and
-/// symptoms can save without it — only with an app lock, which seals them (``healthNotice``, keyed
-/// off the gate's own rule and the lock); a refused save says what happened in a sentence of its
-/// own (``refusalSentence(for:isEdit:lockConfigured:)``); an entry nothing of which could be kept
-/// (notes only, no lock) is refused before the store is called
-/// (``unkeepableEntryProblem(hasNarrative:carriesHealthDetails:lockConfigured:)``) instead of being
-/// announced as saved; and every outcome is pinned directly above the Save bar (``statusLine``)
-/// rather than at the end of the scroll. The refusal itself stays: the sheet never writes to
-/// Health, or turns a switch on, on its own.
+/// says up front, whenever cycle sharing is off, which fields live in Health and that notes and
+/// symptoms still save privately in Fernlet (``healthNotice``, keyed off the gate's own rule); a
+/// refused save says what happened in a sentence of its own (``refusalSentence(for:isEdit:)``); and
+/// every outcome is pinned directly above the Save bar (``statusLine``) rather than at the end of
+/// the scroll. The refusal itself stays: the sheet never writes to Health, or turns a switch on, on
+/// its own. (Until 2026-09-30 notes and symptoms were kept only with an app lock and the sheet
+/// refused a notes-only entry without one; the no-passcode hub key retired that refusal.)
 struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore
     private let editingEntry: CycleDayEntry?
@@ -223,7 +223,6 @@ struct LogPeriodSheet: View {
                 VStack(alignment: .leading, spacing: 22) {
                     // Frozen once the entry is written — see ``savedWithCaveat``.
                     Group {
-                        lockWarning
                         healthNotice
                         dateField
                         flowLevelField
@@ -291,17 +290,6 @@ struct LogPeriodSheet: View {
         }
     }
 
-    /// Shown only when notes would be dropped for want of an app lock.
-    @ViewBuilder
-    private var lockWarning: some View {
-        if lockService.state == .notConfigured && hasNarrative {
-            Text("Notes are only saved when app lock is on. Set up app lock in Settings to keep them with this cycle.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.terracotta)
-                .fernletWrappingText()
-        }
-    }
-
     /// Whether Fernlet may write this sheet's clinical fields to Apple Health right now — the
     /// gateway's own rule (``HealthKitService/isWriteSharingEnabled(for:in:)``), evaluated over the
     /// app's observable preferences so the notice below follows the switches live and can never
@@ -318,26 +306,19 @@ struct LogPeriodSheet: View {
     /// typed beside a flow chip is refused with it — and learning that after composing a long note
     /// is the worst time. `.fernletWrappingText()` so no word of it is clipped at larger sizes.
     ///
-    /// Two sentences, keyed on the lock, because notes and symptoms are sealed under the app lock's
-    /// content key and `PeriodTrackerStore.logEvent` DROPS them when no lock is configured. The one
-    /// sentence this replaced promised "Notes and symptoms still save privately in Fernlet" to every
-    /// user, and for the default user (no lock, no sharing) nothing on this sheet can be kept at all.
+    /// One sentence for every user since 2026-09-30: notes and symptoms are sealed under the hub
+    /// key, which exists with or without a passcode, and a note written while Private is closed is
+    /// buffered rather than dropped — so "still save privately in Fernlet" is true for everyone. (The
+    /// no-lock variant that said otherwise is retired with the drop path.)
     @ViewBuilder
     private var healthNotice: some View {
         if !sharesCycleDataWithHealth {
-            Group {
-                if lockService.isLockConfigured {
-                    Text("Flow, first day of cycle, intermenstrual bleeding, temperature, cervical mucus and ovulation tests are saved in Apple Health, and Fernlet isn't sharing cycle data with Health right now. Notes and symptoms still save privately in Fernlet. You can turn on sharing in Settings › Health.",
-                         comment: "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off and an app lock is set up. The listed fields are the sheet's own field names; Settings › Health is Fernlet's own Settings page.")
-                } else {
-                    Text("Flow, first day of cycle, intermenstrual bleeding, temperature, cervical mucus and ovulation tests are saved in Apple Health, and Fernlet isn't sharing cycle data with Health right now. Notes and symptoms are saved privately in Fernlet only when app lock is on. You can turn on sharing in Settings › Health and set up app lock in Settings.",
-                         comment: "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off and no app lock is set up, so nothing on the sheet can be saved yet. The listed fields are the sheet's own field names; Settings › Health is Fernlet's own Settings page.")
-                }
-            }
-            .font(.fernlet(.body))
-            .foregroundStyle(Color.terracottaInk)
-            .fernletWrappingText()
-            .accessibilityIdentifier("logPeriod.healthNotice")
+            Text("Flow, first day of cycle, intermenstrual bleeding, temperature, cervical mucus and ovulation tests are saved in Apple Health, and Fernlet isn't sharing cycle data with Health right now. Notes and symptoms still save privately in Fernlet. You can turn on sharing in Settings › Health.",
+                 comment: "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off. Notes and symptoms save privately in Fernlet with or without an app passcode. The listed fields are the sheet's own field names; Settings › Health is Fernlet's own Settings page.")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.terracottaInk)
+                .fernletWrappingText()
+                .accessibilityIdentifier("logPeriod.healthNotice")
         }
     }
 
@@ -599,10 +580,6 @@ struct LogPeriodSheet: View {
             .padding(.vertical, 12)
     }
 
-    private var hasNarrative: Bool {
-        !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !symptoms.isEmpty
-    }
-
     /// Seeds the temperature field from an existing day's stored reading, in `unit`.
     ///
     /// `CycleDayEntry.basalBodyTemperatureFahrenheit` hands every stored reading back as Fahrenheit
@@ -669,10 +646,9 @@ struct LogPeriodSheet: View {
     /// entry was kept somewhere else. It was not: `PeriodTrackerStore` writes the Health half first
     /// and refuses the whole log when it is refused, note and symptoms included, so these sentences
     /// say that nothing was saved, that the entry is still in the sheet, and what would let it save.
-    /// A fresh log can be saved without its Health details only when an app lock is set up (the
-    /// store drops notes and symptoms otherwise), so only then does its sentence offer that route.
-    /// A sharing-off EDIT is refused by `editEvent`'s pre-check before anything is deleted, so
-    /// nothing changed.
+    /// A fresh log can always be saved without its Health details — notes and symptoms are kept with
+    /// or without a passcode — so its sentence offers that route. A sharing-off EDIT is refused by
+    /// `editEvent`'s pre-check before anything is deleted, so nothing changed.
     ///
     /// Apple Health's OWN refusal of an edit gets a sentence that stays true on either side of the
     /// delete. `editEvent` now asks Health's share status before deleting, but a refusal that still
@@ -683,12 +659,11 @@ struct LogPeriodSheet: View {
     /// - Parameters:
     ///   - error: What `logEvent` / `editEvent` threw.
     ///   - isEdit: Whether the sheet was editing an existing day.
-    ///   - lockConfigured: Whether an app lock is set up, so notes and symptoms can be kept alone.
     /// - Returns: A resolved sentence; any other error falls back to its `localizedDescription`.
-    static func refusalSentence(for error: any Error, isEdit: Bool, lockConfigured: Bool) -> String {
+    static func refusalSentence(for error: any Error, isEdit: Bool) -> String {
         switch error {
         case HealthKitServiceError.sharingTurnedOff:
-            return sharingOffSentence(isEdit: isEdit, lockConfigured: lockConfigured)
+            return sharingOffSentence(isEdit: isEdit)
         case let healthError as HKError where healthError.code == .errorAuthorizationDenied
             || healthError.code == .errorAuthorizationNotDetermined:
             guard !isEdit else {
@@ -704,38 +679,16 @@ struct LogPeriodSheet: View {
         }
     }
 
-    /// The closed-switch arm of ``refusalSentence(for:isEdit:lockConfigured:)``.
-    private static func sharingOffSentence(isEdit: Bool, lockConfigured: Bool) -> String {
+    /// The closed-switch arm of ``refusalSentence(for:isEdit:)``.
+    private static func sharingOffSentence(isEdit: Bool) -> String {
         if isEdit {
             return String(localized: "logPeriod.refusal.sharingOff.edit",
                           defaultValue: "Nothing was changed, because Fernlet isn't sharing cycle data with Apple Health, and this day's cycle details are kept there. Your changes are still here. You can turn on sharing in Settings › Health.",
                           comment: "Shown above Save when editing a logged period day is refused because Fernlet's cycle sharing with Apple Health is off. Nothing was deleted or saved.")
         }
-        guard lockConfigured else {
-            return String(localized: "logPeriod.refusal.sharingOff.noLock",
-                          defaultValue: "Nothing was saved, because Fernlet isn't sharing cycle data with Apple Health. Your entry is still here. You can turn on sharing in Settings › Health. Notes and symptoms are kept only when app lock is on.",
-                          comment: "Shown above Save when a period log is refused because Fernlet's cycle sharing with Apple Health is off and no app lock is set up, so the notes and symptoms could not be kept on their own either. Nothing was saved.")
-        }
         return String(localized: "logPeriod.refusal.sharingOff",
                       defaultValue: "Nothing was saved, because Fernlet isn't sharing cycle data with Apple Health. Your entry is still here. Turn on sharing in Settings › Health, or clear the flow and other Health details to save just your notes and symptoms.",
                       comment: "Shown above Save when a period log is refused because Fernlet's cycle sharing with Apple Health is off. Nothing was saved, including the note. 'Health details' are the fields the notice at the top of the sheet lists.")
-    }
-
-    /// Why this entry cannot be kept at all, or nil when some of it can: it carries only notes and
-    /// symptoms (nothing for Apple Health) and no app lock is set up, so `PeriodTrackerStore.logEvent`
-    /// would drop the narrative and report `.savedWithDroppedNarrative` — which the sheet used to
-    /// announce as "Health event saved" in success ink, with nothing stored anywhere. Refused before
-    /// the store is called instead, so an EDIT is never deleted on the way either.
-    ///
-    /// - Parameters:
-    ///   - hasNarrative: Whether the entry carries a note or symptoms.
-    ///   - carriesHealthDetails: Whether it has any field that becomes an Apple Health sample.
-    ///   - lockConfigured: Whether an app lock is set up.
-    static func unkeepableEntryProblem(hasNarrative: Bool, carriesHealthDetails: Bool, lockConfigured: Bool) -> String? {
-        guard hasNarrative, !carriesHealthDetails, !lockConfigured else { return nil }
-        return String(localized: "logPeriod.refusal.notesNeedLock",
-                      defaultValue: "Nothing was saved, because notes and symptoms are kept only when app lock is on, and this entry has nothing else to save. Your entry is still here. You can set up app lock in Settings.",
-                      comment: "Shown above Save on the period log sheet when the entry has only notes or symptoms and no app lock is set up. Notes are sealed with the app lock's key, so without one nothing can be kept. Nothing was saved.")
     }
 
     /// Writes the sheet.
@@ -764,24 +717,23 @@ struct LogPeriodSheet: View {
             return
         }
         do {
-            // The gateway's own sample builder, so "carries Health details" can never drift from
-            // what `savePeriodEvent` would actually write.
-            let carriesHealthDetails = try !HealthKitService.periodSamples(for: event, externalUUID: UUID()).isEmpty
-            if let problem = Self.unkeepableEntryProblem(
-                hasNarrative: event.hasNarrative,
-                carriesHealthDetails: carriesHealthDetails,
-                lockConfigured: lockService.isLockConfigured
-            ) {
-                report(problem, kind: .error)
-                return
-            }
             let result: PeriodLogResult
             if let entry = editingEntry {
                 result = try await periodStore.editEvent(event, replacingEntry: entry, unlockedContentKey: lockService.contentKey(for: .privateHub))
             } else {
                 result = try await periodStore.logEvent(event, unlockedContentKey: lockService.contentKey(for: .privateHub))
             }
-            present(result, carriesHealthDetails: carriesHealthDetails)
+            present(result)
+        } catch PendingNarrativeBufferError.bufferUnopenable {
+            // The buffer's key is gone while it still holds entries, so nothing more can be added to
+            // it until those are dealt with — which the Private tab's "can't be opened" card does.
+            // Reached only AFTER the Health half landed (Health is written first until the cutover),
+            // hence the same "check the day" caveat the binding refusal below carries.
+            report(Self.bufferUnopenableSentence, kind: .error)
+        } catch PendingNarrativeBufferError.keyUnreadable {
+            // The buffer's key would not answer this instant: exactly the binding refusal's
+            // situation — the note could not be encrypted just now, nothing typed is lost.
+            report(Self.noteNotEncryptedSentence, kind: .error)
         } catch ColumnCrypto.SealedColumnStrictSealError.bindingUnavailable {
             // The one seal entry refused: this install's device binding was unreadable at the moment
             // of the write, so the sealed narrative could not be minted. Owner decision D4 made this
@@ -798,14 +750,12 @@ struct LogPeriodSheet: View {
             // AFTER the HealthKit write has landed — so a plain "try again" would quietly invite a
             // second copy of the clinical half. It says to look before re-saving instead of naming
             // Apple Health outright, because a note-or-symptoms-only entry writes no sample at all.
-            report(String(localized: "This device couldn't encrypt your note just now, so the note wasn't saved. Nothing you typed is lost, but the rest of the entry already saved, so check the day on your calendar before saving again."),
-                   kind: .error)
+            report(Self.noteNotEncryptedSentence, kind: .error)
         } catch {
             // Most often Fernlet's cycle sharing being off, which refuses the whole log — see
             // `refusalSentence(for:isEdit:lockConfigured:)`. The sheet stays open with everything
             // the user typed.
-            report(Self.refusalSentence(for: error, isEdit: editingEntry != nil, lockConfigured: lockService.isLockConfigured),
-                   kind: .error)
+            report(Self.refusalSentence(for: error, isEdit: editingEntry != nil), kind: .error)
         }
     }
 
@@ -829,13 +779,12 @@ struct LogPeriodSheet: View {
     }
 
     /// Maps a write that LANDED to what the sheet does next: dismiss when it was clean, otherwise
-    /// freeze the sheet (see ``savedWithCaveat``) and say what happened to the note.
+    /// freeze the sheet (see ``savedWithCaveat``) and say where the note is waiting. There is no
+    /// "dropped" arm any more: with or without a passcode, a note is sealed or buffered.
     ///
-    /// "Health event saved" is said only when the entry carried a Health detail. With the
-    /// ``unkeepableEntryProblem(hasNarrative:carriesHealthDetails:lockConfigured:)`` refusal in
-    /// front of the store, a dropped narrative always rode beside a Health sample; the arm still
-    /// checks, so a success sentence can never again stand over an entry that stored nothing.
-    private func present(_ result: PeriodLogResult, carriesHealthDetails: Bool) {
+    /// The buffered sentence says "Unlock" because that is the word on the Private tab's button in
+    /// both modes — the passcode screen's and the no-passcode tap screen's alike.
+    private func present(_ result: PeriodLogResult) {
         switch result {
         case .saved:
             // The only clean outcome: everything the user typed is where they expect it, so
@@ -849,16 +798,24 @@ struct LogPeriodSheet: View {
             savedWithCaveat = true
             report(String(localized: "Note saved. Unlock to view it on your calendar."),
                    kind: .success)
-        case .savedWithDroppedNarrative:
-            savedWithCaveat = true
-            guard carriesHealthDetails else {
-                report(String(localized: "Notes are only saved when app lock is on. Set up app lock in Settings to keep them with this cycle."),
-                       kind: .error)
-                return
-            }
-            report(String(localized: "Health event saved. Set up app lock to keep notes with future cycles."),
-                   kind: .success)
         }
+    }
+
+    /// The note could not be encrypted this instant (the install binding or the pending buffer's key
+    /// would not answer). Leads with what the user most needs — nothing typed is lost — and, because
+    /// the Health half is written first, says to check the day before saving again rather than
+    /// inviting a second copy of it.
+    static var noteNotEncryptedSentence: String {
+        String(localized: "This device couldn't encrypt your note just now, so the note wasn't saved. Nothing you typed is lost, but the rest of the entry already saved, so check the day on your calendar before saving again.")
+    }
+
+    /// The pending buffer holds entries whose key is gone, so nothing more can be added to it until
+    /// the Private tab's "can't be opened" card has dealt with them (period-data design 2026-09-30,
+    /// §6.5, §10.4). Same caveat as ``noteNotEncryptedSentence`` about the Health half.
+    static var bufferUnopenableSentence: String {
+        String(localized: "logPeriod.error.bufferUnopenable",
+               defaultValue: "Fernlet can't add to the notes it's holding for Private, so the note wasn't saved. Nothing you typed is lost, but the rest of the entry already saved. Open Private to sort this out, then check the day before saving again.",
+               comment: "Shown above Save on the period log sheet when the notes Fernlet holds until Private next opens were sealed under a key that no longer exists, so a new note cannot join them. Opening the Private tab shows what can't be opened and offers to remove it. 'Private' is the tab's name.")
     }
 
     /// Publishes a save outcome: renders the sentence and speaks it once.

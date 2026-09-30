@@ -139,6 +139,33 @@ struct PeriodTrackerTests {
         #expect(lock.pending.first?.noteBytes.flatMap { String(data: $0, encoding: .utf8) } == "save later")
     }
 
+    /// Nothing is ever dropped (period-data design 2026-09-30, §6.3): with NO passcode and the
+    /// Private tab closed, a notes-only log is buffered until the tab next opens — the no-passcode
+    /// hub key is what it drains into. Before the tap gate existed the store dropped it and reported
+    /// `.savedWithDroppedNarrative`.
+    @Test func withNoPasscodeAClosedTabBuffersTheNarrativeInsteadOfDroppingIt() async throws {
+        let lock = MockLockService(state: .notConfigured)
+        let repository = makeRepository()
+        let periodStore = makePeriodStore(healthService: MockPeriodHealthKitService(), narrativeRepository: repository, lockService: lock)
+
+        let result = try await periodStore.logEvent(UserLoggedCycleEvent(note: "keep this", symptoms: [.fatigue]), unlockedContentKey: nil)
+
+        #expect(result == .savedWithBufferedNarrative)
+        #expect(lock.pending.count == 1, "the narrative must be held for the next open, never dropped")
+        #expect(lock.pending.first?.noteBytes.flatMap { String(data: $0, encoding: .utf8) } == "keep this")
+        #expect(try repository.narrativeCount() == 0, "no key was live, so nothing is sealed yet")
+    }
+
+    /// A store with no lock seam wired has nowhere to keep a closed-tab narrative, so it refuses
+    /// instead of reporting a buffer that never happened.
+    @Test func anUnwiredLockSeamRefusesRatherThanClaimingABuffer() async throws {
+        let periodStore = makePeriodStore(healthService: MockPeriodHealthKitService(), narrativeRepository: makeRepository(), lockService: nil)
+
+        await #expect(throws: FernletLockError.self) {
+            _ = try await periodStore.logEvent(UserLoggedCycleEvent(note: "nowhere to go"), unlockedContentKey: nil)
+        }
+    }
+
     @Test func lockedLogEventBuffersCustomSymptomScales() async throws {
         let lock = MockLockService(state: .locked(cooldownDeadline: nil))
         let store = makePeriodStore(

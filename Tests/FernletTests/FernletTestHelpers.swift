@@ -425,3 +425,14 @@ extension SymmetricKey {
     /// the first wrote.
     static let journalTestKey = SymmetricKey(data: Data(repeating: 0x4A, count: 32))
 }
+
+extension FernletStore {
+    /// Simulates a Private-tab session for the sealed-backup tests: journals opened under `key`, and
+    /// the backups' hub-key provider (period-data design §9.10) answering the same key — the two
+    /// halves `ContentView` wires in production.
+    @MainActor
+    func openHubForTesting(contentKey key: SymmetricKey) {
+        hubContentKeyProvider = { key }
+        activateSealedJournals(contentKey: key)
+    }
+}

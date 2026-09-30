@@ -34,6 +34,8 @@ import PrivateStoreCore
 @MainActor
 final class FakeSealedBackupHost: SealedBackupContext {
     var sealedBackupContentKey: SymmetricKey?
+    /// The app-lock-reset hold (period-data design §5.3); off unless a test sets it.
+    var sealedBackupRestoreAwaitsOwner = false
     var isPeriodTrackingVisible = true
     var isIntimacyTrackingVisible = true
     var previousJournals: [JournalEntry] = []
@@ -322,6 +324,53 @@ struct SealedBackupPayloadCoverageTests {
         #expect(outcome == .restored(1))
         let readBack = try target.narratives(offset: 0, limit: 10, contentKey: host.sealedBackupContentKey)
         #expect(readBack.map(\.text) == ["only in the cloud"])
+    }
+
+    /// After an app-lock reset the ambient restores wait for the device owner (period-data design
+    /// 2026-09-30, §5.3, Q14): the Private tab's settle calls the targeted restore AMBIENTLY, and it
+    /// must write nothing and record nothing — retryable, so an un-hide settle never re-uploads over
+    /// the cloud copy either. The user's own restore still runs.
+    @Test func anAppLockResetHoldsAmbientRestoresForTheOwner() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
+        let source = makeJournalRepository()
+        try source.insert(journalNarrative("only in the cloud", at: 10), contentKey: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(
+            true, payloadType: .journalNarratives, journalRepository: source
+        ))
+        host.sealedBackupRestoreAwaitsOwner = true
+        let target = makeJournalRepository()
+
+        let ambient = await coordinator.restoreJournalBackupTargeted(journalRepository: target)
+        #expect(ambient == .deferredTransient)
+        #expect(ambient.isRetryable, "retryable, so no settle treats the held restore as done and re-uploads")
+        #expect(try target.narrativeCount() == 0, "a held ambient restore writes nothing")
+        #expect(host.recordedOutcomes[.journalNarratives] == nil, "nor does it raise a banner")
+
+        let explicit = await coordinator.restoreJournalBackupTargeted(journalRepository: target, initiatedByUser: true)
+        #expect(explicit == .restored(1), "the user's own restore is never held")
+    }
+
+    /// The intimacy arm holds the same way (the un-hide settle and the Private tab's settle are both
+    /// ambient), and the very same call restores once the hold is gone.
+    @Test func anIntimacyRestoreHeldForTheOwnerRunsOnceTheHoldIsGone() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
+        let source = makeIntimacyStore()
+        try seed(intimacyLog("only in the cloud", at: 10), into: source, key: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .intimacyLogs, intimacyStore: source))
+        host.sealedBackupRestoreAwaitsOwner = true
+        let target = makeIntimacyStore()
+
+        #expect(await coordinator.restoreIntimacyBackupTargeted(intimacyStore: target) == .deferredTransient)
+        #expect(try target.backupLogCount() == 0)
+        host.sealedBackupRestoreAwaitsOwner = false
+        #expect(await coordinator.restoreIntimacyBackupTargeted(intimacyStore: target) == .restored(1),
+                "once the hold is gone the same restore runs")
     }
 
     /// Same for intimacy, plus its gate: hidden defers (retryable — un-hiding IS the retry) and writes

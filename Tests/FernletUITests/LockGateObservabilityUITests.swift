@@ -15,10 +15,12 @@ import XCTest
 // in UI-test queries — fails it loudly, with a message saying what to change, rather than passing
 // and letting the document keep citing a stale platform behaviour.
 //
-// The gate reachable from a UI test is the NOT-CONFIGURED one: a fresh simulator has no app-lock
-// passcode, so `FernletLockGate` paints `setupCTAOverlay` over the Private hub. That overlay is a
-// real gate — it carries `.isModal`, and the content beneath it carries `.accessibilityHidden(true)`
-// — so it exercises the same cover the passcode overlay does.
+// The gate reachable from a UI test is the NO-PASSCODE one: the launch resets the app lock
+// (`FERNLET_UI_TEST_RESET_APP_LOCK`), so `FernletLockGate` paints the one-button tap screen
+// (`FernletTapGateOverlay`, period-data design 2026-09-30) over the Private hub. Until 2026-09-30 it
+// was the "Set up app lock" call to action; both live in the gate's one not-configured slot, which
+// carries `.isModal` over content marked `.accessibilityHidden(true)`, so it exercises the same cover
+// the passcode overlay does.
 
 /// Probes what XCUITest can actually see and do through the app lock's gate overlay.
 ///
@@ -31,58 +33,60 @@ final class LockGateObservabilityUITests: XCTestCase {
         continueAfterFailure = true
     }
 
-    /// The Private hub, with the gate NOT bypassed, so the setup call-to-action overlay is up.
+    /// The Private hub, with the gate NOT bypassed and no passcode, so the tap screen is up.
     @MainActor
     private func launchGatedPrivateHub() -> XCUIApplication {
-        let app = UXTestApp.launch()
+        let app = UXTestApp.launch(extraEnvironment: ["FERNLET_UI_TEST_RESET_APP_LOCK": "1"])
         app.buttons["Private"].firstMatch.tap()
         return app
     }
 
-    /// The overlay's own call-to-action button, which is the proof that the gate is actually up.
+    /// The tap screen's one button, which is the proof that the gate is actually up. Named
+    /// `setUpButton` for the call to action it replaced; the probes only need "the gate's control".
     @MainActor
     private func setUpButton(_ app: XCUIApplication) -> XCUIElement {
-        app.buttons["Set up app lock"].firstMatch
+        app.buttons["lock.tapGate.unlock"].firstMatch
     }
 
     // MARK: - The claim under test
 
     /// **XCUITest finds an element that carries `.accessibilityHidden(true)`.**
     ///
-    /// The subject is `FernletLockGate.setupCTAOverlay`'s `Image(systemName: "lock.shield")`. It is
-    /// purely decorative next to the call-to-action text, so it carries an UNCONDITIONAL
-    /// `.accessibilityHidden(true)` — there is no state in which it should be in the accessibility
-    /// tree. If an XCUITest query can still see it, then `XCTAssertFalse(someElement.exists)` can
-    /// never be a valid test of "this is hidden from assistive technology", which is the whole
-    /// consequence recorded in the nutrition-label document.
+    /// The subject is the covered hub's own "New journal entry" button. While the gate's overlay is
+    /// up, `FernletLockGateModifier` applies `.accessibilityHidden(overlayIsUp)` — true — to the whole
+    /// gated content, so that button is hidden from assistive technology by construction. If an
+    /// XCUITest query can still see it, then `XCTAssertFalse(someElement.exists)` can never be a
+    /// valid test of "this is hidden from assistive technology", which is the whole consequence
+    /// recorded in the nutrition-label document.
     ///
-    /// The query keys on the SYMBOL NAME appearing in the element's label, which is the second half
-    /// of the original finding: XCUITest not only finds the image, it synthesises a label from the
-    /// SF Symbol name for an image it should never have been handed. Keying on that is more specific
-    /// than "the first image in the window", which would also match status-bar chrome.
+    /// **Why not the decorative image any more (2026-09-30).** Until the no-passcode tap screen
+    /// replaced the setup call to action, the subject was that overlay's `Image(systemName:
+    /// "lock.shield")` with an unconditional `.accessibilityHidden(true)`, which XCUITest reported
+    /// under a label synthesised from the symbol name. The tap screen's `lock.open` sits inside a
+    /// `ScrollView` (the screen scrolls at accessibility text sizes), and there XCUITest's snapshot
+    /// reports no image element at all — measured on the iOS 26.5 simulator and kept in this test's
+    /// attachment as the image inventory. The claim itself — covered, hidden elements are still
+    /// queryable — is unchanged, so the probe measures the covered content directly.
     @MainActor
     func testXCUITestSeesElementsHiddenFromAssistiveTechnology() throws {
         let app = launchGatedPrivateHub()
         XCTAssertTrue(
             setUpButton(app).waitForExistence(timeout: 10),
             """
-            The not-configured lock gate did not appear over the Private hub, so this probe never \
-            reached the thing it measures. Either the demo seed now configures a passcode, or the \
-            gate's call-to-action wording changed — fix the probe, do not delete it.
+            The no-passcode lock gate did not appear over the Private hub, so this probe never \
+            reached the thing it measures. Either the launch no longer resets the app lock, or the \
+            tap screen's button identifier changed — fix the probe, do not delete it.
             """
         )
 
-        let hiddenImage = app.descendants(matching: .image)
-            .matching(NSPredicate(format: "label CONTAINS[c] 'lock' OR identifier CONTAINS[c] 'lock'"))
-            .firstMatch
-        let seen = hiddenImage.exists
+        let covered = app.buttons["New journal entry"].firstMatch
+        let seen = covered.exists
         let allImages = app.descendants(matching: .image).allElementsBoundByIndex
             .map { "\($0.label)|\($0.identifier)" }
         let attachment = XCTAttachment(string: """
             gate overlay up: \(setUpButton(app).exists)
-            image element found despite .accessibilityHidden(true): \(seen)
-            its reported label: "\(seen ? hiddenImage.label : "<not found>")"
-            its reported identifier: "\(seen ? hiddenImage.identifier : "<not found>")"
+            covered element found despite .accessibilityHidden(true): \(seen)
+            its reported label: "\(seen ? covered.label : "<not found>")"
             every image element in the tree: \(allImages)
             """)
         attachment.name = "XCUITest vs accessibilityHidden"
@@ -90,14 +94,14 @@ final class LockGateObservabilityUITests: XCTestCase {
         add(attachment)
 
         XCTAssertTrue(seen, """
-            GOOD NEWS, PROBABLY: an XCUITest query no longer finds the gate overlay's decorative \
-            `Image(systemName: "lock.shield")`, which carries an unconditional \
+            GOOD NEWS, PROBABLY: an XCUITest query no longer finds the Private hub's "New journal \
+            entry" button while the gate's overlay covers it, and the gate marks everything it covers \
             `.accessibilityHidden(true)`. If the platform started honouring the modifier in UI-test \
             queries, then `Docs/Accessibility-Nutrition-Labels.md` §5 is out of date — it currently \
             says XCUITest ignores `accessibilityHidden`, and uses that to justify enforcing the \
             gate's cover by grep-wall alone. Re-take the measurement, update that section, and \
             consider whether the runtime test it abandoned is now writable. (The other possibility \
-            is duller: the overlay stopped drawing an image.)
+            is duller: the demo seed's journal page lost that button.)
             """)
     }
 

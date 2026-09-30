@@ -332,7 +332,7 @@ struct SettingsSheet: View {
         case .appLock:
             AppLockSettingsView()
                 .environment(lockService)
-                .fernletLockGate(scope: .appLockSettings, active: lockService.state != .notConfigured)
+                .fernletLockGate(scope: .appLockSettings, active: lockService.isLockConfigured)
                 .environment(lockService)
         case .sharing:
             settingsDestination(title: "Sharing settings") { sharingSettingsTab }
@@ -2239,12 +2239,17 @@ private struct MemoryEditorSheet: View {
 /// the reset-lock danger zone.
 ///
 /// Pushed from ``SettingsSheet`` via `SettingsRoute.appLock` (wrapped in `fernletLockGate` when a
-/// lock is configured, so reaching this page requires an unlock). All state lives in the
-/// environment's `FernletLockService`; when no lock is configured the page shows only a setup CTA
-/// presenting `FernletLockSetupView`. Enabling biometrics requires re-entering the current passcode
-/// (via the inline verify sheet); disabling does not. Resetting the lock is confirmed with an
-/// explicit warning that the sealed journal, cycle, and intimacy notes become permanently
-/// unreadable — the reset destroys the keys, not just the passcode.
+/// passcode is configured, so reaching this page requires an unlock). All state lives in the
+/// environment's `FernletLockService`. With no passcode the status reads "No passcode" / "Private
+/// opens with a tap." and the page offers setting one up (`FernletLockSetupView`, which asks for a
+/// fresh Face ID / iPhone-passcode check before a passcode takes over existing entries). With one,
+/// **Turn off passcode** confirms what goes with it (Face ID unlock, the duress code, any recovery
+/// device), takes the current passcode on the shared verify sheet, and calls
+/// `FernletLockService.removeCredential(current:)`: the key moves back to device custody and
+/// nothing is deleted (period-data design 2026-09-30, §10.3). Enabling biometrics requires
+/// re-entering the current passcode (the same verify sheet); disabling does not. Resetting the lock
+/// is confirmed with an explicit warning that the entries saved in Fernlet are deleted — the reset
+/// destroys the keys, not just the passcode.
 ///
 /// It also hosts the duress entry points (security-hardening Phase 7): ``DuressPINSetupView`` for
 /// setting the duress code and choosing its response, and the two halves of the in-person recovery
@@ -2262,7 +2267,14 @@ struct AppLockSettingsView: View {
     /// Presents the nothing-silent alert when the reset destroyed the keys and the rows but could
     /// not rebuild the sealed store file (it used to be swallowed by a `try?`).
     @State private var showResetRebuildFailure = false
-    @State private var showBiometricPasscodeVerify = false
+    /// Presents the shared passcode-verify sheet — for a biometric toggle, or for Turn off passcode
+    /// (``verifyTurnsOffPasscode``). One sheet, one PIN pad, so the page's audited pad shape is
+    /// unchanged (`LockGateAccessibilityBoundaryTests`).
+    @State private var showPasscodeVerify = false
+    /// Whether the verify sheet is confirming Turn off passcode rather than a biometric toggle.
+    @State private var verifyTurnsOffPasscode = false
+    /// Presents the Turn off passcode confirmation (design §10.3).
+    @State private var showTurnOffConfirm = false
     @State private var verifyCurrentPasscode = ""
     @State private var verifyError: String?
     /// Shown on the biometric card when turning biometrics OFF failed. Disabling needs no passcode,
@@ -2291,8 +2303,8 @@ struct AppLockSettingsView: View {
                     FernletLockChangePasscodeView()
                         .environment(lockService)
                 }
-                .sheet(isPresented: $showBiometricPasscodeVerify) {
-                    biometricVerifySheet
+                .sheet(isPresented: $showPasscodeVerify) {
+                    passcodeVerifySheet
                 }
                 .sheet(isPresented: $showDuressSetup) {
                     DuressPINSetupView()
@@ -2317,7 +2329,7 @@ struct AppLockSettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 statusCard
 
-                if lockService.state != .notConfigured {
+                if lockService.isLockConfigured {
                     actionsCard
                     biometricCard
                     duressCard
@@ -2346,12 +2358,28 @@ struct AppLockSettingsView: View {
                 Button("Cancel", role: .cancel) { }
                 Button("Reset app lock", role: .destructive) { resetAppLock() }
             } message: {
-                Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
+                // The same words as the gate's confirmation (`lock.reset.confirm.message.v2` in
+                // FernletLockUI): the loss is the whole cycle history saved in Fernlet now, not
+                // "notes" beside a Health copy (period-data design 2026-09-30, §10.5).
+                Text(String(localized: "settings.appLock.reset.message.v2",
+                            defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, you can restore it afterwards from Privacy & Data.",
+                            comment: "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app."))
             }
             .alert("App lock reset", isPresented: $showResetRebuildFailure) {
                 Button("OK", role: .cancel) { dismiss() }
             } message: {
                 Text("Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet.")
+            }
+            // Not destructive-red: turning the passcode off deletes nothing (design §10.3).
+            .alert("Turn off the passcode?", isPresented: $showTurnOffConfirm) {
+                Button("Cancel", role: .cancel) { }
+                Button("Turn off passcode") {
+                    verifyTurnsOffPasscode = true
+                    showPasscodeVerify = true
+                }
+            } message: {
+                Text("Private will open with a tap instead. Your entries stay encrypted on this iPhone and nothing is deleted. \(biometricName(lockService.biometricType)) unlock, your duress code and any recovery device are removed.",
+                     comment: "Message of the confirmation before the app passcode is turned off. The placeholder is Face ID or Touch ID (an Apple product name). Nothing is deleted: the entries stay encrypted on this iPhone, and the Private tab opens with a tap afterwards.")
             }
     }
 
@@ -2383,10 +2411,16 @@ struct AppLockSettingsView: View {
                     Text(statusLabel)
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
-                    if let kind = lockService.credentialKind {
+                    if lockService.isLockConfigured, let kind = lockService.credentialKind {
                         Text(kindLabel(kind))
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
+                    } else if !lockService.isLockConfigured {
+                        Text("Private opens with a tap.",
+                             comment: "Subtitle under 'No passcode' on the App lock settings page: with no app passcode, the Private tab opens with one tap on its Unlock button.")
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
                     }
                 }
                 Spacer()
@@ -2414,6 +2448,16 @@ struct AppLockSettingsView: View {
             } label: {
                 settingsRow(icon: "lock.fill", title: "Lock now", showsChevron: false)
             }
+
+            FernletRowDivider()
+
+            // Confirmed first, then the current passcode on the shared verify sheet (design §10.3).
+            Button {
+                showTurnOffConfirm = true
+            } label: {
+                settingsRow(icon: "lock.open", title: "Turn off passcode")
+            }
+            .accessibilityIdentifier("appLock.turnOffPasscode")
 
             FernletRowDivider()
 
@@ -2495,7 +2539,7 @@ struct AppLockSettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Duress & recovery")
 
-            if lockService.state != .notConfigured && !lockService.isDuressSessionActive {
+            if lockService.isLockConfigured && !lockService.isDuressSessionActive {
                 Button {
                     showDuressSetup = true
                 } label: {
@@ -2543,7 +2587,8 @@ struct AppLockSettingsView: View {
 
     private var setupCTACard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("App lock is not set up. Set a passcode to protect your journal, period, and intimacy history.")
+            Text("Private opens with a tap while no passcode is set. Add a passcode to be asked for it before Private opens.",
+                 comment: "The App lock settings page with no app passcode: what the Private tab does now, and what adding a passcode changes. Must not call the no-passcode state locked, protected or secured.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -2565,14 +2610,25 @@ struct AppLockSettingsView: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    // MARK: Biometric verify sheet
+    // MARK: Passcode verify sheet
 
-    private var biometricVerifySheet: some View {
+    /// The current-passcode prompt the verify sheet shows for its purpose.
+    @ViewBuilder private var passcodeVerifyPrompt: some View {
+        if verifyTurnsOffPasscode {
+            Text("Enter your current passcode to turn it off.",
+                 comment: "Prompt on the verify sheet shown after confirming Turn off passcode in App lock settings.")
+        } else {
+            Text("Enter your current passcode to \(pendingBiometricEnable ? "enable" : "disable") \(biometricName(lockService.biometricType)).")
+        }
+    }
+
+    /// The shared current-passcode sheet: a biometric toggle, or Turn off passcode.
+    private var passcodeVerifySheet: some View {
         NavigationStack {
             ZStack {
                 Color.parchment.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Enter your current passcode to \(pendingBiometricEnable ? "enable" : "disable") \(biometricName(lockService.biometricType)).")
+                    passcodeVerifyPrompt
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
@@ -2590,7 +2646,7 @@ struct AppLockSettingsView: View {
 
                         Spacer()
 
-                        Button("Confirm") { commitBiometricToggle() }
+                        Button("Confirm") { commitPasscodeVerify() }
                             .buttonStyle(.plain)
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.onMoss)
@@ -2613,7 +2669,7 @@ struct AppLockSettingsView: View {
 
                         FernletNumericPad(value: $verifyCurrentPasscode, maxLength: total)
                             .onChange(of: verifyCurrentPasscode) { _, new in
-                                if new.count == total { commitBiometricToggle() }
+                                if new.count == total { commitPasscodeVerify() }
                             }
                     }
                 }
@@ -2627,7 +2683,8 @@ struct AppLockSettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        showBiometricPasscodeVerify = false
+                        showPasscodeVerify = false
+                        verifyTurnsOffPasscode = false
                         verifyCurrentPasscode = ""
                         verifyError = nil
                     }
@@ -2638,11 +2695,20 @@ struct AppLockSettingsView: View {
         .tint(Color.moss)
     }
 
-    private func commitBiometricToggle() {
+    /// Commits whatever the verify sheet is confirming. Turn off passcode calls
+    /// `removeCredential(current:)`: a wrong passcode — and a duress code, which the service answers
+    /// exactly like a mistype after running its response — reads as a mistype here.
+    private func commitPasscodeVerify() {
+        let turnsOffPasscode = verifyTurnsOffPasscode
         Task { @MainActor in
             do {
-                try await lockService.setBiometricEnabled(pendingBiometricEnable, passcode: verifyCurrentPasscode)
-                showBiometricPasscodeVerify = false
+                if turnsOffPasscode {
+                    try await lockService.removeCredential(current: verifyCurrentPasscode)
+                } else {
+                    try await lockService.setBiometricEnabled(pendingBiometricEnable, passcode: verifyCurrentPasscode)
+                }
+                showPasscodeVerify = false
+                verifyTurnsOffPasscode = false
                 verifyCurrentPasscode = ""
                 verifyError = nil
             } catch {
@@ -2666,7 +2732,8 @@ struct AppLockSettingsView: View {
                 if newValue {
                     // Enabling requires passcode verification
                     pendingBiometricEnable = true
-                    showBiometricPasscodeVerify = true
+                    verifyTurnsOffPasscode = false
+                    showPasscodeVerify = true
                 } else {
                     // Disabling doesn't need verification
                     disableBiometrics()
@@ -2693,11 +2760,11 @@ struct AppLockSettingsView: View {
         }
     }
 
-    private var statusLabel: String {
+    /// The status headline. Both no-passcode states read "No passcode" (design §10.3) — the
+    /// tap-opened Private tab proves no credential, so it is never "Unlocked" here.
+    private var statusLabel: LocalizedStringKey {
         switch lockService.state {
-        // The tap-opened Private tab is a no-passcode state; the no-passcode copy lands with the
-        // Settings work that makes it reachable (period-data design §10.3).
-        case .notConfigured, .openedWithoutPasscode: return "Not configured"
+        case .notConfigured, .openedWithoutPasscode: return "No passcode"
         case .locked(let d):
             if let d { return "Locked (cooldown until \(d.formatted(.dateTime.hour().minute())))" }
             return lockService.requiresReset ? "Locked (reset required)" : "Locked"
@@ -2723,7 +2790,7 @@ struct AppLockSettingsView: View {
 
     private func settingsRow(
         icon: String,
-        title: String,
+        title: LocalizedStringKey,
         destructive: Bool = false,
         showsChevron: Bool = true
     ) -> some View {

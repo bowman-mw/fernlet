@@ -36,6 +36,18 @@ enum UITestSupport {
     /// private data (sealed cycle/intimacy content stays encrypted).
     static var bypassPrivateLockGate: Bool { env["FERNLET_UI_TEST_BYPASS_PRIVATE_LOCK"] == "1" }
 
+    /// `FERNLET_UI_TEST_RESET_APP_LOCK=1` — run `FernletLockService.reset()` at launch, before any
+    /// wiring, so the no-passcode Private tab's UI tests start from a known key state on a simulator
+    /// other suites share (the keychain outlives the app). It destroys this simulator's app-lock keys
+    /// and sealed rows, which is the point. Consumed by `UITestPrivateHubSeed`.
+    static var resetsAppLockAtLaunch: Bool { env["FERNLET_UI_TEST_RESET_APP_LOCK"] == "1" }
+
+    /// `FERNLET_UI_TEST_SEED_UNOPENABLE_ENTRY=1` — after that reset, seal one cycle note under a
+    /// throwaway key that is forgotten at once, so the Private tab meets the "Some entries can't be
+    /// opened here" card (period-data design §4.9). Only with the reset flag. Consumed by
+    /// `UITestPrivateHubSeed`.
+    static var seedsUnopenableEntry: Bool { env["FERNLET_UI_TEST_SEED_UNOPENABLE_ENTRY"] == "1" }
+
     /// `FERNLET_UI_TEST_HIDE_PERIOD=1` — seed the demo persona with the period surface explicitly
     /// hidden, so the appearance gallery can review the merged Cycle page's intimacy-only
     /// rendering. Consumed by `FernletStore.seedDemoContent` on every seeded launch.
@@ -142,6 +154,8 @@ enum UITestSupport {
     #else
     static var shouldSeedDemoContent: Bool { false }
     static var bypassPrivateLockGate: Bool { false }
+    static var resetsAppLockAtLaunch: Bool { false }
+    static var seedsUnopenableEntry: Bool { false }
     static var hidePeriodSurface: Bool { false }
     static var hideIntimacySurface: Bool { false }
     static var enableCoachExchange: Bool { false }

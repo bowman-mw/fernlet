@@ -41,7 +41,9 @@ enum PrivateHubSection: String, CaseIterable, Hashable, Identifiable {
 /// ``CycleTrackerView``, and ``WorryBoxView``, all behind one lock gate.
 ///
 /// The whole hub sits behind `fernletLockGate` (bypassable only via the DEBUG UI-test hook), so
-/// each child screen inherits the app-lock requirement instead of gating itself. Section
+/// each child screen inherits the app-lock requirement instead of gating itself. With no passcode,
+/// that gate is the one-button tap screen, driven by ``privateHubOpener`` (period-data design
+/// 2026-09-30, §10.1): the tab still opens only by a deliberate tap. Section
 /// visibility follows ``PrivateHubSection/visibleSections(visibility:)``. Only the selected child
 /// exists, and `resetUnavailableSectionIfNeeded()` converges the ancestor-owned `$section` onto a
 /// real page after a visibility flip from Settings, a profile import, or an Age/Gender edit.
@@ -68,6 +70,10 @@ struct PrivateHubView: View {
     /// before handing the flag to the capture modifier. Rendered from state, never
     /// `.onAppear`/`.onDisappear` (documented unreliable on page TabViews). Defaults to true.
     var isFrontmost: Bool = true
+    /// The app's no-passcode open coordinator (`PrivateHubOpenCoordinator`), handed to the gate so
+    /// its not-configured slot is the tap screen rather than "Set up app lock". Nil only before the
+    /// launch wiring has built it, when the gate falls back to the setup call to action.
+    var privateHubOpener: (any FernletPrivateHubOpening)?
     /// The environment-injected lock service, read here (not only inside the gate modifier) so
     /// the capture-friction attachment below can know whether the gate's opaque overlay is up:
     /// a screenshot of the LOCKED (or not-yet-configured) hub must never spend the
@@ -117,7 +123,7 @@ struct PrivateHubView: View {
         // without configuring a passcode. Release builds: always gated.
         // `.privateHub` is the scope that owns the sealed content key — unlocking the progress-photo
         // strip or App-lock settings does NOT open this tab (and vice versa).
-        .fernletLockGate(scope: .privateHub, active: lockGateIsActive)
+        .fernletLockGate(scope: .privateHub, active: lockGateIsActive, privateHubOpener: privateHubOpener)
         .onAppear { resetUnavailableSectionIfNeeded() }
         .onChange(of: store.sensitiveSurfaceVisibility) { _, _ in
             resetUnavailableSectionIfNeeded()

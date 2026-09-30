@@ -570,6 +570,14 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "App lock › Manage",
             route: .appLock
         ),
+        // Period-data design 2026-09-30, §9.19: the passcode is optional, so turning it off is a
+        // named action of its own (the key moves back to device custody; nothing is deleted).
+        SettingsSearchEntry(
+            title: "Turn off passcode",
+            keywords: ["turn off passcode", "remove passcode", "disable passcode", "no passcode", "open with a tap"],
+            breadcrumb: "App lock › Manage",
+            route: .appLock
+        ),
         SettingsSearchEntry(
             title: "Face ID / Touch ID",
             keywords: ["face id", "touch id", "biometric", "biometrics", "fingerprint", "optic id"],

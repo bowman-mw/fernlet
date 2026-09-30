@@ -42,15 +42,20 @@ extension SealedBackupPayloadType {
 /// The state the sealed-backup flow needs from the app store. Mirrors the
 /// `WorkoutSyncContext` host-protocol pattern so `SealedBackupCoordinator` depends
 /// on this seam rather than the concrete `FernletStore` (plan §5d). `sealedBackupContentKey`
-/// is exposed as a narrow accessor so the store's `journalContentKey` stays private
-/// (it migrates to JournalSealingCoordinator in a later phase).
+/// is the Private tab's content key (period-data design 2026-09-30, §9.10) — the one key every
+/// sealed payload is written under, in both passcode modes and on every Private section.
 ///
 /// Deliberately exposes NOTHING of the Tier-2 behavioral memories (owner decision 2026-09-23): the
 /// retired sensitive-notes payload was the only reader and writer, and with the seam gone the
 /// coordinator cannot even name the records a future payload might otherwise re-export.
 @MainActor
 protocol SealedBackupContext: AnyObject {
+    /// The Private tab's content key, or nil while the tab is closed.
     var sealedBackupContentKey: SymmetricKey? { get }
+    /// Whether AMBIENT restores (the launch pass, the Private tab's settle, an un-hide) must skip
+    /// every payload because an app-lock reset is waiting for the device owner (design §5.3, Q14).
+    /// The user's explicit restores still run.
+    var sealedBackupRestoreAwaitsOwner: Bool { get }
     /// Whether cycle tracking is visible. The backup paths must consult this: both reconcile and
     /// restore decrypt period narratives on ambient, launch-time paths that no view drives.
     var isPeriodTrackingVisible: Bool { get }
@@ -734,13 +739,19 @@ final class SealedBackupCoordinator {
         // divergence-latch checks stay LIVE and unconditional below; they are the real no-clobber
         // invariant, and pinning this verdict weakens none of them.
         let deviceWasFresh = isFreshInstallForRestore()
+        // An app-lock reset is waiting for the device owner (design §5.3, Q14): the AMBIENT pass
+        // restores nothing. The user's own Retry still does. The follow-through below keeps its own
+        // non-empty-store guards, so skipping the restores cannot let an empty store overwrite a
+        // backup.
+        let heldForOwner = !userInitiated && host.sealedBackupRestoreAwaitsOwner
+        if heldForOwner { FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "launch"]) }
         // No sensitive-notes arm: that payload is retired and never restored (the sweep above deletes
         // it). Each arm below records its own outcome on the host inside the call — that recording IS
         // the user-visible signal and the Retry affordance — so the pass fires and forgets.
         // G5 (restore half). This decrypts cycle history off CloudKit and WRITES it into the local
         // narrative store, so a read-side gate alone would miss it. Skipping only defers: the backup
         // stays in iCloud and restores if the user un-hides.
-        if prefs.sealedBackupPeriodEnabled && host.isPeriodTrackingVisible {
+        if !heldForOwner, prefs.sealedBackupPeriodEnabled && host.isPeriodTrackingVisible {
             let outcome = await restoreSealedBackupOutcome(payloadType: .periodData, freshInstallOverride: deviceWasFresh)
             // The pass above is fresh-install-only, so on a device that is already in use it can ONLY
             // ever answer `.skippedStoreNotEmpty` — including when the sealed narrative store is empty and
@@ -752,33 +763,33 @@ final class SealedBackupCoordinator {
             // no-clobber behavior is unchanged.
             if userInitiated, outcome == .skippedStoreNotEmpty {
                 // Outcome recorded on the host by the call; the banner reads it from there.
-                _ = await restorePeriodBackupTargeted()
+                _ = await restorePeriodBackupTargeted(initiatedByUser: true)
             }
         }
         // Journal has no visibility gate (journaling is always visible), so the pref alone decides.
         // Same targeted fallback as period on an explicit Retry: without it, an in-use device can only
         // ever answer `.skippedStoreNotEmpty`, which is neither `needsAttention` nor `isRetryable`, so
         // the journal backup would be permanently unrestorable with no user-visible signal.
-        if prefs.sealedBackupJournalEnabled {
+        if !heldForOwner, prefs.sealedBackupJournalEnabled {
             let outcome = await restoreSealedBackupOutcome(
                 payloadType: .journalNarratives, freshInstallOverride: deviceWasFresh
             )
             if userInitiated, outcome == .skippedStoreNotEmpty {
                 // Outcome recorded on the host by the call; the banner reads it from there.
-                _ = await restoreJournalBackupTargeted()
+                _ = await restoreJournalBackupTargeted(initiatedByUser: true)
             }
         }
         // Intimacy mirrors the period half's G5 gate: this decrypts intimate notes off CloudKit and
         // WRITES them into the local sealed store, so a read-side gate alone would miss it. Skipping
         // only DEFERS — the backup stays in iCloud and restores if the user un-hides (the un-hide
         // settle in `FernletStore.setIntimacyTrackingVisible` is what makes that true).
-        if prefs.sealedBackupIntimacyEnabled && host.isIntimacyTrackingVisible {
+        if !heldForOwner, prefs.sealedBackupIntimacyEnabled && host.isIntimacyTrackingVisible {
             let outcome = await restoreSealedBackupOutcome(
                 payloadType: .intimacyLogs, freshInstallOverride: deviceWasFresh
             )
             if userInitiated, outcome == .skippedStoreNotEmpty {
                 // Outcome recorded on the host by the call; the banner reads it from there.
-                _ = await restoreIntimacyBackupTargeted()
+                _ = await restoreIntimacyBackupTargeted(initiatedByUser: true)
             }
         }
         // RESTORE-BEFORE-REUPLOAD: every payload above is pulled down BEFORE the re-upload
@@ -942,9 +953,14 @@ final class SealedBackupCoordinator {
     ///
     /// Prefs gating (iCloud sync on, period backup enabled) lives with the caller, matching how
     /// `restoreSealedBackupsIfNeeded` holds the prefs guards and `performRestore` stays pure.
+    ///
+    /// `initiatedByUser` is true only for the user's Retry: an ambient caller (the un-hide settle) is
+    /// held while an app-lock reset waits for the device owner (see ``heldForOwner(site:initiatedByUser:)``).
     func restorePeriodBackupTargeted(
-        narrativeRepository: MenstrualNarrativeRepository? = nil
+        narrativeRepository: MenstrualNarrativeRepository? = nil,
+        initiatedByUser: Bool = false
     ) async -> SealedBackupRestoreOutcome {
+        if heldForOwner(site: "period", initiatedByUser: initiatedByUser) { return .deferredTransient }
         // Fail-closed at the decrypt seam, same as the launch path. For the un-hide caller this is a
         // defensive re-check (it flips visibility first, so this only fires on a re-hide that raced the
         // task); for the Retry caller it is the real gate. Reported as retryable (un-hiding IS the retry)
@@ -991,9 +1007,14 @@ final class SealedBackupCoordinator {
     /// `.payloadStoreOnly` drops ONLY the whole-device freshness gate. The per-payload store-empty check
     /// and the one-way divergence latch below still run, and they are what make it no-clobber: a user
     /// who DELETED their journal is never re-populated from the stale-by-construction cloud copy.
+    ///
+    /// `initiatedByUser` as for ``restorePeriodBackupTargeted(narrativeRepository:initiatedByUser:)``:
+    /// the Private tab's settle is ambient and is held for the device owner after a reset.
     func restoreJournalBackupTargeted(
-        journalRepository: JournalNarrativeRepository? = nil
+        journalRepository: JournalNarrativeRepository? = nil,
+        initiatedByUser: Bool = false
     ) async -> SealedBackupRestoreOutcome {
+        if heldForOwner(site: "journal", initiatedByUser: initiatedByUser) { return .deferredTransient }
         // Resolved once so the latch check and the write consult the SAME store.
         let repository = journalRepository ?? JournalNarrativeRepository()
         guard !repository.hasEverStoredNarrative else {
@@ -1018,9 +1039,13 @@ final class SealedBackupCoordinator {
     /// `.deferredTransient` (retryable — un-hiding IS the retry), which also stops a caller from
     /// treating a gated, unpageable store as restored and re-uploading over the cloud copy. Then the
     /// one-way divergence latch, so logs the user deliberately DELETED are never resurrected.
+    ///
+    /// `initiatedByUser` as for ``restorePeriodBackupTargeted(narrativeRepository:initiatedByUser:)``.
     func restoreIntimacyBackupTargeted(
-        intimacyStore: IntimacyLogStore? = nil
+        intimacyStore: IntimacyLogStore? = nil,
+        initiatedByUser: Bool = false
     ) async -> SealedBackupRestoreOutcome {
+        if heldForOwner(site: "intimacy", initiatedByUser: initiatedByUser) { return .deferredTransient }
         guard host.isIntimacyTrackingVisible else {
             FernletAuditLog.log("sealedBackup.targetedIntimacyRestoreSkippedHidden")
             return .deferredTransient
@@ -1038,6 +1063,16 @@ final class SealedBackupCoordinator {
         FernletAuditLog.log("sealedBackup.targetedIntimacyRestoreAttempted")
         host.recordSealedBackupRestoreOutcome(outcome, payloadType: .intimacyLogs)
         return outcome
+    }
+
+    /// Whether an AMBIENT targeted restore must stand down because an app-lock reset is waiting for
+    /// the device owner (design §5.3, Q14). Answered as `.deferredTransient` by the callers — NOT
+    /// recorded as a status (there is nothing to retry from a banner), and retryable, so an un-hide
+    /// settle treats it as "not restored yet" and never re-uploads over the cloud copy.
+    private func heldForOwner(site: String, initiatedByUser: Bool) -> Bool {
+        guard !initiatedByUser, host.sealedBackupRestoreAwaitsOwner else { return false }
+        FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": site])
+        return true
     }
 
     /// Bool-returning restore kept for the restore tests and the `FernletStore` wrapper. Does NOT record

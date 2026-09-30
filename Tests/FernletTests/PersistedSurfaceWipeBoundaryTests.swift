@@ -304,6 +304,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.intent.pendingSheet": .kept(
             reason: "A self-clearing Siri/Shortcuts hand-off token naming a SCREEN, never content. `consume()` removes it on read whether or not it is honored, and anything older than 120 seconds is discarded."
         ),
+        "fernlet.sealedBackup.restoreAwaitsOwner": .kept(
+            reason: "The sealed-backup restore owner hold (period-data design 2026-09-30, §5.3, Q14): one bit set by the app-lock reset funnel, holding every AMBIENT restore until the device owner asks. It must outlive the wipe, or a phone whose lock was reset and whose data was then wiped would start restoring the cloud history on its own."
+        ),
         "fernlet.intimacyLog.everStored": .kept(
             reason: "A sealed-store divergence latch: one bit meaning 'this install held intimacy rows'. It must outlive the wipe, or a sealed-backup chunk that survived a failed delete could restore itself onto the device."
         ),

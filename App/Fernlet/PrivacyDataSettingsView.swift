@@ -1626,7 +1626,10 @@ struct PrivacyDataSettingsView: View {
         if let uiTestOverride = uiTestLockConfiguredOverride {
             return uiTestOverride
         }
-        return lockService.state != .notConfigured
+        // A PASSCODE, not merely "not .notConfigured": the tap-opened Private tab is a no-passcode
+        // state too (period-data design §4.1). The no-passcode entry through a fresh device-owner
+        // check is design unit 5 (Q5).
+        return lockService.isLockConfigured
     }
 
     private var uiTestLockConfiguredOverride: Bool? {

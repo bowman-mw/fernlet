@@ -62,7 +62,7 @@ struct OnboardingLockSetupView: View {
 
                     lockChoice(
                         title: "Skip for now",
-                        subtitle: "Lockable features will ask you to set up your lock first.",
+                        subtitle: "You can skip this. Without a passcode, Private opens with a tap.",
                         systemImage: "clock.arrow.circlepath"
                     ) {
                         skipAction()
@@ -83,14 +83,18 @@ struct OnboardingLockSetupView: View {
     /// result: a user who opened the sheet and backed out configured nothing, so recording
     /// "chosen" there would clear the deferral and stop lockable features ever offering setup.
     private func recordPasscodeSetupOutcome() {
-        guard lockService.state != .notConfigured else {
+        // `isLockConfigured`, not `!= .notConfigured`: the tap-opened Private tab is a no-passcode
+        // state too, and it must read as "nothing was set up" here (period-data design §4.1).
+        guard lockService.isLockConfigured else {
             skipAction()
             return
         }
         setPasscodeAction()
     }
 
-    private func lockChoice(title: String, subtitle: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    /// One choice card. `LocalizedStringKey` so the three cards' copy is harvested and localized —
+    /// a `String` parameter silently opts every call site out.
+    private func lockChoice(title: LocalizedStringKey, subtitle: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Image(systemName: systemImage)

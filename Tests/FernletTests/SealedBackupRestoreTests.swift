@@ -95,7 +95,7 @@ struct SealedBackupRestoreTests {
     @Test func applyRestoredPeriodWritesNarratives() throws {
         let store = makeTestStore()
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
@@ -141,7 +141,7 @@ struct SealedBackupRestoreTests {
     @Test func applyRestoredPeriodDoesNotDuplicateOnSecondRestore() throws {
         let store = makeTestStore()                         // fresh by the day/memory checks
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)       // unlock so the period insert path has a key
+        store.openHubForTesting(contentKey: key)       // unlock so the period insert path has a key
 
         // One in-memory narrative store shared across both restores (mirrors production's shared store).
         let narrativeRepository = MenstrualNarrativeRepository(
@@ -172,7 +172,7 @@ struct SealedBackupRestoreTests {
     @Test func applyRestoredPeriodRefusedWhenNarrativeStorePreSeeded() throws {
         let store = makeTestStore()
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
@@ -297,7 +297,7 @@ struct SealedBackupRestoreTests {
         let store = makeTestStore()
         store.settings.periodTrackingVisible = true
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
@@ -347,7 +347,7 @@ struct SealedBackupRestoreTests {
         let store = makeTestStore()
         store.settings.periodTrackingVisible = true
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
@@ -381,7 +381,7 @@ struct SealedBackupRestoreTests {
         let store = makeTestStore()
         store.settings.periodTrackingVisible = true
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let context = PrivatePersistenceController(inMemory: true).container.viewContext
         // The "old build" writes a narrative; its defaults suite is then discarded, like an app update
@@ -409,7 +409,7 @@ struct SealedBackupRestoreTests {
         let store = makeTestStore()
         store.settings.periodTrackingVisible = true
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let context = PrivatePersistenceController(inMemory: true).container.viewContext
         let preLatchRepository = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
@@ -438,7 +438,7 @@ struct SealedBackupRestoreTests {
     @Test func freshInstallScopedApplyRefusesADivergedEmptyStore() throws {
         let store = makeTestStore()   // blank → classifies as a fresh install
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let repository = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
@@ -472,7 +472,7 @@ struct SealedBackupRestoreTests {
     @Test func applyRefusesToWriteInsideACancelledTask() async throws {
         let store = makeTestStore()
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let repository = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
@@ -506,7 +506,7 @@ struct SealedBackupRestoreTests {
     @Test func restoringNarrativesLatchesTheEverStoredMarker() throws {
         let store = makePopulatedTestStore()
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
@@ -529,7 +529,7 @@ struct SealedBackupRestoreTests {
     @Test func applyRestoredPeriodWritesUnderPayloadStoreOnlyScopeOnInUseDevice() throws {
         let store = makePopulatedTestStore()
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
@@ -573,7 +573,7 @@ struct SealedBackupRestoreTests {
             date: try #require(FernletDate.date(fromDayKey: "2026-06-10"))
         )
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         // No days blob whatsoever — the post-reset state.
         #expect(store.loadDay(for: "2026-06-01").journals.isEmpty)
@@ -615,7 +615,7 @@ struct SealedBackupRestoreTests {
         let today = try #require(FernletDate.date(fromDayKey: "2026-06-10"))
         let (store, _, narratives) = makeTestStoreWithRepositories(date: today)
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let restored = JournalNarrative(
             id: UUID(), dayKey: "2026-06-10", tag: .good, entryDate: today,
@@ -640,7 +640,7 @@ struct SealedBackupRestoreTests {
         let today = try #require(FernletDate.date(fromDayKey: "2026-06-10"))
         let (store, _, narratives) = makeTestStoreWithRepositories(date: today)
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         // An entry this device already has (skeleton + sealed row), as a mid-restore race would leave it.
         let existing = JournalNarrative(

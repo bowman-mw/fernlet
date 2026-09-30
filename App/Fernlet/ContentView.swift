@@ -13,6 +13,7 @@ import FernletFoundation
 import FernletDomainModel
 import FernletExchange
 import FernletLock
+import FernletLockUI
 import PrivateHealthStore
 import PrivateMemoryStore
 import PrivateStoreCore
@@ -50,6 +51,9 @@ struct ContentView: View {
     @State private var periodContext: PeriodContextBridge?
     @State private var stressService = StressService()
     @State private var worryBoxService = WorryBoxService()
+    /// The no-passcode Private tab's open coordinator (period-data design 2026-09-30, §4.9), built by
+    /// the launch wiring once the lock service is in reach and handed to the hub's gate.
+    @State private var privateHubOpener: PrivateHubOpenCoordinator?
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     /// The injected capture-friction state (screenshot pulse + capture cover; friction, never a
@@ -126,6 +130,9 @@ struct ContentView: View {
 
     var body: some View {
         rootSheetHost
+            // Every passcode setup sheet, wherever it is presented from, asks the same coordinator
+            // before it mints a fresh key over sealed entries (period-data design §4.4 step 2).
+            .environment(\.fernletPrivateHubOpener, privateHubOpener)
             .onChange(of: activeSheet?.id) { oldID, newID in
                 handleActiveSheetIDChange(oldID: oldID, newID: newID)
             }
@@ -427,10 +434,64 @@ struct ContentView: View {
     /// scoring contexts first (before any load can observe a missing gate), then the lock / worry-box
     /// activation and the delete-all hooks, then the post-launch sequence.
     private func performLaunchWiring() async {
+        #if DEBUG
+        UITestPrivateHubSeed.applyLaunchHooks(lockService: lockService)
+        #endif
+        wirePrivateHubCustody()
         wireSensitiveGatesAndScoringContexts()
         wireLockAndWorryBox()
         wireWorkoutHealthAccessOffer()
         await runPostLaunchSequence()
+    }
+
+    /// The no-passcode Private tab: the one-button gate's open coordinator, the sealed backups'
+    /// hub-key provider and the app-lock reset funnel (period-data design 2026-09-30, §4.9, §9.10,
+    /// §9.21). Before anything else in the launch wiring, so no settle can read a backup key from the
+    /// retired journal-section source and no reset can land without its funnel.
+    private func wirePrivateHubCustody() {
+        let preferencesStore = storagePreferencesStore
+        let appStore = store
+        let priorEntries = SealedPriorEntryStore(
+            intimacyStore: intimacyStore,
+            restoresAfterRemoval: {
+                Self.sealedBackupRestoresAfterRemoval(
+                    preferencesStore.preferences,
+                    intimacyVisible: appStore.isIntimacyTrackingVisible
+                )
+            }
+        )
+        Self.wirePrivateHubCustody(store: store, lockService: lockService, priorEntries: priorEntries)
+        privateHubOpener = PrivateHubOpenCoordinator(custody: lockService, entries: priorEntries)
+    }
+
+    /// The two custody hooks, as one testable step: the sealed backups read the Private tab's key
+    /// from the lock service (R2-F1: never the journal section's, which is nil on the Cycle section in
+    /// both passcode modes), and `reset()` hands its aftermath to the store's reset funnel (§9.21),
+    /// which clears the backup bookkeeping and holds ambient restores for the device owner. Wired once
+    /// here, so both reset entry points (the gate's lost-key card and Settings → App lock) get it.
+    ///
+    /// - Parameters:
+    ///   - store: The app store.
+    ///   - lockService: The lock service.
+    ///   - priorEntries: Where the divergence latches are cleared.
+    static func wirePrivateHubCustody(
+        store: FernletStore,
+        lockService: FernletLockService,
+        priorEntries: any PriorPrivateEntryStore
+    ) {
+        store.hubContentKeyProvider = { [weak lockService] in lockService?.contentKey(for: .privateHub) }
+        lockService.onResetCompleted = { [weak store] in
+            store?.handleAppLockResetCompleted(clearBookkeeping: { priorEntries.clearBackupBookkeeping() })
+        }
+    }
+
+    /// Whether a Sealed backup comes back once the "can't be opened" card's entries are removed —
+    /// the card says so only when it is true. The Private tab's settle restores journal and intimacy
+    /// backups into an emptied store (intimacy only while visible); the period restore joins it in
+    /// design unit 5, which adds `.periodData` here.
+    static func sealedBackupRestoresAfterRemoval(_ preferences: StoragePreferences, intimacyVisible: Bool) -> Bool {
+        guard preferences.iCloudSyncEnabled else { return false }
+        return preferences.sealedBackupJournalEnabled || (preferences.sealedBackupIntimacyEnabled && intimacyVisible)
     }
 
     /// The first-workout Health offer ("Asked the first time you log a workout…"), over the app's
@@ -827,7 +888,7 @@ struct ContentView: View {
             // invisibly) while an unprotected sheet — Settings, Trends, First Aid from a
             // notification tap, an incoming recipe share — fully covers the Personal tab. The
             // protected sheets claim the nudge themselves, visibly, via their own attachments.
-            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, healthKitService: healthKitService, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isActive: selectedTab == .personal, isFrontmost: selectedTab == .personal && !rootSheetIsCoveringTabs)
+            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, healthKitService: healthKitService, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isActive: selectedTab == .personal, isFrontmost: selectedTab == .personal && !rootSheetIsCoveringTabs, privateHubOpener: privateHubOpener)
                 .tabPage(.personal)
         }
         // Paging is OFF: the floating tab bar is the navigation. `.page` style handed every
@@ -1375,20 +1436,20 @@ struct ContentView: View {
     /// switch (not a chain of `if case .unlocked`) so an unlock taken out on the progress-photo strip
     /// or the App-lock settings page lands in the DEACTIVATE branch rather than silently falling
     /// through and leaving journals decrypted from a previous hub session.
+    ///
+    /// The no-passcode tap opens the same scope, so it activates exactly like a passcode unlock of
+    /// it; `.notConfigured` is the CLOSED no-passcode state and deactivates (the device key stays the
+    /// journal's write fallback while closed — period-data design 2026-09-30, §9.17).
     private func applySealedJournalActivation(for lockState: FernletLockState) {
         switch lockState {
-        case .unlocked(.privateHub):
+        case .unlocked(.privateHub), .openedWithoutPasscode(.privateHub):
             if let contentKey = lockService.contentKey(for: .privateHub) {
                 store.activateSealedJournals(contentKey: contentKey)
             } else {
                 store.deactivateSealedJournals()
             }
-        case .unlocked, .locked:
+        case .unlocked, .openedWithoutPasscode, .locked, .notConfigured:
             store.deactivateSealedJournals()
-        // `.openedWithoutPasscode` is mapped like `.notConfigured` until the tap-opened Private tab
-        // is reachable (period-data design §13 unit 2, which activates it with the hub key).
-        case .notConfigured, .openedWithoutPasscode:
-            store.activateNoLockJournals()
         }
     }
 
@@ -1398,11 +1459,10 @@ struct ContentView: View {
     /// HealthKit round trip, so a lock that lands while it is suspended (auto-lock on background, a
     /// manual re-lock, a duress wipe) would otherwise leave decrypted cycle plaintext resident — and
     /// `prediction` feeds the ungated Home outlook card. Re-checking the LIVE lock state here scrubs
-    /// exactly that window. `.notConfigured` is untouched: with no lock, the entries are the user's
-    /// ordinary, ungated data.
+    /// exactly that window, in BOTH passcode modes: `.notConfigured` is the closed no-passcode state,
+    /// no longer "ordinary, ungated data" (design invariant I11).
     private func settlePeriodEntriesAfterLoad() {
-        let state = lockService.state
-        if state != .notConfigured, !state.isUnlocked(for: .privateHub) {
+        if !lockService.state.isUnlocked(for: .privateHub) {
             periodStore.scrubCycleState()
         }
         refreshPeriodContext()

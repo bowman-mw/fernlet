@@ -128,7 +128,7 @@ struct SealedBackupChunkTests {
     @Test func applyRestoredChunksInsertsEveryPeriodChunk() throws {
         let store = makeTestStore()
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
         let repo = MenstrualNarrativeRepository(
             context: PrivatePersistenceController(inMemory: true).container.viewContext,
             defaults: isolatedDefaults()

@@ -73,10 +73,11 @@ public protocol FernletLockServicing: PeriodLockContext {
 }
 
 extension FernletLockServicing {
-    /// Satisfies the narrow `PeriodLockContext.isLockConfigured` seam without each conformer
-    /// reimplementing it: whether a PASSCODE exists (``FernletLockState/isPasscodeConfigured``).
-    /// A Private tab opened by a tap (``FernletLockState/openedWithoutPasscode(scope:)``) reads
-    /// false here, exactly like `.notConfigured`: no passcode was proven in either state.
+    /// Whether a PASSCODE exists (``FernletLockState/isPasscodeConfigured``) — the one question the
+    /// app asks instead of comparing the state against `.notConfigured`. A Private tab opened by a
+    /// tap (``FernletLockState/openedWithoutPasscode(scope:)``) reads false here, exactly like
+    /// `.notConfigured`: no passcode was proven in either state. (It used to satisfy a
+    /// `PeriodLockContext` requirement; that seam no longer asks, since nothing is dropped.)
     public var isLockConfigured: Bool { state.isPasscodeConfigured }
 
     /// The one surface an in-force unlock covers — by passcode or by the no-passcode tap — or nil
@@ -3617,6 +3618,15 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// `PeriodLockContext`: discards all buffered narratives without processing them.
     public func purgePendingNarratives() throws {
         try buffer.purge()
+    }
+
+    /// Whether the pending buffer holds entries no key on this iPhone can open (its file is non-empty
+    /// and its key is definitively gone) — READ-ONLY, for the app's "entries this iPhone can't open"
+    /// check (period-data design 2026-09-30, §4.9, §6.5). Nothing is minted, migrated or decrypted.
+    ///
+    /// - Throws: `PendingNarrativeBufferError.keyUnreadable` when the key row would not answer.
+    public func pendingNarrativesAreUnopenable() throws -> Bool {
+        try buffer.holdsUnopenableEntries()
     }
 
     /// Drops the in-memory content key reference.

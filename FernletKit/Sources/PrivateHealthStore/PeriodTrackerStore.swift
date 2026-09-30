@@ -63,14 +63,16 @@ public nonisolated struct UserLoggedCycleEvent: Equatable {
 /// What happened to a logged cycle event's narrative half.
 ///
 /// Returned by ``PeriodTrackerStore/logEvent(_:unlockedContentKey:)`` (and the edit path) so the
-/// sheet can tell the user when their note was deferred or lost rather than sealed immediately.
+/// sheet can tell the user when their note was deferred rather than sealed immediately. There is no
+/// "dropped" outcome: a narrative is sealed, or buffered until the Private tab next opens, in both
+/// passcode modes — or the call throws and nothing about it was kept (period-data design 2026-09-30,
+/// §6.3: nothing is ever dropped).
 public nonisolated enum PeriodLogResult: Equatable {
     /// The HealthKit samples saved and the narrative, if any, was sealed immediately.
     case saved
-    /// The app was locked: the narrative sits sealed in the pending buffer until the next unlock.
+    /// The Private tab was closed (with or without a passcode): the narrative sits sealed in the
+    /// pending buffer until the tab next opens.
     case savedWithBufferedNarrative
-    /// No lock is configured, so there was no safe place to keep the narrative — it was dropped.
-    case savedWithDroppedNarrative
 }
 
 /// Thrown when a cycle write is attempted while cycle tracking is hidden. Reaching this means a
@@ -326,15 +328,17 @@ public protocol PeriodHealthKitServicing: AnyObject {
     func delete(_ samples: [HKSample]) async throws
 }
 
-/// Narrow lock seam consumed by ``PeriodTrackerStore`` for buffering narratives while the app is
-/// locked. `FernletLockServicing` (in the `FernletLock` module) refines this, so `FernletLockService`
-/// is the production conformer — the seam is owned HERE so `PrivateHealthStore` never names the lock
-/// module (a one-directional edge; the lock module depends on this one, not the reverse).
+/// Narrow lock seam consumed by ``PeriodTrackerStore`` for buffering narratives while the Private
+/// tab is closed. `FernletLockServicing` (in the `FernletLock` module) refines this, so
+/// `FernletLockService` is the production conformer — the seam is owned HERE so `PrivateHealthStore`
+/// never names the lock module (a one-directional edge; the lock module depends on this one, not the
+/// reverse).
+///
+/// It no longer asks whether a passcode exists (period-data design 2026-09-30, §4.3): the buffer has
+/// its own device key and every install now has a hub key to drain into — opened by a passcode or by
+/// a tap — so a closed-tab narrative is always buffered, never dropped.
 public protocol PeriodLockContext: AnyObject {
-    /// Whether an app lock exists at all. Without one there is no buffer key and no later unlock to
-    /// drain at, so a locked-state narrative is dropped rather than buffered.
-    var isLockConfigured: Bool { get }
-    /// Seals `payload` into the device-key pending buffer to await the next unlock.
+    /// Seals `payload` into the device-key pending buffer to await the next time Private opens.
     func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws
     /// Unseals and returns every buffered payload WITHOUT clearing the buffer —
     /// ``purgePendingNarratives()`` is the explicit clear, called only once re-sealing succeeded.
@@ -566,9 +570,12 @@ public final class PeriodTrackerStore {
     /// Saves one user-logged cycle event: clinical fields to HealthKit, narrative to the sealed store.
     ///
     /// Gate G2 (write half): throws ``PeriodTrackingHiddenError`` while hidden. The narrative lands
-    /// in the sealed store when the content key is available, in the lock service's pending buffer
-    /// while locked, and is dropped when no lock is configured — the result says which happened so
-    /// the sheet can tell the user. The note is trimmed and capped at 1000 characters before sealing.
+    /// in the sealed store when the content key is available and in the lock service's pending
+    /// buffer while the Private tab is closed — with or without a passcode; it is never dropped
+    /// (period-data design 2026-09-30, §6.3). The result says which happened so the sheet can tell the
+    /// user. A buffer that refuses (its key unreadable, or entries under a key that is gone) throws,
+    /// and so does a store with no lock seam wired. The note is trimmed and capped at 1000 characters
+    /// before sealing.
     ///
     /// - Returns: What happened to the narrative half; see ``PeriodLogResult``.
     public func logEvent(_ event: UserLoggedCycleEvent, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
@@ -594,11 +601,13 @@ public final class PeriodTrackerStore {
             return .saved
         }
 
-        if lockService?.isLockConfigured == false {
-            return .savedWithDroppedNarrative
+        // No seam wired means nowhere to keep the narrative: refuse loudly rather than report a
+        // buffer that never happened (the old optional chain returned `.savedWithBufferedNarrative`
+        // with nothing written).
+        guard let lockService else {
+            throw FernletLockError.internalError("pending narrative buffer is not wired")
         }
-
-        try lockService?.bufferPendingNarrative(PendingNarrativePayload(
+        try lockService.bufferPendingNarrative(PendingNarrativePayload(
             hkExternalUUID: narrative.hkExternalUUID,
             dateKey: narrative.dateKey,
             noteBytes: narrative.note.map { Data($0.utf8) },
