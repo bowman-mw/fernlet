@@ -85,6 +85,18 @@
         }
       }
     },
+    "messages.card.opensInFernlet" : {
+      "comment" : "Small line in the lower-right corner of every sent recipe or workout card. Every recipient reads it, including one whose device cannot open the card (no Fernlet, an older Fernlet, an iPad or a Mac), so it says where the card opens, neutrally, without instructions. 'Fernlet' is the product name and must NOT be translated; 'iPhone' is Apple's product name. Keep it short — Messages truncates this corner hard.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens in Fernlet on iPhone"
+          }
+        }
+      }
+    },
     "messages.card.plan" : {
       "comment" : "Trailing caption on a sent workout card when the sender set no display name of their own. Keep it short — Messages truncates this corner hard.",
       "extractionState" : "extracted_with_value",

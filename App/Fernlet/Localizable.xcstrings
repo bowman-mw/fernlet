@@ -20,6 +20,16 @@
         }
       }
     },
+    "%@ %@ · P%@g C%@g F%@g" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ · P%3$@g C%4$@g F%5$@g"
+          }
+        }
+      }
+    },
     "%@ %@ · P%lldg C%lldg F%lldg" : {
       "localizations" : {
         "en" : {
@@ -73,6 +83,9 @@
         }
       }
     },
+    "%@ didn't answer. Their Fernlet may be closed, locked, or busy sharing with someone else. Nothing was sent." : {
+      "comment" : "Why a recipe share did not go out: the other phone never answered. %@ is the person's name."
+    },
     "%@ is in your foods now — scan it again and it'll log in a tap." : {
 
     },
@@ -81,6 +94,9 @@
     },
     "%@ is logged. The rest of today's plan is there whenever you're ready." : {
 
+    },
+    "%@ isn't nearby anymore, so nothing was sent." : {
+      "comment" : "Why a recipe share did not go out: the other phone disappeared from the nearby list. %@ is the person's name."
     },
     "%@ isn't reachable for a heart right now." : {
 
@@ -225,6 +241,16 @@
     },
     "%@ — you're resting between sets." : {
 
+    },
+    "%@%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@"
+          }
+        }
+      }
     },
     "%@, %@" : {
       "localizations" : {
@@ -786,16 +812,6 @@
     },
     "%lld%% wound" : {
 
-    },
-    "%lld%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%2$@"
-          }
-        }
-      }
     },
     "%lld. %@" : {
       "localizations" : {
@@ -1648,6 +1664,9 @@
     "Connected" : {
 
     },
+    "Connecting to %@…" : {
+
+    },
     "Connection History" : {
 
     },
@@ -1812,6 +1831,9 @@
 
     },
     "Couldn't update your workout just now — please try again in a moment." : {
+
+    },
+    "Counted as %@" : {
 
     },
     "Counting every sealed surface…" : {
@@ -2509,6 +2531,9 @@
     "Fernlet couldn't seal this photo to your private timeline. Please try again." : {
 
     },
+    "Fernlet couldn't set up a secure connection with %@, so nothing was sent." : {
+      "comment" : "Why a recipe share did not go out: the secure connection could not be completed. %@ is the person's name."
+    },
     "Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet remove them, or delete them yourself in the Health app." : {
 
     },
@@ -2529,6 +2554,20 @@
     },
     "Fernlet is holding all it can, so that photo stayed on your own wall." : {
 
+    },
+    "Fernlet is still connected to %@. Recipe sharing links two Fernlets at a time, so nothing went to %@." : {
+      "comment" : "Why a recipe share did not go out: this phone is already connected to someone else. The first %@ is who it is connected to, the second is who the user tried to share with.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet is still connected to %1$@. Recipe sharing links two Fernlets at a time, so nothing went to %2$@."
+          }
+        }
+      }
+    },
+    "Fernlet is still connected to another Fernlet. Recipe sharing links two Fernlets at a time, so nothing went to %@." : {
+      "comment" : "Why a recipe share did not go out: this phone is already connected to someone else. %@ is the name of the person the user tried to share with."
     },
     "Fernlet keeps the most recent %lld calls." : {
 
@@ -2559,6 +2598,20 @@
     },
     "Fernlet removed everything it stored on this device." : {
 
+    },
+    "Fernlet sent “%@” to %@ over your private connection. If it reaches them, they can choose whether to save it. You won't get a notice either way." : {
+      "comment" : "Recipe share confirmation. The first %@ is the recipe's name, the second is the person's name. The app only knows the recipe left this phone, not that it arrived: keep the sentence about the other person conditional, and never say it was received or saved.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet sent “%1$@” to %2$@ over your private connection. If it reaches them, they can choose whether to save it. You won't get a notice either way."
+          }
+        }
+      }
+    },
+    "Fernlet was still connecting to another Fernlet. Recipe sharing links two Fernlets at a time, so nothing went to %@." : {
+      "comment" : "Why a recipe share did not go out: another connection attempt was already in progress. %@ is the person's name."
     },
     "Fernlet will contact %@ and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept." : {
 
@@ -2603,9 +2656,6 @@
     "Finding product page..." : {
 
     },
-    "Fingerprint" : {
-
-    },
     "Finish" : {
 
     },
@@ -2626,6 +2676,12 @@
     },
     "Flow level" : {
 
+    },
+    "Flow, first day of cycle, intermenstrual bleeding, temperature, cervical mucus and ovulation tests are saved in Apple Health, and Fernlet isn't sharing cycle data with Health right now. Notes and symptoms are saved privately in Fernlet only when app lock is on. You can turn on sharing in Settings › Health and set up app lock in Settings." : {
+      "comment" : "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off and no app lock is set up, so nothing on the sheet can be saved yet. The listed fields are the sheet's own field names; Settings › Health is Fernlet's own Settings page."
+    },
+    "Flow, first day of cycle, intermenstrual bleeding, temperature, cervical mucus and ovulation tests are saved in Apple Health, and Fernlet isn't sharing cycle data with Health right now. Notes and symptoms still save privately in Fernlet. You can turn on sharing in Settings › Health." : {
+      "comment" : "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off and an app lock is set up. The listed fields are the sheet's own field names; Settings › Health is Fernlet's own Settings page."
     },
     "Flow: %@" : {
 
@@ -2792,7 +2848,7 @@
     "Hard — talking takes effort." : {
 
     },
-    "Have %@ scan this code. It proves this phone really holds your Fernlet identity — the code expires after a few minutes." : {
+    "Have the person you're connecting with scan this code. It proves this phone really holds your Fernlet identity. The code expires after a few minutes." : {
 
     },
     "Haven't had these in a while" : {
@@ -3999,6 +4055,16 @@
     "Owned" : {
 
     },
+    "P %@g · C %@g · F %@g" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P %1$@g · C %2$@g · F %3$@g"
+          }
+        }
+      }
+    },
     "P %lld" : {
 
     },
@@ -4808,6 +4874,9 @@
     "Safety & reporting" : {
 
     },
+    "Safety code" : {
+
+    },
     "Save" : {
 
     },
@@ -4962,7 +5031,7 @@
     "Search by friend or session name" : {
 
     },
-    "Search by name or fingerprint" : {
+    "Search by name" : {
 
     },
     "Search foods" : {
@@ -5019,14 +5088,42 @@
     "Send message" : {
 
     },
+    "Sending didn't finish" : {
+      "comment" : "Recipe share heading when the connection dropped partway through sending, so the other person may or may not have the recipe."
+    },
+    "Sending to %@…" : {
+
+    },
+    "Sending “%@” to %@ didn't finish." : {
+      "comment" : "Spoken by VoiceOver when a recipe share was cut off partway. The first %@ is the recipe's name, the second is the person's name.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sending “%1$@” to %2$@ didn't finish."
+          }
+        }
+      }
+    },
     "Sent %@ some good vibes." : {
 
     },
     "Sent to" : {
 
     },
-    "Sent to %@." : {
-
+    "Sent to %@" : {
+      "comment" : "Recipe share confirmation heading. %@ is the name of the nearby person the recipe was sent to."
+    },
+    "Sent “%@” to %@." : {
+      "comment" : "Spoken by VoiceOver when a recipe share finishes. The first %@ is the recipe's name, the second is the person's name.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sent “%1$@” to %2$@."
+          }
+        }
+      }
     },
     "Serving: %@" : {
 
@@ -5180,6 +5277,9 @@
 
     },
     "Show my code" : {
+
+    },
+    "Shown" : {
 
     },
     "Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements." : {
@@ -5544,6 +5644,9 @@
     "The census above counts marker bytes and writes nothing. This one also reads completion latches, can fetch and decrypt three iCloud manifests on request, can run a media at-rest conversion pass, and can clear one latch to arm a keyed pass on the next hub unlock." : {
 
     },
+    "The connection to %@ dropped while sending, so they may not have it. You can try again." : {
+      "comment" : "Why a recipe share may not have arrived: the connection dropped partway through sending. %@ is the person's name."
+    },
     "The lock guards period, intimacy, and other sensitive areas before they open." : {
 
     },
@@ -5564,6 +5667,9 @@
     },
     "The session is carrying on now that Fernlet is open again. Nothing that was already saved was lost." : {
 
+    },
+    "The share stopped before anything went out, so nothing was sent to %@." : {
+      "comment" : "Why a recipe share did not go out: sharing was stopped (for example the app was locked or left) before sending began. %@ is the person's name."
     },
     "The shared photo wall — the pictures friends gave you and the ones you shared with them stay, on both sides. You remove photos one at a time from the photo itself; there's no bulk delete." : {
 
@@ -5939,9 +6045,6 @@
 
     },
     "Verify passcode" : {
-
-    },
-    "Verify with %@" : {
 
     },
     "Very easy — barely trying." : {
@@ -6411,7 +6514,13 @@
     "Your split" : {
 
     },
-    "Your verification code, as a QR code for %@ to scan" : {
+    "Your verification code" : {
+
+    },
+    "Your verification code, as a QR code for the person you're connecting with to scan" : {
+
+    },
+    "^[%lld ingredient](inflect: true) not counted in this estimate" : {
 
     },
     "^[%lld tasks](inflect: true)" : {
@@ -6969,6 +7078,90 @@
     },
     "letting it go…" : {
 
+    },
+    "logPeriod.refusal.healthDenied" : {
+      "comment" : "Shown above Save when Apple Health itself refused Fernlet's cycle write (the user denied Fernlet cycle data in the Health app). Nothing was saved.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing was saved, because Apple Health isn't allowing Fernlet to save cycle data. Your entry is still here. You can allow it for Fernlet in the Health app."
+          }
+        }
+      }
+    },
+    "logPeriod.refusal.healthDenied.edit" : {
+      "comment" : "Shown above Save when Apple Health itself refused an edit of a logged period day (the user denied Fernlet some cycle data in the Health app). Saving again rewrites the whole day from the sheet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your changes weren't saved, because Apple Health isn't allowing Fernlet to save some of this day's cycle details. Your changes are still here. Allow it for Fernlet in the Health app, then save again."
+          }
+        }
+      }
+    },
+    "logPeriod.refusal.notesNeedLock" : {
+      "comment" : "Shown above Save on the period log sheet when the entry has only notes or symptoms and no app lock is set up. Notes are sealed with the app lock's key, so without one nothing can be kept. Nothing was saved.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing was saved, because notes and symptoms are kept only when app lock is on, and this entry has nothing else to save. Your entry is still here. You can set up app lock in Settings."
+          }
+        }
+      }
+    },
+    "logPeriod.refusal.sharingOff" : {
+      "comment" : "Shown above Save when a period log is refused because Fernlet's cycle sharing with Apple Health is off. Nothing was saved, including the note. 'Health details' are the fields the notice at the top of the sheet lists.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing was saved, because Fernlet isn't sharing cycle data with Apple Health. Your entry is still here. Turn on sharing in Settings › Health, or clear the flow and other Health details to save just your notes and symptoms."
+          }
+        }
+      }
+    },
+    "logPeriod.refusal.sharingOff.edit" : {
+      "comment" : "Shown above Save when editing a logged period day is refused because Fernlet's cycle sharing with Apple Health is off. Nothing was deleted or saved.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing was changed, because Fernlet isn't sharing cycle data with Apple Health, and this day's cycle details are kept there. Your changes are still here. You can turn on sharing in Settings › Health."
+          }
+        }
+      }
+    },
+    "logPeriod.refusal.sharingOff.noLock" : {
+      "comment" : "Shown above Save when a period log is refused because Fernlet's cycle sharing with Apple Health is off and no app lock is set up, so the notes and symptoms could not be kept on their own either. Nothing was saved.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing was saved, because Fernlet isn't sharing cycle data with Apple Health. Your entry is still here. You can turn on sharing in Settings › Health. Notes and symptoms are kept only when app lock is on."
+          }
+        }
+      }
+    },
+    "logPeriod.validation.cycleStartNeedsFlow" : {
+      "comment" : "Shown above Save on the period log sheet when 'First day of cycle' is on but no flow level is chosen. The first-day mark is stored with the flow level, so it cannot be saved alone.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose a flow level to mark the first day of your cycle."
+          }
+        }
+      }
     },
     "logged" : {
 
@@ -7738,6 +7931,20 @@
     },
     "“%@” logged to today." : {
 
+    },
+    "“%@” wasn't sent" : {
+      "comment" : "Recipe share heading when nothing was sent. %@ is the recipe's name."
+    },
+    "“%@” wasn't sent to %@." : {
+      "comment" : "Spoken by VoiceOver when a recipe share did not go out. The first %@ is the recipe's name, the second is the person's name.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%1$@” wasn't sent to %2$@."
+          }
+        }
+      }
     },
     "“System” follows your phone's Light/Dark setting, the way onboarding already does." : {
 
