@@ -9,7 +9,9 @@
 // ("medium", 118 g per one), re-opens it as "1 each", and shows "1 medium (118 g)". Pinned here: the
 // save and re-open rules, the persisted keys (absent when nil, so every other line's bytes are
 // unchanged), an older reader decoding the new blob and totalling the same grams, and the recipe
-// share wire carrying plain grams that a receiving peer totals exactly as the sender does.
+// share wire carrying plain grams that a receiving peer totals exactly as the sender does. Fix round 1:
+// a line an older build already reads to the same grams ("1 cup" of a food stating one cup) is kept as
+// typed, and a recipe a meal log mints and a substitution fork are saved by the same rule.
 
 import Foundation
 import Testing
@@ -96,6 +98,78 @@ struct RecipeHouseholdMeasureTests {
         #expect(cup.savingHouseholdAsGrams(using: milk) == cup, "a volume-served food keeps its cup")
         let other = Self.line(Self.garlic(), 1, "each")
         #expect(other.savingHouseholdAsGrams(using: banana) == other, "a different food never rewrites the line")
+    }
+
+    static func food(_ name: String, _ portions: [FoodPortion]) -> FoodItem {
+        FoodItem(name: name, servingSize: 100, servingUnit: "g", macros: Macros(protein: 3, carbs: 28, fat: 0),
+                 micronutrients: Micronutrients(), category: "Test", source: .usda, dataType: .srLegacy, tags: [],
+                 portions: portions)
+    }
+
+    /// Fix round 1 (u2-L-M2, u2-C-U2-2): a line a build from before this round already converts to the
+    /// same grams — one stated cup, an exact "slice", an exact "each" — is kept as typed, so the grocery
+    /// list, share text and export still read "1 cup" and "2 slice". Only a line that needs this round's
+    /// readers (a banana's "each", a cup of butter beside its tablespoon) becomes grams; and a line whose
+    /// strict reading gives OTHER grams than today's (a qualified "tbsp, chopped" beside a stated cup)
+    /// is saved as today's grams, so every build totals the same.
+    @Test func aLineAnOlderBuildReadsIsKeptAsTyped() {
+        let rice = Self.food("Rice, white, cooked", [FoodPortion(amount: 1, unit: "cup", gramWeight: 158)])
+        for (quantity, unit) in [(1.0, "cup"), (2.0, "tbsp"), (0.5, "cup")] {
+            let typed = Self.line(rice, quantity, unit)
+            #expect(typed.savingHouseholdAsGrams(using: rice) == typed, "\(quantity) \(unit) of a food stating one cup")
+        }
+        let bread = Self.food("Bread, whole-wheat", [FoodPortion(amount: 1, unit: "slice", gramWeight: 32)])
+        let slices = Self.line(bread, 2, "slice")
+        #expect(slices.savingHouseholdAsGrams(using: bread) == slices)
+        let sandwich = Self.food("Sandwich", [FoodPortion(amount: 1, unit: "each", gramWeight: 210),
+                                              FoodPortion(amount: 1, unit: "medium", gramWeight: 200)])
+        let one = Self.line(sandwich, 1, "each")
+        #expect(one.savingHouseholdAsGrams(using: sandwich) == one, "a stated \"each\" answers first on every build")
+        let herb = Self.food("Herb", [FoodPortion(amount: 1, unit: "cup", gramWeight: 158),
+                                      FoodPortion(amount: 1, unit: "tbsp, chopped", gramWeight: 5)])
+        let spoon = Self.line(herb, 1, "tbsp").savingHouseholdAsGrams(using: herb)
+        #expect(spoon.quantity == 5 && spoon.unit == "g" && spoon.householdMeasure?.label == "tbsp",
+                "an older build reads the cup's density (9.9 g); today reads the chopped tbsp (5 g): saved as 5 g")
+    }
+
+    /// Fix round 1 (u2-C-U2-3): every path that MINTS a recipe line applies the rule — a recipe a meal
+    /// log creates ("4 each" of a banana at yield 4) and a substitution fork ("0.6 each" of apples).
+    @Test func mintedAndForkedLinesAreSavedAsGrams() {
+        let banana = Self.banana()
+        let rice = Self.food("Rice, white, cooked", [FoodPortion(amount: 1, unit: "cup", gramWeight: 158)])
+        let stranger = Self.line(Self.garlic(), 2, "each")
+        let cups = Self.line(rice, 4, "cup")
+        let minted = Self.recipe("Banana rice", servings: 4, [Self.line(banana, 4, "each"), cups, stranger])
+            .savingHouseholdAsGrams(using: [banana, rice])
+        #expect(minted.ingredients[0].quantity == 472 && minted.ingredients[0].unit == "g")
+        #expect(minted.ingredients[0].householdMeasure?.label == "medium")
+        #expect(minted.ingredients[1] == cups, "one stated cup stays a cup")
+        #expect(minted.ingredients[2] == stranger, "a line whose food is not given is kept")
+        let apples = Self.food("Apples, raw, with skin", [
+            FoodPortion(amount: 1, unit: "small (2-3/4\" dia)", gramWeight: 149),
+            FoodPortion(amount: 1, unit: "medium (3\" dia)", gramWeight: 182),
+            FoodPortion(amount: 1, unit: "large (3-1/4\" dia)", gramWeight: 223)
+        ])
+        #expect(apples.preferredRecipeUnit == .each)
+        let swapped = RecipeSubstitution.substitutedIngredient(
+            replacing: Self.line(banana, 118, "g"), originalFoodItem: banana, with: apples)
+        #expect(swapped.unit == "g" && swapped.householdMeasure?.label == "medium")
+        #expect(abs((swapped.householdMeasure?.gramsPerUnit ?? 0) - 182) < 0.001)
+        #expect(abs(swapped.quantity - 0.6 * 182) < 0.001, "118 g of banana → 0.6 of a 182 g apple, saved as its grams")
+    }
+
+    /// A recipe a quick log mints reaches the book through `FernletStore.commitResolution`, which saves
+    /// its lines as the editor does.
+    @MainActor
+    @Test func commitResolutionSavesMintedRecipesAsGrams() throws {
+        let banana = Self.banana()
+        let store = makeTestStore(bundledFoodItems: [banana])
+        let minted = Self.recipe("Banana smoothie", servings: 4, [Self.line(banana, 4, "each")])
+        store.commitResolution(MealResolution(meals: [], createdRecipes: [minted], confidence: .high, isFallback: false))
+        let saved = try #require(store.recipes.first { $0.id == minted.id })
+        #expect(saved.ingredients.map(\.unit) == ["g"] && saved.ingredients.map(\.quantity) == [472])
+        #expect(saved.ingredients.first?.householdMeasure?.label == "medium")
+        #expect(MealBuilder.macroTotals(for: saved, foodItems: [banana]) == MealBuilder.macroTotals(for: minted, foodItems: [banana]))
     }
 
     /// The recipe editor's save path (`CustomIngredientUpsert.recipeIngredients`) applies the rule to a

@@ -330,9 +330,10 @@ struct IngredientSubstitutionSheet: View {
 }
 
 private extension RecipeIngredient {
+    /// "50 g · Margarine", or "0.65 medium (118 g) · Apples, raw" for a household choice saved as
+    /// grams (F4a, fix round 1).
     func lineDescription(name: String) -> String {
-        let qty = quantity.formatted(.number.precision(.fractionLength(0...1)))
-        return "\(qty) \(unit) · \(name)"
+        "\(amountText) · \(name)"
     }
 }
 #endif

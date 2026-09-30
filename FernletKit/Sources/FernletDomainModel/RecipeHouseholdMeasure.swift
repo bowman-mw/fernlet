@@ -9,8 +9,14 @@
 // banana resolves only on a build whose portion reader knows that "medium (7" to 7-7/8" long)" is what
 // one banana weighs; on an older build it converts to nothing and the recipe totals ZERO there
 // (`MealBuilder` zeroes a recipe with an unconvertible line). Grams resolve on every build. So a
-// household choice is saved as the grams it converts to, with the choice kept beside them as display
-// metadata — never as a new `RecipeUnit` token (a token an older peer does not know fails the same way).
+// household choice only this round's readers convert is saved as the grams it converts to, with the
+// choice kept beside them as display metadata — never as a new `RecipeUnit` token (a token an older
+// peer does not know fails the same way). A choice an older build already reads the same way ("1 cup"
+// of a food stating one cup, "2 slice") is kept as typed, so every other surface still shows it.
+//
+// Every path that MINTS a recipe line applies it (fix round 1, finding u2-C-U2-3): the editor
+// (`CustomIngredientUpsert`), a substitution fork (`RecipeSubstitution.substitutedIngredient`), and a
+// recipe a meal log creates (`FernletStore.commitResolution`, via `RecipeDefinition.savingHouseholdAsGrams`).
 
 import Foundation
 
@@ -57,10 +63,17 @@ extension RecipeIngredient {
     /// before the line re-opens as grams instead (the food's portions changed under it).
     public static let householdRestoreTolerance = 0.005
 
-    /// The line as it is SAVED from the recipe editor: a count or volume amount of a mass-served food
-    /// that converts through one of the food's USDA portions becomes the grams it converts to, with
-    /// the choice in ``householdMeasure`` ("1 each" of a banana → `118 g`, "medium"). Every other line
-    /// — grams, ounces, servings, a custom food's own serving, a volume-served food — is returned
+    /// The line as it is SAVED — from the recipe editor, a substitution fork, or a recipe a meal log
+    /// mints: a count or volume amount of a mass-served food that converts through one of the food's
+    /// USDA portions ONLY on this round's readers becomes the grams it converts to, with the choice in
+    /// ``householdMeasure`` ("1 each" of a banana → `118 g`, "medium"; "1 cup" of honey, whose cup and
+    /// tablespoon an older build found ambiguous → `339 g`, "cup").
+    ///
+    /// A line an older build already converts to the same grams is kept as typed (report §6.3: "use
+    /// `2 each` only when today's reader already resolves it") — "1 cup" of cooked rice (one stated
+    /// cup), "2 slice" of bread, so the grocery list, share text and export still read "1 cup", and
+    /// fix round 1's finding u2-L-M2 (every such line had turned into grams) stays closed. Every other
+    /// line — grams, ounces, servings, a custom food's own serving, a volume-served food — is returned
     /// unchanged, as is one whose conversion fails.
     public func savingHouseholdAsGrams(using foodItem: FoodItem) -> RecipeIngredient {
         guard foodItem.id == foodItemId,
@@ -69,6 +82,9 @@ extension RecipeIngredient {
               let conversion = servingConversion(using: foodItem), conversion.provenance == .sourcePortion,
               let grams = conversion.grams, let portion = conversion.sourcePortion,
               let label = Self.householdLabel(for: requested, portion: portion) else { return self }
+        if let strict = strictlyReadGrams(using: foodItem), abs(strict - grams) <= Self.householdRestoreTolerance * grams {
+            return self
+        }
         let measure = RecipeHouseholdMeasure(label: label, gramsPerUnit: grams / quantity)
         guard measure.isValid else { return self }
         return RecipeIngredient(id: id, foodItemId: foodItemId, quantity: grams, unit: RecipeUnit.gram.rawValue,
@@ -100,6 +116,14 @@ extension RecipeIngredient {
         return "\(count) \(measure.label) (\(amount) \(unit))"
     }
 
+    /// Mass-served source-portion lines rewritten by ``savingHouseholdAsGrams(using:)``; a line whose
+    /// food is absent from `foodItems` is kept as it is.
+    static func savingHouseholdAsGrams(_ lines: [RecipeIngredient], using foodItems: [FoodItem]) -> [RecipeIngredient] {
+        lines.map { line in
+            foodItems.first { $0.id == line.foodItemId }.map { line.savingHouseholdAsGrams(using: $0) } ?? line
+        }
+    }
+
     /// What one of `requested` is on `portion`: the size and noun the portion states for "each"
     /// ("medium", "clove", "medium stalk"; "each" for a portion stated as `each`), else the unit token.
     private static func householdLabel(for requested: RecipeUnit, portion: FoodPortion) -> String? {
@@ -107,5 +131,17 @@ extension RecipeIngredient {
         guard case .count(let noun, let size)? = portion.measure else { return RecipeUnit.each.rawValue }
         let words = [size, noun].compactMap { $0 }
         return words.isEmpty ? nil : words.joined(separator: " ")
+    }
+}
+
+extension RecipeDefinition {
+    /// The recipe with every line saved as ``RecipeIngredient/savingHouseholdAsGrams(using:)`` saves it,
+    /// against `foodItems` (the rows its lines are bound to). For a recipe a MEAL LOG mints — quick log's
+    /// multi-ingredient items and the reviewed decomposition — whose lines carry the resolver's units
+    /// ("4 each" of a banana), which only this round's readers convert (fix round 1, finding u2-C-U2-3).
+    public func savingHouseholdAsGrams(using foodItems: [FoodItem]) -> RecipeDefinition {
+        var saved = self
+        saved.ingredients = RecipeIngredient.savingHouseholdAsGrams(ingredients, using: foodItems)
+        return saved
     }
 }

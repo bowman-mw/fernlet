@@ -313,15 +313,21 @@ newer one rebuilds the parts (``RecipeComponentImport``). The labelling separato
 are tokens and never localize. Part names are user content (``RecipeComponentNaming`` normalizes
 them).
 
-A line chosen as a household amount ("1 each" of a banana, half a cup of butter) is SAVED as the
-grams it converts to, with the choice in the line's additive optional ``RecipeHouseholdMeasure``
-("medium", 118 g per one) — 2026-09-30, F4a. Grams are the only encoding every build and every peer
-resolves; "1 each" of a banana converts only where the portion reader knows what one weighs, and an
-unconvertible line totals a recipe at zero. The measure is display metadata: nutrition never reads
-it, the recipe page shows "1 medium (118 g)" (``RecipeIngredient/amountText``), the editor re-opens
-the line as "1 each" (``RecipeIngredient/restoringHouseholdAmount(using:)``), and the
-`fernlet.recipe` wire carries the plain grams, so its bytes and keys are unchanged. No new
-``RecipeUnit`` token exists or may be added for it.
+A line chosen as a household amount that only this round's readers convert ("1 each" of a banana,
+half a cup of butter beside its tablespoon) is SAVED as the grams it converts to, with the choice in
+the line's additive optional ``RecipeHouseholdMeasure`` ("medium", 118 g per one) — 2026-09-30, F4a.
+Grams are the only encoding every build and every peer resolves; "1 each" of a banana converts only
+where the portion reader knows what one weighs, and an unconvertible line totals a recipe at zero. A
+line an older build already reads to the same grams ("1 cup" of a food stating one cup, "2 slice") is
+kept as typed (fix round 1), so the grocery list, share text and export still show it. Every path
+that mints a recipe line applies the rule: the editor, a substitution fork
+(``RecipeSubstitution/substitutedIngredient(replacing:originalFoodItem:with:)``) and a recipe a meal
+log creates (``RecipeDefinition/savingHouseholdAsGrams(using:)``, applied where the store commits it).
+The measure is display metadata: nutrition never reads it, the recipe page shows "1 medium (118 g)"
+(``RecipeIngredient/amountText``), the editor re-opens the line as "1 each"
+(``RecipeIngredient/restoringHouseholdAmount(using:)``), and the `fernlet.recipe` wire carries the
+plain grams, so its bytes and keys are unchanged. No new ``RecipeUnit`` token exists or may be added
+for it.
 
 - ``RecipeDefinition``
 - ``RecipeIngredient``

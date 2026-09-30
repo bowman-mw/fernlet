@@ -2610,7 +2610,13 @@ final class FernletStore {
         if date == nil { refreshCurrentDayIfNeeded() }
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "meal date required")
-        for newRecipe in resolution.createdRecipes { diary.recipes.insert(newRecipe, at: 0) }
+        // A minted recipe's lines carry the resolver's units ("4 each" of a banana), which only this
+        // round's portion readers convert; saved as their grams (the editor's rule) so a paired device
+        // on an older build does not total the recipe at zero (fix round 1, finding u2-C-U2-3).
+        let mintedFoods = resolution.createdRecipes.isEmpty ? [] : foodCatalog.items(forRecipes: resolution.createdRecipes)
+        for newRecipe in resolution.createdRecipes {
+            diary.recipes.insert(newRecipe.savingHouseholdAsGrams(using: mintedFoods), at: 0)
+        }
         // `diary.recipes.insert` is a raw array mutation with NO save; `appendMeal` below schedules one,
         // so created recipes ride along whenever there are meals. A resolution with created recipes but
         // NO meals would otherwise lose them on the next reload — persist explicitly when recipes were added.

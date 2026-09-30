@@ -75,6 +75,12 @@ public nonisolated enum RecipeSubstitution {
 
     /// The bound replacement `RecipeIngredient` (fresh id, substitute's `foodItemId`, gram-matched
     /// quantity/unit). Convenience over `replacementQuantity` for the fork call site.
+    ///
+    /// Saved the way the recipe editor saves a line (``RecipeIngredient/savingHouseholdAsGrams(using:)``):
+    /// a substitute whose preferred unit only this round's readers convert ("0.65 each" of apples —
+    /// one medium apple is USDA's "medium (3" dia)") becomes its grams with "medium" kept for display,
+    /// so the fork does not total zero on a paired device still on an older build (fix round 1,
+    /// finding u2-C-U2-3).
     public static func substitutedIngredient(
         replacing original: RecipeIngredient,
         originalFoodItem: FoodItem?,
@@ -86,6 +92,7 @@ public nonisolated enum RecipeSubstitution {
             substitute: substitute
         )
         return RecipeIngredient(foodItemId: substitute.id, quantity: quantity, unit: unit)
+            .savingHouseholdAsGrams(using: substitute)
     }
 
     /// Forks a NEW recipe from `source` with exactly one ingredient replaced. Returns `nil` when

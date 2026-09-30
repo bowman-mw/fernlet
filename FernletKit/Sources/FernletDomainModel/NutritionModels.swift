@@ -2162,6 +2162,21 @@ extension RecipeServingConversion {
         return converted
     }
 
+    /// The grams `quantity` `unit` weighs under the STRICT reading every build before the
+    /// ingredient-search round's F1(b) and F4a used: a count through the one portion stated exactly
+    /// in that unit, a volume through the food's one exactly stated volume portion. Nil where that
+    /// reading refuses — a line an older build cannot convert. Mass amounts are physical on every
+    /// build and are not asked here.
+    fileprivate static func strictGrams(quantity: Double, unit: RecipeUnit, foodItem: FoodItem) -> Double? {
+        guard validRequest(quantity, unit: unit), validServing(foodItem),
+              let dimension = unit.dimension, dimension != .mass else { return nil }
+        let portion = unit.isCount ? foodItem.exactPortion(matching: unit) : foodItem.uniquePortion(in: dimension)
+        guard let portion,
+              let amount = convertedAmount(quantity, from: unit, to: portion.exactRecipeUnit, dimension: dimension)
+        else { return nil }
+        return portion.grams(for: amount)
+    }
+
     private static func validRequest(_ quantity: Double, unit: RecipeUnit) -> Bool {
         let limit = unit.isCount || unit == .serving
             ? RecipeConversionLimits.maxCount : RecipeConversionLimits.maxGrams
@@ -2185,6 +2200,15 @@ extension RecipeIngredient {
     /// review or fall through rather than treating a raw quantity as a count of servings.
     public func servingConversion(using foodItem: FoodItem) -> RecipeServingConversion? {
         RecipeServingConversion.resolve(quantity: quantity, unit: unit, foodItem: foodItem)
+    }
+
+    /// The grams this count or volume line weighs as a build from BEFORE the ingredient-search round's
+    /// F1(b)/F4a reads it — one portion stated exactly in the unit (a count) or the one exactly stated
+    /// volume portion (a volume) — or nil where that build cannot convert it. What
+    /// ``savingHouseholdAsGrams(using:)`` asks before it rewrites a line.
+    func strictlyReadGrams(using foodItem: FoodItem) -> Double? {
+        guard let requested = RecipeUnit.normalized(unit) else { return nil }
+        return RecipeServingConversion.strictGrams(quantity: quantity, unit: requested, foodItem: foodItem)
     }
 }
 
