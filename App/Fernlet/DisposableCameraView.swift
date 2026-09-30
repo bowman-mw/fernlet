@@ -567,17 +567,33 @@ enum DisposableCameraOrientation {
 /// the admission-prompt sheet for join requests, and the develop flow: "Develop" stops the
 /// capture session and either leaves immediately (no photos — the keep-as-friend prompt is then
 /// FriendsView's job via the pending review batch) or presents `FriendPhotoReviewSheet` with
-/// friend candidates computed at presentation time against the live trust vault. Orientation
+/// friend candidates computed at presentation time against the live trust vault — over the photo ids
+/// snapshotted at Develop, rendered and answered wherever the manager holds them, so an ending that
+/// moves the roll under the open review (door 3's give-up) cannot empty it. It reports whether any
+/// sheet or alert of its own is up (`presentsOwnSheet`), so FriendsView never requests its
+/// session-end review over one. Orientation
 /// flips through ``DisposableCameraOrientation``'s hysteresis so mid-rotation near-square frames
 /// never thrash the layout.
 struct DisposableCameraView: View {
     var store: FernletStore
+    /// Reported up to ``FriendsView``: whether this view has a sheet or alert of its own up right
+    /// now (see ``ownPresentationIsUp``). The Friends surface must not request its session-end
+    /// review over one — the request would queue behind this view's sheet with a snapshot taken
+    /// before the person answered the Develop review here — and re-checks the moment this goes
+    /// false (2026-09-30 fix round, findings C-F1/C-F2). Defaults to a constant for a caller that
+    /// does not need to know.
+    var presentsOwnSheet: Binding<Bool> = .constant(false)
 
     @State private var camera = CameraCaptureController()
     @State private var flashOpacity: Double = 0
     @State private var showInfo = false
     @State private var showChat = false
     @State private var reviewPresented = false
+    /// The photo ids the open Develop review offers, snapshotted at ``beginDevelop()``. The review
+    /// renders and answers these ids wherever the manager holds them now (2026-09-30 fix round,
+    /// findings C-F1/L-F1): door 3's give-up ends the session under an open review with the mesh
+    /// still held, so this view stays up while the ending moves the live list into the pending batch.
+    @State private var developReviewIDs: Set<UUID> = []
     @State private var selectedForSave: Set<UUID> = []
     // Phase 2 friend minting: candidates snapshotted when the review presents + the user's keeps.
     @State private var friendCandidates: [MeshSessionRosterEntry] = []
@@ -623,6 +639,11 @@ struct DisposableCameraView: View {
         .onAppear { camera.startSession() }
         .onDisappear {
             camera.stopSession()
+            // Leaving the hierarchy takes every sheet of this view with it.
+            presentsOwnSheet.wrappedValue = false
+        }
+        .onChange(of: ownPresentationIsUp, initial: true) { _, isUp in
+            presentsOwnSheet.wrappedValue = isUp
         }
         .onChange(of: manager.pendingRemovalProposals) { _, _ in
             presentNextRemovalProposalIfNeeded()
@@ -646,6 +667,22 @@ struct DisposableCameraView: View {
             showInfo: $showInfo,
             beginDevelop: beginDevelop
         ))
+    }
+
+    /// Whether any sheet or alert this view hangs is up: its Develop review, info and chat sheets
+    /// (the info sheet carries the rename sheet and the block confirmation), the end-session and
+    /// removal-seconding alerts, and the manager-driven admission sheet and session alert — the
+    /// same conditions their presenters read. What ``presentsOwnSheet`` reports.
+    private var ownPresentationIsUp: Bool {
+        reviewPresented || showInfo || showChat || leaveSessionConfirm || activeRemovalProposal != nil
+            || (!manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil)
+            || manager.meshError != nil || manager.routedShareRefusal != nil
+    }
+
+    /// The Develop review's photos: the snapshotted ids still awaiting an answer, wherever the
+    /// manager holds them (`MeshNetworkManager.photosAwaitingAnswer(among:)`).
+    private var developReviewPhotos: [FriendPhotoPayload] {
+        manager.photosAwaitingAnswer(among: developReviewIDs)
     }
 
     /// The full-screen camera "hardware" scene for the current geometry.
@@ -1304,10 +1341,13 @@ struct DisposableCameraView: View {
             // FriendsView offers them there (2026-09-30); none is kept unasked.
             Task { await manager.leaveSessionAfterNotifyingPeers() }
         } else {
-            // This review reads the LIVE list. If the session ends under it (the other side
-            // developed first, so this device is the last member), the ending promotes the list
-            // into pendingFriendReview and tears this view down; FriendsView then asks again, with
-            // every photo still offered and ticked.
+            // The review offers exactly these ids and answers them wherever the manager holds them
+            // when the person answers. Door 3's give-up can end the session under it with the mesh
+            // held, so this view stays up while the ending moves the photos into
+            // pendingFriendReview; the snapshot keeps them offered and the answer still lands. A
+            // termination instead tears this view down, and FriendsView asks again with every
+            // photo still offered and ticked. A photo arriving after the snapshot is not shown, so
+            // it is not answered here: it reaches the post-session review.
             // Phase 2: friend eligibility is computed at presentation time, against the live
             // trust vault, so peers trusted or blocked mid-session never reach the sheet.
             friendCandidates = FriendMintingReview.eligibleCandidates(
@@ -1315,7 +1355,8 @@ struct DisposableCameraView: View {
                 trustedPeers: store.trustedProximityPeers
             )
             keptFriendFingerprints = []
-            selectedForSave = Set(manager.sessionPhotos.map(\.id))
+            developReviewIDs = Set(manager.sessionPhotos.map(\.id))
+            selectedForSave = developReviewIDs
             reviewPresented = true
         }
     }
@@ -1350,14 +1391,14 @@ struct DisposableCameraView: View {
     @ViewBuilder
     private var reviewSheet: some View {
         FriendPhotoReviewSheet(
-            photos: manager.sessionPhotos,
+            photos: developReviewPhotos,
             selectedIDs: $selectedForSave,
             friendCandidates: friendCandidates,
             keptFriendFingerprints: $keptFriendFingerprints,
             saveSelected: { await keepSelectedSessionPhotos() },
             saveToPhotos: { await exportSelectedPhotosToLibrary() },
             discardAll: {
-                manager.deleteAllSessionPhotos()
+                manager.finishSessionPhotos(keeping: [], of: developReviewIDs)
                 finalizeFriendKeeps()
                 Task { @MainActor in
                     await manager.leaveSessionAfterNotifyingPeers()
@@ -1372,9 +1413,10 @@ struct DisposableCameraView: View {
     /// FRND-12: the primary review action. Keeps the ticked photos on the in-app wall, mints the
     /// kept friends, and ends the session — deliberately with NO Photos-library involvement, so a
     /// system-permission denial can never cost the user their pictures. The optional export is
-    /// `exportSelectedPhotosToLibrary`.
+    /// `exportSelectedPhotosToLibrary`. Scoped to the ids the review showed (``developReviewIDs``),
+    /// wherever they are held now.
     private func keepSelectedSessionPhotos() async {
-        manager.finishSessionPhotos(keeping: selectedForSave)
+        manager.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)
         finalizeFriendKeeps()
         await manager.leaveSessionAfterNotifyingPeers()
         reviewPresented = false
@@ -1386,7 +1428,7 @@ struct DisposableCameraView: View {
     /// Purely additive: a failure (including a Photos permission denial) surfaces on the sheet and
     /// never touches the keep flow.
     private func exportSelectedPhotosToLibrary() async {
-        let toSave = manager.hydratedPhotos(manager.sessionPhotos.filter { selectedForSave.contains($0.id) })
+        let toSave = manager.hydratedPhotos(developReviewPhotos.filter { selectedForSave.contains($0.id) })
         // If no bytes could be loaded/decrypted, don't report a false success.
         guard !toSave.isEmpty else {
             photoSaveError = .generic

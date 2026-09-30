@@ -53,10 +53,13 @@ nonisolated enum FriendsRoute: Hashable {
 /// the ended session's unreviewed photos, which every ending promotes into it), gated on
 /// `isSessionLive` so it presents once the SESSION has ended and never on a link blip, and so a
 /// review promoted while no instance existed (or while the scene was dark) still presents on the
-/// next appearance or activation. Kept photos are answered with `finishReviewedPhotos`, kept
-/// friends are minted one-sided via ``FernletStore``'s `keepProximityFriends`, and the candidate
-/// half is consumed with `completeFriendReview` — never by clearing the live roster, which would
-/// clobber the next session's entries.
+/// next appearance or activation. Every trigger schedules a short-deferred check rather than
+/// presenting on the spot, the check never requests over the camera's own sheets or the root sheet,
+/// and a request whose sheet never appears is withdrawn unconsumed and re-asked by a bounded
+/// landing watchdog — a dropped request can no longer latch the surface shut. Kept photos are
+/// answered with `finishReviewedPhotos`, kept friends are minted one-sided via ``FernletStore``'s
+/// `keepProximityFriends`, and the candidate half is consumed with `completeFriendReview` — never
+/// by clearing the live roster, which would clobber the next session's entries.
 struct FriendsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -95,14 +98,37 @@ struct FriendsView: View {
     /// The album root's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
     @State private var scrollToTopToken = 0
 
+    /// Whether the live camera (this surface's own child) has a sheet or alert of its own up,
+    /// reported by `DisposableCameraView`. A session-end sheet requested over one queues behind it
+    /// with a snapshot taken before the person answered the camera's own review, so the presenter
+    /// waits for this to go false and snapshots then (2026-09-30 fix round, findings C-F1/C-F2).
+    @State private var cameraPresentsOwnSheet = false
+    /// Bumped to run a deferred session-end check (``scheduleReviewCheck()``).
+    @State private var reviewCheckRequest = 0
+    /// Bumped on every session-end sheet request; its task is the landing watchdog
+    /// (``confirmSessionEndSheetLanded()``).
+    @State private var reviewLandingRequest = 0
+    /// Set by either session-end sheet's content appearing — the only proof a request landed.
+    @State private var sessionEndSheetLanded = false
+    /// Watchdog re-requests left for the current trigger (R2: each trigger resets it to the bound).
+    @State private var reviewRetriesLeft = 0
+
     @Environment(\.scenePhase) private var scenePhase
+
+    /// How long a trigger waits before presenting: past the dismissal of whatever it fired beside —
+    /// the camera leaving with its sheet, a root sheet closing, the scene's own activation routing.
+    private static let reviewCheckDelay: Duration = .milliseconds(700)
+    /// How long a session-end sheet request has to land before the watchdog withdraws it.
+    private static let reviewLandingGrace: Duration = .seconds(2)
+    /// Re-requests per trigger after a request that did not land (R2).
+    private static let maxReviewRetries = 4
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
 
     var body: some View {
         ZStack {
             if manager.isInSession && sessionReady {
-                DisposableCameraView(store: store)
+                DisposableCameraView(store: store, presentsOwnSheet: $cameraPresentsOwnSheet)
                     .transition(.opacity)
                     .zIndex(1)
             } else {
@@ -133,16 +159,19 @@ struct FriendsView: View {
             // ContentView's Social-tab layout swap destroys the previous instance in the same
             // transaction as the isInSession flip, so its onChange never fires. The review is
             // model-state (pendingFriendReview, photos included), not a view-event.
-            presentDisconnectReviewIfNeeded()
+            scheduleReviewCheck()
         }
-        .onChange(of: manager.pendingFriendReview) { _, _ in
-            presentDisconnectReviewIfNeeded()
-        }
-        // A session that ended while the scene was dark (a continuation task carrying the mesh)
-        // is answered when the person comes back, not at the next tab visit.
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { presentDisconnectReviewIfNeeded() }
-        }
+        // Every session-end trigger schedules rather than presents (see scheduleReviewCheck): the
+        // batch moving, the session ending, the scene coming back (a session that ended in the dark
+        // is answered on return, after ContentView's own activation routing), and whatever covered
+        // the surface — the camera's own sheets, the root sheet — going away.
+        .onChange(of: manager.pendingFriendReview) { _, _ in scheduleReviewCheck() }
+        .onChange(of: manager.isSessionLive) { _, live in if !live { scheduleReviewCheck() } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { scheduleReviewCheck() } }
+        .onChange(of: cameraPresentsOwnSheet) { _, up in if !up { scheduleReviewCheck() } }
+        .onChange(of: activeSheet == nil) { _, clear in if clear { scheduleReviewCheck() } }
+        .task(id: reviewCheckRequest) { await runDeferredReviewCheck() }
+        .task(id: reviewLandingRequest) { await confirmSessionEndSheetLanded() }
         .onChange(of: manager.isInSession) { wasInSession, nowInSession in
             handleSessionSurfaceChange(wasInSession: wasInSession, nowInSession: nowInSession)
         }
@@ -203,6 +232,10 @@ struct FriendsView: View {
     /// into custody and drained when the link heals, and the radios come back through
     /// `startFriendsDiscovery`'s resume arm. Only a session that is really over — End Session, or a
     /// launch with no mesh — swaps back to the album.
+    ///
+    /// The swap is also a review trigger (2026-09-30 fix round, finding L-F2): an ending that does
+    /// not move the batch — one already pending from an earlier give-up, with nothing new to add —
+    /// fires no other edge once the session is over, and the camera leaving takes its sheets with it.
     private func handleSessionSurfaceChange(wasInSession: Bool, nowInSession: Bool) {
         guard wasInSession, !nowInSession else { return }
         // The camera swap destroyed the album's stack; the path outlives it here, so clear it or the
@@ -210,6 +243,7 @@ struct FriendsView: View {
         if sessionReady { path.removeAll() }
         sessionReady = false
         showConnectionAnimation = false
+        scheduleReviewCheck()
     }
 
     /// The **lifecycle** half: the keep-as-friend ceremony and the connection choreography.
@@ -267,7 +301,7 @@ struct FriendsView: View {
                 showConnectionAnimation = false
                 sessionReady = true
             }
-            presentDisconnectReviewIfNeeded()
+            scheduleReviewCheck()
         }
     }
 
@@ -288,6 +322,7 @@ struct FriendsView: View {
         )
         .interactiveDismissDisabled()
         .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
+        .onAppear { sessionEndSheetLanded = true }
     }
 
     /// FRND-12: the primary review action of the disconnect flow. Keeps the ticked photos on the
@@ -351,6 +386,7 @@ struct FriendsView: View {
             done: { keepFriendsPromptPresented = false }
         )
         .presentationDetents([.medium, .large])
+        .onAppear { sessionEndSheetLanded = true }
     }
 
     // MARK: - Photo album
@@ -922,7 +958,9 @@ struct FriendsView: View {
 
     /// Session-end review, driven off OBSERVABLE MODEL STATE (Phase 2, "Session-end review is
     /// model-state, not view-events"): presents whenever a promoted `pendingFriendReview` batch
-    /// exists, checked from `.onChange`, `.onAppear` and scene activation. Friend candidates come
+    /// exists, run by the deferred check every trigger schedules (``scheduleReviewCheck()``: the
+    /// batch moving, the session ending, the surface swapping or appearing, scene activation, a
+    /// covering presentation going away) and confirmed by the landing watchdog. Friend candidates come
     /// from the BATCH entries; eligibility is computed here — at presentation time, against the live
     /// trust vault — so peers trusted or blocked mid-session never reach the prompt.
     ///
@@ -942,12 +980,24 @@ struct FriendsView: View {
     /// termination and a permanent rejoin bar on a mesh the pair could still have resumed. The
     /// model half (the manager's three hooks) and this presenting half must read the SAME predicate
     /// or the ceremony is only half re-pointed.
+    ///
+    /// **It never requests over a presentation, and a request is not proof** (2026-09-30 fix round,
+    /// findings C-F2/L-F2). Besides this surface's own presenters it waits out the root sheet — which
+    /// its request would otherwise REPLACE (a First Aid route consumed on the same activation, a
+    /// meal log, Settings' Delete everything) — and the camera's sheets and alerts, which it would
+    /// otherwise queue behind with a stale snapshot; each schedules a re-check when it goes. A
+    /// request that still does not land — a presenter this view cannot see — is withdrawn
+    /// unconsumed and re-asked by ``confirmSessionEndSheetLanded()`` rather than latching
+    /// ``aPresentationIsUp`` shut.
     private func presentDisconnectReviewIfNeeded() {
         guard !manager.isSessionLive else { return }
         // ``aPresentationIsUp``, not the two sheet flags: a `.sheet` requested while the album's
         // `fullScreenCover` is up is one of the two presentations SwiftUI drops (fix review P2-2),
         // and a review that silently never appears is a batch the user never gets to answer.
         guard !aPresentationIsUp else { return }
+        // Nor over a presentation this surface does not own (fix round C-F2/L-F2): the camera's own
+        // sheets and alerts, or the root sheet. Each re-checks here the moment it goes away.
+        guard activeSheet == nil, !cameraPresentsOwnSheet else { return }
         guard let batch = manager.pendingFriendReview else { return }
         reviewBatch = batch
         reviewPhotos = manager.pendingReviewPhotos
@@ -963,8 +1013,10 @@ struct FriendsView: View {
         case .photoReview:
             selectedForSave = Set(reviewPhotos.map(\.id))
             disconnectReviewPresented = true
+            noteSessionEndSheetRequested()
         case .friendPromptOnly:
             keepFriendsPromptPresented = true
+            noteSessionEndSheetRequested()
         case .none:
             // Nothing to review — consume the batch immediately so it can't re-present.
             manager.completeFriendReview(batch.id)
@@ -986,6 +1038,77 @@ struct FriendsView: View {
         reviewBatch = nil
         friendCandidates = []
         keptFriendFingerprints = []
+    }
+
+    // MARK: - Session-end review: scheduling and the landing watchdog
+
+    /// Asks for a session-end check a moment from now (``runDeferredReviewCheck()``), with a fresh
+    /// watchdog budget.
+    ///
+    /// **Every trigger schedules; none presents on the spot** (2026-09-30 fix round, findings
+    /// C-F2/L-F2). Most of them fire in the same transaction as another presentation — the camera
+    /// leaving the hierarchy with its chat, info or Develop sheet, a root sheet closing, the scene
+    /// coming back while ContentView routes a notification into the root sheet — and what SwiftUI
+    /// does with a second sheet depends on who asked. Measured on the iOS 26.5 simulator: this
+    /// surface's request REPLACES a standing sheet of a view above it (ContentView's root sheet
+    /// vanished under the review), while a request made over a sheet of a view below it (the
+    /// camera's) queues behind it and presents when that one closes — a review snapshotted before
+    /// the person answered the camera's own. Neither dropped the request in the shapes tried; the
+    /// reviewers' latch is covered anyway by the landing watchdog. Waiting out
+    /// ``reviewCheckDelay``, and refusing while either kind of sheet is up (see the presenter), makes
+    /// the review the only presentation asking.
+    private func scheduleReviewCheck() {
+        reviewRetriesLeft = Self.maxReviewRetries
+        reviewCheckRequest &+= 1
+    }
+
+    /// The deferred half of ``scheduleReviewCheck()``: waits out ``reviewCheckDelay``, then presents
+    /// if the review is still due. `.task` semantics also run it on every appearance and cancel it
+    /// when a newer request or a disappearance supersedes it — a review for a surface that is not on
+    /// screen waits for the surface.
+    private func runDeferredReviewCheck() async {
+        do {
+            try await Task.sleep(for: Self.reviewCheckDelay)
+        } catch {
+            return   // superseded by a newer request, or the surface went away (R7: nothing owed)
+        }
+        presentDisconnectReviewIfNeeded()
+    }
+
+    /// Marks a session-end sheet request unlanded and arms its watchdog.
+    private func noteSessionEndSheetRequested() {
+        sessionEndSheetLanded = false
+        reviewLandingRequest &+= 1
+    }
+
+    /// The landing watchdog. A session-end sheet whose content has not appeared within
+    /// ``reviewLandingGrace`` was dropped — and its flag, left true, would latch
+    /// ``aPresentationIsUp`` shut until the next peer commit. So it is withdrawn WITHOUT consuming
+    /// anything (the batch, photos included, stays pending) and re-requested through the deferred
+    /// check, at most ``maxReviewRetries`` times per trigger (R2).
+    private func confirmSessionEndSheetLanded() async {
+        guard disconnectReviewPresented || keepFriendsPromptPresented else { return }
+        do {
+            try await Task.sleep(for: Self.reviewLandingGrace)
+        } catch {
+            return   // a newer request re-armed the watchdog, or the surface went away (R7)
+        }
+        guard disconnectReviewPresented || keepFriendsPromptPresented, !sessionEndSheetLanded else { return }
+        withdrawUnlandedSessionEndSheet()
+        guard reviewRetriesLeft > 0 else { return }
+        reviewRetriesLeft -= 1
+        reviewCheckRequest &+= 1
+    }
+
+    /// Lowers an unlanded session-end sheet's flag without answering anything. `reviewBatch` goes
+    /// first so the keep prompt's `onDismiss` finalize is a no-op — the heal arm's rule.
+    private func withdrawUnlandedSessionEndSheet() {
+        reviewBatch = nil
+        reviewPhotos = []
+        friendCandidates = []
+        keptFriendFingerprints = []
+        keepFriendsPromptPresented = false
+        disconnectReviewPresented = false
     }
 
 }

@@ -296,6 +296,77 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
     }
 }
 
+// MARK: - The in-camera review under door 3
+
+/// Fix round findings C-F1/L-F1: door 3's give-up ends the session while the mesh is HELD, so the
+/// camera — and a Develop review it already has open — stays on screen while the ending moves the
+/// live list into the pending batch. The review snapshots its ids at Develop and renders/answers
+/// them wherever the manager holds them; before, it read `sessionPhotos`, went empty, and its
+/// "Delete all" pruned nothing.
+@MainActor
+@Suite(.serialized)
+struct MeshDevelopReviewUnderGiveUpTests {
+
+    /// A founded pair whose partner vanished: `captureCount` photos on node 0, the camera's
+    /// Develop snapshot taken, the slot lost, and then door 3 fires — the reviewer's sequence.
+    private static func developThenGiveUp(
+        _ rig: MeshFoundingRig, captureCount: Int
+    ) throws -> (MeshNetworkManager, [UUID]) {
+        rig.link(0, 1)
+        rig.commit(0, 1)
+        let manager = rig.nodes[0].manager
+        // R2: bounded by the caller's count.
+        for _ in 0..<captureCount { rig.capturePhoto(at: 0) }
+        let snapshot = manager.sessionPhotos.map(\.id)   // beginDevelop()'s snapshot
+        try #require(snapshot.count == captureCount)
+        let slot = try #require(manager.slots.first)
+        manager.evictSlotForTesting(peerID: slot.id)
+        manager.endSessionAfterDiscoveryTimeout()
+        try #require(!manager.isSessionLive && manager.currentMesh != nil,
+                     "precondition: door 3 ended the session and holds the mesh, so the camera stays up")
+        try #require(manager.isInSession, "precondition: the Friends surface keeps the camera and its review")
+        try #require(manager.sessionPhotos.isEmpty, "precondition: the ending moved the roll out from under it")
+        return (manager, snapshot)
+    }
+
+    /// The open review keeps offering every photo it snapshotted, and its "Keep selected" answer —
+    /// one kept, two unticked — lands: the unticked leave the wall and the sealed index, and nothing
+    /// is left pending to be asked about again.
+    @Test func theOpenDevelopReviewStillOffersAndAnswersItsPhotosAfterTheGiveUp() throws {
+        let rig = try MeshFoundingRig.build(2, label: "develop-door3")
+        defer { rig.teardown() }
+        let (manager, snapshot) = try Self.developThenGiveUp(rig, captureCount: 3)
+
+        #expect(manager.photosAwaitingAnswer(among: Set(snapshot)).map(\.id) == snapshot,
+                "the grid the person is looking at still holds every photo it offered, in order")
+
+        manager.finishSessionPhotos(keeping: [snapshot[0]], of: Set(snapshot))
+
+        let wall = Set(manager.meshPhotos.map(\.id))
+        #expect(wall.contains(snapshot[0]), "the ticked photo is kept")
+        #expect(!wall.contains(snapshot[1]) && !wall.contains(snapshot[2]), "the unticked ones leave the wall")
+        let persisted = try #require(LastMemberReviewFixtures.persistedWallIDs(rig.nodes[0].store))
+        #expect(persisted.contains(snapshot[0]) && persisted.isDisjoint(with: snapshot.dropFirst()),
+                "and the sealed index agrees")
+        #expect(manager.pendingReviewPhotos.isEmpty, "answered once: FriendsView has nothing to re-ask")
+        #expect(manager.pendingFriendReview?.photos.isEmpty ?? true)
+    }
+
+    /// The reviewer's exact failure: "Delete all" confirmed in the camera after the give-up.
+    @Test func deleteAllInTheOpenDevelopReviewAfterTheGiveUpRemovesEveryPhoto() throws {
+        let rig = try MeshFoundingRig.build(2, label: "develop-door3-delete")
+        defer { rig.teardown() }
+        let (manager, snapshot) = try Self.developThenGiveUp(rig, captureCount: 2)
+
+        manager.finishSessionPhotos(keeping: [], of: Set(snapshot))
+
+        #expect(Set(manager.meshPhotos.map(\.id)).isDisjoint(with: snapshot), "every photo left the wall")
+        let persisted = try #require(LastMemberReviewFixtures.persistedWallIDs(rig.nodes[0].store))
+        #expect(persisted.isDisjoint(with: snapshot), "and the sealed index")
+        #expect(manager.photosAwaitingAnswer(among: Set(snapshot)).isEmpty, "nothing left to offer")
+    }
+}
+
 // MARK: - The review API's scoping
 
 /// `completeFriendReview`, `finishReviewedPhotos`, the per-photo delete and the removal purge each
@@ -355,7 +426,38 @@ struct PendingPhotoReviewScopingTests {
         #expect(manager.pendingFriendReview?.entries.count == 1, "the candidate half is untouched")
     }
 
-    /// A photo deleted from the wall is no longer a choice, and a batch left with nothing clears.
+    /// The camera's answer ignores an id someone already answered: the post-session review kept it,
+    /// so a later "Delete all" from a review that also showed it must not discard it.
+    @Test func aDevelopAnswerIgnoresPhotosAlreadyAnswered() throws {
+        let (manager, captured) = try endedSessionWithPhotos(2)
+        defer { manager.leaveMesh() }
+        let batch = try #require(manager.pendingFriendReview)
+        manager.finishReviewedPhotos(Set(captured), keeping: Set(captured), in: batch.id)
+
+        manager.finishSessionPhotos(keeping: [], of: Set(captured))
+
+        #expect(Set(manager.meshPhotos.map(\.id)).isSuperset(of: Set(captured)), "the first answer stands")
+    }
+
+    /// A photo that arrived after the Develop snapshot was never shown, so the camera's answer
+    /// leaves it listed — it reaches the post-session review at the teardown, ticked.
+    @Test func aDevelopAnswerLeavesAPhotoItNeverShowedForThePostSessionReview() throws {
+        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        defer { manager.leaveMesh() }
+        LastMemberReviewFixtures.capture(2, on: manager)
+        let snapshot = Set(manager.sessionPhotos.map(\.id))
+        LastMemberReviewFixtures.capture(1, on: manager)   // lands while the sheet is up
+        let late = try #require(manager.sessionPhotos.first { !snapshot.contains($0.id) }?.id)
+
+        manager.finishSessionPhotos(keeping: [], of: snapshot)
+        #expect(manager.sessionPhotos.map(\.id) == [late], "only what the sheet showed was answered")
+        manager.leaveSession()
+
+        #expect(manager.pendingReviewPhotos.map(\.id) == [late], "and the late one awaits its own answer")
+        #expect(manager.meshPhotos.contains { $0.id == late }, "still on the wall, not discarded unseen")
+    }
+
+    /// A photo deleted from the wall is no longer a choice, and a batch left with nothing clears.    /// A photo deleted from the wall is no longer a choice, and a batch left with nothing clears.
     @Test func deletingAPendingPhotoRemovesItFromTheReview() throws {
         let (manager, captured) = try endedSessionWithPhotos(1)
         defer { manager.leaveMesh() }
@@ -454,6 +556,163 @@ struct FriendsViewLastMemberReviewPresentationTests {
         if let window { Self.writeEvidence(of: window) }
     }
 
+    /// Fix round findings C-F2/L-F2: the session ends in the SAME main-actor turn that lowers a sheet
+    /// the Friends surface does not own (here one hung by the view containing it — ContentView's
+    /// other root slots). The reviewers' concern was a request dropped in that transaction and then
+    /// latched. On the iOS 26.5 simulator SwiftUI did NOT drop it, even with the pre-round immediate
+    /// presenter and no watchdog (red-check 2026-09-30: green both ways), so this cell pins the
+    /// outcome — the review lands, every photo still pending — rather than proving the latch.
+    @Test func aReviewDueInTheSameTransactionAsAnotherSheetClosingStillLands() async throws {
+        let windowScene = try #require(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "Expected an active window scene for SwiftUI lifecycle testing"
+        )
+        let manager = store.meshNetworkManager
+        let cover = ForeignCoverModel()
+        let hosting = UIHostingController(rootView: ForeignCoverHost(store: store, cover: cover))
+        var window: UIWindow? = UIWindow(windowScene: windowScene)
+        window?.frame = windowScene.screen.bounds
+        window?.rootViewController = hosting
+        window?.makeKeyAndVisible()
+        defer {
+            hosting.dismiss(animated: false)
+            window?.isHidden = true
+            window?.rootViewController = nil
+            window = nil
+        }
+        try await Task.sleep(for: .milliseconds(500))   // the album surface settles, nothing pending
+        manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            for color in [UIColor.systemTeal, .systemOrange] { manager.addPhoto(Self.swatch(color)) }
+        }
+        let captured = Set(manager.sessionPhotos.map(\.id))
+        try #require(captured.count == 2)
+        cover.isUp = true
+        // R2: bounded — at most 30 polls of 100 ms for the cover to land.
+        for _ in 0..<30 where !holdsForeignCover(hosting.presentedViewController) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try #require(holdsForeignCover(hosting.presentedViewController), "precondition: the cover is up")
+
+        // One turn: the covering sheet goes and the session ends — nobody reviewing.
+        cover.isUp = false
+        manager.leaveSession()
+
+        // R2: bounded — at most 100 polls of 100 ms for the review to land.
+        for _ in 0..<100 where hosting.presentedViewController == nil || holdsForeignCover(hosting.presentedViewController) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(hosting.presentedViewController != nil && !holdsForeignCover(hosting.presentedViewController),
+                "the photo review landed after the other sheet went — no dropped, latched request")
+        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured,
+                "and nothing was answered on the way")
+    }
+
+    /// The camera's teardown shape (finding C-F2): the view that OWNS a presented sheet leaves the
+    /// hierarchy in the same main-actor turn as the ending — the camera swapping out with its chat,
+    /// info or Develop sheet up. As above, not a drop on the iOS 26.5 simulator either way; the cell
+    /// pins that the review lands, every photo pending.
+    @Test func aReviewDueAsASheetOwnerLeavesTheHierarchyStillLands() async throws {
+        let windowScene = try #require(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "Expected an active window scene for SwiftUI lifecycle testing"
+        )
+        let manager = store.meshNetworkManager
+        let cover = ForeignCoverModel()
+        let hosting = UIHostingController(rootView: ForeignCoverHost(store: store, cover: cover))
+        var window: UIWindow? = UIWindow(windowScene: windowScene)
+        window?.frame = windowScene.screen.bounds
+        window?.rootViewController = hosting
+        window?.makeKeyAndVisible()
+        defer {
+            hosting.dismiss(animated: false)
+            window?.isHidden = true
+            window?.rootViewController = nil
+            window = nil
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            for color in [UIColor.systemTeal, .systemOrange] { manager.addPhoto(Self.swatch(color)) }
+        }
+        let captured = Set(manager.sessionPhotos.map(\.id))
+        try #require(captured.count == 2)
+        cover.childMounted = true
+        try await Task.sleep(for: .milliseconds(200))
+        cover.isChildSheetUp = true
+        // R2: bounded — at most 30 polls of 100 ms for the owner's sheet to land.
+        for _ in 0..<30 where !holdsForeignCover(hosting.presentedViewController) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try #require(holdsForeignCover(hosting.presentedViewController), "precondition: the owner's sheet is up")
+
+        // One turn: the sheet's owner leaves the hierarchy and the session ends.
+        cover.childMounted = false
+        manager.leaveSession()
+
+        // R2: bounded — at most 100 polls of 100 ms for the review to land.
+        for _ in 0..<100 where hosting.presentedViewController == nil || holdsForeignCover(hosting.presentedViewController) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(hosting.presentedViewController != nil && !holdsForeignCover(hosting.presentedViewController),
+                "the photo review landed after the owner and its sheet went")
+        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured, "and nothing was answered on the way")
+    }
+
+    /// Fix round finding L-F2 (d), and the hazard the empirical run actually showed: on the iOS 26.5
+    /// simulator a sheet requested by `FriendsView` while a sheet of a view ABOVE it is up does not
+    /// drop — SwiftUI REPLACES the standing one ("only presenting a single sheet is supported"). So a
+    /// review requested over the root router's sheet (a First Aid route consumed on the same
+    /// activation, a meal log, Settings' Delete everything) took that sheet away. The presenter now
+    /// waits out `activeSheet` and re-checks the moment it closes. Red-checked 2026-09-30: with the
+    /// `activeSheet` leg of the guard removed, the first expectation fails.
+    @Test func aReviewWaitsOutTheRootSheetInsteadOfReplacingIt() async throws {
+        let windowScene = try #require(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "Expected an active window scene for SwiftUI lifecycle testing"
+        )
+        let manager = store.meshNetworkManager
+        let cover = ForeignCoverModel()
+        let hosting = UIHostingController(rootView: ForeignCoverHost(store: store, cover: cover))
+        var window: UIWindow? = UIWindow(windowScene: windowScene)
+        window?.frame = windowScene.screen.bounds
+        window?.rootViewController = hosting
+        window?.makeKeyAndVisible()
+        defer {
+            hosting.dismiss(animated: false)
+            window?.isHidden = true
+            window?.rootViewController = nil
+            window = nil
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            for color in [UIColor.systemTeal, .systemOrange] { manager.addPhoto(Self.swatch(color)) }
+        }
+        let captured = Set(manager.sessionPhotos.map(\.id))
+        try #require(captured.count == 2)
+        cover.rootSheet = .journal
+        // R2: bounded — at most 30 polls of 100 ms for the root sheet to land.
+        for _ in 0..<30 where !holdsForeignCover(hosting.presentedViewController) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try #require(holdsForeignCover(hosting.presentedViewController), "precondition: the root sheet is up")
+
+        manager.leaveSession()
+        try await Task.sleep(for: .milliseconds(2_500))   // past the deferred check and a landing grace
+
+        #expect(holdsForeignCover(hosting.presentedViewController),
+                "the root sheet is still the one on screen: the review did not replace it")
+        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured, "and the review is still owed")
+        cover.rootSheet = nil
+        // R2: bounded — at most 100 polls of 100 ms for the review to land once the root sheet goes.
+        for _ in 0..<100 where hosting.presentedViewController == nil || holdsForeignCover(hosting.presentedViewController) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(hosting.presentedViewController != nil && !holdsForeignCover(hosting.presentedViewController),
+                "then the review lands on its own, off the root sheet closing")
+    }
+
     /// Renders the window (the presented sheet included) to a PNG in the evidence directory, when
     /// one was named. Evidence only; a failed write changes no verdict.
     private static func writeEvidence(of window: UIWindow) {
@@ -470,6 +729,73 @@ struct FriendsViewLastMemberReviewPresentationTests {
     }
 }
 
+/// The test's stand-in for a presentation the Friends surface cannot see: a sheet hung by the view
+/// that contains it, raised and lowered by the cell.
+@MainActor
+@Observable
+final class ForeignCoverModel {
+    /// Whether the container's sheet is up.
+    var isUp = false
+    /// Whether the child that owns ``isChildSheetUp``'s sheet is in the hierarchy at all.
+    var childMounted = false
+    /// Whether the mounted child's own sheet is up.
+    var isChildSheetUp = false
+    /// The root router's slot, bound to `FriendsView.activeSheet` exactly as ContentView binds it.
+    var rootSheet: FernletSheet?
+}
+
+/// `FriendsView` inside a container whose sheets the cell drives: a root-router slot bound to
+/// `activeSheet` (ContentView's shape), a container sheet `FriendsView` cannot see (ContentView's
+/// other root slots), and a child that owns a sheet and can leave the hierarchy (the camera's shape).
+struct ForeignCoverHost: View {
+    let store: FernletStore
+    @Bindable var cover: ForeignCoverModel
+
+    var body: some View {
+        ZStack {
+            FriendsView(
+                store: store, activeSheet: $cover.rootSheet, isTabBarCompact: .constant(false),
+                tabResetToken: .constant(0)
+            )
+            if cover.childMounted {
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .sheet(isPresented: $cover.isChildSheetUp) { ForeignCoverMarker() }
+            }
+        }
+        .sheet(isPresented: $cover.isUp) {
+            ForeignCoverMarker()
+        }
+        .sheet(item: $cover.rootSheet) { _ in
+            ForeignCoverMarker()
+        }
+    }
+}
+
+/// A UIKit view the cell can find in a presented controller's hierarchy: which sheet is up.
+final class ForeignCoverMarkerView: UIView {}
+
+/// The cover sheet's content, recognizable by its ``ForeignCoverMarkerView``.
+struct ForeignCoverMarker: UIViewRepresentable {
+    func makeUIView(context: Context) -> ForeignCoverMarkerView { ForeignCoverMarkerView() }
+    func updateUIView(_ uiView: ForeignCoverMarkerView, context: Context) {}
+}
+
+/// Whether `controller`'s view hierarchy holds the cover's marker (bounded breadth-first walk).
+@MainActor
+func holdsForeignCover(_ controller: UIViewController?) -> Bool {
+    guard let root = controller?.view else { return false }
+    var queue: [UIView] = [root]
+    var index = 0
+    // R2: bounded by the finite view tree, and capped.
+    while index < queue.count, index < 5_000 {
+        if queue[index] is ForeignCoverMarkerView { return true }
+        queue.append(contentsOf: queue[index].subviews)
+        index += 1
+    }
+    return false
+}
+
 // MARK: - Source walls
 
 /// The defect lived in two places a behavioral cell cannot reach at once — the manager's teardown
@@ -482,13 +808,16 @@ struct LastMemberPhotoReviewSourceWallTests {
         let source = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
         )
-        #expect(source.components(separatedBy: "sessionPhotos.removeAll()").count - 1 == 2,
-                "exactly two bulk empties: finishSessionPhotos (the answer) and the promotion's move")
+        #expect(source.components(separatedBy: "sessionPhotos.removeAll()").count - 1 == 1,
+                "exactly one bulk empty: the promotion's move (the answers remove what they answered)")
         let answer = try #require(MeshRoutedSourceScan.bracedBody(
-            after: "public func finishSessionPhotos(keeping", in: source))
+            after: "public func finishSessionPhotos(keeping kept: Set<UUID>, of reviewed: Set<UUID>)", in: source))
         let promotion = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func movePhotosIntoPendingReview()", in: source))
-        #expect(answer.contains("sessionPhotos.removeAll()"))
+        #expect(answer.contains("sessionPhotos.removeAll { answered.contains($0.id) }"),
+                "the camera's answer takes what it answered out of the live list")
+        #expect(answer.contains("batch.photos.removeAll { answered.contains($0.id) }"),
+                "and out of the pending batch, where door 3 may have moved it (C-F1/L-F1)")
         #expect(promotion.contains("sessionPhotos.removeAll()"))
         #expect(promotion.contains("pendingFriendReview = batch"), "the promotion moves, never drops")
         let leave = try #require(MeshRoutedSourceScan.bracedBody(after: "public func leaveSession()", in: source))
@@ -512,5 +841,51 @@ struct LastMemberPhotoReviewSourceWallTests {
                     "\(action) leaves only a mesh that is still held (door 3)")
         }
         #expect(source.contains(".onChange(of: scenePhase)"), "a review promoted in the dark presents on return")
+    }
+
+    /// Fix round C-F2/L-F2: every trigger schedules, the check refuses over presentations this
+    /// surface does not own, and an unlanded request is withdrawn and re-asked rather than latched.
+    @Test func theFriendsPresenterNeverLatchesADroppedRequest() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
+        #expect(source.components(separatedBy: "presentDisconnectReviewIfNeeded()").count - 1 == 2,
+                "declared once and called once — from the deferred check; every trigger schedules")
+        let deferred = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func runDeferredReviewCheck() async", in: source))
+        #expect(deferred.contains("presentDisconnectReviewIfNeeded()"))
+        let present = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func presentDisconnectReviewIfNeeded()", in: source))
+        #expect(present.contains("guard activeSheet == nil, !cameraPresentsOwnSheet else { return }"),
+                "no request over the root sheet or the camera's own sheets")
+        #expect(present.components(separatedBy: "noteSessionEndSheetRequested()").count - 1 == 2,
+                "both session-end sheets arm the landing watchdog")
+        let watchdog = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func confirmSessionEndSheetLanded() async", in: source))
+        #expect(watchdog.contains("!sessionEndSheetLanded") && watchdog.contains("withdrawUnlandedSessionEndSheet()"),
+                "an unlanded request is withdrawn")
+        #expect(watchdog.contains("guard reviewRetriesLeft > 0 else { return }"), "and re-asked a bounded number of times")
+        let withdraw = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func withdrawUnlandedSessionEndSheet()", in: source))
+        #expect(!withdraw.contains("completeFriendReview") && !withdraw.contains("finishReviewedPhotos"),
+                "withdrawing answers nothing")
+        #expect(source.contains("DisposableCameraView(store: store, presentsOwnSheet: $cameraPresentsOwnSheet)"),
+                "the camera reports its own sheets up")
+        #expect(source.contains(".onChange(of: cameraPresentsOwnSheet)") && source.contains(".onChange(of: activeSheet == nil)"),
+                "and each covering presentation re-checks when it goes")
+    }
+
+    /// Fix round C-F1/L-F1: the camera's Develop review renders and answers its snapshotted ids,
+    /// never the live list an ending can move out from under it.
+    @Test func theCameraReviewAnswersItsSnapshotWhereverThePhotosAreHeld() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/DisposableCameraView.swift"))
+        let sheet = try #require(MeshRoutedSourceScan.bracedBody(after: "private var reviewSheet: some View", in: source))
+        #expect(sheet.contains("photos: developReviewPhotos"), "the grid renders the snapshot wherever it is held")
+        #expect(sheet.contains("manager.finishSessionPhotos(keeping: [], of: developReviewIDs)"),
+                "Delete all answers the snapshot")
+        let keep = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func keepSelectedSessionPhotos() async", in: source))
+        #expect(keep.contains("manager.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)"),
+                "Keep selected answers the snapshot")
+        #expect(!source.contains("deleteAllSessionPhotos()"), "no answer scoped to the live list alone")
+        #expect(source.contains("manager.photosAwaitingAnswer(among: developReviewIDs)"))
     }
 }

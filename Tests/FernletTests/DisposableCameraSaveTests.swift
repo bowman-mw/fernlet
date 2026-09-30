@@ -99,7 +99,7 @@ struct DisposableCameraSaveTests {
     @Test func disposableCameraSource_hydratesBeforeExport_andKeepsWithoutTheSaver() throws {
         let source = try RepoRoot.source("App/Fernlet/DisposableCameraView.swift")
 
-        #expect(source.contains("manager.hydratedPhotos(manager.sessionPhotos.filter"),
+        #expect(source.contains("manager.hydratedPhotos(developReviewPhotos.filter"),
                 """
                 The disposable camera's Photos export must rehydrate the ticked session photos \
                 (manager.hydratedPhotos(...)) before handing them to FriendPhotoLibrarySaver — \
