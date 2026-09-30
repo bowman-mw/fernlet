@@ -71,21 +71,23 @@ standard install prompt for Fernlet itself — the property that made an `MSMess
 transport for the separate Coach app, and the right one here. Messages matches the card to
 `MSMessageExtensionBalloonPlugin:3RTUPF8FFH:MBO.Fernlet.MessagesExtension`, so the prompt also appears
 on any device whose Fernlet has no such extension — a build older than 24 (the first TestFlight build
-to carry it) — and on an iPad or a Mac, since the extension is iPhone-only. **That prompt is empty while Fernlet
-has no public App Store page**, and a `data:` URL gets no browser fallback (Apple loads only an HTTP(S)
-message URL when no app can open it) — the 2026-09-29 diagnosis of the owner's "pops up and is blank"
-report, **not confirmed**: nobody has yet said which device and build tapped the card, and the owner's
-own iPhone carried build 24 when the report came in, so if that phone was the recipient the diagnosis
-cannot apply and only the device logs `Docs/MessagesExtensionReleaseChecklist.md` lists can say what
-did. Nor does anything here change what that recipient taps into: only a fallback `https` message URL
-or a public App Store page would put something in the sheet, and both are the owner's call. Since
-2026-09-30 every card carries one line meant for that recipient, the layout's `trailingSubcaption`
-"Opens in Fernlet on iPhone" (`FernletMessagesCopy.cardOpensInFernlet`) — a mitigation, not a fix.
+to carry it) — and on an iPad or a Mac, since the extension is iPhone-only. That prompt is empty while
+Fernlet has no public App Store page, and a `data:` URL gets no browser fallback (Apple loads only an
+HTTP(S) message URL when no app can open it). Every card carries one line meant for that recipient,
+the layout's `trailingSubcaption` "Opens in Fernlet on iPhone" (`FernletMessagesCopy.cardOpensInFernlet`).
 Messages draws a template layout itself, and Apple describes a recipient without the app seeing that
-layout, so the line is *expected* to reach them; that is unverified. It has been seen only on a
-recipient that has the extension, and the one simulator attempt at a recipient without it (Fernlet
-uninstalled on the receiving side) emptied the thread instead of drawing any card, so it could not
-tell.
+layout, so the line is *expected* to reach them; that is unverified.
+
+**A blank card after a Fernlet update is Messages, not this extension** (confirmed by the owner
+2026-09-30; it was the owner's "pops up and is blank" report). When Fernlet is updated or reinstalled
+while Messages keeps running, pkd registers this extension under a new UUID, but the running Messages
+process keeps asking for the old one: MobileSMS logs `Failed to start plugin; pkd returned an error:
+... "no such plugin (uuid not found)"` and `[com.apple.Messages:AppCards] Loaded remote view.
+Success=false`, and the card's sheet — blank for its first ~1.2-1.5 s even when all is well — is never
+filled. The composer (+ > Fernlet) is blank in the same state, and every re-tap fails until Messages is
+relaunched. None of this extension's code runs, so it cannot detect or repair it; force-quitting
+Messages once after each Fernlet update is the fix, and the release checklist carries the tester note.
+It reproduces on the simulator by reinstalling Fernlet while MobileSMS keeps running.
 
 ### What it keeps
 

@@ -270,12 +270,13 @@ enum FernletMessagesCopy {
     /// The one line on a sent card aimed at a recipient who CANNOT open it (2026-09-30). The card is a
     /// serverless `data:` URL bound to Fernlet's iMessage extension, so on a device without that
     /// extension — no Fernlet, a Fernlet build older than 24, an iPad or a Mac — Messages answers a tap
-    /// with its own install sheet, which has nothing to show while Fernlet has no public App Store page
-    /// (the 2026-09-29 diagnosis of the owner's "pops up and is blank" report; not confirmed on the
-    /// device that showed it). Messages draws the template layout itself, so this line is EXPECTED to
-    /// be what that recipient can read — unverified: it has been seen only on a recipient that has the
-    /// extension. A mitigation, not a fix; the sheet stays empty. Fernlet users see it too, hence the
-    /// neutral wording.
+    /// with its own install sheet, which has nothing to show while Fernlet has no public App Store page.
+    /// Messages draws the template layout itself, so this line is EXPECTED to be what that recipient
+    /// can read — unverified: it has been seen only on a recipient that has the extension. It does not
+    /// fill the sheet. (The owner's "pops up and is blank" report turned out to be something else: a
+    /// stale extension registration inside a Messages process that outlived a Fernlet update, fixed by
+    /// force-quitting Messages — see the extension's DocC page.) Fernlet users see the line too, hence
+    /// the neutral wording.
     static var cardOpensInFernlet: String {
         String(localized: "messages.card.opensInFernlet", defaultValue: "Opens in Fernlet on iPhone",
                comment: "Small line in the lower-right corner of every sent recipe or workout card. Every recipient reads it, including one whose device cannot open the card (no Fernlet, an older Fernlet, an iPad or a Mac), so it says where the card opens, neutrally, without instructions. 'Fernlet' is the product name and must NOT be translated; 'iPhone' is Apple's product name. Keep it short — Messages truncates this corner hard.")

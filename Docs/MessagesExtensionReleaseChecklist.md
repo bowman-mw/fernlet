@@ -36,28 +36,29 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
   are rejected before any inbox write.
 - [ ] Receiver does not have Fernlet: confirm Messages shows the standard app-install path and no
   Fernlet data is exposed outside the card.
-  *2026-09-30: the owner reported that receiving a recipe "pops up and is blank". The diagnosis (not
-  yet confirmed on the device that showed it) is this row: a device with no Fernlet iMessage extension
-  able to open the card — no Fernlet, a Fernlet build older than 24 (build 24 is the first TestFlight
-  build that carries the extension), or an iPad or Mac (the extension is iPhone-only) — gets Messages'
-  install sheet, which is empty while Fernlet has no public App Store page, and the card's `data:` URL
-  gets no browser fallback. What to record: which device and Fernlet build tapped the card, and
-  whether the sheet is empty. One fact already cuts against the diagnosis: the owner's own iPhone
-  carried build 24 when the report came in, so if that phone was the recipient it cannot apply. Every
-  card now carries "Opens in Fernlet on iPhone" as its trailing subcaption so that recipient can read
-  why — a mitigation, not a fix: the sheet stays empty until a fallback `https` message URL or a
-  public App Store page exists (the owner's call). On a receiving device WITHOUT Fernlet (or with a
-  build older than 24), confirm the bubble is drawn at all, with its caption and that line, and not
-  truncated: it has been seen only on a recipient that has the extension, and the one simulator
-  attempt without it emptied the thread instead. If a phone WITH build 24 or later shows a blank
-  panel instead, the diagnosis is wrong: capture `log stream` (or Console) filtered on `process ==
-  "FernletMessagesExtension" OR process == "MobileSMS"` while tapping the card, pull that phone's
-  crash logs (`devicectl device copy from --domain-type systemCrashLogs`), note how long the panel
-  stays blank — Messages shows its own blank panel with a spinner until the extension draws its first
-  frame — and record whether Fernlet is listed in that phone's Messages app drawer (the + menu), since
-  an iMessage app the drawer does not list may not be what answers the tap.*
-- [ ] TestFlight note for testers: Fernlet cards open only on an iPhone with build 24 or later;
-  anyone on an older build sees an empty sheet until they update.
+  The install sheet is empty while Fernlet has no public App Store page, and the card's `data:` URL
+  gets no browser fallback, so such a recipient sees an empty sheet. Every card carries "Opens in
+  Fernlet on iPhone" as its trailing subcaption so that recipient can read why. On a receiving device
+  WITHOUT Fernlet (or with a build older than 24, the first TestFlight build that carries the
+  extension), confirm the bubble is drawn at all, with its caption and that line, and not truncated:
+  it has been seen only on a recipient that has the extension.
+- [ ] After installing a Fernlet update, force-quit Messages on BOTH phones, then send and open one
+  card. *2026-09-30, CONFIRMED by the owner: the "pops up and is blank" report was Messages, not this
+  extension. When Fernlet is updated or reinstalled while Messages keeps running, pkd registers the
+  extension under a new UUID but the running Messages process keeps asking for the old one, and the
+  tapped card's sheet (always blank for its first ~1.2-1.5 s) is never filled. Log signature, from
+  MobileSMS: `[com.apple.PlugInKit:lifecycle] ... [MBO.Fernlet.MessagesExtension(1.0)] Failed to start
+  plugin; pkd returned an error: ... Code=4 "no such plugin (uuid not found)"`, then
+  `[com.apple.Messages:AppCards] Loaded remote view. Success=false`. The + > Fernlet composer is blank
+  in the same state, and every re-tap fails until Messages is relaunched. No Fernlet code runs, so the
+  extension cannot detect or fix it. Reproduced on the iOS 26.5 simulator with the Release build of
+  build 24 (reinstall Fernlet while MobileSMS keeps running, then tap a received card); a freshly
+  launched Messages draws the card in ~1.4 s. On the owner's iPhone, the Messages process had survived
+  the build-24 TestFlight update; force-quitting Messages fixed it. Report it to Apple (Feedback:
+  Messages keeps a stale PlugInKit UUID after the containing app updates).*
+- [ ] TestFlight "What to Test" note: "After installing a Fernlet update, force-quit Messages once on
+  each phone before sending or opening Fernlet cards." Fernlet cards open only on an iPhone with build
+  24 or later.
 - [ ] Forward each card, then open it on a second recipient device. Confirm the packet UUID/hash
   survive forwarding and the replay ledger prevents a second canonical import.
 - [ ] Delete the source recipe/workout after sending. Confirm the received packet remains
