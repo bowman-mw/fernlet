@@ -293,6 +293,17 @@ final class FernletStore {
         manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
         return manager
     }()
+    /// The one presenter of the session-end photo review (session photos U3, 2026-09-30): first
+    /// thing shown, in its own overlay window above every tab and sheet, and the source of the run
+    /// policy's `sessionPhotoReviewBlocksDiscovery` fact. It holds this store weakly (as its
+    /// ``SessionPhotoReviewHost``); the Photos-library saver is injected HERE, the composition root,
+    /// so the coordinator's only route to the camera roll is its post-answer export.
+    @ObservationIgnored private(set) lazy var sessionPhotoReviewCoordinator = SessionPhotoReviewCoordinator(
+        manager: meshNetworkManager,
+        host: self,
+        presenter: SessionPhotoReviewOverlayPresenter(),
+        saveKeptPhotosToLibrary: { try await FriendPhotoLibrarySaver.save($0) }
+    )
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
@@ -2167,7 +2178,9 @@ final class FernletStore {
     /// before discovery is re-armed; on a hard stop the gate closes before the session is torn down.
     ///
     /// The store owns the tab mirror (``selectedTab``), the age record, the wipe bracket, the two
-    /// nearby opt-ins and the manager's two session predicates; the edge owns the other three facts.
+    /// nearby opt-ins, the manager's two session predicates and the session-photo review's discovery
+    /// block (``sessionPhotoReviewCoordinator``, whose edge ContentView forwards); the edge owns the
+    /// other three facts.
     /// `continuation` is ``meshContinuationState``'s feed since P8 item 6 — the policy is FED, never
     /// driven: nothing in this body registers, submits or completes a task, and nothing outside
     /// ``MeshContinuationTaskHost`` writes the claim. The host is deliberately not called from
@@ -2188,7 +2201,8 @@ final class FernletStore {
                 hasCommittedPeer: meshNetworkManager.hasCommittedPeer
             ),
             allowNearbyPresence: settings.allowNearbyPresence,
-            allowNearbyRecipeShares: settings.allowNearbyRecipeShares
+            allowNearbyRecipeShares: settings.allowNearbyRecipeShares,
+            sessionPhotoReviewBlocksDiscovery: sessionPhotoReviewCoordinator.blocksDiscovery
         )
         let verdict = ProximityRunPolicy.verdict(for: input)
         let previous = proximityRunVerdict

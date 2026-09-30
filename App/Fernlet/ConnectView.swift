@@ -47,23 +47,27 @@ nonisolated enum FriendsRoute: Hashable {
 /// ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the "is there a peer right now"
 /// predicate (P6 item 2) — completes; otherwise it renders the album layout — the
 /// post-session shop-window card, the nearby-peer banner (with the QR verify ceremony on manual
-/// commits), and the searchable photo wall. It also owns the session-end review flow:
-/// `presentDisconnectReviewIfNeeded()` presents either the full photo review or the compact
-/// keep-as-friends prompt off observable model state (`pendingFriendReview` — its candidates and
-/// the ended session's unreviewed photos, which every ending promotes into it), gated on
-/// `isSessionLive` so it presents once the SESSION has ended and never on a link blip, and so a
-/// review promoted while no instance existed (or while the scene was dark) still presents on the
-/// next appearance or activation. Every trigger schedules a short-deferred check rather than
-/// presenting on the spot, the check never requests over the camera's own sheets or the root sheet,
-/// and a request whose sheet never appears is withdrawn unconsumed and re-asked by a bounded
-/// landing watchdog — a dropped request can no longer latch the surface shut. The photos are held
-/// in the sealed pending corpus until this answer (2026-09-30: nothing on the wall, nothing in the
-/// camera roll before the choice); the answer goes through `finishReviewedPhotos`, and only when
-/// the person turned on "Also save kept photos to Photos" are the photos it reports KEPT exported,
-/// re-read from the wall. An answer that did not apply keeps the sheet up with an inline failure.
-/// Kept friends are minted one-sided via ``FernletStore``'s `keepProximityFriends`, and the
-/// candidate half is consumed with `completeFriendReview` — never by clearing the live roster,
-/// which would clobber the next session's entries.
+/// commits), and the searchable photo wall.
+///
+/// **The session-end PHOTO review is not this view's** (session photos U3, 2026-09-30: "the pop up
+/// screen for selecting photos should be the first thing shown"). ``SessionPhotoReviewCoordinator``
+/// presents it app-wide in its own overlay window, above whatever tab or sheet is up. This view
+/// keeps two pieces of it: the ``PendingPhotoReviewCard`` in the album's nearby-status slot while
+/// photos are waiting (its "Choose photos" re-presents a review put off with "Not now"), and the
+/// launch restore's resume OFFER withheld while the review blocks discovery.
+///
+/// It still owns the compact keep-as-friends prompt for a session that produced NO photos:
+/// `presentDisconnectReviewIfNeeded()` presents it off observable model state
+/// (`pendingFriendReview`'s candidates), gated on `isSessionLive` so it presents once the SESSION
+/// has ended and never on a link blip, and — photos first (invariant I17) — never while photos are
+/// outstanding, the overlay is up or the review blocks discovery; a prompt already up is withdrawn
+/// unconsumed the moment the overlay shows, so a batch that turned into a photo batch under it has
+/// its candidates answered once, by the overlay. Every trigger schedules a short-deferred check
+/// rather than presenting on the spot, the check never requests over the camera's own sheets or the
+/// root sheet, and a request whose sheet never appears is withdrawn unconsumed and re-asked by a
+/// bounded landing watchdog. Kept friends are minted one-sided via ``FernletStore``'s
+/// `keepProximityFriends`, and the candidate half is consumed with `completeFriendReview` — never by
+/// clearing the live roster, which would clobber the next session's entries.
 struct FriendsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -76,30 +80,12 @@ struct FriendsView: View {
     /// Nil shows "Connected" alone, never an identifier in its place.
     @State private var connectionPeerName: String?
     @State private var sessionReady = false
-    @State private var disconnectReviewPresented = false
-    @State private var selectedForSave: Set<UUID> = []
     // Phase 2 friend minting: the promoted batch this instance is presenting (consumed via
     // completeFriendReview on finalize), candidates snapshotted at presentation time, and keeps.
     @State private var reviewBatch: MeshFriendReviewBatch?
-    /// The batch photos the photo review is showing, snapshotted at presentation: the answer is
-    /// scoped to exactly these, so a photo promoted while the sheet is up stays pending rather than
-    /// being discarded unseen.
-    @State private var reviewPhotos: [FriendPhotoPayload] = []
     @State private var friendCandidates: [MeshSessionRosterEntry] = []
     @State private var keptFriendFingerprints: Set<String> = []
     @State private var keepFriendsPromptPresented = false
-    @State private var photoSaveError: PhotoSaveFailure? = nil
-    /// The review's opt-in camera-roll toggle, off each time the review presents.
-    @State private var alsoSaveToPhotos = false
-    /// Why the last answer did not apply in full; the sheet stays up and says so.
-    @State private var reviewAnswerFailure: SessionPhotoAnswerFailure?
-    /// Kept photos the last answer removed because their held bytes could not be opened.
-    @State private var reviewUnreadableCount = 0
-    /// What the review is busy with after the answer (the Photos export).
-    @State private var reviewWorking: FriendPhotoReviewWorkingMessage?
-    /// Where the review's answer waits for a failed Photos export's alert to be closed before it
-    /// leaves the session and hides (fix round 1, U2-C-U2-R2 / U2-L-U2-R2).
-    @State private var saveFailureAcknowledgement = PhotoSaveFailureAcknowledgement()
     @State private var selectedAlbumPostID: UUID?
     @State private var sessionSearchText = ""
     @State private var cacheWarningDismissed = false
@@ -137,10 +123,10 @@ struct FriendsView: View {
     private static let reviewLandingGrace: Duration = .seconds(2)
     /// Re-requests per trigger after a request that did not land (R2).
     private static let maxReviewRetries = 4
-    /// How long the "couldn't be opened" notice stays on the review before it hides.
-    private static let unreadableNoticeDuration: Duration = .milliseconds(1_800)
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
+    /// The app-level presenter of the session-end photo review (session photos U3).
+    private var reviewCoordinator: SessionPhotoReviewCoordinator { store.sessionPhotoReviewCoordinator }
 
     var body: some View {
         ZStack {
@@ -187,11 +173,10 @@ struct FriendsView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { scheduleReviewCheck() } }
         .onChange(of: cameraPresentsOwnSheet) { _, up in if !up { scheduleReviewCheck() } }
         .onChange(of: activeSheet == nil) { _, clear in if clear { scheduleReviewCheck() } }
-        // The held photos' decrypt seam opening (an unlock, the foreground leg, the reconcile) and a
-        // duress session ending are both edges a waiting review presents on; a duress session
-        // STARTING withdraws a review that is up, unanswered (fix round 1, U2-L-U2-R1).
-        .onChange(of: manager.heldPhotosCanBeShown) { _, canShow in if canShow { scheduleReviewCheck() } }
-        .onChange(of: store.duressSessionActive) { _, active in handleDuressSessionChange(active: active) }
+        // Photos first (I17): the overlay showing withdraws a keep prompt that is up, unanswered; the
+        // overlay going, or the review's discovery block falling, is when a prompt may be due.
+        .onChange(of: reviewCoordinator.isShowing) { _, showing in handleOverlayChange(showing: showing) }
+        .onChange(of: reviewCoordinator.blocksDiscovery) { _, blocked in if !blocked { scheduleReviewCheck() } }
         .task(id: reviewCheckRequest) { await runDeferredReviewCheck() }
         .task(id: reviewLandingRequest) { await confirmSessionEndSheetLanded() }
         .onChange(of: manager.isInSession) { wasInSession, nowInSession in
@@ -202,9 +187,6 @@ struct FriendsView: View {
         }
         .onChange(of: connectedPeerName()) { _, name in
             adoptDisclosedPeerName(name)
-        }
-        .sheet(isPresented: $disconnectReviewPresented) {
-            disconnectReviewSheet
         }
         // Sessions with no photos but eligible new-friend candidates get the compact prompt.
         // Dismissing without choosing = skip all: onDismiss mints only the toggled keeps and
@@ -223,14 +205,16 @@ struct FriendsView: View {
         }
     }
 
-    /// Whether ANY of this surface's three presenters is up right now — the one predicate that
-    /// stands between "a cover is showing" and a second presentation request SwiftUI silently drops
-    /// (P6 item 2 fix review, finding P2-2).
+    /// Whether ANY of this surface's presenters is up right now — the one predicate that stands
+    /// between "a cover is showing" and a second presentation request SwiftUI silently drops (P6
+    /// item 2 fix review, finding P2-2).
     ///
-    /// **Three, not two.** `body` hangs a celebration `fullScreenCover`
-    /// (`$showConnectionAnimation`), two session-end `.sheet`s (`$disconnectReviewPresented`,
-    /// `$keepFriendsPromptPresented`) and the album photo feed's `fullScreenCover`
-    /// (`$selectedAlbumPostID`) off ONE anchor. The heal arm special-cased only the two sheets, so a
+    /// **Two now, and the photo review is not one of them.** `body` hangs a celebration
+    /// `fullScreenCover` (`$showConnectionAnimation`), the keep-friends `.sheet`
+    /// (`$keepFriendsPromptPresented`) and the album photo feed's `fullScreenCover`
+    /// (`$selectedAlbumPostID`) off ONE anchor. The session-end PHOTO review used to be a fourth; it
+    /// moved to ``SessionPhotoReviewCoordinator``'s overlay window (session photos U3), which draws
+    /// above this surface without presenting from it. The heal arm once special-cased only the sheets, so a
     /// commit while a wall photo was open took the celebrate branch: two `fullScreenCover`s cannot
     /// both present from one anchor, the celebration never appeared, nothing reset
     /// `showConnectionAnimation`, and `.accessibilityHidden(showConnectionAnimation)` on the whole
@@ -242,7 +226,7 @@ struct FriendsView: View {
     /// Read by the heal arm and by ``presentDisconnectReviewIfNeeded()``, which is the other site
     /// that requests a presentation and therefore the other site that can lose one.
     private var aPresentationIsUp: Bool {
-        disconnectReviewPresented || keepFriendsPromptPresented || selectedAlbumPostID != nil
+        keepFriendsPromptPresented || selectedAlbumPostID != nil
     }
 
     /// The **layout** half of the session transition: what surface the Social tab draws.
@@ -296,17 +280,15 @@ struct FriendsView: View {
         if !hadPeer && hasPeer {
             if aPresentationIsUp {
                 // A session became live again while a session-end sheet was up: dismiss WITHOUT
-                // consuming — the batch, its unanswered photos included, persists and re-presents
-                // (merged) at the next real teardown. Clearing
-                // reviewBatch first turns the keep sheet's onDismiss finalize into a no-op, and
-                // skipping the fullScreenCover avoids presenting it in the same transaction as a
-                // sheet dismissal (one of the two would drop).
+                // consuming — the batch persists and re-presents (merged) at the next real teardown.
+                // Clearing reviewBatch first turns the keep sheet's onDismiss finalize into a no-op,
+                // and skipping the fullScreenCover avoids presenting it in the same transaction as a
+                // sheet dismissal (one of the two would drop). The photo review is the overlay's,
+                // which never presents over a live session.
                 reviewBatch = nil
-                reviewPhotos = []
                 friendCandidates = []
                 keptFriendFingerprints = []
                 keepFriendsPromptPresented = false
-                disconnectReviewPresented = false
                 showConnectionAnimation = false
                 sessionReady = true
             } else {
@@ -325,160 +307,6 @@ struct FriendsView: View {
             }
             scheduleReviewCheck()
         }
-    }
-
-    /// The end-of-session photo review sheet (keep/discard the session's photos, and the friend
-    /// candidates alongside them). The photos are HELD, never on the wall, until this answer; tiles
-    /// load through the manager's gated review seam; the camera-roll copy is the sheet's opt-in
-    /// toggle, applied here only after the keep landed and only to the photos that did.
-    private var disconnectReviewSheet: some View {
-        FriendPhotoReviewSheet(
-            photos: reviewPhotos,
-            selectedIDs: $selectedForSave,
-            friendCandidates: friendCandidates,
-            keptFriendFingerprints: $keptFriendFingerprints,
-            alsoSaveToPhotos: $alsoSaveToPhotos,
-            canKeep: manager.wallCanTakeKeeps,
-            workingMessage: reviewWorking,
-            answerFailure: reviewAnswerFailure,
-            unreadableCount: reviewUnreadableCount,
-            tileReloadToken: manager.heldPhotosCanBeShown ? 1 : 0,
-            keepSelected: { await keepSelectedSessionPhotos() },
-            discardAll: { await discardAllSessionPhotos() },
-            loadImageData: { manager.reviewThumbnailData(for: $0) }
-        )
-        // Not dismissable while Keep is on offer and the last answer applied: every exit is then an
-        // answer. While the wall cannot take a keep, or the last answer did not apply (the seam
-        // closed under it, a read or a wall write failed), a swipe-down is the way out that answers
-        // nothing — otherwise Delete all would be the only button that could ever work, a forced
-        // discard (fix round 1, U2-L-U2-R1). The batch stays, and re-presents.
-        .interactiveDismissDisabled(manager.wallCanTakeKeeps && reviewAnswerFailure == nil)
-        .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
-        // The alert closing — either button, or the system taking it down — releases an answer
-        // waiting on it; so does the sheet going away, so a torn-down sheet never strands one.
-        .onChange(of: photoSaveError == nil) { _, cleared in if cleared { saveFailureAcknowledgement.acknowledge() } }
-        .onAppear { sessionEndSheetLanded = true }
-        .onDisappear { saveFailureAcknowledgement.acknowledge() }
-    }
-
-    /// The review's primary action: keeps the ticked shown photos (the unticked shown ones are
-    /// deleted), answers the friend half, and — only if the toggle is on — exports what the answer
-    /// reports kept. The Photos-library authorization is asked only then, after the keep has
-    /// landed, so a denial can never cost the keep (FRND-12).
-    ///
-    /// The answer is scoped to `reviewPhotos`, the ones this sheet showed (2026-09-30). A failed
-    /// export's alert is shown INSIDE the review and closed by the person before the review goes on
-    /// to leave and hide (design §4.6; fix round 1, U2-C-U2-R2 / U2-L-U2-R2) — hiding in the same
-    /// turn took the alert down unseen.
-    private func keepSelectedSessionPhotos() async {
-        guard let batch = reviewBatch else { return }
-        let leaving = meshToLeaveAfterTheAnswer()
-        let answer = manager.finishReviewedPhotos(Set(reviewPhotos.map(\.id)), keeping: selectedForSave, in: batch.id)
-        answerFriendHalfOfPhotoReview()
-        await exportKeptPhotosIfAsked(answer)
-        if photoSaveError != nil { await saveFailureAcknowledgement.wait() }
-        await finishPhotoReview(after: answer, leaving: leaving)
-    }
-
-    /// The camera-roll half of the answer, and the ONLY place this surface hands photos to
-    /// `FriendPhotoLibrarySaver`: the photos the answer reports landed on the wall
-    /// (`SessionPhotoAnswer.keptOnWall`), hydrated from the WALL — never a pending byte, and never
-    /// before the answer. Purely additive: a failure (a Photos denial included) sets
-    /// `photoSaveError`, whose alert the still-present sheet shows — the caller waits for it to be
-    /// closed before hiding — and never touches the keep.
-    private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async {
-        guard alsoSaveToPhotos, !answer.keptOnWall.isEmpty else { return }
-        let toSave = manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })
-        // If no bytes could be loaded/decrypted, don't report a false success.
-        guard !toSave.isEmpty else {
-            photoSaveError = .generic
-            return
-        }
-        reviewWorking = .savingToPhotos
-        defer { reviewWorking = nil }
-        do {
-            try await FriendPhotoLibrarySaver.save(toSave)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        } catch {
-            photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
-        }
-    }
-
-    /// Deletes every photo this sheet showed and answers the friend half — the keep action's twin
-    /// with nothing kept, which needs only the pending index (so it works while the wall cannot be
-    /// read).
-    private func discardAllSessionPhotos() async {
-        guard let batch = reviewBatch else { return }
-        let leaving = meshToLeaveAfterTheAnswer()
-        let answer = manager.finishReviewedPhotos(Set(reviewPhotos.map(\.id)), keeping: [], in: batch.id)
-        answerFriendHalfOfPhotoReview()
-        await finishPhotoReview(after: answer, leaving: leaving)
-    }
-
-    /// The mesh an answer may leave once it has finished: the one held at the moment of the answer,
-    /// and only while its session is not live — door 3's give-up keeps an ended mesh held for
-    /// exactly this leave.
-    ///
-    /// Decided AT the answer, not after it (fix round 1, U2-L-U2-R4): the export can wait on the
-    /// Photos permission prompt for as long as the person takes, the unreadable notice pauses, and
-    /// the failure alert waits to be closed. Meanwhile a given-up pair can heal back into a LIVE
-    /// session (Unit 2 has no discovery block), or a new session can form; a leave decided afterwards
-    /// from `currentMesh != nil` alone would sign a departure/termination on a mesh the pair had just
-    /// resumed. ``finishPhotoReview(after:leaving:)`` leaves only if this same mesh is still held and
-    /// still not live.
-    private func meshToLeaveAfterTheAnswer() -> UUID? {
-        guard !manager.isSessionLive else { return nil }
-        return manager.currentMesh?.meshID
-    }
-
-    /// After an answer: either stay up — the answer left photos still held (`notApplied`), so the
-    /// sheet shrinks to exactly those, keeps its batch for the retry, and says why inline, rather
-    /// than hiding and letting the deferred check re-present it in a loop — or finish. Finishing
-    /// shows the one-line "couldn't be opened" notice first when the answer found unreadable
-    /// photos, then leaves the mesh the answer found held (door 3's give-up keeps it for exactly
-    /// this; after a verified termination, a removal or the ceiling there is nothing left to leave)
-    /// — only if that same mesh is still held and its session has not come back to life in the
-    /// meantime (``meshToLeaveAfterTheAnswer()``) — and hides.
-    private func finishPhotoReview(after answer: SessionPhotoAnswer, leaving: UUID?) async {
-        guard answer.notApplied.isEmpty else {
-            reviewAnswerFailure = answer.failure
-            reviewPhotos = reviewPhotos.filter { answer.notApplied.contains($0.id) }
-            selectedForSave.formIntersection(Set(reviewPhotos.map(\.id)))
-            return
-        }
-        reviewAnswerFailure = nil
-        if !answer.unreadable.isEmpty {
-            reviewUnreadableCount = answer.unreadable.count
-            await pauseForUnreadableNotice()
-        }
-        reviewBatch = nil
-        reviewPhotos = []
-        if let leaving, manager.currentMesh?.meshID == leaving, !manager.isSessionLive {
-            await manager.leaveSessionAfterNotifyingPeers()
-        }
-        disconnectReviewPresented = false
-    }
-
-    /// Holds the review on screen long enough to read the "couldn't be opened" line (it is also
-    /// announced). Cancellation just ends the pause early — the hide still runs.
-    private func pauseForUnreadableNotice() async {
-        do {
-            try await Task.sleep(for: Self.unreadableNoticeDuration)
-        } catch {
-            return   // cancelled: hide at once (R7: nothing owed)
-        }
-    }
-
-    /// The friend half of a PHOTO review's answer: mints the kept candidates and consumes the
-    /// presented batch's candidates, but keeps `reviewBatch` — a photo answer that did not apply
-    /// retries against the same batch while the sheet stays up. Answered once: the section leaves
-    /// the sheet with it.
-    private func answerFriendHalfOfPhotoReview() {
-        guard let batch = reviewBatch else { return }
-        store.keepProximityFriends(from: friendCandidates, keptFingerprints: keptFriendFingerprints)
-        manager.completeFriendReview(batch.id)
-        friendCandidates = []
-        keptFriendFingerprints = []
     }
 
     /// The compact "keep these as friends?" prompt used when a session produced no photos.
@@ -525,6 +353,10 @@ struct FriendsView: View {
                     .padding(.top, 4)
 
                     shopWindowCard
+
+                    // Session photos U3: photos from the last session waiting for the choice. Discovery
+                    // is stopped meanwhile, so the nearby banner below is empty and this takes its slot.
+                    pendingPhotoReviewCard
 
                     nearbyStatusBanner
                         .animation(.easeInOut(duration: 0.3), value: manager.isSearching)
@@ -693,6 +525,18 @@ struct FriendsView: View {
         }
     }
 
+    // MARK: - Pending photo review card (session photos U3)
+
+    /// "Photos waiting for you" while an ended session's photos wait for the choice — never over a
+    /// live session, and never under a duress decoy (hide, never delete: the corpus is untouched,
+    /// and a dead "Choose photos" would make the decoy distinguishable).
+    @ViewBuilder
+    private var pendingPhotoReviewCard: some View {
+        if manager.hasOutstandingPhotoReview && !manager.isSessionLive && !store.duressSessionActive {
+            PendingPhotoReviewCard(count: manager.pendingReviewPhotos.count) { reviewCoordinator.reopen() }
+        }
+    }
+
     // MARK: - Nearby status banner
 
     @ViewBuilder
@@ -759,9 +603,11 @@ struct FriendsView: View {
             state: store.meshContinuationState,
             lastAudit: store.meshContinuationLastAudit
         )
+        // The resume OFFER is withheld while the session-photo review blocks discovery: its promise
+        // ("keep this tab open … you'll reconnect") is false until the person has chosen.
         let resume: SessionResumeCard? = sessionResumeDismissed
             ? nil
-            : SessionResumeCopy.card(for: manager.sessionResumePresentation)
+            : SessionResumeCopy.card(for: reviewCoordinator.resumePresentation(manager.sessionResumePresentation))
         switch MeshContinuationCardPresentation.slotDecision(continuation: continuation, resume: resume) {
         case .continuation:
             if let continuation { continuationBanner(continuation) }
@@ -1059,31 +905,27 @@ struct FriendsView: View {
         connectionPeerName = name
     }
 
-    /// Session-end review, driven off OBSERVABLE MODEL STATE (Phase 2, "Session-end review is
-    /// model-state, not view-events"): presents whenever a promoted `pendingFriendReview` batch
-    /// exists, run by the deferred check every trigger schedules (``scheduleReviewCheck()``: the
-    /// batch moving, the session ending, the surface swapping or appearing, scene activation, a
-    /// covering presentation going away) and confirmed by the landing watchdog. Friend candidates come
-    /// from the BATCH entries; eligibility is computed here — at presentation time, against the live
-    /// trust vault — so peers trusted or blocked mid-session never reach the prompt.
+    /// The session-end KEEP-AS-FRIENDS prompt, driven off OBSERVABLE MODEL STATE (Phase 2,
+    /// "Session-end review is model-state, not view-events"): presents whenever a promoted
+    /// `pendingFriendReview` batch carries candidates and NO photos, run by the deferred check every
+    /// trigger schedules (``scheduleReviewCheck()``: the batch moving, the session ending, the
+    /// surface swapping or appearing, scene activation, a covering presentation going away, the
+    /// overlay going) and confirmed by the landing watchdog. Friend candidates come from the BATCH
+    /// entries; eligibility is computed here — at presentation time, against the live trust vault —
+    /// so peers trusted or blocked mid-session never reach the prompt.
     ///
-    /// **The photos come from the batch too, never from `sessionPhotos`** (2026-09-30). The last
-    /// device left in a mesh ends through a verified termination whose teardown emptied
-    /// `sessionPhotos` in the same main-actor turn, so this function — which runs after that turn —
-    /// read "no photos" and offered at most the keep-friends prompt, while every photo stayed on the
-    /// wall unasked. Every ending now promotes the unreviewed photos into the batch (held in the
-    /// sealed pending corpus, never on the wall), and a relaunch rebuilds it from that corpus;
-    /// `manager.pendingReviewPhotos` is that list minus anything answered since, and all of it
-    /// starts ticked, as the camera's own review does.
+    /// **Photos first** (session photos U3, invariant I17). A batch with photos is the overlay's
+    /// (``SessionPhotoReviewCoordinator``), which answers its candidates inside the photo review, so
+    /// this returns early while photos are outstanding, while the overlay shows, and while the
+    /// review blocks discovery (an answer or a leave still running); the photo half is never decided
+    /// here — `sessionEndReview` is asked with `hasPhotos: false` only.
     ///
     /// The gate is `isSessionLive` — neither `isInSession` nor `hasCommittedPeer` (P6 item 2 and
-    /// its fix): a founded mesh outlives its links, so on `isInSession` this sheet would never
-    /// present again for a proximity pair (the manager would promote the batch and nothing would
-    /// show it), and on `hasCommittedPeer` a two-second blip presented it **over a live session** —
-    /// where both of its actions call `leaveSessionAfterNotifyingPeers()`, which for a pair signs a
-    /// termination and a permanent rejoin bar on a mesh the pair could still have resumed. The
-    /// model half (the manager's three hooks) and this presenting half must read the SAME predicate
-    /// or the ceremony is only half re-pointed.
+    /// its fix): a founded mesh outlives its links, so on `isInSession` this prompt would never
+    /// present again for a proximity pair, and on `hasCommittedPeer` a two-second blip presented it
+    /// **over a live session**, whose dismissal mints friends and consumes the batch mid-session.
+    /// The model half (the manager's three hooks) and this presenting half must read the SAME
+    /// predicate or the ceremony is only half re-pointed.
     ///
     /// **It never requests over a presentation, and a request is not proof** (2026-09-30 fix round,
     /// findings C-F2/L-F2). Besides this surface's own presenters it waits out the root sheet — which
@@ -1095,39 +937,24 @@ struct FriendsView: View {
     /// ``aPresentationIsUp`` shut.
     private func presentDisconnectReviewIfNeeded() {
         guard !manager.isSessionLive else { return }
-        // ``aPresentationIsUp``, not the two sheet flags: a `.sheet` requested while the album's
+        // ``aPresentationIsUp``, not the sheet flag alone: a `.sheet` requested while the album's
         // `fullScreenCover` is up is one of the two presentations SwiftUI drops (fix review P2-2),
-        // and a review that silently never appears is a batch the user never gets to answer.
+        // and a prompt that silently never appears is a batch the user never gets to answer.
         guard !aPresentationIsUp else { return }
         // Nor over a presentation this surface does not own (fix round C-F2/L-F2): the camera's own
         // sheets and alerts, or the root sheet. Each re-checks here the moment it goes away.
         guard activeSheet == nil, !cameraPresentsOwnSheet else { return }
+        // Photos first (I17): the overlay answers a photo batch's candidates, once.
+        guard !manager.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,
+              !reviewCoordinator.blocksDiscovery else { return }
         guard let batch = manager.pendingFriendReview else { return }
-        // Held photos are drawn and answered only through the manager's decrypt seam, so a review
-        // with photos waits until that seam is open — and never presents under a duress decoy: its
-        // tiles would be blank, every answer refused, and "N photos waiting" is itself the tell.
-        // Hide, never delete: the batch stays and presents when the decoy ends (fix round 1,
-        // U2-L-U2-R1; design §4.7's duress row).
-        guard !manager.hasOutstandingPhotoReview || heldPhotosMayBeReviewed else { return }
         reviewBatch = batch
-        reviewPhotos = manager.pendingReviewPhotos
         friendCandidates = FriendMintingReview.eligibleCandidates(
             roster: batch.entries,
             trustedPeers: store.trustedProximityPeers
         )
         keptFriendFingerprints = []
-        switch FriendMintingReview.sessionEndReview(
-            hasPhotos: !reviewPhotos.isEmpty,
-            eligibleCandidateCount: friendCandidates.count
-        ) {
-        case .photoReview:
-            selectedForSave = Set(reviewPhotos.map(\.id))
-            alsoSaveToPhotos = false
-            reviewAnswerFailure = nil
-            reviewUnreadableCount = 0
-            photoSaveError = nil   // a failure from an earlier review never opens this one
-            disconnectReviewPresented = true
-            noteSessionEndSheetRequested()
+        switch FriendMintingReview.sessionEndReview(hasPhotos: false, eligibleCandidateCount: friendCandidates.count) {
         case .friendPromptOnly:
             keepFriendsPromptPresented = true
             noteSessionEndSheetRequested()
@@ -1135,32 +962,29 @@ struct FriendsView: View {
             // Nothing to review — consume the batch immediately so it can't re-present.
             manager.completeFriendReview(batch.id)
             reviewBatch = nil
-            reviewPhotos = []
+            friendCandidates = []
+        case .photoReview:
+            // Unreachable with `hasPhotos: false`; answered, not trapped, and answering nothing.
+            reviewBatch = nil
             friendCandidates = []
         }
     }
 
-    /// Whether this surface may present held photos right now: the manager's decrypt seam is open
-    /// (unlocked, foreground, no duress; the pending index read and reconciled) and no duress
-    /// session is in force.
-    private var heldPhotosMayBeReviewed: Bool {
-        !store.duressSessionActive && manager.heldPhotosCanBeShown
-    }
-
-    /// A duress session starting withdraws a photo review that is up WITHOUT answering it — the
-    /// heal arm's pattern: the batch, photos and candidates, stays in the manager (hide, never
-    /// delete) and presents again once the decoy ends, which is this function's other edge.
-    private func handleDuressSessionChange(active: Bool) {
-        guard active else {
+    /// The overlay's edges (invariant I17). Rising: a keep prompt that is up is withdrawn WITHOUT
+    /// minting or consuming — the heal arm's pattern, `reviewBatch` cleared first so the sheet's
+    /// `onDismiss` finalize is a no-op — because a late photo can have turned a candidates-only batch
+    /// into a photo batch under it, whose candidates the overlay now offers. Falling: a prompt may be
+    /// due.
+    private func handleOverlayChange(showing: Bool) {
+        guard showing else {
             scheduleReviewCheck()
             return
         }
-        guard disconnectReviewPresented else { return }
+        guard keepFriendsPromptPresented else { return }
         reviewBatch = nil
-        reviewPhotos = []
         friendCandidates = []
         keptFriendFingerprints = []
-        disconnectReviewPresented = false
+        keepFriendsPromptPresented = false
     }
 
     /// Completes the keep-as-friend flow: mints the kept candidates (one-sided, local-only) and
@@ -1218,34 +1042,32 @@ struct FriendsView: View {
         reviewLandingRequest &+= 1
     }
 
-    /// The landing watchdog. A session-end sheet whose content has not appeared within
+    /// The landing watchdog. A keep prompt whose content has not appeared within
     /// ``reviewLandingGrace`` was dropped — and its flag, left true, would latch
     /// ``aPresentationIsUp`` shut until the next peer commit. So it is withdrawn WITHOUT consuming
-    /// anything (the batch, photos included, stays pending) and re-requested through the deferred
-    /// check, at most ``maxReviewRetries`` times per trigger (R2).
+    /// anything (the batch stays pending) and re-requested through the deferred check, at most
+    /// ``maxReviewRetries`` times per trigger (R2).
     private func confirmSessionEndSheetLanded() async {
-        guard disconnectReviewPresented || keepFriendsPromptPresented else { return }
+        guard keepFriendsPromptPresented else { return }
         do {
             try await Task.sleep(for: Self.reviewLandingGrace)
         } catch {
             return   // a newer request re-armed the watchdog, or the surface went away (R7)
         }
-        guard disconnectReviewPresented || keepFriendsPromptPresented, !sessionEndSheetLanded else { return }
+        guard keepFriendsPromptPresented, !sessionEndSheetLanded else { return }
         withdrawUnlandedSessionEndSheet()
         guard reviewRetriesLeft > 0 else { return }
         reviewRetriesLeft -= 1
         reviewCheckRequest &+= 1
     }
 
-    /// Lowers an unlanded session-end sheet's flag without answering anything. `reviewBatch` goes
-    /// first so the keep prompt's `onDismiss` finalize is a no-op — the heal arm's rule.
+    /// Lowers an unlanded keep prompt's flag without answering anything. `reviewBatch` goes first
+    /// so the keep prompt's `onDismiss` finalize is a no-op — the heal arm's rule.
     private func withdrawUnlandedSessionEndSheet() {
         reviewBatch = nil
-        reviewPhotos = []
         friendCandidates = []
         keptFriendFingerprints = []
         keepFriendsPromptPresented = false
-        disconnectReviewPresented = false
     }
 
 }

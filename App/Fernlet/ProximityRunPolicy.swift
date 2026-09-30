@@ -4,10 +4,11 @@
 // Network migration P7 item 1 (plan §13 option A; the P7 launcher's item 1): the app-layer run
 // policy as a VALUE — one pure function from everything the app knows about its own lifecycle
 // (scene, tab, duress, iOS data protection, the age ruling, a delete-all in flight,
-// P8's continuation task, and what the mesh manager currently holds) to what each proximity radio
-// must do right now, plus the routed access gate the app already assembles.
+// P8's continuation task, what the mesh manager currently holds, and — session photos U3,
+// 2026-09-30 — whether an ended session's photo review is blocking discovery) to what each
+// proximity radio must do right now, plus the routed access gate the app already assembles.
 //
-// **A value, not a coordinator.** Everything that makes this decision hard — ten inputs, four
+// **A value, not a coordinator.** Everything that makes this decision hard — eleven inputs, four
 // radios, a continuation state that does not exist yet — is combinatorial, and combinatorics belong
 // in a table a test can enumerate, not in a control flow only a scene can reach. §13 rejects a
 // self-observing ProximityKit (option B: it imports no UIKit and cannot import `FernletLock`) and a
@@ -226,7 +227,15 @@ nonisolated enum ProximityRunPolicy {
         /// `settings.allowNearbyRecipeShares`.
         let allowNearbyRecipeShares: Bool
 
-        /// Builds an input from the ten facts.
+        /// `SessionPhotoReviewCoordinator.blocksDiscovery` (session photos U3, 2026-09-30): an
+        /// ended session's photos are still waiting for the person's choice, or an answer or a leave
+        /// the review started is still running. Stops discovery from STARTING anything — no second
+        /// session forms, and no answered session is resumed — while never changing a live
+        /// session's discovery: the coordinator answers false whenever a session is live, and the
+        /// policy lowers only a running verdict (``discoveryState(_:foreground:hardStop:)``).
+        let sessionPhotoReviewBlocksDiscovery: Bool
+
+        /// Builds an input from the eleven facts.
         ///
         /// - Parameters:
         ///   - scenePhase: The scene phase.
@@ -239,6 +248,7 @@ nonisolated enum ProximityRunPolicy {
         ///   - session: What the manager holds.
         ///   - allowNearbyPresence: The presence opt-in.
         ///   - allowNearbyRecipeShares: The recipe-share opt-in.
+        ///   - sessionPhotoReviewBlocksDiscovery: Whether the session-photo review blocks discovery.
         init(
             scenePhase: ScenePhase,
             selectedTab: FernletTab,
@@ -249,7 +259,8 @@ nonisolated enum ProximityRunPolicy {
             continuation: ProximityContinuationState,
             session: ProximitySessionPresence,
             allowNearbyPresence: Bool,
-            allowNearbyRecipeShares: Bool
+            allowNearbyRecipeShares: Bool,
+            sessionPhotoReviewBlocksDiscovery: Bool
         ) {
             self.scenePhase = scenePhase
             self.selectedTab = selectedTab
@@ -261,6 +272,7 @@ nonisolated enum ProximityRunPolicy {
             self.session = session
             self.allowNearbyPresence = allowNearbyPresence
             self.allowNearbyRecipeShares = allowNearbyRecipeShares
+            self.sessionPhotoReviewBlocksDiscovery = sessionPhotoReviewBlocksDiscovery
         }
     }
 
@@ -426,7 +438,20 @@ nonisolated enum ProximityRunPolicy {
     /// and any other tab keeps it only for a committed peer; in the background a live continuation
     /// task must not browse or admit (invariant 5), and otherwise a committed peer's links are held
     /// while a search with nobody stands down.
+    ///
+    /// The session-photo review's block (``Input/sessionPhotoReviewBlocksDiscovery``) lowers a
+    /// RUNNING verdict to what any other tab gets — ``heldForACommittedPeer(_:)`` — so neither
+    /// `startJoin` nor the resume arm runs while the person has photos to choose (owner question
+    /// Q4's default), and it touches nothing that was not going to run anyway: every background
+    /// row, and every row off the Friends tab, is already held or stopped.
     private static func discoveryState(_ input: Input, foreground: Bool, hardStop: Bool) -> ProximityRunState {
+        let state = unblockedDiscoveryState(input, foreground: foreground, hardStop: hardStop)
+        guard input.sessionPhotoReviewBlocksDiscovery, state.isRunning else { return state }
+        return heldForACommittedPeer(input.session)
+    }
+
+    /// ``discoveryState(_:foreground:hardStop:)`` before the session-photo review's block.
+    private static func unblockedDiscoveryState(_ input: Input, foreground: Bool, hardStop: Bool) -> ProximityRunState {
         if hardStop { return .stop }
         if foreground {
             switch input.selectedTab {

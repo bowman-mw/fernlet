@@ -79,35 +79,49 @@ struct PhotoSaveFailureAcknowledgementTests {
 }
 
 /// Both review hosts show a failed export inside the review and wait for it to be closed before they
-/// leave and hide, and neither opens a review with an earlier review's failure.
+/// leave and hide, and neither opens a review with an earlier review's failure. Since session photos
+/// U3 the two hosts are `SessionPhotoReviewCoordinator` (the overlay; its screen, in its own file,
+/// hangs the alert and releases the wait) and the camera's Develop sheet.
 @MainActor
 struct ReviewHostsExportFailureSourceWallTests {
 
-    /// One host's shape: its keep action, the function that opens its review, and that function's
-    /// signature as the scan finds it.
+    /// One host's shape: its keep action, the function that opens its review, the leave-and-hide
+    /// call, and the file (with its needles) that releases the wait when the alert closes or the
+    /// review goes.
     private struct Host {
         let file: String
+        let keep: String
         let presenter: String
         let finish: String
+        let releaseFile: String
+        let releases: [String]
     }
 
     private static let hosts = [
-        Host(file: "App/Fernlet/ConnectView.swift",
-             presenter: "private func presentDisconnectReviewIfNeeded()",
-             finish: "await finishPhotoReview(after: answer, leaving: leaving)"),
+        Host(file: "App/Fernlet/SessionPhotoReviewCoordinator.swift",
+             keep: "func keepSelected() async",
+             presenter: "private func present()",
+             finish: "await finish(after: answer)",
+             releaseFile: "App/Fernlet/SessionPhotoReviewScreen.swift",
+             releases: [".onChange(of: coordinator.photoSaveError == nil) { _, cleared in",
+                        "if cleared { coordinator.acknowledgeSaveFailure() }",
+                        ".onDisappear { coordinator.acknowledgeSaveFailure() }"]),
         Host(file: "App/Fernlet/DisposableCameraView.swift",
+             keep: "private func keepSelectedSessionPhotos() async",
              presenter: "private func beginDevelop()",
-             finish: "await finishDevelopReview(after: answer)")
+             finish: "await finishDevelopReview(after: answer)",
+             releaseFile: "App/Fernlet/DisposableCameraView.swift",
+             releases: [".onChange(of: photoSaveError == nil) { _, cleared in if cleared { saveFailureAcknowledgement.acknowledge() } }",
+                        "saveFailureAcknowledgement.acknowledge()\n            reviewCoordinator.cameraDevelopReviewUp = false"]),
     ]
 
     /// Export, then the wait on the acknowledgement, then the leave-and-hide — in that order, in
-    /// both hosts; the alert's closing and the sheet's disappearance both release the wait; and the
+    /// both hosts; the alert's closing and the review's disappearance both release the wait; and the
     /// function that opens the review clears any earlier failure.
     @Test func theExportFailureIsAcknowledgedBeforeTheReviewLeavesAndHides() throws {
         for host in Self.hosts {
             let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(host.file))
-            let keep = try #require(MeshRoutedSourceScan.bracedBody(
-                after: "private func keepSelectedSessionPhotos() async", in: source), "\(host.file): keep action renamed?")
+            let keep = try #require(MeshRoutedSourceScan.bracedBody(after: host.keep, in: source), "\(host.file): keep action renamed?")
             let export = try #require(keep.range(of: "await exportKeptPhotosIfAsked(answer)"), "\(host.file)")
             let wait = try #require(
                 keep.range(of: "if photoSaveError != nil { await saveFailureAcknowledgement.wait() }"),
@@ -116,14 +130,16 @@ struct ReviewHostsExportFailureSourceWallTests {
             let finish = try #require(keep.range(of: host.finish), "\(host.file)")
             #expect(export.lowerBound < wait.lowerBound && wait.lowerBound < finish.lowerBound,
                     "\(host.file): export, then the acknowledged alert, then the leave and the hide")
-            #expect(source.contains(
-                ".onChange(of: photoSaveError == nil) { _, cleared in if cleared { saveFailureAcknowledgement.acknowledge() } }"),
-                "\(host.file): the alert closing releases the wait")
-            #expect(source.contains(".onDisappear { saveFailureAcknowledgement.acknowledge() }"),
-                    "\(host.file): a torn-down sheet never strands the answer")
+            let releaser = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(host.releaseFile))
+            for needle in host.releases {
+                #expect(releaser.contains(needle), "\(host.releaseFile): the alert closing, or the review going, releases the wait")
+            }
             let opener = try #require(MeshRoutedSourceScan.bracedBody(after: host.presenter, in: source), "\(host.file)")
             #expect(opener.contains("photoSaveError = nil"),
                     "\(host.file): a failure from an earlier review never opens this one")
         }
+        let coordinator = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/SessionPhotoReviewCoordinator.swift"))
+        let acknowledge = try #require(MeshRoutedSourceScan.bracedBody(after: "func acknowledgeSaveFailure()", in: coordinator))
+        #expect(acknowledge.contains("saveFailureAcknowledgement.acknowledge()"), "the screen's release reaches the wait")
     }
 }

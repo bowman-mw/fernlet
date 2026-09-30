@@ -193,6 +193,10 @@ struct ContentView: View {
             .onChange(of: store.meshNetworkManager.isSessionLive) { _, _ in
                 applyProximityRunPolicyFromView()
             }
+            // Session photos U3: while an ended session's photos wait for the person's choice — or an
+            // answer or a leave the review started is still running — discovery must not start a
+            // second session or resume the ended one, so the block's every edge re-runs the policy.
+            .onChange(of: store.sessionPhotoReviewCoordinator.blocksDiscovery) { _, _ in applyProximityRunPolicyFromView() }
             // P8 item 6: the mesh this device is on IS the background task's identity
             // (`MBO.Fernlet.mesh-continuation.<meshID>`), so a new mesh registers a new handler and
             // a mesh ending ends the task that was continuing it. Observed here rather than in the
@@ -282,6 +286,12 @@ struct ContentView: View {
             } message: {
                 Text(messagesRecipeImportError ?? "")
             }
+            // Session photos U3: the session-end photo review is the first thing shown — its own
+            // overlay window above every sheet here, never one of them. This feeds its presenter the
+            // window scene, the scene phase, the launch and the root sheet (First Aid waits it out).
+            .modifier(SessionPhotoReviewTriggers(
+                store: store, activeSheet: activeSheet, launchComplete: launcher.isDone, scenePhase: scenePhase
+            ))
     }
 
     /// One-time "first kept friend" presence offer (Phase 4a), driven by observable store state.
@@ -567,6 +577,8 @@ struct ContentView: View {
         // UX appearance tests: jump straight to a sheet by its FernletSheet.id
         // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).
         if let initialSheet = UITestSupport.initialSheet { activeSheet = initialSheet }
+        // Session photos U3: an ended session's photos held for review before the first evaluation.
+        UITestSupport.seedHeldSessionPhotosIfRequested(on: store.meshNetworkManager)
         #endif
         // A notification tapped during a cold launch stored its deep-link before this
         // view finished preparing — open it now (live taps arrive via the onReceive handlers).

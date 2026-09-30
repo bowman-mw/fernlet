@@ -57,7 +57,9 @@ import ProximityKit
         let view = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
         let reads = view.components(separatedBy: "manager.sessionResumePresentation").count - 1
         #expect(reads == 1, "the surface samples the presentation exactly once, inside the card")
-        #expect(view.contains("SessionResumeCopy.card(for: manager.sessionResumePresentation)"),
+        // Session photos U3: the one read passes through the review coordinator's filter, which
+        // withholds only the resume OFFER while the photo review blocks discovery.
+        #expect(view.contains("SessionResumeCopy.card(for: reviewCoordinator.resumePresentation(manager.sessionResumePresentation))"),
                 "and only through the copy table — no sentence is composed in the view")
         #expect(view.contains(".accessibilityIdentifier(\"friends.sessionResume\")"),
                 "the card is reachable by identifier for the UI suite")

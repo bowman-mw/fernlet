@@ -5,8 +5,8 @@
 // phase's central test, and one that needs no simulator, no scene and no manager.
 //
 // The table is the artefact. `ProximityRunPolicyProduct.rows()` enumerates every row of the input
-// product (3 phases × 5 tabs × 4 continuation states × 3 session presences × 2⁶ Bool facts =
-// 11 520) from the enums' own `allCases`, so a new input widens the pinned count deliberately and
+// product (3 phases × 5 tabs × 4 continuation states × 3 session presences × 2⁷ Bool facts =
+// 23 040) from the enums' own `allCases`, so a new input widens the pinned count deliberately and
 // a dropped dimension collapses the set visibly. Over that product the suite states each claim
 // the policy makes — the gate reads only its three facts, `.inactive` is a foreground scene, nothing
 // but a continued mesh claims the background, discovery never runs there (invariant 5), a hard stop
@@ -16,6 +16,11 @@
 // radio's rule (`expectedMesh` and friends) is compared on all 11 520 rows as the named expectation
 // per row; being a re-statement, its value is catching a guard-order slip, not proving the
 // semantics — the clauses do that.
+//
+// Session photos U3 (2026-09-30) widened the product from 11 520 to 23 040 with its seventh Bool,
+// `sessionPhotoReviewBlocksDiscovery`: while an ended session's photos wait for the person's choice
+// discovery never runs (so no second session forms and no answered session is resumed), and the
+// block never lowers anything that was not running — `theReviewBlockOnlyLowersARunningDiscovery`.
 //
 // Item 2 added two projections, of which `belowMinimumAge(_:)` survives — P9-3-A's fix
 // (2026-09-22) retired `appLockEngaged(_:)` with the input fact it projected, dropping the product
@@ -46,8 +51,8 @@ enum ProximityRunPolicyProduct {
     /// so this is a literal list; a fourth phase widens ``count`` deliberately.
     static let scenePhases: [ScenePhase] = [.active, .inactive, .background]
 
-    /// The size of the product: 3 phases × 5 tabs × 4 continuation states × 3 presences × 2⁶.
-    static let count = 3 * 5 * 4 * 3 * 64
+    /// The size of the product: 3 phases × 5 tabs × 4 continuation states × 3 presences × 2⁷.
+    static let count = 3 * 5 * 4 * 3 * 128
 
     /// Every row of the product.
     static func rows() -> [ProximityRunPolicy.Input] {
@@ -67,15 +72,15 @@ enum ProximityRunPolicyProduct {
         return rows
     }
 
-    /// The six Bool inputs as one 6-bit counter, so none can be left out. It was SEVEN until
-    /// P9-3-A's fix retired `appLockEngaged`.
+    /// The seven Bool inputs as one 7-bit counter, so none can be left out. It was seven until
+    /// P9-3-A's fix retired `appLockEngaged`, six until session photos U3 added the review block.
     private static func flagRows(
         phase: ScenePhase,
         tab: FernletTab,
         continuation: ProximityContinuationState,
         session: ProximitySessionPresence
     ) -> [ProximityRunPolicy.Input] {
-        (0..<64).map { bits in
+        (0..<128).map { bits in
             ProximityRunPolicy.Input(
                 scenePhase: phase,
                 selectedTab: tab,
@@ -86,7 +91,8 @@ enum ProximityRunPolicyProduct {
                 continuation: continuation,
                 session: session,
                 allowNearbyPresence: (bits & 16) != 0,
-                allowNearbyRecipeShares: (bits & 32) != 0
+                allowNearbyRecipeShares: (bits & 32) != 0,
+                sessionPhotoReviewBlocksDiscovery: (bits & 64) != 0
             )
         }
     }
@@ -102,7 +108,8 @@ enum ProximityRunPolicyProduct {
         continuation: ProximityContinuationState = .notRequested,
         session: ProximitySessionPresence = .absent,
         presence: Bool = true,
-        recipe: Bool = true
+        recipe: Bool = true,
+        reviewBlock: Bool = false
     ) -> ProximityRunPolicy.Input {
         ProximityRunPolicy.Input(
             scenePhase: phase,
@@ -114,7 +121,8 @@ enum ProximityRunPolicyProduct {
             continuation: continuation,
             session: session,
             allowNearbyPresence: presence,
-            allowNearbyRecipeShares: recipe
+            allowNearbyRecipeShares: recipe,
+            sessionPhotoReviewBlocksDiscovery: reviewBlock
         )
     }
 
@@ -124,7 +132,8 @@ enum ProximityRunPolicyProduct {
         phase: ScenePhase? = nil,
         belowAge: Bool? = nil,
         wipe: Bool? = nil,
-        continuation: ProximityContinuationState? = nil
+        continuation: ProximityContinuationState? = nil,
+        reviewBlock: Bool? = nil
     ) -> ProximityRunPolicy.Input {
         ProximityRunPolicy.Input(
             scenePhase: phase ?? r.scenePhase,
@@ -136,7 +145,8 @@ enum ProximityRunPolicyProduct {
             continuation: continuation ?? r.continuation,
             session: r.session,
             allowNearbyPresence: r.allowNearbyPresence,
-            allowNearbyRecipeShares: r.allowNearbyRecipeShares
+            allowNearbyRecipeShares: r.allowNearbyRecipeShares,
+            sessionPhotoReviewBlocksDiscovery: reviewBlock ?? r.sessionPhotoReviewBlocksDiscovery
         )
     }
 
@@ -166,11 +176,14 @@ enum ProximityRunPolicyProduct {
         return foreground(r) ? .foregroundOnly : .hold
     }
 
-    /// The discovery rule as an `if` chain.
+    /// The discovery rule as an `if` chain. The session-photo review's block turns the one running
+    /// row — foreground on the Friends tab — into what every other tab gets.
     static func expectedDiscovery(_ r: ProximityRunPolicy.Input) -> ProximityRunState {
         if hardStop(r) { return .stop }
         let keep: ProximityRunState = r.session == .peerCommitted ? .hold : .stop
-        if foreground(r) { return r.selectedTab == .social ? .foregroundOnly : keep }
+        if foreground(r) {
+            return r.selectedTab == .social && !r.sessionPhotoReviewBlocksDiscovery ? .foregroundOnly : keep
+        }
         if r.continuation == .running { return .stop }
         return keep
     }
@@ -208,9 +221,9 @@ enum ProximityRunPolicyProduct {
         let rows = Product.rows()
         #expect(Product.scenePhases.count == 3,
                 "the three phases SwiftUI declares today; a fourth widens the product on purpose")
-        #expect(Product.count == 11_520, "3 × 5 × 4 × 3 × 64 — a new input must move this deliberately")
-        #expect(rows.count == 11_520, "every row was built")
-        #expect(Set(rows).count == 11_520, "and no two rows are the same input — no dimension collapsed")
+        #expect(Product.count == 23_040, "3 × 5 × 4 × 3 × 128 — a new input must move this deliberately")
+        #expect(rows.count == 23_040, "every row was built")
+        #expect(Set(rows).count == 23_040, "and no two rows are the same input — no dimension collapsed")
         #expect(FernletTab.allCases.count == 5, "the five tabs")
         #expect(ProximityContinuationState.allCases.count == 4, "not requested, running, refused, expired")
         #expect(ProximitySessionPresence.allCases.count == 3, "absent, mesh held, peer committed")
@@ -362,7 +375,7 @@ enum ProximityRunPolicyProduct {
     @Test func anInactiveSceneIsAForegroundScene() {
         let rows = Product.rows()
         let inactive = rows.filter { $0.scenePhase == .inactive }
-        #expect(inactive.count == 3_840, "one third of the product")
+        #expect(inactive.count == 7_680, "one third of the product")
         let sameAsActive = inactive.allSatisfy { Product.verdict($0) == Product.verdict(Product.copy($0, phase: .active)) }
         #expect(sameAsActive,
                 "Control Center, a call banner, the Face ID sheet and Split View change no radio and no gate leg")
@@ -378,7 +391,7 @@ enum ProximityRunPolicyProduct {
         let continued = rows.filter { r in
             r.continuation == .running && r.session != .absent && !ProximityRunPolicy.isHardStop(r)
         }
-        #expect(continued.count == 240, "3 phases × 5 tabs × 2 presences × the 8 hard-stop-free flag rows")
+        #expect(continued.count == 480, "3 phases × 5 tabs × 2 presences × the 16 hard-stop-free flag rows")
         let everyContinuedRuns = continued.allSatisfy { Product.verdict($0).mesh == .run }
         #expect(everyContinuedRuns, "a running task with something to continue always grants the background")
         let onlyContinuedRuns = rows.filter { Product.verdict($0).mesh == .run }.count == continued.count
@@ -428,7 +441,7 @@ enum ProximityRunPolicyProduct {
     @Test func aHardStopStopsEveryRadioAndOnlyAHardStopTearsTheMeshDown() {
         let rows = Product.rows()
         let hard = rows.filter { ProximityRunPolicy.isHardStop($0) }
-        #expect(hard.count == 10_080, "seven of every eight rows carry at least one of the three")
+        #expect(hard.count == 20_160, "seven of every eight rows carry at least one of the three")
         let allStopped = hard.allSatisfy { r in
             let v = Product.verdict(r)
             return v.mesh == .stop && v.discovery == .stop && v.presence == .stop && v.recipeShare == .stop
@@ -451,12 +464,13 @@ enum ProximityRunPolicyProduct {
     /// photos and the lock settings; it is not a radio switch.
     @Test func noLockLegSurvivesAndAListenerRunsWheneverItsOwnRuleAllows() {
         let rows = Product.rows()
-        #expect(Product.count == 11_520, "the product lost its lock dimension: 2⁶ flag rows, not 2⁷")
+        #expect(Product.count == 23_040,
+                "the product lost its lock dimension and gained the review block: 2⁷ flag rows, not 2⁸")
         let presenceRows = rows.filter { r in
             r.allowNearbyPresence && Product.foreground(r) && !Product.hardStop(r) && r.selectedTab != .personal
         }
-        #expect(presenceRows.count == 384,
-                "2 foreground phases × 4 presence tabs × 4 tasks × 3 presences × the 4 opted-in, hard-stop-free flag rows")
+        #expect(presenceRows.count == 768,
+                "2 foreground phases × 4 presence tabs × 4 tasks × 3 presences × the 8 opted-in, hard-stop-free flag rows")
         let everyPresenceRowRuns = presenceRows.allSatisfy { Product.verdict($0).presence == .foregroundOnly }
         #expect(everyPresenceRowRuns,
                 "presence runs on every one of them — a configured lock at rest can no longer park it")
@@ -464,7 +478,7 @@ enum ProximityRunPolicyProduct {
             r.allowNearbyRecipeShares && Product.foreground(r) && !Product.hardStop(r)
                 && (r.selectedTab == .home || r.selectedTab == .food || r.selectedTab == .move)
         }
-        #expect(recipeRows.count == 288, "and three listening tabs' worth for the recipe listener")
+        #expect(recipeRows.count == 576, "and three listening tabs' worth for the recipe listener")
         let everyRecipeRowRuns = recipeRows.allSatisfy { Product.verdict($0).recipeShare == .foregroundOnly }
         #expect(everyRecipeRowRuns, "which runs on every one of its own")
         let listenersStillStopSomewhere = rows.contains { r in
@@ -500,6 +514,34 @@ enum ProximityRunPolicyProduct {
         #expect(recipeNeverOnFriends, "the recipe listener never runs on the Friends tab")
         let someRecipeRuns = rows.contains { Product.verdict($0).recipeShare == .foregroundOnly }
         #expect(someRecipeRuns, "and it does run somewhere — the rule is not vacuous")
+    }
+
+    /// Session photos U3, invariant I11: with the review block raised discovery never runs — no
+    /// `startJoin`, no resume, so no second session forms and no answered session comes back — and
+    /// the block moves nothing else: no other radio, no gate leg, and no discovery verdict that was
+    /// not running anyway.
+    @Test func theReviewBlockOnlyLowersARunningDiscovery() {
+        let rows = Product.rows()
+        let blocked = rows.filter(\.sessionPhotoReviewBlocksDiscovery)
+        #expect(blocked.count == 11_520, "half the product")
+        let neverRuns = blocked.allSatisfy { !Product.verdict($0).discovery.isRunning }
+        #expect(neverRuns, "no blocked row runs discovery")
+        let free = rows.filter { !$0.sessionPhotoReviewBlocksDiscovery }
+        let nothingElseMoves = free.allSatisfy { r in
+            let open = Product.verdict(r)
+            let shut = Product.verdict(Product.copy(r, reviewBlock: true))
+            return open.mesh == shut.mesh && open.presence == shut.presence
+                && open.recipeShare == shut.recipeShare && open.routedAccessGate == shut.routedAccessGate
+        }
+        #expect(nothingElseMoves, "the block moves no other radio and no gate leg")
+        let heldOrStoppedUntouched = free.filter { !Product.verdict($0).discovery.isRunning }.allSatisfy { r in
+            Product.verdict(r).discovery == Product.verdict(Product.copy(r, reviewBlock: true)).discovery
+        }
+        #expect(heldOrStoppedUntouched, "and every discovery verdict that was not running is unchanged")
+        #expect(Product.verdict(Product.row(reviewBlock: true)).discovery == .stop,
+                "a Friends visit with photos waiting searches for nobody")
+        #expect(Product.verdict(Product.row(session: .meshHeld, reviewBlock: true)).discovery == .stop,
+                "and does not resume a held mesh")
     }
 
     /// The flat re-statements of the mesh and discovery rules agree on every row — the named
@@ -695,10 +737,11 @@ struct ProximityRunPolicyFunnelTests {
             continuation: .notRequested,
             session: .absent,
             allowNearbyPresence: store.settings.allowNearbyPresence,
-            allowNearbyRecipeShares: store.settings.allowNearbyRecipeShares
+            allowNearbyRecipeShares: store.settings.allowNearbyRecipeShares,
+            sessionPhotoReviewBlocksDiscovery: false
         ))
         #expect(verdict == expected,
-                "a fresh store's input is the edge's three facts, the mirrored tab, the two opt-ins, no ruling, no wipe, no task, no session")
+                "a fresh store's input is the edge's three facts, the mirrored tab, the two opt-ins, no ruling, no wipe, no task, no session, no photo review")
         #expect(!store.deleteAllInProgress, "no wipe is in flight on a fresh store")
         #expect(store.discoveryTimeoutTask == nil, "and no fresh-search timeout was armed — nothing here starts a search")
     }

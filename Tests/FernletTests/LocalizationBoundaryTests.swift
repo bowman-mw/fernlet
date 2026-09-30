@@ -2312,6 +2312,9 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "FernletKit/Sources/ProximityKit/Localizable.xcstrings",
                      key: "proximity.review.unreadable",
                      source: "the photo review's couldn't-be-opened notice (session photos, 2026-09-30)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "friends.pendingReview.body",
+                     source: "the Friends card's photos-waiting sentence (session photos U3, 2026-09-30)"),
     ]
 
     /// Whether a catalog's `strings` table carries `key` with an English `one` AND `other` plural form.

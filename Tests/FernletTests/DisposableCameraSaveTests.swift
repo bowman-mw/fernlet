@@ -124,6 +124,11 @@ struct DisposableCameraSaveTests {
         #expect(export.contains("FriendPhotoLibrarySaver.save("), "and it is that function")
         #expect(export.contains("manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })"),
                 "saving only what the answer reports landed, hydrated from the WALL")
+        // Session photos U3 (design I2's source wall): in the camera, as in the review coordinator,
+        // the ONLY function that names `FriendPhotoLibrarySaver` at all is the one taking the answer.
+        let everywhere = source.components(separatedBy: "FriendPhotoLibrarySaver").count - 1
+        let inExport = export.components(separatedBy: "FriendPhotoLibrarySaver").count - 1
+        #expect(everywhere == inExport, "every mention of the saver in the camera is inside the post-answer export")
 
         let keep = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func keepSelectedSessionPhotos() async", in: source),

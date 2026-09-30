@@ -19,7 +19,9 @@
 // selection has been made") the Photos export is no longer a button that works BEFORE the answer:
 // it is an opt-in toggle applied AFTER the keep, only over the photos the answer reports landed on
 // the wall (`SessionPhotoAnswer.keptOnWall`), re-read from the wall. The source wall pins that the
-// one review function naming the saver takes the answer (invariant I2).
+// one review function naming the saver takes the answer (invariant I2). Since session photos U3 the
+// session-end review is `SessionPhotoReviewCoordinator`'s (its overlay window), not FriendsView's:
+// the wall reads the coordinator, and pins that FriendsView names no saver in its review half.
 
 import Foundation
 import Photos
@@ -76,33 +78,33 @@ struct ConnectReviewKeepTests {
 
     // MARK: - Source wall: the disconnect-review call site
 
-    /// The defect lived at the CALL SITE, so the behavioral test alone can regress silently: pin
-    /// `FriendsView`'s disconnect review (ConnectView.swift) to the answer-first form — the keep
-    /// answers the promoted batch and never names `FriendPhotoLibrarySaver`, and the ONE review
-    /// function that does name it takes the answer and reads only `keptOnWall`, hydrated from the
+    /// The defect lived at the CALL SITE, so the behavioral test alone can regress silently: pin the
+    /// session-end review's presenter — since U3 `SessionPhotoReviewCoordinator` — to the answer-first
+    /// form. The keep answers the promoted batch and never names the saver; the ONE function that
+    /// reaches the Photos library takes the answer and reads only `keptOnWall`, hydrated from the
     /// wall (I2: nothing reaches the camera roll before the choice, and nothing the answer did not
-    /// report kept). Reads shipping source off disk via ``RepoRoot`` so a vacuous pass is impossible.
-    @Test func connectViewSource_exportsOnlyTheAnswersKeptPhotos_andKeepsWithoutTheSaver() throws {
-        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
-
-        #expect(source.contains("keepSelected: { await keepSelectedSessionPhotos() }"),
-                "The sheet's primary action must be the keep — in-app wall only, no Photos authorization")
-        #expect(source.contains("alsoSaveToPhotos: $alsoSaveToPhotos"),
-                "The Photos copy is the sheet's opt-in toggle, read by the host after the answer")
-        #expect(!source.contains("saveToPhotos:"),
+    /// report kept). The saver itself is injected by the store, so the coordinator file names
+    /// `FriendPhotoLibrarySaver` only inside that function. Reads shipping source off disk via
+    /// ``RepoRoot`` so a vacuous pass is impossible.
+    @Test func reviewCoordinatorSource_exportsOnlyTheAnswersKeptPhotos_andKeepsWithoutTheSaver() throws {
+        let screen = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/SessionPhotoReviewScreen.swift"))
+        #expect(screen.contains("keepSelected: { await coordinator.keepSelected() }"),
+                "The review's primary action must be the keep — in-app wall only, no Photos authorization")
+        #expect(screen.contains("alsoSaveToPhotos: $coordinator.alsoSaveToPhotos"),
+                "The Photos copy is the review's opt-in toggle, read by the coordinator after the answer")
+        #expect(!screen.contains("saveToPhotos:"),
                 "no pre-answer export button: the camera roll must not see a photo before the choice")
-        #expect(source.contains("loadImageData: { manager.reviewThumbnailData(for: $0) }"),
+        #expect(screen.contains("loadImageData: { coordinator.manager.reviewThumbnailData(for: $0) }"),
                 "tiles load held photos through the gated review seam, never the wall")
 
-        let keep = try #require(MeshRoutedSourceScan.bracedBody(
-            after: "private func keepSelectedSessionPhotos() async", in: source),
-            "FriendsView.keepSelectedSessionPhotos is the FRND-12 keep action — renamed?")
-        #expect(keep.contains("finishReviewedPhotos("),
-                "The keep action must answer the promoted batch")
-        #expect(!keep.contains("FriendPhotoLibrarySaver"),
+        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/SessionPhotoReviewCoordinator.swift"))
+        let keep = try #require(MeshRoutedSourceScan.bracedBody(after: "func keepSelected() async", in: source),
+                                "SessionPhotoReviewCoordinator.keepSelected is the FRND-12 keep action — renamed?")
+        #expect(keep.contains("finishReviewedPhotos("), "The keep action must answer the promoted batch")
+        #expect(!keep.contains("FriendPhotoLibrarySaver") && !keep.contains("saveKeptPhotosToLibrary"),
                 """
-                The keep action must never touch FriendPhotoLibrarySaver: its authorization gate \
-                is what used to turn a Photos permission denial into losing the in-app photos.
+                The keep action must never touch the saver: its authorization gate is what used to \
+                turn a Photos permission denial into losing the in-app photos.
                 """)
         let answerLine = try #require(keep.range(of: "finishReviewedPhotos("))
         let exportLine = try #require(keep.range(of: "exportKeptPhotosIfAsked(answer)"),
@@ -112,15 +114,27 @@ struct ConnectReviewKeepTests {
         let export = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async", in: source),
             "the one review export takes a SessionPhotoAnswer — renamed?")
-        #expect(export.contains("FriendPhotoLibrarySaver.save("))
+        #expect(export.contains("try await saveKeptPhotosToLibrary(toSave)"), "it is the one that reaches the saver")
         #expect(export.contains("manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })"),
                 "and saves only what the answer reports landed, hydrated from the WALL")
         #expect(export.contains("guard alsoSaveToPhotos"), "and only when the person turned the toggle on")
-        // Every other function naming the saver is the album carousel's per-photo save of a photo
-        // already on the wall, which is not the review's (the feed views declared below FriendsView).
-        let reviewHalf = try #require(source.range(of: "private struct FriendPhotoFeedView"))
-        let saverSites = source[..<reviewHalf.lowerBound].components(separatedBy: "FriendPhotoLibrarySaver.save(").count - 1
-        #expect(saverSites == 1, "the Friends review names the saver in exactly one place: the post-answer export")
+        #expect(source.components(separatedBy: "saveKeptPhotosToLibrary(").count - 1 == 1,
+                "the injected saver is called in exactly one place")
+        let everywhere = source.components(separatedBy: "FriendPhotoLibrarySaver").count - 1
+        let inExport = export.components(separatedBy: "FriendPhotoLibrarySaver").count - 1
+        #expect(everywhere == inExport && everywhere >= 1,
+                "every mention of FriendPhotoLibrarySaver in the coordinator is inside the post-answer export (I2)")
+
+        let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
+        #expect(store.contains("saveKeptPhotosToLibrary: { try await FriendPhotoLibrarySaver.save($0) }"),
+                "the store, the composition root, injects the real saver")
+        let friends = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
+        // Every function naming the saver in ConnectView is the album carousel's per-photo save of a
+        // photo already on the wall (the feed views declared below FriendsView).
+        let reviewHalf = try #require(friends.range(of: "private struct FriendPhotoFeedView"))
+        #expect(!friends[..<reviewHalf.lowerBound].contains("FriendPhotoLibrarySaver"),
+                "the Friends surface names no saver at all: the review's export is the coordinator's")
+        #expect(!friends.contains("FriendPhotoReviewSheet("), "and presents no photo review of its own")
     }
 
     /// P6 item 2's pass-B review finding P2-4, as a source wall because both halves live in
@@ -147,8 +161,8 @@ struct ConnectReviewKeepTests {
         let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
         let armDecl = try #require(source.range(of: "func handleCommittedPeerChange"),
                                    "FriendsView.handleCommittedPeerChange is the lifecycle arm — renamed?")
-        let nextDecl = try #require(source.range(of: "private var disconnectReviewSheet"),
-                                    "the review sheet is declared right after the arm — reordered?")
+        let nextDecl = try #require(source.range(of: "private var keepFriendsPromptSheet"),
+                                    "the keep prompt is declared right after the arm — reordered?")
         try #require(armDecl.lowerBound < nextDecl.lowerBound,
                      "Expected the arm to be declared before the review sheet — update this scan if they moved")
         let armBody = source[armDecl.upperBound..<nextDecl.lowerBound]
@@ -159,10 +173,10 @@ struct ConnectReviewKeepTests {
                 hand-listed subset: the two session-end sheets AND the album photo feed can each \
                 be up when a peer commits.
                 """)
-        #expect(armBody.contains("disconnectReviewPresented"),
+        #expect(armBody.contains("keepFriendsPromptPresented = false") && !armBody.contains("disconnectReviewPresented"),
                 """
-                The heal arm must dismiss the PHOTO REVIEW sheet as well as the keep prompt: it is \
-                the blip's common case, and a heal arrives seconds later in the same room.
+                The heal arm dismisses the keep prompt; the PHOTO review is no longer this view's sheet \
+                (U3: the overlay, which never presents over a live session, so a heal cannot meet it).
                 """)
         #expect(armBody.components(separatedBy: "showConnectionAnimation = false").count - 1 >= 2,
                 """
@@ -175,7 +189,8 @@ struct ConnectReviewKeepTests {
                                          "the one-presentation predicate is gone — renamed?")
         let predicateEnd = try #require(source.range(of: "}", range: predicateDecl.upperBound..<source.endIndex))
         let predicateBody = source[predicateDecl.upperBound..<predicateEnd.lowerBound]
-        for presenter in ["disconnectReviewPresented", "keepFriendsPromptPresented", "selectedAlbumPostID"] {
+        #expect(!predicateBody.contains("disconnectReviewPresented"), "the photo review is not one of this view's presenters")
+        for presenter in ["keepFriendsPromptPresented", "selectedAlbumPostID"] {
             #expect(predicateBody.contains(presenter),
                     """
                     \(presenter) is one of the three presenters hung off this view's single anchor, \

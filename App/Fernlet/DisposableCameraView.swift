@@ -571,7 +571,11 @@ enum DisposableCameraOrientation {
 /// snapshotted at Develop, rendered and answered wherever the manager holds them, so an ending that
 /// moves the roll under the open review (door 3's give-up) cannot empty it. It reports whether any
 /// sheet or alert of its own is up (`presentsOwnSheet`), so FriendsView never requests its
-/// session-end review over one. Orientation
+/// keep-as-friends prompt over one, and — session photos U3 — whether its Develop review is up
+/// (``SessionPhotoReviewCoordinator/cameraDevelopReviewUp``, cleared three ways so it cannot latch),
+/// so the app-wide session-end review never draws over it; its answer raises the coordinator's
+/// answer-in-flight leg around the finish-and-leave, and its capture session stops while that
+/// overlay is up (a hidden live camera is a privacy defect). Orientation
 /// flips through ``DisposableCameraOrientation``'s hysteresis so mid-rotation near-square frames
 /// never thrash the layout.
 struct DisposableCameraView: View {
@@ -640,6 +644,9 @@ struct DisposableCameraView: View {
     private static let shutterCream = Color(red: 0.984, green: 0.969, blue: 0.933)
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
+    /// The app-level session-end review (session photos U3): told when the Develop review is up, and
+    /// around this view's answer.
+    private var reviewCoordinator: SessionPhotoReviewCoordinator { store.sessionPhotoReviewCoordinator }
     private let portraitWindThreshold: Double = 120
     private let landscapeWindThreshold: Double = 720
 
@@ -647,15 +654,21 @@ struct DisposableCameraView: View {
         GeometryReader { geometry in
             cameraSurface(geometry: geometry)
         }
-        .onAppear { camera.startSession() }
+        .onAppear { if !reviewCoordinator.isShowing { camera.startSession() } }
         .onDisappear {
             camera.stopSession()
-            // Leaving the hierarchy takes every sheet of this view with it.
+            // Leaving the hierarchy takes every sheet of this view with it — the Develop review
+            // included, so its flag is cleared here too (I20: it cannot outlive the camera).
             presentsOwnSheet.wrappedValue = false
+            reviewCoordinator.cameraDevelopReviewUp = false
         }
         .onChange(of: ownPresentationIsUp, initial: true) { _, isUp in
             presentsOwnSheet.wrappedValue = isUp
         }
+        .onChange(of: reviewPresented, initial: true) { _, up in reviewCoordinator.cameraDevelopReviewUp = up }
+        // The session-end overlay over this surface (door 3's held mesh, before its leave lands):
+        // no live capture under it, and no restart after it unless the session is live again.
+        .onChange(of: reviewCoordinator.isShowing) { _, showing in handleOverlayChange(showing: showing) }
         .onChange(of: manager.pendingRemovalProposals) { _, _ in
             presentNextRemovalProposalIfNeeded()
         }
@@ -1390,6 +1403,17 @@ struct DisposableCameraView: View {
         keptFriendFingerprints = []
     }
 
+    /// Stops the capture session while the app-wide session-end review is up, and restarts it when
+    /// the review goes only if this session is live and the Develop review is not up.
+    private func handleOverlayChange(showing: Bool) {
+        guard !showing else {
+            camera.stopSession()
+            return
+        }
+        guard manager.isSessionLive, !reviewPresented else { return }
+        camera.startSession()
+    }
+
     /// Restarts the capture session after a review the user cancelled.
     ///
     /// `isInSession` is the right predicate here and stays (P6 item 2): the question is whether this
@@ -1397,7 +1421,7 @@ struct DisposableCameraView: View {
     /// a peer is committed this instant. A founded pair whose link blipped is still looking at the
     /// camera.
     private func resumeCameraAfterCancelledReview() {
-        guard manager.isInSession else { return }
+        guard manager.isInSession, !reviewCoordinator.isShowing else { return }
         camera.startSession()
     }
 
@@ -1428,7 +1452,10 @@ struct DisposableCameraView: View {
         // The alert closing — either button, or the system taking it down — releases an answer
         // waiting on it; so does the sheet going away, so a torn-down sheet never strands one.
         .onChange(of: photoSaveError == nil) { _, cleared in if cleared { saveFailureAcknowledgement.acknowledge() } }
-        .onDisappear { saveFailureAcknowledgement.acknowledge() }
+        .onDisappear {
+            saveFailureAcknowledgement.acknowledge()
+            reviewCoordinator.cameraDevelopReviewUp = false
+        }
     }
 
     /// FRND-12's primary review action: keeps the ticked photos (the unticked shown ones are
@@ -1439,6 +1466,10 @@ struct DisposableCameraView: View {
     /// review closes (design §4.6; fix round 1, U2-C-U2-R2 / U2-L-U2-R2): the alert hangs off the
     /// sheet, so closing it first took the alert down with it.
     private func keepSelectedSessionPhotos() async {
+        // The discovery block's answer leg (I21), raised before the manager is touched and lowered
+        // only after this answer's leave has returned.
+        reviewCoordinator.beginAnswer()
+        defer { reviewCoordinator.endAnswer() }
         let answer = manager.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)
         finalizeFriendKeeps()
         await exportKeptPhotosIfAsked(answer)
@@ -1472,6 +1503,8 @@ struct DisposableCameraView: View {
     /// "Delete all", confirmed: deletes every photo the review showed and mints the kept friends —
     /// the keep action's twin with nothing kept.
     private func discardAllSessionPhotos() async {
+        reviewCoordinator.beginAnswer()
+        defer { reviewCoordinator.endAnswer() }
         let answer = manager.finishSessionPhotos(keeping: [], of: developReviewIDs)
         finalizeFriendKeeps()
         await finishDevelopReview(after: answer)

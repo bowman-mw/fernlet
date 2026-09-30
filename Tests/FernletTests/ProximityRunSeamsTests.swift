@@ -46,11 +46,13 @@ import ProximityKit
         duress: Bool = false,
         wipe: Bool = false,
         continuation: ProximityContinuationState = .notRequested,
-        session: ProximitySessionPresence = .absent
+        session: ProximitySessionPresence = .absent,
+        reviewBlock: Bool = false
     ) -> ProximityRunPolicy.Verdict {
         ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(
             phase: phase, tab: tab, duress: duress, protected: true, belowAge: false,
-            wipe: wipe, continuation: continuation, session: session, presence: true, recipe: true
+            wipe: wipe, continuation: continuation, session: session, presence: true, recipe: true,
+            reviewBlock: reviewBlock
         ))
     }
 
@@ -213,6 +215,28 @@ import ProximityKit
         )
         #expect(resumed == [.resumeSearch, .armDiscoveryTimeout, .presence(.foregroundOnly)],
                 "`resumeSearchingForPartitionedMesh()`, never `startJoin()` — that would nil the ceiling")
+    }
+
+    /// Session photos U3, the edge invariant I21 exists to prevent, documented: the review block
+    /// FALLING while an ended mesh is still held is a discovery edge into `foregroundOnly` over
+    /// `.meshHeld`, which the transition answers with the resume arm —
+    /// `resumeSearchingForPartitionedMesh()`, which does not refuse a given-up session, so it would
+    /// revive the session the person just closed. That is why the coordinator leaves the held mesh
+    /// at PRESENT and keeps the block up until that leave has returned. Over `.absent` — where the
+    /// block does fall — the same edge is today's fresh search.
+    @Test func theReviewBlockFallingOverAHeldMeshWouldResumeItAndOverNothingIsAFreshSearch() {
+        let blockedHeld = Self.verdict(session: .meshHeld, reviewBlock: true)
+        #expect(blockedHeld.discovery == .stop, "while blocked, a Friends visit over the held mesh searches nobody")
+        let overHeld = Self.actions(from: blockedHeld, to: Self.verdict(session: .meshHeld), Self.facts(inSession: true))
+        #expect(overHeld == [.resumeSearch, .armDiscoveryTimeout],
+                "the edge I21 prevents: a block falling over a held mesh resumes it")
+        let overNothing = Self.actions(
+            from: Self.verdict(reviewBlock: true), to: Self.verdict(), Self.facts()
+        )
+        #expect(overNothing == [.startJoin, .armDiscoveryTimeout],
+                "the edge the block actually falls on once the leave returned: a fresh search")
+        let rising = Self.actions(from: Self.verdict(), to: Self.verdict(reviewBlock: true), Self.facts(searching: true))
+        #expect(rising == [.cancelDiscoveryTimeout, .stopJoin], "and the block rising over a search stands it down")
     }
 
     /// A hard stop over a live session tears it down through `leaveSession()`, the mesh's own
@@ -492,7 +516,7 @@ import ProximityKit
             #expect(!view.contains(name), "a retired radio member came back to ContentView")
         }
         let viewEdges = view.components(separatedBy: "applyProximityRunPolicyFromView()").count - 1
-        #expect(viewEdges == 7, "the view hands the funnel six edges through one helper — tab, the lock transition (the view's duress feed since P9-3-A retired the lock fact), opt-in, age, session liveness, launch — plus that helper's declaration")
+        #expect(viewEdges == 8, "the view hands the funnel seven edges through one helper — tab, the lock transition (the view's duress feed since P9-3-A retired the lock fact), opt-in, age, session liveness, the session-photo review's discovery block (U3), launch — plus that helper's declaration")
         let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
         let storeEdges = store.components(separatedBy: "reapplyProximityRunPolicy(").count - 1
         #expect(storeEdges == 6, "the store's own edges — two opt-in setters, P8 item 6's continuation feed, the wipe's raise and lower — plus the declaration")

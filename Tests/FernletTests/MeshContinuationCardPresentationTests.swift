@@ -251,8 +251,8 @@ import Testing
                 "and only through the table — no sentence is composed in the view")
         #expect(view.contains(".accessibilityIdentifier(card.accessibilityIdentifier)"),
                 "the card carries its own frozen identifier for the UI suite")
-        #expect(view.contains("SessionResumeCopy.card(for: manager.sessionResumePresentation)"),
-                "P7's resume card still reads its own presentation through its own table")
+        #expect(view.contains("SessionResumeCopy.card(for: reviewCoordinator.resumePresentation(manager.sessionResumePresentation))"),
+                "P7's resume card still reads its own presentation through its own table (the offer withheld while the photo review blocks discovery, U3)")
         #expect(view.contains("MeshContinuationCardPresentation.slotDecision(continuation:"),
                 "and which of the two owns the shared slot is the value's decision, not an if chain here")
     }

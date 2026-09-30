@@ -14,7 +14,9 @@
 //
 
 import Foundation
+import UIKit
 import FernletDomainModel
+import ProximityKit
 
 /// Central reader for the UX-appearance-test launch flags.
 ///
@@ -122,6 +124,40 @@ enum UITestSupport {
         return MeshContinuationCardKind(rawValue: token)
     }
 
+    /// `-uitestSeedHeldSessionPhotos <n>` (session photos U3) — how many generated photos to hold as
+    /// an ENDED session's awaiting review at launch, so `SessionPhotoReviewFirstUITests` can prove
+    /// the review is the first thing shown. Clamped to 1...10 (the film's own quota); nil when the
+    /// argument is absent or not a number.
+    static var seededHeldSessionPhotoCount: Int? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let flag = arguments.firstIndex(of: "-uitestSeedHeldSessionPhotos"), flag + 1 < arguments.count,
+              let count = Int(arguments[flag + 1]) else { return nil }
+        return min(max(count, 1), 10)
+    }
+
+    /// Holds ``seededHeldSessionPhotoCount`` generated JPEGs through the manager's own capture door
+    /// with no session live — so each is held AWAITING in the sealed pending corpus exactly as a
+    /// real ended session's photo is, never on the wall — unless a review is already outstanding
+    /// (a relaunch in the same test must not pile more on). Consumed by `ContentView`'s launch
+    /// sequence before the review's first evaluation.
+    ///
+    /// - Parameter manager: The store's mesh manager.
+    static func seedHeldSessionPhotosIfRequested(on manager: MeshNetworkManager) {
+        guard let count = seededHeldSessionPhotoCount, !manager.hasOutstandingPhotoReview else { return }
+        let colors: [UIColor] = [.systemTeal, .systemOrange, .systemPink, .systemIndigo, .systemGreen]
+        let side = CGSize(width: 240, height: 240)
+        // R2: bounded by the clamped count.
+        for index in 0..<count {
+            let color = colors[index % colors.count]
+            let image = UIGraphicsImageRenderer(size: side).image { context in
+                color.setFill()
+                context.fill(CGRect(origin: .zero, size: side))
+            }
+            guard let data = image.jpegData(compressionQuality: 0.8) else { continue }
+            manager.addPhoto(data)
+        }
+    }
+
     /// True when a test harness owns this process: an XCTest runner is attached (the unit-test
     /// host app), or the app was launched by a UI test (`XCTestSessionIdentifier`, the
     /// `-completeOnboarding`/`-resetOnboarding` arguments, or any `FERNLET_UI_TEST_*` hook).
@@ -137,6 +173,7 @@ enum UITestSupport {
             || env["XCTestSessionIdentifier"] != nil
             || arguments.contains("-completeOnboarding")
             || arguments.contains("-resetOnboarding")
+            || arguments.contains("-uitestSeedHeldSessionPhotos")
             || env.keys.contains { $0.hasPrefix("FERNLET_UI_TEST_") }
     }
     #else
@@ -153,6 +190,8 @@ enum UITestSupport {
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
     static var seededMeshContinuationCard: MeshContinuationCardKind? { nil }
+    static var seededHeldSessionPhotoCount: Int? { nil }
+    static func seedHeldSessionPhotosIfRequested(on manager: MeshNetworkManager) {}
     static var isTestHarnessActive: Bool { false }
     #endif
 }
