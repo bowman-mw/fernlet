@@ -45,7 +45,11 @@ on the HealthKit side since 2026-09-23: the gateway refuses a cycle-sample WRITE
 Health sharing for cycle tracking is off, but lets Fernlet delete its own samples. Because an edit
 is delete-then-recreate, ``PeriodTrackerStore/editEvent(_:replacingEntry:unlockedContentKey:)``
 asks ``PeriodHealthKitServicing/checkPeriodEventWriteAllowed(_:)`` BEFORE it deletes anything —
-the visibility gate's rule ("never delete what you cannot rewrite") applied to the sharing gate.
+the visibility gate's rule ("never delete what you cannot rewrite") applied to the sharing gate,
+and since 2026-09-30 to Apple Health's own share grant for each type the rewrite writes. The read
+seam, ``PeriodHealthKitServicing/loadPeriodEvents(in:)``, answers empty where nothing is readable
+(no Health, or a type Fernlet was never asked to read), so sealed note-only entries still load
+with cycle sharing off.
 
 Orthogonal to visibility is the **content key**, supplied per call by `FernletLockService` and
 never retained here. The repositories — ``MenstrualNarrativeRepository`` and

@@ -204,7 +204,9 @@ struct HealthKitWriteGateTests {
     }
 
     /// A period EDIT is delete-then-write, so its pre-check must refuse exactly when the write would
-    /// be — and pass for an entry with no clinical field, which writes nothing to Health.
+    /// be — and pass for an entry with no clinical field, which writes nothing to Health. Since
+    /// 2026-09-30 "would be" includes Apple Health's own share grant, which HealthKit's save
+    /// enforces after Fernlet's switches (`PeriodLogSharingOffTests` drives the edit end to end).
     @Test func thePeriodEditPreCheckMatchesTheWriteGate() throws {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let harness = WriteGateHarness(masterEnabled: true, enabledCapabilities: [])
@@ -215,6 +217,10 @@ struct HealthKitWriteGateTests {
         }
         try harness.service.checkPeriodEventWriteAllowed(UserLoggedCycleEvent(note: "a note only"))
         harness.enable(.cycleTracking)
+        #expect(throws: HKError.self, "Fernlet's switches are on, but Health never granted the type") {
+            try harness.service.checkPeriodEventWriteAllowed(UserLoggedCycleEvent(flowLevel: .light))
+        }
+        harness.controller.grantAllShareTypes()
         try harness.service.checkPeriodEventWriteAllowed(UserLoggedCycleEvent(flowLevel: .light))
     }
 

@@ -2765,28 +2765,76 @@ extension HealthKitService: PeriodHealthKitServicing {
         return samples
     }
 
-    /// Throws exactly when ``savePeriodEvent(_:externalUUID:)`` would refuse `event` for sharing —
-    /// the check `PeriodTrackerStore.editEvent` runs BEFORE it deletes the entry it replaces, so an
-    /// edit can never delete a day it is not allowed to rewrite.
+    /// Throws exactly when writing `event` would be refused — by Fernlet's sharing switches
+    /// (``HealthKitServiceError/sharingTurnedOff``) or by Apple Health's own share grant for any of
+    /// the event's sample types (an `HKError`, see ``requireHealthShareGrant(for:)``). The check
+    /// `PeriodTrackerStore.editEvent` runs BEFORE it deletes the entry it replaces, so an edit can
+    /// never delete a day it is not allowed to rewrite.
+    ///
+    /// Apple Health's half joined 2026-09-30. Fernlet's switches can be on while Health itself
+    /// refuses a type (the user allowed Menstrual Flow in the Health prompt but not Basal Body
+    /// Temperature, and one granted type is enough to count as a grant). The edit then deleted the
+    /// day's own flow sample and its sealed note, and only the re-log's batch save was refused.
+    /// Asking Health's share status first refuses that edit while the day is still whole.
     public func checkPeriodEventWriteAllowed(_ event: UserLoggedCycleEvent) throws {
         let samples = try Self.periodSamples(for: event, externalUUID: UUID())
         guard !samples.isEmpty else { return }
         try requireWriteSharing(.cycleTracking)
+        try requireHealthShareGrant(for: samples)
+    }
+
+    /// Throws the `HKError` HealthKit's own save would, before anything is written or deleted, when
+    /// Apple Health has not granted Fernlet share access to every type in `samples`:
+    /// `.errorAuthorizationDenied` for a type the user turned down, `.errorAuthorizationNotDetermined`
+    /// for one never asked. Share status is the half of HealthKit's authorization an app IS told,
+    /// so this answers exactly what the save would. Audited by type identifier only, never a value.
+    private func requireHealthShareGrant(for samples: [HKSample]) throws {
+        for sample in samples {
+            let status = storeController.authorizationStatus(for: sample.sampleType)
+            guard status != .sharingAuthorized else { continue }
+            FernletAuditLog.log("healthkit.write.refusedByHealth", context: ["type": sample.sampleType.identifier])
+            throw HKError(status == .sharingDenied ? .errorAuthorizationDenied : .errorAuthorizationNotDetermined)
+        }
     }
 
     /// Fetches every cycle-related sample (all five period sample types, whatever their source
     /// app) in the range, sorted by start date — the raw feed `PeriodTrackerStore` folds into its
     /// sealed cycle entries.
+    ///
+    /// Empty, not an error, where nothing is READABLE: on a device without Health, and for a type
+    /// Fernlet was never asked to read (``isUnrequestedReadError(_:)``). While Fernlet's cycle
+    /// sharing is off it never asks for cycle access, and HealthKit fails a query on a type that was
+    /// never requested, so the whole load threw and `PeriodTrackerStore.loadEntries` cleared the
+    /// page: a note-and-symptoms entry, which saves without Health, was sealed and then never shown
+    /// (2026-09-30). A type the user DENIED already reads as empty (HealthKit hides read denial), so
+    /// an unrequested one now reads the same way. Every other failure still throws.
     public func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
-        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
+        guard isHealthDataAvailable() else { return [] }
         let predicate = HKQuery.predicateForSamples(withStart: dateRange.start, end: dateRange.end, options: .strictStartDate)
         var allSamples: [HKSample] = []
         for sampleType in try Self.periodSampleTypes() {
             try Task.checkCancellation()
-            allSamples += try await samples(for: sampleType, predicate: predicate)
+            allSamples += try await readablePeriodSamples(for: sampleType, predicate: predicate)
         }
         try Task.checkCancellation()
         return allSamples.sorted { $0.startDate < $1.startDate }
+    }
+
+    /// Whether `error` is HealthKit refusing a query because Fernlet never asked to read that type
+    /// (`HKError.Code.errorAuthorizationNotDetermined`) — nothing readable, rather than a failure.
+    nonisolated public static func isUnrequestedReadError(_ error: any Error) -> Bool {
+        (error as? HKError)?.code == .errorAuthorizationNotDetermined
+    }
+
+    /// One period type's samples, or none when Fernlet was never asked to read it (see
+    /// ``loadPeriodEvents(in:)``). Audited by type identifier, so an empty page is traceable.
+    private func readablePeriodSamples(for type: HKSampleType, predicate: NSPredicate) async throws -> [HKSample] {
+        do {
+            return try await samples(for: type, predicate: predicate)
+        } catch let error where Self.isUnrequestedReadError(error) {
+            FernletAuditLog.log("healthkit.read.notRequested", context: ["type": type.identifier])
+            return []
+        }
     }
 
     /// Pure sample-construction for one cycle event: emits a sample per populated field, all

@@ -531,6 +531,14 @@ struct ContentView: View {
             // from petting in a previous test on the same simulator.
             PetInteractionGovernor.clearPersistentState()
         }
+        // Period log suite: cycle sharing OFF (the shipped default) whatever an earlier suite left
+        // in this simulator's keychain. Before the sheet hook below presents anything.
+        if UITestSupport.pinsHealthSharingOff {
+            storagePreferencesStore.update { preferences in
+                preferences.healthKitMasterEnabled = false
+                preferences.healthKitCapabilityEnabled[HealthCapability.cycleTracking.rawValue] = false
+            }
+        }
         // P8 item 7: seed the background-continuation claim so the Friends tab can render the
         // refused / expired / system-ended card. Through the kind's own inverse, so the hook can
         // only ask for a cell the presentation table answers; no task, no radio, no scene edge.

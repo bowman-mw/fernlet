@@ -309,12 +309,16 @@ public protocol PeriodHealthKitServicing: AnyObject {
     /// key ``MenstrualNarrative/hkExternalUUID`` later joins on.
     /// - Returns: The samples that were saved.
     func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample]
-    /// Throws exactly when ``savePeriodEvent(_:externalUUID:)`` would refuse `event` because
-    /// Fernlet's sharing for cycle tracking is off (an event with no clinical field writes nothing
-    /// and never throws). Never writes. ``PeriodTrackerStore/editEvent(_:replacingEntry:unlockedContentKey:)``
-    /// runs it BEFORE deleting the entry it replaces.
+    /// Throws exactly when writing `event` would be refused: Fernlet's sharing for cycle tracking is
+    /// off, or Apple Health has not granted Fernlet share access to one of the event's sample types
+    /// (an event with no clinical field writes nothing and never throws). Never writes.
+    /// ``PeriodTrackerStore/editEvent(_:replacingEntry:unlockedContentKey:)`` runs it BEFORE
+    /// deleting the entry it replaces.
     func checkPeriodEventWriteAllowed(_ event: UserLoggedCycleEvent) throws
-    /// All cycle-relevant samples (from any source app) starting in `dateRange`.
+    /// All cycle-relevant samples (from any source app) starting in `dateRange` — empty, not an
+    /// error, where nothing is readable (no Health on the device, or a type Fernlet was never asked
+    /// to read), so the sealed note-only entries ``PeriodTrackerStore/loadEntries(unlockedContentKey:)``
+    /// joins onto the samples still load.
     func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample]
     /// Deletes the given samples; callers pre-filter to Fernlet-owned samples, since HealthKit
     /// refuses deletes of other apps' data. Not gated on Fernlet's sharing switches — removing

@@ -56,6 +56,14 @@ enum UITestSupport {
     /// launch, so a relaunch without it puts the gate back.
     static var enableCoachExchange: Bool { env["FERNLET_UI_TEST_COACH_EXCHANGE"] == "1" }
 
+    /// `FERNLET_UI_TEST_HEALTH_SHARING_OFF=1` — turn Fernlet's master Health switch and its Cycle
+    /// tracking switch off at launch (the shipped defaults), so a test that needs cycle sharing OFF
+    /// gets it on any simulator. The preferences keychain outlives the app, and two Settings suites
+    /// seed "Share with Health" ON; without this the period log suite had to read the sheet under
+    /// test to learn the state, and skipped when that sheet regressed. Consumed by `ContentView`'s
+    /// launch wiring. Writes only the two switches; it asks Apple Health for nothing.
+    static var pinsHealthSharingOff: Bool { env["FERNLET_UI_TEST_HEALTH_SHARING_OFF"] == "1" }
+
     /// `FERNLET_UI_TEST_OPEN_SHEET=<FernletSheet.id>` — present a sheet directly on
     /// launch (e.g. "workout", "settings", "trends"). Generalizes the older
     /// `FERNLET_UI_TEST_OPEN_SETTINGS=1` hook, which is still honored for back-compat.
@@ -137,6 +145,7 @@ enum UITestSupport {
     static var hidePeriodSurface: Bool { false }
     static var hideIntimacySurface: Bool { false }
     static var enableCoachExchange: Bool { false }
+    static var pinsHealthSharingOff: Bool { false }
     static var initialSheet: FernletSheet? { nil }
     static var forceCaptureCover: Bool { false }
     static var shouldOpenJournalEditor: Bool { false }
