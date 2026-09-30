@@ -15,8 +15,15 @@ import FoodCatalog
 @Suite
 struct FoodIngredientIdentityTests {
 
-    private static func heads(_ name: String, usda: Bool = true) -> Set<String> {
-        FoodIngredientIdentity.heads(ofName: name, readsClassMembers: usda)
+    private static func heads(_ name: String, usda: Bool = true, modifiers: [String] = []) -> Set<String> {
+        let modifierForms = modifiers.reduce(into: Set<String>()) { $0.formUnion(FoodIngredientIdentity.forms(of: $1)) }
+        return FoodIngredientIdentity.heads(ofName: name, referenceNaming: usda, modifierForms: modifierForms)
+    }
+
+    private static func query(_ text: String) throws -> FoodIngredientIdentity.QueryHead {
+        try #require(FoodIngredientIdentity.QueryHead(
+            searchTokens: text.split(separator: " ").map(String.init), normalizedQuery: text
+        ))
     }
 
     private static func food(_ name: String, _ dataType: FoodDataType = .srLegacy) -> FoodItem {
@@ -50,6 +57,34 @@ struct FoodIngredientIdentityTests {
                 "a branded name's second segment is a flavor, never a class member")
     }
 
+    /// When a class's second segment only qualifies it — or names a typed modifier — the member is the
+    /// third segment: the canonical USDA zucchini, thigh and bacon rows (fix round 1).
+    @Test func aQualifiedClassNamesItsMemberThird() {
+        #expect(Self.heads("Squash, summer, zucchini, includes skin, raw").contains("zucchini"))
+        #expect(Self.heads("Chicken, broilers or fryers, thigh, meat only, raw").contains("thigh"))
+        #expect(Self.heads("Pork, cured, bacon, unprepared").contains("bacon"))
+        #expect(Self.heads("Pork, fresh, shoulder, whole, separable lean only, raw").contains("shoulder"))
+        #expect(Self.heads("Beef, flank, steak, boneless, choice, raw", modifiers: ["flank"]).contains("steak"))
+        #expect(!Self.heads("Beef, flank, steak, boneless, choice, raw").contains("steak"),
+                "without the modifier, 'flank' is the member and the third segment a qualifier")
+        #expect(!Self.heads("Beverages, Cocoa mix, powder", modifiers: ["cocoa"]).contains("powder"),
+                "a member that is a product ('cocoa mix') does not defer to its third segment")
+    }
+
+    /// A product name (branded, restaurant, a person's own) is one phrase: a preposition makes it a
+    /// composite, and a first segment followed by anything but an echo of its words is a flavor list —
+    /// the rows fix round 1's reviewers found filling the lime, lemon and zucchini lists.
+    @Test func aProductNameIsOnePhrase() {
+        #expect(Self.heads("Lemon, Ginger Drink, Lemon, Ginger", usda: false).isEmpty)
+        #expect(Self.heads("Lime, Cherry, Berry Blue, Strawberry, Orange Jelly Beans, Orange", usda: false).isEmpty)
+        #expect(Self.heads("Roasted Vegetable Zucchini, Spinach, Eggplant, Peppers, & Broccoli Pizza", usda: false).isEmpty)
+        #expect(Self.heads("Zucchini With Marinara, Marinara", usda: false).isEmpty)
+        #expect(Self.heads("Yeast With Poppy Seed Filling Cake", usda: false).isEmpty)
+        #expect(Self.heads("Tater Chips, Milk Chocolate", usda: false).isEmpty)
+        #expect(Self.heads("Dark Chocolate Chips, Dark", usda: false) == ["chips"], "the catalog's ', <flavor>' echo")
+        #expect(Self.heads("Pork with chili and tomatoes") == ["pork"], "a reference name still ends its phrase there")
+    }
+
     /// A part that is the food, and a one-word parenthetical, name the ingredient; leaves do not.
     @Test func partsAndParentheticalsNameTheIngredient() {
         #expect(Self.heads("Ginger root, raw").contains("ginger"))
@@ -70,7 +105,7 @@ struct FoodIngredientIdentityTests {
         #expect(paste.isNamed(by: Self.food("Tomato Paste", .branded)))
         let cocoa = try #require(FoodIngredientIdentity.QueryHead(searchTokens: ["cocoa", "powder"], normalizedQuery: "cocoa powder"))
         #expect(cocoa.isNamed(by: Self.food("Cocoa, dry powder, unsweetened")))
-        #expect(!cocoa.isNamed(by: Self.food("Cocoa, Powder", .branded)), "a branded second segment is a flavor")
+        #expect(!cocoa.isNamed(by: Self.food("Cocoa, Powder", .branded)), "a branded first segment followed by a flavor is no product")
         #expect(!Self.heads("Tomato, paste, canned").contains("paste"), "a one-word query has no modifier")
     }
 
@@ -83,6 +118,32 @@ struct FoodIngredientIdentityTests {
                 "two whole phrases ending in different nouns have no single head")
         #expect(Self.heads("Wild Pacific Sardines Cumin & Coriander", usda: false).isEmpty, "& coordinates like 'and'")
         #expect(Self.heads("Egg burrito") == ["burrito"])
+        #expect(Self.heads("Macaroni and cheese, boxed mix").isEmpty, "two one-word phrases: a dish, not cheese")
+        #expect(Self.heads("Peas and carrots, frozen, unprepared").isEmpty)
+        #expect(Self.heads("Half And Half", usda: false) == ["half"], "two phrases ending in the same noun")
+    }
+
+    // MARK: - The compound level
+
+    /// A USDA reference row that says a typed modifier as its kind is the compound the person typed; a
+    /// row that says it later, a product name, and every row of a brand query stay at the plain level.
+    @Test func aReferenceRowNamingTheKindIsTheCompound() throws {
+        let compound = FoodIngredientIdentity.compoundLevel, plain = FoodIngredientIdentity.ingredientLevel
+        let wholeMilk = try Self.query("whole milk")
+        #expect(wholeMilk.level(of: Self.food("Milk, whole, 3.25% milkfat, with added vitamin D"), brandQuery: false) == compound)
+        #expect(wholeMilk.level(of: Self.food("Milk, dry, whole, with added vitamin D"), brandQuery: false) == plain)
+        #expect(wholeMilk.level(of: Self.food("Milk, buttermilk, fluid, whole"), brandQuery: false) == plain)
+        #expect(wholeMilk.level(of: Self.food("Whole Milk", .branded), brandQuery: false) == plain)
+        #expect(wholeMilk.level(of: Self.food("Milk, whole, 3.25% milkfat, with added vitamin D"), brandQuery: true) == plain)
+        #expect(wholeMilk.level(of: Self.food("Yogurt, plain, whole milk"), brandQuery: false) == 0)
+        let oliveOil = try Self.query("olive oil")
+        #expect(oliveOil.level(of: Self.food("Oil, olive, salad or cooking"), brandQuery: false) == compound)
+        #expect(oliveOil.level(of: Self.food("Oil, corn, peanut, and olive"), brandQuery: false) == plain)
+        let blackPepper = try Self.query("black pepper")
+        #expect(blackPepper.level(of: Self.food("Spices, pepper, black"), brandQuery: false) == compound,
+                "a class member's kind is its qualifier")
+        #expect(try Self.query("milk").level(of: Self.food("Milk, whole, 3.25% milkfat"), brandQuery: false) == plain,
+                "a one-word query has no compound")
     }
 
     // MARK: - Forms and the query
@@ -130,6 +191,25 @@ struct FoodIngredientIdentityTests {
         #expect(catalog.results(for: "chocolate chips", context: .userTyped, ranking: .standard).map(\.id)
                 == catalog.results(for: "chocolate chips", context: .userTyped).map(\.id),
                 "the default is the standard order")
+    }
+
+    /// The compound level leads the identity group, and a flavored product is no longer the ingredient:
+    /// fix round 1's "whole milk", "olive oil" and "milk chocolate chips" #1 rows.
+    @Test func theTypedCompoundLeads() {
+        let buttermilk = Self.food("Milk, buttermilk, fluid, whole")
+        let dry = Self.food("Milk, dry, whole, with added vitamin D")
+        let fluid = Self.food("Milk, whole, 3.25% milkfat, with added vitamin D")
+        let milk = FoodCatalog(source: InMemoryBundledFoodSource([buttermilk, dry, fluid]))
+        #expect(milk.results(for: "whole milk", context: .userTyped, ranking: .ingredientIdentity).first?.id == fluid.id)
+        let blend = Self.food("Oil, corn, peanut, and olive")
+        let olive = Self.food("Oil, olive, salad or cooking")
+        let oil = FoodCatalog(source: InMemoryBundledFoodSource([blend, olive]))
+        #expect(oil.results(for: "olive oil", context: .userTyped, ranking: .ingredientIdentity).first?.id == olive.id)
+        let tater = Self.food("Tater Chips, Milk Chocolate", .branded)
+        let chips = Self.food("Milk Chocolate Chips", .branded)
+        let baking = FoodCatalog(source: InMemoryBundledFoodSource([tater, chips]))
+        #expect(baking.results(for: "milk chocolate chips", context: .userTyped, ranking: .ingredientIdentity)
+                .map(\.id) == [chips.id, tater.id])
     }
 
     /// Among rows that ARE the ingredient, the standard keys still order them: the generic tier first.

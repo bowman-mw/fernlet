@@ -126,9 +126,10 @@ public nonisolated enum FoodBrandLexicon {
 /// 1b. **the ingredient-identity key, recipe surfaces only** (ingredient-search round F5, 2026-09-30)
 ///    — ABOVE 1a, and only for a caller that passes ``FoodSearchRanking/ingredientIdentity``: a row
 ///    whose name IS the typed ingredient (``FoodIngredientIdentity``) outranks every row that only
-///    contains its words, and the keys below order each side. Like history it re-ranks rows the
-///    floors already admitted and never adds one; unlike history it reaches no resolver pool and no
-///    confidence gate (`scoredResults` passes ``FoodSearchRanking/standard``);
+///    contains its words — and, for a typed compound, a USDA reference row that names it ("Milk,
+///    whole" for "whole milk") leads that group — and the keys below order each level. Like history
+///    it re-ranks rows the floors already admitted and never adds one; unlike history it reaches no
+///    resolver pool and no confidence gate (`scoredResults` passes ``FoodSearchRanking/standard``);
 /// 2. `sourcePriority` (manual > Open Food Facts > USDA > AI), then brand-aware `dataTypePriority`,
 ///    ABOVE the score.
 ///    A plain ingredient query therefore keeps generic USDA rows above commercial titles whose
@@ -242,7 +243,7 @@ public nonisolated enum FoodItemSearch {
                       score >= FoodItemSearch.minimumBindScore else { return nil }
                 return RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
             }
-            let ranked = FoodItemSearch.markingIdentity(scored, query: query, ranking: ranking)
+            let ranked = FoodItemSearch.markingIdentity(scored, query: query, ranking: ranking, isBrandQuery: isBrandQuery)
                 .sorted { first, second in
                     FoodItemSearch.ranksAhead(first, second, isBrandQuery: isBrandQuery)
                 }
@@ -284,8 +285,10 @@ public nonisolated enum FoodItemSearch {
         let score: Int
         let history: Int
         let nameTokens: Set<String>
-        /// 1 when the row IS the typed ingredient (``FoodIngredientIdentity``); 0 otherwise, and 0 for
-        /// every row under ``FoodSearchRanking/standard``, which makes the key inert there.
+        /// The row's ``FoodIngredientIdentity`` level: ``FoodIngredientIdentity/compoundLevel`` (2) for a
+        /// USDA reference row naming the typed compound, ``FoodIngredientIdentity/ingredientLevel`` (1)
+        /// for any other row that IS the typed ingredient, 0 otherwise — and 0 for every row under
+        /// ``FoodSearchRanking/standard``, which makes the key inert there.
         var identity = 0
 
         init(entry: Index.Entry, score: Int, history: Int) {
@@ -303,17 +306,18 @@ public nonisolated enum FoodItemSearch {
     /// when too few ranked rows say the head whole for it to be a finished word
     /// (``FoodIngredientIdentity/QueryHead/sharesHead(_:)``). A row whose name does not say a head
     /// noun as a whole word is never parsed, which keeps a broad prefix's cost to one set test per row.
+    /// `isBrandQuery` withholds the compound level (a brand query's tier already leads).
     /// R2: two bounded passes over `rows`.
     fileprivate static func markingIdentity(
-        _ rows: [RankedRow], query: SearchQuery, ranking: FoodSearchRanking
+        _ rows: [RankedRow], query: SearchQuery, ranking: FoodSearchRanking, isBrandQuery: Bool
     ) -> [RankedRow] {
         guard ranking == .ingredientIdentity, !rows.isEmpty,
               let head = FoodIngredientIdentity.QueryHead(searchTokens: query.tokens, normalizedQuery: query.normalized),
               head.sharesHead(rows.map(\.nameTokens)) else { return rows }
         return rows.map { row in
-            guard head.isSaid(in: row.nameTokens), head.isNamed(by: row.foodItem) else { return row }
+            guard head.isSaid(in: row.nameTokens) else { return row }
             var marked = row
-            marked.identity = 1
+            marked.identity = head.level(of: row.foodItem, brandQuery: isBrandQuery)
             return marked
         }
     }
@@ -431,7 +435,7 @@ public nonisolated enum FoodItemSearch {
             )
             return RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
         }
-        let ranked = markingIdentity(scored, query: prepared, ranking: ranking)
+        let ranked = markingIdentity(scored, query: prepared, ranking: ranking, isBrandQuery: isBrandQuery)
         .sorted { ranksAhead($0, $1, isBrandQuery: isBrandQuery) }
         .map { (foodItem: $0.foodItem, score: $0.score) }
         let window = ranked.prefix(max(limit, demotionWindow))
@@ -535,9 +539,10 @@ public nonisolated enum FoodItemSearch {
     /// once per row instead of once per comparison.
     ///
     /// **F5 (2026-09-30) added a key above history, for the recipe surfaces only**: a row that IS the
-    /// typed ingredient (`identity` 1) ranks ahead of every row that is not, and the keys below order
-    /// each side — so among plain rows your own logged food still comes first, then source, the
-    /// generic-first data type and the score. The owner's call: "for the recipe it's more important to
+    /// typed ingredient (`identity` 1) ranks ahead of every row that is not, a USDA reference row that
+    /// names the typed compound (`identity` 2, "Oil, olive" for "olive oil") ahead of both, and the keys
+    /// below order each level — so among plain rows your own logged food still comes first, then
+    /// source, the generic-first data type and the score. The owner's call: "for the recipe it's more important to
     /// rank the plain ingredients first". Under ``FoodSearchRanking/standard`` every row carries 0, the
     /// key compares equal, and this function is the one it was before.
     fileprivate static func ranksAhead(_ first: RankedRow, _ second: RankedRow, isBrandQuery: Bool) -> Bool {

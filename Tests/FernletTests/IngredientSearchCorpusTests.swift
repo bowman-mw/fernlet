@@ -9,7 +9,9 @@
 // the exact call the recipe ingredient editor makes — `FoodCatalog.bundled()`'s
 // `results(for:context: .userTyped, ranking: .ingredientIdentity)` at its default limit of SIX, the
 // whole list the person sees (the identity-first order is F5's, 2026-09-30) — and pins, per query,
-// where the first PLAIN form of the ingredient sits in those six rows.
+// where the first PLAIN form of the ingredient sits in those six rows and how many of the six are
+// plain (the list's composition, which a first-row pin cannot see — F5's fix round 1), plus a few
+// named rows the six must lead with, show or never show (`sixPins`).
 //
 // "PLAIN" IS A JUDGEMENT, AND IT IS WRITTEN DOWN. Each query carries an include regex, an optional
 // exclude regex and (for the chocolate family) a "must name chocolate" guard, ported verbatim from the
@@ -102,15 +104,22 @@ struct IngredientCorpusPin: Sendable, Equatable {
     let nameRank: Int?
     /// The same, counting only rows that also pass the plausibility check; nil when none does.
     let plausibleRank: Int?
+    /// How many of the six rows the judge accepts by NAME — the list's composition, not just its first
+    /// plain row (fix round 1 of F5: identity once filled rows 2–6 of "lemon" with ginger drinks and
+    /// gelatin while the first plain row stayed #1, and no rank pin moved).
+    let plainInSix: Int
     /// Count nouns only (nil otherwise): whether that plausible plain row resolves "1 each" to
-    /// nutrition — the banana case (report §3). False when no plausible plain row is visible.
+    /// nutrition — the banana case (report §3) — through a portion that IS one item. A branded label
+    /// serving ("1 serving (35 g)", `BundledRowCorrection.rebasingBrandedNutrients`) converts but is a
+    /// serving, not a count, so it reads false. False when no plausible plain row is visible.
     let eachConverts: Bool?
 
     /// Builds one pin; `each` is given only for the count-noun queries.
-    init(_ query: String, _ nameRank: Int?, _ plausibleRank: Int?, each: Bool? = nil) {
+    init(_ query: String, _ nameRank: Int?, _ plausibleRank: Int?, plain: Int, each: Bool? = nil) {
         self.query = query
         self.nameRank = nameRank
         self.plausibleRank = plausibleRank
+        self.plainInSix = plain
         self.eachConverts = each
     }
 
@@ -119,8 +128,21 @@ struct IngredientCorpusPin: Sendable, Equatable {
         let name = nameRank.map(String.init) ?? "nil"
         let plausible = plausibleRank.map(String.init) ?? "nil"
         let each = eachConverts.map { ", each: \($0)" } ?? ""
-        return "        .init(\"\(query)\", \(name), \(plausible)\(each)),"
+        return "        .init(\"\(query)\", \(name), \(plausible), plain: \(plainInSix)\(each)),"
     }
+}
+
+/// A named row a query's six must show, lead with, or never show — the rows fix round 1 of F5 was
+/// about, pinned by name because a rank pin cannot see them (the first plain row did not move).
+struct IngredientCorpusSixPin: Sendable {
+    /// The typed text.
+    let query: String
+    /// The exact name the six must lead with, if pinned.
+    let leads: String?
+    /// Exact names that must be among the six rows.
+    let shows: [String]
+    /// Exact names that must not be among the six rows.
+    let hides: [String]
 }
 
 /// One judge with its regexes compiled once.
@@ -181,12 +203,17 @@ struct IngredientSearchCorpusTests {
     /// chocolate chips, graham crackers, tomato, black beans, white rice, bread and "chocolate" to #1;
     /// whole milk, apple, apples and rice into view; sugar, milk chocolate chips, olive oil, tomatoes,
     /// bacon, salmon, tofu and mayonnaise up within it.
-    static let measuredBaseline = (plainAtOne: 136, plainVisible: 151)
+    /// 139 / 151 with F5's fix round 1: a USDA reference row that names the typed compound leads
+    /// ("Milk, whole" 4 → 1, "Oil, olive" 2 → 1), and a branded product whose first segment is only a
+    /// flavor is no longer the ingredient ("Tater Chips, Milk Chocolate" left #1 for real milk
+    /// chocolate chips, 2 → 1). No pin moved down.
+    static let measuredBaseline = (plainAtOne: 139, plainVisible: 151)
 
     /// The names-only baseline beside it — the report's §4.1 table (97 at #1, 132 visible on
     /// cf46b8eb), which judged names without nutrition. Kept so the gap between the two is visible.
-    /// 113 / 145 before F5, 137 / 152 with it (the gap is still white chocolate chips).
-    static let nameOnlyBaseline = (plainAtOne: 137, plainVisible: 152)
+    /// 113 / 145 before F5, 137 / 152 with it, 140 / 152 with its fix round 1 (the gap is still white
+    /// chocolate chips).
+    static let nameOnlyBaseline = (plainAtOne: 140, plainVisible: 152)
 
     /// Count-noun queries whose first plausible plain VISIBLE row takes "1 each". Zero on cf46b8eb:
     /// the report's §4.3 "1 of 26" counted "1 each" OR "1 piece" on the first plain row of the top
@@ -198,8 +225,56 @@ struct IngredientSearchCorpusTests {
     /// cucumber, jalapeno, grape tomatoes, corn tortillas and zucchini. Still refused: apple(s), egg,
     /// potato, sweet potato (no plain row in view), avocado and tomato (RACC-only rows), bell
     /// peppers, chicken, graham crackers and marshmallows. Eighteen with F5: graham crackers' first
-    /// plain row is now the branded "Graham Crackers" #1, whose label serving is its "each".
-    static let eachBaseline = 18
+    /// plain row became the branded "Graham Crackers" #1, whose label serving is its "each". Seventeen
+    /// again with F5's fix round 1, which stopped counting a label serving as an item
+    /// (`countsOneItem`): "9 graham crackers" on that row is nine 35 g servings, not nine crackers, so
+    /// the F5 "gain" was a unit regression, now named in the round's worsened list.
+    static let eachBaseline = 17
+
+    /// How many of the 960 visible rows (160 queries × six) the judges accept by name — the six
+    /// lists' composition in one number, derived from the pins' `plainInSix` (fix round 1 of F5, from
+    /// the reviewers' measurement: 366 on the standard order, 438 with F5 as first built, when branded
+    /// flavor lists and composites filled the lists behind a first plain row that never moved; 449
+    /// once a product name is read as one phrase and a qualified USDA class names its member third).
+    static let plainRowsInSixBaseline = 449
+
+    /// The description `BundledRowCorrection.rebasingBrandedNutrients` gives a branded label serving
+    /// it keeps as the row's count portion — a serving, not an item.
+    static let labelServingPrefix = "1 serving ("
+
+    /// The named rows (fix round 1 of F5): the flavor-first product lists and composites identity once
+    /// counted as the ingredient (hidden), the canonical USDA rows they pushed out of view (shown), and
+    /// the typed compounds' own rows (leading). Exact catalog names — the catalog is never regenerated.
+    static let sixPins: [IngredientCorpusSixPin] = [
+        .init(query: "lemon", leads: "Lemons, raw, without peel", shows: [], hides: [
+            "Lemon, Ginger Drink, Lemon, Ginger", "Lemon, Lime Gelatin Mix, Lemon, Lime",
+            "Lemon, Sea Salt And Extra Virgin Olive Oil Crackers, Lemon, Sea Salt"
+        ]),
+        .init(query: "lime", leads: "Limes, raw", shows: [], hides: [
+            "Lime, Cherry, Berry Blue, Strawberry, Orange Jelly Beans, Orange",
+            "Lime, Lemongrass, & Sweet Coconut Thai Green Curry Starter, & Sweet Coconut"
+        ]),
+        .init(query: "zucchini", leads: "Squash, zucchini, baby, raw",
+              shows: ["Squash, summer, zucchini, includes skin, raw"], hides: [
+            "Roasted Vegetable Zucchini, Spinach, Eggplant, Peppers, & Broccoli Pizza, Roasted Vegetable",
+            "Grifled Zucchini, Butternut Squash & Tomatoes With Quinoa Duo Quinoa Blends, Butternut Squash & Tomatoes"
+        ]),
+        .init(query: "avocado", leads: "Avocado, Hass, peeled, raw", shows: [], hides: [
+            "Avocado, Cucumber, And Surimi Topped With Shrimp", "Avocado, Cilantro & Lime Flavor Crackers, Cilantro & Lime"
+        ]),
+        .init(query: "basil", leads: "Basil, fresh", shows: ["Spices, basil, dried"],
+              hides: ["Basil, Garlic & Oregano Diced Tomatoes, Garlic & Oregano"]),
+        .init(query: "cilantro", leads: "Coriander (cilantro) leaves, raw", shows: [],
+              hides: ["Cilantro With Lime Fully Cooked Chicken Sausage, Cilantro With Lime"]),
+        .init(query: "strawberries", leads: "Strawberries, raw", shows: [],
+              hides: ["Strawberries, Mangoes, Bananas Tropical Blend, Strawberries, Mangoes, Bananas"]),
+        .init(query: "chicken thighs", leads: nil,
+              shows: ["Chicken, broilers or fryers, thigh, meat only, cooked, roasted"], hides: ["Pollo Adobado Chicken Thighs"]),
+        .init(query: "whole milk", leads: "Milk, whole, 3.25% milkfat, with added vitamin D", shows: [], hides: []),
+        .init(query: "olive oil", leads: "Oil, olive, salad or cooking", shows: [], hides: []),
+        .init(query: "milk chocolate chips", leads: "Milk Chocolate Premium Baking Chips, Milk Chocolate", shows: [], hides: []),
+        .init(query: "black beans", leads: "Beans, black, mature seeds, raw", shows: [], hides: []),
+    ]
 
     /// The count-noun queries — the research's `replay/units.py` list. Frozen English matching inputs.
     static let countNouns: Set<String> = [
@@ -388,166 +463,166 @@ struct IngredientSearchCorpusTests {
     // MARK: - The pins (measured; re-take with the dump)
 
     static let pins: [IngredientCorpusPin] = [
-        .init("all-purpose flour", 1, 1),
-        .init("flour", nil, nil),
-        .init("bread flour", 1, 1),
-        .init("whole wheat flour", 1, 1),
-        .init("sugar", 4, 4),
-        .init("granulated sugar", 1, 1),
-        .init("brown sugar", 1, 1),
-        .init("powdered sugar", 1, 1),
-        .init("baking soda", 1, 1),
-        .init("baking powder", 1, 1),
-        .init("vanilla extract", 1, 1),
-        .init("cocoa powder", 1, 1),
-        .init("chocolate chips", 1, 1),
-        .init("chocolate chip", 1, 1),
-        .init("semisweet chocolate chips", 1, 1),
-        .init("semi sweet chocolate chips", 1, 1),
-        .init("dark chocolate chips", 1, 1),
-        .init("milk chocolate chips", 2, 2),
-        .init("white chocolate chips", 1, nil),
-        .init("butter", 1, 1),
-        .init("unsalted butter", 1, 1),
-        .init("eggs", 1, 1, each: true),
-        .init("egg", nil, nil, each: false),
-        .init("egg whites", 1, 1),
-        .init("yeast", 1, 1),
-        .init("cornstarch", 1, 1),
-        .init("honey", 1, 1),
-        .init("maple syrup", 1, 1),
-        .init("molasses", 1, 1),
-        .init("oats", 1, 1),
-        .init("rolled oats", 1, 1),
-        .init("walnuts", 1, 1),
-        .init("pecans", 1, 1),
-        .init("almonds", 1, 1),
-        .init("raisins", 1, 1),
-        .init("shredded coconut", 1, 1),
-        .init("sprinkles", 1, 1),
-        .init("cream cheese", 1, 1),
-        .init("heavy cream", 1, 1),
-        .init("sour cream", 1, 1),
-        .init("buttermilk", 1, 1),
-        .init("milk", nil, nil),
-        .init("whole milk", 4, 4),
-        .init("almond milk", 1, 1),
-        .init("oat milk", 1, 1),
-        .init("sweetened condensed milk", 1, 1),
-        .init("graham crackers", 1, 1, each: true),
-        .init("marshmallows", 1, 1, each: false),
-        .init("peanut butter", 1, 1),
-        .init("almond flour", 1, 1),
-        .init("coconut oil", 1, 1),
-        .init("vegetable oil", 1, 1),
-        .init("canola oil", 1, 1),
-        .init("olive oil", 2, 2),
-        .init("extra virgin olive oil", 1, 1),
-        .init("banana", 1, 1, each: true),
-        .init("bananas", 1, 1, each: true),
-        .init("apple", 4, 4, each: false),
-        .init("apples", 4, 4, each: false),
-        .init("lemon", 1, 1, each: true),
-        .init("lemon juice", 1, 1),
-        .init("lime", 1, 1, each: true),
-        .init("orange", 1, 1, each: true),
-        .init("strawberries", 1, 1),
-        .init("blueberries", 1, 1),
-        .init("raspberries", 1, 1),
-        .init("avocado", 1, 1, each: false),
-        .init("tomato", 1, 1, each: false),
-        .init("tomatoes", 2, 2, each: true),
-        .init("cherry tomatoes", 1, 1),
-        .init("onion", 1, 1, each: true),
-        .init("red onion", 1, 1, each: true),
-        .init("yellow onion", 1, 1, each: true),
-        .init("garlic", 1, 1),
-        .init("garlic clove", 1, 1, each: true),
-        .init("ginger", 1, 1),
-        .init("carrot", 1, 1, each: true),
-        .init("carrots", 1, 1, each: true),
-        .init("celery", 1, 1),
-        .init("potato", nil, nil, each: false),
-        .init("sweet potato", nil, nil, each: false),
-        .init("spinach", 1, 1),
-        .init("kale", 1, 1),
-        .init("lettuce", 1, 1),
-        .init("cucumber", 1, 1, each: true),
-        .init("bell pepper", 1, 1, each: false),
-        .init("red bell pepper", 1, 1, each: false),
-        .init("jalapeno", 1, 1, each: true),
-        .init("broccoli", 1, 1),
-        .init("cauliflower", 1, 1),
-        .init("zucchini", 1, 1, each: true),
-        .init("mushrooms", 1, 1),
-        .init("corn", 1, 1),
-        .init("peas", 1, 1),
-        .init("green beans", 1, 1),
-        .init("cilantro", 1, 1),
-        .init("parsley", 1, 1),
-        .init("basil", 1, 1),
-        .init("green onions", 1, 1),
-        .init("scallions", 1, 1),
-        .init("chicken breast", 2, 2, each: false),
-        .init("chicken thighs", 2, 2, each: false),
-        .init("ground beef", 1, 1),
-        .init("ground turkey", 1, 1),
-        .init("bacon", 5, 5),
-        .init("salmon", 4, 4),
-        .init("shrimp", 1, 1),
-        .init("tofu", 2, 2),
-        .init("black beans", 1, 1),
-        .init("chickpeas", 1, 1),
-        .init("lentils", 1, 1),
-        .init("rice", 6, 6),
-        .init("white rice", 1, 1),
-        .init("brown rice", 1, 1),
-        .init("pasta", 1, 1),
-        .init("spaghetti", nil, nil),
-        .init("quinoa", 1, 1),
-        .init("bread", 1, 1),
-        .init("tortillas", 1, 1, each: true),
-        .init("cheddar cheese", 1, 1),
-        .init("mozzarella", 1, 1),
-        .init("parmesan", 1, 1),
-        .init("feta", 1, 1),
-        .init("greek yogurt", 1, 1),
-        .init("yogurt", 1, 1),
-        .init("soy sauce", 1, 1),
-        .init("salt", 1, 1),
-        .init("black pepper", 1, 1),
-        .init("cinnamon", 1, 1),
-        .init("cumin", 1, 1),
-        .init("paprika", 1, 1),
-        .init("chili powder", 1, 1),
-        .init("oregano", 1, 1),
-        .init("garlic powder", 1, 1),
-        .init("onion powder", 1, 1),
-        .init("red pepper flakes", 1, 1),
-        .init("vinegar", 1, 1),
-        .init("apple cider vinegar", 1, 1),
-        .init("balsamic vinegar", 1, 1),
-        .init("dijon mustard", 1, 1),
-        .init("ketchup", 1, 1),
-        .init("mayonnaise", 5, 5),
-        .init("chicken broth", 1, 1),
-        .init("tomato paste", 1, 1),
-        .init("canned tomatoes", 1, 1),
-        .init("coconut milk", 1, 1),
-        .init("water", 1, 1),
-        .init("choc", 2, 2),
-        .init("chocolate", 1, 1),
-        .init("chocolate c", 1, 1),
-        .init("chocolate ch", 1, 1),
-        .init("chocolate chi", 1, 1),
-        .init("chocolate chip", 1, 1),
-        .init("ban", 1, 1),
-        .init("bana", 1, 1),
-        .init("banan", 1, 1),
-        .init("brown s", nil, nil),
-        .init("baking s", 1, 1),
-        .init("chicken b", nil, nil),
-        .init("peanut b", 1, 1),
+        .init("all-purpose flour", 1, 1, plain: 6),
+        .init("flour", nil, nil, plain: 0),
+        .init("bread flour", 1, 1, plain: 3),
+        .init("whole wheat flour", 1, 1, plain: 4),
+        .init("sugar", 4, 4, plain: 1),
+        .init("granulated sugar", 1, 1, plain: 3),
+        .init("brown sugar", 1, 1, plain: 4),
+        .init("powdered sugar", 1, 1, plain: 3),
+        .init("baking soda", 1, 1, plain: 1),
+        .init("baking powder", 1, 1, plain: 4),
+        .init("vanilla extract", 1, 1, plain: 4),
+        .init("cocoa powder", 1, 1, plain: 4),
+        .init("chocolate chips", 1, 1, plain: 3),
+        .init("chocolate chip", 1, 1, plain: 2),
+        .init("semisweet chocolate chips", 1, 1, plain: 4),
+        .init("semi sweet chocolate chips", 1, 1, plain: 6),
+        .init("dark chocolate chips", 1, 1, plain: 3),
+        .init("milk chocolate chips", 1, 1, plain: 2),
+        .init("white chocolate chips", 1, nil, plain: 2),
+        .init("butter", 1, 1, plain: 5),
+        .init("unsalted butter", 1, 1, plain: 2),
+        .init("eggs", 1, 1, plain: 1, each: true),
+        .init("egg", nil, nil, plain: 0, each: false),
+        .init("egg whites", 1, 1, plain: 4),
+        .init("yeast", 1, 1, plain: 3),
+        .init("cornstarch", 1, 1, plain: 2),
+        .init("honey", 1, 1, plain: 3),
+        .init("maple syrup", 1, 1, plain: 3),
+        .init("molasses", 1, 1, plain: 1),
+        .init("oats", 1, 1, plain: 4),
+        .init("rolled oats", 1, 1, plain: 3),
+        .init("walnuts", 1, 1, plain: 6),
+        .init("pecans", 1, 1, plain: 6),
+        .init("almonds", 1, 1, plain: 3),
+        .init("raisins", 1, 1, plain: 4),
+        .init("shredded coconut", 1, 1, plain: 1),
+        .init("sprinkles", 1, 1, plain: 2),
+        .init("cream cheese", 1, 1, plain: 2),
+        .init("heavy cream", 1, 1, plain: 3),
+        .init("sour cream", 1, 1, plain: 3),
+        .init("buttermilk", 1, 1, plain: 3),
+        .init("milk", nil, nil, plain: 0),
+        .init("whole milk", 1, 1, plain: 2),
+        .init("almond milk", 1, 1, plain: 4),
+        .init("oat milk", 1, 1, plain: 3),
+        .init("sweetened condensed milk", 1, 1, plain: 2),
+        .init("graham crackers", 1, 1, plain: 1, each: false),
+        .init("marshmallows", 1, 1, plain: 4, each: false),
+        .init("peanut butter", 1, 1, plain: 4),
+        .init("almond flour", 1, 1, plain: 6),
+        .init("coconut oil", 1, 1, plain: 2),
+        .init("vegetable oil", 1, 1, plain: 4),
+        .init("canola oil", 1, 1, plain: 2),
+        .init("olive oil", 1, 1, plain: 2),
+        .init("extra virgin olive oil", 1, 1, plain: 1),
+        .init("banana", 1, 1, plain: 4, each: true),
+        .init("bananas", 1, 1, plain: 3, each: true),
+        .init("apple", 4, 4, plain: 3, each: false),
+        .init("apples", 4, 4, plain: 3, each: false),
+        .init("lemon", 1, 1, plain: 1, each: true),
+        .init("lemon juice", 1, 1, plain: 1),
+        .init("lime", 1, 1, plain: 1, each: true),
+        .init("orange", 1, 1, plain: 6, each: true),
+        .init("strawberries", 1, 1, plain: 2),
+        .init("blueberries", 1, 1, plain: 1),
+        .init("raspberries", 1, 1, plain: 2),
+        .init("avocado", 1, 1, plain: 5, each: false),
+        .init("tomato", 1, 1, plain: 4, each: false),
+        .init("tomatoes", 2, 2, plain: 3, each: true),
+        .init("cherry tomatoes", 1, 1, plain: 2),
+        .init("onion", 1, 1, plain: 4, each: true),
+        .init("red onion", 1, 1, plain: 2, each: true),
+        .init("yellow onion", 1, 1, plain: 2, each: true),
+        .init("garlic", 1, 1, plain: 3),
+        .init("garlic clove", 1, 1, plain: 2, each: true),
+        .init("ginger", 1, 1, plain: 2),
+        .init("carrot", 1, 1, plain: 2, each: true),
+        .init("carrots", 1, 1, plain: 2, each: true),
+        .init("celery", 1, 1, plain: 2),
+        .init("potato", nil, nil, plain: 0, each: false),
+        .init("sweet potato", nil, nil, plain: 0, each: false),
+        .init("spinach", 1, 1, plain: 3),
+        .init("kale", 1, 1, plain: 1),
+        .init("lettuce", 1, 1, plain: 6),
+        .init("cucumber", 1, 1, plain: 2, each: true),
+        .init("bell pepper", 1, 1, plain: 4, each: false),
+        .init("red bell pepper", 1, 1, plain: 1, each: false),
+        .init("jalapeno", 1, 1, plain: 2, each: true),
+        .init("broccoli", 1, 1, plain: 1),
+        .init("cauliflower", 1, 1, plain: 2),
+        .init("zucchini", 1, 1, plain: 2, each: true),
+        .init("mushrooms", 1, 1, plain: 4),
+        .init("corn", 1, 1, plain: 5),
+        .init("peas", 1, 1, plain: 1),
+        .init("green beans", 1, 1, plain: 4),
+        .init("cilantro", 1, 1, plain: 1),
+        .init("parsley", 1, 1, plain: 2),
+        .init("basil", 1, 1, plain: 2),
+        .init("green onions", 1, 1, plain: 2),
+        .init("scallions", 1, 1, plain: 1),
+        .init("chicken breast", 2, 2, plain: 2, each: false),
+        .init("chicken thighs", 2, 2, plain: 3, each: false),
+        .init("ground beef", 1, 1, plain: 6),
+        .init("ground turkey", 1, 1, plain: 6),
+        .init("bacon", 5, 5, plain: 1),
+        .init("salmon", 4, 4, plain: 3),
+        .init("shrimp", 1, 1, plain: 5),
+        .init("tofu", 2, 2, plain: 3),
+        .init("black beans", 1, 1, plain: 3),
+        .init("chickpeas", 1, 1, plain: 6),
+        .init("lentils", 1, 1, plain: 4),
+        .init("rice", 6, 6, plain: 1),
+        .init("white rice", 1, 1, plain: 6),
+        .init("brown rice", 1, 1, plain: 6),
+        .init("pasta", 1, 1, plain: 3),
+        .init("spaghetti", nil, nil, plain: 0),
+        .init("quinoa", 1, 1, plain: 3),
+        .init("bread", 1, 1, plain: 6),
+        .init("tortillas", 1, 1, plain: 5, each: true),
+        .init("cheddar cheese", 1, 1, plain: 3),
+        .init("mozzarella", 1, 1, plain: 6),
+        .init("parmesan", 1, 1, plain: 6),
+        .init("feta", 1, 1, plain: 3),
+        .init("greek yogurt", 1, 1, plain: 2),
+        .init("yogurt", 1, 1, plain: 3),
+        .init("soy sauce", 1, 1, plain: 4),
+        .init("salt", 1, 1, plain: 1),
+        .init("black pepper", 1, 1, plain: 2),
+        .init("cinnamon", 1, 1, plain: 2),
+        .init("cumin", 1, 1, plain: 2),
+        .init("paprika", 1, 1, plain: 2),
+        .init("chili powder", 1, 1, plain: 2),
+        .init("oregano", 1, 1, plain: 3),
+        .init("garlic powder", 1, 1, plain: 2),
+        .init("onion powder", 1, 1, plain: 2),
+        .init("red pepper flakes", 1, 1, plain: 1),
+        .init("vinegar", 1, 1, plain: 5),
+        .init("apple cider vinegar", 1, 1, plain: 1),
+        .init("balsamic vinegar", 1, 1, plain: 2),
+        .init("dijon mustard", 1, 1, plain: 5),
+        .init("ketchup", 1, 1, plain: 3),
+        .init("mayonnaise", 5, 5, plain: 1),
+        .init("chicken broth", 1, 1, plain: 2),
+        .init("tomato paste", 1, 1, plain: 2),
+        .init("canned tomatoes", 1, 1, plain: 6),
+        .init("coconut milk", 1, 1, plain: 4),
+        .init("water", 1, 1, plain: 4),
+        .init("choc", 2, 2, plain: 4),
+        .init("chocolate", 1, 1, plain: 5),
+        .init("chocolate c", 1, 1, plain: 1),
+        .init("chocolate ch", 1, 1, plain: 1),
+        .init("chocolate chi", 1, 1, plain: 1),
+        .init("chocolate chip", 1, 1, plain: 2),
+        .init("ban", 1, 1, plain: 3),
+        .init("bana", 1, 1, plain: 3),
+        .init("banan", 1, 1, plain: 3),
+        .init("brown s", nil, nil, plain: 0),
+        .init("baking s", 1, 1, plain: 1),
+        .init("chicken b", nil, nil, plain: 0),
+        .init("peanut b", 1, 1, plain: 4),
     ]
 
     // MARK: - Plausibility
@@ -573,14 +648,20 @@ struct IngredientSearchCorpusTests {
         let visible = catalog.results(for: query, context: .userTyped, ranking: .ingredientIdentity)
         let nameIndex = visible.firstIndex { matcher.accepts($0.name) }
         let plausibleIndex = visible.firstIndex { matcher.accepts($0.name) && isPlausible($0) }
+        let plain = visible.filter { matcher.accepts($0.name) }.count
         var each: Bool?
         if countNouns.contains(query) {
-            each = plausibleIndex.map { index in
-                RecipeIngredient(foodItemId: visible[index].id, quantity: 1, unit: RecipeUnit.each.rawValue)
-                    .servingConversion(using: visible[index]) != nil
-            } ?? false
+            each = plausibleIndex.map { countsOneItem(visible[$0]) } ?? false
         }
-        return IngredientCorpusPin(query, nameIndex.map { $0 + 1 }, plausibleIndex.map { $0 + 1 }, each: each)
+        return IngredientCorpusPin(query, nameIndex.map { $0 + 1 }, plausibleIndex.map { $0 + 1 }, plain: plain, each: each)
+    }
+
+    /// Whether "1 each" of `item` converts through a portion that is one item — not a branded label
+    /// serving kept as the row's count portion (`BundledRowCorrection`'s "1 serving (N g)").
+    static func countsOneItem(_ item: FoodItem) -> Bool {
+        let line = RecipeIngredient(foodItemId: item.id, quantity: 1, unit: RecipeUnit.each.rawValue)
+        guard let conversion = line.servingConversion(using: item) else { return false }
+        return conversion.sourcePortion?.description?.hasPrefix(labelServingPrefix) != true
     }
 
     // MARK: - Tests
@@ -608,6 +689,20 @@ struct IngredientSearchCorpusTests {
 
     /// The tuples are measured facts derived from the pins, and the pins cover the probe's corpus
     /// exactly, in its order — so neither can drift from the other.
+    /// The named rows of fix round 1: the canonical USDA rows identity must keep in view, the compound
+    /// rows it must lead with, and the flavored products it must no longer count as the ingredient.
+    @Test func theSixShowTheNamedRows() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount >= FoodSearchCorpusTests.shippedRowCount,
+                     "the shipped catalog must be loaded — this suite must never pass vacuously")
+        for pin in Self.sixPins {
+            let names = catalog.results(for: pin.query, context: .userTyped, ranking: .ingredientIdentity).map(\.name)
+            if let leads = pin.leads { #expect(names.first == leads, "\(pin.query) leads with \(names.first ?? "nothing")") }
+            for name in pin.shows { #expect(names.contains(name), "\(pin.query) must show \(name): \(names)") }
+            for name in pin.hides { #expect(!names.contains(name), "\(pin.query) must not show \(name): \(names)") }
+        }
+    }
+
     @Test func baselineTuplesAreDerivedFromThePins() {
         #expect(Self.judges.map(\.query) == IngredientReplayCorpus.all.map(\.query),
                 "the judges must cover the replay probe's corpus, in its order")
@@ -621,6 +716,7 @@ struct IngredientSearchCorpusTests {
         let nameVisible = Self.pins.filter { $0.nameRank != nil }.count
         #expect((nameAtOne, nameVisible) == Self.nameOnlyBaseline)
         #expect(Self.pins.filter { $0.eachConverts == true }.count == Self.eachBaseline)
+        #expect(Self.pins.map(\.plainInSix).reduce(0, +) == Self.plainRowsInSixBaseline)
         #expect(Set(Self.pins.filter { $0.eachConverts != nil }.map(\.query)) == Self.countNouns)
     }
 
@@ -674,10 +770,12 @@ struct IngredientSearchCorpusTests {
         let nameAtOne = measured.filter { $0.nameRank == 1 }.count
         let nameVisible = measured.filter { $0.nameRank != nil }.count
         let each = measured.filter { $0.eachConverts == true }.count
+        let plainRows = measured.map(\.plainInSix).reduce(0, +)
         let text = """
             measuredBaseline = (plainAtOne: \(atOne), plainVisible: \(visible))
             nameOnlyBaseline = (plainAtOne: \(nameAtOne), plainVisible: \(nameVisible))
             eachBaseline = \(each)
+            plainRowsInSixBaseline = \(plainRows)
             \(measured.map(\.literal).joined(separator: "\n"))
 
             """

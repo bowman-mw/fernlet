@@ -39,15 +39,26 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 /// - **USDA's "Category, specific, qualifiers" form.** The first comma segment is the food. When that
 ///   segment is one of USDA's ingredient CLASSES (``classNames`` — "Cheese", "Spices", "Nuts",
 ///   "Squash", "Fish" …), the second segment names a member that stands alone as the ingredient
-///   ("Cheese, parmesan" is parmesan, "Squash, zucchini" is zucchini), so its head counts too. Dish and
-///   product categories ("Cookies", "Bread", "Soup", "Oil", "Flour") are deliberately NOT classes:
-///   "Oil, olive" is not an olive and "Flour, almond" is not an almond. USDA reference rows only
-///   (``readsClassMembers(of:)``): a branded description's second segment is a flavor.
-/// - **A phrase ends at a preposition** (``phraseEndWords``): "Pork with chili and tomatoes" is pork,
-///   "Ginger In Syrup" is ginger, "Chicken, canned, no broth" says nothing about broth.
+///   ("Cheese, parmesan" is parmesan, "Squash, zucchini" is zucchini), so its head counts too. When the
+///   second segment only QUALIFIES the class (``qualifierSegments`` — "Squash, summer, zucchini",
+///   "Chicken, broilers or fryers, thigh", "Pork, cured, bacon") or its head is one of the typed
+///   modifiers ("Beef, flank, steak" for "flank steak"), the member is the third segment, and its head
+///   counts as well. Dish and product categories ("Cookies", "Bread", "Soup", "Oil", "Flour") are
+///   deliberately NOT classes: "Oil, olive" is not an olive and "Flour, almond" is not an almond.
+///   USDA reference rows only (``followsReferenceNaming(of:)``).
+/// - **A product name is read as one phrase** (every row that is not a USDA reference row: branded,
+///   restaurant, a person's own). FDC product descriptions are free-form, so two USDA conventions do not
+///   apply to them. A preposition in the product phrase makes the row a composite ("Zucchini With
+///   Marinara", "Yeast With Poppy Seed Filling Cake"), which is no head at all. And the first segment is
+///   the product only when every later segment merely repeats its words — the catalog's `, <flavor>`
+///   echo ("Dark Chocolate Chips, Dark"); otherwise the first segment is a flavor list ("Lemon, Ginger
+///   Drink", "Lime, Cherry, Berry Blue, … Jelly Beans") and the name gives no head
+///   (``productPhraseCounts(_:)``).
+/// - **A phrase ends at a preposition** (``phraseEndWords``, USDA reference rows): "Pork with chili and
+///   tomatoes" is pork, "Chicken, canned, no broth" says nothing about broth.
 /// - **Coordination** ("or", "and", "&"): "Chicken or turkey salad" shares the head "salad"; two whole
-///   phrases ("Egg omelet or scrambled egg", "Wild Pacific Sardines Cumin & Coriander") count only
-///   when both end in the same noun.
+///   phrases ("Egg omelet or scrambled egg", "Macaroni and cheese", "Wild Pacific Sardines Cumin &
+///   Coriander") count only when both end in the same noun ("Half and half").
 /// - **A part that is the food** (``partNouns``): "Ginger root" is ginger and "garlic cloves" are
 ///   garlic. Leaves are not on the list: grape and sweet-potato leaves are not grapes or sweet potatoes.
 /// - **A one-word parenthetical is a synonym**: "Coriander (cilantro) leaves" is cilantro, "Green
@@ -56,8 +67,17 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 ///   cumin, the spice a recipe calls cumin.
 /// - **USDA's inverted compound**: USDA writes "tomato paste" as "Tomato, paste" and "cocoa powder" as
 ///   "Cocoa, dry powder" — the modifier first. When the first segment's head is one of the query's
-///   modifiers, the second segment's head counts too (USDA reference rows only, so a branded
-///   "Chocolate Chips, Chocolate" never turns its flavor into a head).
+///   modifiers, the second segment's head counts too (USDA reference rows only).
+///
+/// **Two levels: the compound the person typed.** For a query with modifiers ("whole milk", "olive
+/// oil", "black pepper") the head alone cannot tell "Milk, whole" from "Milk, buttermilk, fluid, whole"
+/// or "Oil, olive" from "Oil, corn, peanut, and olive". USDA's reference form can: it writes the kind
+/// right after the food ("Milk, whole", "Oil, olive", "Beans, black") and, for a class, in the member's
+/// qualifier ("Spices, pepper, black"). A reference row that says a typed modifier there
+/// (``namesKind(_:modifierForms:)``) is ``compoundLevel``, above the rest of the identity group at
+/// ``ingredientLevel``. Product names never reach it — their word order is free, so "All Purpose Flour"
+/// would otherwise leap over "Flour, wheat, all-purpose", which gives the kind one segment later — and
+/// neither does any row in a brand query, where the brand tier already leads.
 ///
 /// **Only a finished word is a head.** While a word is still being typed ("choc", "ban", "chocolate c")
 /// the row that happens to end in those letters is an abbreviated product ("F1 CHSCK BAR CHOC"), not the
@@ -65,6 +85,10 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 /// ranked row in ``completenessDivisor`` says the head as a whole word (``QueryHead/sharesHead(_:)``):
 /// measured over the 160-query corpus, every unfinished prefix sits under 1% and every finished word
 /// over 60%. Off means every row is 0 and the standard order stands, unchanged.
+///
+/// **What it cannot see.** A single-segment product name that puts its flavor LAST ("Cake Mix Extra
+/// Moist Lemon", "Apple Cinnamon") reads like a plain noun phrase whose head is the flavor, so it still
+/// counts; telling a flavor from a product noun there needs something other than the name.
 ///
 /// Every word list here is a FROZEN ENGLISH MATCHING INPUT (localization wall): each is compared with
 /// the catalog's English USDA names after `FoodItemSearch.normalized`, never displayed.
@@ -94,8 +118,25 @@ public nonisolated enum FoodIngredientIdentity {
         "spices", "squash", "turkey", "veal"
     ]
 
+    /// Second segments that qualify a class instead of naming its member, so the member is the third
+    /// segment: "Squash, summer, zucchini", "Chicken, broilers or fryers, thigh", "Pork, fresh,
+    /// shoulder", "Duck, domesticated, liver". Each is a whole segment, words joined by one space.
+    /// Not "winter": its members are varieties named WITH the class ("spaghetti squash", "acorn
+    /// squash"), and "Squash, winter, spaghetti" read as spaghetti pushed the pasta out of view.
+    static let qualifierSegments: Set<String> = [
+        "summer", "broilers or fryers", "broiler or fryers", "broiler", "fresh", "cured", "whole",
+        "domesticated", "wild", "mixed species", "dark meat", "light meat", "roasting", "stewing", "retail parts"
+    ]
+
     /// Coordinators, "or" before "and"; "&" is read as "and".
     static let coordinators = ["or", "and"]
+
+    /// The identity of a row that IS the typed ingredient (its head is the query's).
+    public static let ingredientLevel = 1
+
+    /// The identity of a USDA reference row that is the ingredient AND says a typed modifier as its
+    /// kind ("Milk, whole" for "whole milk") — see the type's "Two levels".
+    public static let compoundLevel = 2
 
     /// The completeness gate: the head is a finished word when at least one ranked row in this many
     /// says it whole.
@@ -151,15 +192,27 @@ public nonisolated enum FoodIngredientIdentity {
             return saying * FoodIngredientIdentity.completenessDivisor >= nameTokenSets.count
         }
 
-        /// Whether `foodItem`'s name IS the queried ingredient: one of its head nouns shares a form with
-        /// the query's.
+        /// `foodItem`'s identity for this query: 0 when its name is not the queried ingredient (no head
+        /// noun shares a form with the query's), ``FoodIngredientIdentity/ingredientLevel`` when it is,
+        /// and ``FoodIngredientIdentity/compoundLevel`` when it is a USDA reference row that also says a
+        /// typed modifier as its kind — never in a brand query (`brandQuery`), whose tier leads instead.
+        public func level(of foodItem: FoodItem, brandQuery: Bool) -> Int {
+            let parsed = NameSegments(foodItem.name)
+            let reference = FoodIngredientIdentity.followsReferenceNaming(of: foodItem)
+            let heads = FoodIngredientIdentity.heads(of: parsed, referenceNaming: reference, modifierForms: modifierForms)
+            guard heads.contains(where: { !FoodIngredientIdentity.forms(of: $0).isDisjoint(with: forms) }) else {
+                return 0
+            }
+            guard reference, !brandQuery, !modifierForms.isEmpty,
+                  FoodIngredientIdentity.namesKind(parsed, modifierForms: modifierForms) else {
+                return FoodIngredientIdentity.ingredientLevel
+            }
+            return FoodIngredientIdentity.compoundLevel
+        }
+
+        /// Whether `foodItem`'s name IS the queried ingredient, at either level.
         public func isNamed(by foodItem: FoodItem) -> Bool {
-            let heads = FoodIngredientIdentity.heads(
-                ofName: foodItem.name,
-                readsClassMembers: FoodIngredientIdentity.readsClassMembers(of: foodItem),
-                modifierForms: modifierForms
-            )
-            return heads.contains { !FoodIngredientIdentity.forms(of: $0).isDisjoint(with: forms) }
+            level(of: foodItem, brandQuery: false) > 0
         }
     }
 
@@ -189,11 +242,11 @@ public nonisolated enum FoodIngredientIdentity {
 
     // MARK: - Names
 
-    /// Whether a row's name follows USDA's reference "Category, member" convention, so a class
-    /// category's member counts as its head: USDA reference rows only. A branded description (and a
-    /// person's own food) puts a flavor or a note after its comma — "Chocolate Chips, Chocolate",
-    /// "Beef, Teriyaki" — not a member of a class.
-    public static func readsClassMembers(of foodItem: FoodItem) -> Bool {
+    /// Whether a row's name follows USDA's reference naming — "Category, specific, qualifiers", a
+    /// class's member, a phrase that ends at a preposition, the inverted compound: USDA reference rows
+    /// only. A product description (branded, restaurant, a person's own food) is free-form and is read
+    /// as one product phrase instead (``productPhraseCounts(_:)``).
+    public static func followsReferenceNaming(of foodItem: FoodItem) -> Bool {
         guard foodItem.source == .usda else { return false }
         switch foodItem.dataType {
         case .foundation, .survey, .srLegacy: return true
@@ -202,27 +255,71 @@ public nonisolated enum FoodIngredientIdentity {
     }
 
     /// The head nouns of a catalog name — see the type's documentation for each rule.
-    /// `readsClassMembers` (``readsClassMembers(of:)``) says whether USDA's two-segment conventions (a
-    /// class member, an inverted compound) apply; `modifierForms` are the query's words before its head
-    /// (``QueryHead/modifierForms``), empty for a one-word query.
+    /// `referenceNaming` (``followsReferenceNaming(of:)``) says which conventions apply; `modifierForms`
+    /// are the query's words before its head (``QueryHead/modifierForms``), empty for a one-word query.
     public static func heads(
-        ofName name: String, readsClassMembers: Bool, modifierForms: Set<String> = []
+        ofName name: String, referenceNaming: Bool, modifierForms: Set<String> = []
     ) -> Set<String> {
-        let parsed = NameSegments(name)
+        heads(of: NameSegments(name), referenceNaming: referenceNaming, modifierForms: modifierForms)
+    }
+
+    /// ``heads(ofName:referenceNaming:modifierForms:)`` on a name already parsed.
+    static func heads(of parsed: NameSegments, referenceNaming: Bool, modifierForms: Set<String>) -> Set<String> {
         var heads = Set(parsed.synonyms)
-        guard let food = parsed.segments.first, !food.isEmpty else { return heads }
+        guard let food = parsed.segments.first, !food.isEmpty,
+              referenceNaming || productPhraseCounts(parsed) else { return heads }
         let core = phraseCore(food)
         heads.formUnion(coordinatedHead(core))
         heads.formUnion(partOwner(core, parts: partNouns))
-        guard readsClassMembers, parsed.segments.count > 1 else { return heads }
-        let member = parsed.segments[1]
-        if classNames.contains(food.joined(separator: " ")) { heads.formUnion(memberHeads(member)) }
+        guard referenceNaming, parsed.segments.count > 1 else { return heads }
+        heads.formUnion(classMemberHeads(parsed.segments, modifierForms: modifierForms))
         // USDA's inverted compound: "Tomato, paste" for "tomato paste".
         if let foodHead = core.last, !forms(of: foodHead).isDisjoint(with: modifierForms),
-           let memberHead = phraseCore(member).last {
+           let memberHead = phraseCore(parsed.segments[1]).last {
             heads.insert(memberHead)
         }
         return heads
+    }
+
+    /// Whether a product name's first segment IS its product: it holds no preposition (a composite —
+    /// "Zucchini With Marinara") and every later segment only repeats its words (the `, <flavor>` echo,
+    /// "Dark Chocolate Chips, Dark"). Otherwise the first segment is a flavor or the first item of a
+    /// list ("Lemon, Ginger Drink").
+    static func productPhraseCounts(_ parsed: NameSegments) -> Bool {
+        guard let food = parsed.segments.first, !food.contains(where: phraseEndWords.contains) else { return false }
+        let said = Set(food)
+        return parsed.segments.dropFirst().allSatisfy { Set($0).isSubset(of: said) }
+    }
+
+    /// The heads a class category's member names: the second segment's, and the third's when the second
+    /// only qualifies the class or names one of the typed modifiers (``readsThirdSegment(_:modifierForms:)``).
+    static func classMemberHeads(_ segments: [[String]], modifierForms: Set<String>) -> Set<String> {
+        guard segments.count > 1, classNames.contains(segments[0].joined(separator: " ")) else { return [] }
+        var heads = memberHeads(segments[1])
+        if segments.count > 2, readsThirdSegment(segments[1], modifierForms: modifierForms) {
+            heads.formUnion(memberHeads(segments[2]))
+        }
+        return heads
+    }
+
+    /// Whether a class's second segment defers its member to the third: it is one of
+    /// ``qualifierSegments``, or its head is one of the typed modifiers ("Beef, flank, steak").
+    static func readsThirdSegment(_ second: [String], modifierForms: Set<String>) -> Bool {
+        if qualifierSegments.contains(second.joined(separator: " ")) { return true }
+        guard let head = phraseCore(second).last else { return false }
+        return !forms(of: head).isDisjoint(with: modifierForms)
+    }
+
+    /// Whether a reference name says one of the typed modifiers as its food's kind: in the first
+    /// segment's phrase, in the specific after it ("Milk, whole", "Oil, olive"), or — for a class — in
+    /// the member's qualifier ("Spices, pepper, black"). Bounded by the three parsed segments.
+    static func namesKind(_ parsed: NameSegments, modifierForms: Set<String>) -> Bool {
+        let segments = parsed.segments
+        let isClass = segments.first.map { classNames.contains($0.joined(separator: " ")) } ?? false
+        let kindSegments = segments.prefix(isClass ? 3 : 2)
+        return kindSegments.contains { segment in
+            phraseCore(segment).contains { !forms(of: $0).isDisjoint(with: modifierForms) }
+        }
     }
 
     /// The heads a class member names: each "or" alternative's last word, and a part's owner.
@@ -242,14 +339,16 @@ public nonisolated enum FoodIngredientIdentity {
         return Array(tokens[..<end])
     }
 
-    /// The head of a phrase that may be coordinated: its last word, unless two whole phrases are joined
-    /// and end in different nouns, in which case it has none.
+    /// The head of a phrase that may be coordinated: its last word, unless two phrases are joined and
+    /// end in different nouns, in which case it has none. A one-word first conjunct before a longer
+    /// phrase shares that phrase's head ("chicken or turkey salad"); two single words are two phrases
+    /// ("macaroni and cheese" is neither, "half and half" is half).
     static func coordinatedHead(_ core: [String]) -> Set<String> {
         guard let last = core.last else { return [] }
         guard core.count >= 3 else { return [last] }
         for coordinator in coordinators {
             guard let index = core[1..<(core.count - 1)].firstIndex(of: coordinator) else { continue }
-            guard index > 1 else { return [last] }   // "chicken or turkey salad": one shared head
+            if index == 1, core.count > 3 { return [last] }
             let firstHead = core[index - 1]
             return forms(of: firstHead).isDisjoint(with: forms(of: last)) ? [] : [last]
         }

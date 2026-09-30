@@ -719,6 +719,15 @@ struct LocalizationBoundaryTests {
             the name's first segment. Add a class deliberately (a taxonomic group whose member names the \
             food alone, never a dish or product category) and re-measure the ingredient corpus.
             """)
+        #expect(FoodIngredientIdentity.qualifierSegments == [
+            "summer", "broilers or fryers", "broiler or fryers", "broiler", "fresh", "cured", "whole",
+            "domesticated", "wild", "mixed species", "dark meat", "light meat", "roasting", "stewing", "retail parts"
+        ], """
+            USDA's English class qualifiers: "Squash, summer, zucchini" is zucchini only while "summer" \
+            matches the name's whole second segment. A qualifier only ADDS the third segment's head, so \
+            re-measure the ingredient corpus after adding one ("brisket" would make "Beef, brisket, flat \
+            half" a half-and-half).
+            """)
     }
 
     /// The dish heuristic's carrier-use phrases (ingredient-search round, F3): matched against USDA's

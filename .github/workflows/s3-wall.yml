@@ -358,10 +358,13 @@ jobs:
         # `FoodIngredientIdentityTests` (the recipe surfaces' identity-first ranking rules; like the
         # corpus, a change to them compiles clean) and flips 36 corpus pins upward: the seven suites
         # as written, read off their own result bundle on the F5 tree after a build-for-testing — 90 tests,
-        # 0 failed, 0 skipped, no restart line.
+        # 0 failed, 0 skipped, no restart line. RE-MEASURED 90 → 95 at F5's fix round 1 (2026-09-30):
+        # the identity rules for product names, qualified USDA classes and the typed compound (four
+        # tests) and the corpus's named six-row pins (one) — the same seven suites, same reading, 95
+        # tests, 0 failed, 0 skipped, no restart line.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh food-search 90 \
+          Scripts/run-gated-suites.sh food-search 95 \
             IngredientSearchCorpusTests \
             CatalogDefaultUnitSweepTests \
             RecipeImportIngredientLineTests \
