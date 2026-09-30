@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import ImageIO
 import FernletCrypto
+import FernletDomainModel
 import FernletFoundation
 
 /// The file half every friend-photo corpus shares: where the sealed full-size bytes and thumbnails
@@ -166,6 +167,34 @@ struct FriendPhotoCorpusFiles {
                 )
             }
         }
+    }
+
+    // MARK: - Index entries
+
+    /// A payload as every at-rest index in this module stores it: its session's participant list
+    /// cut to ``FriendPhotoLimits/maxParticipants``, the bound `FriendPhotoSessionMetadata`'s
+    /// DECODER enforces. Everything else is untouched.
+    ///
+    /// The encoder is synthesized and bounds nothing, and a local session's list is not bounded at
+    /// its source (the mesh manager unions every member it has seen, so a long session with churn
+    /// passes 32). One such entry used to make the WHOLE index fail to decode on the next read: the
+    /// wall read as unrecoverable (and the next save swept every kept photo), the pending corpus
+    /// deferred for good with no build able to read it. Cut at write, every index reads back by
+    /// construction; each store also refuses a write whose bytes would not decode, as a backstop.
+    static func withinDecodeBounds(_ payload: FriendPhotoPayload) -> FriendPhotoPayload {
+        guard let session = payload.session,
+              session.participants.count > FriendPhotoLimits.maxParticipants else { return payload }
+        FernletAuditLog.log(
+            "privateMedia.sessionParticipantsTrimmed",
+            context: ["participants": "\(session.participants.count)"]
+        )
+        return payload.withSession(FriendPhotoSessionMetadata(
+            id: session.id,
+            meshID: session.meshID,
+            meshName: session.meshName,
+            startedAt: session.startedAt,
+            participants: Array(session.participants.prefix(FriendPhotoLimits.maxParticipants))
+        ))
     }
 
     // MARK: - Reads

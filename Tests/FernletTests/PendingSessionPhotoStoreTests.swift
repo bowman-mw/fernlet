@@ -499,6 +499,36 @@ struct PendingSessionPhotoStoreTests {
         #expect(capped.isAnswered(extra), "the cap dropped the newest tombstone instead of the soonest-expiring")
     }
 
+    /// A held photo whose session lists more participants than the wire decoder accepts (a long
+    /// session with churn) is cut to that bound as it is held, so the index still loads. Before, the
+    /// index opened but its WHOLE body failed to decode: `.deferred(.unsupportedFormat)` for good —
+    /// never written, never purged, no build able to read it, every later hold refused (review
+    /// U1-L-U1-F1).
+    @Test func aSessionPastTheParticipantBoundStillLoads() throws {
+        let directory = makeDirectory()
+        defer { cleanUp(directory) }
+        let key = SymmetricKey(size: .bits256)
+        let store = PendingSessionPhotoStore(directory: directory, keyProvider: InMemoryPrivateMediaKeyProvider(key: key))
+        let participants = (0...FriendPhotoLimits.maxParticipants).map {
+            FriendPhotoSessionParticipant(fingerprint: "fp-\($0)", displayName: "Person \($0)")
+        }
+        let session = FriendPhotoSessionMetadata(
+            id: UUID(), meshID: UUID(), meshName: "Long evening", startedAt: Self.t0, participants: participants
+        )
+        let plain = held(sender: "Crowd")
+        let crowded = HeldSessionPhoto(key: plain.key, heldAt: plain.heldAt, payload: plain.payload.withSession(session))
+
+        let committed = try requireHeld(crowded, bytes: jpeg(), into: .empty, store: store)
+
+        let reopened = PendingSessionPhotoStore(directory: directory, keyProvider: InMemoryPrivateMediaKeyProvider(key: key))
+        let loaded = try loadedIndex(reopened, now: Self.t0)
+        #expect(loaded == committed, "the committed mirror is not what a load reads back")
+        let entry = try #require(loaded.photos.first)
+        #expect(entry.payload.session?.participants == Array(participants.prefix(FriendPhotoLimits.maxParticipants)))
+        // Not stuck: the next hold onto the loaded mirror lands.
+        _ = try requireHeld(held(sender: "Next"), bytes: jpeg(), into: loaded, store: reopened)
+    }
+
     /// No timer: a photo held a year ago loads exactly as it was held, and still opens.
     @Test func aHeldPhotoIsStillHeldAYearLater() throws {
         let directory = makeDirectory()

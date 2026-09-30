@@ -173,6 +173,10 @@ public nonisolated struct PendingSessionPhotoIndex: Codable, Equatable, Sendable
 /// - **A file that opens but does not decode is never purged.** An opened file was written by a
 ///   Fernlet build; a different `schemaVersion` (an older TestFlight build over a newer one) or an
 ///   undecodable body is ``Deferral/unsupportedFormat``: never written, never purged.
+/// - Every index this store writes reads back by construction: each entry's session participant
+///   list is cut to the wire decoder's bound at hold, and a write whose bytes would not decode is
+///   refused before anything is sealed (it would otherwise be an ``Deferral/unsupportedFormat``
+///   index no build can read).
 /// - Every clean load sweeps files the index does not name (a kill between a hold's byte write and
 ///   its index write).
 /// - Born sealed: no legacy-plaintext branch; planted plaintext reads as missing.
@@ -376,11 +380,11 @@ public struct PendingSessionPhotoStore {
         let entry = HeldSessionPhoto(key: photo.key, heldAt: photo.heldAt, payload: Self.metadataOnly(photo.payload))
         next.photos.append(entry)
         next.photos.sort { $0.heldAt > $1.heldAt }
-        guard writeIndex(next) else {
+        guard let committed = writeIndex(next) else {
             files.removeFiles(for: localID)
             return (.notPersisted, index)
         }
-        return (.held, next)
+        return (.held, committed)
     }
 
     /// Why a hold is refused before anything is written, or nil when it may proceed.
@@ -402,11 +406,14 @@ public struct PendingSessionPhotoStore {
         return nil
     }
 
-    /// A payload with no bytes of any kind — the index holds metadata only.
+    /// A payload with no bytes of any kind, within the wire decode bounds — the index holds
+    /// metadata only, and every entry must read back (a session's participant list past the
+    /// decoder's bound would otherwise make the WHOLE index undecodable: deferred for good, with
+    /// every held photo stranded and every later hold refused).
     private static func metadataOnly(_ payload: FriendPhotoPayload) -> FriendPhotoPayload {
         // `withDecryptedImageData` rebuilds through the plaintext initialiser (clearing any
         // ciphertext fields); `withoutImageData` then drops the placeholder bytes.
-        payload.withDecryptedImageData(Data()).withoutImageData()
+        FriendPhotoCorpusFiles.withinDecodeBounds(payload.withDecryptedImageData(Data()).withoutImageData())
     }
 
     // MARK: Answer
@@ -434,9 +441,9 @@ public struct PendingSessionPhotoStore {
         let ordered = keys.sorted { ($0.origin, $0.itemID.uuidString) < ($1.origin, $1.itemID.uuidString) }
         next.answered.append(contentsOf: ordered.map { AnsweredSessionPhoto(key: $0, expiresAt: expiresAt) })
         next = Self.pruned(next, now: now)
-        guard prepareDirectory(), writeIndex(next) else { return (false, index) }
-        files.removeOrphanedFiles(keeping: next.heldLocalIDs)
-        return (true, next)
+        guard prepareDirectory(), let committed = writeIndex(next) else { return (false, index) }
+        files.removeOrphanedFiles(keeping: committed.heldLocalIDs)
+        return (true, committed)
     }
 
     /// Drops expired tombstones and, past ``maxAnsweredIDs``, the soonest-expiring ones.
@@ -509,25 +516,37 @@ public struct PendingSessionPhotoStore {
     }
 
     /// Seals and atomically writes the index. Nothing is written without a key.
-    private func writeIndex(_ index: PendingSessionPhotoIndex) -> Bool {
+    ///
+    /// The encoded bytes are decoded back through the same path ``load(now:)`` uses BEFORE anything
+    /// is sealed: a body this build cannot read would load as ``Deferral/unsupportedFormat``, which
+    /// by contract is never written over or purged — the corpus would be stuck for good. Such a
+    /// write is refused instead (the previous file stays), a backstop behind the decode-bound cut
+    /// every entry gets at hold.
+    /// - Returns: the index exactly as a later load decodes it — the owner's committed mirror — or
+    ///   nil when nothing was written.
+    private func writeIndex(_ index: PendingSessionPhotoIndex) -> PendingSessionPhotoIndex? {
         assert(index.photos.count <= Self.maxHeldPhotos, "the held-photo cap is enforced at hold")
         let data: Data
         do {
             data = try encoder.encode(index)
         } catch {
             FernletAuditLog.log("privateMedia.pendingIndexWriteFailed", context: ["error": "\(error)"])
-            return false
+            return nil
+        }
+        guard let readBack = decodedIndex(data) else {
+            FernletAuditLog.log("privateMedia.pendingIndexWriteFailed", context: ["error": "wouldNotReadBack"])
+            return nil
         }
         guard let sealed = keyProvider.gcmSeal(data, purpose: Self.indexPurpose) else {
             FernletAuditLog.log("privateMedia.pendingIndexWriteFailed", context: ["error": "noKey"])
-            return false
+            return nil
         }
         do {
             try sealed.write(to: indexURL, options: [.atomic, .completeFileProtection])
-            return true
+            return readBack
         } catch {
             FernletAuditLog.log("privateMedia.pendingIndexWriteFailed", context: ["error": "\(error)"])
-            return false
+            return nil
         }
     }
 }

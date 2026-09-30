@@ -131,9 +131,21 @@ keep uses. ``PrivateMediaStore/save(_:)`` cannot say whether a given photo is on
 refused or unsealable bytes, only audits a failed image write, and trims by a peer-signed
 `addedAt`), so `commitKept` reports ``PrivateMediaStore/WallKeepResult/keptOnWall`` — ids whose
 sealed bytes landed AND that the committed index names — makes room only by evicting photos already
-on the wall, and removes its own files if the index write fails. A photo reaches the wall only by
+on the wall, and removes its own files if the index write fails. It also returns
+``PrivateMediaStore/WallKeepResult/committedWall``, the wall exactly as the committed index names
+it: the owner REPLACES its in-memory wall with that list and never inserts the kept photos into its
+old one, because only the store knows which wall photos the keep evicted, and a mirror that still
+names an evicted photo (or misses a survivor) makes the owner's next full-index save sweep a photo
+nobody chose to lose. A photo reaches the wall only by
 being re-sealed under the wall key through that path: pending and wall bytes use different keys and
 different AEAD purposes, so no file can be moved between corpora.
+
+Both indexes read back by construction. `FriendPhotoSessionMetadata` is a wire type whose DECODER
+refuses more than `FriendPhotoLimits.maxParticipants` participants while its synthesized encoder
+bounds nothing, and a local session's list is unbounded at its source; one such entry used to make
+a whole index undecodable (the wall then read as unrecoverable, the pending corpus as deferred for
+good). Every entry is cut to that bound as it is written, and each store decodes its encoded index
+back before sealing it, refusing a write that would not read — the previous file stays.
 
 The wall's ``PrivateMediaStore/loadIndex()`` also treats an index file that EXISTS but cannot be
 read as ``PrivateMediaStore/IndexLoad/deferred``, never as an empty wall: the key row is

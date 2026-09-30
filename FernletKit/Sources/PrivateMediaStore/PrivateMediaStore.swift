@@ -179,7 +179,7 @@ public struct PrivateMediaStore {
         }
         // NEVER sweep against an index that was not committed: the on-disk index still names the
         // OLD photo set, so a sweep keyed on the NEW set would delete files it still references.
-        guard writeSealedIndex(capped) else { return }
+        guard writeSealedIndex(capped) != nil else { return }
         files.removeOrphanedFiles(keeping: Set(capped.map(\.id)))
     }
 
@@ -193,11 +193,21 @@ public struct PrivateMediaStore {
         /// Whether the wall index was rewritten. False when nothing landed (there was nothing to
         /// commit) or when the write failed (the files just written were removed again).
         public let indexCommitted: Bool
+        /// The wall exactly as the committed index names it, metadata only, newest first — the
+        /// same list a later ``load()`` returns, including which wall photos were evicted to make
+        /// room. The owner REPLACES its in-memory wall with this; it never inserts the kept photos
+        /// into its old list, because only the store knows which wall photos the keep evicted, and
+        /// a mirror that still names an evicted photo (its bytes are gone) or misses a surviving
+        /// one makes the owner's next full-index ``save(_:)`` sweep a photo nobody chose to lose.
+        /// When ``indexCommitted`` is false the index was not rewritten and this is the `wall`
+        /// passed in, unchanged.
+        public let committedWall: [FriendPhotoPayload]
 
         /// Creates a result; the store is the only producer outside tests.
-        public init(keptOnWall: Set<UUID>, indexCommitted: Bool) {
+        public init(keptOnWall: Set<UUID>, indexCommitted: Bool, committedWall: [FriendPhotoPayload]) {
             self.keptOnWall = keptOnWall
             self.indexCommitted = indexCommitted
+            self.committedWall = committedWall
         }
     }
 
@@ -218,23 +228,28 @@ public struct PrivateMediaStore {
     ///    named them) and nothing is reported kept.
     /// 4. Only after a committed index, the orphan sweep removes the evicted wall photos' files.
     ///
+    /// The result carries the committed wall (``WallKeepResult/committedWall``), which the owner
+    /// assigns as its new in-memory wall — never "old wall plus the kept photos".
+    ///
     /// - Parameters:
     ///   - kept: The photos to add, each carrying its plaintext bytes (`imageData`).
     ///   - wall: The COMPLETE current wall, metadata only — never a set derived from a
     ///     ``IndexLoad/deferred`` read, for the same reason as ``save(_:)``.
     public func commitKept(_ kept: [FriendPhotoPayload], onto wall: [FriendPhotoPayload]) -> WallKeepResult {
         let written = writeKeptPhotos(kept, besides: wall)
-        guard !written.isEmpty else { return WallKeepResult(keptOnWall: [], indexCommitted: false) }
+        guard !written.isEmpty else {
+            return WallKeepResult(keptOnWall: [], indexCommitted: false, committedWall: wall)
+        }
         let room = max(0, Self.maxCachedPhotos - written.count)
         let survivors = wall.sorted { $0.addedAt > $1.addedAt }.prefix(room)
-        let committed = written + survivors
-        assert(committed.count <= Self.maxCachedPhotos, "a keep must never be trimmed by the cap")
-        guard writeSealedIndex(Self.cappedNewestFirst(committed)) else {
+        let committed = Self.cappedNewestFirst(written + survivors)
+        assert(committed.count == written.count + survivors.count, "a keep must never be trimmed by the cap")
+        guard let committedWall = writeSealedIndex(committed) else {
             for photo in written { files.removeFiles(for: photo.id) }
-            return WallKeepResult(keptOnWall: [], indexCommitted: false)
+            return WallKeepResult(keptOnWall: [], indexCommitted: false, committedWall: wall)
         }
-        files.removeOrphanedFiles(keeping: Set(committed.map(\.id)))
-        return WallKeepResult(keptOnWall: Set(written.map(\.id)), indexCommitted: true)
+        files.removeOrphanedFiles(keeping: Set(committedWall.map(\.id)))
+        return WallKeepResult(keptOnWall: Set(written.map(\.id)), indexCommitted: true, committedWall: committedWall)
     }
 
     /// Step 1 of ``commitKept(_:onto:)``: writes each keepable photo's sealed bytes and returns the
@@ -269,8 +284,9 @@ public struct PrivateMediaStore {
     }
 
     /// The canonical index view: newest first, capped at ``maxCachedPhotos``. ``save(_:)`` commits
-    /// exactly this, and ``loadIndex()`` returns exactly this, so a caller's in-memory list can
-    /// never disagree with the file manifest that was written.
+    /// exactly this, ``loadIndex()`` returns exactly this, and ``commitKept(_:onto:)`` returns what
+    /// it committed as ``WallKeepResult/committedWall``, so a caller that holds the returned view
+    /// never disagrees with the file manifest that was written.
     private static func cappedNewestFirst(_ photos: [FriendPhotoPayload]) -> [FriendPhotoPayload] {
         Array(photos.sorted { $0.addedAt > $1.addedAt }.prefix(maxCachedPhotos))
     }
@@ -281,9 +297,27 @@ public struct PrivateMediaStore {
     /// Fail-closed like the photo bytes: with no key NOTHING is written, so the index never lands in
     /// the clear and the previous file — sealed or legacy plaintext — is left exactly as it was for
     /// the next attempt.
-    /// - Returns: whether the index was committed; ``save(_:)``'s orphan sweep depends on it.
-    private func writeSealedIndex(_ capped: [FriendPhotoPayload]) -> Bool {
-        guard let data = try? encoder.encode(capped.map { $0.withoutImageData() }) else { return false }
+    ///
+    /// Every entry is first cut to the wire decode bounds
+    /// (`FriendPhotoCorpusFiles.withinDecodeBounds(_:)`), and the encoded bytes are decoded back
+    /// BEFORE anything is sealed: an index this build could not read would load as
+    /// ``IndexLoad/unrecoverable``, and the save after that would sweep every kept photo. A body
+    /// that does not read back is refused like a keyless write — the previous file stays.
+    /// - Returns: the entries exactly as a later read decodes them (ISO-8601 drops fractional
+    ///   seconds), or nil when nothing was committed; ``save(_:)``'s orphan sweep depends on it.
+    private func writeSealedIndex(_ capped: [FriendPhotoPayload]) -> [FriendPhotoPayload]? {
+        let entries = capped.map { FriendPhotoCorpusFiles.withinDecodeBounds($0.withoutImageData()) }
+        guard let data = try? encoder.encode(entries) else { return nil }
+        let readBack: [FriendPhotoPayload]
+        do {
+            readBack = try decoder.decode([FriendPhotoPayload].self, from: data)
+        } catch {
+            FernletAuditLog.log(
+                "privateMedia.indexWouldNotReadBack",
+                context: ["error": "\(error)", "recovery": "orphanSweepSkipped"]
+            )
+            return nil
+        }
         guard let sealed = keyProvider.gcmSeal(
             data,
             purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2
@@ -292,17 +326,17 @@ public struct PrivateMediaStore {
                 "privateMedia.indexSealSkipped",
                 context: ["reason": "noKey", "recovery": "orphanSweepSkipped"]
             )
-            return false
+            return nil
         }
         do {
             try sealed.write(to: sealedIndexURL, options: [.atomic, .completeFileProtection])
-            return true
+            return readBack
         } catch {
             FernletAuditLog.log(
                 "privateMedia.indexWriteFailed",
                 context: ["error": "\(error)", "recovery": "orphanSweepSkipped"]
             )
-            return false
+            return nil
         }
     }
 

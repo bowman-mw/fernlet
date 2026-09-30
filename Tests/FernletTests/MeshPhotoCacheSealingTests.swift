@@ -67,6 +67,32 @@ struct MeshPhotoCacheSealingTests {
         )
     }
 
+    /// A full wall of metadata-only photos, one second apart after `base` (whole seconds, so the
+    /// ISO-8601 index round-trips them exactly).
+    private func fullWall(after base: Date) -> [FriendPhotoPayload] {
+        (1...PrivateMediaStore.maxCachedPhotos).map { offset in
+            FriendPhotoPayload(
+                imageData: Data(),
+                addedAt: base.addingTimeInterval(Double(offset)),
+                senderName: "Wall \(offset)"
+            ).withoutImageData()
+        }
+    }
+
+    /// Session metadata listing one participant more than the wire decoder accepts — what a long
+    /// session with churn stamps (the mesh manager unions every member it has seen).
+    private func crowdedSession() -> FriendPhotoSessionMetadata {
+        FriendPhotoSessionMetadata(
+            id: UUID(),
+            meshID: UUID(),
+            meshName: "Long evening",
+            startedAt: Date(timeIntervalSince1970: 500),
+            participants: (0...FriendPhotoLimits.maxParticipants).map {
+                FriendPhotoSessionParticipant(fingerprint: "fp-\($0)", displayName: "Person \($0)")
+            }
+        )
+    }
+
     /// Writes a pre-sealing plaintext index exactly as the old store did (ISO-8601 dates).
     private func writeLegacyIndex(_ photos: [FriendPhotoPayload], to url: URL) throws {
         let encoder = JSONEncoder()
@@ -289,6 +315,7 @@ struct MeshPhotoCacheSealingTests {
         #expect(result.keptOnWall == [landed.id])
         #expect(result.indexCommitted)
         #expect(Set(store.load().map(\.id)) == [onWall.id, landed.id])
+        #expect(result.committedWall == store.load(), "the returned wall is not what the index names")
         #expect(store.imageData(for: landed.withoutImageData()) == landed.imageData)
         for refused in [blocked.id, unsafe.id] {
             #expect(!FileManager.default.fileExists(atPath: imageFileURL(in: directory, id: refused).path))
@@ -308,13 +335,7 @@ struct MeshPhotoCacheSealingTests {
             keyProvider: InMemoryPrivateMediaKeyProvider()
         )
         let base = Date(timeIntervalSince1970: 1_000_000)
-        let wall = (1...PrivateMediaStore.maxCachedPhotos).map { offset in
-            FriendPhotoPayload(
-                imageData: Data(),
-                addedAt: base.addingTimeInterval(Double(offset)),
-                senderName: "Wall \(offset)"
-            ).withoutImageData()
-        }
+        let wall = fullWall(after: base)
         store.save(wall)
         let oldest = try #require(wall.first)
         let kept = photo(named: "Kept", fingerprint: "fp-kept", at: base)  // older than the whole wall
@@ -326,6 +347,81 @@ struct MeshPhotoCacheSealingTests {
         #expect(after.count == PrivateMediaStore.maxCachedPhotos)
         #expect(after.contains { $0.id == kept.id }, "the keep evicted the photo it was keeping")
         #expect(!after.contains { $0.id == oldest.id }, "room was not made by evicting the oldest wall photo")
+        #expect(result.committedWall == after, "the returned wall is not what the index names")
+        // The owner's next full-index save of that mirror (here, a delete of one wall photo) keeps
+        // the kept photo and its bytes.
+        let deleted = try #require(result.committedWall.first { $0.id != kept.id })
+        store.save(result.committedWall.filter { $0.id != deleted.id })
+        #expect(store.load().contains { $0.id == kept.id })
+        #expect(store.imageData(for: kept.withoutImageData()) == kept.imageData)
+    }
+
+    /// Two keeps into a full wall, the second made onto the wall the first RETURNED: the mirror the
+    /// owner holds stays equal to the disk index. The second keep evicts the first kept photo (the
+    /// oldest `addedAt` on the wall, the wall's FIFO rule), and only the store knows that — an owner
+    /// that inserted the kept photo into its old list would hold a ghost whose bytes are gone and
+    /// miss a survivor its next full-index save would then sweep (review U1-C-U1-R1 / U1-L-U1-F2).
+    @Test func consecutiveKeepsIntoAFullWallKeepTheMirrorEqualToDisk() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = PrivateMediaStore(
+            indexURL: legacyIndexURL(in: directory),
+            keyProvider: InMemoryPrivateMediaKeyProvider()
+        )
+        let base = Date(timeIntervalSince1970: 1_000_000)
+        store.save(fullWall(after: base))
+        let first = photo(named: "First", fingerprint: "fp-first", at: base)  // older than the whole wall
+        let second = photo(named: "Second", fingerprint: "fp-second", at: base.addingTimeInterval(5_000))
+
+        let firstKeep = store.commitKept([first], onto: store.load())
+        #expect(firstKeep.committedWall == store.load())
+        let secondKeep = store.commitKept([second], onto: firstKeep.committedWall)
+
+        let disk = store.load()
+        #expect(secondKeep.keptOnWall == [second.id])
+        #expect(secondKeep.committedWall == disk, "the mirror an owner assigns disagrees with the disk index")
+        #expect(!disk.contains { $0.id == first.id }, "the oldest addedAt on a full wall is the one evicted")
+        #expect(store.imageData(for: first.withoutImageData()) == nil, "the evicted photo's bytes were not swept")
+        let survivor = try #require(secondKeep.committedWall.first { $0.id != second.id })
+        store.save(secondKeep.committedWall.filter { $0.id != survivor.id })
+        let afterDelete = store.load()
+        #expect(afterDelete.count == PrivateMediaStore.maxCachedPhotos - 1)
+        #expect(afterDelete.contains { $0.id == second.id })
+        #expect(store.imageData(for: second.withoutImageData()) == second.imageData)
+    }
+
+    /// A photo whose session lists more participants than the wire decoder accepts no longer makes
+    /// the WHOLE wall index unreadable (it used to load as unrecoverable, and the save after that
+    /// swept every kept photo): the entry is cut to the bound as it is written, through `save` and
+    /// through `commitKept` alike, and the index reads back with every photo (review U1-L-U1-F1).
+    @Test func aSessionPastTheParticipantBoundStillReadsBack() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = PrivateMediaStore(
+            indexURL: legacyIndexURL(in: directory),
+            keyProvider: InMemoryPrivateMediaKeyProvider()
+        )
+        let session = crowdedSession()
+        let bounded = Array(session.participants.prefix(FriendPhotoLimits.maxParticipants))
+        let saved = photo(named: "Saved", fingerprint: "fp-a", at: Date(timeIntervalSince1970: 3_000))
+            .withSession(session)
+        store.save([saved])
+
+        guard case .entries(let entries) = store.loadIndex() else {
+            Issue.record("an over-bound session made the wall index unreadable")
+            return
+        }
+        let entry = try #require(entries.first { $0.id == saved.id })
+        #expect(entry.session?.participants == bounded)
+        #expect(store.imageData(for: entry) == saved.imageData)
+
+        let kept = photo(named: "Kept", fingerprint: "fp-b", at: Date(timeIntervalSince1970: 4_000))
+            .withSession(session)
+        let result = store.commitKept([kept], onto: entries)
+        #expect(result.keptOnWall == [kept.id])
+        #expect(result.committedWall == store.load())
+        #expect(Set(store.load().map(\.id)) == [saved.id, kept.id])
+        #expect(store.load().allSatisfy { $0.session?.participants == bounded })
     }
 
     /// An index write that fails after the bytes landed removes those bytes (the old index never
@@ -342,7 +438,7 @@ struct MeshPhotoCacheSealingTests {
 
         let result = store.commitKept([kept], onto: [])
 
-        #expect(result == PrivateMediaStore.WallKeepResult(keptOnWall: [], indexCommitted: false))
+        #expect(result == PrivateMediaStore.WallKeepResult(keptOnWall: [], indexCommitted: false, committedWall: []))
         #expect(!FileManager.default.fileExists(atPath: imageFileURL(in: directory, id: kept.id).path),
                 "a keep whose index never committed left its bytes on the wall")
         #expect(!FileManager.default.fileExists(
