@@ -164,6 +164,9 @@ struct PrivacyDataSettingsView: View {
     /// after a forget so the row can state the count and hide itself when there is nothing to forget.
     /// A snapshot rather than a live read: `body` must not touch `UserDefaults` on every render.
     @State private var rememberedSearchCorrections = 0
+    /// Whether an app-lock reset left every Sealed backup restore and re-upload waiting for the device
+    /// owner (`SealedBackupRestoreHold`), read on appear — a snapshot, so `body` never touches defaults.
+    @State private var backupHeldForOwner = false
     /// Presents the typed-gate ``DeleteEverythingSheet`` for this screen's delete buttons.
     @State private var showDeleteEverything = false
     private let cloudDataService: any PrivacyCloudDataManaging
@@ -324,6 +327,7 @@ struct PrivacyDataSettingsView: View {
         // One read of the correction-memory count per visit (research §26 fix 1.10) — the row states
         // it and hides itself at zero. Read here, not in `body`, so rendering never touches defaults.
         rememberedSearchCorrections = store?.foodSearchCorrectionCount ?? 0
+        backupHeldForOwner = store?.sealedBackupRestoreAwaitsOwner ?? false
         await loadCloudCountsIfNeeded()
     }
 
@@ -1066,6 +1070,7 @@ struct PrivacyDataSettingsView: View {
     private var showsSealedBackupStatusBanner: Bool {
         guard let store else { return false }
         return store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
+            || Self.showsOwnerHoldLine(held: backupHeldForOwner, preferences: storagePreferencesStore.preferences)
             || store.sealedBackupJournalReuploadDeferred || store.sealedBackupIntimacyReuploadDeferred
             || !sealedBackupAttentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
             || ownPhotoAttention != nil || ownPhotoBackupDisableFailed
@@ -1174,6 +1179,39 @@ struct PrivacyDataSettingsView: View {
     /// the state it is actually in.
     @ViewBuilder
     private var reuploadDeferredLines: some View {
+        if Self.showsOwnerHoldLine(held: backupHeldForOwner, preferences: storagePreferencesStore.preferences) {
+            // While the hold is set the three lines below would promise an upload that is held
+            // (review C-U2-R1), so this one honest line stands in for them.
+            ownerHoldLine
+        } else {
+            reuploadDeferredPayloadLines
+        }
+    }
+
+    /// Whether the "your app lock was reset" line shows: the hold is set and at least one payload
+    /// backup is on (with none on there is nothing in iCloud to keep).
+    ///
+    /// - Parameters:
+    ///   - held: Whether ambient restores and re-uploads wait for the device owner.
+    ///   - preferences: The storage preferences.
+    static func showsOwnerHoldLine(held: Bool, preferences: StoragePreferences) -> Bool {
+        held && (preferences.sealedBackupPeriodEnabled || preferences.sealedBackupJournalEnabled
+            || preferences.sealedBackupIntimacyEnabled)
+    }
+
+    /// After an app-lock reset: what Fernlet is (not) doing with the Sealed backup, and nothing it
+    /// cannot do yet. The owner's restore action that releases the hold is design unit 5.
+    private var ownerHoldLine: some View {
+        Text("Your app lock was reset, so Fernlet is keeping your Sealed backup in iCloud as it was. It won't restore it or back up this iPhone over it on its own.")
+            .font(.fernlet(.bodySmall))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .accessibilityIdentifier("privacy.sealedBackup.heldForOwner")
+    }
+
+    /// The per-payload re-upload deferral lines.
+    @ViewBuilder
+    private var reuploadDeferredPayloadLines: some View {
         if let store, store.sealedBackupPeriodReuploadDeferred {
             // Two states share the flag: period still hidden (the un-hide is the remedy — and
             // it now actually triggers the re-upload), or already visible but the re-upload

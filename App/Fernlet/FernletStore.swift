@@ -6906,6 +6906,16 @@ extension FernletStore: JournalSealingContext {
     /// the retries so a *permanently* failing entry can't make the scan run on every launch forever. Once
     /// the cap is hit the flag is set anyway (give up); going-forward edits to such a day are still covered
     /// by the per-write strip (`mutatePastDay`).
+    /// Whether opening Private may write journal rows the sealed store does not hold yet: in-memory
+    /// journal text no seal has taken, or this one-time past-day scrub still pending (it seals leaked
+    /// plaintext from older days). Conservative on purpose — a pending scrub may find nothing — because
+    /// it only ever withholds the "can't be opened" card's "your Sealed backup will be restored"
+    /// promise, whose journal restore refuses a store that is not empty (review C-U2-R3).
+    var journalTextAwaitsSealing: Bool {
+        journalSealingCoordinator.hasJournalTextAwaitingSeal
+            || pastDayJournalScrubDefaults.integer(forKey: Self.pastDayJournalScrubFlagKey) < Self.pastDayJournalScrubVersion
+    }
+
     func scrubLeakedPastDayJournalsIfNeeded() {
         let defaults = pastDayJournalScrubDefaults
         guard defaults.integer(forKey: Self.pastDayJournalScrubFlagKey) < Self.pastDayJournalScrubVersion

@@ -58,7 +58,11 @@ not security, and no copy here ever calls the no-passcode state locked, protecte
 in a moment." with the button kept; the lost-key card whose only control is the reset; or
 ``FernletUnopenableEntriesCard`` — "Some entries can't be opened here" — naming, by kind
 (``FernletUnopenableEntryCounts``), the entries a fresh key would be minted over while no key on the
-iPhone can open them, with "Remove them and open Private" (destructive) and "Not now". Nothing is
+iPhone can open them, with "Remove them and open Private" (destructive) and "Not now". A kind the
+user has HIDDEN (period or intimacy tracking) is never named on either screen — they are shown to
+whoever holds the phone: its rows appear only as "Other private entries", the held-entries line
+names no kind, and the tap screen's line names cycle entries only while the coordinator's
+``FernletPrivateHubOpening/tapGateNamesCycleEntries`` says period tracking is visible. Nothing is
 deleted without that tap, and the card hands its own counts back with it so the coordinator deletes
 only what the user saw. While a custodian recovery is owed the Private tab keeps the setup call to
 action — that phone's way back is a setup or the recovery ceremony, never a tap. The same slot
@@ -69,7 +73,10 @@ no-passcode key where there is one (the service asks a fresh device-owner check 
 exist), and a setup that would mint a fresh key over unchecked entries answers "Open the Private tab
 once first", where the check runs. The loss copy moved to `.v2` keys because its meaning changed —
 cycle history now lives in Fernlet whether or not it was copied to Apple Health — worded
-unconditionally, since this module cannot see the Health switches.
+unconditionally, since this module cannot see the Health switches. It promises no Sealed backup
+restore yet: after a reset every restore waits for the device owner, and nothing can release that
+hold until the owner's restore action (design unit 5), which brings the design's restore sentence
+back (`LocalizationBoundaryTests` pins the two together).
 
 **Every entry point in this module names a `FernletLockScope`, and none of them defaults it.**
 ``FernletLockView(scope:onUnlocked:onResetRequested:)``, ``FernletLockSetupView(grantingScope:)``

@@ -38,17 +38,23 @@ public enum FernletTapOpenOutcome: Equatable, Sendable {
 
 /// The entries the "Some entries can't be opened here" card names, counted by kind — keylessly, and
 /// only once the app has proven no copy of the key that sealed them survives on this iPhone.
+///
+/// A kind the user has HIDDEN (period or intimacy tracking) is never named: the app counts its rows
+/// into ``otherEntries`` instead, because the card is shown to whoever holds the phone. The counts
+/// here are what the card shows, and what a Remove tap carries back.
 public struct FernletUnopenableEntryCounts: Equatable, Sendable {
-    /// Cycle entries (sealed cycle notes and records).
+    /// Cycle entries (sealed cycle notes and records), while period tracking is visible.
     public var cycleEntries: Int
-    /// Intimacy entries.
+    /// Intimacy entries, while intimacy tracking is visible.
     public var intimacyEntries: Int
     /// Journal entries that open under neither the lost key nor this iPhone's journal device key.
     public var journalEntries: Int
     /// Worry Box entries that open under neither the lost key nor this iPhone's worry device key.
     public var worryEntries: Int
-    /// Whether the cycle notes held for Private (the pending buffer) were sealed under a key that is
-    /// gone. The buffer is one sealed file, so it has no count to show.
+    /// Entries of a kind that is hidden on this iPhone, named only as "other private entries".
+    public var otherEntries: Int
+    /// Whether the entries held for Private (the pending buffer) were sealed under a key that is
+    /// gone. The buffer is one sealed file, so it has no count to show, and its line names no kind.
     public var hasUnopenableHeldEntries: Bool
     /// Whether a Sealed backup will be restored once the entries are removed (the app knows its
     /// backup switches; this module does not).
@@ -60,6 +66,7 @@ public struct FernletUnopenableEntryCounts: Equatable, Sendable {
         intimacyEntries: Int = 0,
         journalEntries: Int = 0,
         worryEntries: Int = 0,
+        otherEntries: Int = 0,
         hasUnopenableHeldEntries: Bool = false,
         sealedBackupRestoresAfterRemoval: Bool = false
     ) {
@@ -67,6 +74,7 @@ public struct FernletUnopenableEntryCounts: Equatable, Sendable {
         self.intimacyEntries = intimacyEntries
         self.journalEntries = journalEntries
         self.worryEntries = worryEntries
+        self.otherEntries = otherEntries
         self.hasUnopenableHeldEntries = hasUnopenableHeldEntries
         self.sealedBackupRestoresAfterRemoval = sealedBackupRestoresAfterRemoval
     }
@@ -74,7 +82,7 @@ public struct FernletUnopenableEntryCounts: Equatable, Sendable {
     /// True when there is nothing to name — no row of any kind and no unopenable held entries.
     public var isEmpty: Bool {
         cycleEntries == 0 && intimacyEntries == 0 && journalEntries == 0 && worryEntries == 0
-            && !hasUnopenableHeldEntries
+            && otherEntries == 0 && !hasUnopenableHeldEntries
     }
 }
 
@@ -101,6 +109,9 @@ public enum FernletPriorEntriesReview: Equatable, Sendable {
 /// existential can ride the SwiftUI environment (``SwiftUICore/EnvironmentValues/fernletPrivateHubOpener``)
 /// — a main-actor class conformer is Sendable by construction.
 public protocol FernletPrivateHubOpening: AnyObject, Sendable {
+    /// Whether the tap screen's line may name cycle entries — false while period tracking is hidden,
+    /// so the screen shown to whoever holds the phone never names a hidden feature.
+    var tapGateNamesCycleEntries: Bool { get }
     /// The Unlock button: open the Private tab, or say why it could not be opened yet.
     func openPrivateHub() async -> FernletTapOpenOutcome
     /// The card's "Remove them and open Private": delete exactly the entries the card named, then
@@ -135,10 +146,16 @@ extension GateCopy {
                    comment: "Heading of the screen shown over the Private tab when no app passcode is set. 'Private' is the tab's name; translate it the way the tab is translated.")
         }
 
-        /// What is behind the button.
-        static var body: String {
-            String(localized: "lock.tapGate.body", defaultValue: "Your journal, cycle and worry entries are here.", bundle: .module,
-                   comment: "Line under the heading on the Private tab's no-passcode unlock screen, naming what the tab holds.")
+        /// What is behind the button. Cycle entries are named only while period tracking is visible:
+        /// this screen is shown to whoever holds the phone, and a hidden feature is never named.
+        ///
+        /// - Parameter namingCycle: Whether period tracking is visible.
+        static func body(namingCycle: Bool) -> String {
+            namingCycle
+                ? String(localized: "lock.tapGate.body", defaultValue: "Your journal, cycle and worry entries are here.", bundle: .module,
+                         comment: "Line under the heading on the Private tab's no-passcode unlock screen, naming what the tab holds.")
+                : String(localized: "lock.tapGate.body.noCycle", defaultValue: "Your journal and worry entries are here.", bundle: .module,
+                         comment: "Line under the heading on the Private tab's no-passcode unlock screen when cycle tracking is hidden, naming what the tab holds. Must not mention cycle or intimacy.")
         }
 
         /// The honest line (owner question Q6): what the button is and is not.
@@ -168,11 +185,15 @@ extension GateCopy {
         }
 
         /// The body of the card shown when this iPhone's key for Private can never be opened again.
+        ///
+        /// It promises no Sealed backup restore: after a reset every restore waits for the device owner
+        /// (`SealedBackupRestoreHold`), and the owner's restore action arrives with design unit 5,
+        /// which adds the sentence back (review C-U2-R4).
         static var unrecoverableBody: String {
             String(localized: "lock.tapGate.unrecoverable.body",
-                   defaultValue: "This iPhone's key for your private entries is gone, so they can't be opened here. Resetting clears Private so you can use it again. It doesn't bring those entries back. If Sealed backup is on, you can restore it afterwards from Privacy & Data.",
+                   defaultValue: "This iPhone's key for your private entries is gone, so they can't be opened here. Resetting clears Private so you can use it again. It doesn't bring those entries back.",
                    bundle: .module,
-                   comment: "Card on the Private tab (no app passcode) when the key for private entries was lost, for example after this iPhone was erased and restored from a backup. The entries are already unreadable and resetting does not recover them; say both plainly. 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app.")
+                   comment: "Card on the Private tab (no app passcode) when the key for private entries was lost, for example after this iPhone was erased and restored from a backup. The entries are already unreadable and resetting does not recover them; say both plainly.")
         }
     }
 
@@ -216,10 +237,17 @@ extension GateCopy {
                    comment: "One row of counts on the card naming entries that can't be opened. The number is how many Worry Box entries. 'Worry Box' is a feature name in this app.")
         }
 
-        /// The pending buffer's row: one sealed file, so no count.
+        /// The row for a kind that is hidden on this iPhone: counted, never named.
+        static func otherCount(_ count: Int) -> String {
+            String(localized: "lock.unopenable.count.other", defaultValue: "Other private entries: \(count)", bundle: .module,
+                   comment: "One row of counts on the card naming entries that can't be opened. The number is how many entries of kinds the user has hidden in Settings. Must not name what kind they are.")
+        }
+
+        /// The pending buffer's row: one sealed file, so no count, and no kind named (it can be shown
+        /// while cycle tracking is hidden).
         static var heldEntries: String {
-            String(localized: "lock.unopenable.heldEntries", defaultValue: "Cycle notes saved while Private was closed", bundle: .module,
-                   comment: "One row on the card naming entries that can't be opened: the cycle notes Fernlet was holding until Private opened. They are one sealed file, so there is no count.")
+            String(localized: "lock.unopenable.heldEntries", defaultValue: "Entries saved while Private was closed", bundle: .module,
+                   comment: "One row on the card naming entries that can't be opened: what Fernlet was holding until Private opened. They are one sealed file, so there is no count. Must not name what kind they are.")
         }
 
         /// Said only when a Sealed backup will actually be restored afterwards.
@@ -311,7 +339,7 @@ struct FernletTapGateOverlay: View {
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
                 .accessibilityAddTraits(.isHeader)
-            Text(GateCopy.Tap.body)
+            Text(GateCopy.Tap.body(namingCycle: opener.tapGateNamesCycleEntries))
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .multilineTextAlignment(.center)
@@ -512,6 +540,7 @@ public struct FernletUnopenableEntriesCard: View {
         if counts.intimacyEntries > 0 { lines.append(GateCopy.Unopenable.intimacyCount(counts.intimacyEntries)) }
         if counts.journalEntries > 0 { lines.append(GateCopy.Unopenable.journalCount(counts.journalEntries)) }
         if counts.worryEntries > 0 { lines.append(GateCopy.Unopenable.worryCount(counts.worryEntries)) }
+        if counts.otherEntries > 0 { lines.append(GateCopy.Unopenable.otherCount(counts.otherEntries)) }
         return lines
     }
 }

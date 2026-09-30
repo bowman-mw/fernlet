@@ -36,7 +36,7 @@ struct PrivateHubCustodyWiringTests {
             latchDefaults: latches,
             intimacyStore: IntimacyLogStore(repository: IntimacyLogRepository(controller: fixture.persistence, defaults: latches)),
             deviceKeyService: fixture.harness.sealedContentKeyServiceID,
-            restoresAfterRemoval: { false }
+            restoresAfterRemoval: { _ in false }
         )
     }
 

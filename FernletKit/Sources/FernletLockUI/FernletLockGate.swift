@@ -59,11 +59,16 @@ enum GateCopy {
     /// was ever copied to Apple Health, so "entries remain in Apple Health" stopped being the
     /// promise. The wording is unconditional on purpose — this module cannot see the Health
     /// switches, and "anything Fernlet copied to Apple Health stays there" is true either way.
+    ///
+    /// It promises no Sealed backup restore yet: after a reset every restore waits for the device
+    /// owner (the app's restore hold), and the owner's restore action — with the design's closing
+    /// sentence "If Sealed backup is on, you can restore it afterwards from Privacy & Data" — arrives
+    /// with design unit 5 (review C-U2-R4). `LocalizationBoundaryTests` pins the two together.
     static var resetConfirmMessage: String {
         String(localized: "lock.reset.confirm.message.v2",
-               defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, you can restore it afterwards from Privacy & Data.",
+               defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there.",
                bundle: .module,
-               comment: "Message in the reset confirmation dialog. 'Permanently deleted' is literal: there is no recovery on this iPhone. Only what Fernlet copied to Apple Health (if anything) stays there. 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app.")
+               comment: "Message in the reset confirmation dialog. 'Permanently deleted' is literal: there is no recovery on this iPhone. Only what Fernlet copied to Apple Health (if anything) stays there.")
     }
 
     /// Title of the nothing-silent alert after a reset that could not finish cleanly.

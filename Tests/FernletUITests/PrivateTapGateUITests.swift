@@ -21,9 +21,10 @@ final class PrivateTapGateUITests: XCTestCase {
     /// Launches with no passcode (and, optionally, one entry sealed under a key that is gone), then
     /// opens the Private tab.
     @MainActor
-    private func launchToTheGate(seedingUnopenableEntry: Bool = false) -> XCUIApplication {
+    private func launchToTheGate(seedingUnopenableEntry: Bool = false, hidingPeriod: Bool = false) -> XCUIApplication {
         var environment = ["FERNLET_UI_TEST_RESET_APP_LOCK": "1"]
         if seedingUnopenableEntry { environment["FERNLET_UI_TEST_SEED_UNOPENABLE_ENTRY"] = "1" }
+        if hidingPeriod { environment["FERNLET_UI_TEST_HIDE_PERIOD"] = "1" }
         let app = UXTestApp.launch(extraEnvironment: environment)
         app.buttons["Private"].firstMatch.tap()
         return app
@@ -93,6 +94,28 @@ final class PrivateTapGateUITests: XCTestCase {
         remove.tap()
         XCTAssertTrue(remove.waitForNonExistence(timeout: 15))
         XCTAssertFalse(unlockButton(app).exists, "after Remove, Private is open")
+    }
+
+    /// Review C-U2-R5: with cycle tracking HIDDEN, neither the tap screen nor the card — both shown to
+    /// whoever holds the phone — names cycle. The unopenable cycle entry is still on the card, as one
+    /// of the "other private entries".
+    @MainActor
+    func testAHiddenCycleKindIsNeverNamedOnTheGateOrTheCard() {
+        let app = launchToTheGate(seedingUnopenableEntry: true, hidingPeriod: true)
+        let unlock = unlockButton(app)
+        XCTAssertTrue(unlock.waitForExistence(timeout: 15))
+        // Exact strings, not a "contains cycle" sweep: the covered hub (its "Cycle" section title
+        // included) stays queryable under the gate, which is a different pin (LockGateObservability).
+        XCTAssertTrue(app.staticTexts["Your journal and worry entries are here."].exists,
+                      "the tap screen names only what is visible")
+        XCTAssertFalse(app.staticTexts["Your journal, cycle and worry entries are here."].exists,
+                       "the tap screen must not name hidden cycle tracking")
+
+        unlock.tap()
+        XCTAssertTrue(app.buttons["lock.unopenable.remove"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Other private entries: 1"].exists, "the hidden kind is counted, not named")
+        XCTAssertFalse(app.staticTexts["Cycle entries: 1"].exists, "the card must not name hidden cycle tracking")
+        attachScreenshot(of: app, named: "Private · can't-open card with cycle tracking hidden")
     }
 
     @MainActor

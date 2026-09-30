@@ -289,11 +289,15 @@ enum FernletLockCopy {
         /// not it was copied to Apple Health, so the old "entries remain in Apple Health" promise no
         /// longer holds. Unconditional wording on purpose — this module cannot see the Health
         /// switches, and "anything Fernlet copied stays there" is true either way.
+        ///
+        /// No restore promise yet: a forgotten passcode ends in a reset, after which every Sealed
+        /// backup restore waits for the device owner, and the owner's restore action arrives with
+        /// design unit 5 (review C-U2-R4), which adds the design's backup sentence back.
         static var forgottenPasscode: String {
             String(localized: "lock.disclosure.forgottenPasscode.v2",
-                   defaultValue: "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there. Sealed backup in Privacy & Data keeps an encrypted copy you can restore.",
+                   defaultValue: "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there.",
                    bundle: .module,
-                   comment: "First loss mode in the no-recovery disclosure. 'Can't be opened again' is literal: no support path exists. Only what Fernlet copied to Apple Health (if anything) survives there. 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app.")
+                   comment: "First loss mode in the no-recovery disclosure. 'Can't be opened again' is literal: no support path exists. Only what Fernlet copied to Apple Health (if anything) survives there.")
         }
 
         /// Loss mode two, on Secure-Enclave hardware: losing the device's key, passcode or not.

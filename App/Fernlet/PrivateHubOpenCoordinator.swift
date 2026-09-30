@@ -52,8 +52,18 @@ protocol PriorPrivateEntryStore: AnyObject {
     func removeWorryEntries(ids: [UUID]) throws
     /// Clears the three divergence latches (they spoke for a key that no longer exists).
     func clearBackupBookkeeping()
-    /// Whether a Sealed backup would be restored once the unopenable rows are gone.
-    func sealedBackupRestoresAfterRemoval() -> Bool
+    /// Whether a Sealed backup would really be restored once the unopenable rows are gone — the card
+    /// says so only then (review C-U2-R3).
+    ///
+    /// - Parameter journalKeepsOpenableRows: Whether journal rows that DO open stay behind the removal
+    ///   (they are folded under the new key, so the journal store is not empty and its empty-store-only
+    ///   restore refuses).
+    func sealedBackupRestoresAfterRemoval(journalKeepsOpenableRows: Bool) -> Bool
+    /// The derived period-tracking visibility. A hidden kind is never NAMED on the card: its rows are
+    /// counted into the neutral "other private entries" line (review C-U2-R5).
+    func isPeriodTrackingVisible() -> Bool
+    /// The derived intimacy-tracking visibility (18+ gate included), with the same effect.
+    func isIntimacyTrackingVisible() -> Bool
 }
 
 // MARK: - Coordinator
@@ -72,7 +82,10 @@ protocol PriorPrivateEntryStore: AnyObject {
 ///    such row is provably unopenable. Journal and Worry Box rows are tried under their own device
 ///    keys — a row that opens is ALIVE (it is folded under the new key once Private opens), a row
 ///    that refuses is dead, and a row that could not be decided stops the check ("try again"). The
-///    pending buffer is dead when its key is gone over a non-empty file.
+///    pending buffer is dead when its key is gone over a non-empty file. A HIDDEN kind (period or
+///    intimacy, by the same derived visibility the rest of the app gates on) is never named on the
+///    card — its rows are shown only as "other private entries" — yet they are still removed on the
+///    Remove tap, or the fresh key would be minted over them.
 /// 3. No dead rows → mint and open (clearing any backup bookkeeping first, audited by kind).
 ///    Dead rows → nothing is minted and nothing is deleted: the gate shows the counts.
 ///
@@ -92,10 +105,16 @@ final class PrivateHubOpenCoordinator: FernletPrivateHubOpening {
     /// The sealed rows and bookkeeping.
     private let entries: any PriorPrivateEntryStore
 
-    /// What the check found: the counts the card would show, the dead journal/worry ids behind them,
-    /// and whether any bookkeeping was set.
+    /// What the check found: the counts the card would show, the rows behind them, and whether any
+    /// bookkeeping was set.
+    ///
+    /// `counts` is what the user SEES — a hidden kind's rows are folded into its `otherEntries` line,
+    /// never named — while the raw cycle and intimacy counts decide what Remove deletes: the hidden
+    /// kinds' dead rows go too, or the fresh key would be minted over them.
     private struct Survey {
         var counts: FernletUnopenableEntryCounts
+        var cycleRows: Int
+        var intimacyRows: Int
         var deadJournalIDs: [UUID]
         var deadWorryIDs: [UUID]
         var hasBookkeeping: Bool
@@ -115,6 +134,10 @@ final class PrivateHubOpenCoordinator: FernletPrivateHubOpening {
         self.custody = custody
         self.entries = entries
     }
+
+    /// Whether the tap screen's line may name cycle entries: only while period tracking is visible,
+    /// so a hidden feature is never named on the screen shown to whoever holds the phone.
+    var tapGateNamesCycleEntries: Bool { entries.isPeriodTrackingVisible() }
 
     /// The Unlock button.
     func openPrivateHub() async -> FernletTapOpenOutcome {
@@ -197,29 +220,62 @@ final class PrivateHubOpenCoordinator: FernletPrivateHubOpening {
         let journal = try entries.journalOpenability()
         let worry = try entries.worryOpenability()
         guard journal.transientCount == 0, worry.transientCount == 0 else { throw SurveyRefusal.undecided }
-        var counts = FernletUnopenableEntryCounts(
-            cycleEntries: try entries.cycleEntryCount(),
-            intimacyEntries: try entries.intimacyEntryCount(),
-            journalEntries: journal.deadIDs.count,
-            worryEntries: worry.deadIDs.count,
-            hasUnopenableHeldEntries: try custody.pendingNarrativesAreUnopenable()
+        let cycleRows = try entries.cycleEntryCount()
+        let intimacyRows = try entries.intimacyEntryCount()
+        var counts = Self.shownCounts(
+            cycleRows: cycleRows,
+            intimacyRows: intimacyRows,
+            periodVisible: entries.isPeriodTrackingVisible(),
+            intimacyVisible: entries.isIntimacyTrackingVisible()
         )
+        counts.journalEntries = journal.deadIDs.count
+        counts.worryEntries = worry.deadIDs.count
+        counts.hasUnopenableHeldEntries = try custody.pendingNarrativesAreUnopenable()
         if !counts.isEmpty {
-            counts.sealedBackupRestoresAfterRemoval = entries.sealedBackupRestoresAfterRemoval()
+            counts.sealedBackupRestoresAfterRemoval = entries.sealedBackupRestoresAfterRemoval(
+                journalKeepsOpenableRows: !journal.openableIDs.isEmpty
+            )
         }
         return Survey(
             counts: counts,
+            cycleRows: cycleRows,
+            intimacyRows: intimacyRows,
             deadJournalIDs: journal.deadIDs,
             deadWorryIDs: worry.deadIDs,
             hasBookkeeping: entries.hasBackupBookkeeping()
         )
     }
 
+    /// The cycle and intimacy counts as the card may show them: a visible kind by name, a hidden kind
+    /// (period hidden by the user or by the sex-derived default, intimacy hidden or under the 18+
+    /// gate) only inside the neutral "other private entries" count — the card is shown to whoever
+    /// holds the phone, and a hidden sensitive feature is never named (review C-U2-R5).
+    ///
+    /// - Parameters:
+    ///   - cycleRows: Keyless count of sealed cycle rows.
+    ///   - intimacyRows: Keyless count of sealed intimacy rows.
+    ///   - periodVisible: The derived period-tracking visibility.
+    ///   - intimacyVisible: The derived intimacy-tracking visibility.
+    static func shownCounts(
+        cycleRows: Int,
+        intimacyRows: Int,
+        periodVisible: Bool,
+        intimacyVisible: Bool
+    ) -> FernletUnopenableEntryCounts {
+        FernletUnopenableEntryCounts(
+            cycleEntries: periodVisible ? cycleRows : 0,
+            intimacyEntries: intimacyVisible ? intimacyRows : 0,
+            otherEntries: (periodVisible ? 0 : cycleRows) + (intimacyVisible ? 0 : intimacyRows)
+        )
+    }
+
     /// Deletes exactly the survey's dead rows, keylessly, and the dead buffer file. Audited by kind
     /// and count only.
     private func removeDeadEntries(_ survey: Survey) throws {
-        if survey.counts.cycleEntries > 0 { try entries.removeCycleEntries() }
-        if survey.counts.intimacyEntries > 0 { try entries.removeIntimacyEntries() }
+        // The RAW counts, not the shown ones: a hidden kind's dead rows are removed too (they were on
+        // the card as "other private entries"), or the fresh key would be minted over them.
+        if survey.cycleRows > 0 { try entries.removeCycleEntries() }
+        if survey.intimacyRows > 0 { try entries.removeIntimacyEntries() }
         try Self.inBatches(survey.deadJournalIDs) { try entries.removeJournalEntries(ids: $0) }
         try Self.inBatches(survey.deadWorryIDs) { try entries.removeWorryEntries(ids: $0) }
         if survey.counts.hasUnopenableHeldEntries { try custody.purgePendingNarratives() }
@@ -250,6 +306,7 @@ final class PrivateHubOpenCoordinator: FernletPrivateHubOpening {
             "intimacy": "\(counts.intimacyEntries)",
             "journal": "\(counts.journalEntries)",
             "worry": "\(counts.worryEntries)",
+            "other": "\(counts.otherEntries)",
             "held": counts.hasUnopenableHeldEntries ? "1" : "0"
         ]
     }
@@ -268,8 +325,14 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     private let intimacyStore: IntimacyLogStore
     /// The keychain service holding the journal and worry device keys.
     private let deviceKeyService: String
-    /// Whether a Sealed backup will be restored after a removal (the app's backup switches).
-    private let restoresAfterRemoval: () -> Bool
+    /// Whether a Sealed backup will really be restored after a removal (the app's backup switches, the
+    /// owner hold, and whether the journal store will be empty), given whether openable journal rows
+    /// stay behind.
+    private let restoresAfterRemoval: (_ journalKeepsOpenableRows: Bool) -> Bool
+    /// The derived period-tracking visibility; fail-closed (hidden) unless the app wires it.
+    private let periodVisible: () -> Bool
+    /// The derived intimacy-tracking visibility; fail-closed (hidden) unless the app wires it.
+    private let intimacyVisible: () -> Bool
 
     /// Creates the store.
     ///
@@ -278,19 +341,26 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     ///   - latchDefaults: Suite holding the three divergence latches.
     ///   - intimacyStore: The app's intimacy funnel on the same store.
     ///   - deviceKeyService: The journal/worry device-key service.
-    ///   - restoresAfterRemoval: Whether a Sealed backup comes back after a removal.
+    ///   - periodVisible: The derived period-tracking visibility (default: hidden, fail-closed).
+    ///   - intimacyVisible: The derived intimacy-tracking visibility (default: hidden, fail-closed).
+    ///   - restoresAfterRemoval: Whether a Sealed backup comes back after a removal, given whether
+    ///     openable journal rows stay behind.
     init(
         controller: PrivatePersistenceController? = nil,
         latchDefaults: UserDefaults = .standard,
         intimacyStore: IntimacyLogStore,
         deviceKeyService: String = KeychainItem.journalService,
-        restoresAfterRemoval: @escaping () -> Bool
+        periodVisible: @escaping () -> Bool = { false },
+        intimacyVisible: @escaping () -> Bool = { false },
+        restoresAfterRemoval: @escaping (_ journalKeepsOpenableRows: Bool) -> Bool
     ) {
         cycleRepository = MenstrualNarrativeRepository(controller: controller, defaults: latchDefaults)
         journalRepository = JournalNarrativeRepository(controller: controller, defaults: latchDefaults)
         worryRepository = WorryNarrativeRepository(controller: controller)
         self.intimacyStore = intimacyStore
         self.deviceKeyService = deviceKeyService
+        self.periodVisible = periodVisible
+        self.intimacyVisible = intimacyVisible
         self.restoresAfterRemoval = restoresAfterRemoval
     }
 
@@ -315,7 +385,11 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         journalRepository.clearDivergenceLatch()
         intimacyStore.clearDivergenceLatch()
     }
-    func sealedBackupRestoresAfterRemoval() -> Bool { restoresAfterRemoval() }
+    func sealedBackupRestoresAfterRemoval(journalKeepsOpenableRows: Bool) -> Bool {
+        restoresAfterRemoval(journalKeepsOpenableRows)
+    }
+    func isPeriodTrackingVisible() -> Bool { periodVisible() }
+    func isIntimacyTrackingVisible() -> Bool { intimacyVisible() }
 
     /// A device key read WITHOUT minting: found → the key; absent → nil (every row is dead under a key
     /// that does not exist); unreadable → a throw, so nothing is called dead on a read that did not

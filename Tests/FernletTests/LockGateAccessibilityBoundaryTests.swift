@@ -127,6 +127,31 @@ import Testing
                 "the tap gate must be hosted in the gate's modal not-configured slot")
     }
 
+    /// Review C-U2-R5: the no-passcode screen and its "can't be opened" card are shown to whoever
+    /// holds the phone, so the copy used while a sensitive feature is HIDDEN names no kind — the tap
+    /// screen's no-cycle line, the "other private entries" count and the held-entries line (which can
+    /// show while cycle tracking is hidden) — and the card really does print the neutral count.
+    @Test func theNoPasscodeCopyForHiddenKindsNamesNoKind() throws {
+        let tapGate = try Self.source("FernletKit/Sources/FernletLockUI/FernletTapGate.swift")
+        let kinds = try Regex(#"\b(cycle|period|intimacy|intimate|sex|sexual)\b"#).ignoresCase()
+        for key in ["lock.tapGate.body.noCycle", "lock.unopenable.count.other", "lock.unopenable.heldEntries"] {
+            let text = try #require(Self.defaultValue(for: key, in: tapGate), "\(key) is gone — this wall reads nothing")
+            #expect(text.firstMatch(of: kinds) == nil, "\(key) names a kind that may be hidden: \(text)")
+        }
+        #expect(tapGate.contains("GateCopy.Unopenable.otherCount(counts.otherEntries)"),
+                "the card must print hidden kinds' rows as the neutral count")
+        #expect(tapGate.contains("GateCopy.Tap.body(namingCycle: opener.tapGateNamesCycleEntries)"),
+                "the tap screen's line must follow period visibility")
+    }
+
+    /// The `defaultValue` of the localized string keyed `key` in `text`, or nil.
+    static func defaultValue(for key: String, in text: String) -> String? {
+        guard let keyRange = text.range(of: "\"\(key)\"") else { return nil }
+        let rest = text[keyRange.upperBound...]
+        guard let start = rest.range(of: "defaultValue: \"") else { return nil }
+        return rest[start.upperBound...].components(separatedBy: "\"").first
+    }
+
     /// The text between two markers, or nil when either is missing.
     private static func slice(_ text: String, from start: String, to end: String) -> String? {
         guard let lower = text.range(of: start), let upper = text.range(of: end, range: lower.upperBound..<text.endIndex) else {

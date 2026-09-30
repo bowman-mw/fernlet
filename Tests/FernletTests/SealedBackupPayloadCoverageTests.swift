@@ -148,7 +148,8 @@ struct SealedBackupPayloadCoverageTests {
     /// can be driven end to end. Everything else about it is the production object.
     private func makeCloudCoordinator(
         host: FakeSealedBackupHost,
-        cloud: FakeSealedBackupCloud
+        cloud: FakeSealedBackupCloud,
+        preferences: StoragePreferences? = nil
     ) -> SealedBackupCoordinator {
         let keychainService = cloud.keychainService
         let generationDefaults = cloud.generationDefaults
@@ -167,7 +168,8 @@ struct SealedBackupPayloadCoverageTests {
                     identityService: identity,
                     generationStore: SealedBackupGenerationStore(defaults: generationDefaults)
                 )
-            }
+            },
+            preferencesProvider: preferences.map { chosen in { chosen } }
         )
     }
 
@@ -371,6 +373,120 @@ struct SealedBackupPayloadCoverageTests {
         host.sealedBackupRestoreAwaitsOwner = false
         #expect(await coordinator.restoreIntimacyBackupTargeted(intimacyStore: target) == .restored(1),
                 "once the hold is gone the same restore runs")
+    }
+
+    /// Review C-U2-R1: holding the RESTORES after an app-lock reset is not enough — the Private tab's
+    /// settle, the launch follow-through and the Retry pass all re-upload afterwards, and with the hub
+    /// key now live on every section that re-upload would REPLACE the owner's pre-reset history in
+    /// iCloud with whatever was written since the reset. While the hold is set, every deferred
+    /// re-upload writes nothing; the control half proves it was the hold (not some other guard) that
+    /// held it.
+    @Test func anAppLockResetHoldsEveryReuploadSoThePreResetCloudCopyStays() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        let preferences = StoragePreferences(
+            iCloudSyncEnabled: true,
+            sealedBackupJournalEnabled: true,
+            sealedBackupIntimacyEnabled: true,
+            sealedBackupJournalReuploadDeferred: true,
+            sealedBackupIntimacyReuploadDeferred: true
+        )
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        // The owner's history, backed up before the reset.
+        let journalHistory = makeJournalRepository()
+        try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
+        try journalHistory.insert(journalNarrative("also before", at: 20), contentKey: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
+        let intimacyHistory = makeIntimacyStore()
+        try seed(intimacyLog("before the reset", at: 10), into: intimacyHistory, key: host.sealedBackupContentKey)
+        try seed(intimacyLog("also before", at: 20), into: intimacyHistory, key: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .intimacyLogs, intimacyStore: intimacyHistory))
+        let preReset = cloud.sealedRecordIdentities
+        #expect(!preReset.isEmpty)
+
+        // The reset: a fresh key, stores holding only what was written since, and the owner hold.
+        host.sealedBackupContentKey = SymmetricKey(size: .bits256)
+        host.sealedBackupRestoreAwaitsOwner = true
+        let journalSince = makeJournalRepository()
+        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        let intimacySince = makeIntimacyStore()
+        try seed(intimacyLog("after the reset", at: 30), into: intimacySince, key: host.sealedBackupContentKey)
+
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .intimacyLogs, intimacyStore: intimacySince)
+        #expect(cloud.sealedRecordIdentities == preReset, "a held re-upload writes nothing over the pre-reset copy")
+
+        host.sealedBackupRestoreAwaitsOwner = false
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        #expect(cloud.sealedRecordIdentities != preReset, "control: without the hold the very same call re-uploads")
+    }
+
+    /// Review C-U2-R1, the escrow adopt: it switches keys and then re-seals every enabled payload from
+    /// the local stores — after a reset, that is the post-reset store. While the hold is set the key is
+    /// still adopted, nothing is written, and each enabled payload records the upload it owes.
+    @Test func anEscrowAdoptDuringTheOwnerHoldAdoptsTheKeyButWritesNothing() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        let preferences = StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true)
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        let journalHistory = makeJournalRepository()
+        try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
+        let preReset = cloud.sealedRecordIdentities
+        let otherDevice = try seedSyncedEscrowKey(into: cloud.keychainService)
+        defer { KeychainItem.deleteAll(service: otherDevice) }
+
+        host.sealedBackupRestoreAwaitsOwner = true
+        let journalSince = makeJournalRepository()
+        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        let intimacySince = makeIntimacyStore()
+        try seed(intimacyLog("after the reset", at: 30), into: intimacySince, key: host.sealedBackupContentKey)
+
+        #expect(await coordinator.adoptSyncedEscrowAndReupload(journalRepository: journalSince, intimacyStore: intimacySince),
+                "the other device's key is still adopted")
+        #expect(cloud.sealedRecordIdentities == preReset, "nothing is re-sealed over the pre-reset copy")
+        #expect(host.reuploadDeferrals[.journalNarratives] == true)
+        #expect(host.reuploadDeferrals[.intimacyLogs] == true)
+        #expect(host.reuploadDeferrals[.periodData] == nil, "a payload that is off owes nothing")
+    }
+
+    /// Plants another device's escrow key as an iCloud-Keychain (synchronizable) row in `service`, the
+    /// state `reconcileBackupEscrowKey` reports as a conflict and the adopt resolves. Returns the other
+    /// device's own keychain service, for cleanup.
+    private func seedSyncedEscrowKey(into service: String) throws -> String {
+        let otherService = "com.fernlet.p3-coverage.other.\(UUID().uuidString)"
+        let other = IdentityService(keychainService: otherService)
+        try other.ensureProvisioned()
+        let publicKey = other.provisionBackupEscrowKeyForSealing()
+        let account = IdentityService.escrowKeychainAccount(forPublicKey: publicKey)
+        let keyData = try #require(KeychainItem.load(account: account, service: otherService))
+        #expect(KeychainItem.store(keyData, account: account, service: service,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
+        return otherService
+    }
+
+    /// Review C-U2-R2: with the backups reading the Private tab's key, the OLD period exporter would
+    /// have run from the Cycle section for the first time — over the one account-wide period slot,
+    /// before design unit 5's guards against the other iPhone's copy exist. Until then it is paused as
+    /// a non-destructive deferral: the switch stays on, the upload is owed, and nothing is written.
+    @Test func thePeriodExportIsPausedAsANonDestructiveDeferral() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        #expect(host.sealedBackupContentKey != nil && host.isPeriodTrackingVisible, "the hub is open and cycle visible")
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
+
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .periodData), "the switch stays on")
+        #expect(host.reuploadDeferrals[.periodData] == true, "the upload is owed, not dropped")
+        #expect(cloud.sealedRecords.isEmpty, "nothing reaches the account-wide period slot")
+
+        host.isPeriodTrackingVisible = false
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        #expect(host.reuploadDeferrals[.periodData] == true, "hidden stays the silent no-op; the owed upload is kept")
+        #expect(await coordinator.setSealedBackupEnabled(false, payloadType: .periodData), "turning it off still deletes")
     }
 
     /// Same for intimacy, plus its gate: hidden defers (retryable — un-hiding IS the retry) and writes

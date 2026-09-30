@@ -474,6 +474,31 @@ struct LocalizationBoundaryTests {
         }
     }
 
+    /// Review C-U2-R4: after an app-lock reset every Sealed backup restore waits for the device owner
+    /// (`SealedBackupRestoreHold`), and until something can RELEASE that hold no restore can follow a
+    /// reset — so no reset or forgotten-passcode copy may promise one. The day the owner's restore
+    /// action lands (design unit 5, which gives the hold its release), this wall lets the design's
+    /// restore sentence back in.
+    @Test func theResetCopyPromisesNoRestoreWhileNothingCanReleaseTheOwnerHold() throws {
+        let hold = try String(contentsOf: RepoRoot.url("App/Fernlet/SealedBackupRestoreHold.swift"), encoding: .utf8)
+        #expect(hold.contains("struct SealedBackupRestoreHold"), "the hold moved — this wall reads nothing")
+        guard !hold.contains("func release(") else { return }
+        let sites: [(file: String, key: String)] = [
+            ("FernletKit/Sources/FernletLockUI/FernletLockGate.swift", "lock.reset.confirm.message.v2"),
+            ("FernletKit/Sources/FernletLockUI/FernletLockView.swift", "lock.disclosure.forgottenPasscode.v2"),
+            ("FernletKit/Sources/FernletLockUI/FernletLockView.swift", "lock.reset.required.body.v2"),
+            ("FernletKit/Sources/FernletLockUI/FernletTapGate.swift", "lock.tapGate.unrecoverable.body"),
+            ("App/Fernlet/SettingsSheet.swift", "settings.appLock.reset.message.v2")
+        ]
+        for site in sites {
+            let source = try String(contentsOf: RepoRoot.url(site.file), encoding: .utf8)
+            let text = try #require(LockGateAccessibilityBoundaryTests.defaultValue(for: site.key, in: source),
+                                    "\(site.key) is gone from \(site.file) — this wall reads nothing")
+            #expect(!text.localizedCaseInsensitiveContains("restore"),
+                    "\(site.key) promises a restore no build can run yet: \(text)")
+        }
+    }
+
     // MARK: - B. Frozen token canaries
 
     /// Sealed cycle symptoms. `PeriodSymptom` raw values ride the ChaChaPoly-encrypted

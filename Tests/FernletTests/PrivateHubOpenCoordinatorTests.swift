@@ -34,14 +34,24 @@ private struct CoordinatorRig {
     let entries: SealedPriorEntryStore
     let coordinator: PrivateHubOpenCoordinator
 
-    init() {
+    /// - Parameters:
+    ///   - periodVisible: The derived period-tracking visibility the store reports.
+    ///   - intimacyVisible: The derived intimacy-tracking visibility the store reports.
+    ///   - restoresAfterRemoval: The app's "will a Sealed backup really come back" decision.
+    init(
+        periodVisible: Bool = true,
+        intimacyVisible: Bool = true,
+        restoresAfterRemoval: @escaping (_ journalKeepsOpenableRows: Bool) -> Bool = { _ in false }
+    ) {
         service = fixture.makeService()
         entries = SealedPriorEntryStore(
             controller: fixture.persistence,
             latchDefaults: latches,
             intimacyStore: IntimacyLogStore(repository: IntimacyLogRepository(controller: fixture.persistence, defaults: latches)),
             deviceKeyService: fixture.harness.sealedContentKeyServiceID,
-            restoresAfterRemoval: { false }
+            periodVisible: { periodVisible },
+            intimacyVisible: { intimacyVisible },
+            restoresAfterRemoval: restoresAfterRemoval
         )
         coordinator = PrivateHubOpenCoordinator(custody: service, entries: entries)
     }
@@ -78,6 +88,12 @@ private struct CoordinatorRig {
 
     /// Every sealed row in the fixture's store, counted keylessly.
     func rowCount() throws -> Int { try fixture.persistence.sealedRowCount() }
+}
+
+/// A settable stand-in for the owner hold, captured by a rig's backup decision.
+@MainActor
+private final class HoldSwitch {
+    var isHeld = false
 }
 
 @Suite(.serialized)
@@ -186,6 +202,102 @@ struct PrivateHubOpenCoordinatorTests {
 
         #expect(await rig.coordinator.removeUnopenableEntriesAndOpen(named: shown) == .opened)
         #expect(try !rig.service.pendingNarrativesAreUnopenable())
+    }
+
+    // MARK: - Hidden kinds are never named (review C-U2-R5)
+
+    /// Intimacy hidden (by the user, or the 18+ gate): the card — shown to whoever holds the phone —
+    /// counts those rows only as "other private entries", and the Remove tap still removes them, or
+    /// the fresh key would be minted over them.
+    @MainActor
+    @Test func aHiddenIntimacyKindIsCountedButNeverNamedAndStillRemoved() async throws {
+        let rig = CoordinatorRig(intimacyVisible: false)
+        defer { rig.fixture.cleanup() }
+        _ = try rig.plantMixedPriorEntries()
+
+        let shown = FernletUnopenableEntryCounts(cycleEntries: 1, journalEntries: 1, worryEntries: 1, otherEntries: 1)
+        #expect(await rig.coordinator.openPrivateHub() == .unopenableEntries(shown), "no intimacy line; one other entry")
+        #expect(rig.coordinator.tapGateNamesCycleEntries, "period is visible, so the tap screen may name cycle")
+
+        #expect(await rig.coordinator.removeUnopenableEntriesAndOpen(named: shown) == .opened)
+        #expect(try rig.intimacy.logCount() == 0, "the hidden kind's dead rows are removed with the rest")
+        #expect(try rig.cycle.narrativeCount() == 0)
+    }
+
+    /// Period hidden (by the user, or by the sex-derived default): no "Cycle entries" line, and the
+    /// tap screen's line stops naming cycle.
+    @MainActor
+    @Test func aHiddenPeriodKindIsNamedNeitherOnTheCardNorOnTheTapScreen() async throws {
+        let rig = CoordinatorRig(periodVisible: false)
+        defer { rig.fixture.cleanup() }
+        _ = try rig.plantMixedPriorEntries()
+
+        #expect(await rig.coordinator.openPrivateHub() == .unopenableEntries(FernletUnopenableEntryCounts(
+            intimacyEntries: 1, journalEntries: 1, worryEntries: 1, otherEntries: 1
+        )))
+        #expect(!rig.coordinator.tapGateNamesCycleEntries)
+    }
+
+    /// Both hidden: the two kinds fold into one count, so not even which of them is here shows.
+    @MainActor
+    @Test func twoHiddenKindsFoldIntoOneOtherCount() {
+        #expect(PrivateHubOpenCoordinator.shownCounts(cycleRows: 3, intimacyRows: 2, periodVisible: false, intimacyVisible: false)
+                == FernletUnopenableEntryCounts(otherEntries: 5))
+        #expect(PrivateHubOpenCoordinator.shownCounts(cycleRows: 3, intimacyRows: 2, periodVisible: true, intimacyVisible: true)
+                == FernletUnopenableEntryCounts(cycleEntries: 3, intimacyEntries: 2))
+    }
+
+    // MARK: - The backup promise is made only when it will be kept (review C-U2-R3)
+
+    /// The card's "Your Sealed backup will be restored after you continue" follows the real restore
+    /// conditions: the journal backup restores only into an EMPTY journal store, so a journal row
+    /// that opens (written from Home, folded in at the open) withholds the promise; with only dead
+    /// rows it is made; and while an app-lock reset holds every restore for the owner it never is.
+    @MainActor
+    @Test func theCardPromisesABackupRestoreOnlyWhenOneWillRun() async throws {
+        let journalBackupOnly = StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true)
+        let hold = HoldSwitch()
+        let decide: (Bool) -> Bool = { journalKeepsOpenableRows in
+            ContentView.sealedBackupRestoresAfterRemoval(
+                journalBackupOnly,
+                intimacyVisible: true,
+                restoreHeldForOwner: hold.isHeld,
+                journalStoreEmptiesOnRemoval: !journalKeepsOpenableRows
+            )
+        }
+
+        let withLiveJournal = CoordinatorRig(restoresAfterRemoval: decide)
+        defer { withLiveJournal.fixture.cleanup() }
+        _ = try withLiveJournal.plantMixedPriorEntries()
+        #expect(await Self.promisesRestore(withLiveJournal) == false,
+                "a journal row that opens stays behind, so the empty-store journal restore would refuse")
+
+        let deadOnly = CoordinatorRig(restoresAfterRemoval: decide)
+        defer { deadOnly.fixture.cleanup() }
+        try deadOnly.journal.insert(CoordinatorRig.journalNarrative("sealed under the lost key"), contentKey: CoordinatorRig.lostKey)
+        #expect(await Self.promisesRestore(deadOnly) == true, "the journal store empties, so its backup comes back")
+
+        hold.isHeld = true
+        #expect(await Self.promisesRestore(deadOnly) == false, "after an app-lock reset nothing is restored on its own")
+    }
+
+    /// The decision's intimacy half and its switches, beside the journal half above.
+    @MainActor
+    @Test func theBackupPromiseNeedsSyncAndAVisibleIntimacyHalf() {
+        let intimacyOnly = StoragePreferences(iCloudSyncEnabled: true, sealedBackupIntimacyEnabled: true)
+        #expect(ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, intimacyVisible: true, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: false))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, intimacyVisible: false, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: true),
+                "a hidden intimacy backup defers its restore")
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, intimacyVisible: true, restoreHeldForOwner: true, journalStoreEmptiesOnRemoval: true))
+        let syncOff = StoragePreferences(sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true)
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(syncOff, intimacyVisible: true, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: true))
+    }
+
+    /// The card's backup line for the rig's current rows, or nil when there is no card.
+    @MainActor
+    private static func promisesRestore(_ rig: CoordinatorRig) async -> Bool? {
+        guard case .unopenableEntries(let counts) = await rig.coordinator.openPrivateHub() else { return nil }
+        return counts.sealedBackupRestoresAfterRemoval
     }
 
     // MARK: - Bookkeeping only

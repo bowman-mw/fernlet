@@ -88,6 +88,15 @@ final class JournalSealingCoordinator {
     /// Whether the entry's text is sealed in the narrative store (so the snapshot strips it).
     func isSealed(_ id: UUID) -> Bool { sealedJournalIDs.contains(id) }
 
+    /// Whether in-memory journal text is waiting for a seal no key has taken yet — the entries the
+    /// next activation's ``migrateExistingJournalsToSealedStore(contentKey:)`` pass writes into the
+    /// narrative store. Read by the "can't be opened" card's backup promise: a store that gains rows at
+    /// the first open is not empty, so its empty-store-only restore would refuse.
+    var hasJournalTextAwaitingSeal: Bool {
+        let unsealed: (JournalEntry) -> Bool = { !$0.text.isEmpty && !self.sealedJournalIDs.contains($0.id) }
+        return host.previousJournals.contains(where: unsealed) || host.day.journals.contains(where: unsealed)
+    }
+
     /// True while the content key is active (the Private tab is open): sealed entries are hydrated
     /// with their text, so an EMPTY-text entry in memory is genuinely a tag-only mood check-in. While
     /// closed/inactive, stripped sealed entries also sit in memory with empty text — a tag-only

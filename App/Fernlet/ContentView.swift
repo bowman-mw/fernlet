@@ -453,10 +453,14 @@ struct ContentView: View {
         let appStore = store
         let priorEntries = SealedPriorEntryStore(
             intimacyStore: intimacyStore,
-            restoresAfterRemoval: {
+            periodVisible: { appStore.isPeriodTrackingVisible },
+            intimacyVisible: { appStore.isIntimacyTrackingVisible },
+            restoresAfterRemoval: { journalKeepsOpenableRows in
                 Self.sealedBackupRestoresAfterRemoval(
                     preferencesStore.preferences,
-                    intimacyVisible: appStore.isIntimacyTrackingVisible
+                    intimacyVisible: appStore.isIntimacyTrackingVisible,
+                    restoreHeldForOwner: appStore.sealedBackupRestoreAwaitsOwner,
+                    journalStoreEmptiesOnRemoval: !journalKeepsOpenableRows && !appStore.journalTextAwaitsSealing
                 )
             }
         )
@@ -485,13 +489,33 @@ struct ContentView: View {
         }
     }
 
-    /// Whether a Sealed backup comes back once the "can't be opened" card's entries are removed —
-    /// the card says so only when it is true. The Private tab's settle restores journal and intimacy
-    /// backups into an emptied store (intimacy only while visible); the period restore joins it in
-    /// design unit 5, which adds `.periodData` here.
-    static func sealedBackupRestoresAfterRemoval(_ preferences: StoragePreferences, intimacyVisible: Bool) -> Bool {
-        guard preferences.iCloudSyncEnabled else { return false }
-        return preferences.sealedBackupJournalEnabled || (preferences.sealedBackupIntimacyEnabled && intimacyVisible)
+    /// Whether a Sealed backup REALLY comes back once the "can't be opened" card's entries are
+    /// removed — the card promises it only when this is true (review C-U2-R3). The Private tab's
+    /// settle restores the journal and intimacy backups only into an EMPTY store with its divergence
+    /// latch clear, and only while no app-lock reset is waiting for the device owner, so:
+    /// - nothing is restored while the owner hold is set (every ambient restore is held);
+    /// - the journal half counts only when the journal store will be empty after the removal — no
+    ///   journal row that opens stays behind (it is folded under the new key, which re-sets the latch)
+    ///   and no journal text is waiting to be sealed at the first open;
+    /// - the intimacy half counts only while intimacy tracking is visible (hidden defers its restore).
+    ///
+    /// The period restore joins it in design unit 5, which adds `.periodData` here.
+    ///
+    /// - Parameters:
+    ///   - preferences: The storage preferences (sync and the per-payload switches).
+    ///   - intimacyVisible: The derived intimacy-tracking visibility.
+    ///   - restoreHeldForOwner: Whether an app-lock reset is waiting for the device owner.
+    ///   - journalStoreEmptiesOnRemoval: Whether the journal store will be empty after the removal.
+    static func sealedBackupRestoresAfterRemoval(
+        _ preferences: StoragePreferences,
+        intimacyVisible: Bool,
+        restoreHeldForOwner: Bool,
+        journalStoreEmptiesOnRemoval: Bool
+    ) -> Bool {
+        guard preferences.iCloudSyncEnabled, !restoreHeldForOwner else { return false }
+        let journalRestores = preferences.sealedBackupJournalEnabled && journalStoreEmptiesOnRemoval
+        let intimacyRestores = preferences.sealedBackupIntimacyEnabled && intimacyVisible
+        return journalRestores || intimacyRestores
     }
 
     /// The first-workout Health offer ("Asked the first time you log a workout…"), over the app's
