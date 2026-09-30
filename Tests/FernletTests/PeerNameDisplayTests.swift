@@ -13,6 +13,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 @testable import ProximityKit
+@testable import Fernlet
 
 /// The display-name rule for peers, and the connect path's no-identifier ratchet.
 @Suite struct PeerNameDisplayTests {
@@ -92,6 +93,81 @@ import FernletDomainModel
         for placeholder in placeholders {
             #expect(!placeholder.isEmpty)
             #expect(PeerNameDisplay.personName(placeholder, fingerprint: nil) == placeholder)
+        }
+    }
+
+    /// A first name for warm copy is the first word of a chosen name, or the WHOLE placeholder:
+    /// the rule runs before the split, so a nameless friend never reads "Someone".
+    @Test func aFirstNameIsAWordOfANameOrTheWholePlaceholder() {
+        let fingerprint = Self.realFingerprint()
+        #expect(PeerNameDisplay.firstName("Aisha Bloom", fingerprint: fingerprint) == "Aisha")
+        #expect(PeerNameDisplay.firstName("  Sam\n Lee ", fingerprint: nil) == "Sam",
+                "split after sanitizing, so a newline is a word break and not part of the name")
+        #expect(PeerNameDisplay.firstName(fingerprint, fingerprint: fingerprint, placeholder: .met)
+                == PeerNameDisplay.text(for: .met), "the placeholder whole, never its first word")
+        #expect(PeerNameDisplay.firstName(fingerprint, fingerprint: nil, placeholder: .met)
+                == PeerNameDisplay.text(for: .met), "the 16-hex shape without the fingerprint in hand")
+        #expect(PeerNameDisplay.firstName("", fingerprint: nil) == PeerNameDisplay.text(for: .nearby))
+        let instanceName = MeshLinkAdvertisement.randomInstanceName()
+        #expect(PeerNameDisplay.firstName(instanceName, fingerprint: nil, placeholder: .met)
+                == PeerNameDisplay.text(for: .met))
+    }
+
+    /// Every heart sentence built on `PresenceManager.firstName(of:)` (the presence refusals the
+    /// package composes, Home's received-heart card) refuses an identifier, because it delegates.
+    @Test func thePresenceFirstNameNeverAnswersAnIdentifier() {
+        #expect(PresenceManager.firstName(of: "Aisha Bloom") == "Aisha")
+        #expect(PresenceManager.firstName(of: Self.realFingerprint()) == PeerNameDisplay.text(for: .met),
+                "a friend kept before their name arrived has the fingerprint filed as the name")
+        #expect(PresenceManager.firstName(of: "  ") == PeerNameDisplay.text(for: .met),
+                "and an empty name reads the localized placeholder, not the English-only \"your friend\"")
+    }
+
+    /// The mesh heart's status lines (session info sheet) never name a fingerprint filed as a
+    /// friend's name: "Sent 3f2a9c81b4de4a61 some good vibes." was the fix review's C-F1.
+    @Test func sessionHeartStatusLinesNeverNameAFingerprint() {
+        let fingerprint = Self.realFingerprint()
+        let placeholder = PeerNameDisplay.text(for: .met)
+        #expect(SessionHeartStatusCopy.shownRecipient(fingerprint) == placeholder)
+        #expect(SessionHeartStatusCopy.shownRecipient("Robin Jones") == "Robin Jones")
+        // A key's `==` does not compare interpolated values (a `.value` format argument is never
+        // equal, measured: two keys both carrying "Someone you met" compared unequal), so the pin
+        // reads each key's description, after proving the description carries its arguments.
+        let named = String(describing: SessionHeartStatusCopy.sent(recipientName: "Robin Jones"))
+        #expect(named.contains("Robin Jones"), "precondition: a key's description shows its arguments")
+        let leftNamed = String(describing: SessionHeartStatusCopy.message(.recipientLeft, recipientName: "Robin Jones"))
+        #expect(leftNamed.contains("Robin") && !leftNamed.contains("Jones"),
+                "precondition: a failure sentence carries the first name")
+        let sent = String(describing: SessionHeartStatusCopy.sent(recipientName: fingerprint))
+        #expect(!sent.localizedCaseInsensitiveContains(fingerprint), "the sent line names no fingerprint")
+        #expect(sent.contains(placeholder), "it names the placeholder instead")
+        // R2: bounded by the enum's cases.
+        for cause in MeshNetworkManager.SessionHeartFailure.allCases {
+            let line = String(describing: SessionHeartStatusCopy.message(cause, recipientName: fingerprint))
+            #expect(!line.localizedCaseInsensitiveContains(fingerprint), "\(cause) names no fingerprint")
+            #expect(!line.contains("\"Someone\""), "\(cause) keeps the placeholder whole")
+        }
+    }
+
+    /// The presence fallback's status builders, one per surface, interpolate no raw recipient name.
+    ///
+    /// They are private computed properties on views, so the pin is on their bodies: each of
+    /// connecting, verifying and sent names the recipient through `shownRecipient`, and `.failed`
+    /// passes the manager's sentence, which `thePresenceFirstNameNeverAnswersAnIdentifier` covers.
+    @Test func presenceHeartStatusBuildersNameNoRawRecipient() throws {
+        let sites = [
+            ("App/Fernlet/DisposableCameraView.swift", "private var presenceHeartStatusText: String? {"),
+            ("App/Fernlet/FriendListView.swift", "private var heartStatusText: String? {")
+        ]
+        // R2: bounded by the literal site list.
+        for (path, signature) in sites {
+            let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(path))
+            let body = try #require(MeshRoutedSourceScan.bracedBody(after: signature, in: code),
+                                    "\(path) still builds the presence status line")
+            #expect(!body.contains("\\(name)") && !body.contains("\\(recipientName)"),
+                    "\(path) interpolates a raw recipient name")
+            #expect(body.components(separatedBy: "SessionHeartStatusCopy.shownRecipient(").count - 1 == 3,
+                    "\(path): connecting, verifying and sent each name through the helper")
         }
     }
 

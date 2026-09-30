@@ -555,7 +555,7 @@ struct FriendListView: View {
     private func sendHeartBlock(_ peer: ProximityTrustedPeerRecord, reachable: Bool) -> some View {
         let onCooldown = !store.heartLedger.canSendHeart(to: peer.fingerprint)
         let sending = heartSendInProgress
-        let firstName = PresenceManager.firstName(of: shownName(peer))
+        let firstName = shownFirstName(peer)
         let awayEnabled = store.settings.heartsAwayDelivery
         // "Queued but not yet at the drop-off" — an uploaded heart drops out of this count, so it
         // reads as "still waiting on us", not "still undelivered".
@@ -635,7 +635,7 @@ struct FriendListView: View {
                     store.setHeartsAwayDelivery(true)
                     recordAwayOutcome(
                         store.heartDropService.queueHeart(to: consented),
-                        firstName: PresenceManager.firstName(of: shownName(consented))
+                        firstName: shownFirstName(consented)
                     )
                 }
                 awayConsentPeer = nil
@@ -763,16 +763,20 @@ struct FriendListView: View {
         }
     }
 
+    /// The presence pipeline's status line. Names go through `SessionHeartStatusCopy.shownRecipient`:
+    /// the state carries the trust-vault name, which is the fingerprint for a friend kept before
+    /// their name arrived. `.failed`'s sentence is the manager's, built on
+    /// `PresenceManager.firstName(of:)`, which applies the same rule.
     private var heartStatusText: String? {
         switch store.presenceManager.heartSendState {
         case .idle:
             nil
         case .connecting(let recipientName):
-            "Connecting to \(recipientName)..."
+            "Connecting to \(SessionHeartStatusCopy.shownRecipient(recipientName))..."
         case .verifying(let recipientName):
-            "Saying hello to \(recipientName)..."
+            "Saying hello to \(SessionHeartStatusCopy.shownRecipient(recipientName))..."
         case .sent(let recipientName):
-            "Sent \(recipientName) some good vibes."
+            "Sent \(SessionHeartStatusCopy.shownRecipient(recipientName)) some good vibes."
         case .failed(let message):
             message
         }
@@ -842,6 +846,15 @@ struct FriendListView: View {
     /// - Returns: The text to render.
     private func shownName(_ peer: ProximityTrustedPeerRecord) -> String {
         PeerNameDisplay.shown(peer.displayName, fingerprint: peer.fingerprint, placeholder: .met)
+    }
+
+    /// The first word of ``shownName(_:)`` for the hearts copy, or "Someone you met" whole: taking
+    /// the first word of the placeholder would read "Someone".
+    ///
+    /// - Parameter peer: A trust-vault record.
+    /// - Returns: The text to interpolate.
+    private func shownFirstName(_ peer: ProximityTrustedPeerRecord) -> String {
+        PeerNameDisplay.firstName(peer.displayName, fingerprint: peer.fingerprint, placeholder: .met)
     }
 
     // MARK: - Display name

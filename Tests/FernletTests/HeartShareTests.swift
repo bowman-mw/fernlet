@@ -329,6 +329,43 @@ struct HeartShareTests {
         #expect(ledger.canSendHeart(to: friend.fingerprint))  // the rate window was NOT consumed
     }
 
+    /// A friend kept before their name arrived has their fingerprint filed AS the name
+    /// (`MeshNetworkManager.rosterDisplayName`, then `keepProximityFriends`). The refusals this
+    /// manager composes are rendered verbatim by both heart surfaces, so they must never
+    /// interpolate it (2026-09-29, fix review C-F1): they name "Someone you met" instead.
+    @Test func heartRefusalsNeverNameAFingerprintFiledAsTheName() throws {
+        let host = MockHeartProximityHost()
+        let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
+        let manager = PresenceManager(store: host, ledger: ledger)
+        let signingKey = Data((0..<32).map { _ in UInt8.random(in: .min ... .max) })
+        let fingerprint = IdentityService.fingerprint(of: signingKey)
+        let friend = ProximityTrustedPeerRecord(
+            displayName: fingerprint,
+            fingerprint: fingerprint,
+            signingPublicKey: signingKey,
+            keyAgreementPublicKey: Data((0..<32).map { _ in UInt8.random(in: .min ... .max) }),
+            mode: .friend
+        )
+        let placeholder = PeerNameDisplay.text(for: .met)
+
+        manager.sendHeart(to: friend)
+        guard case .failed(let notNearby) = manager.heartSendState else {
+            Issue.record("Expected the not-nearby refusal, got \(manager.heartSendState)")
+            return
+        }
+        #expect(!notNearby.localizedCaseInsensitiveContains(fingerprint))
+        #expect(notNearby.hasPrefix(placeholder), "the refusal names the placeholder: \(notNearby)")
+
+        ledger.recordHeartSent(to: fingerprint)
+        manager.sendHeart(to: friend)
+        guard case .failed(let cooldown) = manager.heartSendState else {
+            Issue.record("Expected the cooldown refusal, got \(manager.heartSendState)")
+            return
+        }
+        #expect(!cooldown.localizedCaseInsensitiveContains(fingerprint))
+        #expect(cooldown.contains("You just sent \(placeholder) some warmth"))
+    }
+
     @Test func sendHeartRefusesSecondHeartToSameFriendWithinRateWindow() throws {
         let host = MockHeartProximityHost()
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })

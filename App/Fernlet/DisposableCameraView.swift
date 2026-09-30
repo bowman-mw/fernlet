@@ -1764,7 +1764,7 @@ struct DisposableCameraView: View {
         let reachable = transport != .unavailable
         let sending = sessionHeartSendInProgress
         let friendName = PeerNameDisplay.shown(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met)
-        let firstName = PresenceManager.firstName(of: friendName)
+        let firstName = PeerNameDisplay.firstName(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met)
         let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
         return Button {
             // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1).
@@ -1855,13 +1855,16 @@ struct DisposableCameraView: View {
     /// The PRESENCE fallback's status line, still a composed `String` — `PresenceManager`'s own
     /// `heartSendState.failed(message:)` is the same localization hole in P9's scope, and forking
     /// only half of it here would create a `LocalizedStringKey(runtimeString)` conversion rather
-    /// than close anything.
+    /// than close anything. Names go through `SessionHeartStatusCopy.shownRecipient`: the state
+    /// carries the trust-vault name, which is the fingerprint for a friend kept before their name
+    /// arrived. `.failed`'s sentence is the manager's, built on `PresenceManager.firstName(of:)`,
+    /// which applies the same rule.
     private var presenceHeartStatusText: String? {
         switch store.presenceManager.heartSendState {
         case .idle: return nil
-        case .connecting(let name): return "Connecting to \(name)…"
-        case .verifying(let name): return "Saying hello to \(name)…"
-        case .sent(let name): return "Sent \(name) some good vibes."
+        case .connecting(let name): return "Connecting to \(SessionHeartStatusCopy.shownRecipient(name))…"
+        case .verifying(let name): return "Saying hello to \(SessionHeartStatusCopy.shownRecipient(name))…"
+        case .sent(let name): return "Sent \(SessionHeartStatusCopy.shownRecipient(name)) some good vibes."
         case .failed(let message): return message
         }
     }

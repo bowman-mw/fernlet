@@ -6,13 +6,21 @@ import ProximityKit
 /// in-person group — the existing members of a mesh session and the host of a Group Activity.
 ///
 /// Pure presentation, zero manager reference: it renders the first pending request (the requester's
-/// name) with an "N more waiting" pill, and forwards Allow/Decline through the closures. No
-/// fingerprint (owner decision 2026-09-29): an identifier string is not part of the in-person
-/// experience, and the requester is already committed to an existing member, whose QR ceremony at
-/// the first meeting is the verification path. Callers pass the name through `PeerNameDisplay`, so
-/// an identifier filed as a name reads "Someone nearby". The `displayName` extractor closure keeps
-/// it generic over the request payload type without a retroactive protocol conformance, and
-/// `accessibilityPrefix`
+/// name) with an "N more waiting" pill, and forwards Allow/Decline through the closures. Callers
+/// pass the name through `PeerNameDisplay`, so an identifier filed as a name reads "Someone nearby".
+///
+/// **No fingerprint, and what that costs (owner decision 2026-09-29).** An identifier string is not
+/// part of the in-person experience, so the gatekeeper now decides on the requester's chosen name
+/// ALONE. That name is peer-supplied: a stranger can take a kept friend's name, and nothing on this
+/// sheet tells the two apart. No verification path is reachable from here either. The QR ceremony
+/// (`VerifyQRViews`) is optional, runs only pre-commit from a Friends-tab lobby row, and does not
+/// exist in-session, where the mesh prompt is presented. Nor does the request imply a ceremony
+/// happened: a mesh admission request is accepted even from a slot this device never committed
+/// (`MeshNetworkManager.handleAdmissionRequest`, the deliberate pre-commit exception), and the
+/// requester's own commit may have been the plain Connect tap, which is unilateral. A display-only
+/// cue for a requester whose verified signing key matches a kept friend is an open owner question,
+/// not built. The `displayName` extractor closure keeps the sheet generic over the request payload
+/// type without a retroactive protocol conformance, and `accessibilityPrefix`
 /// namespaces the button identifiers (`<prefix>.allow`, `<prefix>.decline`, `<prefix>.error`,
 /// `<prefix>.error.dismiss`) so each presentation surface keeps its own UI-test hooks.
 /// Swipe-to-dismiss declines everything still pending (fail-closed) — wired at the presentation

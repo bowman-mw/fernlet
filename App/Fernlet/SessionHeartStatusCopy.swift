@@ -42,11 +42,26 @@ enum SessionHeartStatusCopy {
     /// be pushed, drained or custody-transferred until it is delivered or expires. The wording has
     /// never claimed a receipt.
     ///
-    /// - Parameter recipientName: The friend's display name.
+    /// - Parameter recipientName: The friend's display name as the manager published it, which is
+    ///   the trust-vault row's. Shown through ``shownRecipient(_:)``, never raw.
     /// - Returns: a `LocalizedStringKey`, never a `String` — `Text(String)` selects the
     ///   `StringProtocol` overload and renders verbatim.
     static func sent(recipientName: String) -> LocalizedStringKey {
-        "Sent \(recipientName) some good vibes."
+        "Sent \(shownRecipient(recipientName)) some good vibes."
+    }
+
+    /// The recipient as a status line names them: their chosen name, or "Someone you met".
+    ///
+    /// Never the stored value raw (2026-09-29). A friend kept before their name arrived has their
+    /// fingerprint filed AS the name (`MeshNetworkManager.rosterDisplayName`, then
+    /// `keepProximityFriends`), and the manager publishes `friend.displayName`, so "Sent
+    /// 3f2a9c81b4de4a61 some good vibes." was one tap away on the session's info sheet.
+    /// `PeerNameDisplay`'s 16-hex shape rule catches that without the fingerprint in hand.
+    ///
+    /// - Parameter recipientName: The friend's display name as published.
+    /// - Returns: Resolved display text; interpolated as a value, never looked up as a key.
+    static func shownRecipient(_ recipientName: String) -> String {
+        PeerNameDisplay.shown(recipientName, fingerprint: nil, placeholder: .met)
     }
 
     /// The sentence for one frozen failure cause.
@@ -54,12 +69,13 @@ enum SessionHeartStatusCopy {
     /// - Parameters:
     ///   - cause: The frozen token the manager published.
     ///   - recipientName: The friend's display name; the first name is used where the sentence
-    ///     reads better for it, exactly as the pre-item-6 sentences did.
+    ///     reads better for it, exactly as the pre-item-6 sentences did, and a name that is really
+    ///     an identifier reads "Someone you met" whole (``shownRecipient(_:)``'s rule).
     /// - Returns: a `LocalizedStringKey`, never a `String`.
     static func message(
         _ cause: MeshNetworkManager.SessionHeartFailure, recipientName: String
     ) -> LocalizedStringKey {
-        let firstName = PresenceManager.firstName(of: recipientName)
+        let firstName = PeerNameDisplay.firstName(recipientName, fingerprint: nil, placeholder: .met)
         switch cause {
         case .heartsOff:
             return "Turn on nearby hearts to send \(firstName) some warmth."
