@@ -6895,18 +6895,6 @@
         }
       }
     },
-    "deleteAll.scope.base" : {
-      "comment" : "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "This deletes your logged days, meals and their photos, gym progress photos, journal entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, custom items and coins."
-          }
-        }
-      }
-    },
     "deleteAll.scope.icloudCopy" : {
       "comment" : "Appended to the delete-everything scope only when a day-record copy exists in iCloud.",
       "extractionState" : "extracted_with_value",
@@ -6939,6 +6927,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Any encrypted iCloud backups go too."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.withUnchosenSessionPhotos" : {
+      "comment" : "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'. 'Photos from a Friends session you haven't chosen yet' are the in-person session photos still waiting in the keep-or-delete review; photos already kept stay (see the kept paragraph).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This deletes your logged days, meals and their photos, gym progress photos, journal entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, photos from a Friends session you haven't chosen yet, custom items and coins."
           }
         }
       }
@@ -7055,6 +7055,53 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "friends.pendingReview.body" : {
+      "comment" : "Body of the Friends tab card for photos waiting to be chosen. The count is how many photos. Must keep saying that nothing is saved (not in Fernlet, not in the camera roll) until the person chooses.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "1 photo from your last session is waiting. Nothing is saved until you choose."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photos from your last session are waiting. Nothing is saved until you choose."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "friends.pendingReview.button" : {
+      "comment" : "Button on the Friends tab card that opens the review of photos from the last in-person session, where the person keeps or deletes them.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose photos"
+          }
+        }
+      }
+    },
+    "friends.pendingReview.title" : {
+      "comment" : "Title of the Friends tab card shown while photos from an ended in-person session are still waiting for the person to choose which to keep.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photos waiting for you"
           }
         }
       }
