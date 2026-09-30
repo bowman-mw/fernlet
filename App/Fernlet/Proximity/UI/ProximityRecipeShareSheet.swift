@@ -131,7 +131,9 @@ struct ProximityRecipeShareSheet: View {
                         .fernletWrappingText()
                 }
 
-                if !manager.diagnosticEvents.isEmpty {
+                // Developer detail (2026-09-29): its lines name peers by fingerprint and quote
+                // transport errors, so it is not part of sharing a recipe.
+                if store.proximityDebugToolsEnabled, !manager.diagnosticEvents.isEmpty {
                     diagnosticDetailsCard
                 }
 
@@ -480,15 +482,17 @@ struct ProximityRecipeShareSheet: View {
     /// message VERBATIM, and it is English — a pre-existing residual, since ProximityKit composes it.
     /// With the panel carrying every share failure, the line now shows it only for the search
     /// refusal ("Search again" while paired), and for the moments after "Try again" returns to the
-    /// list, before the 2.5 s auto-clear.
+    /// list, before the 2.5 s auto-clear. Names pass through `PeerNameDisplay` with no fingerprint to
+    /// hand: the recipient row files the fingerprint as the name for a peer this radio never
+    /// discovered, and the helper's fingerprint-shape rule catches exactly that.
     private var statusText: Text? {
         switch manager.sendState {
         case .idle, .sent:
             nil
         case .connecting(let recipientName):
-            Text("Connecting to \(recipientName)…")
+            Text("Connecting to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))…")
         case .sending(let recipientName):
-            Text("Sending to \(recipientName)…")
+            Text("Sending to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))…")
         case .failed(let message):
             Text(verbatim: message)
         }

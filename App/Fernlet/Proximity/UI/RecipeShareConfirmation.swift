@@ -97,7 +97,7 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
     /// a second share inside its per-sender rate limit), so "they can look it over" would be a
     /// delivery claim in everything but the word.
     private static func sent(_ outcome: RecipeShareOutcome) -> RecipeShareConfirmation {
-        let name = outcome.recipientName
+        let name = shownName(outcome)
         let title = outcome.recipeTitle
         return RecipeShareConfirmation(
             outcome: outcome,
@@ -119,7 +119,7 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
         _ outcome: RecipeShareOutcome,
         failure: RecipeShareFailure
     ) -> RecipeShareConfirmation {
-        let name = outcome.recipientName
+        let name = shownName(outcome)
         let title = outcome.recipeTitle
         guard !failure.mayHaveReachedRecipient else {
             return RecipeShareConfirmation(
@@ -152,7 +152,7 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
         for failure: RecipeShareFailure,
         outcome: RecipeShareOutcome
     ) -> LocalizedStringResource {
-        let name = outcome.recipientName
+        let name = shownName(outcome)
         switch failure {
         case .pairedWithAnother:
             return pairedWithAnotherDetail(outcome)
@@ -183,10 +183,19 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
         }
     }
 
+    /// The recipient as the panel names them: their chosen name, or "Someone nearby".
+    ///
+    /// The outcome carries the manager's name slot, which files the fingerprint as the name for a
+    /// peer this radio never discovered. `PeerNameDisplay` is the one rule that keeps an identifier
+    /// off this path (owner decision 2026-09-29), so every sentence below reads the name through it.
+    private static func shownName(_ outcome: RecipeShareOutcome) -> String {
+        PeerNameDisplay.shown(outcome.recipientName, fingerprint: nil)
+    }
+
     /// The cap refusal's sentence, naming the Fernlet that holds the link when it is known.
     private static func pairedWithAnotherDetail(_ outcome: RecipeShareOutcome) -> LocalizedStringResource {
-        let name = outcome.recipientName
-        guard let other = outcome.otherPeerName, !other.isEmpty else {
+        let name = shownName(outcome)
+        guard let other = outcome.otherPeerName.flatMap({ PeerNameDisplay.personName($0, fingerprint: nil) }) else {
             return LocalizedStringResource(
                 "Fernlet is still connected to another Fernlet. Recipe sharing links two Fernlets at a time, so nothing went to \(name).",
                 comment: "Why a recipe share did not go out: this phone is already connected to someone else. %@ is the name of the person the user tried to share with.")
