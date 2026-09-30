@@ -40,7 +40,26 @@ When a Fernlet card is opened (`willBecomeActive(with:)` with a selected message
 so a card the 2026-09-23 build sent still opens — and re-validates the packet and its card through
 `FernletExchange`, whose inflate is bounded before it starts; it never trusts what the bubble
 displays, and an envelope it cannot validate shows "This Fernlet item can't be opened" and writes
-nothing. **Review in Fernlet** enqueues the validated packet into the App Group review inbox and opens
+nothing. The decision is `FernletMessagesReceivedItem.resolve(messageURL:)`, a total, non-throwing
+function in `FernletExchange`; `showReceivedItem` is a thin switch over its three cases, each of
+which draws a title and a status line.
+
+**An opened card is drawn from its own URL and nothing else** (2026-09-30, after the owner's report
+that receiving a recipe "pops up and is blank"). Until then it paid for the composer first:
+`viewDidLoad` read and validated the whole App Group catalog and built a composer card per recipe (up
+to 100, in the expanded style a received card opens in), and `willBecomeActive(with:)` read the
+catalog again before looking at the selected message — all before the card's first frame, while
+Messages shows its own blank panel with a spinner. Now `viewDidLoad` shows an opening state (the brand
+mark on the panel's paper, every control hidden), `willBecomeActive(with:)` makes one decision —
+selected message → the card; none → re-read the catalog and draw the composer — and a presentation
+change or search keystroke redraws only while the composer is up (`PanelState`). The composer still
+reads the catalog fresh on every activation, and lazily if it is first drawn some other way.
+`MessagesExtensionBoundaryTests.aReceivedCardIsDrawnWithoutTheComposersCatalog` holds that shape by
+source scan. On the iOS 26.5 simulator the change is not measurable — a received card's **Review in
+Fernlet** appeared 1.2–1.4 s after the tap (UI-test polling) with a 1-recipe, a 100-recipe and a
+100-recipe catalog near the 1 MiB cap, before and after; the extension's own launch dominates — so it
+is hardening, not a proven cause: it takes the coordinated catalog read, the one step on that path
+that can wait on another process, off it. **Review in Fernlet** enqueues the validated packet into the App Group review inbox and opens
 `fernlet://messages/recipe?id=…` (or `/workout`) — a link that carries an opaque inbox identifier
 and nothing else. Nothing is imported here: the containing app presents the review, applies the
 replay ledger and the calendar and safety checks, and saves only when the person confirms.
@@ -97,7 +116,10 @@ holds it instead: `FernletExchangeTests` (the envelope, card, limits, catalog an
 controller drives), `ExchangeMessageEnvelopeV2Tests` (the version-2 wire, its inflate bound, its
 capacity, and the version-1 cards that must keep opening), `ExchangeMultipartRecipeTests` (a recipe
 made in parts as packet version 2, its versioned content hash, and the salad fixture on a card),
-`MessagesExtensionBoundaryTests` (imports, the copy vault's catalog, the manifest),
+`MessagesReceivedItemTests` (which screen an opened card gets: the sender's own card opens as
+itself, anything else is "can't be opened", nothing is empty), `MessagesExtensionBoundaryTests`
+(imports, the copy vault's catalog, the manifest, and the received-card path's independence from the
+catalog),
 `LocalizationBoundaryTests` H1/H2, and every shipping-code wall, which since 2026-09-23 is held to
 the full set of shipping roots by
 `PowerOfTenBoundaryTests.everyShippingCodeWallScansEveryShippingRoot`. What a simulator cannot check

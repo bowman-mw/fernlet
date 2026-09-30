@@ -21,6 +21,9 @@ import Testing
 ///   catalog store, picker priority, inbox expiry/overflow/clear) is covered by
 ///   `FernletExchangeTests` and `ExchangeMessageEnvelopeV2Tests`, against the same types the
 ///   controller calls;
+/// - which screen an opened card gets is `FernletMessagesReceivedItem.resolve`, a pure function in
+///   `FernletExchange` pinned by `MessagesReceivedItemTests`; that the controller routes through it,
+///   and never reads the composer's catalog on the way, is held here by source scan;
 /// - its display copy is extracted to `FernletMessagesCopy` and held by
 ///   `LocalizationBoundaryTests` rules H1/H2;
 /// - its import surface and file inventory are held here;
@@ -72,6 +75,59 @@ struct MessagesExtensionBoundaryTests {
             \(offenders.sorted().joined(separator: "\n"))
             """
         )
+    }
+
+    /// A card someone opens is drawn from its own URL, never from the composer's catalog.
+    ///
+    /// 2026-09-30, the owner's report that receiving a recipe "pops up and is blank". Until then an
+    /// opened card paid for the composer before its first frame: `viewDidLoad` read and validated the
+    /// whole App Group catalog and built a composer card per recipe (up to 100, in the expanded style
+    /// a received card opens in), and `willBecomeActive(with:)` read the catalog again before it looked
+    /// at the selected message — all while Messages shows its own blank, spinning panel. A received
+    /// card needs none of it, and the coordinated catalog read is the one step on that path that can
+    /// wait on another process. `FernletTests` cannot link the appex, so this scan is what holds the
+    /// shape: `viewDidLoad` renders neither the composer nor the catalog; the selected-message branch
+    /// of `willBecomeActive` goes straight to `showReceivedItem`, which switches over
+    /// `FernletMessagesReceivedItem.resolve` (pinned by `MessagesReceivedItemTests`); and no function
+    /// on the received-card path reaches the catalog or the composer.
+    @Test func aReceivedCardIsDrawnWithoutTheComposersCatalog() throws {
+        let source = try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesViewController.swift")
+
+        let viewDidLoad = try Self.body(of: "viewDidLoad", in: source)
+        #expect(!viewDidLoad.contains("reloadCatalog") && !viewDidLoad.contains("renderComposer"),
+                "viewDidLoad reads the catalog or renders the composer again — before a received card's first frame")
+
+        let activation = try Self.body(of: "willBecomeActive", in: source)
+        let branch = try #require(activation.range(of: "guard let message = conversation.selectedMessage else {"),
+                                  "willBecomeActive no longer branches on the selected message first")
+        let composerReturn = try #require(activation.range(of: "return", range: branch.upperBound..<activation.endIndex))
+        #expect(!activation[..<branch.lowerBound].contains("reloadCatalog"), "the catalog is read before the branch again")
+        #expect(activation[branch.upperBound..<composerReturn.lowerBound].contains("reloadCatalog()"),
+                "the composer branch must still re-read the catalog on every activation")
+        let selectedPath = activation[composerReturn.upperBound...]
+        #expect(selectedPath.contains("showReceivedItem(from: message)"))
+        #expect(!selectedPath.contains("reloadCatalog") && !selectedPath.contains("renderComposer"))
+
+        for name in Self.receivedCardPath {
+            let body = try Self.body(of: name, in: source)
+            #expect(!body.contains("reloadCatalog") && !body.contains("loadCatalogIfNeeded") && !body.contains("renderComposer"),
+                    "\(name) is on the received-card path and reaches the composer's catalog")
+        }
+        #expect(try Self.body(of: "showReceivedItem", in: source).contains("FernletMessagesReceivedItem.resolve(messageURL:"),
+                "the received screen is no longer decided by the resolver MessagesReceivedItemTests pins")
+    }
+
+    /// Every function an opened card runs through, from the switch to the drawn labels, plus the
+    /// opening state `viewDidLoad` shows before the activation decides.
+    static let receivedCardPath = [
+        "showOpening", "showReceivedItem", "showReceivedRecipe", "showReceivedWorkout", "showReceived", "showInvalidReceivedItem"
+    ]
+
+    /// The body of `func <name>(` in `source`, or a recorded failure when the function is gone — a
+    /// renamed function must fail the pin, not pass it by reading nothing.
+    static func body(of name: String, in source: String) throws -> String {
+        try #require(HealthKitLifecycleBoundaryTests.functionBody(named: name, in: source),
+                     "func \(name)( is gone from FernletMessagesViewController — update this pin with the rename")
     }
 
     /// Fixture: the import matcher sees the forms that would matter, and the permitted set is a

@@ -21,6 +21,19 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         case workouts
     }
 
+    /// What the panel is showing, which decides what a presentation change or a search keystroke may
+    /// redraw.
+    ///
+    /// `opening` is the state from `viewDidLoad` until `willBecomeActive(with:)` has said whether this
+    /// activation is a card someone opened or the composer. Only `composer` redraws on a transition or a
+    /// keystroke, so a transition Messages delivers before activation cannot put the composer — and its
+    /// catalog read — in front of a received card.
+    private enum PanelState {
+        case opening
+        case composer
+        case received
+    }
+
     /// The composer's colours, spelled out in `UIColor` rather than read from the app's design
     /// tokens: an app extension is a separate process with no access to the host's asset catalog,
     /// and a missing token here would render as black-on-black rather than fail loudly.
@@ -52,25 +65,32 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     private var selectedWorkoutID: UUID?
     private var receivedRecipe: RecipeExchangePacket?
     private var receivedWorkout: FernletMessagesWorkoutInboxRecord?
-    private var isShowingReceivedItem = false
+    private var panelState = PanelState.opening
+    private var hasReadCatalog = false
     private var catalogUnavailableMessage: String?
 
     private var catalogMode: CatalogMode {
         CatalogMode(rawValue: modeControl.selectedSegmentIndex) ?? .recipes
     }
 
+    /// Builds the view and shows the opening state — no catalog read, no composer. Until 2026-09-30
+    /// this read and validated the whole App Group catalog and built a card per recipe (up to 100 in
+    /// the expanded style a received card opens in) before the first frame, for an activation that was
+    /// usually about to show one received card instead; `willBecomeActive(with:)` then read the
+    /// catalog a second time.
     override func viewDidLoad() {
         super.viewDidLoad()
         configureView()
-        reloadCatalog()
-        renderComposer()
+        showOpening()
     }
 
+    /// One decision per activation. A card someone opened is drawn from its own URL and nothing else;
+    /// only the composer reads the catalog, fresh on every activation, so it still picks up whatever the
+    /// app published since the last one.
     override func willBecomeActive(with conversation: MSConversation) {
         super.willBecomeActive(with: conversation)
-        reloadCatalog()
         guard let message = conversation.selectedMessage else {
-            isShowingReceivedItem = false
+            reloadCatalog()
             renderComposer()
             return
         }
@@ -84,12 +104,12 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     override func didTransition(to presentationStyle: MSMessagesAppPresentationStyle) {
         super.didTransition(to: presentationStyle)
-        guard !isShowingReceivedItem else { return }
+        guard panelState == .composer else { return }
         renderComposer()
     }
 
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-        guard presentationStyle == .expanded, !isShowingReceivedItem else { return }
+        guard presentationStyle == .expanded, panelState == .composer else { return }
         renderComposer()
     }
 
@@ -224,7 +244,29 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         ]
     }
 
+    /// The panel before `willBecomeActive(with:)` has decided what it is: the brand mark on the
+    /// panel's own paper, with every composer and received-card control hidden. Never an empty panel,
+    /// and never the composer's catalog read.
+    private func showOpening() {
+        panelState = .opening
+        titleLabel.text = nil
+        statusLabel.text = nil
+        statusLabel.isHidden = true
+        previewLabel.text = nil
+        previewLabel.isHidden = true
+        let controls: [UIView] = [modeControl, searchBar, itemStack, browseButton, insertButton, reviewButton]
+        controls.forEach { $0.isHidden = true }
+    }
+
+    /// The composer's catalog, read the first time the composer draws without an activation having
+    /// read it — after a received card, say. Every activation that opens the composer re-reads it.
+    private func loadCatalogIfNeeded() {
+        guard !hasReadCatalog else { return }
+        reloadCatalog()
+    }
+
     private func reloadCatalog() {
+        hasReadCatalog = true
         guard let directory = FernletMessagesCatalogFileStore.productionDirectory() else {
             catalog = nil
             catalogUnavailableMessage = FernletMessagesCopy.sharedStorageUnavailable
@@ -240,7 +282,8 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     }
 
     private func renderComposer() {
-        isShowingReceivedItem = false
+        loadCatalogIfNeeded()
+        panelState = .composer
         receivedRecipe = nil
         receivedWorkout = nil
         configureComposerVisibility()
@@ -640,25 +683,17 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         return layout
     }
 
+    /// A thin switch: which screen the card gets is `FernletMessagesReceivedItem.resolve`'s decision,
+    /// which `MessagesReceivedItemTests` pins, and every outcome draws a title and a status line.
     private func showReceivedItem(from message: MSMessage) {
-        guard let url = message.url else {
-            showInvalidReceivedItem()
-            return
-        }
-        do {
-            let envelope = try ExchangeMessageEnvelope.decode(messageURL: url)
-            switch try envelope.validatedPayload() {
-            case .recipe(let packet): try showReceivedRecipe(packet)
-            case .workoutPlan(let packet): try showReceivedWorkout(packet, dayKey: envelope.scheduledStartDayKey)
-            }
-        } catch {
-            showInvalidReceivedItem()
+        switch FernletMessagesReceivedItem.resolve(messageURL: message.url) {
+        case .recipe(let packet, let card): showReceivedRecipe(packet, card: card)
+        case .workoutPlan(let record, let card): showReceivedWorkout(record, card: card)
+        case .invalid: showInvalidReceivedItem()
         }
     }
 
-    private func showReceivedRecipe(_ packet: RecipeExchangePacket) throws {
-        let card = try ExchangeCardMetadata.recipe(from: packet)
-        isShowingReceivedItem = true
+    private func showReceivedRecipe(_ packet: RecipeExchangePacket, card: ExchangeCardMetadata) {
         receivedRecipe = packet
         receivedWorkout = nil
         let status = packet.includesNotes
@@ -668,24 +703,22 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
                      preview: prependingParts(of: packet, to: notePreviewOrSummary(for: packet)))
     }
 
-    private func showReceivedWorkout(_ packet: WorkoutPlanExchangePacket, dayKey: String?) throws {
-        let record = try FernletMessagesWorkoutInboxRecord(packet: packet, suggestedStartDayKey: dayKey)
-        let card = try ExchangeCardMetadata.workoutPlan(from: packet, scheduledStartDayKey: dayKey)
-        let schedule = dayKey.map { FernletMessagesCopy.scheduled(dayKey: $0) }
+    private func showReceivedWorkout(_ record: FernletMessagesWorkoutInboxRecord, card: ExchangeCardMetadata) {
+        let schedule = record.suggestedStartDayKey.map { FernletMessagesCopy.scheduled(dayKey: $0) }
             ?? FernletMessagesCopy.chooseDateInFernlet
         let status = card.senderLabel.map { FernletMessagesCopy.receivedWorkoutPlan(from: $0) }
             ?? FernletMessagesCopy.receivedWorkoutPlan
-        isShowingReceivedItem = true
         receivedRecipe = nil
         receivedWorkout = record
         showReceived(
             title: card.title,
             status: status,
-            preview: "\(schedule) · \(FernletMessagesCopy.workoutCount(packet.plan.sessionCount))"
+            preview: "\(schedule) · \(FernletMessagesCopy.workoutCount(record.packet.plan.sessionCount))"
         )
     }
 
     private func showReceived(title: String, status: String, preview: String) {
+        panelState = .received
         titleLabel.text = title
         statusLabel.text = status
         statusLabel.isHidden = false
@@ -700,7 +733,6 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     }
 
     private func showInvalidReceivedItem() {
-        isShowingReceivedItem = true
         receivedRecipe = nil
         receivedWorkout = nil
         showReceived(title: FernletMessagesCopy.invalidTitle,

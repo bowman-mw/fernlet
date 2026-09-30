@@ -123,6 +123,18 @@ is still unmeasured on hardware — the first item of `Docs/MessagesExtensionRel
 and raising it needs that measurement, never the file limits (64 KiB recipes, the coach-plan paste
 limit for plans).
 
+### Opening a card
+
+``FernletMessagesReceivedItem`` is what the extension shows for a card someone opened, decided from
+the card's URL alone (2026-09-30): ``FernletMessagesReceivedItem/recipe(_:card:)``,
+``FernletMessagesReceivedItem/workoutPlan(_:card:)`` — already the review-inbox record it will be
+handed on as, so a plan card that opens can always be handed to Fernlet — or
+``FernletMessagesReceivedItem/invalid``. It is total and never throws, so no input, `nil` included,
+yields an empty screen, and it reads no file: opening a card needs nothing from the App Group catalog,
+which is the composer's. It lives here rather than in the extension's view controller so
+`MessagesReceivedItemTests` can drive it with the sender's own encoder; the extension's
+`showReceivedItem` is a thin switch over it.
+
 ### The App Group documents
 
 Three coordinated files in the `group.MBO.Fernlet` container, all written atomically with
@@ -190,6 +202,7 @@ coordination, not from an actor — the other writer is a different process.
 - ``ExchangeCardMetadata``
 - ``ExchangePacketKind``
 - ``ExchangeLimits``
+- ``FernletMessagesReceivedItem``
 
 ### The App Group catalog
 
