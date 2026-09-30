@@ -14,7 +14,8 @@ import FernletDomainModel
 /// - Important: there is no longer ONE key behind every store. Security-hardening Phase 5 split
 ///   the media key in two — the friend photo wall keeps the original backup-restorable row, the
 ///   user's OWN photos (meal / recipe / progress) seal under a separate row that is on its way to
-///   being device-bound. Which key a provider vends is a property of the provider instance
+///   being device-bound, and session photos awaiting the person's choice seal under a third,
+///   born-device-bound row. Which key a provider vends is a property of the provider instance
 ///   (``KeychainPrivateMediaKeyProvider/Role``), not of this protocol, so stores stay
 ///   key-agnostic.
 public protocol PrivateMediaKeyProviding {
@@ -40,7 +41,7 @@ extension PrivateMediaKeyProviding {
 /// SAME keychain row (fixed service/account), so stores sharing a role share a key even when each
 /// store constructs its own provider instance.
 ///
-/// ## Two keys, two custody classes (security-hardening Phase 5, Docs/Verifiability.md §6.3)
+/// ## Three keys, two custody classes (security-hardening Phase 5, Docs/Verifiability.md §6.3)
 ///
 /// - ``Role/friendWall`` — account `com.fernlet.private-media.contentKey`, the ORIGINAL row,
 ///   unchanged: `kSecAttrAccessibleAfterFirstUnlock`, *not* `…ThisDeviceOnly`, non-sync, i.e.
@@ -69,13 +70,21 @@ extension PrivateMediaKeyProviding {
 /// `kSecAttrAccessible` attribute, never from a persisted "we bound it" flag, because such a flag
 /// rides the device backup onto a phone the bound row never reached.
 ///
+/// - ``Role/pendingSessionPhotos`` — account `com.fernlet.private-media.pendingContentKey`, the row
+///   behind ``PendingSessionPhotoStore`` (session photos held until the person chooses). Minted
+///   `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, non-sync, from the first mint: the corpus
+///   it seals is excluded from the device backup and never escrowed, so nothing about it is meant
+///   to reach another phone.
+///
 /// ## Delete-all
 ///
-/// NEITHER row is deleted by "delete everything" (owner decision, Phase 5). The friend row must
-/// survive because the wall it protects deliberately survives; the own row is kept for the same
-/// stale-cache reason that made ``deleteKeychainRowForWipe()`` callerless — the own STORES are
-/// emptied instead (`MealPhotoStore.deleteAll` / `ProgressPhotoStore.deleteAll`), and a key whose
-/// stores are empty protects nothing.
+/// NO row is deleted by "delete everything" (owner decision, Phase 5; extended to the pending row
+/// on 2026-09-30). The friend row must survive because the wall it protects deliberately survives;
+/// the own and pending rows are kept for the same stale-cache reason that made
+/// ``deleteKeychainRowForWipe()`` callerless — their STORES are emptied instead
+/// (`MealPhotoStore.deleteAll` / `ProgressPhotoStore.deleteAll` /
+/// ``PendingSessionPhotoStore/purgeAll()``), and a key whose stores are empty protects nothing.
+/// The duress silent wipe is the exception for all of them: it sweeps the whole service.
 ///
 /// Concurrency: NOT `Sendable` — `cachedKey` is unsynchronized mutable state, safe only because
 /// each instance stays inside one isolation domain (in practice, the main actor of the store
@@ -95,21 +104,33 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
         /// The user's own photos — meal, recipe, and gym-progress (body) pictures plus the sealed
         /// progress index. Separate row so it can be device-bound without touching the wall.
         case ownPhotos
+        /// Session photos nobody has chosen yet (``PendingSessionPhotoStore``): held from capture
+        /// or receipt until the person answers the review, never on the wall before that. Born
+        /// device-bound (``defaultDeviceBinding(for:)``): nothing pending is ever meant to leave
+        /// this phone, so there is no escrow route to protect and no restore to survive.
+        case pendingSessionPhotos
 
-        /// The `kSecAttrAccount` this role's key lives under (both share one service).
+        /// The `kSecAttrAccount` this role's key lives under (all roles share one service).
         var account: String {
             switch self {
             case .friendWall: return KeychainPrivateMediaKeyProvider.account
             case .ownPhotos:  return KeychainPrivateMediaKeyProvider.ownAccount
+            case .pendingSessionPhotos: return KeychainPrivateMediaKeyProvider.pendingAccount
             }
         }
     }
 
+    /// The one keychain service every media-key row lives under — also the service the duress
+    /// silent wipe sweeps whole (`FernletLockService.privateMediaKeychainService`), which is what
+    /// crypto-erases every role at once. A role on any other service would survive that wipe.
     static let service = "com.fernlet.private-media"
     /// Friend-wall (original, backup-restorable) key row.
     static let account = "com.fernlet.private-media.contentKey"
     /// Own-photos key row (Phase 5 split).
     static let ownAccount = "com.fernlet.private-media.ownContentKey"
+    /// Pending session-photo key row (2026-09-30 session-photo review). Frozen token: renaming it
+    /// strands every held photo behind a row nothing reads.
+    static let pendingAccount = "com.fernlet.private-media.pendingContentKey"
 
     /// Mint-time binding policy per role — what class a row is created under when it does not yet
     /// exist. **Not** the authority on an existing row's custody: see ``OwnPhotoKeyBinder``.
@@ -128,10 +149,17 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
     ///   which passes `deviceBound: true` through ``init(role:deviceBound:mintsIfAbsent:)`` so a
     ///   *fresh* row on an eligible device is born bound rather than minted loose and immediately
     ///   updated.
+    ///
+    /// - `.pendingSessionPhotos` is `true`, and unlike `.ownPhotos` that needs no gate: the row
+    ///   guards photos that exist only until the person chooses, which are excluded from the device
+    ///   backup and never escrowed, so binding strands nothing that was ever meant to travel. It is
+    ///   defence in depth behind the backup exclusion — a lost exclusion flag still yields nothing
+    ///   off-device. Pinned by `KeyCustodyBoundaryTests.pendingSessionPhotoKeyIsDeviceBoundAtMint`.
     public static func defaultDeviceBinding(for role: Role) -> Bool {
         switch role {
         case .friendWall: return false
         case .ownPhotos:  return false
+        case .pendingSessionPhotos: return true
         }
     }
 
@@ -232,10 +260,11 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
     /// from the in-memory key until relaunch, then `mediaKey()` minted a fresh key and every retained
     /// photo decrypted to garbage. See Docs/PrivacyWipeCoverage.md.
     ///
-    /// The Phase-5 own-photos row (``ownAccount``) is deliberately NOT deleted by the wipe either,
-    /// and has no equivalent method: its stores ARE emptied by delete-all, so the key protects
-    /// nothing afterwards, and deleting it would only re-introduce the same stale-cache hazard for
-    /// anything captured between the wipe and relaunch.
+    /// The Phase-5 own-photos row (``ownAccount``) and the pending session-photo row
+    /// (``pendingAccount``) are deliberately NOT deleted by the wipe either, and have no equivalent
+    /// method: their stores ARE emptied by delete-all, so the keys protect nothing afterwards, and
+    /// deleting them would only re-introduce the same stale-cache hazard for anything captured
+    /// between the wipe and relaunch.
     ///
     /// Kept as API only for a future caller that first empties the wall too. A key whose stores are
     /// all empty protects nothing, so leaving the row in place leaks nothing.

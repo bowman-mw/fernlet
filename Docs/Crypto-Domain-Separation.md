@@ -159,6 +159,9 @@ on the reasoning.
 | `privateFriendPhotoImageV2` | `fernlet.private-media.friend-photo.image.aead.v2` | `PrivateMediaStore`, `MediaAtRestFormatMigration` |
 | `privateFriendPhotoThumbnailV2` | `fernlet.private-media.friend-photo.thumbnail.aead.v2` | `PrivateMediaStore`, `MediaAtRestFormatMigration` |
 | `privateFriendPhotoIndexV2` | `fernlet.private-media.friend-photo.index.aead.v2` | `PrivateMediaStore`, `MediaAtRestFormatMigration` |
+| `privatePendingSessionPhotoImageV1` | `fernlet.private-media.pending-session-photo.image.aead.v1` | `PendingSessionPhotoStore` (2026-09-30; its own domain so a pending file can never open as a wall photo, or the reverse) |
+| `privatePendingSessionPhotoThumbnailV1` | `fernlet.private-media.pending-session-photo.thumbnail.aead.v1` | `PendingSessionPhotoStore` |
+| `privatePendingSessionPhotoIndexV1` | `fernlet.private-media.pending-session-photo.index.aead.v1` | `PendingSessionPhotoStore` |
 | `mealPhotoV2` | `fernlet.private-media.meal-photo.aead.v2` | `MealPhotoStore`, `OwnPhotoBackupCoordinator`, `OwnPhotoKeyMigration`, `MediaAtRestFormatMigration` |
 | `recipePhotoV2` | `fernlet.private-media.recipe-photo.aead.v2` | `FernletStore`, `OwnPhotoBackupCoordinator`, `OwnPhotoKeyMigration`, `MediaAtRestFormatMigration` |
 | `progressPhotoV2` | `fernlet.private-media.progress-photo.aead.v2` | `OwnPhotoKeyMigration`, `ProgressPhotoStore`, `MediaAtRestFormatMigration` |

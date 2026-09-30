@@ -366,6 +366,28 @@ public nonisolated enum FernletCryptoPurpose {
         public static let privateFriendPhotoImageV2 = CryptographicPurpose("fernlet.private-media.friend-photo.image.aead.v2")
         public static let privateFriendPhotoThumbnailV2 = CryptographicPurpose("fernlet.private-media.friend-photo.thumbnail.aead.v2")
         public static let privateFriendPhotoIndexV2 = CryptographicPurpose("fernlet.private-media.friend-photo.index.aead.v2")
+        /// **Written since the 2026-09-30 session-photo review round.** A session photo's
+        /// full-size bytes while it waits in `PendingSessionPhotoStore` — held from capture or
+        /// receipt until the person chooses, never on the friend wall until then — sealed under the
+        /// device-bound pending media key.
+        ///
+        /// Its own domain rather than a reuse of ``privateFriendPhotoImageV2``: a pending file moved
+        /// into the wall's directory must not open as a wall photo (and a wall file must not open as
+        /// a pending one), so a photo can enter the wall only through the wall's own write path. The
+        /// three pending spellings diverge from the wall's at `pending-session-photo` vs
+        /// `friend-photo`, and from each other at `image` / `thumbnail` / `index`; none is a prefix
+        /// of another.
+        public static let privatePendingSessionPhotoImageV1 = CryptographicPurpose("fernlet.private-media.pending-session-photo.image.aead.v1")
+        /// **Written since the 2026-09-30 session-photo review round.** A held session photo's
+        /// thumbnail (the review grid's tile), same corpus and key as
+        /// ``privatePendingSessionPhotoImageV1``; separate so a thumbnail cannot stand in for the
+        /// full-size photo or vice versa.
+        public static let privatePendingSessionPhotoThumbnailV1 = CryptographicPurpose("fernlet.private-media.pending-session-photo.thumbnail.aead.v1")
+        /// **Written since the 2026-09-30 session-photo review round.** The pending corpus's sealed
+        /// index (`PendingSessionPhotoIndex.sealed`): held photos' sender names, fingerprints and
+        /// times, plus the answered tombstones that refuse a re-delivery. The durable truth the
+        /// review is rebuilt from after a process kill.
+        public static let privatePendingSessionPhotoIndexV1 = CryptographicPurpose("fernlet.private-media.pending-session-photo.index.aead.v1")
         public static let mealPhotoV2 = CryptographicPurpose("fernlet.private-media.meal-photo.aead.v2")
         public static let recipePhotoV2 = CryptographicPurpose("fernlet.private-media.recipe-photo.aead.v2")
         public static let progressPhotoV2 = CryptographicPurpose("fernlet.private-media.progress-photo.aead.v2")

@@ -189,6 +189,11 @@ protected by keys that never leave the device:
   the row was still backup-restorable already carries the old key, so the binding protects backups
   taken *after* the flip, and a user who takes neither route keeps the old, backup-restorable
   custody rather than being bound without a recovery path.
+- **Born bound (2026-09-30):** the pending session-photo key (`…pendingContentKey`), which seals
+  friend-session photos only until the person chooses them, is minted
+  `AfterFirstUnlockThisDeviceOnly` from its first mint, and its corpus directory is excluded from
+  the device backup (§6 item 3's update). Pinned by
+  `KeyCustodyBoundaryTests.pendingSessionPhotoKeyIsDeviceBoundAtMint`.
 
 - **Destroyed on the duress WIPE (Phase 7):** every key listed above that this device holds for the
   sealed corpus — the salt/verifier pair, the scrypt-wrapped and enclave-wrapped content keys, **the
@@ -196,7 +201,7 @@ protected by keys that never leave the device:
   coercer walk around the wipe with Face ID), the duress and recovery rows, and the journal /
   Worry Box device fallback keys, **and the private-media keys under `com.fernlet.private-media`**
   (the own-photo key that seals progress/body photos, meal and recipe photos and the sealed progress
-  index, plus the friend-wall key) — is deleted synchronously when the duress PIN is entered on a
+  index, the pending session-photo key, plus the friend-wall key) — is deleted synchronously when the duress PIN is entered on a
   device configured for `DuressMode.silentWipe`. The media sweep is a Phase-7 review fix and it is
   load-bearing to the sentence: those photos are sealed under a key the app lock never holds and the
   ordinary delete funnel deliberately keeps, so before it the "no surviving key" claim was false for
@@ -521,6 +526,18 @@ shipped; the rest are still open.
    `Tests/FernletTests/OwnPhotoKeyBindingTests` (including "no own photo becomes unreadable across the
    flip", end to end on the real keychain rows) and by `KeyCustodyBoundaryTests`
    (`ownPhotoKeyBindsToThisDeviceOnceItsGateIsSatisfied`). Item 3 is now **closed**.
+   **UPDATE (2026-09-30): a third media key, born bound.** Session photos nobody has chosen yet
+   (the friend-session review, where the owner ruled that nothing is saved until the person chooses)
+   are held in a separate sealed corpus, `PendingSessionPhotoStore`, under a third row in the same
+   service: `…pendingContentKey`, minted `AfterFirstUnlockThisDeviceOnly`, non-synchronizable, with
+   **no gate** — unlike the own-photo row there is nothing to escrow and nothing meant to survive
+   onto another phone, so binding it strands nothing. Its directory is also excluded from the device
+   backup; the key binding is defence in depth behind that flag. It is not a decision reversed: the
+   friend wall's backup-restorable row is unchanged, and a photo reaches the wall only by being
+   re-sealed under the wall key when the person keeps it. Pinned by `KeyCustodyBoundaryTests`
+   (`pendingSessionPhotoKeyIsDeviceBoundAtMint`,
+   `pendingSessionPhotoKeyLivesUnderTheServiceTheDuressWipeSweeps`) and
+   `Tests/FernletTests/PendingSessionPhotoStoreTests`.
 4. **Sealed-backup escrow: do NOT device-bind it** — cross-device restore is its entire purpose.
    **DONE (2026-08-10): the bounded hardening shipped as record format v2.** Every backup generation
    mints a 32-byte CSPRNG salt, stamped on *every* chunk of that generation (not just the head — the

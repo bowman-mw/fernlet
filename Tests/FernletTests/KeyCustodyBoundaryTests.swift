@@ -237,6 +237,46 @@ struct KeyCustodyBoundaryTests {
         #expect(after == before, "binding rotated the own-photo key instead of re-binding the row")
     }
 
+    // MARK: The pending session-photo key (2026-09-30): the row behind photos nobody has chosen
+    // yet is BORN device-bound — `AfterFirstUnlockThisDeviceOnly`, non-synchronizable — with no gate,
+    // because nothing pending is ever escrowed or meant to survive onto another phone. A third,
+    // independent key: a pending box must never open under the wall's or the own-photo key.
+    //
+    // The row is process-global in the simulator (like the wall's), so this never deletes it: on a
+    // fresh simulator it is minted here; on a reused one it was minted by this same code.
+    @MainActor
+    @Test func pendingSessionPhotoKeyIsDeviceBoundAtMint() {
+        #expect(KeychainPrivateMediaKeyProvider.defaultDeviceBinding(for: .pendingSessionPhotos),
+                "the pending session-photo key must be minted device-bound")
+        let pending = KeychainPrivateMediaKeyProvider(role: .pendingSessionPhotos)
+        #expect(pending.deviceBound)
+        let pendingBytes = pending.mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+        #expect(pendingBytes != nil, "pending session-photo key could not be minted/read")
+        let wallBytes = KeychainPrivateMediaKeyProvider(role: .friendWall).mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+        let ownBytes = KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+        #expect(pendingBytes != wallBytes, "the pending key is the friend-wall key under another name")
+        #expect(pendingBytes != ownBytes, "the pending key is the own-photo key under another name")
+
+        let attrs = rowAttributes(account: "com.fernlet.private-media.pendingContentKey",
+                                  service: "com.fernlet.private-media")
+        #expect(attrs?.accessible == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String,
+                "the pending session-photo key must be AfterFirstUnlockThisDeviceOnly (never backup-restorable)")
+        #expect(attrs?.synchronizable == false, "the pending session-photo key must never reach iCloud Keychain")
+    }
+
+    // MARK: The duress silent wipe crypto-erases pending photos by sweeping the WHOLE media service.
+    // Pinned against the lock's own constant (FernletLock cannot import PrivateMediaStore, so the
+    // service is restated there by value): the row the provider really writes must be found under
+    // exactly the service the wipe sweeps. A role moved to another service would survive the wipe.
+    @MainActor
+    @Test func pendingSessionPhotoKeyLivesUnderTheServiceTheDuressWipeSweeps() {
+        #expect(KeychainPrivateMediaKeyProvider(role: .pendingSessionPhotos).mediaKey() != nil)
+        let attrs = rowAttributes(account: "com.fernlet.private-media.pendingContentKey",
+                                  service: FernletLockService.privateMediaKeychainService)
+        #expect(attrs != nil,
+                "the pending session-photo row is not under \(FernletLockService.privateMediaKeychainService), the service the duress wipe sweeps")
+    }
+
     // MARK: Proves the proximity identity private keys provision as ThisDeviceOnly and that a
     // freshly minted escrow key is WITHHELD from sync (WS-2: ThisDeviceOnly until a later launch
     // promotes it) — sanctioned exception 2 of 2 is the *promotion*, pinned by the grep-wall.
