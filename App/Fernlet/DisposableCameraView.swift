@@ -611,9 +611,6 @@ struct DisposableCameraView: View {
     @State private var reviewUnreadableCount = 0
     /// What the Develop review is busy with after the answer (the Photos export).
     @State private var reviewWorking: FriendPhotoReviewWorkingMessage?
-    /// Where the Develop answer waits for a failed Photos export's alert to be closed before it ends
-    /// the session and closes the review (fix round 1, U2-C-U2-R2 / U2-L-U2-R2).
-    @State private var saveFailureAcknowledgement = PhotoSaveFailureAcknowledgement()
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     @State private var previousWindTranslation: CGFloat = 0
     // Orientation is @State (not a raw per-frame `size.width > size.height`) so a transient
@@ -647,6 +644,16 @@ struct DisposableCameraView: View {
     /// The app-level session-end review (session photos U3): told when the Develop review is up, and
     /// around this view's answer.
     private var reviewCoordinator: SessionPhotoReviewCoordinator { store.sessionPhotoReviewCoordinator }
+    /// Where the Develop answer waits for a failed Photos export's alert to be closed before it ends
+    /// the session and closes the review (fix round 1, U2-C-U2-R2 / U2-L-U2-R2) — held by the
+    /// store-owned coordinator and open only while ``reviewPresented`` feeds its Develop flag, NOT in
+    /// this view's `@State` (fix round 1 of U3, U3-C-U3-R1): a termination tears this view down
+    /// under a running answer, and a failure after that (or after a swipe-down) must not be waited
+    /// on forever — that wait never lowered the answer leg, which kept discovery blocked and every
+    /// later session-end review undismissable.
+    private var saveFailureAcknowledgement: PhotoSaveFailureAcknowledgement {
+        reviewCoordinator.developSaveFailureAcknowledgement
+    }
     private let portraitWindThreshold: Double = 120
     private let landscapeWindThreshold: Double = 720
 
@@ -1464,7 +1471,8 @@ struct DisposableCameraView: View {
     /// the review showed (``developReviewIDs``), wherever they are listed now. A failed export's
     /// alert is shown inside the review and closed by the person BEFORE the session is left and the
     /// review closes (design §4.6; fix round 1, U2-C-U2-R2 / U2-L-U2-R2): the alert hangs off the
-    /// sheet, so closing it first took the alert down with it.
+    /// sheet, so closing it first took the alert down with it. If the review already went (a
+    /// termination, a swipe-down) the wait returns at once, so the answer leg always falls.
     private func keepSelectedSessionPhotos() async {
         // The discovery block's answer leg (I21), raised before the manager is touched and lowered
         // only after this answer's leave has returned.

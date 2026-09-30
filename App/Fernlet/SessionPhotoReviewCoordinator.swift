@@ -9,7 +9,7 @@
 // review, above whatever tab or sheet the person is on, driven by a pure gate.
 //
 // Three pieces:
-//   * `SessionPhotoReviewGate` — a pure function from eleven facts to present / stay up / hide
+//   * `SessionPhotoReviewGate` — a pure function from twelve facts to present / stay up / hide
 //     without answering / wait, exhaustively tested like `ProximityRunPolicy`.
 //   * `SessionPhotoReviewCoordinator` — owned by `FernletStore`; snapshots the batch at present,
 //     draws it through a `SessionPhotoReviewPresenting` (the overlay window in the app, a recorder in
@@ -30,15 +30,16 @@ import ProximityKit
 /// When the session-end photo review may draw — the pure decision behind
 /// ``SessionPhotoReviewCoordinator`` (design §4.5, invariant I9).
 ///
-/// A value, not a coordinator: eleven facts in, one ``Verdict`` out, no clock, no store, no
-/// manager. `SessionPhotoReviewGateTests` enumerates the whole product (ten Booleans × a zero and a
-/// non-zero count).
+/// A value, not a coordinator: twelve facts in, one ``Verdict`` out, no clock, no store, no
+/// manager. `SessionPhotoReviewGateTests` enumerates the whole product (eleven Booleans × a zero and
+/// a non-zero count).
 ///
 /// - ``Verdict/present``: photos are outstanding, the session is over, the held photos can be drawn
 ///   and answered (the manager's decrypt seam is open, its pending index loaded and reconciled), the
 ///   scene is active, the launch has finished, and nothing the review must yield to is up — no
 ///   duress session, no delete-all, no crisis surface (First Aid, the stress explainer; owner
-///   question Q8), no camera Develop sheet — and the person has not said "Not now" this activation.
+///   question Q8), no camera Develop sheet, no answer still in flight — and the person has not said
+///   "Not now" this activation.
 /// - ``Verdict/hideWithoutAnswer``: showing, and a duress session began, a delete-all began or a
 ///   crisis surface came up underneath. Nothing is answered; it presents again once that clears.
 /// - ``Verdict/stayUp``: showing otherwise. Backgrounding does NOT hide it: the review sheet's
@@ -78,6 +79,12 @@ nonisolated enum SessionPhotoReviewGate {
         let deferredByUser: Bool
         /// The review is on screen now.
         let isShowing: Bool
+        /// An answer from either surface is still running (the overlay's own, taken down under it
+        /// by a step-aside, or the camera's Develop answer). The review waits for it: presented
+        /// under it, that answer's own hide would take the new review down and its actions would
+        /// refuse. It presents once the answer ends (``SessionPhotoReviewCoordinator/endAnswer()``
+        /// asks again). Fix round 1, U3-C-U3-R1.
+        let answerInFlight: Bool
     }
 
     /// What the presenter must do.
@@ -121,7 +128,7 @@ nonisolated enum SessionPhotoReviewGate {
     static func mayPresent(_ input: Input) -> Bool {
         guard input.outstandingPhotoCount > 0, !input.sessionIsLive, input.heldPhotosCanBeShown else { return false }
         guard input.sceneIsActive, input.launchComplete, !mustStepAside(input) else { return false }
-        return !input.cameraDevelopReviewUp && !input.deferredByUser
+        return !input.cameraDevelopReviewUp && !input.deferredByUser && !input.answerInFlight
     }
 
     /// Whether `sheet` is a crisis surface the review must never cover (Q8's default): First Aid
@@ -178,9 +185,10 @@ extension FernletStore: SessionPhotoReviewHost {}
 /// **When it draws.** ``SessionPhotoReviewGate`` decides, over the facts ``gateInput`` samples:
 /// the manager's (outstanding photos, liveness, the decrypt seam, the camera's mount), the host's
 /// (duress, delete-all) and the ones ContentView feeds (``scenePhase``, ``launchComplete``,
-/// ``crisisSurfaceUp``) and the camera reports (``cameraDevelopReviewUp``). Every edge schedules a
-/// settled evaluation (``scheduleEvaluation()``, 500 ms, cancel-and-replace) so a burst of
-/// promotions and the foreground re-entry pass land in one snapshot.
+/// ``crisisSurfaceUp``) and the camera reports (``cameraDevelopReviewUp``), and its own
+/// ``answerInFlight`` (it never presents under a running answer). Every edge schedules a settled
+/// evaluation (``scheduleEvaluation()``, 500 ms, cancel-and-replace) so a burst of promotions and
+/// the foreground re-entry pass land in one snapshot.
 ///
 /// **Invariants it keeps.**
 /// - I2: the ONLY function here that reaches the Photos library is
@@ -193,6 +201,10 @@ extension FernletStore: SessionPhotoReviewHost {}
 ///   flight, so the run policy never sees the block fall over a held mesh.
 /// - I25: an answer that leaves photos held keeps the review up with the inline failure; it never
 ///   hides and re-presents on its own.
+/// - No answer is ever stranded (fix round 1, U3-C-U3-R1): the wait for a failed export's alert
+///   runs only while the review that shows it is open (``PhotoSaveFailureAcknowledgement``), for
+///   the overlay and for the camera's Develop review alike, so ``answerInFlight`` always falls; and
+///   only the overlay's own answer refuses its actions.
 ///
 /// **Leaving at present.** A review that presents while an ended mesh is still held (door 3's
 /// give-up) leaves it at once (``leaveEndedMeshIfHeld()``), so the Friends tab swaps to the album
@@ -229,8 +241,18 @@ final class SessionPhotoReviewCoordinator {
     /// Whether the camera's Develop review is up — written by the camera from its presentation
     /// flag and cleared in BOTH the camera's and the review sheet's `.onDisappear`. The gate reads it
     /// ANDed with `isInSession` (``gateInput``), so a missed clear cannot outlive the camera (I20).
+    /// It also opens and closes ``developSaveFailureAcknowledgement``, so the Develop answer's wait
+    /// for a failed export's alert ends with the review however it goes.
     var cameraDevelopReviewUp = false {
-        didSet { if cameraDevelopReviewUp != oldValue { scheduleEvaluation() } }
+        didSet {
+            guard cameraDevelopReviewUp != oldValue else { return }
+            if cameraDevelopReviewUp {
+                developSaveFailureAcknowledgement.reviewDidOpen()
+            } else {
+                developSaveFailureAcknowledgement.reviewDidClose()
+            }
+            scheduleEvaluation()
+        }
     }
 
     // MARK: The snapshot the screen renders
@@ -263,8 +285,13 @@ final class SessionPhotoReviewCoordinator {
     // MARK: The discovery block's legs
 
     /// Answers in flight from either surface (the overlay's own, the camera's Develop through
-    /// ``beginAnswer()`` / ``endAnswer()``).
+    /// ``beginAnswer()`` / ``endAnswer()``) — the block's answer leg and the gate's wait.
     private(set) var answersInFlight = 0
+    /// The overlay's OWN Keep or Delete all is running — the only thing that refuses its three
+    /// actions. The camera's Develop answer counts toward ``answerInFlight`` but never disables this
+    /// review, so a leg that outlived its surface can never leave a review nobody can dismiss (fix
+    /// round 1, U3-C-U3-R1).
+    private(set) var ownAnswerInFlight = false
     /// A leave this coordinator started is running.
     private(set) var leaveInFlight = false
     /// "Not now" this activation.
@@ -284,8 +311,14 @@ final class SessionPhotoReviewCoordinator {
     /// Leaves an ended mesh (`leaveSessionAfterNotifyingPeers()` in the app; a controllable seam in
     /// tests, so the block can be observed while the leave runs).
     @ObservationIgnored private let leaveEndedMesh: @MainActor (MeshNetworkManager) async -> Void
-    /// Where an answer waits for a failed export's alert to be closed.
-    @ObservationIgnored let saveFailureAcknowledgement = PhotoSaveFailureAcknowledgement()
+    /// Where the overlay's answer waits for a failed export's alert to be closed — open while the
+    /// review is on screen (``present()`` opens it, both hides close it).
+    @ObservationIgnored let saveFailureAcknowledgement = PhotoSaveFailureAcknowledgement(host: "overlay")
+    /// Where the camera's Develop answer waits for the same alert — open while
+    /// ``cameraDevelopReviewUp``. Held here, on the store-owned coordinator, rather than in the
+    /// camera's `@State`: a termination tears the camera down under a running answer, and that
+    /// answer must still reach the object whose close resumes it (fix round 1, U3-C-U3-R1).
+    @ObservationIgnored let developSaveFailureAcknowledgement = PhotoSaveFailureAcknowledgement(host: "develop")
     /// A "Not now" whose deferral ends at the next activation (the scene went to the background).
     @ObservationIgnored private var deferralEndsOnActivation = false
     /// The settle before an evaluation.
@@ -359,7 +392,8 @@ final class SessionPhotoReviewCoordinator {
             crisisSurfaceUp: crisisSurfaceUp,
             cameraDevelopReviewUp: cameraDevelopReviewUp && manager.isInSession,
             deferredByUser: deferredByUser,
-            isShowing: isShowing
+            isShowing: isShowing,
+            answerInFlight: answerInFlight
         )
     }
 
@@ -468,18 +502,22 @@ final class SessionPhotoReviewCoordinator {
             return
         }
         isShowing = true
+        saveFailureAcknowledgement.reviewDidOpen()
         FernletAuditLog.log("sessionPhotoReview.presented", context: ["photos": String(shown.count)])
         leaveEndedMeshIfHeld()
     }
 
     /// Takes the review down answering nothing (a duress session, a delete-all, a crisis surface).
     /// The batch, photos and candidates, stays in the manager; the review presents again once the
-    /// cause clears. A leave already running keeps running (and keeps the block up).
+    /// cause clears — and once an answer still running under it has ended (the gate's
+    /// `answerInFlight` leg). A leave already running keeps running (and keeps the block up). An
+    /// answer waiting on a failed export's alert is released, and one whose export fails later
+    /// does not wait: the alert went with the review.
     private func hideWithoutAnswer() {
         presenter.hide()
         isShowing = false
         clearSnapshot()
-        saveFailureAcknowledgement.acknowledge()
+        saveFailureAcknowledgement.reviewDidClose()
         FernletAuditLog.log("sessionPhotoReview.hiddenWithoutAnswer")
     }
 
@@ -489,6 +527,7 @@ final class SessionPhotoReviewCoordinator {
         presenter.hide()
         isShowing = false
         clearSnapshot()
+        saveFailureAcknowledgement.reviewDidClose()
         scheduleEvaluation()
     }
 
@@ -552,8 +591,9 @@ final class SessionPhotoReviewCoordinator {
 
     /// "Not now": waits for a running leave, then hides answering nothing. The review comes back
     /// at the next background-to-active edge or a tap on the Friends card; nothing is written.
+    /// Refused only while this review's own answer runs, never for another surface's.
     func notNow() async {
-        guard isShowing, !answerInFlight else { return }
+        guard isShowing, !ownAnswerInFlight else { return }
         await awaitLeave()
         guard isShowing else { return }
         deferredByUser = true
@@ -566,24 +606,28 @@ final class SessionPhotoReviewCoordinator {
     /// the friend half, exports what the answer reports kept if the toggle is on, waits for the
     /// leave, and hides — or stays up with the inline failure when photos were left held.
     func keepSelected() async {
-        guard isShowing, let batchID, !answerInFlight else { return }
+        guard isShowing, let batchID, !ownAnswerInFlight else { return }
+        ownAnswerInFlight = true
         beginAnswer()
         let answer = manager.finishReviewedPhotos(Set(photos.map(\.id)), keeping: selectedIDs, in: batchID)
         answerFriendHalf(of: batchID)
         await exportKeptPhotosIfAsked(answer)
         if photoSaveError != nil { await saveFailureAcknowledgement.wait() }
         await finish(after: answer)
+        ownAnswerInFlight = false
         endAnswer()
     }
 
     /// Delete all (after the sheet's own confirmation): deletes every shown photo and answers the
     /// friend half. Needs only the pending index, so it works while the wall cannot be read.
     func discardAll() async {
-        guard isShowing, let batchID, !answerInFlight else { return }
+        guard isShowing, let batchID, !ownAnswerInFlight else { return }
+        ownAnswerInFlight = true
         beginAnswer()
         let answer = manager.finishReviewedPhotos(Set(photos.map(\.id)), keeping: [], in: batchID)
         answerFriendHalf(of: batchID)
         await finish(after: answer)
+        ownAnswerInFlight = false
         endAnswer()
     }
 

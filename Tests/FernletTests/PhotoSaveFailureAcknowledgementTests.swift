@@ -14,9 +14,17 @@
 // error each time a review presents. The behavioural half drives the acknowledgement itself; the
 // source half pins both hosts to it, because the ordering lives in SwiftUI actions no tier-1 cell
 // can press.
+//
+// Session photos U3, fix round 1 (U3-C-U3-R1): the wait runs only while the review that shows the
+// alert is OPEN. A failure that lands after the review was taken down (First Aid, duress, a
+// delete-all, a termination, a swipe-down) has no alert left to close; waiting for it stranded the
+// answer's `endAnswer()` for the process — discovery stayed blocked and every later review refused
+// its actions. The acknowledgement now starts closed, is opened and closed by its host, returns at
+// once (audited) when closed, and a close resumes a waiter.
 
 import Foundation
 import Testing
+import FernletFoundation
 @testable import Fernlet
 
 /// The acknowledgement a review's answer waits on.
@@ -38,9 +46,29 @@ struct PhotoSaveFailureAcknowledgementTests {
         return task
     }
 
+    /// Whether a wait on `acknowledgement` returns without suspending. Bounded, and it never
+    /// hangs: a wait that did suspend (the bug this pins) is released before the answer is read, so
+    /// the cell fails instead of stranding the run.
+    private static func waitReturnsAtOnce(_ acknowledgement: PhotoSaveFailureAcknowledgement) async -> Bool {
+        let waiter = Task { @MainActor in await acknowledgement.wait() }
+        // R2: bounded — at most 100 yields for the wait to return or to suspend.
+        for _ in 0..<100 where !acknowledgement.isWaiting { await Task.yield() }
+        let suspended = acknowledgement.isWaiting
+        acknowledgement.acknowledge()
+        await waiter.value
+        return !suspended
+    }
+
+    /// An acknowledgement whose review is open, as a host's is while its review is on screen.
+    private static func opened() -> PhotoSaveFailureAcknowledgement {
+        let acknowledgement = PhotoSaveFailureAcknowledgement(host: "test")
+        acknowledgement.reviewDidOpen()
+        return acknowledgement
+    }
+
     /// The answer stays suspended until the alert is closed, and resumes exactly then.
     @Test func anAnswerWaitsUntilTheAlertIsClosed() async {
-        let acknowledgement = PhotoSaveFailureAcknowledgement()
+        let acknowledgement = Self.opened()
         let waiter = await Self.suspendedWaiter(on: acknowledgement)
         #expect(acknowledgement.isWaiting, "the answer is suspended while the failure is on screen")
 
@@ -53,7 +81,7 @@ struct PhotoSaveFailureAcknowledgementTests {
     /// Acknowledging with nobody waiting — the alert closing after the sheet already went, or the
     /// sheet's disappearance after the alert already closed — does nothing, any number of times.
     @Test func anAcknowledgementWithNobodyWaitingIsHarmless() async {
-        let acknowledgement = PhotoSaveFailureAcknowledgement()
+        let acknowledgement = Self.opened()
         acknowledgement.acknowledge()
         acknowledgement.acknowledge()
         #expect(!acknowledgement.isWaiting)
@@ -67,7 +95,7 @@ struct PhotoSaveFailureAcknowledgementTests {
     /// A second wait while one answer is already suspended returns at once instead of replacing —
     /// and stranding — the first; the first still resumes on the acknowledgement.
     @Test func aSecondWaitNeverStrandsTheFirst() async {
-        let acknowledgement = PhotoSaveFailureAcknowledgement()
+        let acknowledgement = Self.opened()
         let first = await Self.suspendedWaiter(on: acknowledgement)
 
         await acknowledgement.wait()   // returns at once
@@ -75,6 +103,47 @@ struct PhotoSaveFailureAcknowledgementTests {
         #expect(acknowledgement.isWaiting, "the first answer is still the one waiting")
         acknowledgement.acknowledge()
         #expect(await first.value)
+    }
+
+    /// **U3-C-U3-R1.** A wait that begins after the review went — the export failed after First
+    /// Aid, a duress session, a termination or a swipe-down took the review down under it — returns
+    /// at once and audits the failure as unseen: there is no alert left to close. A fresh
+    /// acknowledgement is closed, so a host that never opened it can never wait on it.
+    @Test func aWaitWithTheReviewClosedReturnsAtOnceAndIsAudited() async {
+        let host = "test-\(UUID().uuidString)"
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        let acknowledgement = PhotoSaveFailureAcknowledgement(host: host)
+
+        let neverOpened = await Self.waitReturnsAtOnce(acknowledgement)
+        acknowledgement.reviewDidOpen()
+        acknowledgement.reviewDidClose()   // the review went before the export failed
+        let afterClose = await Self.waitReturnsAtOnce(acknowledgement)
+
+        let unseen = capture.values(of: "sessionPhotoReview.exportFailureUnseen", key: "host").filter { $0 == host }
+        #expect(neverOpened, "a review never opened has no alert to wait for")
+        #expect(afterClose, "nor does one that already went")
+        #expect(unseen.count == 2, "each unseen failure is audited, never swallowed")
+    }
+
+    /// **U3-C-U3-R1.** The review going while an answer waits on its alert resumes that answer, and
+    /// a review that opens again waits again.
+    @Test func theReviewGoingResumesAWaitingAnswer() async {
+        let acknowledgement = Self.opened()
+        let waiter = await Self.suspendedWaiter(on: acknowledgement)
+        #expect(acknowledgement.isWaiting, "the alert is up in the open review: the answer waits")
+
+        acknowledgement.reviewDidClose()   // a termination unmounts the camera, or a hide
+
+        #expect(!acknowledgement.isWaiting, "closing the review resumes the answer")
+        acknowledgement.acknowledge()   // releases a waiter the close failed to (so the cell ends)
+        #expect(await waiter.value)
+        acknowledgement.reviewDidOpen()
+        let next = await Self.suspendedWaiter(on: acknowledgement)
+        #expect(acknowledgement.isWaiting, "a review open again waits again")
+        acknowledgement.acknowledge()
+        #expect(await next.value)
     }
 }
 
@@ -141,5 +210,31 @@ struct ReviewHostsExportFailureSourceWallTests {
         let coordinator = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/SessionPhotoReviewCoordinator.swift"))
         let acknowledge = try #require(MeshRoutedSourceScan.bracedBody(after: "func acknowledgeSaveFailure()", in: coordinator))
         #expect(acknowledge.contains("saveFailureAcknowledgement.acknowledge()"), "the screen's release reaches the wait")
+    }
+
+    /// **U3-C-U3-R1.** Each host's acknowledgement is open exactly while its review is, so no wait
+    /// can outlive the alert it waits for: the overlay's opens in `present()` and closes in both
+    /// hides; the Develop review's follows the coordinator's Develop flag (whose three clears end its
+    /// wait) and lives on the store-owned coordinator — the camera constructs none in its `@State`,
+    /// where a termination that tears the camera down would leave a running answer unreachable. And
+    /// the sheet cannot be swiped away mid-answer, taking the alert with it.
+    @Test func eachAcknowledgementIsOpenExactlyWhileItsReviewIs() throws {
+        let coordinator = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/SessionPhotoReviewCoordinator.swift"))
+        let present = try #require(MeshRoutedSourceScan.bracedBody(after: "private func present()", in: coordinator))
+        #expect(present.contains("saveFailureAcknowledgement.reviewDidOpen()"), "the overlay's opens with its review")
+        for hide in ["private func hide()", "private func hideWithoutAnswer()"] {
+            let body = try #require(MeshRoutedSourceScan.bracedBody(after: hide, in: coordinator), "\(hide) is gone")
+            #expect(body.contains("saveFailureAcknowledgement.reviewDidClose()"), "\(hide) closes it")
+        }
+        let flag = try #require(MeshRoutedSourceScan.bracedBody(after: "var cameraDevelopReviewUp = false", in: coordinator))
+        #expect(flag.contains("developSaveFailureAcknowledgement.reviewDidOpen()")
+                && flag.contains("developSaveFailureAcknowledgement.reviewDidClose()"),
+                "the Develop review's follows the Develop flag")
+        let camera = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/DisposableCameraView.swift"))
+        #expect(!camera.contains("PhotoSaveFailureAcknowledgement("), "the camera constructs no acknowledgement of its own")
+        #expect(camera.contains("reviewCoordinator.developSaveFailureAcknowledgement"), "it waits on the coordinator's")
+        let sheet = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/UI/FriendPhotoReviewSheet.swift"))
+        #expect(sheet.contains(".interactiveDismissDisabled(isBusy)"), "no review is swiped away while its answer runs")
     }
 }

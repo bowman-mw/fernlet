@@ -18,6 +18,10 @@
 // plus the late-arrival re-presentation, First Aid (Q8), door 3 then "Not now" landing on the album
 // with the card, and the resume-offer suppression. The overlay window itself is
 // `SessionPhotoReviewOverlayTests`'s.
+//
+// Fix round 1 (U3-C-U3-R1): no answer is ever stranded — a step-aside under a failing export still
+// ends the answer, the Develop answer's wait ends with the Develop review, nothing presents under an
+// answer still in flight, and another surface's answer leg never disables the overlay.
 
 import Foundation
 import SwiftUI
@@ -52,13 +56,18 @@ final class RecordingReviewPresenter: SessionPhotoReviewPresenting {
     }
 }
 
-/// A Photos saver that records what it was handed and can hold the export open.
+/// A Photos saver that records what it was handed, can hold the export open, and can fail it.
 @MainActor
 final class RecordingPhotoSaver {
+    /// The failure a denied Photos authorization stands in for.
+    struct Denied: Error {}
+
     /// Every batch handed to the saver, in order.
     private(set) var saved: [[FriendPhotoPayload]] = []
     /// When true the export suspends until ``release()``.
     var holdsUntilReleased = false
+    /// Thrown once the export resumes (a Photos denial after the permission prompt), if set.
+    var failure: Error?
     private var waiting: CheckedContinuation<Void, Never>?
 
     /// Whether an export is suspended right now.
@@ -66,8 +75,8 @@ final class RecordingPhotoSaver {
 
     func save(_ photos: [FriendPhotoPayload]) async throws {
         saved.append(photos)
-        guard holdsUntilReleased else { return }
-        await withCheckedContinuation { waiting = $0 }
+        if holdsUntilReleased { await withCheckedContinuation { waiting = $0 } }
+        if let failure { throw failure }
     }
 
     func release() {
@@ -380,6 +389,131 @@ struct SessionPhotoReviewCoordinatorTests {
         overLive.beginAnswer()
         #expect(!overLive.blocksDiscovery, "false over a live session, whatever is outstanding or in flight")
         overLive.endAnswer()
+    }
+
+    /// Fix round 1, U3-C-U3-R1 (the overlay road). First Aid opens under the review while its Photos
+    /// export is still running (the permission prompt, a slow save), and the export then fails.
+    /// Nobody can see that failure's alert — the review is down — so the answer must not wait for
+    /// it. Before the fix it waited forever: the answer leg never fell, discovery stayed blocked for
+    /// the rest of the process, and every later review refused Keep, Delete all and Not now.
+    @Test func aStepAsideUnderAFailingExportStillEndsTheAnswer() async throws {
+        let (manager, captured) = try endedSession(photos: 1)
+        defer { manager.leaveMesh() }
+        let saver = RecordingPhotoSaver()
+        saver.holdsUntilReleased = true
+        saver.failure = RecordingPhotoSaver.Denied()
+        let coordinator = Fixtures.coordinator(manager, host: store, presenter: RecordingReviewPresenter(), saver: saver)
+        coordinator.evaluateNow()
+        coordinator.alsoSaveToPhotos = true
+        let keep = Task { await coordinator.keepSelected() }
+        try await Fixtures.waitUntil { saver.isSuspended }
+
+        coordinator.crisisSurfaceUp = true   // First Aid, from a notification, over the Photos prompt
+        #expect(!coordinator.isShowing, "the review steps aside at once")
+        saver.release()   // and the person denies Photos
+        try await Fixtures.waitUntil { !coordinator.answerInFlight }
+
+        #expect(!coordinator.answerInFlight, "the answer leg falls: nothing waits on an alert nobody can see")
+        #expect(manager.meshPhotos.map(\.id) == captured, "the keep stands")
+        coordinator.crisisSurfaceUp = false
+        LastMemberReviewFixtures.capture(1, on: manager)   // a later photo, held awaiting
+        coordinator.evaluateNow()
+        #expect(coordinator.isShowing, "the next review presents")
+        await coordinator.notNow()
+        #expect(!coordinator.isShowing, "and can be dismissed: never a full-screen trap")
+        coordinator.acknowledgeSaveFailure()   // releases a stranded wait (before the fix) so the cell ends
+        await keep.value
+    }
+
+    /// Fix round 1, U3-C-U3-R1: the review never presents under an answer still in flight. Were it
+    /// to present a waiting photo before that answer ended (here: First Aid came and went during the
+    /// export), the answer's own hide would take the new review down and its actions would refuse.
+    /// It presents once the answer ends.
+    @Test func nothingPresentsUnderAnAnswerStillInFlight() async throws {
+        let (manager, captured) = try endedSession(photos: 1)
+        defer { manager.leaveMesh() }
+        let presenter = RecordingReviewPresenter()
+        let saver = RecordingPhotoSaver()
+        saver.holdsUntilReleased = true
+        let coordinator = Fixtures.coordinator(manager, host: store, presenter: presenter, saver: saver)
+        coordinator.evaluateNow()
+        LastMemberReviewFixtures.capture(1, on: manager)   // a late photo, not in the snapshot
+        let late = try #require(manager.pendingReviewPhotos.map(\.id).first { !captured.contains($0) })
+        coordinator.alsoSaveToPhotos = true
+        let keep = Task { await coordinator.keepSelected() }
+        try await Fixtures.waitUntil { saver.isSuspended }
+        coordinator.crisisSurfaceUp = true
+        coordinator.crisisSurfaceUp = false   // First Aid closed again while the export runs
+
+        coordinator.evaluateNow()
+        #expect(presenter.shows == 1 && !coordinator.isShowing, "nothing presents under the answer still in flight")
+
+        saver.release()
+        await keep.value
+        coordinator.evaluateNow()
+        #expect(presenter.shows == 2 && coordinator.photos.map(\.id) == [late], "the late photo presents once it ends")
+        #expect(coordinator.isShowing, "and stays up")
+    }
+
+    /// Fix round 1, U3-C-U3-R1: another surface's answer leg (the camera's Develop) never disables
+    /// the overlay — only the overlay's own Keep or Delete all does — so a leg that outlived its
+    /// surface can never leave a full-screen review nobody can dismiss. The review does wait for
+    /// that leg before presenting again.
+    @Test func aForeignAnswerLegNeverDisablesTheOverlay() async throws {
+        let (manager, _) = try endedSession(photos: 2)
+        defer { manager.leaveMesh() }
+        let coordinator = Fixtures.coordinator(manager, host: store, presenter: RecordingReviewPresenter())
+        coordinator.evaluateNow()
+        try #require(coordinator.isShowing)
+
+        coordinator.beginAnswer()   // the camera's leg, still counted in flight
+        await coordinator.notNow()
+        #expect(!coordinator.isShowing, "Not now still hides it")
+        coordinator.reopen()
+        #expect(!coordinator.isShowing, "and it waits for that answer to end before presenting again")
+        coordinator.endAnswer()
+        coordinator.reopen()
+        #expect(coordinator.isShowing, "then it presents")
+
+        coordinator.beginAnswer()
+        await coordinator.discardAll()
+        #expect(!coordinator.isShowing && manager.pendingReviewPhotos.isEmpty, "and Delete all still applies")
+        coordinator.endAnswer()
+    }
+
+    /// Fix round 1, U3-C-U3-R1 (the camera road). The Develop answer waits on a failed export's
+    /// alert only while the Develop review is up: a termination that unmounts the camera (or a
+    /// swipe-down) drops the Develop flag, which releases a waiting answer, and a failure that lands
+    /// after that does not wait at all — so the answer's `defer` always lowers its leg. Before the
+    /// fix the wait sat on a `@State` object the torn-down camera could no longer release.
+    @Test func theDevelopAnswersWaitEndsWithTheDevelopReview() async throws {
+        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let coordinator = Fixtures.coordinator(manager, host: store, presenter: RecordingReviewPresenter())
+        let acknowledgement = coordinator.developSaveFailureAcknowledgement
+        coordinator.cameraDevelopReviewUp = true   // the Develop sheet presents
+        coordinator.beginAnswer()   // keepSelectedSessionPhotos, before the manager
+        let answer = Task { @MainActor in
+            await acknowledgement.wait()   // the export failed: its alert is up in the sheet
+            coordinator.endAnswer()   // the answer's `defer`, after its leave
+        }
+        try await Fixtures.waitUntil { acknowledgement.isWaiting }
+        #expect(acknowledgement.isWaiting && coordinator.answerInFlight, "the answer waits on the alert in the open review")
+
+        coordinator.cameraDevelopReviewUp = false   // a termination unmounts the camera with its sheet
+        try await Fixtures.waitUntil { !coordinator.answerInFlight }
+
+        #expect(!coordinator.answerInFlight, "the review going releases the answer, and its leg falls")
+        acknowledgement.acknowledge()   // releases a stranded wait (a regression) so the cell ends
+        await answer.value
+        coordinator.beginAnswer()   // a second answer whose export fails AFTER a swipe-down
+        let late = Task { @MainActor in
+            await acknowledgement.wait()
+            coordinator.endAnswer()
+        }
+        try await Fixtures.waitUntil { !coordinator.answerInFlight }
+        #expect(!coordinator.answerInFlight && !acknowledgement.isWaiting, "a failure after the review went never waits")
+        acknowledgement.acknowledge()
+        await late.value
     }
 
     /// The resume offer is withheld while the review blocks discovery; endings are not.
