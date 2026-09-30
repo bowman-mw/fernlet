@@ -12,8 +12,9 @@ import FernletScoring
 /// `SavedRecipeRepository` — this protocol inversion is what keeps StoreCore free of any CloudKitSync
 /// dependency) and `FernletStore`, which owns the instance, routes web imports, mesh recipe shares, and
 /// manual saves through ``add(_:)``, and calls ``reloadFromStore()`` on remote CloudKit changes. Beyond
-/// storage, the type also hosts two pure recipe conveniences: ``shareText(for:)`` (the share-sheet body)
-/// and ``makeMeal(from:mealType:)`` (recipe → loggable meal).
+/// storage, the type also hosts one pure recipe convenience, ``makeMeal(from:mealType:)`` (recipe →
+/// loggable meal). The share-sheet text it used to render moved to the app's `RecipeShareText` on
+/// 2026-09-30, which renders both recipe halves in the sender's language.
 ///
 /// Invariants: the buffer's pending queues are the sole un-persisted copy of a mutation —
 /// ``flushPendingSave()`` clears each queue only after its confirmed write, and ``reloadFromStore()``
@@ -137,27 +138,6 @@ public final class SavedRecipeService {
     /// retry (the full durability contract lives on ``DebouncedRowBuffer/flush()``).
     public func flushPendingSave() {
         buffer.flush()
-    }
-
-    /// Renders the plain-text share-sheet body for a recipe: name, per-serving macros, notes,
-    /// ingredient lines, and the source URL when the recipe was web-imported.
-    public func shareText(for recipe: RecipeDefinition) -> String {
-        let webImport = recipe.webImport
-        let macros = webImport?.macros ?? Macros(protein: 0, carbs: 0, fat: 0)
-        var lines: [String] = [recipe.name, ""]
-        if macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
-            let servingNote = recipe.servings > 1 ? " (per serving, \(recipe.servings) servings)" : ""
-            lines += ["Macros\(servingNote): P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g", ""]
-        }
-        if !recipe.notes.isEmpty {
-            lines += [recipe.notes, ""]
-        }
-        lines += ["Ingredients:"]
-        lines += (webImport?.ingredientLines ?? []).map { "- \($0)" }
-        if let sourceURL = webImport?.sourceURL {
-            lines += ["", "Source: \(sourceURL.absoluteString)"]
-        }
-        return lines.joined(separator: "\n")
     }
 
     /// Builds a loggable `Meal` from a saved recipe, snapshotting its macros/micronutrients and

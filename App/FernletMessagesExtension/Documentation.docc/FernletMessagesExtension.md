@@ -33,6 +33,21 @@ above the note.
 The card artwork is drawn locally — an SF Symbol and a wordmark on a 1200×630 canvas — so Messages
 never fetches, and a recipient never sees, a private food photo.
 
+**One card builder, shared with the app (2026-09-30).** The recipe card — envelope URL, template
+layout, artwork, summary line — is built by ``FernletMessagesCard`` with the copy in
+``FernletMessagesCardCopy`` and the colours in ``FernletMessagesPalette``. Those two files are ALSO
+members of the Fernlet app target, through a membership exception on this synchronized folder (the
+precedent the widget files set), because the app's recipe Share screen composes the same card for
+"Send in Messages" with `MFMessageComposeViewController`. The composer here inserts
+`FernletMessagesCard.recipeMessage(for:)`; the workout card keeps its layout here and reaches the
+builder only for the shared message wrapper and artwork. A card composed in the app belongs to this
+extension (the app embeds it), so it opens here exactly like one inserted from the composer. The
+builder reads the recipe's name and counts off the envelope's validated card rather than the
+packet's payload, so the shared files need no import beyond this target's four, even under the app
+target's member-import visibility. `MessagesExtensionBoundaryTests` holds that the composer builds
+through it, that no app file builds a card of its own, and that the membership exception lists
+exactly those two files; `MessagesRecipeCardParityTests` exercises the builder from the app.
+
 ### Receiving
 
 When a Fernlet card is opened (`willBecomeActive(with:)` with a selected message, or
@@ -74,7 +89,7 @@ on any device whose Fernlet has no such extension — a build older than 24 (the
 to carry it) — and on an iPad or a Mac, since the extension is iPhone-only. That prompt is empty while
 Fernlet has no public App Store page, and a `data:` URL gets no browser fallback (Apple loads only an
 HTTP(S) message URL when no app can open it). Every card carries one line meant for that recipient,
-the layout's `trailingSubcaption` "Opens in Fernlet on iPhone" (`FernletMessagesCopy.cardOpensInFernlet`).
+the layout's `trailingSubcaption` "Opens in Fernlet on iPhone" (`FernletMessagesCardCopy.cardOpensInFernlet`).
 Messages draws a template layout itself, and Apple describes a recipient without the app seeing that
 layout, so the line is *expected* to reach them; that is unverified.
 
@@ -116,10 +131,13 @@ slots from the Home Screen icon and is the set's source of truth — never hand-
 
 ### Localization and accessibility
 
-Every sentence lives in ``FernletMessagesCopy`` and this target's `Localizable.xcstrings`, synced by
+Every sentence lives in ``FernletMessagesCopy`` — or, for what a recipe card carries, in
+``FernletMessagesCardCopy`` — and this target's `Localizable.xcstrings`, synced by
 `Scripts/sync-string-catalogs.sh`; `LocalizationBoundaryTests` rules H1 and H2 hold every literal
 here to "catalogued, or an argued token". No `bundle:` argument appears: an appex's `Bundle.main` is
-its own bundle. Labels scale with Dynamic Type, each catalog card is one accessibility element whose
+its own bundle, and in the app, where the card copy is compiled too, `Bundle.main` is the app's, so
+the same eight keys also live in `App/Fernlet/Localizable.xcstrings`, the three counts with
+hand-authored plural blocks in both catalogs. Either way a card reads in the sender's language. Labels scale with Dynamic Type, each catalog card is one accessibility element whose
 label is the item's title, and the target is inside the accessibility wall's scan.
 
 ### Concurrency
@@ -141,7 +159,9 @@ made in parts as packet version 2, its versioned content hash, and the salad fix
 itself, anything else is "can't be opened", nothing is empty), `MessagesExtensionBoundaryTests`
 (imports, the copy vault's catalog, the manifest, and the received-card path's independence from the
 catalog),
-`LocalizationBoundaryTests` H1/H2, and every shipping-code wall, which since 2026-09-23 is held to
+`MessagesRecipeCardParityTests` (the shared card builder, compiled into the app: the card's URL is
+the envelope's own and opens as the same packet, and its face), `LocalizationBoundaryTests` H1/H2, and
+every shipping-code wall, which since 2026-09-23 is held to
 the full set of shipping roots by
 `PowerOfTenBoundaryTests.everyShippingCodeWallScansEveryShippingRoot`. What a simulator cannot check
 — two phones, real delivery, locked devices — is the checklist in
@@ -155,6 +175,12 @@ It has no call site, in shipping code or tests.
 ### Composer and viewer
 
 - ``FernletMessagesViewController``
+
+### The recipe card (shared with the app)
+
+- ``FernletMessagesCard``
+- ``FernletMessagesCardCopy``
+- ``FernletMessagesPalette``
 
 ### Copy
 

@@ -36,63 +36,32 @@ enum RecipeLimits {
     static let maxServings = 24
 }
 
-/// Encodes and decodes recipes for sharing — the human-readable share text with its embedded
-/// machine-readable JSON payload, and the proximity-mesh wire payload.
+/// Encodes and decodes recipes for sharing — the proximity-mesh wire payload, and the reader for
+/// the paste text older builds shared.
 ///
 /// The single place that knows the `fernlet.recipe` v1 format. Ingredients are resolved against the
 /// passed `foodItems` and carried as (name, quantity, unit, scaled macros) — recipient devices don't
 /// share the sender's catalog ids, so the payload is self-contained. Steps and a multipart recipe's
 /// parts ride optional keys (version stays 1; old peers ignore them and read the flattened recipe —
-/// see `RecipeComponentWire.swift`). `FernletStore.importRecipe(from:)` decodes pasted share
-/// text through ``decodePayload(from:)``, and the proximity recipe-share flow sends
+/// see `RecipeComponentWire.swift`). The proximity recipe-share flow sends
 /// ``proximityPayload(for:foodItems:)`` over the mesh.
+///
+/// **The paste format is read, no longer written (2026-09-30).** Until then the share sheet's text
+/// was a readable header followed by a ``legacyPayloadMarker`` line and the payload's single-line
+/// JSON, which Mail, Notes and every chat app showed verbatim. The share sheet now sends
+/// ``RecipeShareText``'s readable text, and Fernlet-to-Fernlet travels as a Messages card or over the
+/// nearby radio. ``decodePayload(from:)`` is unchanged, so `FernletStore.importRecipe(from:)` still
+/// imports text an older build shared, and the bare JSON the Shortcuts file import hands it.
 struct RecipeShareCodec {
-    /// The full text a user shares: readable name/servings/ingredients/notes followed by a
-    /// "Fernlet recipe data:" line carrying the single-line JSON payload the importer parses back.
-    /// A multipart recipe lists its ingredients under each part's name.
-    static func shareText(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> String {
-        let payload = payload(for: recipe, foodItems: foodItems)
-        var lines: [String] = [
-            payload.name,
-            "Servings: \(payload.servings)",
-            "",
-            "Ingredients:"
-        ]
-        if let parts = payload.componentSlices {
-            for part in parts where !part.ingredients.isEmpty {
-                lines += ["", "\(part.name):"] + part.ingredients.map { ingredientLine($0) }
-            }
-        } else {
-            lines += payload.ingredients.map { ingredientLine($0) }
-        }
-        if !payload.notes.isEmpty {
-            lines += ["", "Notes:", payload.notes]
-        }
-        if let json = sharedRecipeJSON(for: payload) {
-            lines += ["", "Fernlet recipe data:", json]
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    /// One readable ingredient line of the share text: "- 3 tbsp Olive oil (P0 C0 F42)". An ingredient
-    /// carrying fractional grams reads them at one decimal place ("P3.4"), with a POSIX "." like the
-    /// quantity beside it; the JSON payload below is what an importer parses, never this line.
-    private static func ingredientLine(_ ingredient: SharedRecipeIngredient) -> String {
-        let lead = "- \(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name)"
-        guard let precise = ingredient.preciseMacros else {
-            return "\(lead) (P\(ingredient.protein) C\(ingredient.carbs) F\(ingredient.fat))"
-        }
-        let posix = Locale(identifier: "en_US_POSIX")
-        let protein = MacroGramEntry.display(precise.protein, locale: posix)
-        let carbs = MacroGramEntry.display(precise.carbs, locale: posix)
-        let fat = MacroGramEntry.display(precise.fat, locale: posix)
-        return "\(lead) (P\(protein) C\(carbs) F\(fat))"
-    }
+    /// The line an older build's share text put before the payload JSON. A frozen MATCHING token:
+    /// ``decodePayload(from:)`` looks for it in pasted text, so it stays English forever, whatever
+    /// language the text around it was written in.
+    static let legacyPayloadMarker = "Fernlet recipe data:"
 
     /// The self-contained `SharedRecipePayload` for a structured recipe: each ingredient resolved
     /// against `foodItems` and flattened to name + quantity + scaled macros (ingredients whose food
     /// item can't be resolved are dropped), with ordered steps riding along, and — for a multipart
-    /// recipe — the `components` partition over both. Both share-text and mesh readers ignore an
+    /// recipe — the `components` partition over both. Both paste-text and mesh readers ignore an
     /// unknown key, so this is the form they get (the hash-covered exchange packet does not).
     static func payload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
         ExchangeRecipePayloadBuilder.componentPayload(for: recipe, foodItems: foodItems)
@@ -132,8 +101,8 @@ struct RecipeShareCodec {
         )
     }
 
-    /// Decodes a pasted share back into a payload: accepts either the bare JSON or the full share
-    /// text (the first `{`-line after the "Fernlet recipe data:" marker), then validates the
+    /// Decodes a pasted share back into a payload: accepts either the bare JSON or an older build's
+    /// full share text (the first `{`-line after the ``legacyPayloadMarker`` line), then validates the
     /// `fernlet.recipe` v1 format, the ``RecipeLimits`` size bounds, and the payload's values.
     ///
     /// This is the app's one *external* recipe boundary (pasteboard / share sheet text), so it caps
@@ -158,7 +127,7 @@ struct RecipeShareCodec {
         let jsonText: String
         if trimmedText.hasPrefix("{") {
             jsonText = trimmedText
-        } else if let markerRange = text.range(of: "Fernlet recipe data:") {
+        } else if let markerRange = text.range(of: legacyPayloadMarker) {
             let payloadText = text[markerRange.upperBound...]
             guard let firstJSONLine = payloadText
                 .split(whereSeparator: \.isNewline)
@@ -188,24 +157,6 @@ struct RecipeShareCodec {
             throw RecipeImportError.unsupportedFormat
         } catch {
             throw RecipeImportError.invalidPayload
-        }
-    }
-
-    private static func sharedRecipeJSON(for payload: SharedRecipePayload) -> String? {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        do {
-            let data = try encoder.encode(payload)
-            return String(data: data, encoding: .utf8)
-        } catch {
-            // The only realistic failure is a non-finite quantity, which the editor and the decoder
-            // both rule out. Name it rather than dropping it: the share text still goes out (readable
-            // but not importable), so the sender sees a share and the log says why it lost its payload.
-            FernletAuditLog.log(
-                "recipe.share.payloadEncode.failed",
-                context: ["error": error.localizedDescription, "recipe": payload.name]
-            )
-            return nil
         }
     }
 

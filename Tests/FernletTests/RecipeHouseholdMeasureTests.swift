@@ -400,7 +400,7 @@ struct RecipeHouseholdMeasureTests {
         let wire = try JSONSerialization.jsonObject(with: JSONEncoder().encode(payload.ingredients[0]))
         #expect(Set(try #require(wire as? [String: Any]).keys) == ["name", "quantity", "unit", "protein", "carbs", "fat"])
         let store = makeTestStore()
-        let imported = try store.importRecipe(from: RecipeShareCodec.shareText(for: recipe, foodItems: [banana, garlic]))
+        let imported = try store.importRecipe(from: LegacyRecipeShareTextFixture.text(for: payload))
         let sender = MealBuilder.macroTotals(for: recipe, foodItems: [banana, garlic])
         #expect(sender.carbs > 0)
         #expect(MealBuilder.macroTotals(for: imported, foodItems: store.foodItems) == sender)

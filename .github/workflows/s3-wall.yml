@@ -315,10 +315,13 @@ jobs:
         # renders must reach the string catalog, and — since 2026-09-23 — its manifest must declare
         # exactly the required-reason APIs its binary uses. This test bundle does not link the
         # appex, so these source pins are most of what holds the target at all. RAISED 2026-09-30,
-        # 5 → 6 (measured), for the pin that an opened card is drawn without the composer's catalog.
+        # 5 → 6 (measured), for the pin that an opened card is drawn without the composer's catalog;
+        # RAISED again 2026-09-30, 6 → 10 (measured), for the recipe-card builder the app now shares
+        # ("Send in Messages"): the composer builds through it, the app builds no card of its own, the
+        # two files are app-target members, and the card copy reached the app's catalog too.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh messages-extension 6 MessagesExtensionBoundaryTests
+          Scripts/run-gated-suites.sh messages-extension 10 MessagesExtensionBoundaryTests
 
       - name: CODEOWNERS resolution (CodeOwnersResolutionTests)
         # GitHub never complains about a CODEOWNERS pattern that matches nothing — it silently stops
@@ -365,8 +368,9 @@ jobs:
       # and read off its own result bundle: messages-envelope 46 tests in 3 suites, recipe-wire 19 in 1;
       # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. RAISE a floor when its wire
       # grows; never lower it in passing. RAISED 2026-09-30: messages-envelope 46 → 53 in 4 suites, for
-      # MessagesReceivedItemTests, measured the same way.
-      - name: Messages envelope (ExchangeMessageEnvelopeV2Tests + ExchangeMultipartRecipeTests + FernletExchangeTests + MessagesReceivedItemTests)
+      # MessagesReceivedItemTests, measured the same way; and 53 → 57 in 5 suites, for
+      # MessagesRecipeCardParityTests (the app's "Send in Messages"), measured the same way.
+      - name: Messages envelope (ExchangeMessageEnvelopeV2Tests + ExchangeMultipartRecipeTests + FernletExchangeTests + MessagesReceivedItemTests + MessagesRecipeCardParityTests)
         # The Messages wire: the inflate-bomb bound checked before a byte is inflated, the tight
         # 3,719-byte frame bound under Apple's 5,000-character URL limit, the two version-1 cards minted
         # by the 2026-09-23 build that must keep opening, the literal version-1 content-hash pre-images,
@@ -375,14 +379,17 @@ jobs:
         # blank" report): a card the sender minted — either wire version, a recipe or a workout plan —
         # opens as itself, anything else is "can't be opened", and no input yields an empty screen. It
         # is the only behavioural pin of that decision; the source scan in MessagesExtensionBoundaryTests
-        # checks only that the extension routes through it.
+        # checks only that the extension routes through it. Since 2026-09-30, too, the card the APP
+        # composes for "Send in Messages": built by the extension's own FernletMessagesCard (compiled
+        # into both targets), its URL is exactly the envelope's and opens as the same packet.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh messages-envelope 53 \
+          Scripts/run-gated-suites.sh messages-envelope 57 \
             ExchangeMessageEnvelopeV2Tests \
             ExchangeMultipartRecipeTests \
             FernletExchangeTests \
-            MessagesReceivedItemTests
+            MessagesReceivedItemTests \
+            MessagesRecipeCardParityTests
 
       - name: Recipe wire for recipes made in parts (RecipeMultipartWireTests)
         # The `fernlet.recipe` payload a recipe made in parts travels as on the paste text and the mesh's

@@ -98,8 +98,8 @@ import Testing
 /// `isBlockedProximitySigningKey`, `isBlockedFingerprint`, `isProximitySellerBanned`,
 /// `isClothingItemLocallyReported`, `reconcileModerationBans`, `recomputeCloseFriendsIfNeeded`,
 /// `recordTrainerAudit`, `trainerAuditEvents`, `fundMediaAtRestWitness`); the recipe-share text
-/// helpers (`savedRecipeShareText`, `recipeShareText`, `proximityRecipeSharePayload`,
-/// `importProximityRecipeShare`); the read-only health projections (`allowedHealthCapabilities`,
+/// helpers (`recipeShareText`, `recipeShareDraft`, `proximityRecipeSharePayload`,
+/// `importProximityRecipeShare`; `savedRecipeShareText` was retired 2026-09-30); the read-only health projections (`allowedHealthCapabilities`,
 /// `visibleHealthCapabilities`, `dailyHealthScore`, `workoutExists`); and
 /// `syncCustomExerciseCatalog`, which registers a catalog and syncs nothing. A review that
 /// disagrees adds the row and raises ``measuredSpellingCount`` in the same commit.

@@ -122,10 +122,16 @@ extension RecipeIngredient {
     /// saved from a household choice — "1 medium (118 g)". Numbers follow the person's locale; the
     /// label and unit are source tokens shown verbatim.
     public var amountText: String {
-        let amount = quantity.formatted(.number.precision(.fractionLength(0...1)))
+        amountText(locale: .autoupdatingCurrent)
+    }
+
+    /// ``amountText`` with its numbers in `locale` — for the recipe shared as text, whose tests pin
+    /// a locale rather than read the device's.
+    public func amountText(locale: Locale) -> String {
+        let amount = quantity.formatted(.number.precision(.fractionLength(0...1)).locale(locale))
         guard let measure = householdMeasure, measure.isValid, RecipeUnit.normalized(unit) == .gram,
               quantity.isFinite else { return "\(amount) \(unit)" }
-        let count = (quantity / measure.gramsPerUnit).formatted(.number.precision(.fractionLength(0...2)))
+        let count = (quantity / measure.gramsPerUnit).formatted(.number.precision(.fractionLength(0...2)).locale(locale))
         return "\(count) \(measure.label) (\(amount) \(unit))"
     }
 

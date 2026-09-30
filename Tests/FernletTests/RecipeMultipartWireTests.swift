@@ -294,10 +294,12 @@ struct RecipeMultipartWireTests {
 
     // MARK: - Import: every path rebuilds the parts
 
+    /// Paste text an OLDER build shared (builds stopped writing it on 2026-09-30) still rebuilds the parts.
     @Test func pastedShareTextImportsTheRecipeWithItsParts() throws {
         let salad = RecipeMultipartFixtures.saladWithHomemadeDressing()
         let store = makeTestStore()
-        let text = RecipeShareCodec.shareText(for: salad.recipe, foodItems: salad.foodItems)
+        let text = try LegacyRecipeShareTextFixture.text(
+            for: RecipeShareCodec.payload(for: salad.recipe, foodItems: salad.foodItems))
 
         let imported = try store.importRecipe(from: text)
         try expectRebuiltSalad(imported, in: store)
@@ -323,17 +325,21 @@ struct RecipeMultipartWireTests {
         #expect(imported.steps?.first?.text == "Lemon-dijon dressing: Whisk the lemon juice, mustard and honey.")
     }
 
+    /// The text "Share as text" sends lists each part's ingredients under the part's name, in making
+    /// order. It is for reading: since 2026-09-30 it carries no payload to decode.
     @Test func theShareTextListsIngredientsUnderEachPart() throws {
         let salad = RecipeMultipartFixtures.saladWithHomemadeDressing()
-        let text = RecipeShareCodec.shareText(for: salad.recipe, foodItems: salad.foodItems)
+        let text = RecipeShareText.text(for: salad.recipe, foodItems: salad.foodItems, showCalories: false,
+                                        includesNotes: true, locale: Locale(identifier: "en_US"))
         let lines = text.components(separatedBy: "\n")
 
-        let dressing = try #require(lines.firstIndex(of: "Lemon-dijon dressing:"))
-        let saladHeading = try #require(lines.firstIndex(of: "Salad:"))
-        #expect(dressing < saladHeading)
-        #expect(lines[dressing + 1].contains("Olive oil"))
-        #expect(lines[saladHeading + 1].contains("Romaine lettuce"))
-        #expect(try RecipeShareCodec.decodePayload(from: text) == RecipeMultipartFixtures.saladPayload())
+        let ingredients = try #require(lines.firstIndex(of: "Ingredients"))
+        let dressing = try #require(lines.firstIndex(of: RecipeMultipartFixtures.dressingName))
+        let saladHeading = try #require(lines.firstIndex(of: RecipeMultipartFixtures.saladName))
+        #expect(ingredients < dressing && dressing < saladHeading)
+        #expect(lines[dressing + 1] == "• 3 tbsp Olive oil")
+        #expect(lines[saladHeading + 1] == "• 4 cup Romaine lettuce")
+        #expect(throws: RecipeImportError.missingPayload) { try RecipeShareCodec.decodePayload(from: text) }
     }
 
     // MARK: - Decimal ingredient grams (2026-09-29): an optional key on version 1, never in the packet

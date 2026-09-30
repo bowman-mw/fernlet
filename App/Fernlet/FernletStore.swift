@@ -2898,10 +2898,6 @@ final class FernletStore {
         diary.logLabelScannedFoodItem(foodItem, mealType: mealType, date: date, servings: servings)
     }
 
-    func savedRecipeShareText(for recipe: RecipeDefinition) -> String {
-        savedRecipeService.shareText(for: recipe)
-    }
-
     func addSavedRecipe(_ recipe: RecipeDefinition) {
         // A web re-import replaces any prior recipe from the same source URL under a NEW id (see
         // SavedRecipeService.add). The sealed photo is keyed by the recipe id and the photo store
@@ -5071,10 +5067,6 @@ final class FernletStore {
 
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
         MealBuilder.micronutrientTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
-    }
-
-    func recipeShareText(for recipe: RecipeDefinition) -> String {
-        RecipeShareCodec.shareText(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func proximityRecipeSharePayload(for recipe: RecipeDefinition) -> ProximityRecipeSharePayload {

@@ -427,7 +427,7 @@ struct FoodView: View {
                 logRecipe(recipe, mealType: mealType, isSaved: isSaved)
             }) {
                 RecipeShareButton {
-                    recipeShareDraft = shareDraft(for: recipe, isSaved: isSaved)
+                    recipeShareDraft = store.recipeShareDraft(for: recipe)
                 }
             }
         }
@@ -444,7 +444,7 @@ struct FoodView: View {
                 if isSaved { store.addForkedSavedRecipe(fork) } else { store.addForkedRecipe(fork) }
             },
             onLog: { current, mealType in logRecipe(current, mealType: mealType, isSaved: isSaved) },
-            onShare: { current in recipeShareDraft = shareDraft(for: current, isSaved: isSaved) },
+            onShare: { current in recipeShareDraft = store.recipeShareDraft(for: current) },
             onCookLog: { current, mealType, day in
                 if isSaved {
                     store.logSavedRecipe(current, mealType: mealType, date: day)
@@ -471,15 +471,6 @@ struct FoodView: View {
         }
         guard let meal = store.logRecipe(recipe, mealType: mealType) else { return }
         onMealsLogged([meal])
-    }
-
-    /// The proximity share draft for a recipe, using its half's share-text builder.
-    private func shareDraft(for recipe: RecipeDefinition, isSaved: Bool) -> ProximityRecipeShareDraft {
-        ProximityRecipeShareDraft(
-            title: recipe.name,
-            shareText: isSaved ? store.savedRecipeShareText(for: recipe) : store.recipeShareText(for: recipe),
-            payload: store.proximityRecipeSharePayload(for: recipe)
-        )
     }
 
     /// The Food root's five editor/share sheets, in their original application order.
@@ -946,13 +937,7 @@ private struct RecipeImportSheet: View {
             onEdit: { editingSavedRecipe = recipe },
             onSaveFork: { store.addForkedSavedRecipe($0) },
             onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType) },
-            onShare: { current in
-                recipeShareDraft = ProximityRecipeShareDraft(
-                    title: current.name,
-                    shareText: store.savedRecipeShareText(for: current),
-                    payload: store.proximityRecipeSharePayload(for: current)
-                )
-            },
+            onShare: { current in recipeShareDraft = store.recipeShareDraft(for: current) },
             onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
         )
     }
@@ -6862,7 +6847,7 @@ struct RecipeBookSheet: View {
                 dismissIfPresented()
             }) {
                 RecipeShareButton {
-                    recipeShareDraft = shareDraft(for: recipe, isSaved: isSaved)
+                    recipeShareDraft = store.recipeShareDraft(for: recipe)
                 }
             }
         }
@@ -6892,7 +6877,7 @@ struct RecipeBookSheet: View {
                 logRecipe(current, mealType: mealType, isSaved: isSaved)
                 dismissIfPresented()
             },
-            onShare: { current in recipeShareDraft = shareDraft(for: current, isSaved: isSaved) },
+            onShare: { current in recipeShareDraft = store.recipeShareDraft(for: current) },
             onCookLog: { current, mealType, day in
                 if isSaved {
                     store.logSavedRecipe(current, mealType: mealType, date: day)
@@ -6919,15 +6904,6 @@ struct RecipeBookSheet: View {
         }
         guard let meal = store.logRecipe(recipe, mealType: mealType) else { return }
         onMealsLogged([meal])
-    }
-
-    /// The proximity share draft for a recipe, using its half's share-text builder.
-    private func shareDraft(for recipe: RecipeDefinition, isSaved: Bool) -> ProximityRecipeShareDraft {
-        ProximityRecipeShareDraft(
-            title: recipe.name,
-            shareText: isSaved ? store.savedRecipeShareText(for: recipe) : store.recipeShareText(for: recipe),
-            payload: store.proximityRecipeSharePayload(for: recipe)
-        )
     }
 
     private func importedProductsCard(_ products: [FoodItem]) -> some View {

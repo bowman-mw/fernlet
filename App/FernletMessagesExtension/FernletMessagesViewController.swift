@@ -35,18 +35,9 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         case received
     }
 
-    /// The composer's colours, spelled out in `UIColor` rather than read from the app's design
-    /// tokens: an app extension is a separate process with no access to the host's asset catalog,
-    /// and a missing token here would render as black-on-black rather than fail loudly.
-    private enum Palette {
-        static let ink = UIColor(red: 0.24, green: 0.18, blue: 0.12, alpha: 1)
-        static let moss = UIColor(red: 0.27, green: 0.41, blue: 0.23, alpha: 1)
-        static let paper = UIColor(red: 0.96, green: 0.93, blue: 0.87, alpha: 1)
-        static let card = UIColor(red: 0.99, green: 0.97, blue: 0.92, alpha: 1)
-        static let sage = UIColor(red: 0.79, green: 0.85, blue: 0.73, alpha: 1)
-        static let muted = UIColor(red: 0.36, green: 0.42, blue: 0.47, alpha: 1)
-        static let line = UIColor(red: 0.24, green: 0.18, blue: 0.12, alpha: 0.16)
-    }
+    /// The composer's colours — the same `UIColor`s the card artwork is drawn in, which moved to
+    /// `FernletMessagesPalette` when the card builder became shared with the app (2026-09-30).
+    private typealias Palette = FernletMessagesPalette
 
     private let brandLabel = UILabel()
     private let titleLabel = UILabel()
@@ -559,14 +550,12 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         previewLabel.isHidden = text.isEmpty
     }
 
-    /// Three separately plural-ruled counts joined by punctuation. One key holding all three
-    /// would give a translator a single form for three independent plurals.
+    /// The card's counts line ("4 servings · 9 ingredients · 6 steps"), from the shared builder so
+    /// the composer's cards and the card itself can never disagree.
     private func recipeSummary(for packet: RecipeExchangePacket) -> String {
-        [
-            FernletMessagesCopy.servingCount(packet.recipe.servings),
-            FernletMessagesCopy.ingredientCount(packet.recipe.ingredients.count),
-            FernletMessagesCopy.stepCount(packet.recipe.steps?.count ?? 0)
-        ].joined(separator: " · ")
+        FernletMessagesCard.recipeSummary(servings: packet.recipe.servings,
+                                          ingredients: packet.recipe.ingredients.count,
+                                          steps: packet.recipe.steps?.count ?? 0)
     }
 
     private func workoutSummary(for entry: FernletMessagesWorkoutCatalogEntry) -> String {
@@ -579,8 +568,8 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             return
         }
         do {
-            let envelope = try ExchangeMessageEnvelope(recipe: entry.packet)
-            insert(message: try message(for: envelope, layout: recipeLayout(for: entry.packet)),
+            // The one card builder, shared with the app's "Send in Messages" (2026-09-30).
+            insert(message: try FernletMessagesCard.recipeMessage(for: entry.packet),
                    into: conversation, success: FernletMessagesCopy.recipeInserted)
         } catch ExchangePacketError.tooLarge {
             showComposerStatus(FernletMessagesCopy.recipeTooLarge)
@@ -597,21 +586,13 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         }
         do {
             let envelope = try ExchangeMessageEnvelope(workoutPlan: entry.packet, scheduledStartDayKey: entry.dayKey)
-            insert(message: try message(for: envelope, layout: workoutLayout(for: entry)),
+            insert(message: try FernletMessagesCard.message(for: envelope, layout: workoutLayout(for: entry)),
                    into: conversation, success: FernletMessagesCopy.workoutInserted)
         } catch ExchangePacketError.tooLarge {
             showComposerStatus(FernletMessagesCopy.workoutTooLarge)
         } catch {
             showComposerStatus(FernletMessagesCopy.insertFailed)
         }
-    }
-
-    private func message(for envelope: ExchangeMessageEnvelope, layout: MSMessageTemplateLayout) throws -> MSMessage {
-        let message = MSMessage()
-        message.url = try envelope.messageURL()
-        message.layout = layout
-        message.summaryText = FernletMessagesCopy.messageSummary(title: envelope.card.title)
-        return message
     }
 
     /// Messages documents no queue for this completion, and the label it updates is UIKit state, so
@@ -633,59 +614,9 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         statusLabel.isHidden = false
     }
 
-    private func recipeLayout(for packet: RecipeExchangePacket) -> MSMessageTemplateLayout {
-        let layout = MSMessageTemplateLayout()
-        layout.image = recipePlaceholderImage()
-        layout.caption = packet.recipe.name
-        layout.subcaption = recipeSummary(for: packet)
-        layout.trailingCaption = packet.includesNotes ? FernletMessagesCopy.cardNotesIncluded : FernletMessagesCopy.cardRecipe
-        layout.trailingSubcaption = FernletMessagesCopy.cardOpensInFernlet
-        return layout
-    }
-
-    /// Local, high-resolution cards; Messages never fetches or exposes private food photos.
-    private func recipePlaceholderImage() -> UIImage {
-        placeholderImage(symbol: "fork.knife", label: FernletMessagesCopy.recipeWordmark)
-    }
-
+    /// The workout card's artwork, drawn by the shared builder like the recipe card's.
     private func workoutPlaceholderImage() -> UIImage {
-        placeholderImage(symbol: "dumbbell.fill", label: FernletMessagesCopy.workoutWordmark)
-    }
-
-    private func placeholderImage(symbol: String, label: String) -> UIImage {
-        let size = CGSize(width: 1_200, height: 630)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { _ in
-            Palette.paper.setFill()
-            UIRectFill(CGRect(origin: .zero, size: size))
-            drawPlaceholderSymbol(named: symbol, in: size)
-            drawPlaceholderWordmark(label, in: size)
-        }
-    }
-
-    private func drawPlaceholderSymbol(named symbol: String, in size: CGSize) {
-        let halo = UIBezierPath(ovalIn: CGRect(x: 350, y: 60, width: 500, height: 470))
-        Palette.sage.withAlphaComponent(0.5).setFill()
-        halo.fill()
-        let configuration = UIImage.SymbolConfiguration(pointSize: 250, weight: .medium)
-        let image = UIImage(systemName: symbol, withConfiguration: configuration)
-        let tinted = image?.withTintColor(Palette.moss, renderingMode: .alwaysOriginal)
-        tinted?.draw(in: CGRect(x: 475, y: 145, width: 250, height: 250))
-    }
-
-    private func drawPlaceholderWordmark(_ label: String, in size: CGSize) {
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .center
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 28, weight: .semibold),
-            .foregroundColor: Palette.moss,
-            .paragraphStyle: paragraphStyle
-        ]
-        let rect = CGRect(x: 0, y: size.height - 88, width: size.width, height: 40)
-        label.draw(in: rect, withAttributes: attributes)
+        FernletMessagesCard.placeholderImage(symbol: "dumbbell.fill", label: FernletMessagesCopy.workoutWordmark)
     }
 
     private func workoutLayout(for entry: FernletMessagesWorkoutCatalogEntry) -> MSMessageTemplateLayout {
@@ -694,7 +625,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         layout.caption = entry.card.title
         layout.subcaption = workoutSummary(for: entry)
         layout.trailingCaption = entry.card.senderLabel ?? FernletMessagesCopy.cardPlan
-        layout.trailingSubcaption = FernletMessagesCopy.cardOpensInFernlet
+        layout.trailingSubcaption = FernletMessagesCardCopy.cardOpensInFernlet
         return layout
     }
 

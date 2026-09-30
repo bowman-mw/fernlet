@@ -147,6 +147,11 @@ import Testing
     /// by source scan only that the controller routes through it. Pinned by name in ``wallLines``
     /// too. Counted off the line.
     ///
+    /// RE-MEASURED at the recipe-share round (2026-09-30): `messages-envelope` 4 → 5, for
+    /// `MessagesRecipeCardParityTests` — the card the app composes for "Send in Messages" is the
+    /// extension's own builder's, its URL the envelope's, opening as the same packet. Pinned by name
+    /// in ``wallLines`` too. Counted off the line.
+    ///
     /// NEW at the 2026-09-29 ingredient-search round's fix round 1: `food-search` (6: the F10
     /// ingredient corpus and tap-default sweep, the import-line pins, the two catalog-correction
     /// suites, and the dish-template/plan-tier bind audit). The measuring stick every later search fix
@@ -164,7 +169,7 @@ import Testing
         "memory-lifecycle": 1,
         "messages-extension": 1,
         "codeowners": 1,
-        "messages-envelope": 4,
+        "messages-envelope": 5,
         "recipe-wire": 1,
         "food-search": 6,
         "mesh-batteries": 154
@@ -193,7 +198,8 @@ import Testing
         "messages-extension": ["MessagesExtensionBoundaryTests"],
         "codeowners": ["CodeOwnersResolutionTests"],
         "messages-envelope": ["ExchangeMessageEnvelopeV2Tests", "ExchangeMultipartRecipeTests",
-                              "FernletExchangeTests", "MessagesReceivedItemTests"],
+                              "FernletExchangeTests", "MessagesReceivedItemTests",
+                              "MessagesRecipeCardParityTests"],
         "recipe-wire": ["RecipeMultipartWireTests"],
         "food-search": ["IngredientSearchCorpusTests", "CatalogDefaultUnitSweepTests"]
     ]

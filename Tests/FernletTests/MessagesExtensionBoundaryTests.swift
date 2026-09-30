@@ -27,6 +27,11 @@ import Testing
 /// - its display copy is extracted to `FernletMessagesCopy` and held by
 ///   `LocalizationBoundaryTests` rules H1/H2;
 /// - its import surface and file inventory are held here;
+/// - the recipe CARD is the exception: its builder (`FernletMessagesCard`) and copy
+///   (`FernletMessagesCardCopy`) are compiled into the app too, for the recipe Share screen's "Send in
+///   Messages", so `MessagesRecipeCardParityTests` exercises the very code the extension inserts
+///   with; here it is held that the controller builds its recipe card through it, that the app builds
+///   no card of its own, and that the two files really are members of the app target;
 /// - so is its privacy manifest's required-reason declaration, against every source file that is
 ///   compiled into the appex binary (the target plus the package modules it links).
 struct MessagesExtensionBoundaryTests {
@@ -34,9 +39,9 @@ struct MessagesExtensionBoundaryTests {
     /// The target's directory. Every `.swift` file under it is in the appex process.
     static let extensionRoot = "App/FernletMessagesExtension"
 
-    /// Floor for the scan. The target has three Swift files; a root that stops resolving reports
-    /// zero and would otherwise pass vacuously.
-    static let minimumFilesScanned = 3
+    /// Floor for the scan. The target has five Swift files (two of them shared into the app since
+    /// 2026-09-30); a root that stops resolving reports zero and would otherwise pass vacuously.
+    static let minimumFilesScanned = 5
 
     /// Modules an appex hosted by Messages may import.
     ///
@@ -126,6 +131,72 @@ struct MessagesExtensionBoundaryTests {
                 "the received screen is no longer decided by the resolver MessagesReceivedItemTests pins")
     }
 
+    // MARK: - One card builder, shared with the app (2026-09-30)
+
+    /// The files compiled into BOTH the extension and the app, through the synchronized folder's
+    /// membership exception for the `Fernlet` target.
+    static let sharedCardFiles = ["FernletMessagesCard.swift", "FernletMessagesCardCopy.swift"]
+
+    /// The composer inserts the recipe card the shared builder makes, and keeps no recipe layout of
+    /// its own — so the card the app composes for "Send in Messages" cannot drift from this one.
+    @Test func theComposerBuildsItsRecipeCardThroughTheSharedBuilder() throws {
+        let source = try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesViewController.swift")
+        #expect(try Self.body(of: "insertSelectedRecipe", in: source).contains("FernletMessagesCard.recipeMessage(for: entry.packet)"),
+                "insertSelectedRecipe no longer builds its card with FernletMessagesCard.recipeMessage(for:)")
+        let code = PrivacyWipeCoverageTests.strippingCommentsAndStringLiteralBodies(source)
+        #expect(code.components(separatedBy: "MSMessageTemplateLayout()").count - 1 == 1,
+                "the controller builds a template layout other than the workout card's — a second recipe card format")
+        #expect(!code.contains("MSMessage()"), "the controller mints a message outside FernletMessagesCard.message(for:layout:)")
+        for gone in ["func recipeLayout(", "func placeholderImage(", "func message(for envelope"] {
+            #expect(!code.contains(gone), "FernletMessagesViewController declares \(gone) again — use FernletMessagesCard")
+        }
+    }
+
+    /// No app source builds a Messages card of its own: every `MSMessage` and template layout the
+    /// app sends comes out of the shared builder.
+    @Test func theAppBuildsNoMessagesCardOfItsOwn() throws {
+        var offenders: [String] = []
+        var scanned = 0
+        for root in ["App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension"] {
+            guard let walker = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root).")
+                continue
+            }
+            for case let url as URL in walker where url.pathExtension == "swift" {
+                scanned += 1
+                let code = PrivacyWipeCoverageTests.strippingCommentsAndStringLiteralBodies(try String(contentsOf: url, encoding: .utf8))
+                if code.contains("MSMessageTemplateLayout(") || code.contains("MSMessage(") {
+                    offenders.append(url.lastPathComponent)
+                }
+            }
+        }
+        #expect(scanned >= 150, "scanned only \(scanned) app Swift files — the roots moved")
+        #expect(offenders.isEmpty, """
+            \(offenders.sorted()) build a Messages card outside FernletMessagesCard. A second builder is a \
+            second card format: the recipient's extension would have to open both. Build it with \
+            FernletMessagesCard, which both targets compile.
+            """)
+    }
+
+    /// The two shared files are members of the app target, through the extension folder's own
+    /// membership-exception set — the precedent the widget files set — and nothing else is.
+    @Test func theSharedCardFilesAreMembersOfTheAppTarget() throws {
+        let project = try RepoRoot.source("App/Fernlet.xcodeproj/project.pbxproj")
+        let opener = "/* Exceptions for \"FernletMessagesExtension\" folder in \"Fernlet\" target */ = {"
+        let start = try #require(project.range(of: opener), "the extension folder has no membership exception for the Fernlet target")
+        let end = try #require(project.range(of: "};", range: start.upperBound..<project.endIndex))
+        let set = project[start.upperBound..<end.lowerBound]
+        let listed = set.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasSuffix(".swift,") }
+            .map { String($0.dropLast()) }
+        #expect(listed == Self.sharedCardFiles)
+        #expect(set.contains("target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;"))
+        for file in Self.sharedCardFiles {
+            #expect(FileManager.default.fileExists(atPath: RepoRoot.url("\(Self.extensionRoot)/\(file)").path))
+        }
+    }
+
     /// Every function an opened card runs through, from the switch to the drawn labels, plus the
     /// opening state `viewDidLoad` shows before the activation decides.
     static let receivedCardPath = [
@@ -162,7 +233,8 @@ struct MessagesExtensionBoundaryTests {
     /// was not done. Modelled on `LocalizationBoundaryTests.everyForkedStringActuallyReachedItsCatalog`.
     @Test func everyCopyVaultKeyReachedTheCatalog() throws {
         let source = try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesCopy.swift")
-        let keys = Self.localizedKeys(in: source)
+        let cardSource = try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesCardCopy.swift")
+        let keys = Self.localizedKeys(in: source).union(Self.localizedKeys(in: cardSource))
 
         #expect(
             keys.count >= Self.minimumCopyVaultKeys,
@@ -191,9 +263,38 @@ struct MessagesExtensionBoundaryTests {
         )
     }
 
-    /// Floor for the copy-vault scan (57 keys at the time of writing; the target's other three are
-    /// the probe's).
+    /// Every key of the shared card copy is ALSO in the app's catalog (2026-09-30).
+    ///
+    /// `FernletMessagesCardCopy` is compiled into the app for the recipe Share screen's "Send in
+    /// Messages", and there `String(localized:)` resolves against `App/Fernlet/Localizable.xcstrings`.
+    /// A key missing from it fails the same silent way as above: the card the app composes reads its
+    /// English `defaultValue` in every language. `Scripts/sync-string-catalogs.sh` harvests the keys
+    /// from the app target's build; the three counts' plural blocks are hand-authored
+    /// (`LocalizationBoundaryTests.countBearingKeysCarryPluralVariations()`).
+    @Test func theSharedCardCopyReachedTheAppCatalog() throws {
+        let cardKeys = Self.localizedKeys(in: try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesCardCopy.swift"))
+        #expect(cardKeys.count >= Self.minimumCardCopyKeys, "found only \(cardKeys.count) keys in FernletMessagesCardCopy")
+        let appData = try Data(contentsOf: RepoRoot.url("App/Fernlet/Localizable.xcstrings"))
+        let appJSON = try JSONSerialization.jsonObject(with: appData) as? [String: Any]
+        let appCatalogued = Set((appJSON?["strings"] as? [String: Any] ?? [:]).keys)
+        let missingInApp = cardKeys.subtracting(appCatalogued)
+        #expect(
+            missingInApp.isEmpty,
+            """
+            \(missingInApp.count) key(s) of the shared card copy are not in App/Fernlet/Localizable.xcstrings, \
+            so a card the app composes ("Send in Messages") renders them English forever. Run \
+            Scripts/sync-string-catalogs.sh, hand-author the three counts' plural blocks, and commit:
+            \(missingInApp.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Floor for the copy-vault scan: 57 keys in one vault until 2026-09-30, when the card's eight
+    /// moved to `FernletMessagesCardCopy` (the target's other three are the probe's).
     static let minimumCopyVaultKeys = 45
+
+    /// Floor for the shared card copy: its eight keys.
+    static let minimumCardCopyKeys = 8
 
     /// Every `String(localized: "key"` key named in `source`.
     static func localizedKeys(in source: String) -> Set<String> {

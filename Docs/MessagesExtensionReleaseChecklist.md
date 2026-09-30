@@ -32,6 +32,15 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
   format it does not know (packet version 2), not as damaged.
 - [ ] Sender and receiver both have the shipping Fernlet version: send and review one recipe and
   one planned-workout card.
+- [ ] **Send in Messages from the app** (2026-09-30): open a recipe's Share screen (Food › recipe row
+  › Share, the recipe book, or the recipe page's Share), tap **Send in Messages**, pick a contact
+  and send. The simulator can never check this row — `canSendText` is false on every simulator and
+  the composer cannot be presented there — so it is hardware-only. Confirm: the draft shows the card
+  (picture, name, counts, "Opens in Fernlet on iPhone") and no body text; the bubble matches one
+  inserted from the iMessage app for the same recipe; tapping it on the receiving iPhone opens
+  **Review in Fernlet** like any other card; the Share screen then says "Sent in Messages." (and
+  nothing after Cancel). Then record what an SMS (green-bubble) recipient and a recipient without
+  Fernlet each see, and whether "Include notes" off really sent no notes and no steps.
 - [ ] Sender and receiver use different supported Fernlet versions: verify unsupported envelopes
   are rejected before any inbox write.
 - [ ] Receiver does not have Fernlet: confirm Messages shows the standard app-install path and no

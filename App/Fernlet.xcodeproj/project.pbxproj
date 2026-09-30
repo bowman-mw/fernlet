@@ -93,6 +93,14 @@
 			);
 			target = 4D5347000000000000000010 /* FernletMessagesExtension */;
 		};
+		4D5347000000000000000003 /* Exceptions for "FernletMessagesExtension" folder in "Fernlet" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				FernletMessagesCard.swift,
+				FernletMessagesCardCopy.swift,
+			);
+			target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;
+		};
 		6869C3082FB8D39D0098A0F3 /* Exceptions for "Fernlet" folder in "Fernlet" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -138,6 +146,7 @@
 		4D5347000000000000000001 /* FernletMessagesExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				4D5347000000000000000003 /* Exceptions for "FernletMessagesExtension" folder in "Fernlet" target */,
 				4D5347000000000000000002 /* Exceptions for "FernletMessagesExtension" folder in "FernletMessagesExtension" target */,
 			);
 			path = FernletMessagesExtension;

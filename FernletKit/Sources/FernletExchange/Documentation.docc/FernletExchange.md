@@ -1,8 +1,8 @@
 # ``FernletExchange``
 
 The portable exchange core: versioned recipe and workout-plan packets, the bounded card and
-`MSMessage.url` envelope the Messages extension sends, and the App Group catalog and review inboxes
-the extension and the containing app share.
+`MSMessage.url` envelope a Fernlet Messages card carries, and the App Group catalog and review
+inboxes the extension and the containing app share.
 
 ## Overview
 
@@ -12,11 +12,15 @@ to live in a process Messages hosts: Foundation, CryptoKit, Compression (Apple's
 for the version-2 envelope's DEFLATE, since 2026-09-24) and `FernletDomainModel` (with its
 `FernletFoundation` dependency) and nothing else — no repository, no store, no sync, no HealthKit,
 no Proximity, no `Private*` module. The containing app links it too, through the umbrella
-`FernletKit` product, for three things: the Files and Shortcuts exchange (`ExchangeIntentService`,
+`FernletKit` product, for four things: the Files and Shortcuts exchange (`ExchangeIntentService`,
 `ExchangeFileIntents`, the `.fernletrecipe` / `.fernletplan` document types declared in
 `FernletExchangePackets.swift`), the app half of the Messages hand-off
-(`FernletMessagesCatalogPublisher`, `FernletMessagesRecipeImport`, the two review sheets), and the
-recipe share codec.
+(`FernletMessagesCatalogPublisher`, `FernletMessagesRecipeImport`, the two review sheets), the
+recipe share codec, and — since 2026-09-30 — composing a recipe card itself: the recipe Share
+screen's "Send in Messages" builds a ``RecipeExchangePacket`` and an ``ExchangeMessageEnvelope``
+and hands the card to `MFMessageComposeViewController`, through the extension's own card builder
+(`FernletMessagesCard`, compiled into both targets). There is still ONE envelope and ONE card
+format: the app's card and the extension's are the same bytes (`MessagesRecipeCardParityTests`).
 
 **The rule that shapes the whole module: a packet carries data, never a decision.** Nothing here
 opens a repository, resolves a duplicate, applies a collision policy, schedules a workout or saves a

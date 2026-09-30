@@ -2258,6 +2258,20 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/FernletMessagesExtension/Localizable.xcstrings",
                      key: "messages.workout.sessionCount",
                      source: "the session count on a shared workout plan"),
+        // The recipe card's three counts AGAIN, in the app's catalog (2026-09-30): the card builder
+        // and its copy (`FernletMessagesCardCopy`) are compiled into the app for the recipe Share
+        // screen's "Send in Messages", and there they resolve against the app bundle. Sync harvests
+        // the keys; the `one`/`other` blocks are hand-authored here too, or a card the app composes
+        // reads "1 servings" in English and worse elsewhere.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "messages.recipe.servingCount",
+                     source: "the serving count on a recipe card the app composes"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "messages.recipe.ingredientCount",
+                     source: "the ingredient count on a recipe card the app composes"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "messages.recipe.stepCount",
+                     source: "the step count on a recipe card the app composes"),
         // Network migration P8 item 4's continued-processing card. The key is a BARE LITERAL —
         // `LocalizedStringResource("\(count) friends connected")` — so the key IS the English
         // default and `xcstringstool sync` harvested it with a `%lld` in it and nothing else.
@@ -3301,9 +3315,10 @@ struct LocalizationBoundaryTests {
     /// its three sentences are `LocalizedError` cases, which rule G already owns.
     static let uikitTargetRoot = "App/FernletMessagesExtension"
 
-    /// Floor for the part-H2 scan: the target's three Swift files. Small on purpose — this root is
+    /// Floor for the part-H2 scan: the target's five Swift files (two of them, the recipe card's
+    /// builder and copy, also compiled into the app since 2026-09-30). Small on purpose — this root is
     /// one directory, so the floor's job is to notice the directory moving, not churn.
-    static let minimumUIKitTargetFilesScanned = 3
+    static let minimumUIKitTargetFilesScanned = 5
 
     /// A literal in the UIKit target that is a protocol or system TOKEN rather than copy.
     struct UIKitTargetToken: Sendable {
@@ -3332,6 +3347,11 @@ struct LocalizationBoundaryTests {
             path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
             literal: "dumbbell.fill",
             reason: "SF Symbol name — see the `fork.knife` entry."
+        ),
+        UIKitTargetToken(
+            path: "App/FernletMessagesExtension/FernletMessagesCard.swift",
+            literal: "fork.knife",
+            reason: "SF Symbol name drawn into the recipe card's artwork — see the first `fork.knife` entry."
         ),
         UIKitTargetToken(
             path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",

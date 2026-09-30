@@ -37,10 +37,15 @@
 //  locale — a stored `static let` would freeze whatever language the extension process launched
 //  in, and a Messages extension outlives many foregroundings.
 //
-//  COUNTS carry plural rules. `servingCount`, `ingredientCount`, `stepCount` and `workoutCount`
-//  are hand-authored in the catalog with `one`/`other` variations;
-//  `LocalizationBoundaryTests.countBearingKeysCarryPluralVariations()` pins all four, because
-//  `xcstringstool sync` preserves a plural block but will never invent one.
+//  COUNTS carry plural rules. `workoutCount` here, and the recipe card's `servingCount`,
+//  `ingredientCount` and `stepCount` in `FernletMessagesCardCopy`, are hand-authored in the catalog
+//  with `one`/`other` variations; `LocalizationBoundaryTests.countBearingKeysCarryPluralVariations()`
+//  pins all four, because `xcstringstool sync` preserves a plural block but will never invent one.
+//
+//  THE CARD'S OWN COPY LIVES NEXT DOOR (2026-09-30). What a sent recipe card carries — its captions,
+//  wordmark, summary line and counts — moved to `FernletMessagesCardCopy`, keys unchanged, because
+//  the card builder (`FernletMessagesCard`) is now compiled into the app too, for the recipe Share
+//  screen's "Send in Messages". This vault stays extension-only.
 //
 
 import Foundation
@@ -168,21 +173,6 @@ enum FernletMessagesCopy {
                comment: "VoiceOver value spoken for the currently chosen catalog card. Spoken after the card's name, as a state — not a button label.")
     }
 
-    static func servingCount(_ count: Int) -> String {
-        String(localized: "messages.recipe.servingCount", defaultValue: "\(count) servings",
-               comment: "Serving count in a recipe card's subtitle, e.g. '4 servings'. Needs a plural variation per language; English also needs the one-serving form.")
-    }
-
-    static func ingredientCount(_ count: Int) -> String {
-        String(localized: "messages.recipe.ingredientCount", defaultValue: "\(count) ingredients",
-               comment: "Ingredient count in a recipe card's subtitle, e.g. '9 ingredients'. Needs a plural variation per language; English also needs the one-ingredient form.")
-    }
-
-    static func stepCount(_ count: Int) -> String {
-        String(localized: "messages.recipe.stepCount", defaultValue: "\(count) steps",
-               comment: "Step count in a recipe card's subtitle, e.g. '6 steps'. Needs a plural variation per language; English also needs the one-step form.")
-    }
-
     static func workoutCount(_ count: Int) -> String {
         String(localized: "messages.workout.sessionCount", defaultValue: "\(count) workouts",
                comment: "Number of sessions in a shared workout plan, e.g. '3 workouts'. Needs a plural variation per language; English also needs the one-workout form.")
@@ -245,46 +235,11 @@ enum FernletMessagesCopy {
                comment: "Shown when the card could not be prepared for a reason other than its size, or Messages itself refused it. Nothing was added to the conversation.")
     }
 
-    static func messageSummary(title: String) -> String {
-        String(localized: "messages.card.summaryText", defaultValue: "Fernlet: \(title)",
-               comment: "The card's accessibility/notification summary — what Messages reads aloud and shows in a notification preview. %@ is the item's own title.")
-    }
-
-    // MARK: - Message card captions
-
-    static var cardNotesIncluded: String {
-        String(localized: "messages.card.notesIncluded", defaultValue: "Notes included",
-               comment: "Trailing caption on the sent recipe card, telling the recipient a written note travels with it. Keep it short — Messages truncates this corner hard.")
-    }
-
-    static var cardRecipe: String {
-        String(localized: "messages.card.recipe", defaultValue: "Fernlet recipe",
-               comment: "Trailing caption on a sent recipe card carrying no note. Keep it short — Messages truncates this corner hard.")
-    }
+    // MARK: - Message card captions (the workout card's; the recipe card's are in FernletMessagesCardCopy)
 
     static var cardPlan: String {
         String(localized: "messages.card.plan", defaultValue: "Fernlet plan",
                comment: "Trailing caption on a sent workout card when the sender set no display name of their own. Keep it short — Messages truncates this corner hard.")
-    }
-
-    /// The one line on a sent card aimed at a recipient who CANNOT open it (2026-09-30). The card is a
-    /// serverless `data:` URL bound to Fernlet's iMessage extension, so on a device without that
-    /// extension — no Fernlet, a Fernlet build older than 24, an iPad or a Mac — Messages answers a tap
-    /// with its own install sheet, which has nothing to show while Fernlet has no public App Store page.
-    /// Messages draws the template layout itself, so this line is EXPECTED to be what that recipient
-    /// can read — unverified: it has been seen only on a recipient that has the extension. It does not
-    /// fill the sheet. (The owner's "pops up and is blank" report turned out to be something else: a
-    /// stale extension registration inside a Messages process that outlived a Fernlet update, fixed by
-    /// force-quitting Messages — see the extension's DocC page.) Fernlet users see the line too, hence
-    /// the neutral wording.
-    static var cardOpensInFernlet: String {
-        String(localized: "messages.card.opensInFernlet", defaultValue: "Opens in Fernlet on iPhone",
-               comment: "Small line in the lower-right corner of every sent recipe or workout card. Every recipient reads it, including one whose device cannot open the card (no Fernlet, an older Fernlet, an iPad or a Mac), so it says where the card opens, neutrally, without instructions. 'Fernlet' is the product name and must NOT be translated; 'iPhone' is Apple's product name. Keep it short — Messages truncates this corner hard.")
-    }
-
-    static var recipeWordmark: String {
-        String(localized: "messages.card.wordmark.recipe", defaultValue: "FERNLET RECIPE",
-               comment: "Wordmark DRAWN INTO the card artwork the recipient sees in the conversation. Rendered at 28pt into a 1200×630 image, so a much longer translation will not fit; upper case matches the mark. 'Fernlet' is the product name and must not be translated.")
     }
 
     static var workoutWordmark: String {

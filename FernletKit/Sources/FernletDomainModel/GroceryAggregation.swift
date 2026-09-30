@@ -192,7 +192,7 @@ public nonisolated enum GroceryAggregation {
     }
 
     /// Whole numbers render without a trailing decimal; everything else uses `%g` (drops trailing
-    /// zeros), matching `RecipeShareCodec.shareText`'s quantity formatting.
+    /// zeros), the quantity formatting the recipe paste text used until 2026-09-30.
     static func formatQuantity(_ q: Double) -> String {
         guard q.isFinite else { return String(q) }
         if q == q.rounded(), abs(q) < 1e15 { return String(Int(q)) }

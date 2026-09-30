@@ -21,16 +21,36 @@ struct RecipeShareCodecTests {
         #expect(decoded == payload)
     }
 
+    /// Text an OLDER build shared still imports, alone or inside a message someone wrote around it.
+    /// Builds stopped writing this format on 2026-09-30 (the share sheet sends `RecipeShareText`);
+    /// the reader is unchanged, and this frozen literal is what holds it.
+    @Test func legacyShareTextStillImports() throws {
+        let frozen = LegacyRecipeShareTextFixture.frozenText
+        #expect(try RecipeShareCodec.decodePayload(from: frozen) == LegacyRecipeShareTextFixture.frozenPayload)
+
+        let wrapped = "Try this after training.\n\n\(frozen)\n\nSent from Fernlet."
+        #expect(try RecipeShareCodec.decodePayload(from: wrapped) == LegacyRecipeShareTextFixture.frozenPayload)
+    }
+
+    /// The test helper that rebuilds the old text for other suites' fixtures writes exactly what
+    /// older builds shared, and the marker it matches is the frozen English token.
+    @Test func theLegacyFixtureIsWhatOlderBuildsShared() throws {
+        #expect(try LegacyRecipeShareTextFixture.text(for: LegacyRecipeShareTextFixture.frozenPayload)
+                == LegacyRecipeShareTextFixture.frozenText)
+        #expect(RecipeShareCodec.legacyPayloadMarker == "Fernlet recipe data:")
+        #expect(LegacyRecipeShareTextFixture.frozenText.contains("\n\(RecipeShareCodec.legacyPayloadMarker)\n{"))
+    }
+
+    /// The store imports an older build's text end to end: its name, ingredients and steps.
     @MainActor
-    @Test func shareTextRoundTripsWithPreamble() throws {
+    @Test func theFixturesLegacyTextImportsIntoTheStore() throws {
         let fixture = makeRecipeFixture()
         let payload = RecipeShareCodec.payload(for: fixture.recipe, foodItems: fixture.foodItems)
-        let shareText = RecipeShareCodec.shareText(for: fixture.recipe, foodItems: fixture.foodItems)
-        let text = "Try this after training.\n\n\(shareText)\n\nSent from Fernlet."
-
-        let decoded = try RecipeShareCodec.decodePayload(from: text)
-
-        #expect(decoded == payload)
+        let store = makeTestStore()
+        let imported = try store.importRecipe(from: try LegacyRecipeShareTextFixture.text(for: payload))
+        #expect(imported.name == "Training Bowl")
+        #expect(imported.ingredients.count == 3)
+        #expect(imported.steps?.map(\.text) == ["Combine oats and yogurt.", "Top with berries and chill."])
     }
 
     @Test func decodeRejectsTextWithoutPayloadMarker() {
@@ -430,12 +450,12 @@ struct RecipeShareCodecTests {
 
     // MARK: - Decimal ingredient grams (2026-09-29)
 
+    /// An older build's paste text carries the fractional grams in its JSON; the reader keeps them.
     @MainActor
-    @Test func decimalGramsSurviveTheShareTextAndThePasteImport() throws {
+    @Test func decimalGramsSurviveAnOlderBuildsPasteImport() throws {
         let fixture = makeDecimalRecipeFixture()
-        let text = RecipeShareCodec.shareText(for: fixture.recipe, foodItems: fixture.foodItems)
-        #expect(text.contains("- 40 g House granola (P3.4 C24.5 F0.5)"))
-        #expect(text.contains("- 80 g Rolled oats (P10 C54 F6)"))   // whole grams read exactly as before
+        let sent = RecipeShareCodec.payload(for: fixture.recipe, foodItems: fixture.foodItems)
+        let text = try LegacyRecipeShareTextFixture.text(for: sent)
 
         let payload = try RecipeShareCodec.decodePayload(from: text)
         let granola = try #require(payload.ingredients.first { $0.name == "House granola" })

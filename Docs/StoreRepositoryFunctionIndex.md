@@ -2,7 +2,7 @@
 
 This index maps the core store, repository, persistence, and extracted store service functions to their responsibilities. Use it before adding data mutation, save/load, derived signal, retry queue, saved recipe, launch preparation, storage preference, or sealed-buffer behavior so existing lifecycle code is reused instead of duplicated.
 
-**Last refreshed: 2026-08-20.** This pass removed a hotspot row and a whole section for
+**Last refreshed: 2026-08-20** (and 2026-09-30 for the recipe-share rows: `SavedRecipeService.shareText` retired, `FernletStore+RecipeShare.swift` added). This pass removed a hotspot row and a whole section for
 `BundledFoodSeedingService`, a type that no longer exists in any form; corrected the
 `loadPersistentStores` entry, which advertised a corrupt-store recovery capability the app does not
 have; re-pointed the `Models.swift` section at the `FernletDomainModel` files it was split into; and
@@ -257,7 +257,7 @@ split is by concern, not alphabetical.
 | `applyMealCorrection(...)` | Updates meal nutrition, note, confidence, fallback flag, and quality. |
 | `attachMealPhoto(mealID:photoID:)`, `mealPhotoData(for:)`, `saveMealPhoto(_:)` | Bridge meal photo attachment and storage through `MealPhotoStore`. |
 | `logCatalogFoodItem(_:)`, `logRecipe(_:)`, `logSavedRecipe(_:)`, `logWebImportedFoodProduct(_:)` | Convert an exact catalog pick (as one editable serving), local recipe, saved URL recipe, or imported product into a logged meal. |
-| Saved recipe wrappers | Delegate share text, add, update, and delete to `SavedRecipeService`. |
+| Saved recipe wrappers | Delegate add, update, and delete to `SavedRecipeService`. (Share text moved to `recipeShareText(for:includesNotes:)` on 2026-09-30.) |
 | `addWorkout(_:date:)` | Appends a workout, invalidates summaries, persists, and saves to HealthKit when appropriate. For a Fernlet-logged workout it first makes the one first-workout Health ask (`offerWorkoutHealthAccessOnFirstUse()`) and its save awaits that ask, so the workout reaches Health only if the user allowed it — the log itself never waits. |
 | `installWorkoutHealthAccessOffer(service:preferencesStore:)` / `offerWorkoutHealthAccessOnFirstUse()` / `recordWorkoutHealthOfferResolvedBySettings()` | The first-workout Health offer (`WorkoutHealthAccessOffer`, 2026-09-23): wired by `ContentView` at launch (not under a test harness); claimed synchronously at the first workout logged (`addWorkout`) or started (`startGuidedRun`), returning the one task every save awaits; and the explicit-off fact Settings records when the user turns Health or workout sharing off. The fact lives in `sensitiveVisibilityDefaults` and `resetAll` clears it (`clearWorkoutHealthOfferResolution`). |
 | `refreshWorkoutsFromHealth()` / `backfillWorkoutsFromHealthIfNeeded(defaults:)` | Delegate HealthKit import/backfill to `WorkoutHealthKitSync`. |
@@ -277,7 +277,8 @@ split is by concern, not alphabetical.
 | `cachedWebImportedFoodProduct(for:)` / `saveWebImportedFoodProduct(_:)` | Reuse or upsert imported branded food products by normalized query/name. |
 | `rememberFoodSearchCorrections(_:)` / `publishFoodSearchCorrectionAliases()` | Research §26 fix 1.10's local correction memory: record the search-text → chosen-food pairs a SAVED "Adjust meal" replace produced (`FoodSearchCorrectionMemory`, a device-local `UserDefaults` sidecar, never synced between devices, capped at 200), and republish the alias map into `FoodCatalog.setSearchAliases` — at launch, after every write, and (as an empty map) on the wipe path. `forgetAllFoodSearchCorrections()` is the user-facing clear behind Privacy & data's "Forget corrected searches" row (returns the count it forgot); `foodSearchCorrectionCount` drives that row's text. |
 | `macroTotals(for:)` / `micronutrientTotals(for:)` | Compute local recipe nutrition from current food catalog data. |
-| `recipeShareText(for:)`, `proximityRecipeSharePayload(for:)` | Build share text or proximity payloads through `RecipeShareCodec`. |
+| `proximityRecipeSharePayload(for:)` | Builds the proximity payload through `RecipeShareCodec` (with the recipe's picture, downscaled here in the app target). |
+| `recipeShareDraft(for:)` / `recipeShareText(for:includesNotes:)` / `recipeMessagesCardOffer(for:includesNotes:)` (`FernletStore+RecipeShare.swift`) | The recipe Share screen (2026-09-30): the one draft every entry point builds (title, recipe, nearby payload); the readable "Share as text" body through `RecipeShareText` for either recipe half, calories following the setting and no Fernlet data in it (it replaced both `RecipeShareCodec.shareText` and `SavedRecipeService.shareText`); and what "Send in Messages" may offer — `ready` with the exchange packet only when the card's URL fits, else `tooLarge`, `webImported` or `unavailable`. "Include notes" off withholds notes and, for a recipe the person made, steps, as the nearby share does. |
 | `importProximityRecipeShare(_:)` / `importRecipe(from:)` | Import local or saved recipes from proximity/share payloads, creating ingredients and saved recipes as needed. |
 | `addTexture(_:)`, `deleteMemory(_:)`, `updateMemory(_:category:text:)` | Mutate workshop texture notes and memory records. |
 | `queueMealRetry(_:)`, `clearRetryItem(_:)` | Delegate AI retry queue operations. |
@@ -521,7 +522,6 @@ declared here, never by naming the app-target types that implement them.
 | `delete(_:)` | Removes a saved recipe by ID and enqueues its delete. |
 | `reset()` | Clears saved recipes, clears the buffer so a pending write cannot resurrect them, and returns whether the persisted rows were deleted. |
 | `flushPendingSave()` | Delegates to `DebouncedRowBuffer.flush()` — writes pending upserts/deletes now, keeping a failed queue for retry. |
-| `shareText(for:)` | Builds user-shareable saved recipe text with macros, summary, ingredients, and source URL. |
 | `makeMeal(from:mealType:)` | Converts a saved URL recipe into a `Meal`. |
 
 The debounce/queue mechanics this service used to own now live in `PendingWriteBuffer.swift` (below), shared with `CustomItemService`, `CoinLedgerService`, and `MilestoneLedgerService`.

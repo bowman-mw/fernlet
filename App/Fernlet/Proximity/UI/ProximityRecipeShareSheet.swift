@@ -6,14 +6,15 @@ import FernletUI
 
 /// One recipe the user chose to share, packaged for the share sheet.
 ///
-/// Built at the tap site in `FoodView` (from a local recipe or a saved web recipe) and presented
-/// via `.sheet(item:)`: `payload` is the signed wire body ``ProximityRecipeShareSheet`` sends
-/// over the proximity radio, and `shareText` is the plain-text fallback for the system
-/// "Share outside Fernlet" link.
+/// Built by `FernletStore.recipeShareDraft(for:)` at the tap site in `FoodView` (from a local recipe
+/// or a saved web recipe) and presented via `.sheet(item:)`: `payload` is the signed wire body
+/// ``ProximityRecipeShareSheet`` sends over the proximity radio, and `recipe` is what the "Share
+/// outside Fernlet" card builds its Messages card and its readable text from, for the sheet's
+/// current "Include notes" choice (``RecipeShareElsewhereCard``).
 struct ProximityRecipeShareDraft: Identifiable, Equatable {
     let id = UUID()
     var title: String
-    var shareText: String
+    var recipe: RecipeDefinition
     var payload: ProximityRecipeSharePayload
 }
 
@@ -25,10 +26,13 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// — every other row disables while one is engaged), a searching pulse that gives way to a
 /// "no nearby Fernlets" hint after ~6 s, the connect/send/sent status line, and — with the
 /// proximity debug tools on, never in Release — a collapsible diagnostics card. Recipients are
-/// named through `PeerNameDisplay`, never by fingerprint. An "Include notes" toggle strips the payload's share notes before sending,
-/// and an "Include picture" toggle (default ON, shown only when the draft carries one) strips the
-/// attached recipe photo — the picture can be the sender's own kitchen shot, so it gets the same
-/// per-share control as their notes.
+/// named through `PeerNameDisplay`, never by fingerprint. An "Include notes" toggle, above both
+/// cards since 2026-09-30, covers every way the sheet shares — nearby, Messages and text: it strips
+/// the payload's share notes before a nearby send and is passed to ``RecipeShareElsewhereCard``. An
+/// "Include picture" toggle (default ON, shown only when the draft carries one) strips the attached
+/// recipe photo from the nearby send — the picture can be the sender's own kitchen shot, so it gets
+/// the same per-share control as their notes. It stays in the nearby card because it is the only
+/// route that carries a picture: a Messages card uses Fernlet's own artwork, and text has none.
 /// On disappear it also restarts passive listening behind the same opt-in + active-scene + lock
 /// gates ContentView enforces — the go-dark-after-share fix, since `stop()` would otherwise leave
 /// the device undiscoverable for inbound recipes until the next scene/tab/lock event.
@@ -105,8 +109,9 @@ struct ProximityRecipeShareSheet: View {
         }
     }
 
-    /// The picker: the recipe, the nearby card, the status line, diagnostics and the "Share outside
-    /// Fernlet" link. Carries the toolbar Done, so there is only one Done while the panel shows.
+    /// The picker: the recipe, the "Include notes" switch, the nearby card, the status line,
+    /// diagnostics and the "Share outside Fernlet" card (Messages and text). Carries the toolbar Done,
+    /// so there is only one Done while the panel shows.
     private var pickerContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -121,6 +126,10 @@ struct ProximityRecipeShareSheet: View {
                     // accessibility sizes instead of being cut mid-word.
                     titleLineLimit: 3
                 )
+
+                if draft.payload.hasShareNotes {
+                    notesToggleCard
+                }
 
                 recipientCard
 
@@ -137,7 +146,7 @@ struct ProximityRecipeShareSheet: View {
                     diagnosticDetailsCard
                 }
 
-                externalShareCard
+                RecipeShareElsewhereCard(recipe: draft.recipe, includesNotes: includeNotes, store: store)
             }
             .padding(20)
             .padding(.bottom, 10)
@@ -149,26 +158,10 @@ struct ProximityRecipeShareSheet: View {
         }
     }
 
-    /// The nearby card: the per-share notes/picture toggles and the recipient list (or the
-    /// searching / no-nearby state).
-    private var recipientCard: some View {
+    /// Per-share consent for the sender's notes (and, for a recipe they made, their steps), above
+    /// both cards because it covers every route the sheet shares by.
+    private var notesToggleCard: some View {
         FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Fernlet nearby", systemImage: "dot.radiowaves.left.and.right")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-
-                shareToggles
-
-                recipientList
-            }
-        }
-    }
-
-    /// Per-share consent for the two optional payload parts: the sender's notes and their picture.
-    @ViewBuilder
-    private var shareToggles: some View {
-        if draft.payload.hasShareNotes {
             Toggle(isOn: $includeNotes) {
                 Text("Include notes")
                     .font(.fernlet(.label))
@@ -177,7 +170,27 @@ struct ProximityRecipeShareSheet: View {
             .toggleStyle(.switch)
             .tint(Color.moss)
         }
+    }
 
+    /// The nearby card: the per-share picture toggle and the recipient list (or the searching /
+    /// no-nearby state).
+    private var recipientCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Fernlet nearby", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.fernlet(.header))
+                    .foregroundStyle(Color.bark)
+
+                pictureToggle
+
+                recipientList
+            }
+        }
+    }
+
+    /// Per-share consent for the nearby send's one optional part beyond the notes: the picture.
+    @ViewBuilder
+    private var pictureToggle: some View {
         if draft.payload.imageJPEGData != nil {
             Toggle(isOn: $includePhoto) {
                 Text("Include picture")
@@ -245,21 +258,6 @@ struct ProximityRecipeShareSheet: View {
         .buttonStyle(.plain)
         .disabled(isLockedOut)
         .opacity(isLockedOut ? 0.4 : 1)
-    }
-
-    /// The escape hatch: share the recipe as plain text through the system share sheet.
-    private var externalShareCard: some View {
-        FernletCard {
-            ShareLink(item: draft.shareText) {
-                Label("Share outside Fernlet", systemImage: "square.and.arrow.up")
-                    .font(.fernlet(.label))
-                    // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                    .foregroundStyle(Color.mossInk)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     /// Starts the recipe radio and arms the "nothing nearby" timeout.
