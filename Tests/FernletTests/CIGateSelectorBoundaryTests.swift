@@ -161,6 +161,11 @@ import Testing
     /// RE-MEASURED at the ingredient-search round's F5 (2026-09-30): `food-search` 6 → 7, for
     /// `FoodIngredientIdentityTests` — the recipe surfaces' identity-first ranking rules, which move
     /// only the corpus pins and compile clean when they change. Pinned by name in ``wallLines`` too.
+    ///
+    /// RE-MEASURED at the ingredient-search round's F4b (2026-09-30): `food-search` 7 → 9, for
+    /// `TypicalPortionTableTests` (every typical size at its cited SR Legacy row) and
+    /// `RecipePortionPickerTests` (the recipe editor's per-food unit menu). Both pinned by name in
+    /// ``wallLines`` too.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 8,
         "no-tracking": 1,
@@ -175,7 +180,7 @@ import Testing
         "codeowners": 1,
         "messages-envelope": 5,
         "recipe-wire": 1,
-        "food-search": 7,
+        "food-search": 9,
         "mesh-batteries": 154
     ]
 
@@ -205,7 +210,8 @@ import Testing
                               "FernletExchangeTests", "MessagesReceivedItemTests",
                               "MessagesRecipeCardParityTests"],
         "recipe-wire": ["RecipeMultipartWireTests"],
-        "food-search": ["IngredientSearchCorpusTests", "CatalogDefaultUnitSweepTests", "FoodIngredientIdentityTests"]
+        "food-search": ["IngredientSearchCorpusTests", "CatalogDefaultUnitSweepTests", "FoodIngredientIdentityTests",
+                        "TypicalPortionTableTests", "RecipePortionPickerTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and

@@ -365,16 +365,24 @@ jobs:
         # (2026-09-30): variant words in a product name, a person's own food read by its first
         # segment, and the compound level read below the person's own and logged rows (three tests) —
         # the same seven suites, same reading, 98 tests, 0 failed, 0 skipped, no restart line.
+        # RE-MEASURED 98 → 112 at F4b (2026-09-30), which adds `TypicalPortionTableTests` (every
+        # typical size found at its cited SR Legacy row in the committed catalog, and the rows it may
+        # weigh) and `RecipePortionPickerTests` (the recipe editor's per-food unit menu, its save and
+        # re-open rules, the inflected caption) — like the corpus, a change to either compiles clean.
+        # The nine suites as written, read off their own result bundle's `totalTestCount` on the F4b
+        # tree after a build-for-testing: 112 tests, 0 failed, 0 skipped, no restart line.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh food-search 98 \
+          Scripts/run-gated-suites.sh food-search 112 \
             IngredientSearchCorpusTests \
             CatalogDefaultUnitSweepTests \
             RecipeImportIngredientLineTests \
             BundledRowCorrectionTests \
             CatalogHygieneTests \
             DishTemplateBindAuditTests \
-            FoodIngredientIdentityTests
+            FoodIngredientIdentityTests \
+            TypicalPortionTableTests \
+            RecipePortionPickerTests
 
       # The two exchange-wire lines below are the 2026-09-24 round's (the version-2 Messages card, and
       # recipes made in parts). Each pins a WIRE — bytes that an older build, or a card already sitting
