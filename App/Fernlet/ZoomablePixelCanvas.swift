@@ -11,6 +11,11 @@ import FernletDomainModel
 /// - **One finger** paints — a single-touch pan/tap that the scroll view leaves alone, mapped to a grid
 ///   cell and reported back so the SwiftUI editor keeps owning the pixel/undo/symmetry logic.
 ///
+/// **The canvas owns every touch that starts on it** (owner report 2026-09-29, "it still scrolls
+/// when you're drawing"). No recognizer outside the canvas — the host page's scroll view, the
+/// customization sheet's drag, the iOS 26 swipe-back-from-anywhere — may act on a stroke: see
+/// ``Coordinator/install(on:)`` and the two delegate answers that enforce it.
+///
 /// The pixels render through the shared `ItemTextureRenderer` (one image pixel per cell) shown in a
 /// `UIImageView` with a `.nearest` magnification filter, so blocks stay crisp at every zoom level for
 /// free — no redraw-on-zoom needed.
@@ -33,16 +38,7 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
     func makeUIView(context: Context) -> ZoomScrollView {
         let view = ZoomScrollView()
         view.delegate = context.coordinator
-
-        let paintPan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePaintPan(_:)))
-        paintPan.maximumNumberOfTouches = 1
-        paintPan.delegate = context.coordinator
-        view.content.addGestureRecognizer(paintPan)
-
-        let paintTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePaintTap(_:)))
-        paintTap.delegate = context.coordinator
-        view.content.addGestureRecognizer(paintTap)
-
+        context.coordinator.install(on: view)
         return view
     }
 
@@ -63,19 +59,54 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
     /// The UIKit-side broker between the scroll view's zoom/pan and the paint gestures.
     ///
     /// As `UIScrollViewDelegate` it supplies the zooming view and flips `paintSuppressed` around
-    /// scroll/zoom interactions (reverting a staggered-pinch stray stroke via `onStrokeCancelled`);
-    /// as `UIGestureRecognizerDelegate` it lets the one-finger paint pan/tap recognize
-    /// simultaneously with the scroll view's gestures. Each paint sample is mapped from the
-    /// content view's coordinates to a grid cell and reported through `onPaintCell` — the SwiftUI
-    /// editor keeps ownership of the pixel/undo/symmetry logic.
+    /// scroll/zoom interactions (reverting a staggered-pinch stray stroke via `onStrokeCancelled`).
+    /// As `UIGestureRecognizerDelegate` of the three recognizers ``install(on:)`` adds, it draws
+    /// one boundary — the canvas (``isCanvasOwn(_:)``) — and answers both questions UIKit asks
+    /// about it: the canvas's own recognizers share a touch with each other (a pinch can start
+    /// under a finger that is already painting), and every recognizer OUTSIDE the canvas must
+    /// wait for the canvas's recognizers to fail, which a stroke never does. Each paint sample is
+    /// mapped from the content view's coordinates to a grid cell and reported through
+    /// `onPaintCell` — the SwiftUI editor keeps ownership of the pixel/undo/symmetry logic.
+    ///
+    /// Main-thread only, like the views it serves; the canvas reference is weak because the view
+    /// owns the recognizers that hold this coordinator, never the reverse.
     final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
         var parent: ZoomablePixelCanvas
+        /// The canvas ``install(on:)`` wired — the boundary ``isCanvasOwn(_:)`` draws.
+        private(set) weak var canvas: ZoomScrollView?
         private var isStroking = false
         /// True while a zoom/pan owns the touches: paint is a no-op until the interaction ends. Guards
         /// the staggered pinch where the first finger crosses the pan threshold before the second lands.
         private var paintSuppressed = false
 
         init(_ parent: ZoomablePixelCanvas) { self.parent = parent }
+
+        /// Adds the canvas's three recognizers to `view`, each with this coordinator as delegate.
+        /// Internal rather than private so the gesture tests drive the exact wiring the app ships.
+        ///
+        /// - The **paint pan** (one finger) and **paint tap** paint.
+        /// - The **touch owner** — a pan with no action and no touch-count cap, on the scroll view
+        ///   itself — exists only to hold the failure requirement for touches the paint pan does
+        ///   not cover. The paint pan is capped at one finger, so a two-finger drag is not its
+        ///   gesture, and on an un-zoomed canvas (whose own pan has nothing to scroll yet) such a
+        ///   drag would otherwise fall through to the page or the sheet.
+        func install(on view: ZoomScrollView) {
+            canvas = view
+
+            let paintPan = UIPanGestureRecognizer(target: self, action: #selector(handlePaintPan(_:)))
+            paintPan.maximumNumberOfTouches = 1
+            paintPan.delegate = self
+            view.content.addGestureRecognizer(paintPan)
+
+            let paintTap = UITapGestureRecognizer(target: self, action: #selector(handlePaintTap(_:)))
+            paintTap.delegate = self
+            view.content.addGestureRecognizer(paintTap)
+
+            let touchOwner = UIPanGestureRecognizer(target: nil, action: nil)
+            touchOwner.cancelsTouchesInView = false
+            touchOwner.delegate = self
+            view.addGestureRecognizer(touchOwner)
+        }
 
         func viewForZooming(in scrollView: UIScrollView) -> UIView? {
             (scrollView as? ZoomScrollView)?.content
@@ -113,11 +144,36 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
             }
         }
 
-        // One-finger paint must coexist with the scroll view's pinch (and its 2-finger pan) — they engage
-        // at different touch counts, so allow simultaneous recognition rather than one starving the other.
+        /// True when `other` belongs to the canvas: attached to the zoom scroll view or anything
+        /// inside it (its pinch and two-finger pan, and the three recognizers ``install(on:)``
+        /// adds). Everything else — the host page's scroll view, the sheet's drag, the navigation
+        /// stack's swipe-back — is outside. False before ``install(on:)`` has run, which puts every
+        /// recognizer outside and so errs towards the canvas keeping its touches.
+        func isCanvasOwn(_ other: UIGestureRecognizer) -> Bool {
+            guard let canvas, let view = other.view else { return false }
+            return view.isDescendant(of: canvas)
+        }
+
+        /// One-finger paint coexists with the canvas's OWN pinch and two-finger pan — they engage at
+        /// different touch counts, and a pinch may start under a finger that is already painting.
+        ///
+        /// Only with those. This answered `true` for every recognizer until 2026-09-29, and UIKit
+        /// treats a single `true` from either side as a guarantee, so a stroke also drove the host
+        /// page's scroll view, dragged the customization sheet, and — on a blank canvas, where the
+        /// system back button is still live — let a left-to-right first stroke pop the studio.
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            true
+            isCanvasOwn(other)
+        }
+
+        /// Every recognizer outside the canvas waits for this one to fail. A stroke never fails (it
+        /// ends), so nothing outside can begin while a finger that started on the canvas is down; a
+        /// plain tap still paints, because the tap recognizes rather than fails. This is the half
+        /// that makes the outcome certain: refusing to share (above) is a request another delegate
+        /// can overrule, whereas a failure requirement set up here always holds.
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            !isCanvasOwn(other)
         }
 
         @objc func handlePaintPan(_ gesture: UIPanGestureRecognizer) {
