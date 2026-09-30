@@ -169,16 +169,21 @@ struct IngredientSearchCorpusTests {
     /// "Onion Rings" row the heuristic reads as an ingredient — onion (see `FoodSearchCorpusTests`'
     /// review battery); the one-row-per-name collapse lifted tomatoes. Shrimp fell 2 → 3: the row it
     /// had landed on was the misfiled product "Cooked Shrimp", which left the generic tier.
-    static let measuredBaseline = (plainAtOne: 103, plainVisible: 136)
+    /// 112 / 144 with F7: the curated aliases put USDA's "Candies, semisweet chocolate" first for
+    /// chocolate chip(s) and the four typing prefixes "chocolate c/ch/chi/chip", "Spices, pepper, red
+    /// or cayenne" for red pepper flakes, the soybean salad or cooking oil for vegetable oil, and the
+    /// SR "Garlic, raw" for garlic clove (2 → 1).
+    static let measuredBaseline = (plainAtOne: 112, plainVisible: 144)
 
     /// The names-only baseline beside it — the report's §4.1 table (97 at #1, 132 visible on
     /// cf46b8eb), which judged names without nutrition. Kept so the gap between the two is visible.
-    static let nameOnlyBaseline = (plainAtOne: 104, plainVisible: 137)
+    static let nameOnlyBaseline = (plainAtOne: 113, plainVisible: 145)
 
     /// Count-noun queries whose first plausible plain VISIBLE row takes "1 each". Zero on cf46b8eb:
     /// the report's §4.3 "1 of 26" counted "1 each" OR "1 piece" on the first plain row of the top
     /// 10 ("Chicken breast, roasted" takes "1 piece" only). One with F2: "garlic clove" lands on a
-    /// branded jar whose label serving became its "each" (15 g — a serving, not a clove). Seventeen
+    /// branded jar whose label serving became its "each" (15 g — a serving, not a clove; since F7 it
+    /// lands on USDA's raw garlic and its own 3 g clove, still one of the count). Seventeen
     /// with F4a, from the rows' own USDA counts: banana(s) and onions to their medium, eggs to the
     /// Foundation row's 50.3 g egg, lemon to the fruit its NLEA serving names, lime, orange, carrot(s),
     /// cucumber, jalapeno, grape tomatoes, corn tortillas and zucchini. Still refused: apple(s), egg,
@@ -385,8 +390,8 @@ struct IngredientSearchCorpusTests {
         .init("baking powder", 1, 1),
         .init("vanilla extract", 1, 1),
         .init("cocoa powder", 2, 2),
-        .init("chocolate chips", nil, nil),
-        .init("chocolate chip", nil, nil),
+        .init("chocolate chips", 1, 1),
+        .init("chocolate chip", 1, 1),
         .init("semisweet chocolate chips", 1, 1),
         .init("semi sweet chocolate chips", 1, 1),
         .init("dark chocolate chips", 2, 2),
@@ -424,7 +429,7 @@ struct IngredientSearchCorpusTests {
         .init("peanut butter", 1, 1),
         .init("almond flour", 1, 1),
         .init("coconut oil", 1, 1),
-        .init("vegetable oil", nil, nil),
+        .init("vegetable oil", 1, 1),
         .init("canola oil", 3, 3),
         .init("olive oil", 4, 4),
         .init("extra virgin olive oil", 1, 1),
@@ -447,7 +452,7 @@ struct IngredientSearchCorpusTests {
         .init("red onion", 1, 1, each: true),
         .init("yellow onion", 1, 1, each: true),
         .init("garlic", 1, 1),
-        .init("garlic clove", 2, 2, each: true),
+        .init("garlic clove", 1, 1, each: true),
         .init("ginger", 1, 1),
         .init("carrot", 1, 1, each: true),
         .init("carrots", 1, 1, each: true),
@@ -508,7 +513,7 @@ struct IngredientSearchCorpusTests {
         .init("oregano", 1, 1),
         .init("garlic powder", 1, 1),
         .init("onion powder", 1, 1),
-        .init("red pepper flakes", nil, nil),
+        .init("red pepper flakes", 1, 1),
         .init("vinegar", 1, 1),
         .init("apple cider vinegar", 1, 1),
         .init("balsamic vinegar", 1, 1),
@@ -522,10 +527,10 @@ struct IngredientSearchCorpusTests {
         .init("water", 2, 2),
         .init("choc", 2, 2),
         .init("chocolate", 2, 2),
-        .init("chocolate c", nil, nil),
-        .init("chocolate ch", nil, nil),
-        .init("chocolate chi", nil, nil),
-        .init("chocolate chip", nil, nil),
+        .init("chocolate c", 1, 1),
+        .init("chocolate ch", 1, 1),
+        .init("chocolate chi", 1, 1),
+        .init("chocolate chip", 1, 1),
         .init("ban", 1, 1),
         .init("bana", 1, 1),
         .init("banan", 1, 1),

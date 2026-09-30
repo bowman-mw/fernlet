@@ -679,6 +679,26 @@ struct LocalizationBoundaryTests {
         #expect(lineObject["householdMeasure"] != nil, "…under the frozen key householdMeasure")
     }
 
+    /// The curated search aliases (ingredient-search round, F7). Each phrase is matched against the
+    /// normalized text a person types into the recipe editor, over a catalog baked in English, and
+    /// names a row by its catalog id — so both halves are matching inputs, never display text.
+    @Test func frozenCuratedSearchAliases() {
+        #expect(
+            CuratedSearchAlias.entries.map(\.phrase) == [
+                "chocolate chips", "chocolate chip", "choc chips", "choc chip", "semisweet chocolate chips",
+                "semisweet chocolate chip", "semisweet chocolate", "garlic cloves", "garlic clove",
+                "red pepper flakes", "red pepper flake", "crushed red pepper", "vegetable oil"
+            ],
+            """
+            The curated alias phrases changed. Each is compared with the typed English query; a \
+            translated or re-spelled phrase matches nothing and "chocolate chips" is back to 24 chip \
+            cookies. Add a phrase deliberately (it moves the typed list) and measure it; localize \
+            nothing here — an es/fr/de table would be added beside this one.
+            """
+        )
+        #expect(CuratedSearchAlias.spellingFolds.map { "\($0.first) \($0.second)>\($0.folded)" } == ["semi sweet>semisweet"])
+    }
+
     /// Coach-plan wire tokens.
     ///
     /// `MuscleGroup` and `Equipment` raw values are persisted in day rows, persisted in the

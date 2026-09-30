@@ -208,10 +208,15 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// explicit statement ("when I type this, I mean that food") made by a person who was looking at
     /// the wrong answer, while history is an inference from behaviour. An inference must not overrule
     /// a statement. `FoodSearchHistoryCatalogTests` pins it rather than leaving it to code order.
+    /// A curated alias (``CuratedSearchAlias``, ingredient-search round F7) ranks beneath both personal
+    /// signals and above the rest: a correction first, then this person's own and logged rows, then the
+    /// alias's row, then the cold list — `CuratedSearchAliasTests` pins the order.
     /// - Parameter stripsStopwords: See `FoodItemSearch.results(for:in:limit:stripsStopwords:)`.
-    /// - Parameter context: `.userTyped` enables history AND shows one row per catalog name
-    ///   (``TypeaheadDuplicateCollapse``, ingredient-search round F6); synthesized resolver/import
-    ///   queries pass `.machineGenerated` and see every row. Required so every caller states which
+    /// - Parameter context: `.userTyped` enables history, shows one row per catalog name
+    ///   (``TypeaheadDuplicateCollapse``, ingredient-search round F6) AND answers a curated alias
+    ///   phrase with the row it names (``CuratedSearchAlias``, F7 — "chocolate chips" is USDA's
+    ///   "Candies, semisweet chocolate"); synthesized resolver/import queries pass
+    ///   `.machineGenerated` and see every row, unaliased. Required so every caller states which
     ///   surface it serves.
     public func results(
         for query: String,
@@ -247,10 +252,31 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         guard typed else { return promotingCorrection(ranked, for: query, limit: limit) }
         let ownIDs = Set(userItems.map(\.id))
         let history = searchHistory
-        let shown = TypeaheadDuplicateCollapse.collapsing(ranked, limit: limit) { item in
+        let isPersonal: (FoodItem) -> Bool = { item in
             ownIDs.contains(item.id) || history.weight(for: item.id, now: rankingNow) > 0
         }
-        return promotingCorrection(shown, for: query, limit: limit)
+        let shown = TypeaheadDuplicateCollapse.collapsing(ranked, limit: limit, isProtected: isPersonal)
+        let aliased = insertingCuratedAlias(into: shown, for: query, limit: limit, isPersonal: isPersonal)
+        return promotingCorrection(aliased, for: query, limit: limit)
+    }
+
+    /// Inserts the row a ``CuratedSearchAlias`` phrase names (ingredient-search round, F7) — typed
+    /// search only, so the resolver's `candidates(for:limit:)` and the importer's bind never see it.
+    ///
+    /// The row goes directly beneath the leading run of this person's own rows (their items and the
+    /// rows they have logged), so on a cold catalog it is first; a correction is prepended afterwards
+    /// by ``promotingCorrection(_:for:limit:)`` and so still wins. Nothing is filtered out: a copy of
+    /// the target already in the list moves up, and the list is re-capped at `limit`. Inert when no
+    /// phrase matches or the target does not resolve (an in-memory test catalog, a future rebuild).
+    private func insertingCuratedAlias(
+        into shown: [FoodItem], for query: String, limit: Int, isPersonal: (FoodItem) -> Bool
+    ) -> [FoodItem] {
+        guard limit > 0, let id = CuratedSearchAlias.targetID(forTyped: query),
+              let target = source.item(id: id) else { return shown }
+        var rows = shown.filter { $0.id != target.id }
+        let slot = rows.prefix(limit - 1).prefix(while: isPersonal).count
+        rows.insert(target, at: slot)
+        return Array(rows.prefix(limit))
     }
 
     /// Like ``results(for:limit:)`` but pairs each item with its match score, for callers that gate

@@ -101,6 +101,19 @@ the one with more household portions the domain's tolerant portion reader can re
 raw" is now the SR row with a clove and a cup, not the RACC-only Foundation row) — never hiding a user
 item or a row this person has logged; machine-generated queries see every row.
 
+**Curated aliases.** A typed search also answers a short, frozen-English table of phrases whose
+food's catalog NAME does not say them (the internal `CuratedSearchAlias`, ingredient-search round F7):
+"chocolate chip(s)", "choc chips" and "semi sweet chocolate chips" name USDA's "Candies, semisweet
+chocolate" (its "chips" live only in portion text, which neither FTS nor the name floor reads), "garlic
+clove(s)" names the SR "Garlic, raw" that carries a clove, "red pepper flakes" names "Spices, pepper, red
+or cayenne", and "vegetable oil" names the soybean salad or cooking oil. A phrase matches while its last
+word is still being typed ("chocolate chi"), never on one word, and "semi sweet" folds to "semisweet".
+The row is inserted, never substituted: it sits beneath this person's own and logged rows and beneath a
+correction, above the cold list, and the list keeps its limit. It is typed-only by construction —
+``FoodCatalog/candidates(for:limit:)``, the importer's bind and
+``FoodCatalog/scoredResults(for:limit:stripsStopwords:)`` never see it — so no alias reaches a
+meal-resolution pool or a bind-confidence gate. Targets are the rows' deterministic catalog ids.
+
 The module also owns the ambient nutrient-nudge data path: ``CuratedNutrientSources``
 loads the hand-authored good-sources table (`Resources/CuratedNutrientSources.json`,
 ~55 ``CuratedFoodSource`` rows pinned to real catalog ids with a normalized-name
