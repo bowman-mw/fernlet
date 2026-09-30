@@ -227,14 +227,17 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         let rankingNow = Date()
         let typed = context == .userTyped
         let fetchLimit = typed ? TypeaheadDuplicateCollapse.fetchLimit(for: limit) : limit
+        let candidates = index(for: query, stripsStopwords: stripsStopwords)
+        guard !isSuperseded(typed) else { return [] }
         let normal = FoodItemSearch.results(
             for: query,
-            in: index(for: query, stripsStopwords: stripsStopwords),
+            in: candidates,
             limit: fetchLimit,
             stripsStopwords: stripsStopwords,
             history: typed ? searchHistory : .empty,
             now: rankingNow
         )
+        guard !isSuperseded(typed) else { return [] }
         let ranked: [FoodItem]
         if normal.isEmpty, typed,
            mayRelaxOneToken(of: query, stripsStopwords: stripsStopwords) {
@@ -258,6 +261,18 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         let shown = TypeaheadDuplicateCollapse.collapsing(ranked, limit: limit, isProtected: isPersonal)
         let aliased = insertingCuratedAlias(into: shown, for: query, limit: limit, isPersonal: isPersonal)
         return promotingCorrection(aliased, for: query, limit: limit)
+    }
+
+    /// Whether a TYPED search has been superseded: the task running it was cancelled because a newer
+    /// keystroke replaced it (ingredient-search round, F9 — the recipe editor's typeahead cancels its
+    /// detached search when the field changes). The typed path then stops at its next stage boundary,
+    /// after retrieval or after scoring, and answers `[]`, which that caller already discards; a broad
+    /// prefix such as "choc" hydrates ~9,000 rows and scores them for ~0.7 s on the simulator, so a
+    /// fast typist no longer queues that work once per keystroke. A machine-generated query never stops
+    /// early: a resolver or importer caller that happens to run in a cancelled task still gets its
+    /// whole answer, never a silently truncated one.
+    private func isSuperseded(_ typed: Bool) -> Bool {
+        typed && Task.isCancelled
     }
 
     /// Inserts the row a ``CuratedSearchAlias`` phrase names (ingredient-search round, F7) — typed

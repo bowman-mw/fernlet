@@ -2035,6 +2035,10 @@ struct CollapsedIngredientRow: View {
 /// aborts before any work), runs `FoodCatalog.results(for:)` — real SQLite + hydrate + score work
 /// over a catalog growing toward ~482k rows — on a detached task off the main actor, then returns
 /// nil when superseded so the caller keeps its current list instead of applying a stale result.
+/// A detached task does not inherit its parent's cancellation, so the parent's is forwarded to it:
+/// a keystroke that supersedes a search already running cancels that search too, and the typed
+/// catalog path stops at its next stage boundary (ingredient-search round, F9) instead of finishing
+/// work nobody will read.
 /// An empty query returns `[]` immediately. Callers must invoke it from `.task(id:)` keyed on the
 /// live text, never synchronously in `body`.
 enum CatalogTypeahead {
@@ -2049,9 +2053,14 @@ enum CatalogTypeahead {
             return nil
         }
         // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
-        let hits = await Task.detached { [catalog] in
+        let search = Task.detached { [catalog] in
             catalog.results(for: trimmed, context: .userTyped)
-        }.value
+        }
+        let hits = await withTaskCancellationHandler {
+            await search.value
+        } onCancel: {
+            search.cancel()
+        }
         // Drop the result if this task was superseded while the query was running.
         guard !Task.isCancelled else { return nil }
         return hits
@@ -2197,7 +2206,8 @@ struct RecipeIngredientEditor: View {
     /// The `catalog.results(for:)` call does real work (SQLite + hydrate + index + score) and the
     /// catalog is growing toward ~482k rows, so it must never run synchronously in `body`.
     @State private var typeaheadResults = CatalogTypeaheadResultSet()
-    /// True after the user takes the explicit create-it escape from a settled catalog miss.
+    /// True after the user takes the explicit create-it escape — from a settled catalog miss, or from
+    /// beneath a list that holds nothing right (ingredient-search round, F9).
     @State private var isCreatingCustomIngredient = false
 
     var body: some View {
@@ -2296,6 +2306,7 @@ struct RecipeIngredientEditor: View {
                 }
             }
             .accessibilityIdentifier("recipeIngredient.catalogResults")
+            CustomIngredientEscapeRow(isCreating: isCreatingCustomIngredient) { isCreatingCustomIngredient = true }
         } else if showsSettledMiss && !isCreatingCustomIngredient {
             CatalogSearchEmptyState(actionTitle: "Create custom ingredient") {
                 isCreatingCustomIngredient = true
