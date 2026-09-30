@@ -39,6 +39,15 @@ import FernletDomainModel
 /// the moment they were tapped. They are rewritten to the canonical `g` / `ml` tokens at load. `IU`,
 /// `MC` and the survey units ("sandwich") name no mass or volume and are left as they are; the
 /// converter now lets them resolve "1 serving" (`RecipeServingConversion`).
+///
+/// **Branded products filed as SR Legacy (F6).** 763 compact-source rows are typed `srLegacy` though
+/// they are packaged products the source file carried without a brand owner — "Annies Hmgrwn Org
+/// Cookie Bites Choc Chip", 718 of them with carbohydrate 0 — so they sat in the generic tier above
+/// every real branded row and crowded plain answers out of the six (report §5, D2). None of them is
+/// an SR Legacy food, and every one carries a branded-food category ("Confectionery Products",
+/// "Cheese/Cheese Substitutes") rather than one of SR Legacy's 25 food groups, so they are retyped
+/// `branded` BY CATEGORY — not by FDC-id range, which also holds real generics (FDC 746761, a beef
+/// round). Retyped before the F2 rebase, so the 46 of them on a label serving are rebased too.
 nonisolated enum BundledRowCorrection {
     /// The id prefix the catalog generator mints for rows decoded from the compact USDA source JSON
     /// (`00000000-0000-5000-8000-<12-digit fdcId>`, see `USDAFoodItemRecord.stableUSDAID`). A frozen
@@ -57,9 +66,34 @@ nonisolated enum BundledRowCorrection {
         "MLT": RecipeUnit.milliliter.rawValue
     ]
 
+    /// SR Legacy's 25 food groups — the FDC `foodCategory.description` of every SR Legacy food, read
+    /// from USDA's April 2018 SR Legacy file. FROZEN matching inputs (localization wall): they are
+    /// compared with the English category strings stored in the catalog files.
+    static let srLegacyFoodGroups: Set<String> = [
+        "American Indian/Alaska Native Foods", "Baby Foods", "Baked Products", "Beef Products",
+        "Beverages", "Breakfast Cereals", "Cereal Grains and Pasta", "Dairy and Egg Products",
+        "Fast Foods", "Fats and Oils", "Finfish and Shellfish Products", "Fruits and Fruit Juices",
+        "Lamb, Veal, and Game Products", "Legumes and Legume Products",
+        "Meals, Entrees, and Side Dishes", "Nut and Seed Products", "Pork Products",
+        "Poultry Products", "Restaurant Foods", "Sausages and Luncheon Meats", "Snacks",
+        "Soups, Sauces, and Gravies", "Spices and Herbs", "Sweets",
+        "Vegetables and Vegetable Products"
+    ]
+
     /// Every load-time correction, in order, applied to one hydrated row.
     static func corrected(_ item: FoodItem) -> FoodItem {
-        rebasingBrandedNutrients(aliasingRawServingUnit(item))
+        rebasingBrandedNutrients(retypingMisfiledBrandedProducts(aliasingRawServingUnit(item)))
+    }
+
+    /// F6: types a compact-source `srLegacy` row `branded` when its category is not an SR Legacy food
+    /// group. Every other row is returned unchanged.
+    static func retypingMisfiledBrandedProducts(_ item: FoodItem) -> FoodItem {
+        guard item.dataType == .srLegacy,
+              item.id.uuidString.hasPrefix(compactSourceIDPrefix),
+              !srLegacyFoodGroups.contains(item.category) else { return item }
+        var retyped = item
+        retyped.dataType = .branded
+        return retyped
     }
 
     /// F1(a): rewrites a raw FDC serving-unit code (`GRM`, `GM`, `MLT`) to the token it means.

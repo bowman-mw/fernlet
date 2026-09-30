@@ -69,12 +69,18 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         self.source = source
     }
 
-    /// Convenience for production: opens the bundled `FoodCatalog.sqlite`, falling back to an empty
-    /// catalog (user items only) if the resource is missing. `bundle` defaults to this module's
-    /// resource bundle (`.module`); it is passed as `nil` here because `.module` is synthesized as
-    /// internal and cannot appear as a default-argument value in this public API.
+    /// Convenience for production: opens the bundled `FoodCatalog.sqlite` together with the rows that
+    /// ship beside it (``BundledFoodSupplement``, served through ``SupplementedBundledFoodSource``),
+    /// falling back to an empty catalog (user items only) if the database is missing. `bundle` defaults
+    /// to this module's resource bundle (`.module`); it is passed as `nil` here because `.module` is
+    /// synthesized as internal and cannot appear as a default-argument value in this public API.
     public static func bundled(bundle: Bundle? = nil) -> FoodCatalog {
-        FoodCatalog(source: SQLiteBundledFoodSource(bundle: bundle) ?? InMemoryBundledFoodSource())
+        guard let base = SQLiteBundledFoodSource(bundle: bundle) else {
+            return FoodCatalog(source: InMemoryBundledFoodSource())
+        }
+        return FoodCatalog(source: SupplementedBundledFoodSource(
+            primary: base, supplement: BundledFoodSupplement.items(bundle: bundle)
+        ))
     }
 
     private var userItems: [FoodItem] {
@@ -203,8 +209,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// the wrong answer, while history is an inference from behaviour. An inference must not overrule
     /// a statement. `FoodSearchHistoryCatalogTests` pins it rather than leaving it to code order.
     /// - Parameter stripsStopwords: See `FoodItemSearch.results(for:in:limit:stripsStopwords:)`.
-    /// - Parameter context: `.userTyped` enables history; synthesized resolver/import queries pass
-    ///   `.machineGenerated`. Required so every caller states which surface it serves.
+    /// - Parameter context: `.userTyped` enables history AND shows one row per catalog name
+    ///   (``TypeaheadDuplicateCollapse``, ingredient-search round F6); synthesized resolver/import
+    ///   queries pass `.machineGenerated` and see every row. Required so every caller states which
+    ///   surface it serves.
     public func results(
         for query: String,
         limit: Int = 6,
@@ -212,21 +220,23 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         context: FoodSearchContext
     ) -> [FoodItem] {
         let rankingNow = Date()
+        let typed = context == .userTyped
+        let fetchLimit = typed ? TypeaheadDuplicateCollapse.fetchLimit(for: limit) : limit
         let normal = FoodItemSearch.results(
             for: query,
             in: index(for: query, stripsStopwords: stripsStopwords),
-            limit: limit,
+            limit: fetchLimit,
             stripsStopwords: stripsStopwords,
-            history: context == .userTyped ? searchHistory : .empty,
+            history: typed ? searchHistory : .empty,
             now: rankingNow
         )
         let ranked: [FoodItem]
-        if normal.isEmpty, context == .userTyped,
+        if normal.isEmpty, typed,
            mayRelaxOneToken(of: query, stripsStopwords: stripsStopwords) {
             ranked = FoodItemSearch.partialResults(
                 for: query,
                 in: partialIndex(for: query, stripsStopwords: stripsStopwords),
-                limit: limit,
+                limit: fetchLimit,
                 stripsStopwords: stripsStopwords,
                 history: searchHistory,
                 now: rankingNow
@@ -234,7 +244,13 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         } else {
             ranked = normal
         }
-        return promotingCorrection(ranked, for: query, limit: limit)
+        guard typed else { return promotingCorrection(ranked, for: query, limit: limit) }
+        let ownIDs = Set(userItems.map(\.id))
+        let history = searchHistory
+        let shown = TypeaheadDuplicateCollapse.collapsing(ranked, limit: limit) { item in
+            ownIDs.contains(item.id) || history.weight(for: item.id, now: rankingNow) > 0
+        }
+        return promotingCorrection(shown, for: query, limit: limit)
     }
 
     /// Like ``results(for:limit:)`` but pairs each item with its match score, for callers that gate

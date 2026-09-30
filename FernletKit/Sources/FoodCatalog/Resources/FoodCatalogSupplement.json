@@ -1,0 +1,850 @@
+[
+ {
+  "fdcId": 171910,
+  "name": "Beverages, tea, green, brewed, decaffeinated",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "vitaminB6": 0.005,
+  "thiamin": 0.007,
+  "riboflavin": 0.058,
+  "niacin": 0.03,
+  "magnesium": 1.0,
+  "potassium": 15.0,
+  "zinc": 0.01,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 240.0,
+    "unit": "ml",
+    "gramWeight": 240.0,
+    "description": "ml"
+   }
+  ]
+ },
+ {
+  "fdcId": 171911,
+  "name": "Beverages, tea, green, ready to drink, unsweetened",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 1.0,
+  "phosphorus": 26.0,
+  "potassium": 19.0,
+  "sodium": 7.0,
+  "zinc": 0.01,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 16.0,
+    "unit": "fl oz",
+    "gramWeight": 473.0,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 171922,
+  "name": "Beverages, water, bottled, non-carbonated, EVIAN",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 8.0,
+  "magnesium": 2.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 16.9 fl oz",
+    "gramWeight": 500.0,
+    "description": "bottle 16.9 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 11.2 fl oz",
+    "gramWeight": 331.0,
+    "description": "bottle 11.2 fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 171923,
+  "name": "Beverages, Powerade Zero Ion4, calorie-free, assorted flavors",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "vitaminC": 2.5,
+  "vitaminE": 0.57,
+  "vitaminK": 0.2,
+  "vitaminB6": 0.056,
+  "vitaminB12": 0.17,
+  "thiamin": 0.011,
+  "niacin": 0.845,
+  "calcium": 2.0,
+  "iron": 0.05,
+  "magnesium": 1.0,
+  "potassium": 10.0,
+  "sodium": 42.0,
+  "zinc": 0.01,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 12.0,
+    "unit": "fl oz",
+    "gramWeight": 355.0,
+    "description": "fl oz"
+   },
+   {
+    "amount": 8.0,
+    "unit": "fl oz",
+    "gramWeight": 237.0,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 171946,
+  "name": "Beverages, tea, hibiscus, brewed",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "niacin": 0.04,
+  "folate": 1.0,
+  "calcium": 8.0,
+  "iron": 0.08,
+  "magnesium": 3.0,
+  "phosphorus": 1.0,
+  "potassium": 20.0,
+  "sodium": 4.0,
+  "zinc": 0.04,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 8.0,
+    "unit": "fl oz",
+    "gramWeight": 237.0,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 172242,
+  "name": "Seasoning mix, dry, sazon, coriander & annatto",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Spices and Herbs",
+  "sodium": 17000.0,
+  "tags": [
+   "spices",
+   "herbs"
+  ],
+  "portions": [
+   {
+    "amount": 0.25,
+    "unit": "tsp",
+    "gramWeight": 1.0,
+    "description": "tsp"
+   }
+  ]
+ },
+ {
+  "fdcId": 172253,
+  "name": "Babyfood, water, bottled, GERBER, without added fluoride",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Baby Foods",
+  "tags": [
+   "baby"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "serving",
+    "gramWeight": 113.0,
+    "description": "serving"
+   }
+  ]
+ },
+ {
+  "fdcId": 173183,
+  "name": "Beverages, GEROLSTEINER BRUNNEN GmbH & Co. KG (Gerolsteiner), naturally sparkling, mineral bottled water",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 33.0,
+  "magnesium": 11.0,
+  "potassium": 2.0,
+  "sodium": 13.0,
+  "tags": [
+   "beverages"
+  ]
+ },
+ {
+  "fdcId": 173188,
+  "name": "Beverages, The COCA-COLA company, Glaceau Vitamin Water, Revive Fruit Punch, fortified",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "vitaminC": 10.2,
+  "vitaminB6": 0.338,
+  "vitaminB12": 1.02,
+  "niacin": 3.38,
+  "potassium": 148.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 20.0,
+    "unit": "fl oz",
+    "gramWeight": 591.0,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 173233,
+  "name": "Beverages, water, bottled, PERRIER",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 14.0,
+  "sodium": 1.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "bottle 11 fl oz",
+    "gramWeight": 325.0,
+    "description": "bottle 11 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "cup 8 fl oz",
+    "gramWeight": 237.0,
+    "description": "cup 8 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 6.5 fl oz",
+    "gramWeight": 192.0,
+    "description": "bottle 6.5 fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 173234,
+  "name": "Beverages, water, bottled, POLAND SPRING",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 1.0,
+  "iron": 0.01,
+  "magnesium": 1.0,
+  "sodium": 1.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "bottle 24 fl oz",
+    "gramWeight": 710.0,
+    "description": "bottle 24 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 16.9 fl oz",
+    "gramWeight": 500.0,
+    "description": "bottle 16.9 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 8 fl oz",
+    "gramWeight": 237.0,
+    "description": "bottle 8 fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 173468,
+  "name": "Salt, table",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Spices and Herbs",
+  "calcium": 24.0,
+  "iron": 0.33,
+  "magnesium": 1.0,
+  "potassium": 8.0,
+  "sodium": 38800.0,
+  "zinc": 0.1,
+  "tags": [
+   "spices",
+   "herbs"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "cup",
+    "gramWeight": 292.0,
+    "description": "cup"
+   },
+   {
+    "amount": 1.0,
+    "unit": "tsp",
+    "gramWeight": 6.0,
+    "description": "tsp"
+   },
+   {
+    "amount": 1.0,
+    "unit": "tbsp",
+    "gramWeight": 18.0,
+    "description": "tbsp"
+   },
+   {
+    "amount": 1.0,
+    "unit": "dash",
+    "gramWeight": 0.4,
+    "description": "dash"
+   }
+  ]
+ },
+ {
+  "fdcId": 173647,
+  "name": "Beverages, water, tap, drinking",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 3.0,
+  "magnesium": 1.0,
+  "sodium": 4.0,
+  "zinc": 0.01,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "liter",
+    "gramWeight": 1000.0,
+    "description": "liter"
+   },
+   {
+    "amount": 1.0,
+    "unit": "serving 8 fl oz",
+    "gramWeight": 237.0,
+    "description": "serving 8 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 173655,
+  "name": "Beverages, water, bottled, non-carbonated, DANNON",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 3.0,
+  "magnesium": 1.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "bottle 25 fl oz",
+    "gramWeight": 739.0,
+    "description": "bottle 25 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 500 ml",
+    "gramWeight": 500.0,
+    "description": "bottle 500 ml"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 11.2 fl oz",
+    "gramWeight": 331.0,
+    "description": "bottle 11.2 fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 173656,
+  "name": "Beverages, water, bottled, non-carbonated, PEPSI, AQUAFINA",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 16.9 fl oz i",
+    "gramWeight": 500.0,
+    "description": "bottle 16.9 fl oz i"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 24 fl oz",
+    "gramWeight": 710.0,
+    "description": "bottle 24 fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 173657,
+  "name": "Water, bottled, non-carbonated, NAYA",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 4.0,
+  "magnesium": 2.0,
+  "sodium": 1.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 174144,
+  "name": "Beverages, tea, black, ready to drink",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "sodium": 2.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 16.0,
+    "unit": "fl oz",
+    "gramWeight": 473.0,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 174158,
+  "name": "Water, bottled, generic",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 10.0,
+  "magnesium": 2.0,
+  "sodium": 2.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "cup",
+    "gramWeight": 237.0,
+    "description": "cup"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "ml",
+    "gramWeight": 1.0,
+    "description": "ml"
+   }
+  ]
+ },
+ {
+  "fdcId": 174827,
+  "name": "Beverages, GEROLSTEINER BRUNNEN GmbH & Co. KG,Gerolsteiner naturally sparkling mineral water,",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 33.0,
+  "magnesium": 11.0,
+  "potassium": 2.0,
+  "sodium": 13.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 8.0,
+    "unit": "fl oz",
+    "gramWeight": 240.0,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 174842,
+  "name": "Beverages, carbonated, club soda",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 5.0,
+  "iron": 0.01,
+  "magnesium": 1.0,
+  "potassium": 2.0,
+  "sodium": 21.0,
+  "zinc": 0.1,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "can or bottle (12 fl oz)",
+    "gramWeight": 355.0,
+    "description": "can or bottle (12 fl oz)"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "can or bottle (16 fl oz)",
+    "gramWeight": 474.0,
+    "description": "can or bottle (16 fl oz)"
+   }
+  ]
+ },
+ {
+  "fdcId": 175040,
+  "name": "Leavening agents, baking soda",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Baked Products",
+  "sodium": 27400.0,
+  "tags": [
+   "baked"
+  ],
+  "portions": [
+   {
+    "amount": 0.5,
+    "unit": "tsp",
+    "gramWeight": 2.3,
+    "description": "tsp"
+   },
+   {
+    "amount": 1.0,
+    "unit": "tsp",
+    "gramWeight": 4.6,
+    "description": "tsp"
+   }
+  ]
+ },
+ {
+  "fdcId": 175096,
+  "name": "Beverages, water, tap, well",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 3.0,
+  "magnesium": 1.0,
+  "sodium": 5.0,
+  "zinc": 0.01,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "serving 8 fl oz 8 fl oz",
+    "gramWeight": 237.0,
+    "description": "serving 8 fl oz 8 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "liter",
+    "gramWeight": 1000.0,
+    "description": "liter"
+   }
+  ]
+ },
+ {
+  "fdcId": 175103,
+  "name": "Beverages, water, tap, municipal",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 3.0,
+  "magnesium": 1.0,
+  "potassium": 1.0,
+  "sodium": 3.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "bottle 8 fl oz",
+    "gramWeight": 237.0,
+    "description": "bottle 8 fl oz"
+   },
+   {
+    "amount": 3.0,
+    "unit": "ice cube (3/4 fl oz)",
+    "gramWeight": 64.0,
+    "description": "ice cube (3/4 fl oz)"
+   },
+   {
+    "amount": 1.0,
+    "unit": "liter",
+    "gramWeight": 1000.0,
+    "description": "liter"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 175104,
+  "name": "Beverages, The COCA-COLA company, DASANI, water, bottled, non-carbonated",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "bottle 16.9 fl oz",
+    "gramWeight": 500.0,
+    "description": "bottle 16.9 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 12 fl oz",
+    "gramWeight": 355.0,
+    "description": "bottle 12 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 20 fl oz",
+    "gramWeight": 591.0,
+    "description": "bottle 20 fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 175106,
+  "name": "Beverages, water, bottled, non-carbonated, CALISTOGA",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "bottle 24 fl oz",
+    "gramWeight": 710.0,
+    "description": "bottle 24 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 16.9 fl oz",
+    "gramWeight": 500.0,
+    "description": "bottle 16.9 fl oz"
+   }
+  ]
+ },
+ {
+  "fdcId": 175107,
+  "name": "Beverages, water, bottled, non-carbonated, CRYSTAL GEYSER",
+  "servingSize": 100.0,
+  "servingUnit": "g",
+  "protein": 0.0,
+  "carbs": 0.0,
+  "fat": 0.0,
+  "category": "Beverages",
+  "calcium": 3.0,
+  "sodium": 1.0,
+  "tags": [
+   "beverages"
+  ],
+  "portions": [
+   {
+    "amount": 1.0,
+    "unit": "fl oz",
+    "gramWeight": 29.6,
+    "description": "fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 8 fl oz",
+    "gramWeight": 237.0,
+    "description": "bottle 8 fl oz"
+   },
+   {
+    "amount": 1.0,
+    "unit": "bottle 500 ml",
+    "gramWeight": 500.0,
+    "description": "bottle 500 ml"
+   }
+  ]
+ }
+]

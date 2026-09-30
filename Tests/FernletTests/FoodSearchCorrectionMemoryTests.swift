@@ -201,9 +201,9 @@ struct FoodSearchCorrectionCase: Sendable {
 @Suite
 struct FoodSearchCorrectionCatalogTests {
 
-    /// Row count of the shipped catalog, mirrored from `FoodSearchCorpusTests` so every test here
-    /// guards on it and none can pass vacuously against `FoodCatalog.bundled()`'s empty fallback.
-    static let shippedRowCount = 118_317
+    /// Row count of the shipped catalog as loaded, mirrored from `FoodSearchCorpusTests` so every test
+    /// here guards on it and none can pass vacuously against `FoodCatalog.bundled()`'s empty fallback.
+    static let shippedRowCount = FoodSearchCorpusTests.loadedRowCount
 
     /// The bank. Cold pins are the corpus's own (`FoodSearchCorpusTests.corpus` /
     /// `namedRankingPins`) — if one of these disagrees, the corpus moved and this bank is measuring

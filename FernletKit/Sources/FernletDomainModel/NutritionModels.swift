@@ -1723,8 +1723,11 @@ public nonisolated enum PreparedDishHeuristic {
     // across data-type tiers, so a 3-point margin there put a tomato soup above the sandwich.
     // Tier-aware variants were considered and each cost a different measured case (a same-or-higher
     // tier rule loses `broccoli` and `avocado`, whose correct answers sit a tier BELOW the dish).
-    // Strict it is: a demotion may never promote a worse-scoring row, full stop. `beef` and `onion`
-    // stay unfixed and are pinned that way in `FoodSearchCorpusTests.reviewBattery`.
+    // Strict it is: a demotion may never promote a worse-scoring row, full stop. `beef` stays unfixed
+    // and is pinned that way in `FoodSearchCorpusTests.reviewBattery`; `onion` closed without a margin,
+    // by accident, once the catalog's misfiled branded rows left the generic tier (ingredient-search
+    // round, F6) and the window reached a branded "Onion Rings" row that the heuristic reads as an
+    // ingredient — the pin there records how.
 
     private nonisolated static func singular(_ token: String) -> String {
         if token.hasSuffix("ies"), token.count >= 5 { return String(token.dropLast(3)) + "y" }

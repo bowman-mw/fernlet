@@ -14,7 +14,8 @@
 // exclude regex and (for the chocolate family) a "must name chocolate" guard, ported verbatim from the
 // research's `replay/accept.py`. Those patterns were written from the query's recipe meaning before
 // the probe output was read, and judge NAMES only. One was tightened here, as the report's verifiers
-// asked: "carrot"/"carrots" no longer accept "Carrots, raw, salad" (an FNDDS coleslaw).
+// asked: "carrot"/"carrots" no longer accept "Carrots, raw, salad" (an FNDDS coleslaw). One was
+// widened by F6: "water" accepts SR Legacy's "Water, bottled, …" rows, which F6 restored.
 //
 // …AND A PLAIN ROW MUST ALSO BE PHYSICALLY POSSIBLE. §4.1a found six #1 answers landing on branded
 // rows whose macros cannot exist (per-100 g values stored against a 15 g label serving: 3,767 kcal
@@ -161,12 +162,18 @@ struct IngredientSearchCorpusTests {
     /// headline appears. A fix edits the pins it moves and this tuple, in the same commit.
     /// History: 91 / 127 on cf46b8eb; 96 / 131 with F2 (the branded per-100 g rebase made six
     /// names-only answers — semi sweet chips, sprinkles, both olive oils, cherry tomatoes, cider
-    /// vinegar, dijon — physically possible).
-    static let measuredBaseline = (plainAtOne: 96, plainVisible: 131)
+    /// vinegar, dijon — physically possible); unchanged by F1(a); 103 / 136 with F6: the supplement
+    /// restored salt, baking soda, "baking s" and water (water under the widened judge); retyping
+    /// misfiled products out of the generic tier lifted black pepper, oregano, sprinkles, cocoa
+    /// powder, olive oil and mayonnaise, and — by letting the dish-demotion window reach a branded
+    /// "Onion Rings" row the heuristic reads as an ingredient — onion (see `FoodSearchCorpusTests`'
+    /// review battery); the one-row-per-name collapse lifted tomatoes. Shrimp fell 2 → 3: the row it
+    /// had landed on was the misfiled product "Cooked Shrimp", which left the generic tier.
+    static let measuredBaseline = (plainAtOne: 103, plainVisible: 136)
 
-    /// The names-only baseline beside it — the report's §4.1 table (97 at #1, 132 visible), which
-    /// judged names without nutrition. Kept so the gap between the two is visible at a glance.
-    static let nameOnlyBaseline = (plainAtOne: 97, plainVisible: 132)
+    /// The names-only baseline beside it — the report's §4.1 table (97 at #1, 132 visible on
+    /// cf46b8eb), which judged names without nutrition. Kept so the gap between the two is visible.
+    static let nameOnlyBaseline = (plainAtOne: 104, plainVisible: 137)
 
     /// Count-noun queries whose first plausible plain VISIBLE row takes "1 each". Zero on cf46b8eb:
     /// the report's §4.3 "1 of 26" counted "1 each" OR "1 piece" on the first plain row of the top
@@ -341,7 +348,9 @@ struct IngredientSearchCorpusTests {
         .init(.pantry, "tomato paste", #"^tomato, paste|^tomato products, canned, paste|^tomato paste$"#, nil),
         .init(.pantry, "canned tomatoes", #"^tomatoes, (canned, red, ripe, diced|crushed, canned|whole, canned)|^tomatoes, red, ripe, canned|^(canned )?(diced|whole peeled|crushed) tomatoes$"#, nil),
         .init(.pantry, "coconut milk", #"^nuts, coconut milk|^(canned )?(unsweetened )?coconut milk$"#, #"beverage|creamer"#),
-        .init(.pantry, "water", #"^beverages, water, (tap|bottled, (generic|non-carbonated))|^(purified |spring |drinking |pure )?water$"#, nil),
+        // Widened by F6: "Water, bottled, generic" and "Water, bottled, non-carbonated, NAYA" are SR
+        // Legacy's own spellings of plain water, absent from the catalog when the judge was written.
+        .init(.pantry, "water", #"^beverages, water, (tap|bottled, (generic|non-carbonated))|^water, bottled, (generic|non-carbonated)|^(purified |spring |drinking |pure )?water$"#, nil),
         .init(.prefix, "choc", target: "chocolate", #"^chocolate, dark, \d|^candies, (semisweet|milk|dark|sweet|white) chocolate$|^baking chocolate, (unsweetened|mexican)|^candies, chocolate, dark|^candies, semisweet chocolate$|^(organic |premium |real |pure )*(mini |big |mega )*(semi[- ]*sweet |bittersweet |dark |milk |white )?(chocolate )?(flavored )?(baking )?(chips|morsels)\b"#, chipExclusion, chocolate: true),
         .init(.prefix, "chocolate", #"^chocolate, dark, \d|^candies, (semisweet|milk|dark|sweet|white) chocolate$|^baking chocolate, (unsweetened|mexican)|^candies, chocolate, dark|^candies, semisweet chocolate$|^(organic |premium |real |pure )*(mini |big |mega )*(semi[- ]*sweet |bittersweet |dark |milk |white )?(chocolate )?(flavored )?(baking )?(chips|morsels)\b"#, chipExclusion, chocolate: true),
         .init(.prefix, "chocolate c", target: "chocolate chips", #"^candies, semisweet chocolate$|^(organic |premium |real |pure )*(mini |big |mega )*(semi[- ]*sweet |bittersweet |dark |milk |white )?(chocolate )?(flavored )?(baking )?(chips|morsels)\b"#, chipExclusion, chocolate: true),
@@ -368,10 +377,10 @@ struct IngredientSearchCorpusTests {
         .init("granulated sugar", 1, 1),
         .init("brown sugar", nil, nil),
         .init("powdered sugar", 1, 1),
-        .init("baking soda", nil, nil),
+        .init("baking soda", 1, 1),
         .init("baking powder", 1, 1),
         .init("vanilla extract", 1, 1),
-        .init("cocoa powder", 4, 4),
+        .init("cocoa powder", 2, 2),
         .init("chocolate chips", nil, nil),
         .init("chocolate chip", nil, nil),
         .init("semisweet chocolate chips", 1, 1),
@@ -396,7 +405,7 @@ struct IngredientSearchCorpusTests {
         .init("almonds", 1, 1),
         .init("raisins", 1, 1),
         .init("shredded coconut", 1, 1),
-        .init("sprinkles", 2, 2),
+        .init("sprinkles", 1, 1),
         .init("cream cheese", 1, 1),
         .init("heavy cream", 1, 1),
         .init("sour cream", 1, 1),
@@ -413,7 +422,7 @@ struct IngredientSearchCorpusTests {
         .init("coconut oil", 1, 1),
         .init("vegetable oil", nil, nil),
         .init("canola oil", 3, 3),
-        .init("olive oil", 5, 5),
+        .init("olive oil", 4, 4),
         .init("extra virgin olive oil", 1, 1),
         .init("banana", 1, 1, each: false),
         .init("bananas", 1, 1, each: false),
@@ -428,9 +437,9 @@ struct IngredientSearchCorpusTests {
         .init("raspberries", 1, 1),
         .init("avocado", 1, 1, each: false),
         .init("tomato", 2, 2, each: false),
-        .init("tomatoes", 4, 4, each: false),
+        .init("tomatoes", 3, 3, each: false),
         .init("cherry tomatoes", 1, 1),
-        .init("onion", 4, 4, each: false),
+        .init("onion", 1, 1, each: false),
         .init("red onion", 1, 1, each: false),
         .init("yellow onion", 1, 1, each: false),
         .init("garlic", 1, 1),
@@ -466,7 +475,7 @@ struct IngredientSearchCorpusTests {
         .init("ground turkey", 1, 1),
         .init("bacon", 6, 6),
         .init("salmon", 6, 6),
-        .init("shrimp", 2, 2),
+        .init("shrimp", 3, 3),
         .init("tofu", 3, 3),
         .init("black beans", 2, 2),
         .init("chickpeas", 1, 1),
@@ -486,13 +495,13 @@ struct IngredientSearchCorpusTests {
         .init("greek yogurt", 1, 1),
         .init("yogurt", 1, 1),
         .init("soy sauce", 1, 1),
-        .init("salt", nil, nil),
-        .init("black pepper", 2, 2),
+        .init("salt", 1, 1),
+        .init("black pepper", 1, 1),
         .init("cinnamon", 3, 3),
         .init("cumin", 1, 1),
         .init("paprika", 1, 1),
         .init("chili powder", 1, 1),
-        .init("oregano", 2, 2),
+        .init("oregano", 1, 1),
         .init("garlic powder", 1, 1),
         .init("onion powder", 1, 1),
         .init("red pepper flakes", nil, nil),
@@ -501,12 +510,12 @@ struct IngredientSearchCorpusTests {
         .init("balsamic vinegar", 1, 1),
         .init("dijon mustard", 1, 1),
         .init("ketchup", 1, 1),
-        .init("mayonnaise", nil, nil),
+        .init("mayonnaise", 6, 6),
         .init("chicken broth", 4, 4),
         .init("tomato paste", 1, 1),
         .init("canned tomatoes", 1, 1),
         .init("coconut milk", 1, 1),
-        .init("water", nil, nil),
+        .init("water", 2, 2),
         .init("choc", 2, 2),
         .init("chocolate", 2, 2),
         .init("chocolate c", nil, nil),
@@ -517,7 +526,7 @@ struct IngredientSearchCorpusTests {
         .init("bana", 1, 1),
         .init("banan", 1, 1),
         .init("brown s", nil, nil),
-        .init("baking s", nil, nil),
+        .init("baking s", 1, 1),
         .init("chicken b", nil, nil),
         .init("peanut b", 1, 1),
     ]

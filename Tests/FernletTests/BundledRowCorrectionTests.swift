@@ -134,9 +134,10 @@ struct BundledRowCorrectionTests {
     /// and a gram or milliliter label other than 100 is touched.
     @Test func onlyCompactSourceBrandedLabelsAreRebased() throws {
         func row(_ id: String, _ type: FoodDataType, _ size: Double, _ unit: String) throws -> FoodItem {
+            // An SR Legacy food group, so F6's retype of misfiled branded products leaves these alone.
             FoodItem(id: try #require(UUID(uuidString: id)), name: "Row", servingSize: size, servingUnit: unit,
                      macros: Macros(protein: 10, carbs: 20, fat: 5), micronutrients: Micronutrients(),
-                     category: "Test", source: .usda, dataType: type, tags: [])
+                     category: "Sweets", source: .usda, dataType: type, tags: [])
         }
         let compact = "00000000-0000-5000-8000-000000000001"
         let gtin = "5FB8309B-B672-466E-9782-BFF762002DE3"

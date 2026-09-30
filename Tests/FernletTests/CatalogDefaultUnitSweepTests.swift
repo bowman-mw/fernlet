@@ -8,9 +8,9 @@
 // portion." and Save is disabled — the row "fails on tap" (report §3.4).
 //
 // The report measured 16,310 such rows (13.8%) with three independent replicas. This suite sweeps
-// EVERY row the shipped catalog can hand the editor — through `FoodCatalog.items(ids:)`, so any
-// load-time shim applies exactly as it does in the app — and pins the failures by tap-default unit
-// token. Like the corpus suites it is a photograph: a unit fix (F1, F2, F4a) lowers a count on
+// EVERY row the shipped catalog can hand the editor — the file's rows and the supplement served beside
+// it, through `FoodCatalog.items(ids:)`, so any load-time shim applies exactly as it does in the
+// app — and pins the failures by mechanism and tap-default unit token. Like the corpus suites it is a photograph: a unit fix (F1, F2, F4a) lowers a count on
 // purpose and edits the pin in the same commit; a count that moves without one is a regression.
 //
 // BOUNDED. The id read is capped at `sweepCap` rows and hydration runs in fixed-size chunks, so
@@ -31,18 +31,21 @@ struct CatalogDefaultUnitSweepTests {
     /// "N servings" before the unit guard, leaving only IU/MC/survey rows whose "oil"/"flour" names
     /// default to a physical unit. READABLE: a "cup" default the converter cannot honour — the 437
     /// srLegacy rows with two or more volume portions, and "oil" names with a mass serving and no
-    /// portions (F1(b)/(c)'s territory) — plus one 4,320 ml soda past the 3,000 conversion bound.
+    /// portions (F1(b)/(c)'s territory; F6's restored "Salt, table" and "Water, bottled, generic"
+    /// joined them — each has a cup portion beside other volume portions, so its "1 cup" default
+    /// has no unique volume portion) — plus one 4,320 ml drink past the 3,000 conversion bound.
     static let measuredFailures: [String: Int] = [
         "unreadable → cup": 4,
         "unreadable → g": 1,
-        "readable → cup": 1_046,
+        "readable → cup": 1_048,
         "readable → ml": 1
     ]
 
     /// The headline, derived from the pin above. History: 16,310 on cf46b8eb (the report's figure);
     /// 15,771 with F2 — 539 branded rows on the no-portion "oil" branch gained their label serving
-    /// as an "each" portion, which is now their tap default; 1,052 with F1(a).
-    static let measuredFailureTotal = 1_052
+    /// as an "each" portion, which is now their tap default; 1,052 with F1(a); 1,054 with F6's 26
+    /// restored SR foods (salt and bottled water among them).
+    static let measuredFailureTotal = 1_054
 
     /// Upper bound on the rows one sweep reads — comfortably above the catalog, so a catalog that
     /// grew past it fails the row-count check instead of being silently truncated.
@@ -53,9 +56,11 @@ struct CatalogDefaultUnitSweepTests {
 
     @Test func everyBundledRowsTapDefaultConvertsOrIsPinned() throws {
         let started = Date()
-        let ids = try Self.catalogIDs()
-        try #require(ids.count == FoodSearchCorpusTests.shippedRowCount,
+        let fileIDs = try Self.catalogIDs()
+        try #require(fileIDs.count == FoodSearchCorpusTests.shippedRowCount,
                      "the sweep must read the whole shipped catalog")
+        let ids = fileIDs + BundledFoodSupplement.items().map(\.id)
+        try #require(ids.count == FoodSearchCorpusTests.loadedRowCount, "…and the rows served beside it")
         let catalog = FoodCatalog.bundled()
         var failures: [String: Int] = [:]
         var swept = 0

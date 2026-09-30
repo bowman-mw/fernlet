@@ -37,7 +37,7 @@ struct WholeDescriptionFoodProbeTests {
         #expect(FoodSearchCorpusTests.corpus.count == 57)
         #expect(FoodSearchCorpusTests.resolverBank.count == 32)
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == FoodSearchCorpusTests.shippedRowCount)
+        try #require(catalog.bundledCount == FoodSearchCorpusTests.loadedRowCount)
 
         var queries = FoodSearchCorpusTests.corpus.map(\.query)
         queries.append(contentsOf: FoodSearchCorpusTests.resolverBank.map(\.query))
@@ -54,7 +54,7 @@ struct WholeDescriptionFoodProbeTests {
 
     @Test func floorExcludesMeasuredWrongPortionMatches() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == FoodSearchCorpusTests.shippedRowCount)
+        try #require(catalog.bundledCount == FoodSearchCorpusTests.loadedRowCount)
         let unsafe = [
             try measuredMatch("piece of chicken", floor: 250, catalog: catalog),
             try measuredMatch("slice of toast", floor: 250, catalog: catalog),
@@ -90,7 +90,7 @@ struct WholeDescriptionFoodProbeTests {
 
     @Test func realSliceAndPieceServingBasesNeverTreatGramsAsServings() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == FoodSearchCorpusTests.shippedRowCount)
+        try #require(catalog.bundledCount == FoodSearchCorpusTests.loadedRowCount)
         let toast = try #require(WholeDescriptionFoodProbe.match(
             description: "french toast slice", catalog: catalog
         ))
@@ -222,7 +222,7 @@ struct WholeDescriptionFoodProbeTests {
 
     @Test func retailerFallbackSurfacesVerbatimChipAndScalesTypedCount() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == FoodSearchCorpusTests.shippedRowCount)
+        try #require(catalog.bundledCount == FoodSearchCorpusTests.loadedRowCount)
         let branded = try #require(WholeDescriptionFoodProbe.match(
             description: "CostCo cheese pizza slice", catalog: catalog
         ))
@@ -248,7 +248,7 @@ struct WholeDescriptionFoodProbeTests {
     @Test func realQuickLogPathShortCircuitsToOnePortionBeforeDecomposition() async throws {
         let store = makeTestStore(foodCatalog: FoodCatalog.bundled())
         try #require(store.settings.aiStatus == AIStatus.off)
-        try #require(store.foodCatalog.bundledCount == FoodSearchCorpusTests.shippedRowCount)
+        try #require(store.foodCatalog.bundledCount == FoodSearchCorpusTests.loadedRowCount)
         let match = try #require(WholeDescriptionFoodProbe.match(
             description: "costco cheese pizza slice", catalog: store.foodCatalog
         ))

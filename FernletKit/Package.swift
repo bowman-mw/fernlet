@@ -148,6 +148,10 @@ let package = Package(
                 // Hand-authored good-sources table for the F2 micronutrient nudge
                 // (CuratedNutrientSources). Small read-once JSON, loaded via Bundle.module.
                 .copy("Resources/CuratedNutrientSources.json"),
+                // The 26 zero-energy SR Legacy foods the committed catalog's build dropped (salt,
+                // baking soda, waters, teas), served beside it by BundledFoodSupplement.
+                // Regenerated only by Scripts/food-catalog/sr_zero_energy_supplement.py.
+                .copy("Resources/FoodCatalogSupplement.json"),
             ]
         ),
         // Layer 2.5 — shared sealed-storage substrate on the PROTECTED side of the

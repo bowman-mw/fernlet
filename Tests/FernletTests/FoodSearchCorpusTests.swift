@@ -297,6 +297,14 @@ struct FoodSearchCorpusTests {
     /// shipped-catalog tests, which silently `return` when the database is absent).
     static let shippedRowCount = 118_317
 
+    /// Rows of `Resources/FoodCatalogSupplement.json`, which `FoodCatalog.bundled()` serves beside the
+    /// file: the 26 zero-energy SR Legacy foods the catalog build dropped (salt, baking soda, waters,
+    /// teas — ingredient-search round F6).
+    static let supplementRowCount = 26
+
+    /// What `FoodCatalog.bundled().bundledCount` reports: the file's rows plus its supplement's.
+    static let loadedRowCount = shippedRowCount + supplementRowCount
+
     // MARK: - The 57-query corpus
 
     /// The corpus: the research's 26 named failures plus the 31 pre-registered shape-balanced queries.
@@ -306,7 +314,7 @@ struct FoodSearchCorpusTests {
     /// **The measured baseline** for the current tree (see the file header). Derived counts are
     /// asserted against this, and this is the only place the headline numbers appear. Flipping a
     /// verdict means updating exactly one tuple here plus that row.
-    static let measuredBaseline = (zeroResults: 6, wrongTopOne: 24, defensible: 27)
+    static let measuredBaseline = (zeroResults: 6, wrongTopOne: 23, defensible: 28)
 
     /// §34's 11 named zero-result queries, verbatim. Seven are natural-phrasing failures (there is no
     /// stopword list on the search path, so `of` is a hard AND term), three are brand-index failures
@@ -347,15 +355,21 @@ struct FoodSearchCorpusTests {
     /// `CAMPBELL'S, Chicken Noodle Soup, condensed` and `CHICK-FIL-A, chicken sandwich`.
     /// Four more moved without becoming right, and are judged at their rows below.
     static let reportNamedWrongTopOneQueries: [FoodSearchCorpusCase] = [
-        FoodSearchCorpusCase("apple", .reportNamedWrongTopOne, .wrongTopOne, "Apple & Cheese Tray", 809),
+        // Ingredient-search round F6 (2026-09-30): "Apple & Cheese Tray" was a packaged product the
+        // source filed as SR Legacy; retyped branded, it left the generic tier. Still wrong.
+        FoodSearchCorpusCase("apple", .reportNamedWrongTopOne, .wrongTopOne, "Apple salad with dressing", 808),
         FoodSearchCorpusCase("brown rice", .reportNamedWrongTopOne, .wrongTopOne, "Snacks, brown rice chips", 369),
         FoodSearchCorpusCase("cheddar cheese", .reportNamedWrongTopOne, .wrongTopOne,
                              "Sausage, pork and beef, with cheddar cheese, smoked", 366),
         // The calzone is gone (its name carries no "pizza"), and what it was hiding is a genuine
         // cheese pizza — but a WHITE one, which is a different dish from what "cheese pizza" means,
         // and it wins on a score of −12 that is itself a `formSpecificityBias` false positive: "white"
-        // is in `formQualifierTokens` for egg whites, and costs this row 130 points. Still wrong.
-        FoodSearchCorpusCase("cheese pizza", .reportNamedWrongTopOne, .wrongTopOne, "Annie's Three Cheese Pizza Poppers", 368),
+        // is in `formQualifierTokens` for egg whites, and costs this row 130 points. The floors then
+        // left Annie's pizza POPPERS on top, still wrong — until the ingredient-search round's F6
+        // (2026-09-30) retyped that packaged product, which the source had filed as SR Legacy, as
+        // branded. What leads now is the first of the page of real chain cheese pizzas the ranked pin
+        // below records: a cheese pizza, so DEFENSIBLE (flipped deliberately).
+        FoodSearchCorpusCase("cheese pizza", .reportNamedWrongTopOne, .defensible, "PIZZA HUT 12\" Cheese Pizza, Pan Crust", 368),
         FoodSearchCorpusCase("beef tacos", .reportNamedWrongTopOne, .wrongTopOne, "TACO BELL, BURRITO SUPREME with beef", 57),
         FoodSearchCorpusCase("pho", .reportNamedWrongTopOne, .wrongTopOne,
                              "Gelatin desserts, dry mix, reduced calorie, with aspartame, added phosphorus, potassium, sodium, vitamin C", 238),
@@ -445,7 +459,7 @@ struct FoodSearchCorpusTests {
     /// to something else has changed the comparator even on queries whose visible answer is unmoved.
     @Test func corpusReplaysToThePinnedBaseline() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded — this suite must never pass vacuously")
+        try #require(catalog.bundledCount == Self.loadedRowCount, "shipped catalog must be loaded — this suite must never pass vacuously")
         for corpusCase in Self.corpus {
             let ranked = catalog.scoredResults(for: corpusCase.query, limit: 1)
             // Scalars are extracted before the expectation so a failure prints the query and the
@@ -487,8 +501,8 @@ struct FoodSearchCorpusTests {
         #expect(Self.reportNamedWrongTopOneQueries.allSatisfy { $0.shape == .reportNamedWrongTopOne })
         #expect(Self.reportNamedZeroResultQueries.filter { $0.verdict == .zeroResults }.count == 4,
                 "4 of §34's 11 still return nothing — the three brand-index failures plus the typo")
-        #expect(Self.reportNamedWrongTopOneQueries.filter { $0.verdict == .defensible }.count == 2,
-                "2 of §8's 15 are now right: chicken noodle soup and chick fil a sandwich")
+        #expect(Self.reportNamedWrongTopOneQueries.filter { $0.verdict == .defensible }.count == 3,
+                "3 of §8's 15 are now right: chicken noodle soup, chick fil a sandwich and (since F6) cheese pizza")
         #expect(Self.preRegisteredQueries.count == Self.corpus.count - 26)
 
         // Uniqueness on BOTH the raw text and the folded form the pipeline actually keys on: two rows
@@ -498,7 +512,7 @@ struct FoodSearchCorpusTests {
                 "corpus queries must be unique after normalization")
 
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount)
+        try #require(catalog.bundledCount == Self.loadedRowCount)
         // The corpus's zero-result verdict pins the normal prefix-AND gate and its confidence-safe
         // scorer. A typed discovery fallback is intentionally outside that baseline.
         let empties = Self.corpus.filter { catalog.scoredResults(for: $0.query, limit: 1).isEmpty }
@@ -554,13 +568,14 @@ struct FoodSearchCorpusTests {
         FoodSearchRankedPin("chilis", "§9(b) flipped: one trailing `s` still makes it a brand query, and ONE row survives both floors. The five that used to fill ranks 2-6 (Beans & Franks, Beans & Wieners, Beef Goulash) are gone on carriage; the rows actually NAMED Chili carry the query but score 0 — the +60 coverage bonus needs `chilis` to EQUAL a name token and the token is `chili` — so the SCORE floor takes them too. A one-row page is the honest answer to a query the brand lexicon misread", [
             FoodSearchRankedRow("5 Chilis Salsa", 309, "branded")
         ]),
-        FoodSearchRankedPin("cheese pizza", "§9(c) CLOSED, and it took both floors. Carriage removed both calzones (neither name carries `pizza`); the score floor then removed the three White pizza rows, whose −12/−13 was `formSpecificityBias` reading `white` as an egg-white qualifier. What was hidden behind five wrong rows is a page of real chain cheese pizzas. Rank 1 is still not right — a pizza-flavoured SNACK wins a name tie-break against PIZZA HUT at the same 368 — but nothing negative-scoring is presented any more", [
-            FoodSearchRankedRow("Annie's Three Cheese Pizza Poppers", 368, "srLegacy"),
+        FoodSearchRankedPin("cheese pizza", "§9(c) CLOSED, and it took both floors. Carriage removed both calzones (neither name carries `pizza`); the score floor then removed the three White pizza rows, whose −12/−13 was `formSpecificityBias` reading `white` as an egg-white qualifier. What was hidden behind five wrong rows is a page of real chain cheese pizzas. Rank 1 was still not right — a pizza-flavoured SNACK won a name tie-break against PIZZA HUT at the same 368 — until the ingredient-search round's F6 retyped that snack (a packaged product filed as SR Legacy) as branded; the chain pizzas now lead, and nothing negative-scoring is presented", [
+            // F6 (2026-09-30): Annie's poppers, a misfiled packaged product, left the generic tier.
             FoodSearchRankedRow("PIZZA HUT 12\" Cheese Pizza, Pan Crust", 368, "srLegacy"),
             FoodSearchRankedRow("PIZZA HUT 14\" Cheese Pizza, Pan Crust", 368, "srLegacy"),
             FoodSearchRankedRow("DOMINO'S 14\" Cheese Pizza, Crunchy Thin Crust", 367, "srLegacy"),
             FoodSearchRankedRow("LITTLE CAESARS 14\" Cheese Pizza, Thin Crust", 367, "srLegacy"),
-            FoodSearchRankedRow("PAPA JOHN'S 14\" Cheese Pizza, Original Crust", 367, "srLegacy")
+            FoodSearchRankedRow("PAPA JOHN'S 14\" Cheese Pizza, Original Crust", 367, "srLegacy"),
+            FoodSearchRankedRow("PAPA JOHN'S 14\" Cheese Pizza, Thin Crust", 367, "srLegacy")
         ]),
         FoodSearchRankedPin("cheese pizza slice", "§29's ACCEPTANCE CASE. The defensible branded row is still rank 1 — leading-position stopwording never strips a trailing `slice`, so the survey tier never re-enters and the calzone never appears. Fix 1.8 then removed four of the six rows, including both at −82: none of their names carries `pizza`", [
             FoodSearchRankedRow("Sliced Pizza, Cheese", 120, "branded"),
@@ -665,7 +680,7 @@ struct FoodSearchCorpusTests {
         // The floor stated as an invariant over the whole corpus rather than as a row list: every
         // presented row carries the query in its NAME **and** scores at or above the floor.
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount)
+        try #require(catalog.bundledCount == Self.loadedRowCount)
         for corpusCase in Self.corpus {
             for row in catalog.scoredResults(for: corpusCase.query, limit: 6) {
                 #expect(FoodItemSearch.nameCarriesQuery(row.item.name, query: corpusCase.query),
@@ -732,8 +747,13 @@ struct FoodSearchCorpusTests {
         // demotion guard refuses to sink a dish beneath a WORSE-scoring ingredient and these two
         // dishes lead by 1 point (810 vs 809) and 55 (805 vs 750). A tolerance margin closes both and
         // costs `grilled cheese` — measured, and written up at `PreparedDishHeuristic`'s guard.
+        // `onion` then closed WITHOUT a margin in the ingredient-search round's F6 (2026-09-30), and
+        // by accident rather than design: retyping packaged products the source had filed as SR
+        // Legacy shrank the generic tier, so the 60-row demotion window now reaches the branded tier,
+        // where a branded "Onion Rings" row (810, not a dish to the heuristic — no carrier word) sets
+        // the guard's best-ingredient score above the breaded rings (805), and they sink.
         ("beef", "Beef salad"),
-        ("onion", "Onion rings, breaded, par fried, frozen, unprepared"),
+        ("onion", "Onions, raw"),
         // F4(b)'s counterweight: the margin must not demote a dish the query NAMED. `nuggets` is a
         // carrier now, and this row still wins because it beats every ingredient by far more than the
         // margin; `caesar salad` and `chicken noodle soup` never demote at all (head noun is a dish word).
@@ -749,7 +769,7 @@ struct FoodSearchCorpusTests {
     /// Replays the review battery.
     @Test func reviewBatteryTopAnswersAreUnchanged() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount)
+        try #require(catalog.bundledCount == Self.loadedRowCount)
         for entry in Self.reviewBattery {
             let top = catalog.results(for: entry.query, limit: 1, context: .userTyped).first?.name
             #expect(top == entry.top, "top-1 moved for \"\(entry.query)\"")
@@ -757,23 +777,24 @@ struct FoodSearchCorpusTests {
     }
 
     /// The predeclared cold calibration panel. The prior 250 floor labelled 38 results confident,
-    /// including 19 recorded wrong top rows. At 368, 29 clear and 13 are wrong; the ceiling is
+    /// including 19 recorded wrong top rows. At 368, 29 clear and 12 are wrong (13 until F6 made
+    /// `cheese pizza`'s top a real cheese pizza); the ceiling is
     /// explicit rather than inferred from a passing count. This is a bounded-risk threshold, not an
     /// assurance that every accepted row is food-correct: the remaining category and form defects
     /// require later ranking work rather than an unmeasured lower score floor.
     @Test func confidentBindPopulationMeetsTheColdFalseConfidentCeiling() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount)
+        try #require(catalog.bundledCount == Self.loadedRowCount)
         let confident = Self.corpus.filter { corpusCase in
             (catalog.scoredResults(for: corpusCase.query, limit: 1).first?.score ?? 0) >= FoodItemSearch.confidentBindScore
         }
         let confidentlyWrong = Set(confident.filter { $0.verdict == .wrongTopOne }.map(\.query))
         #expect(confident.count == 29, "confident top-1s: \(confident.count) of 57")
         #expect(confidentlyWrong == Set([
-            "apple", "bowl of cereal", "brown rice", "cheese pizza", "chickpeas", "chipotle chicken bowl",
+            "apple", "bowl of cereal", "brown rice", "chickpeas", "chipotle chicken bowl",
             "glass of milk", "low fat greek yogurt", "piece of chicken", "salmon", "spaghetti", "sweet potato", "whole milk"
         ]))
-        #expect(confidentlyWrong.count <= 13, "cold false-confident ceiling: \(confidentlyWrong.sorted())")
+        #expect(confidentlyWrong.count <= 12, "cold false-confident ceiling: \(confidentlyWrong.sorted())")
     }
 
     /// The three stopword sets are **frozen English matching inputs** and this is their freeze pin.
@@ -868,7 +889,7 @@ struct FoodSearchCorpusTests {
     /// two rescued rows clear by a wide margin and the two demoted rows do not.
     @Test func dishDemotionNeverSinksABetterMatch() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount)
+        try #require(catalog.bundledCount == Self.loadedRowCount)
 
         // Rescued: the query reads as an ingredient, the top row IS a dish, and it stays anyway.
         for (query, name) in [("grilled cheese", "Grilled cheese sandwich, NFS"),
@@ -933,7 +954,7 @@ struct FoodSearchCorpusTests {
         FoodResolverCase("cheerios", 4, "Cereals ready-to-eat, GENERAL MILLS, CHEERIOS"),
         FoodResolverCase("chili", 4, "Chili, NFS"),
         FoodResolverCase("chilis", 1, "5 Chilis Salsa"),
-        FoodResolverCase("cheese pizza", 12, "Annie's Three Cheese Pizza Poppers"),
+        FoodResolverCase("cheese pizza", 12, "PIZZA HUT 12\" Cheese Pizza, Pan Crust"),
         FoodResolverCase("cheese pizza slice", 18, "Sliced Pizza, Cheese"),
         FoodResolverCase("mozzarella cheese", 10, "DENNY'S, mozzarella cheese sticks"),
         FoodResolverCase("pizza dough crust", 18, "Pillsbury Pizza Dough Thin Crust"),
@@ -946,7 +967,7 @@ struct FoodSearchCorpusTests {
                          "Organic Apples & Blueberries Oatmeal + Sprouted Quinoa Super Morning Bowl, Organic Apples & Blueberries"),
         FoodResolverCase("two scrambled eggs", 12, "Egg omelet or scrambled egg, made with butter"),
         FoodResolverCase("chiken breast", 6, "Chicken breast, stewed, skin eaten"),
-        FoodResolverCase("apple", 4, "Apple & Cheese Tray"),
+        FoodResolverCase("apple", 4, "APPLEBEE'S, chili"),
         FoodResolverCase("brown rice", 11, "Snacks, brown rice chips"),
         FoodResolverCase("mac and cheese", 10, "CRACKER BARREL, macaroni n' cheese"),
         FoodResolverCase("chicken noodle soup", 18, "CAMPBELL'S, Chicken Noodle Soup, condensed"),
@@ -977,7 +998,7 @@ struct FoodSearchCorpusTests {
     /// Pins the resolver pool's size and top candidate for every bank entry.
     @Test func resolverCandidateSurfaceIsUnchanged() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount)
+        try #require(catalog.bundledCount == Self.loadedRowCount)
         for resolverCase in Self.resolverBank {
             let pool = catalog.candidates(for: resolverCase.query, limit: 18)
             let actualCount = pool.count
@@ -1002,7 +1023,7 @@ struct FoodSearchCorpusTests {
     /// entire purpose, and why fix 1.6 is confined to the typed-query surface.
     @Test func searchAndResolverSurfacesStillDisagree() throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount)
+        try #require(catalog.bundledCount == Self.loadedRowCount)
         let searchIsEmptyButResolverIsNot = ["costco cheese pizza slice"]
         for query in searchIsEmptyButResolverIsNot {
             let searchCount = catalog.results(for: query, limit: 6, context: .userTyped).count
@@ -1035,7 +1056,9 @@ struct FoodSearchCorpusTests {
             let resolverTop = catalog.candidates(for: corpusCase.query, limit: 18).first?.foodItem.name
             return searchTop != resolverTop
         }
-        #expect(stillDiverging.count == 14, "divergences: \(stillDiverging.map(\.query))")
+        // 15 since the ingredient-search round's F6: `apple`'s two surfaces agreed only on the
+        // misfiled "Apple & Cheese Tray", which left the generic tier for both.
+        #expect(stillDiverging.count == 15, "divergences: \(stillDiverging.map(\.query))")
     }
 
     // MARK: - Catalog composition (the vintage proxy)
@@ -1078,7 +1101,7 @@ struct FoodSearchCorpusTests {
         // Same file, both paths: the repo copy and the resource the FoodCatalog target bundles.
         let bundled = try #require(SQLiteBundledFoodSource(), "the FoodCatalog resource bundle must carry the database")
         #expect(bundled.count == probe.scalar("SELECT COUNT(*) FROM food"))
-        #expect(FoodCatalog.bundled().bundledCount == Self.shippedRowCount)
+        #expect(FoodCatalog.bundled().bundledCount == Self.loadedRowCount)
     }
 
     /// §8's retrieval-layer table: 22 raw FTS5 MATCH expressions and their row counts.
@@ -1140,7 +1163,7 @@ struct FoodSearchCorpusTests {
 
         // Without this guard all three assertions below would pass against the empty-catalog fallback.
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+        try #require(catalog.bundledCount == Self.loadedRowCount, "shipped catalog must be loaded")
         #expect(catalog.scoredResults(for: "costco cheese pizza slice").isEmpty)
         #expect(catalog.scoredResults(for: "kirkland protein bar").isEmpty)
         #expect(catalog.scoredResults(for: "whole foods rotisserie chicken").isEmpty)
@@ -1209,7 +1232,7 @@ struct FoodSearchCorpusTests {
         // The resolver path really does take the unstripped branch end to end: every row it returns
         // for a quantity-led sub-phrase carries BOTH words, which the stripped gate could not promise.
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == Self.shippedRowCount)
+        try #require(catalog.bundledCount == Self.loadedRowCount)
         let phrases = FoodSelectionCandidateBuilder.searchPhrases(from: "two slices of pizza")
         #expect(phrases.contains("slices pizza"), "the quantity word survives into the sub-phrases")
         for candidate in catalog.candidates(for: "two slices of pizza", limit: 18) {
@@ -1238,8 +1261,8 @@ struct FoodSearchCorpusTests {
     /// written in, with the derived counts as a comment, followed by the named ranking pins and the
     /// resolver bank in the same literal form. The assertions here make it a real test rather than a
     /// print statement: every corpus row must produce exactly one line, and every line must parse
-    /// back to the row it came from — which also proves no pinned name contains a quote that would
-    /// silently corrupt the paste.
+    /// back to the row it came from — including a pinned name with a quote in it, which the dump
+    /// escapes (since the ingredient-search round's F6 made `PIZZA HUT 12" Cheese Pizza` a top-1).
     ///
     /// Print it with `TEST_RUNNER_FOOD_CORPUS_DUMP=1` (Xcode forwards the prefix; `FOOD_CORPUS_DUMP`
     /// also works):
@@ -1253,8 +1276,8 @@ struct FoodSearchCorpusTests {
             let parsed = Self.parse(line)
             #expect(parsed == Self.corpus[index], "line \(index + 1) did not round-trip: \(line)")
         }
-        #expect(Self.corpus.allSatisfy { !$0.query.contains("\"") && !($0.expectedTopName ?? "").contains("\"") },
-                "a quote in a pinned string would corrupt the paste-back format")
+        #expect(Self.corpus.contains { ($0.expectedTopName ?? "").contains("\"") },
+                "the round trip above covers a pinned name with a quote in it (PIZZA HUT 12\")")
         Self.printDumpIfRequested(lines)
         Self.printLiveMeasurementIfRequested()
     }
@@ -1272,18 +1295,35 @@ struct FoodSearchCorpusTests {
 
     /// The Swift literal for one corpus row — the exact text the corpus arrays above are written in.
     private static func literal(for corpusCase: FoodSearchCorpusCase) -> String {
-        let head = "FoodSearchCorpusCase(\"\(corpusCase.query)\", .\(corpusCase.shape.rawValue), .\(corpusCase.verdict.rawValue)"
+        let head = "FoodSearchCorpusCase(\"\(escaped(corpusCase.query))\", .\(corpusCase.shape.rawValue), .\(corpusCase.verdict.rawValue)"
         guard let name = corpusCase.expectedTopName, let score = corpusCase.expectedTopScore else {
             return head + "),"
         }
-        return head + ", \"\(name)\", \(score)),"
+        return head + ", \"\(escaped(name))\", \(score)),"
     }
 
-    /// Parses a literal produced by ``literal(for:)`` back into a case. Splitting on the quote
-    /// character is sound precisely because ``dumpEmitsOneParseableRowPerCorpusQuery()`` asserts no
-    /// pinned string contains one.
+    /// Splits a literal on its UNESCAPED quotes, un-escaping as it goes — the inverse of ``escaped(_:)``.
+    private static func quotedParts(_ line: String) -> [String] {
+        var parts = [""]
+        var escaping = false
+        for character in line {
+            if escaping {
+                parts[parts.count - 1].append(character)
+                escaping = false
+            } else if character == "\\" {
+                escaping = true
+            } else if character == "\"" {
+                parts.append("")
+            } else {
+                parts[parts.count - 1].append(character)
+            }
+        }
+        return parts
+    }
+
+    /// Parses a literal produced by ``literal(for:)`` back into a case, splitting on unescaped quotes.
     private static func parse(_ line: String) -> FoodSearchCorpusCase? {
-        let parts = line.components(separatedBy: "\"")
+        let parts = quotedParts(line)
         guard parts.count == 3 || parts.count == 5 else { return nil }
         let tokens = parts[2]
             .split(separator: ",")
@@ -1312,12 +1352,12 @@ struct FoodSearchCorpusTests {
         print("// ── namedRankingPins ─────────────────────────────────────────────")
         for pin in namedRankingPins {
             print("FoodSearchRankedPin(\"\(pin.query)\", \"\(pin.note)\", [")
-            for row in pin.rows { print("    FoodSearchRankedRow(\"\(row.name)\", \(row.score), \"\(row.dataType)\"),") }
+            for row in pin.rows { print("    FoodSearchRankedRow(\"\(escaped(row.name))\", \(row.score), \"\(row.dataType)\"),") }
             print("]),")
         }
         print("// ── resolverBank ─────────────────────────────────────────────────")
         for entry in resolverBank {
-            let name = entry.expectedTopName.map { "\"\($0)\"" } ?? "nil"
+            let name = entry.expectedTopName.map { "\"\(escaped($0))\"" } ?? "nil"
             print("FoodResolverCase(\"\(entry.query)\", \(entry.expectedCount), \(name)),")
         }
     }
@@ -1341,7 +1381,7 @@ struct FoodSearchCorpusTests {
     private static func printLiveMeasurementIfRequested() {
         guard dumpRequested else { return }
         let catalog = FoodCatalog.bundled()
-        guard catalog.bundledCount == shippedRowCount else {
+        guard catalog.bundledCount == loadedRowCount else {
             print("// LIVE DUMP SKIPPED — the shipped catalog is not loaded, so nothing measured here is real")
             return
         }
@@ -1354,9 +1394,10 @@ struct FoodSearchCorpusTests {
 
     /// Swift-literal escaping for a measured catalog name.
     ///
-    /// Pinned names are asserted quote-free by ``dumpEmitsOneParseableRowPerCorpusQuery()``, but a
-    /// MEASURED one need not be: the catalog really does contain rows like `PIZZA HUT 14" Cheese
-    /// Pizza, Pan Crust`, and printing one raw emits a literal that does not compile.
+    /// The catalog really does contain rows like `PIZZA HUT 14" Cheese Pizza, Pan Crust`, and printing
+    /// one raw emits a literal that does not compile. Since the ingredient-search round's F6 a PINNED
+    /// corpus name carries one too (`cheese pizza`'s top), so ``literal(for:)`` escapes and
+    /// ``quotedParts(_:)`` un-escapes, and the dump round-trips it.
     private static func escaped(_ text: String) -> String {
         text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }
@@ -1473,7 +1514,7 @@ struct FoodSearchCorpusTests {
     /// The top-6 ranked rows for `query` through the shipped pipeline, flattened for pinning.
     private static func rankedRows(for query: String) throws -> [FoodSearchRankedRow] {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount == shippedRowCount, "shipped catalog must be loaded")
+        try #require(catalog.bundledCount == loadedRowCount, "shipped catalog must be loaded")
         return catalog.scoredResults(for: query, limit: 6)
             .map { FoodSearchRankedRow($0.item.name, $0.score, $0.item.dataType.rawValue) }
     }

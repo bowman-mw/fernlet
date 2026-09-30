@@ -336,7 +336,7 @@ struct FoodSearchHistoryCatalogTests {
 
     /// Row count of the shipped catalog, mirrored from `FoodSearchCorpusTests` so every test here
     /// guards on it and none can pass vacuously against `FoodCatalog.bundled()`'s empty fallback.
-    static let shippedRowCount = 118_317
+    static let shippedRowCount = FoodSearchCorpusTests.loadedRowCount
 
     /// The bank. Cold pins are the corpus's own — if one disagrees, the corpus moved and this bank is
     /// measuring a tree that no longer exists. The three rows deliberately span the three DISTANCES a

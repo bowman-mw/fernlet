@@ -616,6 +616,28 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// SR Legacy's food-group names (ingredient-search round, F6): matched against the English
+    /// category each catalog row stores, to tell an SR food from a branded product filed as one.
+    @Test func frozenSRLegacyFoodGroups() {
+        #expect(
+            BundledRowCorrection.srLegacyFoodGroups.sorted() == [
+                "American Indian/Alaska Native Foods", "Baby Foods", "Baked Products", "Beef Products",
+                "Beverages", "Breakfast Cereals", "Cereal Grains and Pasta", "Dairy and Egg Products",
+                "Fast Foods", "Fats and Oils", "Finfish and Shellfish Products", "Fruits and Fruit Juices",
+                "Lamb, Veal, and Game Products", "Legumes and Legume Products",
+                "Meals, Entrees, and Side Dishes", "Nut and Seed Products", "Pork Products",
+                "Poultry Products", "Restaurant Foods", "Sausages and Luncheon Meats", "Snacks",
+                "Soups, Sauces, and Gravies", "Spices and Herbs", "Sweets",
+                "Vegetables and Vegetable Products"
+            ],
+            """
+            The SR Legacy food-group set changed. Each name must equal the category string the catalog \\
+            files store, byte for byte; a translated or re-spelled name stops matching, and every SR \\
+            food in that group is retyped as a branded product and drops a ranking tier.
+            """
+        )
+    }
+
     /// Coach-plan wire tokens.
     ///
     /// `MuscleGroup` and `Equipment` raw values are persisted in day rows, persisted in the

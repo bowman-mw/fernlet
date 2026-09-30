@@ -205,9 +205,10 @@ struct DishTemplateBindPin: Equatable, Sendable {
 }
 
 struct DishTemplateBindAuditTests {
-    /// Row count of the shipped `FoodCatalog.sqlite`, so a missing database fails the suite instead of
-    /// letting it pass vacuously (the failure mode §25 names in the two pre-existing catalog tests).
-    static let shippedRowCount = 118_317
+    /// Row count of the shipped catalog as loaded (`FoodCatalog.sqlite` plus the rows served beside it),
+    /// so a missing database fails the suite instead of letting it pass vacuously (the failure mode
+    /// §25 names in the two pre-existing catalog tests).
+    static let shippedRowCount = FoodSearchCorpusTests.loadedRowCount
 
     /// Every template component, in file order, with its measured bind against the shipped catalog.
     ///
@@ -272,7 +273,9 @@ struct DishTemplateBindAuditTests {
         DishTemplateBindPin("vegetable fried rice", "rice fried meatless", "Rice, fried, meatless", 2080, .defensible), // N5: per-alias override REPLACES the generic component — chicken/shrimp variants have no catalog row and stay on "Rice, fried, NFS" (item-13 dependency)
         DishTemplateBindPin("pad thai", "rice noodle cooked", "Rice noodles, cooked", 120, .defensible),
         DishTemplateBindPin("pad thai", "egg whole raw", "Egg, whole, raw, fresh", 1080, .defensible),
-        DishTemplateBindPin("pad thai", "cooked shrimp cooked", "Cooked Shrimp", 180, .defensible),
+        // Ingredient-search round F6: "Cooked Shrimp" was a packaged product filed as SR Legacy; retyped
+        // branded, it yields the tier to USDA's own cooked shrimp at the same score.
+        DishTemplateBindPin("pad thai", "cooked shrimp cooked", "Crustaceans, shrimp, cooked", 180, .defensible),
         DishTemplateBindPin("pad thai", "dry roasted peanuts", "Peanuts, all types, dry-roasted, with salt", 328, .defensible),
         DishTemplateBindPin("bibimbap", "rice white long grain regular enriched cooked", "Rice, white, long-grain, regular, enriched, cooked", 2170, .defensible),
         DishTemplateBindPin("bibimbap", "cooked beef sirloin cooked", "Beef, top sirloin, steak, separable lean only, trimmed to 0\" fat, choice, cooked, broiled", 234, .defensible),
