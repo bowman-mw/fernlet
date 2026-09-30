@@ -5554,6 +5554,10 @@ final class FernletStore {
     ///   fingerprint, so it is not "someone else's gift" — it is still kept). By product decision the wall
     ///   is curated one photo at a time (`MeshNetworkManager.deletePhoto`, which purges the sealed bytes);
     ///   there is deliberately NO "delete all photos", so this funnel must not add a bulk purge here.
+    ///   What the wall holds is only what the person CHOSE (2026-09-30). Session photos nobody has
+    ///   chosen yet are a different corpus — `PendingSessionPhotos/`, sealed under its own
+    ///   device-bound key — and those DO go (leg 4d, owner question Q1's default), together with that
+    ///   session's keep-as-friend offer: the person asked to erase it.
     /// - the app lock itself — a wipe empties the protected data, it does not drop your protection.
     ///
     /// The ORDER is the correctness argument, not housekeeping. A wipe races three background writers
@@ -5830,7 +5834,8 @@ final class FernletStore {
         }
     }
 
-    /// Wipe leg 4: the three sealed own-photo corpora (meal, progress, recipe).
+    /// Wipe leg 4: the three sealed own-photo corpora (meal, progress, recipe), and the session photos
+    /// nobody has chosen yet (4d).
     private func deletePhotoCorpora(into outcome: inout DeleteAllOutcome) {
         // Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
         // the days are gone nothing knows these files exist and they can never be reached again.
@@ -5847,6 +5852,16 @@ final class FernletStore {
         // repository purge below; their photos live in a separate sealed store that the purge can't reach.
         if !recipePhotoStore.deleteAll() {
             outcome.incompleteStores.append("recipe photos")
+        }
+        // 4d. Session photos nobody has chosen yet (2026-09-30): the sealed pending corpus, the whole
+        // review batch (its keep-as-friend candidates too — an offer from a session the person asked
+        // to erase would write new trust rows about it) and the live roll and roster. Runs inside the
+        // `beginPrivacyWipe()` bracket, so no routed projection can hold a photo while it runs, and
+        // after leg 0's hard stop has already moved any live roll into the batch. The wall is NOT
+        // touched (see the survivors list above), and the pending key row survives like the
+        // own-photo row: an emptied store's key protects nothing.
+        if !meshNetworkManager.purgeHeldSessionPhotosForDeleteAll() {
+            outcome.incompleteStores.append("session photos you hadn't chosen yet")
         }
     }
 
@@ -6071,6 +6086,9 @@ final class FernletStore {
         //     decision): the stores are empty, so the key protects nothing and discloses nothing,
         //     while deleting it would re-introduce the same stale-cache hazard for anything captured
         //     between the wipe and relaunch.
+        //   • `…pendingContentKey` (2026-09-30) backs the pending session-photo corpus, which leg 4d
+        //     removes whole. Kept for the own-photo row's reason; the duress WIPE is what
+        //     crypto-erases it, with the rest of the `com.fernlet.private-media` service.
         // A key whose stores were just emptied protects nothing extra, so keeping it discloses
         // nothing. The cache invalidations below stay: they are still correct hygiene for the
         // emptied stores (next read re-fetches the surviving row).

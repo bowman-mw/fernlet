@@ -118,15 +118,20 @@ enum DeleteAllDataConfirmation {
         // step 4b), and each recipe's own photo (`recipePhotoStore`, step 4c). The shared-photo wall is KEPT
         // (see below), so an unqualified "photos" here would contradict the kept list and re-open the exact
         // says-more-than-it-does gap this dialog exists to close. This enumeration is the invariant backstop
-        // (there's no test coupling this text to the funnel) — keep it in step with what step 4/4b delete.
+        // (there's no test coupling this text to the funnel) — keep it in step with what step 4/4b/4c/4d delete.
+        //
+        // Step 4d (2026-09-30) deletes the session photos nobody has chosen yet — held apart from the kept
+        // wall until the person's review — so they are named here. A NEW key rather than a reworded
+        // `deleteAll.scope.base`: the sentence now promises more, and a translation of the old one must not
+        // be shown for it.
         var scope = String(
-            localized: "deleteAll.scope.base",
+            localized: "deleteAll.scope.withUnchosenSessionPhotos",
             defaultValue: """
                 This deletes your logged days, meals and their photos, gym progress photos, journal \
                 entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, \
-                custom items and coins.
+                photos from a Friends session you haven't chosen yet, custom items and coins.
                 """,
-            comment: "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'."
+            comment: "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'. 'Photos from a Friends session you haven't chosen yet' are the in-person session photos still waiting in the keep-or-delete review; photos already kept stay (see the kept paragraph)."
         )
         // Two INDEPENDENT claims, not one. The day-blob copy in iCloud (a live sync copy or one kept after
         // sync was turned off) and any sealed encrypted backups are removed by different legs of the

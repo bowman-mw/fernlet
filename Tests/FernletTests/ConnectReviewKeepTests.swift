@@ -11,11 +11,15 @@
 // Two halves, mirroring `DisposableCameraSaveTests`:
 //   - behavioral: keeping to the in-app wall succeeds with no Photos-library involvement at all —
 //     it neither requires nor changes the process's PHPhotoLibrary authorization state;
-//   - source wall: `FriendsView`'s review call site must pass `saveToPhotos:` (the split form),
-//     its keep action must answer the promoted batch with `finishReviewedPhotos(_:keeping:in:)`
-//     (since 2026-09-30 — the disconnect review reads the batch's photos, never the live list the
-//     ending empties), and that keep action must never touch `FriendPhotoLibrarySaver` — that
+//   - source wall: `FriendsView`'s keep action answers the promoted batch with
+//     `finishReviewedPhotos(_:keeping:in:)` and never touches `FriendPhotoLibrarySaver` — that
 //     independence is exactly what makes a Photos permission denial unable to cost the keep.
+//
+// Since 2026-09-30 (the owner: "None of the photos should be saved to the camera roll until this
+// selection has been made") the Photos export is no longer a button that works BEFORE the answer:
+// it is an opt-in toggle applied AFTER the keep, only over the photos the answer reports landed on
+// the wall (`SessionPhotoAnswer.keptOnWall`), re-read from the wall. The source wall pins that the
+// one review function naming the saver takes the answer (invariant I2).
 
 import Foundation
 import Photos
@@ -44,6 +48,7 @@ struct ConnectReviewKeepTests {
         let statusBefore = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         let manager = MeshNetworkManager(store: store)
         manager.currentMesh = makeConnectTestMesh()
+        HeldPhotos.openGate(on: manager)
 
         for _ in 0..<3 { manager.addPhoto(try makeConnectTestJPEG()) }
         let sessionIDs = manager.sessionPhotos.map(\.id)
@@ -53,8 +58,9 @@ struct ConnectReviewKeepTests {
         let batch = try #require(manager.pendingFriendReview, "the ending promoted the photos")
         #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(sessionIDs))
 
-        manager.finishReviewedPhotos(Set(sessionIDs), keeping: kept, in: batch.id)
+        let answer = manager.finishReviewedPhotos(Set(sessionIDs), keeping: kept, in: batch.id)
 
+        #expect(answer.keptOnWall == kept && answer.notApplied.isEmpty)
         let wallIDs = Set(manager.meshPhotos.map(\.id))
         #expect(kept.isSubset(of: wallIDs),
                 "Kept photos must stay on the in-app wall — no Photos-library involvement required")
@@ -71,48 +77,50 @@ struct ConnectReviewKeepTests {
     // MARK: - Source wall: the disconnect-review call site
 
     /// The defect lived at the CALL SITE, so the behavioral test alone can regress silently: pin
-    /// `FriendsView`'s disconnect review (ConnectView.swift) to the split (FRND-12) sheet form,
-    /// its keep action to `finishReviewedPhotos(_:keeping:in:)`, and that keep action's independence
-    /// from `FriendPhotoLibrarySaver` (what makes a Photos denial harmless to the keep). Reads
-    /// shipping source off disk via ``RepoRoot`` so a vacuous pass is impossible.
-    @Test func connectViewSource_passesSaveToPhotos_andKeepsWithoutTheSaver() throws {
-        let source = try RepoRoot.source("App/Fernlet/ConnectView.swift")
+    /// `FriendsView`'s disconnect review (ConnectView.swift) to the answer-first form — the keep
+    /// answers the promoted batch and never names `FriendPhotoLibrarySaver`, and the ONE review
+    /// function that does name it takes the answer and reads only `keptOnWall`, hydrated from the
+    /// wall (I2: nothing reaches the camera roll before the choice, and nothing the answer did not
+    /// report kept). Reads shipping source off disk via ``RepoRoot`` so a vacuous pass is impossible.
+    @Test func connectViewSource_exportsOnlyTheAnswersKeptPhotos_andKeepsWithoutTheSaver() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
 
-        #expect(source.contains("saveToPhotos: { await exportSelectedPhotosToLibrary() }"),
-                """
-                FRND-12: the disconnect review must build FriendPhotoReviewSheet in the split form \
-                — the Photos export wired as the sheet's optional saveToPhotos: secondary action, \
-                not fused into the keep.
-                """)
-        #expect(source.contains("saveSelected: { await keepSelectedSessionPhotos() }"),
+        #expect(source.contains("keepSelected: { await keepSelectedSessionPhotos() }"),
                 "The sheet's primary action must be the keep — in-app wall only, no Photos authorization")
-        #expect(source.contains("manager.hydratedPhotos(reviewPhotos.filter"),
-                """
-                The Photos export must rehydrate the ticked reviewed photos \
-                (manager.hydratedPhotos(...)) before handing them to FriendPhotoLibrarySaver — \
-                session payloads are metadata-only, so an un-hydrated save throws NothingSavedError.
-                """)
+        #expect(source.contains("alsoSaveToPhotos: $alsoSaveToPhotos"),
+                "The Photos copy is the sheet's opt-in toggle, read by the host after the answer")
+        #expect(!source.contains("saveToPhotos:"),
+                "no pre-answer export button: the camera roll must not see a photo before the choice")
+        #expect(source.contains("loadImageData: { manager.reviewThumbnailData(for: $0) }"),
+                "tiles load held photos through the gated review seam, never the wall")
 
-        // Slice the keep action's body: it runs from its declaration to the export action that
-        // is declared immediately after it. If either function is renamed or reordered, fail
-        // loudly here rather than scanning the wrong span. (The FriendPhotoLibrarySaver check
-        // MUST stay scoped to this slice: the same file's album carousel legitimately saves an
-        // already-kept wall photo to the Photos library on explicit request.)
-        let keepDecl = try #require(source.range(of: "func keepSelectedSessionPhotos"),
-                                    "FriendsView.keepSelectedSessionPhotos is the FRND-12 keep action — renamed?")
-        let exportDecl = try #require(source.range(of: "func exportSelectedPhotosToLibrary"),
-                                      "FriendsView.exportSelectedPhotosToLibrary is the optional Photos export — renamed?")
-        try #require(keepDecl.lowerBound < exportDecl.lowerBound,
-                     "Expected the keep action to be declared before the export action — update this scan if they moved")
-        let keepBody = source[keepDecl.upperBound..<exportDecl.lowerBound]
-
-        #expect(keepBody.contains("finishReviewedPhotos("),
-                "The keep action must keep the ticked photos on the in-app wall, answering the promoted batch")
-        #expect(!keepBody.contains("FriendPhotoLibrarySaver"),
+        let keep = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func keepSelectedSessionPhotos() async", in: source),
+            "FriendsView.keepSelectedSessionPhotos is the FRND-12 keep action — renamed?")
+        #expect(keep.contains("finishReviewedPhotos("),
+                "The keep action must answer the promoted batch")
+        #expect(!keep.contains("FriendPhotoLibrarySaver"),
                 """
                 The keep action must never touch FriendPhotoLibrarySaver: its authorization gate \
                 is what used to turn a Photos permission denial into losing the in-app photos.
                 """)
+        let answerLine = try #require(keep.range(of: "finishReviewedPhotos("))
+        let exportLine = try #require(keep.range(of: "exportKeptPhotosIfAsked(answer)"),
+                                      "the export must take the answer the keep just returned")
+        #expect(answerLine.lowerBound < exportLine.lowerBound, "the export runs only AFTER the answer")
+
+        let export = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async", in: source),
+            "the one review export takes a SessionPhotoAnswer — renamed?")
+        #expect(export.contains("FriendPhotoLibrarySaver.save("))
+        #expect(export.contains("manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })"),
+                "and saves only what the answer reports landed, hydrated from the WALL")
+        #expect(export.contains("guard alsoSaveToPhotos"), "and only when the person turned the toggle on")
+        // Every other function naming the saver is the album carousel's per-photo save of a photo
+        // already on the wall, which is not the review's (the feed views declared below FriendsView).
+        let reviewHalf = try #require(source.range(of: "private struct FriendPhotoFeedView"))
+        let saverSites = source[..<reviewHalf.lowerBound].components(separatedBy: "FriendPhotoLibrarySaver.save(").count - 1
+        #expect(saverSites == 1, "the Friends review names the saver in exactly one place: the post-answer export")
     }
 
     /// P6 item 2's pass-B review finding P2-4, as a source wall because both halves live in

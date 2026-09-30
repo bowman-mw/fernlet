@@ -28,6 +28,7 @@ import FernletFoundation
 import HealthKitGateway
 import LocalPersistence
 import PrivateHealthStore
+import PrivateMediaStore
 @testable import Fernlet
 @testable import FernletLock
 
@@ -538,6 +539,65 @@ struct DuressSilentWipeTests {
         #expect(fixture.purgeCount.value == 1)
         // No cooldown residue survives to tell the two apart.
         #expect(service.currentAttemptCount == 0)
+    }
+
+    /// **I24 (2026-09-30).** The session photos nobody has chosen yet are crypto-erased by the silent
+    /// wipe with every other media key: their device-bound row lives under the swept
+    /// `com.fernlet.private-media` service (here the harness's scoped stand-in), so after the wipe a
+    /// pending index left on disk — a kill before the purge hook's delete-all ran — opens under no
+    /// key, and the next load finds it `.unrecoverable` and removes the corpus.
+    @Test func silentWipeLeavesThePendingCorpusUnopenable() async throws {
+        let fixture = try await makeWipeFixture()
+        defer { fixture.harness.cleanup() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PendingDuressWipe-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let keys = HarnessPendingMediaKeyProvider(service: fixture.harness.mediaKeychainServiceID)
+        let pending = PendingSessionPhotoStore(directory: directory, keyProvider: keys)
+        let bytes = MeshRoutedPhotoFixtures.tinyJPEG()
+        let photo = FriendPhotoPayload(imageData: bytes, senderName: "Sam", senderFingerprint: "fp-sam")
+        let held = HeldSessionPhoto(key: HeldPhotoKey(origin: "fp-sam", itemID: photo.id), heldAt: Date(), payload: photo)
+        let (outcome, _) = pending.hold(held, imageData: bytes, into: .empty)
+        try #require(outcome == .held, "precondition: a photo is held under the harness's pending row")
+        guard case .loaded(let before) = pending.load(now: Date()) else {
+            Issue.record("precondition: the pending index opens before the wipe")
+            return
+        }
+        #expect(before.heldLocalIDs == [photo.id])
+        fixture.service.lock(reason: .manual)
+
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+
+        #expect(KeychainItem.load(account: HarnessPendingMediaKeyProvider.account,
+                                  service: fixture.harness.mediaKeychainServiceID) == nil,
+                "the wipe swept the pending row with the rest of the media service")
+        let afterWipe = PendingSessionPhotoStore(directory: directory, keyProvider: keys)
+        #expect(afterWipe.load(now: Date()) == .unrecoverable(purged: true),
+                "the held photos no longer open under any key, and the corpus is removed on sight")
+        #expect(!FileManager.default.fileExists(atPath: directory.path))
+    }
+}
+
+/// A pending-corpus key provider on a SCOPED keychain service, shaped like the production
+/// `KeychainPrivateMediaKeyProvider(role: .pendingSessionPhotos)` — same account, same mint-if-absent
+/// rule, same `AfterFirstUnlockThisDeviceOnly` class — so the duress wipe's injected media service
+/// sweeps it exactly as it sweeps the production row, without a test ever touching that row.
+struct HarnessPendingMediaKeyProvider: PrivateMediaKeyProviding {
+    /// The production pending row's account (`KeychainPrivateMediaKeyProvider.pendingAccount`).
+    static let account = "com.fernlet.private-media.pendingContentKey"
+    /// The harness's scoped stand-in for `com.fernlet.private-media`.
+    let service: String
+
+    func mediaKey() -> SymmetricKey? {
+        if let stored = KeychainItem.load(account: Self.account, service: service) {
+            return SymmetricKey(data: stored)
+        }
+        let minted = SymmetricKey(size: .bits256)
+        let status = KeychainItem.store(
+            minted.withUnsafeBytes { Data($0) }, account: Self.account, service: service,
+            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
+        return status == errSecSuccess ? minted : nil
     }
 }
 

@@ -21,6 +21,13 @@
 // last member by: the live record and the merge), the other involuntary endings, and the review
 // API's scoping rules; the source walls pin the presenter to the batch.
 //
+// **And since the owner's 2026-09-30 answer, nothing is on the wall before the choice.** Every
+// session photo is HELD in the sealed pending corpus from capture or receipt; the cells that used to
+// assert "still on the wall, not yet pruned" now assert the inverse — held, and NOT on the wall, in
+// memory or in the persisted index — and every cell that answers pushes an open routed gate first,
+// because the answer (which reads plaintext to re-seal kept photos under the wall key) runs only
+// where the gate is open.
+//
 // Nothing here runs a real radio or sleeps on a wall clock; the fabric's clock is advanced by the
 // rigs' own bounded settles.
 
@@ -169,8 +176,9 @@ struct MeshLastMemberPhotoReviewTests {
     }
 
     /// The claims every road must meet: the batch carries exactly the captured photos,
-    /// metadata-only; the live list is empty (moved, not copied); and nothing left the wall — in
-    /// memory or in the persisted index — before the user was asked.
+    /// metadata-only; the live list is empty (moved, not copied); and NOTHING is on the wall — in
+    /// memory or in the persisted index — before the user was asked, while every photo is held in
+    /// the sealed pending corpus (2026-09-30: inverted from "nothing left the wall").
     private static func assertOffered(_ captured: [UUID], on node: MeshDepartureNode) throws {
         let manager = node.manager
         let batch = try #require(manager.pendingFriendReview, "the ending produced a review batch")
@@ -179,17 +187,20 @@ struct MeshLastMemberPhotoReviewTests {
         #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(captured), "all still offerable")
         #expect(batch.photos.allSatisfy { $0.imageData == nil }, "metadata only, as the live list held them")
         #expect(manager.sessionPhotos.isEmpty, "moved into the batch, not copied")
-        #expect(Set(captured).isSubset(of: Set(manager.meshPhotos.map(\.id))),
-                "nothing left the wall before the choice")
-        let persisted = try #require(LastMemberReviewFixtures.persistedWallIDs(node.store))
-        #expect(Set(captured).isSubset(of: persisted), "nor the persisted, sealed index")
+        #expect(Set(captured).isDisjoint(with: Set(manager.meshPhotos.map(\.id))),
+                "nothing is on the wall before the choice")
+        let persisted = LastMemberReviewFixtures.persistedWallIDs(node.store) ?? []
+        #expect(Set(captured).isDisjoint(with: persisted), "nor in the persisted, sealed wall index")
+        let held = try #require(HeldPhotos.persistedIndex(node.store), "the pending index reads back")
+        #expect(Set(captured).isSubset(of: held.heldLocalIDs), "every photo is held in the sealed pending corpus")
         #expect(FriendMintingReview.sessionEndReview(
             hasPhotos: !manager.pendingReviewPhotos.isEmpty, eligibleCandidateCount: 0) == .photoReview,
                 "so the presenter's decision is the PHOTO review, not the keep-friends prompt or nothing")
     }
 
-    /// The user's answer — keep the first photo, discard the second — prunes exactly the discarded
-    /// one, from memory and from disk, and the batch clears once both halves are answered.
+    /// The user's answer — keep the first photo, discard the second — puts exactly the kept one on
+    /// the wall, in memory and on disk, deletes the other, and the batch clears once both halves
+    /// are answered.
     private static func assertTheAnswerPrunesOnlyWhatWasDiscarded(
         _ captured: [UUID], on node: MeshDepartureNode
     ) throws {
@@ -197,11 +208,15 @@ struct MeshLastMemberPhotoReviewTests {
         let batch = try #require(manager.pendingFriendReview)
         let kept = captured[0]
         let discarded = captured[1]
-        manager.finishReviewedPhotos(Set(captured), keeping: [kept], in: batch.id)
-        #expect(manager.meshPhotos.contains { $0.id == kept }, "the kept photo stays on the wall")
-        #expect(!manager.meshPhotos.contains { $0.id == discarded }, "the discarded one leaves it")
+        HeldPhotos.openGate(on: manager)
+        let answer = manager.finishReviewedPhotos(Set(captured), keeping: [kept], in: batch.id)
+        #expect(answer.keptOnWall == [kept] && answer.discarded == [discarded] && answer.notApplied.isEmpty)
+        #expect(manager.meshPhotos.contains { $0.id == kept }, "the kept photo reaches the wall")
+        #expect(!manager.meshPhotos.contains { $0.id == discarded }, "the discarded one never does")
         let persisted = try #require(LastMemberReviewFixtures.persistedWallIDs(node.store))
         #expect(persisted.contains(kept) && !persisted.contains(discarded), "and the sealed index agrees")
+        let held = try #require(HeldPhotos.persistedIndex(node.store))
+        #expect(held.heldLocalIDs.isDisjoint(with: captured), "neither is held any more")
         #expect(manager.pendingFriendReview?.photos.isEmpty ?? true, "the photo half is answered")
         if let id = manager.pendingFriendReview?.id { manager.completeFriendReview(id) }
         #expect(manager.pendingFriendReview == nil, "and with the candidate half answered, the batch is gone")
@@ -230,7 +245,9 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
         #expect(Set(manager.pendingFriendReview?.photos.map(\.id) ?? []) == captured)
         #expect(manager.pendingFriendReview?.entries.isEmpty == true, "a photos-only batch is legal")
         #expect(manager.sessionPhotos.isEmpty)
-        #expect(captured.isSubset(of: Set(manager.meshPhotos.map(\.id))), "nothing discarded unasked")
+        #expect(captured.isDisjoint(with: Set(manager.meshPhotos.map(\.id))), "nothing kept unasked")
+        #expect(captured.isSubset(of: HeldPhotos.persistedIndex(store)?.heldLocalIDs ?? []),
+                "and nothing discarded unasked: every photo is still held")
         #expect(manager.pendingFriendReview?.photos.allSatisfy { $0.session?.meshName == "Acceptance Meadow" } == true,
                 "the ended session's metadata was stamped before its ids were cleared")
     }
@@ -254,7 +271,7 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
 
         #expect(manager.sessionState == .expired, "precondition: the ceiling ended the session")
         #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured)
-        #expect(captured.isSubset(of: Set(manager.meshPhotos.map(\.id))))
+        #expect(captured.isDisjoint(with: Set(manager.meshPhotos.map(\.id))), "held, never on the wall")
     }
 
     /// A new search is a new session, and it must not silently keep what the last one left in the
@@ -330,8 +347,8 @@ struct MeshDevelopReviewUnderGiveUpTests {
     }
 
     /// The open review keeps offering every photo it snapshotted, and its "Keep selected" answer —
-    /// one kept, two unticked — lands: the unticked leave the wall and the sealed index, and nothing
-    /// is left pending to be asked about again.
+    /// one kept, two unticked — lands: only the ticked one reaches the wall and the sealed index, and
+    /// nothing is left pending to be asked about again.
     @Test func theOpenDevelopReviewStillOffersAndAnswersItsPhotosAfterTheGiveUp() throws {
         let rig = try MeshFoundingRig.build(2, label: "develop-door3")
         defer { rig.teardown() }
@@ -340,11 +357,13 @@ struct MeshDevelopReviewUnderGiveUpTests {
         #expect(manager.photosAwaitingAnswer(among: Set(snapshot)).map(\.id) == snapshot,
                 "the grid the person is looking at still holds every photo it offered, in order")
 
-        manager.finishSessionPhotos(keeping: [snapshot[0]], of: Set(snapshot))
+        HeldPhotos.openGate(on: manager)
+        let answer = manager.finishSessionPhotos(keeping: [snapshot[0]], of: Set(snapshot))
 
+        #expect(answer.keptOnWall == [snapshot[0]] && answer.discarded == Set(snapshot.dropFirst()))
         let wall = Set(manager.meshPhotos.map(\.id))
         #expect(wall.contains(snapshot[0]), "the ticked photo is kept")
-        #expect(!wall.contains(snapshot[1]) && !wall.contains(snapshot[2]), "the unticked ones leave the wall")
+        #expect(!wall.contains(snapshot[1]) && !wall.contains(snapshot[2]), "the unticked ones never reach the wall")
         let persisted = try #require(LastMemberReviewFixtures.persistedWallIDs(rig.nodes[0].store))
         #expect(persisted.contains(snapshot[0]) && persisted.isDisjoint(with: snapshot.dropFirst()),
                 "and the sealed index agrees")
@@ -358,11 +377,15 @@ struct MeshDevelopReviewUnderGiveUpTests {
         defer { rig.teardown() }
         let (manager, snapshot) = try Self.developThenGiveUp(rig, captureCount: 2)
 
-        manager.finishSessionPhotos(keeping: [], of: Set(snapshot))
+        HeldPhotos.openGate(on: manager)
+        let answer = manager.finishSessionPhotos(keeping: [], of: Set(snapshot))
 
-        #expect(Set(manager.meshPhotos.map(\.id)).isDisjoint(with: snapshot), "every photo left the wall")
-        let persisted = try #require(LastMemberReviewFixtures.persistedWallIDs(rig.nodes[0].store))
-        #expect(persisted.isDisjoint(with: snapshot), "and the sealed index")
+        #expect(answer.discarded == Set(snapshot))
+        #expect(Set(manager.meshPhotos.map(\.id)).isDisjoint(with: snapshot), "no photo reached the wall")
+        let persisted = LastMemberReviewFixtures.persistedWallIDs(rig.nodes[0].store) ?? []
+        #expect(persisted.isDisjoint(with: snapshot), "nor the sealed index")
+        let held = try #require(HeldPhotos.persistedIndex(rig.nodes[0].store))
+        #expect(held.heldLocalIDs.isDisjoint(with: snapshot), "and the pending corpus let every one go")
         #expect(manager.photosAwaitingAnswer(among: Set(snapshot)).isEmpty, "nothing left to offer")
     }
 }
@@ -412,16 +435,19 @@ struct PendingPhotoReviewScopingTests {
         let batch = try #require(manager.pendingFriendReview)
         let shown = Set(captured.prefix(2))
         let unseen = captured[2]
+        HeldPhotos.openGate(on: manager)
 
-        manager.finishReviewedPhotos(shown, keeping: [], in: UUID())
-        #expect(Set(manager.meshPhotos.map(\.id)).isSuperset(of: Set(captured)), "a stale id discards nothing")
+        #expect(manager.finishReviewedPhotos(shown, keeping: [], in: UUID()) == .nothing, "a stale id answers nothing")
+        #expect(HeldPhotos.ids(manager).isSuperset(of: Set(captured)), "and discards nothing")
 
-        manager.finishReviewedPhotos(shown, keeping: [captured[0]], in: batch.id)
+        let answer = manager.finishReviewedPhotos(shown, keeping: [captured[0]], in: batch.id)
 
+        #expect(answer.keptOnWall == [captured[0]] && answer.discarded == [captured[1]])
         let wall = Set(manager.meshPhotos.map(\.id))
         #expect(wall.contains(captured[0]), "kept")
-        #expect(!wall.contains(captured[1]), "shown and unticked: discarded")
-        #expect(wall.contains(unseen), "never shown: not discarded")
+        #expect(!wall.contains(captured[1]) && !HeldPhotos.ids(manager).contains(captured[1]),
+                "shown and unticked: deleted, never on the wall")
+        #expect(!wall.contains(unseen) && HeldPhotos.ids(manager).contains(unseen), "never shown: still held")
         #expect(manager.pendingReviewPhotos.map(\.id) == [unseen], "and still awaiting its own answer")
         #expect(manager.pendingFriendReview?.entries.count == 1, "the candidate half is untouched")
     }
@@ -432,10 +458,12 @@ struct PendingPhotoReviewScopingTests {
         let (manager, captured) = try endedSessionWithPhotos(2)
         defer { manager.leaveMesh() }
         let batch = try #require(manager.pendingFriendReview)
-        manager.finishReviewedPhotos(Set(captured), keeping: Set(captured), in: batch.id)
+        HeldPhotos.openGate(on: manager)
+        #expect(manager.finishReviewedPhotos(Set(captured), keeping: Set(captured), in: batch.id).keptOnWall == Set(captured))
 
-        manager.finishSessionPhotos(keeping: [], of: Set(captured))
+        let late = manager.finishSessionPhotos(keeping: [], of: Set(captured))
 
+        #expect(late == .nothing, "no longer held, so nothing to answer")
         #expect(Set(manager.meshPhotos.map(\.id)).isSuperset(of: Set(captured)), "the first answer stands")
     }
 
@@ -448,17 +476,20 @@ struct PendingPhotoReviewScopingTests {
         let snapshot = Set(manager.sessionPhotos.map(\.id))
         LastMemberReviewFixtures.capture(1, on: manager)   // lands while the sheet is up
         let late = try #require(manager.sessionPhotos.first { !snapshot.contains($0.id) }?.id)
+        HeldPhotos.openGate(on: manager)
 
-        manager.finishSessionPhotos(keeping: [], of: snapshot)
+        #expect(manager.finishSessionPhotos(keeping: [], of: snapshot).discarded == snapshot)
         #expect(manager.sessionPhotos.map(\.id) == [late], "only what the sheet showed was answered")
         manager.leaveSession()
 
         #expect(manager.pendingReviewPhotos.map(\.id) == [late], "and the late one awaits its own answer")
-        #expect(manager.meshPhotos.contains { $0.id == late }, "still on the wall, not discarded unseen")
+        #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == [late], "still held, not discarded unseen")
     }
 
-    /// A photo deleted from the wall is no longer a choice, and a batch left with nothing clears.    /// A photo deleted from the wall is no longer a choice, and a batch left with nothing clears.
-    @Test func deletingAPendingPhotoRemovesItFromTheReview() throws {
+    /// A held photo leaves only through an answer (2026-09-30): a per-photo delete of one is
+    /// refused, so the batch keeps offering it and the pending corpus keeps holding it — a delete
+    /// that dropped it from memory while the index kept it would bring it back at the next launch.
+    @Test func deletingAHeldPhotoIsRefusedAndTheBatchKeepsIt() throws {
         let (manager, captured) = try endedSessionWithPhotos(1)
         defer { manager.leaveMesh() }
         let batch = try #require(manager.pendingFriendReview)
@@ -467,7 +498,8 @@ struct PendingPhotoReviewScopingTests {
 
         manager.deletePhoto(captured[0])
 
-        #expect(manager.pendingFriendReview == nil, "nothing left to answer, so the batch clears")
+        #expect(manager.pendingReviewPhotos.map(\.id) == captured, "still offered")
+        #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == Set(captured), "and still held on disk")
     }
 
     /// The vote purge drops the voted-out candidate; it must not take the photo choice with it.
@@ -803,23 +835,39 @@ func holdsForeignCover(_ controller: UIViewController?) -> Bool {
 @Suite
 struct LastMemberPhotoReviewSourceWallTests {
 
-    /// Only the user's answer and the promotion may empty the live photo list.
+    /// Only the user's answer, the promotion and delete-all may empty the live photo list.
     @Test func theLivePhotoListIsEmptiedOnlyByAnAnswerOrThePromotion() throws {
         let source = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
         )
         #expect(source.components(separatedBy: "sessionPhotos.removeAll()").count - 1 == 1,
-                "exactly one bulk empty: the promotion's move (the answers remove what they answered)")
+                "exactly one bulk move: the promotion's (the answers remove what they answered)")
+        #expect(source.components(separatedBy: "sessionPhotos = []").count - 1 == 1,
+                "and exactly one other emptier: delete-all's purge of the photos nobody chose")
+        let purge = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "public func purgeHeldSessionPhotosForDeleteAll() -> Bool", in: source))
+        #expect(purge.contains("sessionPhotos = []") && purge.contains("heldPhotoStore.purgeAll()"),
+                "the purge empties the roll AND the corpus behind it, never one without the other")
         let answer = try #require(MeshRoutedSourceScan.bracedBody(
-            after: "public func finishSessionPhotos(keeping kept: Set<UUID>, of reviewed: Set<UUID>)", in: source))
+            after: "public func finishSessionPhotos(keeping kept: Set<UUID>, of reviewed: Set<UUID>) -> SessionPhotoAnswer",
+            in: source))
+        let engine = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "func applyPhotoAnswers(kept: Set<UUID>, discarded: Set<UUID>, now: Date) -> SessionPhotoAnswer",
+            in: source))
+        let forget = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func forgetAnsweredHeldPhotos(_ ids: Set<UUID>)", in: source))
         let promotion = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func movePhotosIntoPendingReview()", in: source))
-        #expect(answer.contains("sessionPhotos.removeAll { answered.contains($0.id) }"),
-                "the camera's answer takes what it answered out of the live list")
-        #expect(answer.contains("batch.photos.removeAll { answered.contains($0.id) }"),
+        #expect(answer.contains("applyPhotoAnswers("), "the camera's answer runs through the one engine")
+        #expect(engine.contains("forgetAnsweredHeldPhotos("), "which takes what it answered out of the lists")
+        #expect(forget.contains("sessionPhotos.removeAll { ids.contains($0.id) }"),
+                "out of the live list")
+        #expect(forget.contains("batch.photos.removeAll { ids.contains($0.id) }"),
                 "and out of the pending batch, where door 3 may have moved it (C-F1/L-F1)")
         #expect(promotion.contains("sessionPhotos.removeAll()"))
         #expect(promotion.contains("pendingFriendReview = batch"), "the promotion moves, never drops")
+        #expect(!promotion.contains("heldPhotoStore") && !promotion.contains("photoCacheStore"),
+                "and writes nothing (I6): both lists are memory projections of the pending index")
         let leave = try #require(MeshRoutedSourceScan.bracedBody(after: "public func leaveSession()", in: source))
         #expect(!leave.contains("sessionPhotos"), "leaveSession decides nothing about the photos")
         let join = try #require(MeshRoutedSourceScan.bracedBody(after: "public func startJoin()", in: source))
@@ -834,12 +882,17 @@ struct LastMemberPhotoReviewSourceWallTests {
         let present = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func presentDisconnectReviewIfNeeded()", in: source))
         #expect(present.contains("manager.pendingReviewPhotos"), "the photos come from the batch")
-        for action in ["private func keepSelectedSessionPhotos()", "private func discardAllSessionPhotos()"] {
+        for action in ["private func keepSelectedSessionPhotos() async", "private func discardAllSessionPhotos() async"] {
             let body = try #require(MeshRoutedSourceScan.bracedBody(after: action, in: source), "\(action) is gone")
             #expect(body.contains("finishReviewedPhotos("), "\(action) answers the batch's photo half")
-            #expect(body.contains("if manager.currentMesh != nil"),
-                    "\(action) leaves only a mesh that is still held (door 3)")
+            #expect(body.contains("await finishPhotoReview(after: answer)"), "\(action) reads what its answer did")
         }
+        let finish = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func finishPhotoReview(after answer: SessionPhotoAnswer) async", in: source))
+        #expect(finish.contains("guard answer.notApplied.isEmpty else"),
+                "an answer that did not apply keeps the sheet up (no hide-and-re-present loop)")
+        #expect(finish.contains("if manager.currentMesh != nil"),
+                "and a finished one leaves only a mesh that is still held (door 3)")
         #expect(source.contains(".onChange(of: scenePhase)"), "a review promoted in the dark presents on return")
     }
 
@@ -879,7 +932,9 @@ struct LastMemberPhotoReviewSourceWallTests {
         let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/DisposableCameraView.swift"))
         let sheet = try #require(MeshRoutedSourceScan.bracedBody(after: "private var reviewSheet: some View", in: source))
         #expect(sheet.contains("photos: developReviewPhotos"), "the grid renders the snapshot wherever it is held")
-        #expect(sheet.contains("manager.finishSessionPhotos(keeping: [], of: developReviewIDs)"),
+        let discard = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func discardAllSessionPhotos() async", in: source))
+        #expect(discard.contains("manager.finishSessionPhotos(keeping: [], of: developReviewIDs)"),
                 "Delete all answers the snapshot")
         let keep = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func keepSelectedSessionPhotos() async", in: source))

@@ -1514,7 +1514,7 @@ extension MeshConvergenceRun {
     /// stands in, which is honest rather than trivial: the origin's chunk files must still open, seal
     /// key and per-slot descriptor comparison included.
     ///
-    /// The projection arm is **per canonical store since P6 item 9** (R3): it read `meshPhotos`
+    /// The projection arm is **per canonical store since P6 item 9** (R3): it read the photo wall
     /// alone, so a heart legitimately projected into the heart ledger — or a text into the session
     /// transcript — whose ciphertext was then reclaimed fell through to the audited-drop arm and
     /// was judged by a deletion rather than by the projection that justified it.
@@ -1572,7 +1572,8 @@ extension MeshConvergenceRun {
     /// Whether `member` projected this item into **its own type's** canonical store.
     ///
     /// One arm per registered routed type, because "the plaintext is safely somewhere else" is a
-    /// different fact for each: a photo is in `meshPhotos`, a heart is a judged gift in the heart
+    /// different fact for each: a photo is HELD for review (the live roll or the awaiting batch —
+    /// since 2026-09-30 never the wall before the person's answer), a heart is a judged gift in the heart
     /// ledger, a text is a row in the session transcript. The control token is reserved and
     /// unregistered, so it has no projection and falls through to the audited-drop arm.
     private func routedProjectedIntoItsStore(
@@ -1586,7 +1587,8 @@ extension MeshConvergenceRun {
             return member.node.manager.sessionMessages.messages
                 .contains { $0.messageID == key.itemID }
         default:
-            return member.node.manager.meshPhotos.contains { $0.id == key.itemID }
+            // A photo is HELD for the person's review since 2026-09-30, never on the wall first.
+            return HeldPhotos.all(member.node.manager).contains { $0.id == key.itemID }
         }
     }
 
@@ -2545,8 +2547,8 @@ struct MeshRoutedDrainConvergenceTests {
         #expect(destinations.isEmpty == false, "the cell needs at least one destination")
         // R2: bounded by the roster cap.
         for member in destinations {
-            #expect(member.node.manager.meshPhotos.filter { $0.id == key.itemID }.count == 1,
-                    "every destination's wall holds exactly one entry for the delivered item")
+            #expect(HeldPhotos.all(member.node.manager).filter { $0.id == key.itemID }.count == 1,
+                    "every destination holds exactly one entry for the delivered item, for review")
         }
     }
 
@@ -2576,8 +2578,8 @@ struct MeshRoutedDrainConvergenceTests {
         #expect(destinations.isEmpty == false, "the cell needs at least one destination")
         // R2: bounded by the roster cap.
         for member in destinations {
-            #expect(member.node.manager.meshPhotos.filter { $0.id == key.itemID }.count == 1,
-                    "every destination's wall holds exactly one entry for the delivered item")
+            #expect(HeldPhotos.all(member.node.manager).filter { $0.id == key.itemID }.count == 1,
+                    "every destination holds exactly one entry for the delivered item, for review")
         }
     }
 

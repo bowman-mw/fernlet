@@ -547,7 +547,8 @@ struct MeshP5AckStageAcceptanceTests {
         #expect(delivered > 0, "no destination reached delivered, so the stage proved nothing")
         // R2: bounded by the roster cap.
         for member in run.livingMembers {
-            #expect(member.node.manager.meshPhotos.contains { $0.id == outcome.key.itemID } == false,
+            let manager = member.node.manager
+            #expect((HeldPhotos.all(manager) + manager.meshPhotos).contains { $0.id == outcome.key.itemID } == false,
                     "an opaque item reached a canonical store, so a decrypt was in the ack path")
         }
     }
@@ -996,14 +997,16 @@ struct MeshP5OtherBranchDeliveryAcceptanceTests {
         let now = MeshRoutedPipeline.mintInstant
         run.openEveryRoutedGate(now: now)
         let key = try run.routedSealedPhotoEvent(at: far, now: now)
-        #expect(near.node.manager.meshPhotos.isEmpty,
+        #expect(HeldPhotos.all(near.node.manager).isEmpty && near.node.manager.meshPhotos.isEmpty,
                 "the precondition: the near branch was away when the photo was minted")
 
         try await run.runHeal()
         try await run.runRoutedDrainRounds(origin: far, key: key)
 
-        #expect(near.node.manager.meshPhotos.filter { $0.id == key.itemID }.count == 1,
-                "the branch that was away shows the photo exactly once after the heal")
+        // Since 2026-09-30 a delivered photo is HELD for the person's review, never on the wall first.
+        #expect(HeldPhotos.all(near.node.manager).filter { $0.id == key.itemID }.count == 1,
+                "the branch that was away holds the photo for review exactly once after the heal")
+        #expect(near.node.manager.meshPhotos.isEmpty, "and none of it is on the wall before the answer")
     }
 
     /// **The cell is one the sealed rectangle really runs**, and the tree carries a far-branch mint

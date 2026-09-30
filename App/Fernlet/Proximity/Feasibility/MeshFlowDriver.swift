@@ -316,16 +316,20 @@ enum MeshFlowDriver {
     /// peer heart-eligible in a LATER session — which is why the hearts script needs two of them
     /// (P6 item 10). The photo half is answered too (keep all, the review's default) because
     /// `completeFriendReview` leaves a batch with unanswered photos standing (2026-09-30); the echo
-    /// counts them, so a run shows the last member's photos reached the review.
+    /// counts them, so a run shows the last member's photos reached the review. The photos are held
+    /// until this answer (2026-09-30), so the echo prints what the answer REPORTS — kept on the wall,
+    /// and anything it could not apply (a closed routed gate, an unreadable wall) — rather than the
+    /// count it asked for.
     private static func autoKeepFriendsIfDue(manager: MeshNetworkManager, store: FernletStore) {
         guard MeshMatrixDebugOptions.autoKeepsFriends,
               let batch = manager.pendingFriendReview else { return }
         let kept = Set(batch.entries.map(\.fingerprint))
         let photoIDs = Set(manager.pendingReviewPhotos.map(\.id))
-        manager.finishReviewedPhotos(photoIDs, keeping: photoIDs, in: batch.id)
+        let answer = manager.finishReviewedPhotos(photoIDs, keeping: photoIDs, in: batch.id)
         store.keepProximityFriends(from: batch.entries, keptFingerprints: kept)
         manager.completeFriendReview(batch.id)
-        echo("friends kept=\(kept.count) vault=\(store.trustedProximityPeers.count) reviewedPhotos=\(photoIDs.count)")
+        echo("friends kept=\(kept.count) vault=\(store.trustedProximityPeers.count) reviewedPhotos=\(photoIDs.count) "
+             + "keptOnWall=\(answer.keptOnWall.count) notApplied=\(answer.notApplied.count)")
     }
 
     // MARK: - Membership roles (P3 item 9)
@@ -571,9 +575,12 @@ enum MeshFlowDriver {
             state.messagesIn = incoming
             state.messagesOut = outgoing
         }
-        let photosIn = manager.meshPhotos.filter { $0.senderFingerprint != manager.localFingerprint }.count
+        // Received photos are HELD for the review until answered (2026-09-30), so "received" counts
+        // the held ones (live roll + awaiting batch) and the wall together; `held` and `wall` split them.
+        let held = manager.sessionPhotos + manager.pendingReviewPhotos
+        let photosIn = (held + manager.meshPhotos).filter { $0.senderFingerprint != manager.localFingerprint }.count
         if photosIn != state.photosIn {
-            echo("photos received=\(photosIn) held=\(manager.meshPhotos.count)")
+            echo("photos received=\(photosIn) held=\(held.count) wall=\(manager.meshPhotos.count)")
             state.photosIn = photosIn
         }
         let catalogs = manager.clothingShop.peerCatalogs.count

@@ -2,6 +2,7 @@
 import Testing
 import UIKit
 import FernletDomainModel
+import PrivateMediaStore
 import ProximityKit
 @testable import Fernlet
 
@@ -128,21 +129,29 @@ struct MeshNetworkManagerTests {
 
     /// Regression for prior finding #6: in-session photos must hold metadata only, not
     /// full-resolution bytes (which previously accumulated in memory for the whole session
-    /// and could be flooded into an OOM). The bytes live in the disk cache and rehydrate.
+    /// and could be flooded into an OOM). The bytes live sealed on disk and load on demand — since
+    /// 2026-09-30 in the PENDING corpus, through the review's gated seam, and on the wall only
+    /// after a keep.
     @Test func sessionPhotos_holdMetadataOnlyNotRawBytes() throws {
         let manager = MeshNetworkManager(store: store)
         manager.currentMesh = makeTestMesh()
+        HeldPhotos.openGate(on: manager)
 
         manager.addPhoto(makeTinyJPEG())
 
         let cached = try #require(manager.sessionPhotos.first)
         #expect(cached.imageData == nil,
                 "Session photo must not retain raw image bytes in memory")
-        // Display path (FriendPhotoReviewSheet tile loadImageData closure).
-        #expect(manager.imageData(for: cached) != nil,
-                "Full-resolution bytes remain available from the disk cache on demand")
-        // Library-save path (ConnectView rehydrates the selected session photos before saving).
-        let rehydrated = try #require(manager.hydratedPhotos([cached]).first)
+        // Display path (FriendPhotoReviewSheet tile loadImageData closure): the review seam.
+        #expect(manager.reviewImageData(for: cached) != nil,
+                "Full-resolution bytes remain available from the sealed pending corpus on demand")
+        #expect(manager.reviewThumbnailData(for: cached) != nil, "and so does the tile's thumbnail")
+        #expect(manager.imageData(for: cached) == nil, "but the WALL has nothing before the answer")
+        // Library-save path: only after the keep, and only from the wall.
+        let answer = manager.finishSessionPhotos(keeping: [cached.id])
+        #expect(answer.keptOnWall == [cached.id])
+        let kept = manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) }
+        let rehydrated = try #require(manager.hydratedPhotos(kept).first)
         #expect(rehydrated.imageData != nil,
                 "hydratedPhotos must repopulate bytes so the save flow does not silently save nothing")
     }
@@ -224,17 +233,20 @@ struct MeshNetworkManagerTests {
     @Test func deleteAllSessionPhotosClearsCurrentRollFromAlbum() {
         let manager = MeshNetworkManager(store: store)
         manager.currentMesh = makeTestMesh()
+        HeldPhotos.openGate(on: manager)
         let existingAlbumIDs = Set(manager.meshPhotos.map(\.id))
         manager.addPhoto(makeTinyJPEG())
         let sessionPhotoID = manager.sessionPhotos[0].id
 
         #expect(manager.sessionPhotos.isEmpty == false)
 
-        manager.deleteAllSessionPhotos()
+        let answer = manager.deleteAllSessionPhotos()
 
+        #expect(answer.discarded == [sessionPhotoID])
         #expect(manager.meshPhotos.contains(where: { $0.id == sessionPhotoID }) == false)
         #expect(Set(manager.meshPhotos.map(\.id)).isSubset(of: existingAlbumIDs))
         #expect(manager.sessionPhotos.isEmpty)
+        #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs.isEmpty == true, "and the pending corpus let it go")
     }
 
     /// The friend photo wall follows its store's `proximitySupportDirectory`, not the process.
@@ -257,9 +269,10 @@ struct MeshNetworkManagerTests {
         try withExtendedLifetime((storeA, storeB, storeC)) {
             let managerA = MeshNetworkManager(store: storeA)
             managerA.currentMesh = makeTestMesh()
+            HeldPhotos.openGate(on: managerA)
             managerA.addPhoto(makeTinyJPEG())
             let keptID = try #require(managerA.sessionPhotos.first?.id)
-            managerA.finishSessionPhotos(keeping: [keptID])
+            #expect(managerA.finishSessionPhotos(keeping: [keptID]).keptOnWall == [keptID])
             #expect(managerA.meshPhotos.contains(where: { $0.id == keptID }))
 
             // A store on its OWN root sees nothing of A's wall.
@@ -282,13 +295,17 @@ struct MeshNetworkManagerTests {
     @Test func finishSessionPhotosKeepsOnlySelectedCurrentRollPhotos() throws {
         let manager = MeshNetworkManager(store: store)
         manager.currentMesh = makeTestMesh()
+        HeldPhotos.openGate(on: manager)
         let existingAlbumIDs = Set(manager.meshPhotos.map(\.id))
         manager.addPhoto(makeTinyJPEG())
         manager.addPhoto(makeTinyJPEG())
         let keptID = try #require(manager.sessionPhotos.first?.id)
         let discardedID = try #require(manager.sessionPhotos.dropFirst().first?.id)
+        #expect(!manager.meshPhotos.contains { $0.id == keptID }, "held, not on the wall, before the answer")
 
-        manager.finishSessionPhotos(keeping: [keptID])
+        let answer = manager.finishSessionPhotos(keeping: [keptID])
+
+        #expect(answer.keptOnWall == [keptID] && answer.discarded == [discardedID] && answer.notApplied.isEmpty)
 
         #expect(manager.meshPhotos.contains(where: { $0.id == keptID }))
         #expect(manager.meshPhotos.contains(where: { $0.id == discardedID }) == false)
@@ -400,7 +417,7 @@ struct MeshNetworkManagerTests {
     /// were the committed-slot gate on the photo family. That family has no dispatch at all since
     /// P5 item 13: photo content rides the routed store, so the negative claim is now stronger than
     /// the gate (nobody reaches the wall through this token, committed or not) and the positive
-    /// control moved to `MeshRoutedPhotoDeliveryTests.aSharedPhotoReachesTheDestinationsWall`.
+    /// control moved to `MeshRoutedPhotoDeliveryTests.aSharedPhotoIsHeldForReviewAtTheDestination`.
     ///
     /// The tokens themselves stay decodable on purpose (D-13.5, invariant 8): an older peer's frame
     /// is parked by name rather than mis-dispatched, and no wire token is ever reused for a new

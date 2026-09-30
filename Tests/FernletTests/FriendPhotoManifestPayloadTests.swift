@@ -15,7 +15,7 @@ import FernletDomainModel
 /// FILTER cells below now describe a shape nothing sends. Their successors on the routed path are
 /// the offer/ask filters (`MeshRoutedInventoryDelta.between`, which names no epoch) and the
 /// projection's own block check, asserted in `MeshRoutedPhotoDeliveryTests`
-/// (`aBlockedOriginsPhotoIsNotHandedToTheWall`, `aPhotoIsHandedToTheWallOnce`).
+/// (`aBlockedOriginsPhotoIsNotHandedToTheWall`, `aPhotoIsHeldOnce`).
 @Suite @MainActor struct FriendPhotoManifestPayloadTests {
 
     // Each entry in the manifest carries a non-optional sender fingerprint,

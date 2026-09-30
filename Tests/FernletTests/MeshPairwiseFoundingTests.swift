@@ -300,10 +300,13 @@ struct MeshFoundingRig {
         }
     }
 
-    /// How many wall entries `node` holds for one item id — the assertion made at the RECIPIENT,
-    /// which is the only one that separates a delivery from a successful mint.
+    /// How many entries `node` holds for one item id — the assertion made at the RECIPIENT, which
+    /// is the only one that separates a delivery from a successful mint. Since 2026-09-30 a delivered
+    /// photo is HELD for the person's review (live roll or awaiting batch), never put on the wall
+    /// before that answer, so this counts held entries plus wall entries (a kept one).
     func wallEntries(at node: Int, itemID: UUID) -> Int {
-        nodes[node].manager.meshPhotos.filter { $0.id == itemID }.count
+        let manager = nodes[node].manager
+        return (HeldPhotos.all(manager) + manager.meshPhotos).filter { $0.id == itemID }.count
     }
 
     /// The item id of the routed item `node` staged as its OWN origin, or nil.
@@ -1918,7 +1921,7 @@ struct MeshPairwiseFoundingTests {
         #expect(rig.nodes[0].manager.routedShareRefusal == nil, "and it was not refused either")
         #expect(rig.nodes[0].manager.photosKeptOnThisPhone == 0,
                 "a photo that reached its destination is not one that stayed on this phone")
-        #expect(rig.nodes[0].manager.meshPhotos.count == 1, "the sender's own echo is unconditional")
+        #expect(rig.nodes[0].manager.sessionPhotos.count == 1, "the sender's own copy is held unconditionally")
         try await rig.settle(until: { rig.wallEntries(at: 1, itemID: outbound) == 1 })
         #expect(rig.wallEntries(at: 1, itemID: outbound) == 1,
                 "the peer's wall holds the photo — DELIVERED, not merely minted")

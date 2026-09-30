@@ -5,6 +5,7 @@ import Testing
 // @testable for the internal `save`, which seeds the share-extension inbox the way the extension does.
 @testable import AppServices
 import CloudKitSync
+@testable import FernletCrypto
 import FernletDomainModel
 import FernletExchange
 import FernletFoundation
@@ -13,6 +14,7 @@ import FernletPersistence
 import HealthKitGateway
 import LocalPersistence
 import PrivateHealthStore
+import PrivateMediaStore
 import PrivateMemoryStore
 import PrivateStoreCore
 @testable import ProximityKit
@@ -393,6 +395,40 @@ struct DeleteAllDataTests {
             with the projection switched back on: `endPrivacyWipe()` runs from a `defer`, so no \
             exit from the funnel leaves it off for the rest of the process
             """)
+    }
+
+    /// Leg 4d (2026-09-30, owner question Q1's default): the funnel removes the session photos nobody
+    /// has chosen yet — the sealed pending corpus, the WHOLE review batch (its keep-as-friend
+    /// candidates too) and the live roster — and keeps the wall of photos the person DID choose.
+    @Test func deleteAllRemovesUnchosenSessionPhotosAndKeepsTheChosenWall() async throws {
+        let store = makeStore("delete-all-held-photos")
+        let manager = store.meshNetworkManager
+        manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
+        HeldPhotos.openGate(on: manager)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            // R2: a hard constant bound.
+            for _ in 0..<3 { manager.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG()) }
+        }
+        let ids = manager.sessionPhotos.map(\.id)
+        try #require(ids.count == 3)
+        #expect(manager.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
+        manager.recordSessionParticipant(
+            displayName: "Bea", fingerprint: "bea-fp-0011223344",
+            signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
+        )
+        manager.leaveSession()
+        try #require(manager.pendingFriendReview?.entries.count == 1 && manager.pendingReviewPhotos.count == 2,
+                     "precondition: two unchosen photos and one candidate are waiting")
+        let pendingDirectory = store.proximitySupportDirectory
+            .appendingPathComponent(PendingSessionPhotoStore.directoryName, isDirectory: true)
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!FileManager.default.fileExists(atPath: pendingDirectory.path), "the pending corpus is gone")
+        #expect(manager.pendingFriendReview == nil, "and the whole batch, candidates included")
+        #expect(manager.sessionPhotos.isEmpty && manager.sessionRoster.isEmpty)
+        #expect(manager.meshPhotos.map(\.id) == [ids[0]], "the chosen wall is kept")
+        #expect(HeldPhotos.persistedWallIDs(store) == [ids[0]], "on disk too")
     }
 
     /// The survival twin of the test above: the wipe must reach THIS store's inbox and no one else's.

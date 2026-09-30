@@ -95,6 +95,10 @@ struct PrivacyWipeCoverageTests {
         "mealPhotoStore.deleteAll",
         "progressPhotoStore.deleteAll",
         "recipePhotoStore.deleteAll",
+        // Leg 4d (2026-09-30): the session photos nobody has chosen yet — the sealed pending corpus,
+        // the whole review batch (candidates too) and the live roll and roster. The wall itself is
+        // still a deliberate survivor; this is the separate corpus that holds photos BEFORE the choice.
+        "meshNetworkManager.purgeHeldSessionPhotosForDeleteAll",
         "sharedRecipeImportQueue.clear",
         // The un-consumed Messages deep-link request (destination + inbox id). Its own token, and
         // NOT the enclosing `clearMessagesImportInboxes` spelling: that helper is registered in

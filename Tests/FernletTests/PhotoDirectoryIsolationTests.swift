@@ -153,6 +153,7 @@ struct PhotoDirectoryIsolationTests {
     /// | sidecar | cleared by |
     /// | --- | --- |
     /// | `MeshPhotoCache.json` + wall prefs | not by the funnel (a documented survivor), but re-saved whole per manager |
+    /// | `PendingSessionPhotos/` (session photos nobody chose yet) | `deleteAllData` leg 4d, and every manager loads and rewrites its index |
     /// | `HeartLedger.json` | `resetAll` |
     /// | `HeartDropOutbox/Dedup/PeerBundles.json` | `deleteAllData` (plus their seal key — see the next wall) |
     /// | `ModerationLedger.json` | `resetAll` |

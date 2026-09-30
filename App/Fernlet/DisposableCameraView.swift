@@ -599,6 +599,14 @@ struct DisposableCameraView: View {
     @State private var friendCandidates: [MeshSessionRosterEntry] = []
     @State private var keptFriendFingerprints: Set<String> = []
     @State private var photoSaveError: PhotoSaveFailure? = nil
+    /// The Develop review's opt-in camera-roll toggle, off each time the review presents.
+    @State private var alsoSaveToPhotos = false
+    /// Why the Develop review's last answer did not apply in full; the sheet stays up and says so.
+    @State private var reviewAnswerFailure: SessionPhotoAnswerFailure?
+    /// Kept photos the last answer removed because their held bytes could not be opened.
+    @State private var reviewUnreadableCount = 0
+    /// What the Develop review is busy with after the answer (the Photos export).
+    @State private var reviewWorking: FriendPhotoReviewWorkingMessage?
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     @State private var previousWindTranslation: CGFloat = 0
     // Orientation is @State (not a raw per-frame `size.width > size.height`) so a transient
@@ -1357,6 +1365,9 @@ struct DisposableCameraView: View {
             keptFriendFingerprints = []
             developReviewIDs = Set(manager.sessionPhotos.map(\.id))
             selectedForSave = developReviewIDs
+            alsoSaveToPhotos = false
+            reviewAnswerFailure = nil
+            reviewUnreadableCount = 0
             reviewPresented = true
         }
     }
@@ -1388,6 +1399,10 @@ struct DisposableCameraView: View {
 
     // MARK: - Review sheet
 
+    /// The Develop review over the photos snapshotted at Develop, wherever the manager lists them
+    /// now. They are HELD in the sealed pending corpus, never on the wall, until this answer; tiles
+    /// load through the manager's gated review seam; swipe-down cancels back to the camera with
+    /// nothing answered.
     @ViewBuilder
     private var reviewSheet: some View {
         FriendPhotoReviewSheet(
@@ -1395,50 +1410,86 @@ struct DisposableCameraView: View {
             selectedIDs: $selectedForSave,
             friendCandidates: friendCandidates,
             keptFriendFingerprints: $keptFriendFingerprints,
-            saveSelected: { await keepSelectedSessionPhotos() },
-            saveToPhotos: { await exportSelectedPhotosToLibrary() },
-            discardAll: {
-                manager.finishSessionPhotos(keeping: [], of: developReviewIDs)
-                finalizeFriendKeeps()
-                Task { @MainActor in
-                    await manager.leaveSessionAfterNotifyingPeers()
-                    reviewPresented = false
-                }
-            },
-            loadImageData: { manager.imageData(for: $0) }
+            alsoSaveToPhotos: $alsoSaveToPhotos,
+            canKeep: manager.wallCanTakeKeeps,
+            workingMessage: reviewWorking,
+            answerFailure: reviewAnswerFailure,
+            unreadableCount: reviewUnreadableCount,
+            tileReloadToken: manager.heldPhotosCanBeShown ? 1 : 0,
+            keepSelected: { await keepSelectedSessionPhotos() },
+            discardAll: { await discardAllSessionPhotos() },
+            loadImageData: { manager.reviewThumbnailData(for: $0) }
         )
         .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
     }
 
-    /// FRND-12: the primary review action. Keeps the ticked photos on the in-app wall, mints the
-    /// kept friends, and ends the session — deliberately with NO Photos-library involvement, so a
-    /// system-permission denial can never cost the user their pictures. The optional export is
-    /// `exportSelectedPhotosToLibrary`. Scoped to the ids the review showed (``developReviewIDs``),
-    /// wherever they are held now.
+    /// FRND-12's primary review action: keeps the ticked photos (the unticked shown ones are
+    /// deleted), mints the kept friends, and — only if the toggle is on — exports what the answer
+    /// reports kept, AFTER the keep landed, so a Photos denial can never cost it. Scoped to the ids
+    /// the review showed (``developReviewIDs``), wherever they are listed now.
     private func keepSelectedSessionPhotos() async {
-        manager.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)
+        let answer = manager.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)
         finalizeFriendKeeps()
-        await manager.leaveSessionAfterNotifyingPeers()
-        reviewPresented = false
+        await exportKeptPhotosIfAsked(answer)
+        await finishDevelopReview(after: answer)
     }
 
-    /// The optional "Also save to Photos" export. Session payloads are held metadata-only to bound
-    /// memory, so the ticked ones are rehydrated from the disk cache first — handing them to the
-    /// saver directly would skip every payload (`imageData` is nil) and throw `NothingSavedError`.
-    /// Purely additive: a failure (including a Photos permission denial) surfaces on the sheet and
-    /// never touches the keep flow.
-    private func exportSelectedPhotosToLibrary() async {
-        let toSave = manager.hydratedPhotos(developReviewPhotos.filter { selectedForSave.contains($0.id) })
+    /// The camera-roll half of the answer, and the ONLY place this view hands photos to
+    /// `FriendPhotoLibrarySaver`: the photos the answer reports landed on the wall
+    /// (`SessionPhotoAnswer.keptOnWall`), hydrated from the WALL — never a pending byte, never before
+    /// the answer. Purely additive: a failure (a Photos denial included) surfaces on the sheet and
+    /// never touches the keep.
+    private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async {
+        guard alsoSaveToPhotos, !answer.keptOnWall.isEmpty else { return }
+        let toSave = manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })
         // If no bytes could be loaded/decrypted, don't report a false success.
         guard !toSave.isEmpty else {
             photoSaveError = .generic
             return
         }
+        reviewWorking = .savingToPhotos
+        defer { reviewWorking = nil }
         do {
             try await FriendPhotoLibrarySaver.save(toSave)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {
             photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
+        }
+    }
+
+    /// "Delete all", confirmed: deletes every photo the review showed and mints the kept friends —
+    /// the keep action's twin with nothing kept.
+    private func discardAllSessionPhotos() async {
+        let answer = manager.finishSessionPhotos(keeping: [], of: developReviewIDs)
+        finalizeFriendKeeps()
+        await finishDevelopReview(after: answer)
+    }
+
+    /// After an answer: stay up when it left photos held (`notApplied`) — the grid already shows
+    /// only those, the selection is trimmed to them, and the inline line says why — or show the
+    /// "couldn't be opened" notice when there is one, end the session, and close.
+    private func finishDevelopReview(after answer: SessionPhotoAnswer) async {
+        guard answer.notApplied.isEmpty else {
+            reviewAnswerFailure = answer.failure
+            selectedForSave.formIntersection(answer.notApplied)
+            return
+        }
+        reviewAnswerFailure = nil
+        if !answer.unreadable.isEmpty {
+            reviewUnreadableCount = answer.unreadable.count
+            await pauseForUnreadableNotice()
+        }
+        await manager.leaveSessionAfterNotifyingPeers()
+        reviewPresented = false
+    }
+
+    /// Holds the review on screen long enough to read the "couldn't be opened" line (it is also
+    /// announced). Cancellation just ends the pause early — the close still runs.
+    private func pauseForUnreadableNotice() async {
+        do {
+            try await Task.sleep(for: .milliseconds(1_800))
+        } catch {
+            return   // cancelled: close at once (R7: nothing owed)
         }
     }
 

@@ -458,7 +458,7 @@ struct MeshRoutedRetryAllowanceTests {
             and the newcomer really does sort LAST, or the cell would pass under a plain \
             head-of-list prefix
             """)
-        #expect(rig.nodes[1].manager.meshPhotos.isEmpty, "nothing projected behind a closed gate")
+        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "nothing projected behind a closed gate")
 
         rig.pushGate(Self.openGate, at: 1)
 
@@ -466,7 +466,7 @@ struct MeshRoutedRetryAllowanceTests {
             the session's FIRST pass must reach the newcomer: the sixteen it already held are \
             re-derivations, and they compete for the retry share
             """)
-        #expect(rig.nodes[1].manager.meshPhotos.count == 1, "and only it — the backlog refuses")
+        #expect(HeldPhotos.all(rig.nodes[1].manager).count == 1, "and only it — the backlog refuses")
     }
 
     /// **D-13.32 itself.** Sixteen items a previous pass attempted and could not finish do not
@@ -485,7 +485,7 @@ struct MeshRoutedRetryAllowanceTests {
 
         let first = try #require(rig.pushGate(Self.openGate, at: 1), "the unlock edge owes a pass")
         #expect(first.legs.isRising, "the plaintext pass runs on a rising leg only")
-        #expect(rig.nodes[1].manager.meshPhotos.isEmpty, "an over-resident blob projects nothing")
+        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "an over-resident blob projects nothing")
 
         rig.pushGate(Self.closedGate, at: 1)
         let arriving = try MeshRoutedPhotoFixtures.item(rig, origin: 0, itemID: try Self.highID())
@@ -503,7 +503,7 @@ struct MeshRoutedRetryAllowanceTests {
             a retrying population may hold at most half the allowance; the reserved half is what \
             reaches the newcomer on its first pass
             """)
-        #expect(rig.nodes[1].manager.meshPhotos.count == 1, "and nothing else was projected")
+        #expect(HeldPhotos.all(rig.nodes[1].manager).count == 1, "and nothing else was projected")
     }
 
     /// **The same discipline on job 4's list, where the population is real.** Sixteen unjudgeable
