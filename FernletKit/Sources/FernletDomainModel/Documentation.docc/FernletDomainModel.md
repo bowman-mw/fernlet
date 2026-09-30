@@ -221,6 +221,15 @@ packet never carries it.
 - ``FoodItemSource``
 - ``FoodBarcode``
 
+An amount becomes nutrition only through ``RecipeServingConversion``, which fails closed: an amount
+it cannot ground in the food's serving or in one of its USDA household portions converts to nothing,
+never to a guess. A VOLUME amount (2026-09-30, the ingredient-search round's F1(b)) takes the portion
+stated in the requested unit when there is exactly one, and otherwise the food's volume portions'
+agreed density: ``FoodPortion/densityAgreement(among:)`` answers with the median-density portion
+only when every portion's g/ml lies within ``FoodPortion/densityAgreementTolerance`` (15%) of it, so
+butter's cup and tablespoon convert a teaspoon while a banana's sliced and mashed cups refuse. A
+COUNT stays strict — exactly one portion of that count unit.
+
 ``FoodItemSource`` gained its fourth frozen token, `openFoodFacts`, on 2026-09-24: a barcode product
 the user looked up on Open Food Facts (behind the web-nutrition-lookup consent, one explicit tap per
 lookup) and kept after reviewing it. It is a user food row — synced with the rest of `foodItems`,

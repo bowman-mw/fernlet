@@ -234,8 +234,9 @@ struct CatalogHygieneTests {
     /// The rule that picks the row: plausible nutrition, then a tap default that converts, then more
     /// readable household portions; a tie keeps the higher-ranked row.
     @Test func collapseKeepsTheRowThatWorks() {
-        var noConvert = Self.food("Garlic, raw")   // "1 cup" default, but two volume portions: no conversion
-        noConvert.portions = [FoodPortion(amount: 1, unit: "cup", gramWeight: 136), FoodPortion(amount: 1, unit: "tsp", gramWeight: 2.8)]
+        // A 4,000 ml serving is past the converter's bound, so no tap default resolves. (Its first form,
+        // a cup and a teaspoon, converts since F1(b) reads agreeing volume portions.)
+        let noConvert = Self.food("Garlic, raw", 4_000, "ml")
         var converts = Self.food("Garlic, raw", 100, "g")
         converts.portions = [FoodPortion(amount: 1, unit: "RACC", gramWeight: 85)]
         var richer = Self.food("Garlic, raw", 100, "g")

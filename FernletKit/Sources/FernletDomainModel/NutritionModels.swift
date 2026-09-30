@@ -2124,6 +2124,7 @@ extension RecipeServingConversion {
     private static func sourcePortion(for unit: RecipeUnit, foodItem: FoodItem) -> FoodPortion? {
         guard let dimension = unit.dimension else { return nil }
         if unit.isCount { return foodItem.uniquePortion(matching: unit) }
+        if unit.isVolume { return foodItem.volumePortion(for: unit) }
         return foodItem.uniquePortion(in: dimension)
     }
 
@@ -2765,6 +2766,24 @@ extension FoodItem {
         return matches.count == 1 ? matches[0] : nil
     }
 
+    /// The portion a VOLUME amount converts through (ingredient-search round, F1(b)): the one portion
+    /// stated in the requested unit when there is exactly one, else the volume portions' agreed
+    /// density — ``FoodPortion/densityAgreement(among:)``.
+    ///
+    /// A single volume portion of another unit was always enough (1 tsp of a food that states only a
+    /// cup); what used to refuse is a food stating SEVERAL, which is most of the ones cooks measure:
+    /// butter (cup 227 g, tbsp 14.2 g), olive oil (tbsp, cup, tsp — all 0.913 g/ml), sugar, milk and
+    /// honey refused "1 cup" as ambiguous although their portions describe one density. Portions that
+    /// disagree — a banana's "cup, sliced" (150 g) against its "cup, mashed" (225 g) — still refuse:
+    /// no single density is source-backed. Counts never take this path; a count stays strict
+    /// (``uniquePortion(matching:)``), so two identical "slice" portions remain ambiguous.
+    fileprivate func volumePortion(for unit: RecipeUnit) -> FoodPortion? {
+        guard unit.isVolume else { return nil }
+        if let stated = uniquePortion(matching: unit) { return stated }
+        let volumes = portions.filter { $0.recipeUnit?.isVolume == true && $0.hasValidGramMeasure }
+        return FoodPortion.densityAgreement(among: volumes)
+    }
+
     private func portion(for unit: RecipeUnit) -> FoodPortion? {
         uniquePortion(matching: unit)
     }
@@ -2788,6 +2807,40 @@ extension FoodPortion {
     public var hasValidGramMeasure: Bool {
         amount.isFinite && amount > 0 && amount <= RecipeConversionLimits.maxGrams &&
             gramWeight.isFinite && gramWeight > 0 && gramWeight <= RecipeConversionLimits.maxGrams
+    }
+
+    /// How far (as a fraction of their median) volume portions' implied densities may spread and
+    /// still count as one source-backed density (F1(b)). 15% admits USDA's own rounding across a
+    /// cup, a tablespoon and a teaspoon of one food (butter 0.9595 vs 0.9603 g/ml) and refuses two
+    /// preparations of it (a banana's sliced 0.634 vs mashed 0.951 g/ml).
+    public static let densityAgreementTolerance = 0.15
+
+    /// Grams per milliliter this portion states, or nil when it is not a valid volume measure.
+    public var impliedDensity: Double? {
+        guard let unit = recipeUnit, unit.isVolume, hasValidGramMeasure,
+              let milliliters = unit.baseAmount(for: amount) else { return nil }
+        let density = gramWeight / milliliters
+        return density.isFinite && density > 0 ? density : nil
+    }
+
+    /// The portion a volume amount converts through when a food states several (F1(b)): with one
+    /// portion, that portion; with two or more, the MEDIAN-density portion, but only when every
+    /// portion's implied g/ml lies within ``densityAgreementTolerance`` of that median — otherwise nil,
+    /// because no single density is source-backed. With an even count the lower of the two middle
+    /// portions is taken, so the answer is always one of the food's own USDA portions (ties keep
+    /// their stored order). Bounded by the food's portion list.
+    public static func densityAgreement(among volumes: [FoodPortion]) -> FoodPortion? {
+        guard !volumes.isEmpty else { return nil }
+        guard volumes.count > 1 else { return volumes[0] }
+        let measured = volumes.enumerated().compactMap { index, portion in
+            portion.impliedDensity.map { (index: index, density: $0) }
+        }
+        guard measured.count == volumes.count else { return nil }
+        let ordered = measured.sorted { ($0.density, $0.index) < ($1.density, $1.index) }
+        let median = ordered[(ordered.count - 1) / 2]
+        let spread = densityAgreementTolerance * median.density
+        guard ordered.allSatisfy({ abs($0.density - median.density) <= spread }) else { return nil }
+        return volumes[median.index]
     }
 
     public func grams(for quantity: Double) -> Double? {

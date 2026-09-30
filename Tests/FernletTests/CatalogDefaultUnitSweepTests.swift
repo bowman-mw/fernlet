@@ -29,23 +29,24 @@ struct CatalogDefaultUnitSweepTests {
     /// read. On cf46b8eb that was 14,843 rows (GRM 12,376, MLT 2,193, IU 193, GM 31, MC 2, survey
     /// units 48), refused before any unit was tried; F1(a) reads GRM/GM/MLT at load and answers
     /// "N servings" before the unit guard, leaving only IU/MC/survey rows whose "oil"/"flour" names
-    /// default to a physical unit. READABLE: a "cup" default the converter cannot honour — the 437
-    /// srLegacy rows with two or more volume portions, and "oil" names with a mass serving and no
-    /// portions (F1(b)/(c)'s territory; F6's restored "Salt, table" and "Water, bottled, generic"
-    /// joined them — each has a cup portion beside other volume portions, so its "1 cup" default
-    /// has no unique volume portion) — plus one 4,320 ml drink past the 3,000 conversion bound.
+    /// default to a physical unit. READABLE: a "cup" default the converter cannot honour — "oil"
+    /// names with a mass serving and no portions (F1(c)'s territory) — plus one 4,320 ml drink past
+    /// the 3,000 conversion bound. F1(b) cleared the other readable mechanism: the 437 srLegacy rows
+    /// (and F6's restored "Salt, table" and "Water, bottled, generic") whose "1 cup" default sat beside
+    /// other volume portions now convert through the stated cup.
     static let measuredFailures: [String: Int] = [
         "unreadable → cup": 4,
         "unreadable → g": 1,
-        "readable → cup": 1_048,
+        "readable → cup": 609,
         "readable → ml": 1
     ]
 
     /// The headline, derived from the pin above. History: 16,310 on cf46b8eb (the report's figure);
     /// 15,771 with F2 — 539 branded rows on the no-portion "oil" branch gained their label serving
     /// as an "each" portion, which is now their tap default; 1,052 with F1(a); 1,054 with F6's 26
-    /// restored SR foods (salt and bottled water among them).
-    static let measuredFailureTotal = 1_054
+    /// restored SR foods (salt and bottled water among them); 615 with F1(b) — a stated cup answers
+    /// "1 cup" beside other volume portions, which cleared those 437 srLegacy rows plus salt and water.
+    static let measuredFailureTotal = 615
 
     /// Upper bound on the rows one sweep reads — comfortably above the catalog, so a catalog that
     /// grew past it fails the row-count check instead of being silently truncated.
