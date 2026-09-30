@@ -20,8 +20,9 @@ struct ComposedRecipeCard: Identifiable {
 ///   save in Fernlet on iPhone. When it cannot be offered, a one-line note says why in its place:
 ///   Messages is not set up here (always, on a simulator), the recipe is too long for a card, or it
 ///   was saved from a web page (``RecipeMessagesCardOffer``).
-/// - **Share as text** hands the system share sheet readable text (``RecipeShareText``), with the
-///   recipe's name as Mail's subject. No JSON, no Fernlet data.
+/// - **Share as text** hands the system share sheet readable text (``RecipeShareText``) through
+///   ``RecipeShareTextItemSource``, with the recipe's name as the sheet's title and Mail's subject.
+///   No JSON, no Fernlet data. The text is built when the row is tapped, not on every render.
 ///
 /// Both follow the Share screen's "Include notes" switch, passed in as `includesNotes`. After a
 /// draft closes, one line says "Sent in Messages." or that sending failed, and VoiceOver hears it; a
@@ -34,6 +35,8 @@ struct RecipeShareElsewhereCard: View {
 
     @State private var composing: ComposedRecipeCard?
     @State private var outcome: RecipeMessagesSendOutcome?
+    /// The text on its way to the system share sheet, while that sheet is up.
+    @State private var sharingText: RecipeShareTextItemSource?
     /// The rows' glyph box, grown with the glyph's own text style so an accessibility-size glyph
     /// never spills over the row's words.
     @ScaledMetric(relativeTo: .title3) private var glyphSide: CGFloat = 34
@@ -46,8 +49,17 @@ struct RecipeShareElsewhereCard: View {
                     .foregroundStyle(Color.bark)
                     .accessibilityAddTraits(.isHeader)
                 messagesRow
+                    .sheet(item: $composing) { card in
+                        RecipeMessageComposer(message: card.message) { finish($0) }
+                            .ignoresSafeArea()
+                    }
                 FernletRowDivider()
                 textRow
+                    .sheet(item: $sharingText) { source in
+                        ActivityShareView(items: [source]) { sharingText = nil }
+                            .presentationDetents([.medium, .large])
+                            .ignoresSafeArea()
+                    }
                 if let status {
                     Text(status.message)
                         .font(.fernlet(.bubble))
@@ -56,10 +68,6 @@ struct RecipeShareElsewhereCard: View {
                         .accessibilityIdentifier("recipeShare.messagesOutcome")
                 }
             }
-        }
-        .sheet(item: $composing) { card in
-            RecipeMessageComposer(message: card.message) { finish($0) }
-                .ignoresSafeArea()
         }
     }
 
@@ -127,16 +135,14 @@ struct RecipeShareElsewhereCard: View {
 
     // MARK: - Share as text
 
-    /// The plain-`String` `ShareLink`, deliberately: given a `SharePreview`, the generic
-    /// `Transferable` form hands the share sheet the text as a file-like item, which drops Copy and
-    /// offers Save to Files instead (seen on the iOS 26.5 simulator). As a string it is text to every
-    /// activity, the sheet's header previews it (the recipe's name is its first line), and Mail takes
-    /// `subject`.
+    /// Opens the system share sheet with the text for the current "Include notes" choice.
     private var textRow: some View {
-        ShareLink(
-            item: store.recipeShareText(for: recipe, includesNotes: includesNotes),
-            subject: Text(verbatim: recipe.name)
-        ) {
+        Button {
+            sharingText = RecipeShareTextItemSource(
+                text: store.recipeShareText(for: recipe, includesNotes: includesNotes),
+                title: recipe.name
+            )
+        } label: {
             rowLabel(title: "Share as text",
                      caption: "Readable text for Mail, Notes or any other app.",
                      systemImage: "text.alignleft")
