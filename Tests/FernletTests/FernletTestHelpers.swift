@@ -337,7 +337,17 @@ func makeTestStoreWithRepositories(
         // sync initializer's hermetic default); pass one to share it across a simulated relaunch.
         deviceHealthResidueStore: deviceHealthResidueStore
     )
+    // The recipe editor's "grams in one" memory (F4b) is a defaults SUITE too; nothing reads it during
+    // init, so a fresh suite set here keeps every test store off `.standard`.
+    store.recipePortionGramsDefaults = uniqueRecipePortionGramsDefaults()
     return (store, repository, journalNarrativeRepository)
+}
+
+/// A fresh throwaway defaults suite for ONE test store's recipe "grams in one" memory
+/// (`RecipePortionGramsMemory`, ingredient-search round F4b) — same axis as
+/// `uniqueFoodSearchCorrectionDefaults()`.
+func uniqueRecipePortionGramsDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "fernlet.tests.recipePortionGrams.\(UUID().uuidString)") ?? .standard
 }
 
 /// Builds a fresh FernletStore (new in-memory coordinator → empty `sealedJournalIDs`) over an

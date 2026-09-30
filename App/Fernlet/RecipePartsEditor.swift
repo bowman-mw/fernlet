@@ -36,7 +36,8 @@ struct RecipeIngredientRows: View {
                     catalog: store.foodCatalog,
                     onSaveCustomIngredient: { store.saveCustomIngredient($0) },
                     onCollapse: ingredient.trimmedName.isEmpty ? nil : { expandedId = nil },
-                    onRemove: { onRemove(ingredient.id) }
+                    onRemove: { onRemove(ingredient.id) },
+                    rememberedPortions: { store.rememberedPortionGrams(for: $0) }
                 )
                 .padding(14)
                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))

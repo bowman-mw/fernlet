@@ -208,6 +208,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         // Research §26 fix 1.10's local correction memory: normalized query → the food id the user
         // picked when they replaced a wrong match. Device-local, never synced, capped at 200 entries.
         "fernlet.foodSearchCorrections.v1": .cleared(token: "FoodSearchCorrectionMemory.clearAll"),
+        // Ingredient-search round F4b's "grams in one" memory: food id + portion label → the grams the
+        // person gave in the recipe editor in place of a USDA typical size. Device-local, never synced,
+        // written only on a recipe save, capped at 200 entries.
+        "fernlet.recipePortionGrams.v1": .cleared(token: "RecipePortionGramsMemory.clearAll"),
         // The un-consumed Messages deep-link request: which queue a shared card landed in, and the
         // record id inside it. `consume()` removes them on the happy path; this token is the wipe's
         // unconditional removal, added because the pointer otherwise outlives the record it names.

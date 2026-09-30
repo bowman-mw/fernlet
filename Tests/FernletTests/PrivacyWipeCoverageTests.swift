@@ -169,6 +169,10 @@ struct PrivacyWipeCoverageTests {
         // the bounded scan can see it (an internal helper's body is not scanned).
         "FoodSearchCorrectionMemory.clearAll",
         "foodCatalog.setSearchAliases",
+        // The recipe editor's "grams in one" memory (ingredient-search round F4b): the sizes this
+        // person gave for foods in place of a USDA typical size. Saved recipe lines carry their own
+        // grams, so clearing it changes no recipe.
+        "RecipePortionGramsMemory.clearAll",
         // The workout tombstone ring. Not only privacy: a surviving tombstone tells the workout
         // observer to DELETE a still-existing app-authored Health sample on the next re-enable,
         // which would override an explicit "keep my Health samples" answer at the wipe.

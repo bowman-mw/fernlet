@@ -638,6 +638,11 @@ final class FernletStore {
     /// `RecipeWebImport.webImageSuppressed`). Injectable so tests can isolate it from the shared
     /// `.standard` suite, mirroring `pastDayJournalScrubDefaults`.
     @ObservationIgnored var webImageAttemptDefaults: UserDefaults = .standard
+    /// Backing store for ``RecipePortionGramsMemory`` — the person's own "grams in one" for a food,
+    /// given in the recipe editor in place of a USDA typical size (ingredient-search round, F4b).
+    /// Injectable so tests can isolate it from the shared `.standard` suite, like
+    /// `webImageAttemptDefaults`; nothing reads it during init.
+    @ObservationIgnored var recipePortionGramsDefaults: UserDefaults = .standard
     /// Backing store for ``FoodSearchCorrectionMemory`` — the device-local record of searches the
     /// user has corrected once (research §26 fix 1.10), republished into `foodCatalog` as a ranking
     /// input.
@@ -4764,24 +4769,36 @@ final class FernletStore {
         recordSensitiveVisibilityResolution()
     }
 
+    // Each save also remembers the person's own "grams in one" its rows were counted in (F4b,
+    // `RecipePortionGramsMemory`) — at the save, so an editor the person cancels teaches nothing.
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
-        diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+        RecipePortionGramsMemory.remember(from: inputIngredients, defaults: recipePortionGramsDefaults)
+        return diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 
     // `steps` is REQUIRED (no default) — see the note on `DiaryStore.updateRecipe`: the stored steps are
     // overwritten unconditionally, so a defaulted-nil would silently erase them.
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
+        RecipePortionGramsMemory.remember(from: inputIngredients, defaults: recipePortionGramsDefaults)
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 
     /// Multipart twins of the two above (a dressing made first, then the salad): see
     /// `DiaryStore.addRecipe(name:servings:notes:parts:)`.
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) -> RecipeDefinition {
-        diary.addRecipe(name: name, servings: servings, notes: notes, parts: parts)
+        RecipePortionGramsMemory.remember(from: parts.flatMap(\.ingredients), defaults: recipePortionGramsDefaults)
+        return diary.addRecipe(name: name, servings: servings, notes: notes, parts: parts)
     }
 
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) {
+        RecipePortionGramsMemory.remember(from: parts.flatMap(\.ingredients), defaults: recipePortionGramsDefaults)
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, parts: parts)
+    }
+
+    /// The person's own "grams in one" for `foodItemID`, newest first — what the recipe editor offers
+    /// under "Your size" (F4b, `RecipePortionGramsMemory`).
+    func rememberedPortionGrams(for foodItemID: UUID) -> [RecipeHouseholdMeasure] {
+        RecipePortionGramsMemory.measures(for: foodItemID, defaults: recipePortionGramsDefaults)
     }
 
     // MARK: - F4 ingredient substitution (fork on explicit save; decision §11.4)
@@ -6233,6 +6250,11 @@ final class FernletStore {
         // state this funnel exists to prevent. No failure signal on a plain defaults removal.
         FoodSearchCorrectionMemory.clearAll(defaults: foodSearchCorrectionDefaults)
         foodCatalog.setSearchAliases([:])
+        // The recipe editor's "grams in one" memory (F4b): the sizes this person gave for foods in place
+        // of a USDA typical size — food and consumption data, the same class of device-local
+        // `UserDefaults` sidecar as the correction memory above. Saved recipe lines carry their own grams,
+        // so clearing it changes no recipe, only which sizes the editor offers. No failure signal.
+        RecipePortionGramsMemory.clearAll(defaults: recipePortionGramsDefaults)
         // The workout tombstone ring (`fernlet.workout.tombstones`): up to 200 ids of removed
         // workouts whose app-authored Health delete may never have confirmed. After this funnel
         // there are no local rows left for a tombstone to guard, and a survivor would make the
