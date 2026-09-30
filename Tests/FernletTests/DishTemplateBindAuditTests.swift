@@ -796,6 +796,48 @@ struct DishTemplateBindAuditTests {
         #expect(components.map(\.unit) == ["serving", "cup"])
     }
 
+    /// A bind that clears the confident SCORE on a word the name only carries INSIDE a longer word is
+    /// reviewed, never auto-committed (ingredient-search round fix round 1, finding u1-L-R1).
+    ///
+    /// The scorer's prefix and substring bonuses cannot tell "apple" from "APPLEBEE'S": *APPLEBEE'S,
+    /// chili* scores 749 for `apple`, past `confidentBindScore`. Before the round's F6 retype the pool's
+    /// generic tier led with the misfiled *Apple & Cheese Tray*; with it retyped `branded`, the
+    /// dish-demoted pool binds the chili, and quick-log "apple" (AI off) auto-committed a cup of it at
+    /// `.high`. The bind itself is a RANKING defect this pin leaves standing (the real apples score
+    /// below the brand on length) — what it pins is that the stamp now says so: the name must state
+    /// the typed word whole, or its plural, for `.high`.
+    @MainActor
+    @Test func planTierReviewsAWordTheNameOnlyCarriesInsideAnother() async throws {
+        #expect(FoodItemSearch.nameStatesQueryAsWords("APPLEBEE'S, chili", query: "Apple") == false)
+        #expect(FoodItemSearch.nameStatesQueryAsWords("Apples, raw, with skin", query: "Apple"))
+        #expect(FoodItemSearch.nameStatesQueryAsWords("Egg, whole, raw, fresh", query: "two eggs"))
+        #expect(FoodItemSearch.nameStatesQueryAsWords("Strawberries, raw", query: "berries") == false)
+        #expect(FoodItemSearch.nameStatesQueryAsWords("Pineapple, raw", query: "apple") == false)
+
+        let brand = Self.food(name: "APPLEBEE'S, chili", tags: [])
+        let apples = Self.food(name: "Apples, raw, with skin", tags: [])
+        let item = { (food: FoodItem) in
+            FoodSelectionMealItem(name: "Apple", ingredients: [FoodSelectionIngredient(
+                candidateId: 1, foodName: food.name, quantity: 1, unit: "serving")])
+        }
+        #expect(MealResolutionService.bindConfidence(
+            for: FoodSelectionPlan(mealName: "x", mealType: .snack, items: [item(brand)], unmatchedItems: []),
+            candidates: [FoodSelectionCandidate(id: 1, foodItem: brand)]) == .low,
+                "749 clears the score floor, but the name never says \"apple\"")
+        #expect(MealResolutionService.bindConfidence(
+            for: FoodSelectionPlan(mealName: "x", mealType: .snack, items: [item(apples)], unmatchedItems: []),
+            candidates: [FoodSelectionCandidate(id: 1, foodItem: apples)]) == .high,
+                "a name that says the word (as its plural) keeps its confidence")
+
+        let store = makeTestStore(foodCatalog: FoodCatalog.bundled())
+        try #require(store.settings.aiStatus == AIStatus.off, "the deterministic tiers must be the rungs under test")
+        try #require(store.foodCatalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+        let resolved = await store.resolveMeals(from: "apple")
+        #expect(resolved.meals.first?.componentSnapshots.map(\.name) == ["APPLEBEE'S, chili"],
+                "the wrong bind stands — a ranking fix will flip this")
+        #expect(resolved.confidence == .low && resolved.needsReview, "and it opens the review sheet")
+    }
+
     /// An item the lexicon does not know at all still hands the WHOLE description to the next tier,
     /// unchanged by this fix: there is no good half to preserve, and a later tier can see all of it.
     @Test func unknownItemStillFallsThroughWithTheWholeDescription() throws {

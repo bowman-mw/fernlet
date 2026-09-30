@@ -268,7 +268,7 @@ final class MealResolutionService {
 
     /// The confidence a deterministic tier-2 plan's binds actually justify: `.high` only when every
     /// item bound at least one food AND every bound food cleared `FoodItemSearch.confidentBindScore`
-    /// against the item it was bound for; `.low` otherwise.
+    /// against the item it was bound for AND states every word of that item whole; `.low` otherwise.
     ///
     /// The same discipline `DishTemplateBindQuality` gives the template tier: `.high` only when every
     /// component bound, and every bind cleared the confident floor. `.medium` is deliberately never
@@ -282,12 +282,19 @@ final class MealResolutionService {
     /// bonus for that one-word phrase, so every bind would look confident. Scoring the full item name
     /// asks the question confidence actually turns on — how well does this row match what was typed?
     ///
-    /// **What this does NOT catch, measured:** `burger and fries` still resolves `.high`, because
-    /// *Hamburger (Burger King)* and *Potato, french fries, with chili* each clear 250 on the whole
-    /// item name via that same substring bonus. The remaining defect there is a bind that is
-    /// confident and still the wrong VARIETY — the category `DishTemplateBindAuditTests`' header
-    /// already names and `verdict` has no word for — not an unhonest confidence stamp.
-    /// `planTierStillCommitsBurgerAndFriesAtHighConfidence` pins it.
+    /// **And every bound row must STATE each typed word whole.** A score alone cannot say so: the
+    /// scorer's +500 prefix and +250 substring bonuses reward a word found INSIDE a longer one, so
+    /// `apple` scores *APPLEBEE'S, chili* 749, past the confident floor, and — once the 2026-09-29
+    /// round's F6 retype moved the misfiled *Apple & Cheese Tray* out of the generic tier — a quick
+    /// log of "apple" auto-committed a cup of chili. `FoodItemSearch.nameStatesQueryAsWords` asks
+    /// whether the name says the word (or its regular plural/singular), and a bind that only carries
+    /// it inside another word pauses at review (fix round 1, finding u1-L-R1).
+    ///
+    /// **What this does NOT catch, measured:** a bind that states every word and is still the wrong
+    /// VARIETY — the category `DishTemplateBindAuditTests`' header already names and `verdict` has no
+    /// word for. `burger and fries` binds *Potato, french fries, with chili*, which says "fries" whole;
+    /// that plan is reviewed today on its burger bind's score, and
+    /// `planTierRoutesBurgerAndFriesToReviewWithoutUnsafeConversion` pins it.
     ///
     /// Caps a tier's claimed confidence at `.low` when the plan bound a food that never earned its
     /// place in the candidate pool by RETRIEVAL — the correction-memory gate on the AI-selection tier
@@ -350,7 +357,8 @@ final class MealResolutionService {
             for ingredient in item.ingredients {
                 guard let bound = candidates.first(where: { $0.id == ingredient.candidateId }),
                       let score = scores[bound.foodItem.id],
-                      score >= FoodItemSearch.confidentBindScore else { return .low }
+                      score >= FoodItemSearch.confidentBindScore,
+                      FoodItemSearch.nameStatesQueryAsWords(bound.foodItem.name, query: item.name) else { return .low }
             }
         }
         return .high

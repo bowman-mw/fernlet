@@ -240,6 +240,13 @@ every confidence gate that reads a score is cold by construction, and the profil
 rows the match gate and both floors already admitted. It is derived, never stored: `DiaryStore`
 computes it from `recentMeals`.
 
+A score is a RETRIEVAL judgement, and its prefix and substring bonuses reward a typed word found
+inside a longer one ("apple" scores *APPLEBEE'S, chili* past ``FoodItemSearch/confidentBindScore``).
+So a confidence stamp asks one more question the score cannot:
+``FoodItemSearch/nameStatesQueryAsWords(_:query:stripsStopwords:)`` — does the name say every typed
+word whole, or its regular plural? The quick-log plan tier (`MealResolutionService.bindConfidence`)
+requires both before it auto-commits (2026-09-30, the ingredient-search round's fix round 1).
+
 - ``FoodItemSearch``
 - ``FoodSearchHistory``
 - ``FoodBrandLexicon``

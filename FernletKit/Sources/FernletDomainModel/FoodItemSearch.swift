@@ -544,6 +544,34 @@ public nonisolated enum FoodItemSearch {
                        name: folded)
     }
 
+    /// Whether `name` states every token of `query` as a WHOLE word — the token itself or a regular
+    /// singular/plural of it — rather than only inside a longer word.
+    ///
+    /// A stricter question than ``nameCarriesQuery(_:query:stripsStopwords:)``, and asked for a
+    /// different purpose. Carriage is the RETRIEVAL floor and deliberately accepts a word found inside
+    /// a longer one ("burger" in *Hamburger, NFS*, see ``carries(_:nameTokens:name:)``), and the
+    /// scorer's +500 prefix / +250 substring bonuses reward it the same way — so a row can clear
+    /// ``confidentBindScore`` on a word it never says. `apple` scores *APPLEBEE'S, chili* 749, because
+    /// the brand begins with the five letters. This is what a CONFIDENCE stamp must also ask: did the
+    /// name say what was typed? (Fix round 1 of the 2026-09-29 ingredient-search round, finding
+    /// u1-L-R1; `MealResolutionService.bindConfidence` is the caller.)
+    ///
+    /// The singular/plural bridge is ``matchVariants(for:)``'s in both directions — `apple` is stated
+    /// by *Apples, raw* and `eggs` by *Egg, whole* — and nothing wider: a compound word ("hamburger",
+    /// "pineapple", "applebees") never states the shorter word inside it.
+    nonisolated public static func nameStatesQueryAsWords(_ name: String, query: String, stripsStopwords: Bool = true) -> Bool {
+        let nameTokens = normalized(name).split(separator: " ").map(String.init)
+        let queryTokens = searchTokens(in: query, stripsStopwords: stripsStopwords)
+        guard !queryTokens.isEmpty, !nameTokens.isEmpty else { return false }
+        // R2: bounded by the query's tokens × the name's tokens.
+        return queryTokens.allSatisfy { queryToken in
+            let forms = Set(matchVariants(for: queryToken))
+            return nameTokens.contains { token in
+                forms.contains(token) || singularStem(token).map { forms.contains($0) } == true
+            }
+        }
+    }
+
     /// Scores one gate-passing entry, or nil when it does not pass the gate.
     ///
     /// The gate below is kept even though `scoredMatches` now applies the strictly narrower name
