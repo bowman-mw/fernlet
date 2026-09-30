@@ -1981,14 +1981,17 @@ struct CollapsedIngredientRow: View {
         grams?.rounded.calories
     }
 
+    /// The quantity and the grams share one locale separator ("1,5 cup · P3,4g" in de), so the
+    /// quantity goes through ``RecipeQuantityDisplay`` rather than a POSIX `%g`.
     private var summaryLine: String {
+        let quantity = RecipeQuantityDisplay.display(ingredient.quantity)
         guard let grams else {
-            return "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · Conversion unavailable"
+            return "\(quantity) \(ingredient.unit) · Conversion unavailable"
         }
         let protein = MacroGramEntry.display(grams.protein)
         let carbs = MacroGramEntry.display(grams.carbs)
         let fat = MacroGramEntry.display(grams.fat)
-        var line = "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · P\(protein)g C\(carbs)g F\(fat)g"
+        var line = "\(quantity) \(ingredient.unit) · P\(protein)g C\(carbs)g F\(fat)g"
         if showCalories, let calories {
             line += " · \(calories) cal"
         }
@@ -2099,7 +2102,8 @@ private struct CatalogSuggestionRow: View {
     var onSelect: (() -> Void)?
 
     /// The reference serving's grams as a row reads them: a custom food typed as 3.4 g shows "3.4",
-    /// and every whole-gram food reads exactly as before.
+    /// and every whole-gram food reads exactly as before. The serving size beside them uses the same
+    /// locale separator (``RecipeQuantityDisplay``).
     private var grams: (protein: String, carbs: String, fat: String) {
         let exact = foodItem.exactMacros
         return (MacroGramEntry.display(exact.protein), MacroGramEntry.display(exact.carbs),
@@ -2130,7 +2134,7 @@ private struct CatalogSuggestionRow: View {
                         .padding(.vertical, 1)
                         .background(Color.parchment, in: Capsule())
                 }
-                Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(grams.protein)g C\(grams.carbs)g F\(grams.fat)g")
+                Text("\(RecipeQuantityDisplay.display(foodItem.servingSize)) \(foodItem.servingUnit) · P\(grams.protein)g C\(grams.carbs)g F\(grams.fat)g")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
@@ -4280,8 +4284,14 @@ private struct MealRow: View {
 ///
 /// Only `quantity` is mutable; `snapshot` rebuilds the component with its macros and micronutrients
 /// scaled proportionally from the captured base quantity, so re-quantifying never invents nutrition
-/// data. `nonisolated` so review state can be constructed off the main actor.
-private nonisolated struct MealComponentCorrectionInput: Identifiable {
+/// data. `nonisolated` so review state can be constructed off the main actor. Internal (not private)
+/// only so `MealBuilderTests` can pin the re-quantifying rule.
+///
+/// A component rebuilt from a stored snapshot has only whole grams to scale from. One added fresh
+/// from a decimal custom food (``fresh(from:)``) also keeps that food's exact grams at the base
+/// quantity (`exactBaseMacros`), so re-quantifying rounds ONCE, by ``FoodItem/scaledMacros(by:)``'s
+/// rule: 3 servings of a 3.4 g food save 10 g, as they count in a recipe, never 3 × 3 = 9.
+nonisolated struct MealComponentCorrectionInput: Identifiable {
     let id: UUID
     let foodItemId: UUID?
     let name: String
@@ -4291,8 +4301,15 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
     let baseMacros: Macros
     let baseMicronutrients: Micronutrients
     let bindScore: Int?
+    /// A decimal food's grams at `baseQuantity`, unrounded; `nil` for a stored snapshot or a
+    /// whole-gram food, which keep the legacy whole-gram rescale.
+    let exactBaseMacros: PreciseMacros?
 
     init(snapshot: MealComponentSnapshot) {
+        self.init(snapshot: snapshot, exactBaseMacros: nil)
+    }
+
+    private init(snapshot: MealComponentSnapshot, exactBaseMacros: PreciseMacros?) {
         id = snapshot.id
         foodItemId = snapshot.foodItemId
         name = snapshot.name
@@ -4302,17 +4319,19 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
         baseMacros = snapshot.macros
         baseMicronutrients = snapshot.micronutrients
         bindScore = snapshot.bindScore
+        self.exactBaseMacros = exactBaseMacros
     }
 
     var snapshot: MealComponentSnapshot {
         let scale = max(quantity, 0) / baseQuantity
+        let macros = exactBaseMacros.map { $0.scaledToTenths(by: scale).rounded } ?? baseMacros.scaled(by: scale)
         return MealComponentSnapshot(
             id: id,
             foodItemId: foodItemId,
             name: name,
             quantity: quantity,
             unit: unit,
-            macros: baseMacros.scaled(by: scale),
+            macros: macros,
             micronutrients: baseMicronutrients.scaled(by: scale),
             bindScore: bindScore
         )
@@ -4321,20 +4340,23 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
     /// A fresh input for an item ADDED (or swapped in) during correction (FOOD-05): resolved
     /// through the catalog at the food item's own reference serving. A new item has no captured
     /// meal base to scale from, so its base IS that reference — macros and micronutrients scaled
-    /// exactly as `MealBuilder`'s component snapshots are, never invented.
+    /// exactly as `MealBuilder`'s component snapshots are, never invented. A decimal food also
+    /// carries its exact grams at that base, so a later quantity change rounds once from them.
     static func fresh(from foodItem: FoodItem) -> MealComponentCorrectionInput? {
         let unit = foodItem.preferredRecipeUnit
         let quantity = foodItem.defaultRecipeQuantity(for: unit)
         let ingredient = RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit.rawValue)
         guard let conversion = ingredient.servingConversion(using: foodItem) else { return nil }
-        return MealComponentCorrectionInput(snapshot: MealComponentSnapshot(
+        let exactBase = foodItem.hasFractionalMacros ? foodItem.exactMacros.scaled(by: conversion.servingScale) : nil
+        let snapshot = MealComponentSnapshot(
             foodItemId: foodItem.id,
             name: foodItem.name,
             quantity: conversion.componentQuantity,
             unit: conversion.componentUnit,
             macros: conversion.scaledMacros(for: foodItem),
             micronutrients: conversion.scaledMicronutrients(for: foodItem)
-        ))
+        )
+        return MealComponentCorrectionInput(snapshot: snapshot, exactBaseMacros: exactBase)
     }
 }
 

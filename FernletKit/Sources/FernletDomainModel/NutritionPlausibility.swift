@@ -224,8 +224,9 @@ public nonisolated enum NutritionCompletenessScope: String, Sendable, CaseIterab
     /// that reads a panel (OCR, a product record), where each of those can genuinely be missing.
     case corePanel
     /// Completeness is not computed. Use where the input type cannot express absence — the
-    /// hand-typed editor row, whose macros are non-optional `Int` and whose serving fields belong to
-    /// the recipe rather than to a nutrition panel — so only the arithmetic half runs.
+    /// hand-typed editor row, whose macros are non-optional grams (`Double`, see
+    /// ``ManualRecipeIngredientInput``) and whose serving fields belong to the recipe rather than to a
+    /// nutrition panel — so only the arithmetic half runs.
     case notApplicable
 }
 

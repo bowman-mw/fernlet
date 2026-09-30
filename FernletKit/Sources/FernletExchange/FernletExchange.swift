@@ -106,9 +106,10 @@ public nonisolated enum ExchangeRecipePayloadBuilder {
         }
     }
 
-    /// The exact grams to send for one ingredient: only when its food carries a fraction and the scaled
-    /// value still has one, so a whole-gram ingredient's bytes are identical to earlier builds. Its
-    /// rounding is the ingredient's whole-gram fields by construction (both come from one exact value).
+    /// The grams to send for one ingredient, at tenths of a gram: only when its food carries a fraction
+    /// and the scaled value still has one there, so a whole-gram ingredient's bytes are identical to
+    /// earlier builds. Its rounding is the ingredient's whole-gram fields by construction (both come
+    /// from ``RecipeServingConversion/scaledPreciseMacros(for:)``).
     private static func wirePreciseMacros(for foodItem: FoodItem, conversion: RecipeServingConversion) -> PreciseMacros? {
         guard foodItem.hasFractionalMacros else { return nil }
         let precise = conversion.scaledPreciseMacros(for: foodItem)

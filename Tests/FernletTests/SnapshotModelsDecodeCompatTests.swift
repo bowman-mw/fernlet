@@ -247,6 +247,20 @@ struct SnapshotModelsDecodeCompatTests {
         #expect(huge.macros.protein == 20000)
     }
 
+    @Test func aDecodedFractionIsKeptAtTenthsAndCheckedBeforeRounding() throws {
+        // 3.44 is kept as the 3.4 a field shows; it still rounds to the stored 3.
+        let tenths = try decode(FoodItem.self, foodItemJSON(protein: 3, precise: #"{"protein":3.44,"carbs":24,"fat":5}"#))
+        #expect(tenths.preciseMacros == PreciseMacros(protein: 3.4, carbs: 24, fat: 5))
+        // 2.46 would SHOW as 2.5 and so count 3, not the stored 2: dropped, the whole grams stand.
+        let disagreeingAtTenths = try decode(FoodItem.self, foodItemJSON(protein: 2, precise: #"{"protein":2.46,"carbs":24,"fat":5}"#))
+        #expect(disagreeingAtTenths.preciseMacros == nil)
+        #expect(disagreeingAtTenths.exactMacros.protein == 2)
+        // A small negative would round to 0 at tenths (and 24.4 agrees with the stored 24), but validity
+        // is checked on the raw value first.
+        let negative = try decode(FoodItem.self, foodItemJSON(protein: 0, precise: #"{"protein":-0.04,"carbs":24.4,"fat":5}"#))
+        #expect(negative.preciseMacros == nil)
+    }
+
     private func foodItemJSON(protein: Int, precise: String) -> String {
         """
         {

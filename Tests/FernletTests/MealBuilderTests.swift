@@ -911,6 +911,35 @@ struct MealBuilderTests {
         #expect(totals == MacroTotals(protein: 10 + 10, carbs: 2 + 54, fat: 1 + 6))
     }
 
+    /// Fix round 1 (2026-09-30): Adjust meal re-quantifies a decimal custom food added there by the
+    /// same round-once rule a recipe uses — 3 servings of a 3.4 g food save 10 g, not 3 × 3 = 9.
+    @Test func adjustMealRequantifiesADecimalFoodFromItsExactGrams() throws {
+        let granola = FoodItem(name: "House granola", servingSize: 1, servingUnit: RecipeUnit.serving.rawValue,
+                               macros: Macros(protein: 3, carbs: 0, fat: 0), micronutrients: Micronutrients(),
+                               category: "custom ingredient", source: .manual, tags: [],
+                               preciseMacros: PreciseMacros(protein: 3.4, carbs: 0.5, fat: 0.4))
+        var added = try #require(MealComponentCorrectionInput.fresh(from: granola))
+        // At the base quantity nothing moves: the same whole grams the catalog resolution gave.
+        #expect(added.snapshot.macros == Macros(protein: 3, carbs: 1, fat: 0))
+        let base = added.quantity
+        added.quantity = base * 3
+        #expect(added.snapshot.macros == Macros(protein: 10, carbs: 2, fat: 1))   // 10.2, 1.5, 1.2
+        #expect(added.snapshot.macros == granola.scaledMacros(by: 3))
+        added.quantity = base * 5
+        #expect(added.snapshot.macros.fat == 2)   // 5 × 0.4 g, not 5 × 0 = 0
+
+        // A whole-gram food, and any component rebuilt from a stored meal (whole grams are all a
+        // snapshot keeps), keep the legacy whole-gram rescale.
+        let oats = foodItem(name: "Rolled oats", source: .manual, macros: Macros(protein: 5, carbs: 27, fat: 3))
+        var wholeGram = try #require(MealComponentCorrectionInput.fresh(from: oats))
+        let wholeBase = wholeGram.snapshot
+        wholeGram.quantity = wholeGram.quantity * 2
+        #expect(wholeGram.snapshot.macros == wholeBase.macros.scaled(by: 2))
+        var stored = MealComponentCorrectionInput(snapshot: added.snapshot)
+        stored.quantity = stored.quantity * 2
+        #expect(stored.snapshot.macros == added.snapshot.macros.scaled(by: 2))
+    }
+
     private func foodItem(
         name: String,
         source: FoodItemSource,

@@ -496,6 +496,54 @@ struct RecipeShareCodecTests {
         #expect(throws: ExchangePacketError.invalidPayload) { try ExchangeRecipePayloadValidator.validate(inProcess) }
     }
 
+    /// Fix round 1 (2026-09-30): the wire fraction is judged at the tenths an importing food stores it
+    /// at, so a newer and an older reader always count the same whole grams.
+    @MainActor
+    @Test func aWireFractionMustAgreeWithTheWholeGramsAtTenths() throws {
+        let fixture = makeDecimalRecipeFixture()
+        let payload = RecipeShareCodec.payload(for: fixture.recipe, foodItems: fixture.foodItems)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let json = String(decoding: try encoder.encode(payload), as: UTF8.self)
+        let precise = #""preciseMacros":{"carbs":24.5,"fat":0.5,"protein":3.4}"#
+        try #require(json.contains(precise))
+
+        // 3.46 rounds raw to the whole 3 an older reader sees, but an importer stores it as 3.5,
+        // which counts 4: refused.
+        let disagreeing = json.replacingOccurrences(of: precise, with: #""preciseMacros":{"carbs":24.5,"fat":0.5,"protein":3.46}"#)
+        #expect(throws: RecipeImportError.invalidPayload) { try RecipeShareCodec.decodePayload(from: disagreeing) }
+        var inProcess = payload
+        inProcess.ingredients[0].preciseMacros = PreciseMacros(protein: 3.46, carbs: 24.5, fat: 0.5)
+        #expect(throws: ExchangePacketError.invalidPayload) { try ExchangeRecipePayloadValidator.validate(inProcess) }
+
+        // 3.44 is stored as 3.4, which still counts 3: accepted, and imported at tenths.
+        let agreeing = json.replacingOccurrences(of: precise, with: #""preciseMacros":{"carbs":24.5,"fat":0.5,"protein":3.44}"#)
+        let store = makeTestStore()
+        let imported = try store.importRecipe(from: agreeing)
+        let granola = try #require(store.foodItems.first { food in
+            food.name == "House granola" && imported.ingredients.contains { $0.foodItemId == food.id }
+        })
+        #expect(granola.exactMacros == PreciseMacros(protein: 3.4, carbs: 24.5, fat: 0.5))
+        #expect(granola.macros == Macros(protein: 3, carbs: 25, fat: 1))
+    }
+
+    /// The sender writes a scaled fraction at tenths: 24 g of the 40 g granola is 0.6 servings, so
+    /// 14.7 g carbs (not a binary 14.700000000000001) and 2.04 g protein as the 2 a row shows.
+    @MainActor
+    @Test func aScaledFractionIsSentAtTenths() throws {
+        var fixture = makeDecimalRecipeFixture()
+        fixture.recipe.ingredients[0].quantity = 24
+        let payload = RecipeShareCodec.payload(for: fixture.recipe, foodItems: fixture.foodItems)
+        let granola = try #require(payload.ingredients.first { $0.name == "House granola" })
+        #expect(granola.preciseMacros == PreciseMacros(protein: 2, carbs: 14.7, fat: 0.3))
+        #expect(granola.protein == 2 && granola.carbs == 15 && granola.fat == 0)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let json = String(decoding: try encoder.encode(payload), as: UTF8.self)
+        #expect(json.contains(#""preciseMacros":{"carbs":14.7,"fat":0.3,"protein":2}"#))
+        #expect(try RecipeShareCodec.decodePayload(from: json) == payload)
+    }
+
     /// A custom granola typed as 3.4 g protein / 24.5 g carbs / 0.5 g fat per 40 g, beside whole-gram oats.
     private func makeDecimalRecipeFixture() -> (recipe: RecipeDefinition, foodItems: [FoodItem]) {
         let granola = FoodItem(name: "House granola", servingSize: 40, servingUnit: RecipeUnit.gram.rawValue,

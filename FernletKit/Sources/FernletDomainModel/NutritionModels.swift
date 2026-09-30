@@ -1234,9 +1234,11 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     /// An additive optional key in the synced blob (`preciseMacros`, a frozen token): absent on every
     /// whole-gram food, so those rows encode byte-identically to earlier builds, and an older build
     /// ignores it (re-saving there drops it, which degrades to whole grams and corrupts nothing).
-    /// Kept only while it is ``PreciseMacros/isValid``, fractional, and rounds to exactly ``macros``;
-    /// read it through ``exactMacros``, which falls back to ``macros`` if the two ever disagree.
-    /// Set only through the initializer or the decoder, which both apply that acceptance rule.
+    /// Stored at tenths of a gram (``PreciseMacros/roundedToTenths``), the precision it is typed and
+    /// shown at, and kept only while it is ``PreciseMacros/isValid``, still fractional at that
+    /// precision, and rounds to exactly ``macros``; read it through ``exactMacros``, which falls back
+    /// to ``macros`` if the two ever disagree. Set only through the initializer or the decoder, which
+    /// both apply that acceptance rule.
     public private(set) var preciseMacros: PreciseMacros?
 
     public var calories: Int {
@@ -1256,10 +1258,24 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     }
 
     /// Whole grams for `scale` servings, rounded ONCE from the exact value. A food with no fraction
-    /// takes the legacy ``Macros/scaled(by:)`` path unchanged, so its numbers are byte-identical.
+    /// takes the legacy ``Macros/scaled(by:)`` path unchanged, so its numbers are byte-identical; a
+    /// decimal food rounds ``scaledPreciseMacros(by:)``, so the whole gram a total counts is always
+    /// the rounding of the tenth its row shows.
     public func scaledMacros(by scale: Double) -> Macros {
-        guard let precise = agreeingPreciseMacros else { return macros.scaled(by: scale) }
-        return precise.scaled(by: scale).rounded
+        guard agreeingPreciseMacros != nil else { return macros.scaled(by: scale) }
+        return scaledPreciseMacros(by: scale).rounded
+    }
+
+    /// The grams for `scale` servings before the whole-gram rounding, with
+    /// `scaledPreciseMacros(by: s).rounded == scaledMacros(by: s)` for every `s`.
+    ///
+    /// A decimal food's exact grams are scaled and rounded to a tenth
+    /// (``PreciseMacros/scaledToTenths(by:)``), the precision its row displays: 4.1 g at 0.6 servings
+    /// is 2.5 g, which counts 3 g, never 2. A whole-gram food's grams are scaled and left unrounded;
+    /// their rounding is the legacy ``Macros/scaled(by:)``.
+    public func scaledPreciseMacros(by scale: Double) -> PreciseMacros {
+        guard let precise = agreeingPreciseMacros else { return PreciseMacros(macros).scaled(by: scale) }
+        return precise.scaledToTenths(by: scale)
     }
 
     /// ``preciseMacros`` when it still rounds to ``macros``; a stale value (``macros`` edited on its
@@ -1270,11 +1286,20 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     }
 
     /// The side-channel acceptance rule, shared by the initializer and the decoder so a value one
-    /// stores is always a value the other keeps: valid, fractional, and in agreement with `macros`.
+    /// stores is always a value the other keeps: valid, fractional at tenths, and in agreement with
+    /// `macros`. The kept value is the tenths one.
     private static func acceptedPreciseMacros(_ candidate: PreciseMacros?, for macros: Macros) -> PreciseMacros? {
-        guard let candidate, candidate.isValid, candidate.hasFractionalPart,
-              candidate.rounded == macros else { return nil }
-        return candidate
+        guard let tenths = fractionalTenths(candidate), tenths.rounded == macros else { return nil }
+        return tenths
+    }
+
+    /// `candidate` rounded to tenths of a gram, when it is valid as given (a raw decode is checked
+    /// BEFORE rounding, so a negative value never passes as 0) and still carries a fraction at tenths.
+    private static func fractionalTenths(_ candidate: PreciseMacros?) -> PreciseMacros? {
+        guard let candidate, candidate.isValid else { return nil }
+        let tenths = candidate.roundedToTenths
+        guard tenths.hasFractionalPart else { return nil }
+        return tenths
     }
 
     /// Short, human-readable provenance shown on ingredient-search rows so the user can tell where a
@@ -1334,9 +1359,9 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         self.brandSource = brandSource
         self.servingSize = servingSize
         self.servingUnit = servingUnit
-        // Fractional grams win: `macros` is derived from them, so the two can never disagree. A
-        // whole-gram (or invalid) `preciseMacros` is dropped and `macros` is taken as given.
-        let wholeGrams = preciseMacros.map { $0.isValid && $0.hasFractionalPart ? $0.rounded : macros } ?? macros
+        // Fractional grams win: `macros` is derived from their tenths, so the two can never disagree.
+        // A whole-gram (at tenths) or invalid `preciseMacros` is dropped and `macros` is taken as given.
+        let wholeGrams = Self.fractionalTenths(preciseMacros)?.rounded ?? macros
         self.macros = wholeGrams
         self.preciseMacros = Self.acceptedPreciseMacros(preciseMacros, for: wholeGrams)
         self.micronutrients = micronutrients
@@ -1381,7 +1406,7 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         portions = try container.decodeIfPresent([FoodPortion].self, forKey: .portions) ?? []
         barcode = try container.decodeIfPresent(String.self, forKey: .barcode)
         // Additive (decimal ingredient grams, 2026-09-29). Missing key -> nil; a value that is
-        // invalid, whole, or disagrees with `macros` is dropped, never trusted.
+        // invalid, whole at tenths, or disagrees with `macros` is dropped, never trusted.
         let decodedPrecise = try container.decodeIfPresent(PreciseMacros.self, forKey: .preciseMacros)
         preciseMacros = Self.acceptedPreciseMacros(decodedPrecise, for: macros)
     }
@@ -1953,10 +1978,11 @@ public nonisolated struct RecipeServingConversion: Equatable, Sendable {
         foodItem.scaledMacros(by: servingScale)
     }
 
-    /// The food's exact grams for this quantity, before any rounding. Its ``PreciseMacros/rounded``
-    /// is ``scaledMacros(for:)``.
+    /// The food's grams for this quantity before the whole-gram rounding
+    /// (``FoodItem/scaledPreciseMacros(by:)``: a decimal food's at tenths of a gram, as its row shows
+    /// them). Its ``PreciseMacros/rounded`` is ``scaledMacros(for:)``.
     public func scaledPreciseMacros(for foodItem: FoodItem) -> PreciseMacros {
-        foodItem.exactMacros.scaled(by: servingScale)
+        foodItem.scaledPreciseMacros(by: servingScale)
     }
 
     public func scaledMicronutrients(for foodItem: FoodItem) -> Micronutrients {
@@ -2478,9 +2504,10 @@ public nonisolated enum SharedRecipeLimits {
 /// OPTIONAL key on version 1, the same additive rule as `steps` and `components`: sent only when the
 /// source food carries a fraction, so every whole-gram ingredient's bytes are unchanged, and an older
 /// reader ignores it and reads the whole-gram `protein`/`carbs`/`fat`, which always equal its
-/// rounding (``preciseMacrosAgreeWithWholeGrams`` is enforced at decode). The hash-covered exchange
-/// packet cannot carry it (an older reader would re-hash without it and call the file corrupt), so
-/// that packet strips it — see ``SharedRecipePayload/droppingPreciseMacros()``.
+/// rounding at tenths of a gram (``preciseMacrosAgreeWithWholeGrams`` is enforced at decode). A
+/// sender writes it already at tenths (``FoodItem/scaledPreciseMacros(by:)``). The hash-covered
+/// exchange packet cannot carry it (an older reader would re-hash without it and call the file
+/// corrupt), so that packet strips it — see ``SharedRecipePayload/droppingPreciseMacros()``.
 public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
     public var name: String
     public var quantity: Double
@@ -2502,12 +2529,13 @@ public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
         self.preciseMacros = preciseMacros
     }
 
-    /// True when `preciseMacros` is absent, or valid and rounding to exactly the whole-gram fields —
-    /// so an older reader (which sees only the whole grams) and a newer one see the same recipe.
+    /// True when `preciseMacros` is absent, or valid and — at the tenths of a gram an importing
+    /// ``FoodItem`` stores it at — rounding to exactly the whole-gram fields, so an older reader
+    /// (which sees only the whole grams) and a newer one count the same recipe.
     public var preciseMacrosAgreeWithWholeGrams: Bool {
         guard let preciseMacros else { return true }
         return preciseMacros.isValid
-            && preciseMacros.rounded == Macros(protein: protein, carbs: carbs, fat: fat)
+            && preciseMacros.roundedToTenths.rounded == Macros(protein: protein, carbs: carbs, fat: fat)
     }
 
     /// Wire JSON keys. Frozen tokens: every build reads the first six, and `preciseMacros` is read by
@@ -2567,9 +2595,9 @@ public nonisolated enum RecipeImportError: Error, Equatable {
 /// save. Never persisted — the saved artifacts are the ``FoodItem`` and ``RecipeIngredient``.
 ///
 /// The typed grams are `Double` so a person can enter "3.4 g" (``MacroGramEntry`` parses them).
-/// ``preciseMacros`` is that exact value; ``macros`` is its whole-gram rounding, the form every total
-/// and every stored meal uses. The saved ``FoodItem`` keeps the fraction in
-/// ``FoodItem/preciseMacros``.
+/// ``preciseMacros`` is that value at tenths of a gram (the precision it is typed, stored and shown
+/// at); ``macros`` is its whole-gram rounding, the form every total and every stored meal uses. The
+/// saved ``FoodItem`` keeps the fraction in ``FoodItem/preciseMacros``.
 public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
 
     public init(id: UUID = UUID(), name: String = "", selectedFoodItemId: UUID? = nil, quantity: Double = 1, unit: String = "serving", protein: Double = 0, carbs: Double = 0, fat: Double = 0, scannedMicronutrients: Micronutrients? = nil, barcode: String? = nil) {
@@ -2602,9 +2630,10 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
         preciseMacros.rounded
     }
 
-    /// The typed grams exactly as entered (sanitized: never negative or non-finite).
+    /// The typed grams at the tenths of a gram they are entered and stored at (sanitized: never
+    /// negative or non-finite).
     public var preciseMacros: PreciseMacros {
-        PreciseMacros(protein: protein, carbs: carbs, fat: fat)
+        PreciseMacros(protein: protein, carbs: carbs, fat: fat).roundedToTenths
     }
 
     public var trimmedName: String {
@@ -2623,7 +2652,8 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
     /// ``resolvedMacros(foodItems:)`` before rounding, for the editor's ingredient-level displays.
     ///
     /// Decimals appear only where they were entered: an unbound row returns its typed grams, a food
-    /// carrying ``FoodItem/preciseMacros`` returns its exact scaled grams, and any other catalog food
+    /// carrying ``FoodItem/preciseMacros`` returns its scaled grams at tenths of a gram
+    /// (``FoodItem/scaledPreciseMacros(by:)``, what the row displays), and any other catalog food
     /// returns its whole-gram scaled macros, so its display is unchanged. The ``PreciseMacros/rounded``
     /// value always equals ``resolvedMacros(foodItems:)``.
     public func resolvedPreciseMacros(foodItems: [FoodItem]) -> PreciseMacros? {

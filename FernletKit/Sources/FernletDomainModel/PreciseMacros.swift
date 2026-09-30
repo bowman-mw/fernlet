@@ -19,6 +19,11 @@ import Foundation
 ///   returns `self`, a negative one floors at 0). So for every whole-gram `m` and every scale `s`,
 ///   `PreciseMacros(m).scaled(by: s).rounded == m.scaled(by: s)`: a food with no fraction produces
 ///   the numbers it always did.
+/// - Tenths of a gram are the precision an ingredient's grams are stored and shown at
+///   (``MacroGramEntry/quantized(_:)``). ``roundedToTenths`` applies it, and ``scaledToTenths(by:)`` is
+///   the scaling a decimal food's row and total share: scale, then round to a tenth, then (for a
+///   total) ``rounded``. So a row that reads "2.5 g" always counts 3 g, never the 2 g a raw 2.46
+///   would round to.
 /// - Decoding is the synthesized, RAW decode: a value read from bytes is not sanitized. Every
 ///   container that decodes one checks ``isValid`` first — ``FoodItem`` drops an invalid value, and
 ///   the `fernlet.recipe` wire (``SharedRecipeIngredient``) refuses the payload.
@@ -66,6 +71,20 @@ public nonisolated struct PreciseMacros: Codable, Equatable, Sendable {
         guard scale.isFinite else { return self }
         let safeScale = max(scale, 0)
         return PreciseMacros(protein: protein * safeScale, carbs: carbs * safeScale, fat: fat * safeScale)
+    }
+
+    /// Each field rounded to the nearest tenth of a gram (``MacroGramEntry/quantized(_:)``): the
+    /// precision a typed value is stored and shown at. Idempotent, and it preserves ``isValid``.
+    public var roundedToTenths: PreciseMacros {
+        PreciseMacros(protein: MacroGramEntry.quantized(protein),
+                      carbs: MacroGramEntry.quantized(carbs),
+                      fat: MacroGramEntry.quantized(fat))
+    }
+
+    /// These grams for `scale` servings at the precision a row shows them: ``scaled(by:)``, then
+    /// ``roundedToTenths``. Its ``rounded`` is the whole grams a total counts for the same amount.
+    public func scaledToTenths(by scale: Double) -> PreciseMacros {
+        scaled(by: scale).roundedToTenths
     }
 
     /// The sanitizing rule behind the initializer: finite and positive, or exactly `+0`.

@@ -62,7 +62,9 @@ read: byte-identical to earlier builds for a one-part recipe, and a multipart re
 share; no shipping wire sends it any more. ``ExchangeRecipePayloadBuilder/componentPayload(for:foodItems:)``
 adds the partition. It is the form for the paste text, the mesh, and ``RecipeExchangePacket``, which
 versions its own hash (above). It also carries an ingredient's fractional grams
-(`SharedRecipeIngredient.preciseMacros`, 2026-09-29) when its food has them. That key is ignorable
+(`SharedRecipeIngredient.preciseMacros`, 2026-09-29) when its food has them, written at tenths of a
+gram; ``ExchangeRecipePayloadValidator`` refuses one that does not round, at tenths, to the ingredient's
+whole-gram fields, so an older and a newer reader count the same grams. That key is ignorable
 on the paste text and the mesh, but not inside a hash: ``RecipeExchangePacket`` strips it before
 hashing in both versions and refuses a packet that carries it, and `payload(for:foodItems:)` strips it
 too. A file, Shortcut or Messages card therefore rounds a 3.4 g ingredient to whole grams. A web-imported recipe

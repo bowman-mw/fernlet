@@ -174,14 +174,17 @@ states the value in effect on the goal card. Evidence and options:
 ``Macros`` is whole grams everywhere it is stored and summed: meals, day records, HealthKit, the widget,
 exports and targets. Decimal grams (2026-09-29) exist only where a person types an ingredient's
 macros ("3.4 g protein"), in ``PreciseMacros``. A ``FoodItem`` keeps them in the additive optional
-blob key `preciseMacros`, only while they are valid, fractional, and round to exactly its `macros`
-(read them through ``FoodItem/exactMacros``). The invariant that keeps every existing number still:
+blob key `preciseMacros`, at tenths of a gram (the precision they are typed and shown at), only
+while they are valid, fractional, and round to exactly its `macros` (read them through
+``FoodItem/exactMacros``). The invariant that keeps every existing number still:
 ``PreciseMacros/scaled(by:)`` and ``PreciseMacros/rounded`` reproduce ``Macros/scaled(by:)``
 exactly, so a whole-gram food scales to the same integers as before and each consumer rounds ONCE
-per ingredient from the exact value (``RecipeServingConversion/scaledMacros(for:)``). Totals stay whole
-grams. On the `fernlet.recipe` wire the fraction rides ``SharedRecipeIngredient/preciseMacros``, an
-optional key on version 1 that must round to the whole-gram fields; the hash-covered exchange packet
-never carries it.
+per ingredient from the exact value (``RecipeServingConversion/scaledMacros(for:)``). A decimal food
+scales to tenths first (``FoodItem/scaledPreciseMacros(by:)``), so the whole gram a total counts is
+the rounding of the tenth its row shows: "2.5 g" counts 3 g, never 2. Totals stay whole grams. On
+the `fernlet.recipe` wire the fraction rides ``SharedRecipeIngredient/preciseMacros``, an optional
+key on version 1 that must round, at tenths, to the whole-gram fields; the hash-covered exchange
+packet never carries it.
 
 - ``Meal``
 - ``MealComponentSnapshot``
@@ -500,6 +503,9 @@ above); this section holds the module-level helpers that have no other home.
 ``MacroGramEntry`` is the typed-grams rule for macro fields: it parses through
 ``LocaleTolerantNumber`` (either separator), stores tenths of a gram, and displays in the locale's
 separator with no grouping, so every prefill parses back to the value it came from.
+``RecipeQuantityDisplay`` writes the quantity or serving size beside those grams in the same
+separator (up to two decimal places), so an es/fr/de row never mixes "1.5" with "3,4".
 
 - ``LocaleTolerantNumber``
 - ``MacroGramEntry``
+- ``RecipeQuantityDisplay``

@@ -89,4 +89,20 @@ struct MacroGramEntryTests {
             }
         }
     }
+
+    // MARK: - The quantity beside the grams (fix round 1, 2026-09-30)
+
+    @Test func aQuantityUsesTheSameSeparatorAsTheGramsBesideIt() {
+        for locale in Self.locales {
+            let separator = MacroGramEntry.display(3.4, locale: locale).contains(",") ? "," : "."
+            #expect(RecipeQuantityDisplay.display(1.5, locale: locale) == "1\(separator)5", "\(locale.identifier)")
+            let line = "\(RecipeQuantityDisplay.display(2.5, locale: locale)) tbsp · P\(MacroGramEntry.display(3.4, locale: locale))g"
+            #expect(line == "2\(separator)5 tbsp · P3\(separator)4g", "\(locale.identifier)")
+        }
+        #expect(RecipeQuantityDisplay.display(40, locale: Self.english) == "40")
+        #expect(RecipeQuantityDisplay.display(0.25, locale: Self.german) == "0,25")
+        #expect(RecipeQuantityDisplay.display(1.0 / 3.0, locale: Self.english) == "0.33")
+        #expect(RecipeQuantityDisplay.display(1_500, locale: Self.german) == "1500")   // never grouped
+        #expect(RecipeQuantityDisplay.display(.nan, locale: Self.english) == "0")
+    }
 }

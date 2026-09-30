@@ -81,6 +81,62 @@ struct PreciseMacrosTests {
         #expect(exact.rounded == conversion.scaledMacros(for: food))
     }
 
+    // MARK: - Tenths of a gram: the row and the total agree (fix round 1, 2026-09-30)
+
+    @Test func theTenthARowShowsAndTheWholeGramItCountsAgree() throws {
+        // Typed as 4.1 g protein per 100 g and used at 60 g: exactly 2.46 g, which the row shows as
+        // "2.5". The total must count 3 (2.5 rounded), never the 2 a raw 2.46 would round to.
+        let food = FoodItem(name: "House granola", servingSize: 100, servingUnit: RecipeUnit.gram.rawValue,
+                            macros: Macros(protein: 0, carbs: 0, fat: 0), micronutrients: Micronutrients(),
+                            category: "custom ingredient", source: .manual, tags: [],
+                            preciseMacros: PreciseMacros(protein: 4.1, carbs: 0.9, fat: 0.4))
+        #expect(food.scaledPreciseMacros(by: 0.6) == PreciseMacros(protein: 2.5, carbs: 0.5, fat: 0.2))
+        #expect(food.scaledMacros(by: 0.6) == Macros(protein: 3, carbs: 1, fat: 0))
+        #expect(MacroGramEntry.display(food.scaledPreciseMacros(by: 0.6).protein,
+                                       locale: Locale(identifier: "en_US")) == "2.5")
+
+        let row = ManualRecipeIngredientInput(name: food.name, selectedFoodItemId: food.id, quantity: 60,
+                                              unit: RecipeUnit.gram.rawValue)
+        let shown = try #require(row.resolvedPreciseMacros(foodItems: [food]))
+        #expect(shown.protein == 2.5)
+        #expect(row.resolvedMacros(foodItems: [food]) == Macros(protein: 3, carbs: 1, fat: 0))
+        #expect(shown.rounded == row.resolvedMacros(foodItems: [food]))
+    }
+
+    @Test func everyScaledDecimalCountsTheRoundingOfTheTenthItShows() {
+        let foods = [PreciseMacros(protein: 3.4, carbs: 0.5, fat: 0.2), PreciseMacros(protein: 4.1, carbs: 12.7, fat: 0.4),
+                     PreciseMacros(protein: 0.3, carbs: 24.5, fat: 9.9), PreciseMacros(protein: 250.5, carbs: 0.1, fat: 0)]
+        let scales: [Double] = [0, 0.1, 1.0 / 3.0, 0.45, 0.6, 1, 1.5, 2.5, 3, 7.25, 12.5, 100]
+        for precise in foods {
+            let food = foodItem(macros: Macros(protein: 0, carbs: 0, fat: 0), precise: precise)
+            for scale in scales {
+                let shown = food.scaledPreciseMacros(by: scale)
+                #expect(shown == shown.roundedToTenths, "\(precise) × \(scale)")
+                #expect(shown.rounded == food.scaledMacros(by: scale), "\(precise) × \(scale)")
+                let rawProtein = precise.protein * scale
+                let tenthShown = MacroGramEntry.quantized(rawProtein)
+                #expect(food.scaledMacros(by: scale).protein == Macros.clampedInt(tenthShown), "\(precise) × \(scale)")
+            }
+        }
+    }
+
+    @Test func aFoodItemStoresItsFractionAtTenths() {
+        // 2.46 is stored as the 2.5 a field would show, so its whole grams are 3.
+        let rounded = foodItem(macros: Macros(protein: 0, carbs: 0, fat: 0), precise: PreciseMacros(protein: 2.46, carbs: 0, fat: 0))
+        #expect(rounded.preciseMacros == PreciseMacros(protein: 2.5, carbs: 0, fat: 0))
+        #expect(rounded.macros == Macros(protein: 3, carbs: 0, fat: 0))
+        #expect(rounded.scaledMacros(by: 1) == rounded.macros)
+        // 2.04 has no fraction at tenths: dropped, and the given whole grams stand.
+        let whole = foodItem(macros: Macros(protein: 2, carbs: 0, fat: 0), precise: PreciseMacros(protein: 2.04, carbs: 0, fat: 0))
+        #expect(whole.preciseMacros == nil)
+        #expect(whole.macros == Macros(protein: 2, carbs: 0, fat: 0))
+        // Rounding to tenths is idempotent and never leaves a value invalid.
+        let tenths = PreciseMacros(protein: 3.45, carbs: 9_999.96, fat: 0.04).roundedToTenths
+        #expect(tenths == PreciseMacros(protein: 3.5, carbs: 10_000, fat: 0))
+        #expect(tenths.roundedToTenths == tenths)
+        #expect(tenths.isValid)
+    }
+
     private func foodItem(macros: Macros, precise: PreciseMacros? = nil) -> FoodItem {
         FoodItem(name: "House granola", servingSize: 1, servingUnit: RecipeUnit.serving.rawValue,
                  macros: macros, micronutrients: Micronutrients(), category: "custom ingredient",
