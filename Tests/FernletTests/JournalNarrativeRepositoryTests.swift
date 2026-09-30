@@ -397,4 +397,94 @@ struct JournalNarrativeRepositoryTests {
         try repo.delete(id: UUID())
         #expect(repo.hasEverStoredNarrative == false)
     }
+
+    // MARK: - The whole-table fold (period-data design 2026-09-30, §9.17)
+
+    /// EVERY device-key row is re-sealed under the hub key — however old, across more than one
+    /// page — and rows already under the hub key are left alone. The fold this replaced re-keyed
+    /// only today and the in-memory recent days, so an older entry written from Home while Private
+    /// was closed stayed under the device key and never showed in the hub.
+    @Test func reencryptAllFoldsEveryDeviceKeyRowAcrossPages() throws {
+        let repo = makeRepository()
+        let deviceKey = makeKey()
+        let hubKey = makeKey()
+        let old = Date(timeIntervalSince1970: 1_600_000_000)
+        for index in 0..<230 {
+            try repo.insert(narrative("home \(index)", dayKey: "2020-09-\(index % 28 + 1)", entryDate: old.addingTimeInterval(Double(index))), contentKey: deviceKey)
+        }
+        try repo.insert(narrative("already in the hub", entryDate: Date()), contentKey: hubKey)
+
+        #expect(try repo.reencryptAll(from: deviceKey, to: hubKey) == 0)
+
+        let underHub = try repo.openability(under: hubKey)
+        #expect(underHub.openableIDs.count == 231, "every row opens under the hub key after one fold")
+        #expect(underHub.deadIDs.isEmpty)
+        #expect(try repo.openability(under: deviceKey).openableIDs.isEmpty, "nothing is left under the device key")
+        #expect(try repo.reencryptAll(from: deviceKey, to: hubKey) == 0, "a second fold is a no-op")
+        let page = try repo.narratives(offset: 0, limit: 1, contentKey: hubKey)
+        #expect(page.first?.text == "home 0", "text survives the re-seal")
+    }
+
+    /// A row sealed under a key that is gone is neither folded nor deleted: the fold is a
+    /// classification, never a loss.
+    @Test func reencryptAllLeavesRowsUnderAnotherKeyUntouched() throws {
+        let repo = makeRepository()
+        let deviceKey = makeKey()
+        let lostKey = makeKey()
+        try repo.insert(narrative("sealed elsewhere", entryDate: Date()), contentKey: lostKey)
+
+        #expect(try repo.reencryptAll(from: deviceKey, to: makeKey()) == 0)
+        #expect(try repo.narrativeCount() == 1)
+        #expect(try repo.openability(under: lostKey).openableIDs.count == 1)
+    }
+
+    // MARK: - The unopenable-entries check (period-data design 2026-09-30, §4.9)
+
+    /// Openable, dead and (when the install binding cannot be read) undecided — never "dead" on a
+    /// read that did not answer; with no key at all every row is dead.
+    ///
+    /// `@MainActor` so the view context's `performAndWait` runs inline in THIS task: the binding
+    /// override is task-local, and a hop to the main queue from another thread would not see it.
+    @MainActor
+    @Test func openabilitySortsRowsIntoOpenableDeadAndUndecided() throws {
+        let repo = makeRepository()
+        let deviceKey = makeKey()
+        let live = narrative("live", entryDate: Date())
+        let dead = narrative("dead", entryDate: Date().addingTimeInterval(1))
+        try repo.insert(live, contentKey: deviceKey)
+        try repo.insert(dead, contentKey: makeKey())
+
+        let classified = try repo.openability(under: deviceKey)
+        #expect(classified.openableIDs == [live.id])
+        #expect(classified.deadIDs == [dead.id])
+        #expect(classified.transientCount == 0)
+
+        let undecided = try DeviceBindingID.$testOverride.withValue(.readError) {
+            try repo.openability(under: deviceKey)
+        }
+        #expect(undecided.transientCount == 2, "a binding read that did not answer decides nothing")
+        #expect(undecided.deadIDs.isEmpty)
+
+        #expect(Set(try repo.openability(under: nil).deadIDs) == [live.id, dead.id])
+    }
+
+    /// The card's removal is keyless and exact: only the named ids go, and a removal latches (it is a
+    /// deletion like any other) until the latch is explicitly cleared.
+    @Test func deleteByIDsRemovesExactlyThoseRowsAndLatchClearingIsExplicit() throws {
+        let repo = makeRepository()
+        let keep = narrative("keep", entryDate: Date())
+        let drop = narrative("drop", entryDate: Date().addingTimeInterval(1))
+        let key = makeKey()
+        try repo.insert(keep, contentKey: key)
+        try repo.insert(drop, contentKey: key)
+
+        try repo.delete(ids: [drop.id])
+
+        #expect(try repo.openability(under: key).openableIDs == [keep.id])
+        #expect(repo.hasEverStoredNarrative)
+        try repo.delete(ids: [keep.id])
+        #expect(repo.hasEverStoredNarrative, "a removal is a deletion: it latches")
+        repo.clearDivergenceLatch()
+        #expect(!repo.hasEverStoredNarrative, "cleared once the key the rows spoke for is gone")
+    }
 }

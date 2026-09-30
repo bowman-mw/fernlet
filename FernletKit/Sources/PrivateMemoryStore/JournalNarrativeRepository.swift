@@ -78,6 +78,42 @@ public protocol JournalNarrativeStoring: AnyObject {
     /// All decryptable narratives across several day keys in one fetch, ascending by `entryDate`.
     /// Returns `[]` when `contentKey` is `nil` or `dayKeys` is empty.
     func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative]
+    /// Re-seals EVERY row that opens under `oldKey` under `newKey`, in bounded pages, skipping rows
+    /// that do not open under `oldKey` (already migrated, or sealed under some other key). The fold
+    /// the app runs when the Private tab opens, so entries written from Home while it was closed
+    /// (sealed under the device key) are readable in the hub — every such entry, not a window of
+    /// recent days (period-data design 2026-09-30, §9.17).
+    ///
+    /// - Returns: How many rows opened under `oldKey` but could not be re-sealed; they stay readable
+    ///   under `oldKey`, so the caller keeps that key and retries on a later open.
+    func reencryptAll(from oldKey: SymmetricKey, to newKey: SymmetricKey) throws -> Int
+}
+
+/// How the rows of one sealed table answer a key, classified without keeping any plaintext: the
+/// shape the app's "entries this iPhone can't open" check (period-data design 2026-09-30, §4.9)
+/// needs before it may call a row unopenable.
+///
+/// A row is `openable` when every sealed column opened, `dead` when one refused for good (a
+/// CryptoKit authentication failure — the wrong key or damaged bytes — a retired format, an empty
+/// column, or an install binding that is authoritatively gone), and counted as `transient` when the
+/// install-binding read itself could not answer (`DeviceBindingID.ReadError`): nothing may be called
+/// unopenable on a read that did not answer, so a caller treats any transient row as "try again".
+///
+/// `Sendable`: a plain value that crosses `performAndWait`'s `@Sendable` closure.
+public struct SealedRowOpenability: Equatable, Sendable {
+    /// Rows whose sealed columns all opened under the key.
+    public var openableIDs: [UUID]
+    /// Rows that can never open under the key.
+    public var deadIDs: [UUID]
+    /// Rows whose open could not be decided this time (retryable).
+    public var transientCount: Int
+
+    /// Creates a classification.
+    public init(openableIDs: [UUID] = [], deadIDs: [UUID] = [], transientCount: Int = 0) {
+        self.openableIDs = openableIDs
+        self.deadIDs = deadIDs
+        self.transientCount = transientCount
+    }
 }
 
 /// ColumnCrypto-sealed journal storage in the local-only private Core Data store — the production
@@ -143,7 +179,8 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
     /// `MenstrualNarrativeRepository.hasEverStoredNarrative` exactly, including living in **standard
     /// (device-local, non-synced) defaults**: iOS drops the app container on uninstall, so a real
     /// reinstall clears it for free, while a delete-all on a live install leaves it SET so the wipe
-    /// cannot be undone by a stale cloud copy. Never cleared once set — a one-way latch.
+    /// cannot be undone by a stale cloud copy. One-way for every writer and for the wipe; cleared
+    /// only by ``clearDivergenceLatch()``, once the key the rows spoke for is provably gone.
     ///
     /// - Important: The key string is device-local state a shipped build already writes; changing it
     ///   would silently reset every existing install's latch back to "never populated".
@@ -416,6 +453,179 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
             )
         }
         return rows
+    }
+
+    // MARK: - Key folds and the unopenable-entries check (period-data design 2026-09-30)
+
+    /// R3: page size of the whole-table walks (``reencryptAll(from:to:)``,
+    /// ``openability(under:)``), so a long journal is never faulted in, re-sealed or classified as
+    /// one unbounded transaction.
+    private static let walkPageSize = 200
+    /// R5: upper bound on one ``delete(ids:)`` call's id list, which becomes an `id IN %@` clause.
+    public static let maxIDsPerDelete = 500
+
+    /// Re-seals every row that opens under `oldKey` under `newKey` — the device-key → hub-key fold
+    /// the app runs whenever the Private tab opens (see ``JournalNarrativeStoring/reencryptAll(from:to:)``).
+    ///
+    /// Rows that do not open under `oldKey` (already under the hub key, or sealed under a key that is
+    /// gone) are left untouched — a classification decision, never a deletion. Paged: `rowCount` is
+    /// fixed before the walk and every iteration advances by the rows it handled (R2); each page
+    /// commits atomically (a failed save rolls that page back and rethrows), and a re-run is
+    /// idempotent because a migrated row no longer opens under `oldKey`. Sets the divergence latch
+    /// when anything was re-sealed, like every other mutation.
+    ///
+    /// - Returns: How many rows opened under `oldKey` but could not be re-sealed under `newKey`.
+    public func reencryptAll(from oldKey: SymmetricKey, to newKey: SymmetricKey) throws -> Int {
+        try context.performAndWait {
+            let rowCount = try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative"))
+            var offset = 0
+            var failures = 0
+            var mutatedAnyPage = false
+            while offset < rowCount {
+                let page = try fetchWalkPage(offset: offset)
+                guard !page.isEmpty else { break }
+                let outcome = resealPage(page, from: oldKey, to: newKey)
+                failures += outcome.failures
+                if outcome.mutated {
+                    mutatedAnyPage = true
+                    do {
+                        try context.saveSealed()
+                    } catch {
+                        context.rollback()
+                        throw error
+                    }
+                }
+                offset += page.count
+            }
+            if failures > 0 {
+                FernletAuditLog.log("journal.reencryptSkipped", context: ["count": "\(failures)"])
+            }
+            guard mutatedAnyPage else { return failures }
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "JournalNarrative.reencryptAll")
+            markNarrativeStored()
+            return failures
+        }
+    }
+
+    /// Classifies every row by whether it opens under `key` — READ-ONLY, nothing is kept but ids.
+    /// `nil` means no such key exists on this iPhone, so every row is dead under it.
+    ///
+    /// Paged like ``reencryptAll(from:to:)``. See ``SealedRowOpenability`` for what dead and
+    /// transient mean; a caller must never call a row unopenable while `transientCount > 0`.
+    public func openability(under key: SymmetricKey?) throws -> SealedRowOpenability {
+        try context.performAndWait {
+            let rowCount = try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative"))
+            var result = SealedRowOpenability()
+            var offset = 0
+            while offset < rowCount {
+                let page = try fetchWalkPage(offset: offset)
+                guard !page.isEmpty else { break }
+                for object in page {
+                    guard let id = object.value(forKey: "id") as? UUID else { continue }
+                    classify(object, id: id, under: key, into: &result)
+                }
+                offset += page.count
+            }
+            return result
+        }
+    }
+
+    /// Deletes the rows with these ids WITHOUT decrypting them, in one save — how the "entries this
+    /// iPhone can't open" card removes exactly the rows it named. Sets the divergence latch when a
+    /// row was removed (``delete(id:)``'s reasoning). The history prune rethrows.
+    ///
+    /// - Parameter ids: At most ``maxIDsPerDelete`` ids per call (R5 — the list becomes an `IN`
+    ///   clause); the caller pages longer lists.
+    public func delete(ids: [UUID]) throws {
+        guard !ids.isEmpty else { return }
+        let bounded = Array(ids.prefix(Self.maxIDsPerDelete))
+        try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
+            request.predicate = NSPredicate(format: "id IN %@", bounded)
+            let rows = try context.fetch(request)
+            rows.forEach(context.delete)
+            try context.saveSealed()
+            try PrivatePersistentHistoryPruner.prune(context: context)
+            if !rows.isEmpty { markNarrativeStored() }
+        }
+    }
+
+    /// Clears the divergence latch (``hasEverStoredNarrative``). NOT a wipe step — "delete everything"
+    /// keeps the latch by design. Called only when the key every sealed row here spoke for is
+    /// provably gone: the app's new-key check after the unopenable rows were removed, and an app-lock
+    /// reset (period-data design 2026-09-30, §4.9, §9.21). The latch backfills from the row count, so
+    /// clearing it over rows that still exist is undone by the next read.
+    public func clearDivergenceLatch() {
+        defaults.removeObject(forKey: Self.everStoredDefaultsKey)
+    }
+
+    /// One bounded page of rows in a stable total order (`entryDate`, then the unique `id`), so
+    /// successive pages of a walk neither overlap nor skip rows.
+    private func fetchWalkPage(offset: Int) throws -> [NSManagedObject] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "entryDate", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
+        request.fetchOffset = offset
+        request.fetchLimit = Self.walkPageSize
+        return try context.fetch(request)
+    }
+
+    /// Re-seals both sealed columns of every row in `page` that opens under `oldKey`.
+    ///
+    /// - Returns: Whether anything was mutated, and how many rows opened but could not be re-sealed.
+    private func resealPage(
+        _ page: [NSManagedObject],
+        from oldKey: SymmetricKey,
+        to newKey: SymmetricKey
+    ) -> (mutated: Bool, failures: Int) {
+        var mutated = false
+        var failures = 0
+        for object in page {
+            // Only rows sealed under `oldKey` migrate — a classification decision, not a swallowed
+            // failure (the same rule `WorryNarrativeRepository.reencryptAll` follows).
+            guard let opened = openColumns(object, under: oldKey) else { continue }
+            do {
+                let text = try crypto.sealString(opened.text, contentKey: newKey)
+                let emotions = try crypto.seal(opened.emotions, contentKey: newKey)
+                object.setValue(text, forKey: "textCiphertext")
+                object.setValue(emotions, forKey: "emotionsCiphertext")
+                mutated = true
+            } catch {
+                failures += 1
+            }
+        }
+        return (mutated, failures)
+    }
+
+    /// Both sealed columns of `object` opened under `key`, or nil when either refuses.
+    private func openColumns(_ object: NSManagedObject, under key: SymmetricKey) -> (text: String, emotions: [String])? {
+        do {
+            let text = try crypto.openString(object.value(forKey: "textCiphertext") as? Data, contentKey: key) ?? ""
+            let emotions: [String] = try crypto.open(object.value(forKey: "emotionsCiphertext") as? Data, contentKey: key) ?? []
+            return (text, emotions)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Files one row under ``SealedRowOpenability``: the install-binding read that could not answer is
+    /// transient; every other refusal is dead.
+    private func classify(_ object: NSManagedObject, id: UUID, under key: SymmetricKey?, into result: inout SealedRowOpenability) {
+        guard let key else {
+            result.deadIDs.append(id)
+            return
+        }
+        do {
+            _ = try crypto.openString(object.value(forKey: "textCiphertext") as? Data, contentKey: key)
+            let _: [String]? = try crypto.open(object.value(forKey: "emotionsCiphertext") as? Data, contentKey: key)
+            result.openableIDs.append(id)
+        } catch is DeviceBindingID.ReadError {
+            result.transientCount += 1
+        } catch {
+            result.deadIDs.append(id)
+        }
     }
 
     // MARK: - Private

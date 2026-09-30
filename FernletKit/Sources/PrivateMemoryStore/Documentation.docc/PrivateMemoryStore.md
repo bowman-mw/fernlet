@@ -63,6 +63,19 @@ stateless `ColumnCrypto` value (``WorryNarrativeRepository`` fully compiler-chec
 ``JournalNarrative`` is additionally `Codable` so the sealed-backup export can serialize
 decrypted rows into its re-encrypted chunks.
 
+**Both tables are folded whole, and both can be classified without a key (period-data design
+2026-09-30, §4.9, §9.17).** While the Private tab is closed — with or without a passcode — journal
+and Worry Box entries seal under their device keys; when it opens, the app folds EVERY such row under
+the tab's content key through `reencryptAll(from:to:)` (bounded pages, rows that do not open under
+the old key skipped, never deleted). The journal's fold used to cover only today and the in-memory
+recent days, so an older entry written from Home stayed out of the hub; it is now on
+``JournalNarrativeStoring`` like the worry one. For the app's "entries this iPhone can't open" check
+both repositories answer `openability(under:)` — ids only, sorted into openable, dead and undecided
+(``SealedRowOpenability``; an install-binding read that did not answer decides nothing) — and delete
+exactly a named id list keylessly (`delete(ids:)`). The journal's divergence latch is one-way for
+every writer and for "delete everything", and is cleared only by `clearDivergenceLatch()`, once the
+key the rows spoke for is provably gone.
+
 ## Topics
 
 ### Journal narratives
@@ -70,6 +83,7 @@ decrypted rows into its re-encrypted chunks.
 - ``JournalNarrative``
 - ``JournalNarrativeStoring``
 - ``JournalNarrativeRepository``
+- ``SealedRowOpenability``
 
 ### Worry Box
 

@@ -104,6 +104,16 @@ public final class IntimacyLogStore {
     /// hidden-means-empty bug: a restore would then happily write the cloud copy in behind the gate.
     public var hasEverStoredLog: Bool { repository.hasEverStoredLog }
 
+    /// Clears the divergence latch behind ``hasEverStoredLog`` — see
+    /// `IntimacyLogRepository.clearDivergenceLatch()` for when that is legitimate.
+    ///
+    /// **Ungated**, like the latch it clears: it touches one device-local boolean and decrypts
+    /// nothing, and the callers (the app's new-key check, the app-lock reset funnel) run while the
+    /// hub is closed and whatever the visibility.
+    public func clearDivergenceLatch() {
+        repository.clearDivergenceLatch()
+    }
+
     /// Total stored logs, counted without decrypting (or faulting in) any row.
     ///
     /// **Ungated for the same reason as ``hasEverStoredLog``** — and additionally because the

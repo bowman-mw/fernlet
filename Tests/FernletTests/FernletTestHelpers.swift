@@ -1,4 +1,5 @@
 import XCTest
+import CryptoKit
 import LocalPersistence
 import FernletDomainModel
 import PrivateMemoryStore
@@ -414,4 +415,13 @@ extension FernletDay {
     static func stub(dateKey: String = "2026-05-19") -> FernletDay {
         FernletDay(date: dateKey)
     }
+}
+
+extension SymmetricKey {
+    /// A fixed Private-tab content key for journal tests. Journals open only under the hub key since
+    /// the no-passcode Private tab (period-data design 2026-09-30, §9.17) retired the device-key
+    /// "no lock" activation, so a test that needs hydrated journal text opens them under this key —
+    /// one fixed value, so a second store over the same sealed repository (a "relaunch") reads what
+    /// the first wrote.
+    static let journalTestKey = SymmetricKey(data: Data(repeating: 0x4A, count: 32))
 }

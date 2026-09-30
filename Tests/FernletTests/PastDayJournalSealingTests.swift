@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Testing
 import FernletFoundation
 import FernletDomainModel
@@ -12,14 +13,15 @@ import FernletDomainModel
 ///
 /// `loadDay(for:)` returns the RAW stored day (what mirrors to iCloud); `loadDayWithDecryptedJournals`
 /// re-hydrates from the sealed store. The pairing proves both "no plaintext in the blob" and "no data
-/// loss". The no-lock device-key seal path is the common case, so the tests activate it explicitly.
+/// loss". The tests open the journal under a fixed hub key (`SymmetricKey.journalTestKey`) — since
+/// 2026-09-30 there is no device-key read mode; the device key is only the closed-tab write fallback.
 @MainActor
 struct PastDayJournalSealingTests {
 
     @Test func addingJournalOnPastDate_stripsPlaintextFromBlob_butKeepsItSealed() {
         let today = Date()
         let store = makeTestStore(date: today)
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-3 * 86_400))
         #expect(pastKey != store.todayKey)
 
@@ -38,7 +40,7 @@ struct PastDayJournalSealingTests {
     @Test func editingJournalOnPastDate_stripsUpdatedPlaintextFromBlob() throws {
         let today = Date()
         let store = makeTestStore(date: today)
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-2 * 86_400))
 
         store.addJournal(text: "original", tag: .good, date: pastKey)
@@ -61,7 +63,7 @@ struct PastDayJournalSealingTests {
     @Test func editingSealedJournalAfterItAgedOut_stripsPlaintextFromBlob() throws {
         let today = Date()
         let (store1, repository, narratives) = makeTestStoreWithRepositories(date: today)
-        store1.activateNoLockJournals()
+        store1.activateSealedJournals(contentKey: .journalTestKey)
         let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-40 * 86_400))
         store1.addJournal(text: "original secret", tag: .good, date: pastKey)
         #expect(store1.loadDay(for: pastKey).journals.first?.text == "")   // sealed + stripped in session 1
@@ -70,7 +72,7 @@ struct PastDayJournalSealingTests {
         // in-memory sealedJournalIDs starts empty, and the aged-out past day is outside the
         // previousJournals window, so activation does NOT re-seal it (reproducing the pre-fix state).
         let store2 = makeStoreSharingStores(date: today, repository: repository, narratives: narratives)
-        store2.activateNoLockJournals()
+        store2.activateSealedJournals(contentKey: .journalTestKey)
 
         // The user opens the old day; the read decrypts the text for display (and now marks it sealed).
         let entry = try #require(store2.loadDayWithDecryptedJournals(for: pastKey).journals.first)
@@ -89,7 +91,7 @@ struct PastDayJournalSealingTests {
     @Test func unrelatedPastDayEdit_doesNotResurrectSealedJournalText() {
         let today = Date()
         let store = makeTestStore(date: today)
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-4 * 86_400))
 
         store.addJournal(text: "private thoughts", tag: .quiet, date: pastKey)

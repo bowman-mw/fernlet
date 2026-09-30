@@ -207,6 +207,32 @@ public final class PendingNarrativeBuffer {
         try loadEntries()
     }
 
+    /// Whether the buffer holds entries that no key on this iPhone can ever open — the file is
+    /// non-empty and its key is definitively ABSENT (the state ``bufferKey()`` refuses with
+    /// ``PendingNarrativeBufferError/bufferUnopenable``). READ-ONLY: it never mints, migrates or
+    /// decrypts anything, so the app's "entries this iPhone can't open" check (period-data design
+    /// 2026-09-30, §4.9) can ask before any key exists.
+    ///
+    /// An absent or empty file answers false, and so does a key that reads found (the entries are
+    /// openable) or a legacy service-less key the production scope would still migrate.
+    ///
+    /// - Throws: ``PendingNarrativeBufferError/keyUnreadable(status:)`` when the key row would not
+    ///   answer: "maybe openable" must never be reported as unopenable, because the caller offers to
+    ///   remove what this calls unopenable.
+    public func holdsUnopenableEntries() throws -> Bool {
+        guard !bufferFileIsAbsentOrEmpty() else { return false }
+        switch KeychainItem.loadDistinguishingAbsence(account: Self.bufferKeyAccountV2, service: scope.keychainService) {
+        case .found:
+            return false
+        case .unreadable(let status):
+            throw PendingNarrativeBufferError.keyUnreadable(status: status)
+        case .absent:
+            let legacyMayOpen = scope.keychainService == PendingNarrativeStorageScope.productionKeychainService
+                && loadLegacyServicelessKey() != nil
+            return !legacyMayOpen
+        }
+    }
+
     /// Deletes the buffer file outright.
     ///
     /// Call only after the drained payloads have been durably persisted, or when intentionally

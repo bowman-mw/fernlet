@@ -180,6 +180,62 @@ public final class WorryNarrativeRepository: WorryStoring, Sendable {
         }
     }
 
+    /// Deletes the worries with these ids WITHOUT decrypting them, in one save — how the "entries
+    /// this iPhone can't open" card (period-data design 2026-09-30, §4.9) removes exactly the rows it
+    /// named. The history prune rethrows, like ``delete(id:)``.
+    ///
+    /// - Parameter ids: At most `JournalNarrativeRepository.maxIDsPerDelete` ids per call (R5 — the
+    ///   list becomes an `IN` clause); the caller pages longer lists.
+    public func delete(ids: [UUID]) throws {
+        guard !ids.isEmpty else { return }
+        let bounded = Array(ids.prefix(JournalNarrativeRepository.maxIDsPerDelete))
+        try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.entityName)
+            request.predicate = NSPredicate(format: "id IN %@", bounded)
+            try context.fetch(request).forEach(context.delete)
+            try context.saveSealed()
+            try PrivatePersistentHistoryPruner.prune(context: context)
+        }
+    }
+
+    /// Classifies every worry row by whether it opens under `key` — READ-ONLY, only ids are kept
+    /// (see ``SealedRowOpenability``). `nil` means no such key exists here, so every row is dead.
+    /// Paged like ``reencryptAll(from:to:)``.
+    public func openability(under key: SymmetricKey?) throws -> SealedRowOpenability {
+        try context.performAndWait {
+            let rowCount = try context.count(for: NSFetchRequest<NSManagedObject>(entityName: Self.entityName))
+            var result = SealedRowOpenability()
+            var offset = 0
+            while offset < rowCount {
+                let page = try fetchWorryPage(offset: offset)
+                guard !page.isEmpty else { break }
+                for object in page {
+                    guard let id = object.value(forKey: "id") as? UUID else { continue }
+                    classify(object, id: id, under: key, into: &result)
+                }
+                offset += page.count
+            }
+            return result
+        }
+    }
+
+    /// Files one row under ``SealedRowOpenability``: an install-binding read that could not answer
+    /// is transient; every other refusal is dead.
+    private func classify(_ object: NSManagedObject, id: UUID, under key: SymmetricKey?, into result: inout SealedRowOpenability) {
+        guard let key else {
+            result.deadIDs.append(id)
+            return
+        }
+        do {
+            _ = try crypto.openString(object.value(forKey: "textCiphertext") as? Data, contentKey: key)
+            result.openableIDs.append(id)
+        } catch is DeviceBindingID.ReadError {
+            result.transientCount += 1
+        } catch {
+            result.deadIDs.append(id)
+        }
+    }
+
     /// Drops every worry row without decrypting anything, so the full data reset works even while
     /// the private lock is closed (see ``WorryStoring/deleteAll()``). Routes through the shared
     /// `PrivateRowPlumbing.deleteRows` sequence, like every sealed repository's `deleteAll()`.

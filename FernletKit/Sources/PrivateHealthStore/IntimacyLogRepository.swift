@@ -132,7 +132,8 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     /// Mirrors `MenstrualNarrativeRepository.hasEverStoredNarrative` exactly, including living in
     /// **standard (device-local, non-synced) defaults**: iOS drops the app container on uninstall, so a
     /// real reinstall clears it for free, while a delete-all on a live install leaves it SET so the
-    /// wipe cannot be undone by a stale cloud copy. Never cleared once set — a one-way latch.
+    /// wipe cannot be undone by a stale cloud copy. One-way for every writer and for the wipe; cleared
+    /// only by ``clearDivergenceLatch()``, once the key the rows spoke for is provably gone.
     ///
     /// - Important: The key string is device-local state a shipped build already writes; changing it
     ///   would silently reset every existing install's latch back to "never populated".
@@ -162,6 +163,15 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     /// write actually commits, so a failed write never claims this device has diverged.
     private func markLogStored() {
         defaults.set(true, forKey: Self.everStoredDefaultsKey)
+    }
+
+    /// Clears the divergence latch (``hasEverStoredLog``). NOT a wipe step — "delete everything"
+    /// keeps the latch by design. Called only when the key every sealed row here spoke for is
+    /// provably gone: the app's new-key check after the unopenable rows were removed, and an app-lock
+    /// reset (period-data design 2026-09-30, §4.9, §9.21). The latch backfills from the row count, so
+    /// clearing it over rows that still exist is undone by the next read.
+    public func clearDivergenceLatch() {
+        defaults.removeObject(forKey: Self.everStoredDefaultsKey)
     }
 
     /// Creates a repository on a sealed-store stack.

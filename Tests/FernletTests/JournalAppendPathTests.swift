@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Testing
 import FernletFoundation
 import FernletDomainModel
@@ -24,7 +25,7 @@ struct JournalAppendPathTests {
     /// the entry's feeling token and none of its words (owner decision 2026-09-23).
     @Test func todayAppendUpdatesDayPreviousJournalsAndMemories() throws {
         let store = makeTestStore()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
 
         store.addJournal(text: "A long enough entry to mint a tier-one memory note.", tag: .good)
 
@@ -40,11 +41,11 @@ struct JournalAppendPathTests {
     /// both must produce identical state. (It now literally delegates; this pins that it stays true.)
     @Test func todayOverloadMatchesExplicitTodayKey() {
         let implicitStore = makeTestStore()
-        implicitStore.activateNoLockJournals()
+        implicitStore.activateSealedJournals(contentKey: .journalTestKey)
         implicitStore.addJournal(text: "Same words, two entry points, one code path.", tag: .neutral)
 
         let explicitStore = makeTestStore()
-        explicitStore.activateNoLockJournals()
+        explicitStore.activateSealedJournals(contentKey: .journalTestKey)
         explicitStore.addJournal(
             text: "Same words, two entry points, one code path.",
             tag: .neutral,
@@ -64,7 +65,7 @@ struct JournalAppendPathTests {
     @Test func pastDateAppendSkipsTheTodayScopedBookkeeping() {
         let now = Date()
         let store = makeTestStore(date: now)
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         let pastKey = FernletDate.dayKey(for: now.addingTimeInterval(-3 * 86_400))
         #expect(pastKey != store.todayKey)
 
@@ -87,7 +88,7 @@ struct JournalAppendPathTests {
     /// including the quick-mood one that never used to reach it.
     @Test func shortEntryAppendsWithoutMintingAMemory() {
         let store = makeTestStore()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
 
         store.addJournal(text: "ok", tag: .neutral)
 

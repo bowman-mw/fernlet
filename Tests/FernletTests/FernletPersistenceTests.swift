@@ -407,7 +407,7 @@ struct FernletPersistenceTests {
         store.flushPendingSnapshotSave()
 
         // A fresh store loaded from the same blob should never see journal text
-        // unless activateNoLockJournals() / activateSealedJournals() is called first.
+        // unless activateSealedJournals(contentKey:) is called first.
         let reloaded = makeStore(controller: controller)
         #expect(
             reloaded.day.journals.allSatisfy { $0.text.isEmpty },

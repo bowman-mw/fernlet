@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Testing
 import FernletDomainModel
 import FernletScoring
@@ -217,7 +218,7 @@ struct JournalScoringParityTests {
     /// `FernletStore.score` (today's live companion).
     @Test func bothScorePathsGiveACheckInOnlyDayTheHalfCredit() {
         let store = makeTestStore()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         store.logQuickMood(.good)
         #expect(store.scoreBreakdown(for: store.day).components["journal"] == FernletScoring.checkInOnlyScore)
         let checkInOnly = store.score

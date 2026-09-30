@@ -40,7 +40,7 @@ struct JournalQuickMoodTests {
 
     @Test func quickMoodUpdatesInPlaceWhenTagOnlyEntryIsIdentifiable() {
         let store = makeTestStore(date: testDate)
-        store.activateNoLockJournals()   // journal key active → tag-only entries are identifiable
+        store.activateSealedJournals(contentKey: .journalTestKey)   // journal key active → tag-only entries are identifiable
         store.logQuickMood(.good)
         store.logQuickMood(.tired)       // changed my mind — same entry, new tag
 
@@ -67,7 +67,7 @@ struct JournalQuickMoodTests {
         // with text stripped to "" and isQuickMood == false. A quick-mood tap must APPEND its own
         // check-in, never retag the foreign entry (whose author's chosen tag must be preserved).
         let store = makeTestStore(date: testDate)
-        store.activateNoLockJournals()               // key active — the old empty-text heuristic would have retagged
+        store.activateSealedJournals(contentKey: .journalTestKey)               // key active — the old empty-text heuristic would have retagged
         store.day.journals = [JournalEntry(text: "", tag: .good, isQuickMood: false)]  // a stripped remote seal
         store.logQuickMood(.tired)
         #expect(store.day.journals.count == 2)
@@ -78,7 +78,7 @@ struct JournalQuickMoodTests {
 
     @Test func realJournalAfterQuickMoodAppendsAndWins() {
         let store = makeTestStore(date: testDate)
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         store.logQuickMood(.quiet)
         store.addJournal(text: "wrote a real entry about the day", tag: .good)
 
@@ -97,7 +97,7 @@ struct JournalQuickMoodTests {
             recorder.wrapped = real
             return recorder
         }
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         store.logQuickMood(.neutral)
 
         // Empty text is deliberately not sealed: no narrative row, not in the sealed-id set.
@@ -167,5 +167,8 @@ private final class RecordingNarrativeStore: JournalNarrativeStoring {
     }
     func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative] {
         try wrapped.narratives(forDayKeys: dayKeys, contentKey: contentKey)
+    }
+    func reencryptAll(from oldKey: SymmetricKey, to newKey: SymmetricKey) throws -> Int {
+        try wrapped.reencryptAll(from: oldKey, to: newKey)
     }
 }

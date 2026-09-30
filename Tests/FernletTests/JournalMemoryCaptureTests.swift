@@ -22,6 +22,7 @@
 // capability the simulator lacks — so off / sleepy / resting / incapable are exercised for real.
 
 import Foundation
+import CryptoKit
 import Testing
 import AIContext
 import FernletDomainModel
@@ -79,7 +80,7 @@ struct JournalMemoryCaptureTests {
 
     private func makeStore(aiOn: Bool, summarizer: FakeJournalSummarizer) -> FernletStore {
         let store = makeTestStore()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         store.journalMemorySummarizer = summarizer
         if aiOn { store.settings.aiStatus = .ready }
         return store
@@ -306,7 +307,7 @@ struct JournalMemoryCaptureTests {
 
     @Test func persistedBlobCarriesOnlyTheEmotionWithAIOff() async throws {
         let (store, repository, _) = makeTestStoreWithRepositories()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
 
         await write(to: store)
         store.flushPendingSnapshotSave()
@@ -320,7 +321,7 @@ struct JournalMemoryCaptureTests {
 
     @Test func persistedBlobNeverCarriesAVerbatimReply() async throws {
         let (store, repository, _) = makeTestStoreWithRepositories()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         store.journalMemorySummarizer = FakeJournalSummarizer(reply: Self.entry)
         store.settings.aiStatus = .ready
 
@@ -334,7 +335,7 @@ struct JournalMemoryCaptureTests {
 
     @Test func persistedBlobCarriesTheSummaryNotTheEntry() async throws {
         let (store, repository, _) = makeTestStoreWithRepositories()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         store.journalMemorySummarizer = FakeJournalSummarizer(reply: Self.paraphrase)
         store.settings.aiStatus = .ready
 

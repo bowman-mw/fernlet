@@ -117,7 +117,8 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
     /// **standard (device-local, non-synced) defaults**: iOS drops the app container on uninstall, so a
     /// real reinstall clears it for free — which is exactly the "never populated" semantics we want —
     /// while a delete-all on a live install leaves it SET, so the wipe cannot be undone by a stale cloud
-    /// copy. Never cleared once set; it is a one-way "this device has diverged" latch.
+    /// copy. A one-way "this device has diverged" latch for every writer and for the wipe; cleared
+    /// only by ``clearDivergenceLatch()``, once the key the rows spoke for is provably gone.
     private static let everStoredDefaultsKey = "fernlet.menstrualNarrative.everStored"
 
     /// Injected so tests get an isolated suite — the latch is process-global otherwise, and one test
@@ -145,6 +146,15 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
 
     private func markNarrativeStored() {
         defaults.set(true, forKey: Self.everStoredDefaultsKey)
+    }
+
+    /// Clears the divergence latch (``hasEverStoredNarrative``). NOT a wipe step — "delete everything"
+    /// keeps the latch by design. Called only when the key every sealed row here spoke for is
+    /// provably gone: the app's new-key check after the unopenable rows were removed, and an app-lock
+    /// reset (period-data design 2026-09-30, §4.9, §9.21). The latch backfills from the row count, so
+    /// clearing it over rows that still exist is undone by the next read.
+    public func clearDivergenceLatch() {
+        defaults.removeObject(forKey: Self.everStoredDefaultsKey)
     }
 
     /// Creates a repository on a sealed-store stack.
