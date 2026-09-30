@@ -607,6 +607,9 @@ struct DisposableCameraView: View {
     @State private var reviewUnreadableCount = 0
     /// What the Develop review is busy with after the answer (the Photos export).
     @State private var reviewWorking: FriendPhotoReviewWorkingMessage?
+    /// Where the Develop answer waits for a failed Photos export's alert to be closed before it ends
+    /// the session and closes the review (fix round 1, U2-C-U2-R2 / U2-L-U2-R2).
+    @State private var saveFailureAcknowledgement = PhotoSaveFailureAcknowledgement()
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     @State private var previousWindTranslation: CGFloat = 0
     // Orientation is @State (not a raw per-frame `size.width > size.height`) so a transient
@@ -1368,6 +1371,7 @@ struct DisposableCameraView: View {
             alsoSaveToPhotos = false
             reviewAnswerFailure = nil
             reviewUnreadableCount = 0
+            photoSaveError = nil   // a failure from an earlier review never opens this one
             reviewPresented = true
         }
     }
@@ -1421,24 +1425,32 @@ struct DisposableCameraView: View {
             loadImageData: { manager.reviewThumbnailData(for: $0) }
         )
         .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
+        // The alert closing — either button, or the system taking it down — releases an answer
+        // waiting on it; so does the sheet going away, so a torn-down sheet never strands one.
+        .onChange(of: photoSaveError == nil) { _, cleared in if cleared { saveFailureAcknowledgement.acknowledge() } }
+        .onDisappear { saveFailureAcknowledgement.acknowledge() }
     }
 
     /// FRND-12's primary review action: keeps the ticked photos (the unticked shown ones are
     /// deleted), mints the kept friends, and — only if the toggle is on — exports what the answer
     /// reports kept, AFTER the keep landed, so a Photos denial can never cost it. Scoped to the ids
-    /// the review showed (``developReviewIDs``), wherever they are listed now.
+    /// the review showed (``developReviewIDs``), wherever they are listed now. A failed export's
+    /// alert is shown inside the review and closed by the person BEFORE the session is left and the
+    /// review closes (design §4.6; fix round 1, U2-C-U2-R2 / U2-L-U2-R2): the alert hangs off the
+    /// sheet, so closing it first took the alert down with it.
     private func keepSelectedSessionPhotos() async {
         let answer = manager.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)
         finalizeFriendKeeps()
         await exportKeptPhotosIfAsked(answer)
+        if photoSaveError != nil { await saveFailureAcknowledgement.wait() }
         await finishDevelopReview(after: answer)
     }
 
     /// The camera-roll half of the answer, and the ONLY place this view hands photos to
     /// `FriendPhotoLibrarySaver`: the photos the answer reports landed on the wall
     /// (`SessionPhotoAnswer.keptOnWall`), hydrated from the WALL — never a pending byte, never before
-    /// the answer. Purely additive: a failure (a Photos denial included) surfaces on the sheet and
-    /// never touches the keep.
+    /// the answer. Purely additive: a failure (a Photos denial included) sets `photoSaveError`, whose
+    /// alert the sheet shows while the caller waits for it to be closed, and never touches the keep.
     private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async {
         guard alsoSaveToPhotos, !answer.keptOnWall.isEmpty else { return }
         let toSave = manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })

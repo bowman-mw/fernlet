@@ -552,6 +552,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
             "Expected an active window scene for SwiftUI lifecycle testing"
         )
         let manager = store.meshNetworkManager
+        HeldPhotos.openGate(on: manager)   // the review presents held photos only where its seam is open
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             for color in [UIColor.systemTeal, .systemOrange, .systemPink] { manager.addPhoto(Self.swatch(color)) }
@@ -600,6 +601,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
             "Expected an active window scene for SwiftUI lifecycle testing"
         )
         let manager = store.meshNetworkManager
+        HeldPhotos.openGate(on: manager)   // the review presents held photos only where its seam is open
         let cover = ForeignCoverModel()
         let hosting = UIHostingController(rootView: ForeignCoverHost(store: store, cover: cover))
         var window: UIWindow? = UIWindow(windowScene: windowScene)
@@ -650,6 +652,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
             "Expected an active window scene for SwiftUI lifecycle testing"
         )
         let manager = store.meshNetworkManager
+        HeldPhotos.openGate(on: manager)   // the review presents held photos only where its seam is open
         let cover = ForeignCoverModel()
         let hosting = UIHostingController(rootView: ForeignCoverHost(store: store, cover: cover))
         var window: UIWindow? = UIWindow(windowScene: windowScene)
@@ -704,6 +707,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
             "Expected an active window scene for SwiftUI lifecycle testing"
         )
         let manager = store.meshNetworkManager
+        HeldPhotos.openGate(on: manager)   // the review presents held photos only where its seam is open
         let cover = ForeignCoverModel()
         let hosting = UIHostingController(rootView: ForeignCoverHost(store: store, cover: cover))
         var window: UIWindow? = UIWindow(windowScene: windowScene)
@@ -743,6 +747,72 @@ struct FriendsViewLastMemberReviewPresentationTests {
         }
         #expect(hosting.presentedViewController != nil && !holdsForeignCover(hosting.presentedViewController),
                 "then the review lands on its own, off the root sheet closing")
+    }
+
+    /// Fix round 1, U2-L-U2-R1: a photo review owed under a duress decoy does NOT present — its
+    /// tiles would be blank, every answer refused, the sheet not dismissable, and "N photos waiting"
+    /// is itself the tell — yet nothing is answered or deleted; it presents once the decoy ends. A
+    /// review that is up when a duress session starts is withdrawn, again answering nothing.
+    /// Red-checked: without the presenter's duress guard the first expectation fails.
+    @Test func aPhotoReviewNeverPresentsUnderADuressDecoyAndReturnsAfterIt() async throws {
+        let windowScene = try #require(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "Expected an active window scene for SwiftUI lifecycle testing"
+        )
+        let manager = store.meshNetworkManager
+        HeldPhotos.openGate(on: manager)
+        manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            for color in [UIColor.systemTeal, .systemOrange] { manager.addPhoto(Self.swatch(color)) }
+        }
+        let captured = Set(manager.sessionPhotos.map(\.id))
+        try #require(captured.count == 2)
+        manager.leaveSession()
+        Self.enterDuress(on: manager, store: store)
+
+        let hosting = UIHostingController(rootView: FriendsView(
+            store: store, activeSheet: .constant(nil), isTabBarCompact: .constant(false),
+            tabResetToken: .constant(0)
+        ))
+        var window: UIWindow? = UIWindow(windowScene: windowScene)
+        window?.frame = windowScene.screen.bounds
+        window?.rootViewController = hosting
+        window?.makeKeyAndVisible()
+        defer {
+            hosting.dismiss(animated: false)
+            window?.isHidden = true
+            window?.rootViewController = nil
+            window = nil
+        }
+        try await Task.sleep(for: .milliseconds(2_500))   // past the deferred check and a landing grace
+
+        #expect(hosting.presentedViewController == nil, "no photo review under the decoy")
+        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured, "and nothing answered or deleted")
+
+        store.duressSessionActive = false
+        HeldPhotos.openGate(on: manager)
+        // R2: bounded — at most 60 polls of 100 ms for the review to land once the decoy ends.
+        for _ in 0..<60 where hosting.presentedViewController == nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(hosting.presentedViewController != nil, "the decoy ending brings the review back")
+
+        Self.enterDuress(on: manager, store: store)
+        // R2: bounded — at most 60 polls of 100 ms for the withdrawal to land.
+        for _ in 0..<60 where hosting.presentedViewController != nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(hosting.presentedViewController == nil, "a duress session starting withdraws the review")
+        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured, "unanswered: every photo still held")
+    }
+
+    /// Puts `store` and `manager` into a duress session the way the app does: the store's flag (the
+    /// views read it) and the routed gate's duress leg (the decrypt seam reads it).
+    private static func enterDuress(on manager: MeshNetworkManager, store: FernletStore) {
+        store.duressSessionActive = true
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
+            _ = manager.applyRoutedAccessGate(HeldPhotoFixtures.duressGate, now: Date())
+        }
     }
 
     /// Renders the window (the presented sheet included) to a PNG in the evidence directory, when
@@ -885,15 +955,55 @@ struct LastMemberPhotoReviewSourceWallTests {
         for action in ["private func keepSelectedSessionPhotos() async", "private func discardAllSessionPhotos() async"] {
             let body = try #require(MeshRoutedSourceScan.bracedBody(after: action, in: source), "\(action) is gone")
             #expect(body.contains("finishReviewedPhotos("), "\(action) answers the batch's photo half")
-            #expect(body.contains("await finishPhotoReview(after: answer)"), "\(action) reads what its answer did")
+            #expect(body.contains("await finishPhotoReview(after: answer, leaving: leaving)"),
+                    "\(action) reads what its answer did")
+            // Fix round 1, U2-L-U2-R4: the mesh to leave is decided AT the answer, before any await.
+            let decided = try #require(body.range(of: "let leaving = meshToLeaveAfterTheAnswer()"),
+                                       "\(action) decides what to leave at the answer")
+            let answered = try #require(body.range(of: "finishReviewedPhotos("))
+            #expect(decided.lowerBound < answered.lowerBound, "\(action) decides before it answers or awaits")
         }
         let finish = try #require(MeshRoutedSourceScan.bracedBody(
-            after: "private func finishPhotoReview(after answer: SessionPhotoAnswer) async", in: source))
+            after: "private func finishPhotoReview(after answer: SessionPhotoAnswer, leaving: UUID?) async", in: source))
         #expect(finish.contains("guard answer.notApplied.isEmpty else"),
                 "an answer that did not apply keeps the sheet up (no hide-and-re-present loop)")
-        #expect(finish.contains("if manager.currentMesh != nil"),
-                "and a finished one leaves only a mesh that is still held (door 3)")
+        #expect(finish.contains("if let leaving, manager.currentMesh?.meshID == leaving, !manager.isSessionLive"),
+                "and a finished one leaves only the mesh its answer found held, and only while it is still not live")
+        #expect(!finish.contains("if manager.currentMesh != nil"),
+                "never whatever mesh is current after the export, the notice or the alert (U2-L-U2-R4)")
+        let decide = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func meshToLeaveAfterTheAnswer() -> UUID?", in: source))
+        #expect(decide.contains("guard !manager.isSessionLive else { return nil }"),
+                "an answer over a live session leaves nothing")
         #expect(source.contains(".onChange(of: scenePhase)"), "a review promoted in the dark presents on return")
+    }
+
+    /// Fix round 1, U2-L-U2-R1: the Friends surface never presents held photos under a duress decoy
+    /// or while the manager's decrypt seam is shut, withdraws a review that is up — unanswered — when
+    /// a duress session starts, re-checks on both edges, and never traps the person in a review whose
+    /// every answer is refused.
+    @Test func theFriendsReviewHidesUnderDuressAndIsNeverATrap() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
+        let present = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func presentDisconnectReviewIfNeeded()", in: source))
+        let gate = try #require(present.range(of: "guard !manager.hasOutstandingPhotoReview || heldPhotosMayBeReviewed else { return }"),
+                                "a review with photos waits for the seam and never presents under duress")
+        let snapshot = try #require(present.range(of: "reviewBatch = batch"))
+        #expect(gate.lowerBound < snapshot.lowerBound, "decided before anything is snapshotted or requested")
+        let may = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private var heldPhotosMayBeReviewed: Bool", in: source))
+        #expect(may.contains("!store.duressSessionActive") && may.contains("manager.heldPhotosCanBeShown"))
+        let duress = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func handleDuressSessionChange(active: Bool)", in: source))
+        #expect(duress.contains("disconnectReviewPresented = false") && duress.contains("reviewBatch = nil"),
+                "a duress session starting withdraws the review")
+        #expect(!duress.contains("finishReviewedPhotos") && !duress.contains("completeFriendReview"),
+                "without answering anything: hide, never delete")
+        #expect(duress.contains("scheduleReviewCheck()"), "and the decoy ending brings it back")
+        #expect(source.contains(".onChange(of: store.duressSessionActive)"))
+        #expect(source.contains(".onChange(of: manager.heldPhotosCanBeShown)"))
+        #expect(source.contains(".interactiveDismissDisabled(manager.wallCanTakeKeeps && reviewAnswerFailure == nil)"),
+                "an answer that did not apply leaves a swipe-down that answers nothing")
     }
 
     /// Fix round C-F2/L-F2: every trigger schedules, the check refuses over presentations this

@@ -19,6 +19,7 @@
 // Every cell that answers pushes an open routed gate first: the answer reads plaintext (to re-seal
 // kept photos under the wall key) and so runs only where the gate is open.
 
+import CryptoKit
 import Foundation
 import Testing
 import UIKit
@@ -99,6 +100,18 @@ enum HeldPhotoFixtures {
             try FileManager.default.moveItem(at: aside, to: index)
         }
     }
+}
+
+/// A pending-corpus key that can be taken away mid-test — the keychain read that fails after the
+/// photos were held (before the first unlock; a row that cannot be read right now).
+///
+/// Concurrency: main-actor test state; the manager reads it on the main actor.
+final class SwitchableMediaKeyProvider: PrivateMediaKeyProviding {
+    /// Whether ``mediaKey()`` answers.
+    var available = true
+    private let key = SymmetricKey(size: .bits256)
+
+    func mediaKey() -> SymmetricKey? { available ? key : nil }
 }
 
 // MARK: - The model
@@ -374,6 +387,79 @@ struct MeshHeldSessionPhotoTests {
         #expect(manager.sessionPhotos.first.flatMap { manager.reviewImageData(for: $0) } != nil)
         let exportable = manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) }.map(\.id)
         #expect(exportable == [ids[1]], "the camera-roll export set cannot include a photo that did not land")
+    }
+
+    /// **I22, fix round 1 (U2-C-U2-R1 / U2-L-U2-R3).** A ticked photo whose held file EXISTS but
+    /// cannot be read at the answer (an I/O error; a locked device's file protection) is not "gone":
+    /// the keep leaves it held and offered with `unavailable`, and once the file reads again the same
+    /// keep lands. Before the fix every nil read was `unreadable`: the photo was tombstoned and its
+    /// files swept — a photo the person chose to keep, deleted for good by a transient failure.
+    @Test func aKeptPhotoThatCannotBeReadRightNowStaysHeld() throws {
+        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        defer { manager.leaveMesh() }
+        HeldPhotos.openGate(on: manager)
+        LastMemberReviewFixtures.capture(2, on: manager)
+        let ids = manager.sessionPhotos.map(\.id)
+        try #require(ids.count == 2)
+        let file = HeldPhotoFixtures.pendingImageURL(store, localID: ids[0])
+        let aside = file.appendingPathExtension("aside")
+        try FileManager.default.moveItem(at: file, to: aside)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
+
+        let answer = manager.finishSessionPhotos(keeping: Set(ids), of: Set(ids))
+
+        #expect(answer.keptOnWall == [ids[1]], "the readable photo is kept")
+        #expect(answer.unreadable.isEmpty, "a read that may succeed later never classes a photo as lost")
+        #expect(answer.notApplied == [ids[0]] && answer.failure == .unavailable)
+        #expect(manager.sessionPhotos.map(\.id) == [ids[0]], "still offered")
+        #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == [ids[0]], "and still held")
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.moveItem(at: aside, to: file)
+        #expect(manager.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]],
+                "the retry keeps it once the file reads")
+    }
+
+    /// **I22, fix round 1.** No key at the answer (a keychain read that failed, before the first
+    /// unlock): the keep applies nothing and every ticked photo stays held for the retry.
+    @Test func aKeepWithNoKeyAtTheAnswerLeavesEveryPhotoHeld() throws {
+        let keys = SwitchableMediaKeyProvider()
+        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession(), heldPhotoKeys: keys)
+        HeldPhotos.openGate(on: manager)
+        let ids = [UUID(), UUID()]
+        for id in ids {
+            let key = MeshContentKey(senderFingerprint: "fp-keyless", contentID: id)
+            try #require(manager.holdSessionPhoto(
+                HeldPhotoFixtures.peerPhoto(id: id, origin: "fp-keyless"), key: key, live: false) == .held)
+        }
+        let batch = try #require(manager.pendingFriendReview)
+        keys.available = false
+
+        let answer = manager.finishReviewedPhotos(Set(ids), keeping: Set(ids), in: batch.id)
+
+        #expect(answer.unreadable.isEmpty && answer.keptOnWall.isEmpty)
+        #expect(answer.notApplied == Set(ids) && answer.failure == .unavailable)
+        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(ids), "every photo still offered")
+        keys.available = true
+        #expect(manager.finishReviewedPhotos(Set(ids), keeping: Set(ids), in: batch.id).keptOnWall == Set(ids),
+                "and kept once the key reads again")
+    }
+
+    /// **I22's boundary, fix round 1.** A ticked photo whose bytes are GONE — they do not open under
+    /// the present key — is the one case a keep removes: reported `unreadable`, never offered again.
+    @Test func aKeptPhotoWhoseBytesAreGoneIsRemovedAndReported() throws {
+        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        defer { manager.leaveMesh() }
+        HeldPhotos.openGate(on: manager)
+        LastMemberReviewFixtures.capture(2, on: manager)
+        let ids = manager.sessionPhotos.map(\.id)
+        try #require(ids.count == 2)
+        try Data("FMA2 corrupt".utf8).write(to: HeldPhotoFixtures.pendingImageURL(store, localID: ids[0]))
+
+        let answer = manager.finishSessionPhotos(keeping: Set(ids), of: Set(ids))
+
+        #expect(answer.unreadable == [ids[0]] && answer.keptOnWall == [ids[1]])
+        #expect(answer.notApplied.isEmpty && answer.failure == nil)
+        #expect(manager.sessionPhotos.isEmpty && HeldPhotos.persistedIndex(store)?.photos.isEmpty == true)
     }
 
     /// **I23.** Identity is origin + item id: an impostor reusing a genuine photo's item id is held
