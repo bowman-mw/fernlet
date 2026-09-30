@@ -1770,14 +1770,27 @@ frame.
 
 | Function | What It Does |
 | --- | --- |
-| `body` | Renders nearby recipient picker, notes toggle, diagnostics, fallback share link, and lifecycle hooks. |
+| `body` | An always-present `ZStack` switching between `pickerContent` and `RecipeShareConfirmationPanel`, carrying the lifecycle hooks, the outcome and scene-phase observers, and the success/error haptic. |
+| `pickerContent` | Renders nearby recipient picker, notes toggle, status line, diagnostics, fallback share link, and the toolbar Done. |
 | `searchingView` | Shows initial discovery progress UI. |
 | `noNearbyView` | Shows empty discovery UI and search-again action. |
 | `diagnosticDetailsCard` | Shows recent connection diagnostic events. |
 | `scheduleNoNearbyState()` | Delays empty-state display while discovery has time to find peers. |
-| `scheduleDismissAfterSendIfNeeded(_:)` | Auto-dismisses after successful send. |
+| `send(to:)` | Tells the latch which row a share began for, then calls `sendRecipeShare`. |
+| `receive(_:)` | Latches an outcome this sheet began into a confirmation, cross-fades to the panel (no motion under Reduce Motion), announces it, and after a success schedules the radio hand back. Replaces the old auto-dismiss. |
+| `retryShare()` | "Try again": re-sends to the same row with the current toggles if it is listed and not locked out, else returns to the picker. |
+| `scheduleRadioHandBack()` | 1.4 s after a successful send (`radioHandBackDelay`, today's post-send pairing lifetime), runs the gated stop-and-restart and gives up the radio, so an open panel never holds the pairing. Reads the scene through a live `@State` mirror, not the captured environment snapshot. |
+| `restartPassiveListening(sceneIsActive:)` | Stops the manager and restarts passive listening behind the opt-in + active-scene + lock gates (the go-dark-after-share fix), shared by the disappearance and the hand back. |
 | `outgoingPayload` | Returns payload with or without notes based on UI toggle. |
-| `statusText` | Maps manager send state to UI status text. |
+| `statusText` | Maps manager send state to the progress line (localized connecting/sending; nothing for `sent`, which the panel owns; the manager's English failure message verbatim, a recorded residual). |
+
+### `RecipeShareConfirmation.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `RecipeShareConfirmation.init(_:)` | Maps a `RecipeShareOutcome` to tone, headline, detail, announcement and `offersRetry`. Exhaustive per cause; "sent" never becomes "delivered". |
+| `RecipeShareOutcomeLatch.beganShare(to:)` / `receive(_:)` / `retry()` / `reset()` | Latches only the outcome of a share the sheet began, once, for the tapped row; retry clears a failure panel and returns the row; reset forgets everything (appear, disappear). |
+| `RecipeShareConfirmationPanel.body` | The confirmation panel: decorative glyph, header-trait heading, detail, and Try again / Done pills, scrolling at AX5. |
 
 ### `ProximityRecipeShareReviewSheet.swift`
 

@@ -32,6 +32,19 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// On disappear it also restarts passive listening behind the same opt-in + active-scene + lock
 /// gates ContentView enforces — the go-dark-after-share fix, since `stop()` would otherwise leave
 /// the device undiscoverable for inbound recipes until the next scene/tab/lock event.
+///
+/// **When a share ends, the sheet says so and stays.** It used to dismiss itself 1.4 s after a send,
+/// which looked exactly like a cancel, and a failure line cleared itself after 2.5 s with nothing
+/// saying to retry. Now the content cross-fades to a ``RecipeShareConfirmationPanel`` built from the
+/// manager's ``ProximityRecipeShareManager/lastShareOutcome`` (latched by
+/// ``RecipeShareOutcomeLatch``, so a share the user cancelled never raises one), announced to
+/// VoiceOver, with a success or error haptic. It stays until Done. What the panel may claim is
+/// "sent", never "delivered": see ``RecipeShareConfirmation``.
+///
+/// The radio's timeline after a successful send is unchanged: 1.4 s later (`radioHandBackDelay`,
+/// the same post-send pairing lifetime the auto-dismiss gave) the sheet runs the same gated
+/// stop-and-restart its disappearance would have, and gives up the radio, so a panel left open
+/// never holds the pairing (or keeps the other phone's radio closed to others).
 struct ProximityRecipeShareSheet: View {
     var draft: ProximityRecipeShareDraft
     var manager: ProximityRecipeShareManager
@@ -39,6 +52,7 @@ struct ProximityRecipeShareSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(FernletLockService.self) private var lockService
     @State private var includeNotes = true
     /// Whether the recipe's attached picture rides the share. Default ON (owner decision: the
@@ -47,57 +61,47 @@ struct ProximityRecipeShareSheet: View {
     @State private var includePhoto = true
     @State private var hasFinishedInitialSearch = false
     @State private var searchDelayTask: Task<Void, Never>?
-    @State private var dismissAfterSendTask: Task<Void, Never>?
+    /// Which share's outcome this sheet is waiting for, and the confirmation on screen.
+    @State private var latch = RecipeShareOutcomeLatch()
+    /// Whether this sheet still owns the recipe radio: true from appear until the post-send hand
+    /// back. Once false, the sheet's disappearance leaves the radio to ContentView's gates.
+    @State private var ownsRadio = true
+    /// The pending post-send hand back of the radio (see `scheduleRadioHandBack`).
+    @State private var handBackTask: Task<Void, Never>?
+    /// A mirror of `scenePhase` the hand-back task can read LIVE. The task runs 1.4 s after it is
+    /// created, and an environment value read through the view it captured is that moment's
+    /// snapshot, so restarting the radio on it could broadcast from a scene that has since gone
+    /// inactive, which is the privacy line every listener holds.
+    @State private var isSceneActive = true
+
+    /// How long the pairing is kept after a successful send before the radio goes back to passive
+    /// listening: the post-send pairing lifetime the old auto-dismiss gave. Not shorter: a text
+    /// recipe's frame is handed to QUIC when `sendPayload` returns, and an earlier `stop()` could
+    /// cancel the tunnel before it drains.
+    static let radioHandBackDelay: Duration = .seconds(1.4)
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        ScreenHeader(
-                            // The user's own recipe name — `verbatim:` so it is never treated as
-                            // a catalog key.
-                            title: Text(verbatim: draft.title),
-                            subtitle: Text("Share with a nearby Fernlet."),
-                            subtitleFirst: false,
-                            // The title is the user's own recipe name: three lines rather than the
-                            // default two, so "Grandma's slow-cooked white bean…" keeps its name at
-                            // accessibility sizes instead of being cut mid-word.
-                            titleLineLimit: 3
-                        )
-
-                        recipientCard
-
-                        if let statusText {
-                            Text(statusText)
-                                .font(.fernlet(.bubble))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
-                        }
-
-                        // Developer detail (2026-09-29): its lines name peers by fingerprint and quote
-                        // transport errors, so it is not part of sharing a recipe.
-                        if store.proximityDebugToolsEnabled, !manager.diagnosticEvents.isEmpty {
-                            diagnosticDetailsCard
-                        }
-
-                        externalShareCard
-                    }
-                    .padding(20)
-                    .padding(.bottom, 10)
+            // An always-present container, so the lifecycle hooks below stay on ONE view: on a bare
+            // `if`/`else` they would re-fire as the content switches, and `onDisappear` stops the radio.
+            ZStack {
+                if let confirmation = latch.confirmation {
+                    RecipeShareConfirmationPanel(
+                        confirmation: confirmation,
+                        onDone: { dismiss() },
+                        onRetry: retryShare
+                    )
+                    .transition(reduceMotion ? .identity : .opacity)
+                } else {
+                    pickerContent
+                        .transition(reduceMotion ? .identity : .opacity)
                 }
             }
             .background(Color.parchment)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
             .onAppear { handleAppear() }
             .onDisappear { handleDisappear() }
-            .onChange(of: manager.sendState) { _, state in
-                scheduleDismissAfterSendIfNeeded(state)
-            }
+            .onChange(of: manager.lastShareOutcome) { _, outcome in receive(outcome) }
+            .onChange(of: scenePhase) { _, phase in isSceneActive = phase == .active }
             .onChange(of: manager.nearbyRecipients) { _, recipients in
                 if recipients.isEmpty {
                     scheduleNoNearbyState()
@@ -105,6 +109,51 @@ struct ProximityRecipeShareSheet: View {
                     searchDelayTask?.cancel()
                     hasFinishedInitialSearch = false
                 }
+            }
+            .sensoryFeedback(trigger: latch.confirmation) { _, shown in
+                shown.map { $0.tone == .sent ? .success : .error }
+            }
+        }
+    }
+
+    /// The picker: the recipe, the nearby card, the status line, diagnostics and the "Share outside
+    /// Fernlet" link. Carries the toolbar Done, so there is only one Done while the panel shows.
+    private var pickerContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                ScreenHeader(
+                    // The user's own recipe name — `verbatim:` so it is never treated as
+                    // a catalog key.
+                    title: Text(verbatim: draft.title),
+                    subtitle: Text("Share with a nearby Fernlet."),
+                    subtitleFirst: false,
+                    // The title is the user's own recipe name: three lines rather than the
+                    // default two, so "Grandma's slow-cooked white bean…" keeps its name at
+                    // accessibility sizes instead of being cut mid-word.
+                    titleLineLimit: 3
+                )
+
+                recipientCard
+
+                if let statusText {
+                    statusText
+                        .font(.fernlet(.bubble))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+
+                if !manager.diagnosticEvents.isEmpty {
+                    diagnosticDetailsCard
+                }
+
+                externalShareCard
+            }
+            .padding(20)
+            .padding(.bottom, 10)
+        }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Done") { dismiss() }
             }
         }
     }
@@ -177,7 +226,7 @@ struct ProximityRecipeShareSheet: View {
     /// One tappable recipient row; tapping sends the payload to that device.
     private func recipientRow(_ recipient: ProximityRecipeShareRecipient, isLockedOut: Bool) -> some View {
         Button {
-            manager.sendRecipeShare(outgoingPayload, to: recipient)
+            send(to: recipient)
         } label: {
             HStack(spacing: 12) {
                 // T1-8: both glyphs are decorative next to text that already names the
@@ -224,31 +273,98 @@ struct ProximityRecipeShareSheet: View {
 
     /// Starts the recipe radio and arms the "nothing nearby" timeout.
     private func handleAppear() {
+        latch.reset()
+        ownsRadio = true
+        isSceneActive = scenePhase == .active
         manager.start()
         scheduleNoNearbyState()
     }
 
     /// Tears the sheet's work down and — the go-dark-after-share fix — restarts passive listening
-    /// behind the same gates ContentView enforces.
+    /// behind the same gates ContentView enforces, unless the post-send hand back already did.
+    ///
+    /// The latch is reset FIRST: `stop()` publishes `interrupted` for a share still in flight, and a
+    /// share the user cancelled by closing the sheet must raise nothing (not even an announcement
+    /// from a sheet on its way out).
     private func handleDisappear() {
         searchDelayTask?.cancel()
-        dismissAfterSendTask?.cancel()
+        handBackTask?.cancel()
+        latch.reset()
+        guard ownsRadio else { return }
+        restartPassiveListening(sceneIsActive: scenePhase == .active)
+    }
+
+    /// Stops the sheet's use of the radio and restarts passive listening behind ContentView's gates.
+    ///
+    /// Go-dark-after-share fix (mesh redesign Phase 3b): stop() tears the recipe radio down, and
+    /// historically nothing restarted passive listening until the next tab/scene/lock event — after
+    /// one share the device silently stopped being discoverable for inbound recipes. Restart it here
+    /// behind the same opt-in + scene + lock gates ContentView enforces. The scene check is NOT
+    /// implicit: the post-send hand back (or a dismissal) can race a backgrounding, and restarting
+    /// there would broadcast while backgrounded — the privacy line every listener holds. No unit
+    /// seam reaches this view closure; ContentView's updateRecipeShareListener chain remains the
+    /// authoritative gate — any later scene/tab/lock/opt-out change re-evaluates and stops the
+    /// manager again (an inactive-scene stop is then restarted by the next scene-active event, not
+    /// left dark). Tab is implicitly satisfied (the sheet only presents over recipe-share tabs).
+    private func restartPassiveListening(sceneIsActive: Bool) {
         manager.stop()
-        // Go-dark-after-share fix (mesh redesign Phase 3b): stop() tears the recipe
-        // radio down, and historically nothing restarted passive listening until the
-        // next tab/scene/lock event — after one share the device silently stopped
-        // being discoverable for inbound recipes. Restart it here behind the same
-        // opt-in + scene + lock gates ContentView enforces. The scene check is NOT
-        // implicit: the post-send auto-dismiss can race a backgrounding (onDisappear
-        // then fires with the scene inactive), and restarting there would broadcast
-        // while backgrounded — the privacy line every listener holds. No unit seam
-        // reaches this view closure; ContentView's updateRecipeShareListener chain
-        // remains the authoritative gate — any later scene/tab/lock/opt-out change
-        // re-evaluates and stops the manager again (an inactive-scene dismissal is
-        // then restarted by the next scene-active event, not left dark). Tab is
-        // implicitly satisfied (the sheet only presents over recipe-share tabs).
-        if scenePhase == .active, store.settings.allowNearbyRecipeShares, isUnlockedForListening {
-            manager.start()
+        guard sceneIsActive, store.settings.allowNearbyRecipeShares, isUnlockedForListening else { return }
+        manager.start()
+    }
+
+    /// Begins a share to `recipient`, telling the latch first so its outcome becomes a panel.
+    private func send(to recipient: ProximityRecipeShareRecipient) {
+        latch.beganShare(to: recipient.id)
+        manager.sendRecipeShare(outgoingPayload, to: recipient)
+    }
+
+    /// A share ended: latch it (only if this sheet began it), cross-fade to the panel, speak it,
+    /// and, after a success, schedule the radio hand back.
+    private func receive(_ outcome: RecipeShareOutcome?) {
+        guard let outcome else { return }
+        var next = latch
+        guard let confirmation = next.receive(outcome) else { return }
+        withAnimation(reduceMotion ? nil : FernletMotion.ui) {
+            latch = next
+        }
+        // The announcement is the one spoken signal; focus is deliberately not moved as well,
+        // which would speak the panel twice.
+        FernletAnnouncer.system.announce(confirmation.announcementKind, confirmation.announcement)
+        if confirmation.tone == .sent {
+            scheduleRadioHandBack()
+        }
+    }
+
+    /// "Try again": re-send to the same row with the current toggles if it is still listed and not
+    /// locked out; otherwise go back to the picker, whose searching / "Search again" states are the
+    /// retry surface.
+    private func retryShare() {
+        var next = latch
+        guard let recipientID = next.retry() else { return }
+        withAnimation(reduceMotion ? nil : FernletMotion.ui) {
+            latch = next
+        }
+        guard let row = manager.nearbyRecipients.first(where: { $0.id == recipientID }),
+              manager.engagedRecipientID == nil || manager.engagedRecipientID == row.id else { return }
+        send(to: row)
+    }
+
+    /// After a successful send, gives the radio back to passive listening once the pairing's
+    /// post-send lifetime has passed, while the panel stays until Done.
+    private func scheduleRadioHandBack() {
+        handBackTask?.cancel()
+        guard ownsRadio else { return }
+        handBackTask = Task { @MainActor in
+            // A cancelled wait (the sheet went away first) must not hand back: `handleDisappear`
+            // has already run the same stop-and-restart.
+            do {
+                try await Task.sleep(for: Self.radioHandBackDelay)
+            } catch {
+                return
+            }
+            guard ownsRadio else { return }
+            ownsRadio = false
+            restartPassiveListening(sceneIsActive: isSceneActive)
         }
     }
 
@@ -334,39 +450,6 @@ struct ProximityRecipeShareSheet: View {
         }
     }
 
-    /// Speaks the send confirmation, then closes the sheet after a beat.
-    ///
-    /// This is the app's shortest and most destructive auto-dismissal: 1.4 s after a successful
-    /// send the ENTIRE SHEET goes away, taking the "Sent to …" line with it. A VoiceOver user could
-    /// not reach that line in 1.4 s, so the only evidence their recipe went anywhere was a surface
-    /// vanishing — which is also what a cancel looks like. Two changes, and they need each other:
-    /// the outcome is ANNOUNCED (so it does not depend on the cursor being in the right place), and
-    /// the window stretches for an assistive technology.
-    ///
-    /// **Deliberately NOT `assistive: nil`.** "Never auto-dismiss" is normally the right answer when
-    /// dismissal destroys a surface, but this sheet OWNS the recipe radio — `handleAppear` starts
-    /// the manager and `handleDisappear` stops it — so a sheet that stays open keeps the device
-    /// advertising. Broadcasting indefinitely because a screen reader is on would trade an
-    /// accessibility gap for a privacy one. The stretched action window closes it either way.
-    private func scheduleDismissAfterSendIfNeeded(_ state: ProximityRecipeShareManager.SendState) {
-        dismissAfterSendTask?.cancel()
-        guard case .sent(let recipientName) = state else { return }
-        let shownName = PeerNameDisplay.shown(recipientName, fingerprint: nil)
-        FernletAnnouncer.system.announce(.success, LocalizedStringResource("Sent to \(shownName)."))
-        let window = FernletDismissalWindow.system.window(
-            standard: .seconds(1.4),
-            assistive: FernletDismissalWindow.assistiveActionWindow)
-        dismissAfterSendTask = Task { @MainActor in
-            // Same shape as `scheduleNoNearbyState`: a cancelled wait must not dismiss the sheet.
-            do {
-                try await Task.sleep(for: window)
-            } catch {
-                return
-            }
-            dismiss()
-        }
-    }
-
     private var isUnlockedForListening: Bool {
         switch lockService.state {
         case .notConfigured, .unlocked: true
@@ -380,21 +463,23 @@ struct ProximityRecipeShareSheet: View {
         return payload
     }
 
-    /// The connect/send/sent line. Names pass through `PeerNameDisplay` with no fingerprint to
-    /// hand: the recipient row files the fingerprint as the name for a peer this radio never
-    /// discovered, and the helper's fingerprint-shape rule catches exactly that.
-    private var statusText: String? {
+    /// The progress line under the nearby card while a share is under way.
+    ///
+    /// `sent` shows nothing: the confirmation panel owns that moment. `failed` renders the manager's
+    /// message VERBATIM, and it is English — a pre-existing residual, since ProximityKit composes it.
+    /// With the panel carrying every share failure, the line now shows it only for the search
+    /// refusal ("Search again" while paired), and for the moments after "Try again" returns to the
+    /// list, before the 2.5 s auto-clear.
+    private var statusText: Text? {
         switch manager.sendState {
-        case .idle:
+        case .idle, .sent:
             nil
         case .connecting(let recipientName):
-            "Connecting to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))..."
+            Text("Connecting to \(recipientName)…")
         case .sending(let recipientName):
-            "Sending to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))..."
-        case .sent(let recipientName):
-            "Sent to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))."
+            Text("Sending to \(recipientName)…")
         case .failed(let message):
-            message
+            Text(verbatim: message)
         }
     }
 }

@@ -210,6 +210,9 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``SessionChatPanel``
 - ``VerifyQRDisplaySheet``
 - ``ProximityRecipeShareSheet``
+- ``RecipeShareConfirmation``
+- ``RecipeShareOutcomeLatch``
+- ``RecipeShareConfirmationPanel``
 - ``ProximityRecipeShareReviewSheet``
 - ``ClothingShareCodec``
 - ``FriendShopView``
