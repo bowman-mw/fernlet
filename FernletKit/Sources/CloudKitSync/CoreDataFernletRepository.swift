@@ -72,6 +72,12 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// only the resident copy is refused), so the cache's memory use has a named ceiling instead of
     /// following the store, which is itself fed by CloudKit sync.
     private var cachedAllDays: [String: FernletDay]?
+    /// Whether ``cachedAllDays`` was installed from a COMPLETE read — every day row fetched and decoded
+    /// (review B3 fix round 1). A memo of a read that was not (a failed fetch memoized as an empty
+    /// history, a day row that would not decode) still serves ``loadAllDays()`` as it always did, but
+    /// is never served by ``loadAllDaysIfComplete()``, which reads again instead. Patching the memo in
+    /// place leaves this as it was; every reset of the memo makes it irrelevant until the next install.
+    private var cachedAllDaysIsComplete = false
 
     /// Ceiling on the day-history memo — roughly twenty years of daily rows. Above it the memo is not
     /// installed (and the skip is audit-logged) rather than holding an unbounded decoded history.
@@ -481,8 +487,27 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// memoizing the result only once migration has completed and the store is readable.
     public func loadAllDays() -> [String: FernletDay] {
         if let cached = cachedAllDays { return cached }
+        return readAllDays().days
+    }
+
+    /// The entire day history like ``loadAllDays()``, or nil when it cannot be trusted to be complete:
+    /// read-only recovery (the blob's fetch or decode failed), a day-row fetch that failed, or a day row
+    /// that would not decode. A memo installed from an incomplete read is dropped and read again — a
+    /// failed fetch must not keep answering "no days" to the one caller that asked to be told.
+    public func loadAllDaysIfComplete() -> [String: FernletDay]? {
+        if let cached = cachedAllDays, cachedAllDaysIsComplete { return isPersistenceBlocked ? nil : cached }
+        cachedAllDays = nil
+        let read = readAllDays()
+        return read.isComplete && !isPersistenceBlocked ? read.days : nil
+    }
+
+    /// The uncached read behind ``loadAllDays()`` and ``loadAllDaysIfComplete()``: the rows (with
+    /// whether every one was fetched and decoded), the blob-only days overlaid, and the memo installed
+    /// under the rules below, with its completeness.
+    private func readAllDays() -> (days: [String: FernletDay], isComplete: Bool) {
         let database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))  // ensure decoded + migration attempted
-        var all = dayRecordRepository.loadAll()
+        let rows = dayRecordRepository.loadAllReportingCompleteness()
+        var all = rows.days
         // Blob fallback (safety net for the not-fully-migrated state): if migration hasn't completed (a
         // failed batch leaves `daysMigratedToRows` false), a day may live ONLY in the blob with no row yet.
         // Overlay those blob-only days so history doesn't read short — mirroring loadDay/snapshot(from:).
@@ -499,6 +524,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         if cachedDatabase?.daysMigratedToRows == true, !isPersistenceBlocked {
             if all.count <= Self.maxMemoizedDayRows {
                 cachedAllDays = all
+                cachedAllDaysIsComplete = rows.isComplete
             } else {
                 FernletAuditLog.log("coredata.dayMemo.skipped", context: [
                     "days": "\(all.count)",
@@ -506,7 +532,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
                 ])
             }
         }
-        return all
+        return (all, rows.isComplete && !isPersistenceBlocked)
     }
 
     /// Reads the Tier-2 memory records from the device-local sidecar — never the mirrored blob, which

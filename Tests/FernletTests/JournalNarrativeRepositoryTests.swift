@@ -586,4 +586,59 @@ struct JournalNarrativeRepositoryTests {
         }
         #expect(try repo.allIDs() == [underDevice.id])
     }
+
+    /// Review B3 fix round 1 (R3 / D-B3-4): one entry changed on both iPhones, then "Restore it here"
+    /// on each in turn — the Q9 back-and-forth — settles at exactly TWO entries on each iPhone: both
+    /// versions, neither doubled. The fork phone A adds for B's words keeps the stamps of B's entry, so
+    /// when it comes back to B as an absent id it is recognised as B's own entry (the same words, the
+    /// same creation stamp), not inserted beside it. Further rounds change nothing.
+    @Test func restoreItHereOnBothIPhonesSettlesAtTwoEntriesEach() throws {
+        let phoneA = makeRepository()
+        let phoneB = makeRepository()
+        let keyA = makeKey()
+        let keyB = makeKey()
+        // The same id on both (the same-id typing path with sync on): each iPhone's own words and stamps.
+        let id = UUID()
+        try phoneA.insert(narrative("A's words", entryDate: Date(timeIntervalSince1970: 100), id: id), contentKey: keyA)
+        try phoneB.insert(narrative("B's words", entryDate: Date(timeIntervalSince1970: 200), id: id), contentKey: keyB)
+        func backup(_ repo: JournalNarrativeRepository, _ key: SymmetricKey) throws -> [JournalNarrative] {
+            try repo.backupRecords(ids: try repo.allIDs(), hubKey: key, deviceKey: .absent).records
+        }
+        func texts(_ repo: JournalNarrativeRepository, _ key: SymmetricKey) throws -> [String] {
+            try backup(repo, key).map(\.text).sorted()
+        }
+
+        _ = try phoneA.upsertMerged(try backup(phoneB, keyB), hubKey: keyA, deviceKey: .absent)
+        #expect(try texts(phoneA, keyA) == ["A's words", "B's words"], "A keeps its own and adds B's")
+        let atB = try phoneB.upsertMerged(try backup(phoneA, keyA), hubKey: keyB, deviceKey: .absent)
+        #expect(try texts(phoneB, keyB) == ["A's words", "B's words"], "B's own entry is not doubled")
+        #expect(atB.inserted == 0 && atB.forked == 1 && atB.unchanged == 1)
+        #expect(atB.followUpIDs.contains(id), "B's own entry stands for the copy that came back")
+
+        for _ in 0..<2 {
+            let again = try phoneA.upsertMerged(try backup(phoneB, keyB), hubKey: keyA, deviceKey: .absent)
+            #expect(!again.changedAnything)
+            #expect(!(try phoneB.upsertMerged(try backup(phoneA, keyA), hubKey: keyB, deviceKey: .absent)).changedAnything)
+        }
+        #expect(try phoneA.narrativeCount() == 2 && phoneB.narrativeCount() == 2)
+    }
+
+    /// The copy rule never swallows a real entry: an absent backup entry with the same words as a local
+    /// one on its day, but written at another moment (another creation stamp), is a different entry and
+    /// is inserted. One with the same words AND stamp — what the other iPhone kept of this iPhone's
+    /// entry after deleting its own version of the pair — stands as that entry and adds nothing.
+    @Test func anAbsentEntryWithTheSameWordsWrittenAtAnotherMomentIsKept() throws {
+        let repo = makeRepository()
+        let hub = makeKey()
+        let local = narrative("Feeling tired", entryDate: Date(timeIntervalSince1970: 100))
+        try repo.insert(local, contentKey: hub)
+        let laterSameWords = narrative("Feeling tired", entryDate: Date(timeIntervalSince1970: 900))
+        var copyOfLocal = local
+        copyOfLocal.id = UUID()
+
+        let result = try repo.upsertMerged([laterSameWords, copyOfLocal], hubKey: hub, deviceKey: .absent)
+        #expect(result.inserted == 1 && result.unchanged == 1)
+        #expect(Set(try repo.allIDs()) == [local.id, laterSameWords.id], "the later entry kept, the copy recognised")
+        #expect(Set(result.followUpIDs) == [local.id, laterSameWords.id])
+    }
 }

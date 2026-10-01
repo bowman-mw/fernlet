@@ -15,8 +15,10 @@ struct SealedBackupV2RestoreResult {
     /// Whether the set was merged and accepted (R10): the export follows, skipping spacing.
     var accepted = false
 
-    /// Whether the pass goes on to its export phase: not after a gate stop.
-    var continueToExport: Bool { gateFailure == nil && !stopped }
+    /// Whether the pass goes on to its export phase: not after a gate stop, and not after a set only a
+    /// newer Fernlet reads — the export could only hold behind E1 or name that same set as another
+    /// iPhone's, burying the one thing the user can act on: update Fernlet (review B3 fix round 1).
+    var continueToExport: Bool { gateFailure == nil && !stopped && outcome != .needsNewerFernlet }
 }
 
 /// A head the restore or export opened (§5.5): its record, plaintext and stamp.
@@ -86,7 +88,7 @@ extension SealedBackupV2Engine {
         guard !host.sealedBackupRestoreAwaitsOwner else { throw SealedBackupV2Stop.gate(.heldForOwner) }
         guard let headRecord = fetched else { return noHead(payload, trigger: trigger) }
         guard escrowReady else { return recordRestore(.deferredKeyNotSynced, payload, trigger: trigger) }
-        let head = try adapter.withOpenSeam { try openHead(headRecord, service: service) }
+        let head = try adapter.withOpenSeam { try Self.decodingAuthenticated { try openHead(headRecord, service: service) } }
         if case .restoreHere(let chosen, _) = trigger, chosen != head.stamp {
             return heldAgain(payload, stamp: head.stamp)
         }
@@ -95,7 +97,9 @@ extension SealedBackupV2Engine {
             payloadType: payload, chunkCount: headRecord.chunkCount, setTag: head.header?.set
         )
         try ensureGate(adapter, epoch: epoch)
-        let records = try adapter.withOpenSeam { try openAndVerify(adapter, head: head, suffix: suffix, service: service) }
+        let records = try adapter.withOpenSeam {
+            try Self.decodingAuthenticated { try openAndVerify(adapter, head: head, suffix: suffix, service: service) }
+        }
         try ensureGate(adapter, epoch: epoch)
         guard let key = liveHubKey else { throw SealedBackupV2Stop.gate(.hubClosed) }
         let merged = try adapter.restoreMerging(records, hubKey: key)
@@ -198,18 +202,37 @@ extension SealedBackupV2Engine {
             lastRestoreFailure[payload] = now()
         }
         if trigger.isExplicit, !outcome.isRetryable { consumeIntent(payload) }
+        // A set only a newer Fernlet reads is named as such, whatever asked for it — never "will be
+        // added the next time you open Private", which this build can never keep (no export follows).
+        if outcome == .needsNewerFernlet { setStatus(.needsNewerFernlet, payload) }
         // A "Restore it here" that ended terminally returns to the held state with both choices
-        // (R1-BR-4): the user can still replace the set, or restore it anyway.
-        if case .restoreHere(let stamp, _) = trigger, !landed, !outcome.isRetryable {
+        // (R1-BR-4): the user can still replace the set, or restore it anyway. One that found a set
+        // only a newer Fernlet reads says so instead (the next visit's E2 names the held set again).
+        if case .restoreHere(let stamp, _) = trigger, !landed, !outcome.isRetryable, outcome != .needsNewerFernlet {
             setStatus(.heldByAnotherDevice(stamp), payload)
         }
         return SealedBackupV2RestoreResult(outcome: outcome)
     }
 
-    /// Whether an ambient restore of `payload` must wait (§4.5): once per hub session, and 15 minutes
-    /// after a failed one.
+    /// Whether an ambient restore of `payload` must wait (§4.5): once per hub session, 15 minutes
+    /// after a failed one — and for the rest of this process after one that found a set only a newer
+    /// Fernlet can read (it would download and decrypt the whole set again to fail the same way; an
+    /// update relaunches, and an explicit choice still runs).
     private func restoreIsSpaced(_ payload: SealedBackupPayloadType) -> Bool {
         restoredThisSession.contains(payload) || isBackingOff(since: lastRestoreFailure[payload])
+            || lastRestoreOutcome[payload] == .needsNewerFernlet
+    }
+
+    /// Runs a step that decodes an AUTHENTICATED set's plaintext (the head's envelope, every chunk's
+    /// records): a `DecodingError` there can only be a shape a newer Fernlet wrote, so it becomes
+    /// ``SealedBackupV2FormatError/unreadableRecords`` — kept apart from any error a store's own merge
+    /// throws later, which stays a retry.
+    static func decodingAuthenticated<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try body()
+        } catch is DecodingError {
+            throw SealedBackupV2FormatError.unreadableRecords
+        }
     }
 
     /// A restore stopped at a gate: nothing written, nothing recorded (a hidden surface drops its
@@ -235,10 +258,16 @@ extension SealedBackupV2Engine {
 
     /// Maps a restore error to its outcome (§5.6): a key mismatch is a retryable wait for the key
     /// (`.deferredKeyNotSynced`, never the terminal `.notRecognized`), a record of ours that will not
-    /// authenticate is `.notRecognized`, a set below the floor is `.rolledBack`; everything else —
-    /// a transport error, a set that does not verify, an envelope from a newer build — retries.
+    /// authenticate is `.notRecognized`, a set below the floor is `.rolledBack`, and a set that
+    /// authenticated but whose envelope or records this build cannot read is `.needsNewerFernlet` —
+    /// the restore's half of §5.5's "never overwritten automatically" (review B3 fix round 1);
+    /// everything else — a transport error, a set whose chunks do not belong together — retries.
     static func classifyRestoreFailure(_ error: Error, payload: SealedBackupPayloadType) -> SealedBackupRestoreOutcome {
         switch error {
+        case SealedBackupV2FormatError.unsupportedVersion, SealedBackupV2FormatError.malformedEnvelope,
+             SealedBackupV2FormatError.unreadableRecords:
+            FernletAuditLog.log("sealedBackup.restoreNeedsNewerFernlet", context: ["payload": payload.rawValue])
+            return .needsNewerFernlet
         case SealedBackupError.keyAgreementIdentityMismatch, IdentityError.notProvisioned:
             FernletAuditLog.log("sealedBackup.restoreDeferredKeyNotSynced", context: ["payload": payload.rawValue])
             return .deferredKeyNotSynced

@@ -51,7 +51,8 @@ struct SealedBackupAcceptedHead: Equatable, Sendable {
 ///   absent key is seeded ONCE from the payload's legacy divergence latch (the period's is
 ///   `fernlet.menstrualNarrative.everStored`, the intimate logs' `fernlet.intimacyLog.everStored`, the
 ///   journal's `fernlet.journalNarrative.everStored`) and written, so a later write can never seed it
-///   again.
+///   again. The app's seed (`FernletStore.sealedBackupMarkerSeed(_:)`) answers unresolved instead
+///   while the app-lock reset's owner hold still keeps that payload's pre-reset copy.
 ///   Clearing writes `false`, never removes the key.
 /// - **Accepted head** `"<acceptor>:<writer>:<generation>:<salt8>"`. `acceptor` is this install's
 ///   writer tag when it was recorded; the value reads as ABSENT when the acceptor is not this

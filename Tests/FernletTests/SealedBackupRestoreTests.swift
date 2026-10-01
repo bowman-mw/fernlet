@@ -109,6 +109,40 @@ struct SealedBackupRestoreTests {
         #expect(!store.sealedBackupBookkeeping.seedRestoreMarkerIfAbsent(.journalNarratives), "seeded once, never again")
     }
 
+    /// Review B3 fix round 1 (D-B3-2): an install upgrading with an app-lock reset's owner hold that was
+    /// RELEASED but still keeps its pre-reset journal copy — the earlier empty-store-only restore was
+    /// refused because entries were written since the reset, and those entries set the journal latch —
+    /// seeds its journal marker UNRESOLVED, not from the latch. A marker seeded resolved would never
+    /// run the restore that pulls the copy back and settles the hold, so the hold would keep every
+    /// journal export waiting forever while Privacy & Data promised a restore. A payload whose copy the
+    /// hold does not keep still seeds from its latch.
+    @MainActor
+    @Test func aPreResetCopyTheOwnerHoldStillKeepsSeedsItsMarkerUnresolved() throws {
+        let (store, _, narratives) = makeTestStoreWithRepositories()
+        let entryDate = Date(timeIntervalSince1970: 1_780_000_000)
+        try narratives.insert(JournalNarrative(id: UUID(), dayKey: "2026-06-01", tag: .good, entryDate: entryDate,
+                                               text: "written since the reset", emotions: [], createdAt: entryDate, updatedAt: entryDate),
+                              contentKey: SymmetricKey(size: .bits256))
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: isolatedDefaults())
+        store.sealedBackupRestoreHold.hold(keepingCopiesFrom: StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true))
+        store.sealedBackupRestoreHold.release()
+        #expect(store.sealedBackupRestoreHold.keepsPreResetCopy(of: .journalNarratives), "released, the copy still kept")
+        #expect(store.sealedBackupLegacyLatch(.journalNarratives), "the entries written since the reset set the latch")
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(
+            defaults: isolatedDefaults(),
+            legacyLatch: { [unowned store] payload in store.sealedBackupMarkerSeed(payload) }
+        )
+        store.sealedBackupPreferencesProvider = { StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true) }
+
+        store.seedSealedBackupBookkeepingOnce()
+        #expect(!store.sealedBackupBookkeeping.restoreResolvedIsSet(.journalNarratives),
+                "unresolved: the next settle merges the pre-reset copy and settles the hold")
+        #expect(store.sealedBackupBookkeeping.seedRestoreMarkerIfAbsent(.journalNarratives) == false, "seeded once")
+
+        store.sealedBackupRestoreHold.forgetPreResetCopy(of: .journalNarratives)
+        #expect(store.sealedBackupMarkerSeed(.journalNarratives), "with no copy kept, the seed is the latch again")
+    }
+
     // MARK: - The retired Tier-2 (sensitive notes) payload is never written back
 
     /// Owner decision 2026-09-23: the sensitive-notes payload — the Tier-2 memories — is retired. Even

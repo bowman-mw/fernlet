@@ -663,7 +663,7 @@ final class OwnPhotoBackupCoordinator {
             if restored.examined { result.examined = true }
             observeManifestMinimum(restored.observedMinimum, corpus: corpus, into: &result)
             switch result.outcome {
-            case .notRecognized, .rolledBack, .deferredKeyNotSynced, .deferredTransient, .deferredLocked:
+            case .notRecognized, .rolledBack, .needsNewerFernlet, .deferredKeyNotSynced, .deferredTransient, .deferredLocked:
                 // Nothing here is fixable by uploading, and a corpus we could not fully restore must
                 // not have its (possibly larger) cloud set rewritten from this device's partial one.
                 // Leaving the cloud copy alone is the whole point of a retryable restore failure.

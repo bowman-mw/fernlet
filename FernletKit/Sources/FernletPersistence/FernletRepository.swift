@@ -43,6 +43,13 @@ public protocol FernletRepository {
     /// Every persisted day keyed by date key — the authoritative, uncapped history the store
     /// rehydrates on launch.
     func loadAllDays() -> [String: FernletDay]
+    /// Every persisted day like ``loadAllDays()`` — or nil when this read cannot be trusted to be
+    /// COMPLETE: the store is in read-only recovery, a day-row fetch failed, or a stored day would not
+    /// decode. ``loadAllDays()`` answers each of those as missing days, which suits a screen and is
+    /// wrong for a caller that reads an absent day as "nothing here": the journal Sealed backup's
+    /// snapshot would publish a truncated set over the full one (journal and intimacy Sealed backup v2
+    /// design 2026-09-30, §7.1, review B3 fix round 1). Fail closed — nil, never a partial history.
+    func loadAllDaysIfComplete() -> [String: FernletDay]?
     /// Loads the persisted Tier-2 behavioral memory records that seed the inference base.
     ///
     /// Tier-2 is DEVICE-LOCAL (owner decision 2026-09-23): conformers keep it out of the snapshot blob
@@ -71,4 +78,10 @@ public extension FernletRepository {
     // `purgeAllPersistedData` would report a complete wipe of data it never touched, in the one
     // flow where a false success is directly user-visible.
     func purgeAllPersistedData() -> Bool { true }
+
+    // INVARIANT for the default below, as for `purgeAllPersistedData`: a conformer with ANY persistent
+    // state MUST override it. The default calls every ``loadAllDays()`` complete, which is true only for
+    // a double whose read cannot fail; a real store that inherited it would hand a truncated history to
+    // the one caller that asked to be told.
+    func loadAllDaysIfComplete() -> [String: FernletDay]? { loadAllDays() }
 }

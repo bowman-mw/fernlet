@@ -107,9 +107,13 @@ final class FakeSealedBackupHost: SealedBackupContext {
     var failsSkeletonWrites = false
     /// Journal entry ids referenced beyond the days and `previousJournals` (an in-memory today).
     var extraReferencedJournalIDs: Set<UUID> = []
+    /// Whether the day store's read is NOT complete (read-only recovery, a failed fetch, a day that
+    /// would not decode) — the referenced ids are then unknown.
+    var dayStoreReadIncomplete = false
     /// Mirrors `FernletStore.sealedBackupJournalReferencedIDs`: every day's journals, `previousJournals`
-    /// and the extra ids.
-    var sealedBackupJournalReferencedIDs: Set<UUID> {
+    /// and the extra ids — nil while ``dayStoreReadIncomplete``.
+    var sealedBackupJournalReferencedIDs: Set<UUID>? {
+        guard !dayStoreReadIncomplete else { return nil }
         var ids = extraReferencedJournalIDs.union(previousJournals.map(\.id))
         for day in days.values { ids.formUnion(day.journals.map(\.id)) }
         return ids

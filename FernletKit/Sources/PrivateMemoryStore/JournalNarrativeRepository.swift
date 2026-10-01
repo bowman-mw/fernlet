@@ -860,7 +860,9 @@ extension JournalNarrativeRepository {
     /// save that is rolled back on any throw. The batch is first reduced by id (the later `updatedAt`
     /// wins; a tie keeps the first). Then, per id, against the local rows (opened under the hub key,
     /// else the device key):
-    /// - absent → inserted with the backup's own `createdAt` / `updatedAt`;
+    /// - absent → inserted with the backup's own `createdAt` / `updatedAt` — unless an entry on its day
+    ///   already IS it (the same words and the same creation stamp: the other iPhone's fork of this
+    ///   iPhone's own entry, coming back), which then stands for it;
     /// - opens with the same text and emotions → nothing (a tag or date difference alone leaves the
     ///   local entry as it is);
     /// - opens with a DIFFERENT text or emotions → the local entry is KEPT, and the backup's copy is
@@ -933,8 +935,10 @@ extension JournalNarrativeRepository {
     }
 
     /// The per-id merge rule into the pending (unsaved) context — see ``upsertMerged(_:hubKey:deviceKey:)``.
-    /// Two passes: inserts, replacements and equal entries first, then the entries whose local text
-    /// differs, so a fork's same-day check sees every entry this merge added.
+    /// Three steps: entries that open the same and dead rows replaced first; then the absent entries;
+    /// then the entries whose local text differs — so every same-day check sees what this merge added.
+    /// The days of the absent entries are read ONCE, before the first insert, and every insert or fork
+    /// is added to that per-day view as it is made.
     private func applyMerge(
         _ batch: [JournalNarrative],
         hubKey: SymmetricKey,
@@ -942,12 +946,11 @@ extension JournalNarrativeRepository {
     ) throws -> JournalNarrativeMergeResult {
         let existing = try fetchRows(ids: batch.map(\.id))
         var result = JournalNarrativeMergeResult()
+        var absent: [JournalNarrative] = []
         var differing: [JournalNarrative] = []
         for incoming in batch {  // R2: bounded by the batch (≤ maxBackupRecords).
             guard let rows = existing[incoming.id], let first = rows.first else {
-                try insertRow(incoming, hubKey: hubKey)
-                result.inserted += 1
-                result.followUpIDs.append(incoming.id)
+                absent.append(incoming)
                 continue
             }
             switch opening(of: rows, hubKey: hubKey, deviceKey: deviceKey) {
@@ -967,26 +970,54 @@ extension JournalNarrativeRepository {
                 throw JournalNarrativeRepositoryError.undecidedRows(count: rows.count)
             }
         }
-        try forkDiffering(differing, hubKey: hubKey, deviceKey: deviceKey, into: &result)
+        var days = try openedEntries(onDays: Set(absent.map(\.dayKey)), hubKey: hubKey, deviceKey: deviceKey)
+        try insertAbsent(absent, hubKey: hubKey, days: &days, into: &result)
+        try forkDiffering(differing, hubKey: hubKey, deviceKey: deviceKey, days: &days, into: &result)
         return result
     }
 
-    /// The second pass: each backup entry whose text or emotions differ from the local entry with its
+    /// The absent entries: each is inserted with its own stamps — unless an entry on its day is
+    /// ALREADY that entry (``JournalMergeDayEntry/isCopy(of:)``: the same words and the same creation
+    /// stamp), which then stands for it. That is the other iPhone's fork of this iPhone's own entry
+    /// coming back: a fork keeps the stamps of the entry it copies, so without this check "Restore it
+    /// here" on both iPhones settles at three entries with one text doubled on each (review B3 fix
+    /// round 1). Two entries the user wrote with the same words were created at different moments,
+    /// so both are kept.
+    private func insertAbsent(
+        _ absent: [JournalNarrative],
+        hubKey: SymmetricKey,
+        days: inout [String: [JournalMergeDayEntry]],
+        into result: inout JournalNarrativeMergeResult
+    ) throws {
+        for incoming in absent {  // R2: bounded by the batch.
+            if let copy = days[incoming.dayKey]?.first(where: { $0.isCopy(of: incoming) }) {
+                result.unchanged += 1
+                result.followUpIDs.append(copy.id)
+                continue
+            }
+            try insertRow(incoming, hubKey: hubKey)
+            days[incoming.dayKey, default: []].append(JournalMergeDayEntry(incoming))
+            result.inserted += 1
+            result.followUpIDs.append(incoming.id)
+        }
+    }
+
+    /// The last step: each backup entry whose text or emotions differ from the local entry with its
     /// id is added as a new entry (a fresh id) — unless an entry on its day already holds the same
-    /// text and emotions, which then stands for it. Reads only the rows of the days those entries are
-    /// on (pending inserts included), once per day.
+    /// text and emotions, which then stands for it. A day not read yet is read once (this merge has
+    /// added nothing to it).
     private func forkDiffering(
         _ differing: [JournalNarrative],
         hubKey: SymmetricKey,
         deviceKey: JournalBackupDeviceKey,
+        days: inout [String: [JournalMergeDayEntry]],
         into result: inout JournalNarrativeMergeResult
     ) throws {
-        var dayContents: [String: [(id: UUID, text: String, emotions: [String])]] = [:]
         for incoming in differing {  // R2: bounded by the batch.
-            if dayContents[incoming.dayKey] == nil {
-                dayContents[incoming.dayKey] = try openedContents(onDay: incoming.dayKey, hubKey: hubKey, deviceKey: deviceKey)
+            if days[incoming.dayKey] == nil {
+                days[incoming.dayKey] = try openedEntries(onDays: [incoming.dayKey], hubKey: hubKey, deviceKey: deviceKey)[incoming.dayKey] ?? []
             }
-            if let equal = dayContents[incoming.dayKey]?.first(where: { $0.text == incoming.text && $0.emotions == incoming.emotions }) {
+            if let equal = days[incoming.dayKey]?.first(where: { $0.hasSameWords(as: incoming) }) {
                 result.unchanged += 1
                 result.followUpIDs.append(equal.id)
                 continue
@@ -994,32 +1025,36 @@ extension JournalNarrativeRepository {
             var fork = incoming
             fork.id = UUID()
             try insertRow(fork, hubKey: hubKey)
-            dayContents[incoming.dayKey, default: []].append((fork.id, fork.text, fork.emotions))
+            days[incoming.dayKey, default: []].append(JournalMergeDayEntry(fork))
             result.forked += 1
             result.followUpIDs.append(fork.id)
         }
     }
 
-    /// The text and emotions of every row on `dayKey` that opens under the hub key or the device key
-    /// (pending inserts of this merge included). Rows that open under neither are left out: they are
-    /// nobody's equal.
-    private func openedContents(
-        onDay dayKey: String,
+    /// Every row on `dayKeys` that opens under the hub key or the device key (pending changes of this
+    /// merge included), by day — every asked day present, empty when it holds none. Rows that open
+    /// under neither are left out: they are nobody's equal. One `dayKey IN` fetch per 500 days.
+    private func openedEntries(
+        onDays dayKeys: Set<String>,
         hubKey: SymmetricKey,
         deviceKey: JournalBackupDeviceKey
-    ) throws -> [(id: UUID, text: String, emotions: [String])] {
-        let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
-        request.predicate = NSPredicate(format: "dayKey == %@", dayKey)
-        var contents: [(id: UUID, text: String, emotions: [String])] = []
-        for row in try context.fetch(request) {  // R2: bounded by one day's rows.
-            guard let id = row.value(forKey: "id") as? UUID else { continue }
-            for key in Self.candidateKeys(hubKey, deviceKey) {
-                guard case .opened(let text, let emotions) = openColumnsClassified(row, under: key) else { continue }
-                contents.append((id, text, emotions))
-                break
+    ) throws -> [String: [JournalMergeDayEntry]] {
+        var byDay = Dictionary(uniqueKeysWithValues: dayKeys.map { ($0, [JournalMergeDayEntry]()) })
+        let keys = Array(dayKeys)
+        for start in stride(from: 0, to: keys.count, by: Self.maxPageSize) {  // R2: bounded by the days asked for.
+            let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
+            request.predicate = NSPredicate(format: "dayKey IN %@", Array(keys[start..<min(start + Self.maxPageSize, keys.count)]))
+            for row in try context.fetch(request) {  // R2: bounded by those days' rows.
+                guard let id = row.value(forKey: "id") as? UUID, let dayKey = row.value(forKey: "dayKey") as? String else { continue }
+                for key in Self.candidateKeys(hubKey, deviceKey) {
+                    guard case .opened(let text, let emotions) = openColumnsClassified(row, under: key) else { continue }
+                    let createdAt = row.value(forKey: "createdAt") as? Date
+                    byDay[dayKey, default: []].append(JournalMergeDayEntry(id: id, text: text, emotions: emotions, createdAt: createdAt))
+                    break
+                }
             }
         }
-        return contents
+        return byDay
     }
 
     /// Inserts `narrative` as a new row sealed under `hubKey`, keeping its own stamps.
@@ -1135,5 +1170,48 @@ extension JournalNarrativeRepository {
             }
         }
         return order.compactMap { chosen[$0] }
+    }
+}
+
+/// One entry on a day as the journal merge's same-day checks see it: its id, its opened words and its
+/// creation stamp (``JournalNarrativeRepository/upsertMerged(_:hubKey:deviceKey:)``).
+private struct JournalMergeDayEntry {
+    /// How far apart two creation stamps may be and still name the same entry — far below any two
+    /// moments a person writes two entries, far above a stamp's round trip through a backup.
+    static let stampTolerance: TimeInterval = 0.001
+
+    /// The entry's id.
+    let id: UUID
+    /// Its opened text.
+    let text: String
+    /// Its opened emotions.
+    let emotions: [String]
+    /// Its creation stamp (nil on a row that lacks one).
+    let createdAt: Date?
+
+    /// Creates the view of an opened row.
+    init(id: UUID, text: String, emotions: [String], createdAt: Date?) {
+        self.id = id
+        self.text = text
+        self.emotions = emotions
+        self.createdAt = createdAt
+    }
+
+    /// The view of an entry this merge is adding.
+    init(_ narrative: JournalNarrative) {
+        self.init(id: narrative.id, text: narrative.text, emotions: narrative.emotions, createdAt: narrative.createdAt)
+    }
+
+    /// Whether it holds `incoming`'s text and emotions.
+    func hasSameWords(as incoming: JournalNarrative) -> Bool {
+        text == incoming.text && emotions == incoming.emotions
+    }
+
+    /// Whether `incoming` is a copy of this very entry: the same words AND the same creation stamp. A
+    /// fork keeps the stamps of the entry it copies and an edit keeps its entry's creation stamp, so
+    /// this is how an entry recognises itself when it comes back under another id.
+    func isCopy(of incoming: JournalNarrative) -> Bool {
+        guard hasSameWords(as: incoming), let createdAt else { return false }
+        return abs(createdAt.timeIntervalSince(incoming.createdAt)) < Self.stampTolerance
     }
 }

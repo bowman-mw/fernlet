@@ -53,9 +53,16 @@ public struct DayRecordRepository: DayRecordRepositoring {
 
     /// Loads the whole (uncapped) day history, duplicate-collapsed to one day per `dateKey`.
     public func loadAll() -> [String: FernletDay] {
+        loadAllReportingCompleteness().days
+    }
+
+    /// The whole day history like ``loadAll()``, with whether it is COMPLETE: false when the fetch
+    /// failed (the history then reads empty) or a row would not decode (that day reads absent) — the
+    /// fail-closed read the journal Sealed backup's snapshot needs (review B3 fix round 1).
+    public func loadAllReportingCompleteness() -> (days: [String: FernletDay], isComplete: Bool) {
         StartupTiming.timed("DayRecordRepository.loadAll") {
             let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
-            return dedupedDays(fetching: request)
+            return dedupedRead(fetching: request)
         }
     }
 
@@ -194,15 +201,22 @@ public struct DayRecordRepository: DayRecordRepositoring {
     /// cleared post-migration). Keeping every top-stamped row on disk makes a mutual wipe impossible;
     /// CloudKit's later merge and any subsequent real (strictly newer) edit collapse them safely.
     private func dedupedDays(fetching request: NSFetchRequest<NSManagedObject>) -> [String: FernletDay] {
+        dedupedRead(fetching: request).days
+    }
+
+    /// ``dedupedDays(fetching:)`` with whether the read was complete: a failed fetch (empty days) or
+    /// any undecodable row makes it incomplete.
+    private func dedupedRead(fetching request: NSFetchRequest<NSManagedObject>) -> (days: [String: FernletDay], isComplete: Bool) {
         let context = controller.container.viewContext
         let records: [NSManagedObject]
         do {
             records = try context.fetch(request)
         } catch {
             // Environmental (locked/unavailable store), not a programmer error: audit and serve
-            // the empty dictionary this function already documents as its failure result.
+            // the empty dictionary this function already documents as its failure result — and say
+            // it is not the history.
             PersistenceFailureAudit.record("dayRecord.fetch.failed", error: error)
-            return [:]
+            return ([:], false)
         }
         // Group every decodable row by `dateKey` (a stable per-row tiebreak accompanies each).
         /// One decodable fetched row: its managed object, decoded day, `updatedAt` stamp, and tiebreak.
@@ -266,6 +280,6 @@ public struct DayRecordRepository: DayRecordRepositoring {
                 "fetched": "\(records.count)"
             ])
         }
-        return result
+        return (result, skipped == 0)
     }
 }

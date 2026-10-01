@@ -20,7 +20,7 @@ struct SealedBackupRestoreOutcomeTests {
         #expect(SealedBackupRestoreOutcome.restored(3).didRestore)
         for outcome: SealedBackupRestoreOutcome in [
             .nothingToRestore, .skippedStoreNotEmpty, .deferredKeyNotSynced,
-            .deferredLocked, .deferredTransient, .notRecognized, .rolledBack
+            .deferredLocked, .deferredTransient, .notRecognized, .rolledBack, .needsNewerFernlet
         ] {
             #expect(outcome.didRestore == false)
         }
@@ -29,7 +29,7 @@ struct SealedBackupRestoreOutcomeTests {
     @Test func deferredAndUnrecognizedNeedAttention() {
         // The deferred/unrecognized outcomes are the ones the user must see (WS-4 "visible").
         for outcome: SealedBackupRestoreOutcome in [
-            .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized, .rolledBack
+            .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized, .rolledBack, .needsNewerFernlet
         ] {
             #expect(outcome.needsAttention)
         }
@@ -55,6 +55,10 @@ struct SealedBackupRestoreOutcomeTests {
         // record. It must still be visible — a silent rollback is the whole failure mode.
         #expect(SealedBackupRestoreOutcome.rolledBack.isRetryable == false)
         #expect(SealedBackupRestoreOutcome.rolledBack.needsAttention)
+        // needsNewerFernlet (review B3 fix round 1): only an update reads the set — no Retry prompt,
+        // but never silent.
+        #expect(SealedBackupRestoreOutcome.needsNewerFernlet.isRetryable == false)
+        #expect(SealedBackupRestoreOutcome.needsNewerFernlet.needsAttention)
         // Benign outcomes are not "retry" prompts.
         for outcome: SealedBackupRestoreOutcome in [.restored(1), .nothingToRestore, .skippedStoreNotEmpty] {
             #expect(outcome.isRetryable == false)

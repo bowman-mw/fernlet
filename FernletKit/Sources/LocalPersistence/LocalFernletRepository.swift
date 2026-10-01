@@ -344,6 +344,15 @@ public struct LocalFernletRepository: FernletRepository {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).days
     }
 
+    /// Every persisted day like ``loadAllDays()``, or nil while the file could not be read or decoded
+    /// — read-only recovery, where ``loadAllDays()`` answers the legacy migration's days (usually none)
+    /// in place of the history the file holds (review B3 fix round 1: the journal Sealed backup's
+    /// snapshot must not read that as "no entries").
+    public func loadAllDaysIfComplete() -> [String: FernletDay]? {
+        let days = loadAllDays()
+        return state.persistenceBlockedByDecodeFailure ? nil : days
+    }
+
     /// The persisted Tier-2 behavioral memories that seed the inference base — read from the
     /// device-local ``tierTwoMemoryStore`` sidecar, never from the database file. Read-only here:
     /// the save path is the sidecar's only writer (no backup restores it, by owner decision).

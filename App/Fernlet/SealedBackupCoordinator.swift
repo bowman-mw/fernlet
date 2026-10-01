@@ -118,7 +118,13 @@ protocol SealedBackupContext: AnyObject {
     /// snapshot is the sealed ids among these, so an ORPHAN sealed row (no skeleton anywhere: a delete
     /// whose row delete failed, an entry another iPhone deleted with sync on) is never exported and can
     /// never come back through a restore. Keyless; decrypts nothing.
-    var sealedBackupJournalReferencedIDs: Set<UUID> { get }
+    ///
+    /// NIL when the day store's read cannot be trusted to be complete (read-only recovery, a failed
+    /// fetch, a day that would not decode — `FernletRepository.loadAllDaysIfComplete()`): every sealed
+    /// entry on an unread day would read as an orphan, and the export would publish a truncated set
+    /// over the full one exactly when the day store is broken. The snapshot then fails (nothing
+    /// written, the upload still owed) — fail closed, review B3 fix round 1.
+    var sealedBackupJournalReferencedIDs: Set<UUID>? { get }
     /// Records whether a sealed backup of `payloadType` still owes an upload — the dirty flag every
     /// sealed-store change sets (``markSealedBackupDirty(_:)``), set too when the backup is turned on
     /// or the escrow key adopted, and cleared only by a verified commit (design 2026-09-30, §4.4).
@@ -151,7 +157,8 @@ protocol SealedBackupContext: AnyObject {
     /// fails precisely the users the sealed backup exists to protect.
     ///
     /// Implementations must add one `JournalEntry` per skeleton to that skeleton's day — only for ids
-    /// the day lacks, never editing an existing one — schedule a snapshot save, and re-run the
+    /// the day lacks, never editing an existing one, and writing NO day that lacks none (the merge
+    /// names unchanged entries too; review B3 fix round 1) — schedule a snapshot save, and re-run the
     /// sealed-journal refresh so hydration fills the text back in by id.
     ///
     /// - Returns: False when any day write failed: the restore then stays unresolved, and the next
@@ -183,6 +190,12 @@ enum SealedBackupRestoreOutcome: Equatable {
     /// retrying re-fetches the same substituted record forever, and silently retrying is exactly the
     /// failure mode the rollback defense exists to end. The user is told, and nothing is written.
     case rolledBack
+    /// The backup in iCloud authenticates, but a newer Fernlet wrote it: its envelope, or a record in
+    /// it (a feeling tag this build does not know, say), is a shape this build cannot read (review B3
+    /// fix round 1). Terminal for THIS build — retrying reads the same set the same way, so it is not
+    /// retried automatically in this process (a relaunch, which an update is, tries again) — and never
+    /// a damaged backup: an update reads it. The user is told to update Fernlet.
+    case needsNewerFernlet
 
     var didRestore: Bool {
         if case .restored = self { return true }
@@ -193,7 +206,7 @@ enum SealedBackupRestoreOutcome: Equatable {
     /// (restored / nothing-to-restore / skipped-non-empty) do not.
     var needsAttention: Bool {
         switch self {
-        case .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized, .rolledBack:
+        case .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized, .rolledBack, .needsNewerFernlet:
             return true
         case .restored, .nothingToRestore, .skippedStoreNotEmpty: return false
         }
@@ -206,7 +219,8 @@ enum SealedBackupRestoreOutcome: Equatable {
         case .deferredKeyNotSynced, .deferredLocked, .deferredTransient: return true
         // `.rolledBack` sits with `.notRecognized`: retrying re-fetches the identical record, so a
         // Retry affordance would only promise something it can never deliver.
-        case .restored, .nothingToRestore, .skippedStoreNotEmpty, .notRecognized, .rolledBack:
+        // `.needsNewerFernlet` too: only an update reads the set, and an update relaunches.
+        case .restored, .nothingToRestore, .skippedStoreNotEmpty, .notRecognized, .rolledBack, .needsNewerFernlet:
             return false
         }
     }
@@ -382,13 +396,13 @@ final class SealedBackupCoordinator {
     /// The journal adapter over the repository `repository` answers (design 2026-09-30, §7): its seam
     /// is `!duress`, its snapshot the ids the host's days reference, its device key read without
     /// minting from ``journalDeviceKeyService``, its skeletons rebuilt by the host. Fail closed when the
-    /// coordinator is gone (the seam shut, nothing referenced, no skeleton written).
+    /// coordinator is gone (the seam shut, the referenced ids unknown, no skeleton written).
     private func makeJournalAdapter(_ repository: @escaping @MainActor () -> JournalNarrativeRepository) -> JournalBackupAdapter {
         let service = journalDeviceKeyService
         return JournalBackupAdapter(
             repository: repository,
             isOpen: { [weak self] in self.map { !$0.host.duressSessionActive } ?? false },
-            referencedIDs: { [weak self] in self?.host.sealedBackupJournalReferencedIDs ?? [] },
+            referencedIDs: { [weak self] in self?.host.sealedBackupJournalReferencedIDs },
             deviceKey: { SealedDeviceKeyRead.read(.deviceJournalKey, service: service) },
             reinstate: { [weak self] skeletons in self?.host.reinstateJournalEntries(from: skeletons) ?? false }
         )

@@ -1704,6 +1704,13 @@ struct PrivacyDataSettingsView: View {
             // No Retry hint: retrying re-fetches the same record. The honest ask is to re-upload
             // from a device that still holds the data, which is the only path that recovers.
             return "The \(noun) backup in iCloud is older than one this device already has, so Fernlet didn't restore it — that shouldn't happen on its own. Nothing was changed. If you still have this data on another device, back it up again from there."
+        case .needsNewerFernlet:
+            // No Retry hint either: only an update reads it (review B3 fix round 1).
+            return String(
+                localized: "sealedBackup.restore.needsNewerFernlet",
+                defaultValue: "Some \(noun) entries or the \(noun) backup need a newer version of Fernlet. Update Fernlet to keep backing them up.",
+                comment: "Privacy & Data: a Sealed backup, or entries on this iPhone, were written by a newer version of Fernlet that this version can't read. The placeholder is a mid-sentence backup noun such as 'period'."
+            )
         case .restored, .nothingToRestore, .skippedStoreNotEmpty:
             return ""
         }

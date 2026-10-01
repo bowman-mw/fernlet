@@ -133,6 +133,11 @@ enum SealedBackupV2FormatError: Error, Equatable {
     /// a set tag that differs from the record name it was fetched under, or a record total that
     /// differs from the head's (§5.3). Fails closed as a retryable restore.
     case setMismatch
+    /// The set authenticated, but a record in it (or its envelope's fields) would not decode — a value
+    /// this build does not know, such as a newer feeling tag. Only a newer Fernlet wrote it: the
+    /// restore names it `.needsNewerFernlet`, never a transient failure retried forever and never a
+    /// damaged backup (review B3 fix round 1).
+    case unreadableRecords
 }
 
 /// Reading the shape of a decrypted chunk plaintext.

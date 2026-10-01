@@ -676,6 +676,7 @@ struct SealedBackupIntimacyV2Tests {
         #expect(row(.waitingForRestore(.rolledBack), rolledBack: stamp) == .olderThanSeen(stamp))
         #expect(row(.waitingForRestore(.notRecognized)) == .damaged)
         #expect(row(.waitingForRestore(.deferredTransient)) == .waitingForRestore)
+        #expect(row(.waitingForRestore(.needsNewerFernlet)) == .needsNewerFernlet, "review B3 fix round 1: no 'next time' promise")
         #expect(row(.headSealedWithOtherKey) == .sealedWithOtherKey)
         #expect(row(.headDamaged) == .damaged)
         #expect(row(.needsNewerFernlet) == .needsNewerFernlet)

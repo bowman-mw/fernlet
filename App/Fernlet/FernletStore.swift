@@ -3492,13 +3492,29 @@ final class FernletStore {
     @ObservationIgnored var sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: .standard)
 
     /// The Sealed backup v2 bookkeeping — restore markers, accepted heads, observed foreign heads (see
-    /// ``SealedBackupBookkeeping``). Each marker's one-time seed reads its payload's legacy divergence
-    /// latch (``sealedBackupLegacyLatch(_:)``). Internal-settable ONLY so tests can point it at an
-    /// isolated suite (and a fixed seed).
+    /// ``SealedBackupBookkeeping``). Each marker's one-time seed is ``sealedBackupMarkerSeed(_:)``: its
+    /// payload's legacy divergence latch, unless the owner hold still keeps that payload's pre-reset
+    /// copy. Internal-settable ONLY so tests can point it at an isolated suite (and a fixed seed).
     @ObservationIgnored lazy var sealedBackupBookkeeping = SealedBackupBookkeeping(
         defaults: .standard,
-        legacyLatch: { [unowned self] payload in self.sealedBackupLegacyLatch(payload) }
+        legacyLatch: { [unowned self] payload in self.sealedBackupMarkerSeed(payload) }
     )
+
+    /// What `payload`'s v2 restore marker is seeded with, once (design 2026-09-30 §4.3): unresolved
+    /// while the app-lock reset's owner hold still keeps that payload's pre-reset iCloud copy — held,
+    /// or released and not yet pulled back — else its legacy divergence latch.
+    ///
+    /// The hold's copy is the one thing a seeded-resolved marker would strand (review B3 fix round 1).
+    /// An install upgrading with a released hold whose earlier empty-store-only restore was refused
+    /// (entries written since the reset set the latch) would seed resolved, so the restore that would
+    /// pull the pre-reset copy back and settle the hold never runs — and the hold then keeps every
+    /// export of that payload waiting, forever, while Privacy & Data promises a restore. Seeded
+    /// unresolved, the next ambient restore (the owner's release, when still held) merges the copy in
+    /// and settles the hold, and the union is exported.
+    func sealedBackupMarkerSeed(_ payload: SealedBackupPayloadType) -> Bool {
+        guard !sealedBackupRestoreHold.keepsPreResetCopy(of: payload) else { return false }
+        return sealedBackupLegacyLatch(payload)
+    }
 
     /// The legacy divergence latch that seeds `payload`'s v2 restore marker once (design 2026-09-30,
     /// §4.3): the cycle narratives' for period; the attached intimacy funnel's for the intimate logs
@@ -3634,7 +3650,10 @@ final class FernletStore {
         switch sealedBackupV2Status[payload] {
         case .waitingForBackupKey?: return .deferredKeyNotSynced
         case .headDamaged?: return .notRecognized
-        case .needsNewerFernlet?, .tooLarge?: return .deferredTransient
+        // Its own sentence since the restore can end there too (review B3 fix round 1): "update
+        // Fernlet", never "couldn't reach … tap Retry", which a Retry can never clear.
+        case .needsNewerFernlet?: return .needsNewerFernlet
+        case .tooLarge?: return .deferredTransient
         default: return sealedBackupRestoreStatus[payload]
         }
     }
@@ -3657,7 +3676,8 @@ final class FernletStore {
     }
 
     /// Seeds every v2 payload's restore marker once (the first launch of this build, or the first
-    /// after an uninstall) from its legacy latch, and marks the upload owed for each one seeded while
+    /// after an uninstall) from ``sealedBackupMarkerSeed(_:)`` — its legacy latch, or unresolved while
+    /// the owner hold keeps its pre-reset copy — and marks the upload owed for each one seeded while
     /// its backup is on — so every install exports one complete v2 set at its first Private visit,
     /// through E2 (design 2026-09-30 §4.3, R1-BR-11). A present marker is never re-seeded. Called once
     /// by `ContentView`'s launch wiring, before any settle.
@@ -7516,8 +7536,28 @@ extension FernletStore: SealedBackupContext {
     /// day's journals, plus the in-memory today and `previousJournals` (a write not saved yet). The
     /// journal backup exports only the sealed rows among them, so an orphan row is never exported
     /// (design 2026-09-30, §7.1). Keyless.
-    var sealedBackupJournalReferencedIDs: Set<UUID> {
+    ///
+    /// NIL — never a partial set — when the day store cannot say its read is complete
+    /// (`FernletRepository.loadAllDaysIfComplete()`: read-only recovery, a failed day-row fetch, a day
+    /// that would not decode). A partial set would make every entry on an unread day an orphan, and the
+    /// export would publish that truncated set over the full backup exactly when the day store is
+    /// broken (review B3 fix round 1).
+    var sealedBackupJournalReferencedIDs: Set<UUID>? {
+        // The adapter audits the refused snapshot (`sealedBackup.v2.journalDaysUnreadable`).
+        guard let storedDays = repository.loadAllDaysIfComplete() else { return nil }
         var ids = Set(day.journals.map(\.id)).union(previousJournals.map(\.id))
+        for stored in storedDays.values {  // R2: bounded by the stored days.
+            ids.formUnion(stored.journals.map(\.id))
+        }
+        return ids
+    }
+
+    /// The journal ids the days already hold — the in-memory today and every stored day — read to
+    /// decide which restored entries still need a skeleton. A read that came back short only makes a
+    /// day look like it lacks one (an unneeded but harmless write, re-checked inside the write), never
+    /// the other way round, so the plain read serves here.
+    private var journalIDsTheDaysHold: Set<UUID> {
+        var ids = Set(day.journals.map(\.id))
         for stored in diary.loadAllDaysFromRepository().values {  // R2: bounded by the stored days.
             ids.formUnion(stored.journals.map(\.id))
         }
@@ -7538,12 +7578,21 @@ extension FernletStore: SealedBackupContext {
     /// Existing ids are never touched, so a restore that races a partially-present day cannot duplicate
     /// or overwrite an entry. Entries are kept in date order to match how the diary renders them.
     ///
+    /// Only a day that LACKS one of its skeletons is written (review B3 fix round 1). The merge names
+    /// every entry carrying a backup entry's content — unchanged ones too, so a retry after a failed
+    /// skeleton write rebuilds what is missing — and a past-day write re-stamps and re-saves the day
+    /// row (with iCloud sync on, re-uploads it); rewriting every day of a two-year journal on each merge
+    /// would hang the main actor and could put this iPhone's stale copy of a day over the other
+    /// iPhone's newer one. An idempotent re-merge writes no day.
+    ///
     /// - Returns: False when any day write failed (each failure is audited): the restore then stays
     ///   unresolved and the next session's idempotent merge re-adds the missing skeletons (R1-BR-6).
     func reinstateJournalEntries(from skeletons: [JournalNarrativeSkeleton]) -> Bool {
         guard !skeletons.isEmpty else { return true }
+        let held = journalIDsTheDaysHold
+        let missing = skeletons.filter { !held.contains($0.id) }
         var allWritten = true
-        for (dayKey, rows) in Dictionary(grouping: skeletons, by: \.dayKey) {
+        for (dayKey, rows) in Dictionary(grouping: missing, by: \.dayKey) {
             let written = diary.mutateDay(date: dayKey) { day in
                 var known = Set(day.journals.map(\.id))
                 for row in rows where !known.contains(row.id) {
@@ -7563,9 +7612,10 @@ extension FernletStore: SealedBackupContext {
                                     context: ["op": "reinstateJournals", "dayKey": dayKey])
             }
         }
-        scheduleSnapshotSave()
-        // Hydrate the text back in by id (today + the previousJournals window). Older days hydrate
-        // lazily on read via `loadDayWithDecryptedJournals`, so nothing is lost for them either.
+        if !missing.isEmpty { scheduleSnapshotSave() }
+        // Hydrate the text back in by id (today + the previousJournals window) — even when no skeleton
+        // was missing: a replaced dead row's words still need showing. Older days hydrate lazily on read
+        // via `loadDayWithDecryptedJournals`, so nothing is lost for them either.
         journalSealingCoordinator.refreshAfterSnapshotApply()
         return allWritten
     }

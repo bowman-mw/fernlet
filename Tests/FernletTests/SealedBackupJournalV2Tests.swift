@@ -17,7 +17,9 @@ import CoreData
 import CryptoKit
 import FernletDomainModel
 import FernletFoundation
+import FernletPersistence
 import Foundation
+import LocalPersistence
 import PrivateMemoryStore
 import PrivateStoreCore
 import Testing
@@ -544,6 +546,165 @@ struct SealedBackupJournalV2Tests {
         #expect(cloud.sealedRecords.isEmpty, "no chunk or head was written after the delete")
     }
 
+    // MARK: - Review B3 fix round 1
+
+    /// R1 / D-B3-1, at the engine: while the day store cannot say its read is complete, the referenced
+    /// ids are unknown and the snapshot fails — the export ends `.failed` with NOTHING written (the full
+    /// backup in iCloud stays exactly as it was) and the upload still owed; once the day store reads
+    /// whole again, the next visit exports every entry.
+    @MainActor
+    @Test func anIncompleteDayStoreReadExportsNothingOverTheFullBackup() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let clock = ManualClock()
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone", resolved: true, clock: { clock.now })
+        try phone.write(JournalBackupDevice.entry("first", day: 1))
+        try phone.write(JournalBackupDevice.entry("second", day: 2))
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
+        let fullSet = cloud.sealedRecordIdentities
+
+        phone.host.dayStoreReadIncomplete = true
+        try phone.write(JournalBackupDevice.entry("third", day: 3))
+        phone.engine.hubSessionEnded()
+        await phone.coordinator.settleV2Backup(.journalNarratives)
+        #expect(phone.host.v2Status[.journalNarratives] == .failed)
+        #expect(cloud.sealedRecordIdentities == fullSet, "the full backup was not replaced by a truncated set")
+        #expect(phone.host.reuploadDeferrals[.journalNarratives] == true, "the upload is still owed")
+
+        phone.host.dayStoreReadIncomplete = false
+        phone.engine.hubSessionEnded()
+        clock.advance(SealedBackupV2Engine.failureBackoff + 1)
+        await phone.coordinator.settleV2Backup(.journalNarratives)
+        #expect(Set(try await JournalBackupDevice.cloudEntries(cloud).map(\.text)) == ["first", "second", "third"])
+    }
+
+    /// R1 / D-B3-1, in the store over its REAL day repository: a day row this build cannot decode (here
+    /// planted; in life another iPhone's newer build with sync on, or a corrupt row) makes the
+    /// referenced journal ids unknown — never the ids of the days that did decode, which would drop
+    /// every entry on the unread day from the backup — while the plain read the screens use still
+    /// serves the days it can. Once the row reads again, so do the ids.
+    @MainActor
+    @Test func theStoresReferencedJournalIDsFailClosedOnADayRowThatWillNotDecode() throws {
+        let (store, repository, _) = makeTestStoreWithRepositories()
+        let readable = Self.skeleton(dayKey: "2026-03-01")
+        let unreadable = Self.skeleton(dayKey: "2026-03-02")
+        #expect(store.reinstateJournalEntries(from: [readable, unreadable]))
+        #expect(store.sealedBackupJournalReferencedIDs?.isSuperset(of: [readable.id, unreadable.id]) == true)
+
+        let context = repository.persistenceController.container.viewContext
+        let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
+        request.predicate = NSPredicate(format: "dateKey == %@", unreadable.dayKey)
+        let row = try #require(try context.fetch(request).first)
+        let payload = row.value(forKey: "payloadData") as? Data
+        row.setValue(Data("{\"a newer shape\":true}".utf8), forKey: "payloadData")
+        try context.save()
+        repository.invalidateCache()
+        #expect(store.sealedBackupJournalReferencedIDs == nil, "unknown, never the ids of the days that decoded")
+        #expect(store.loadAllDaysFromRepository()[readable.dayKey] != nil, "the screens' read still serves what decodes")
+
+        row.setValue(payload, forKey: "payloadData")
+        try context.save()
+        #expect(store.sealedBackupJournalReferencedIDs?.isSuperset(of: [readable.id, unreadable.id]) == true,
+                "the incomplete memo is read again, not served")
+    }
+
+    /// R1 / D-B3-1: read-only recovery (the blob's fetch failed) is not a complete history in the Core
+    /// Data repository, nor is an unreadable file in the local one — both answer nil from
+    /// `loadAllDaysIfComplete()` where `loadAllDays()` answers an empty or legacy history.
+    @MainActor
+    @Test func readOnlyRecoveryIsNeverACompleteDayHistory() throws {
+        let (store, repository, _) = makeTestStoreWithRepositories()
+        #expect(store.reinstateJournalEntries(from: [Self.skeleton(dayKey: "2026-03-01")]))
+        #expect(repository.loadAllDaysIfComplete()?.isEmpty == false)
+        repository.invalidateCache()
+        repository.forceNextFetchFailureForTesting()
+        #expect(repository.loadAllDaysIfComplete() == nil)
+        #expect(repository.isInReadOnlyRecovery)
+
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fernlet.tests.unreadableDays.\(UUID().uuidString)").appendingPathExtension("json")
+        try Data("not the database".utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let local = LocalFernletRepository(
+            fileURL: fileURL, backupExclusionPreference: { false },
+            legacyDefaults: UserDefaults(suiteName: "fernlet.tests.unreadableDaysLegacy.\(UUID().uuidString)") ?? .standard
+        )
+        #expect(local.loadAllDaysIfComplete() == nil, "a file that will not decode is not an empty history")
+    }
+
+    /// R2 / D-B3-3: the merge names every entry carrying a backup entry's content — unchanged ones too —
+    /// but the skeleton follow-up writes only a day that LACKS one: an idempotent re-merge rewrites no
+    /// day row (none re-stamped, none re-uploaded with sync on), and one missing skeleton writes its own
+    /// day alone.
+    @MainActor
+    @Test func anIdempotentReMergeWritesNoDayRow() throws {
+        let (store, repository, _) = makeTestStoreWithRepositories()
+        let skeletons = ["2026-03-01", "2026-03-02", "2026-03-03"].map { Self.skeleton(dayKey: $0) }
+        #expect(store.reinstateJournalEntries(from: skeletons))
+        let stamps = try Self.dayRowStamps(repository)
+        #expect(Set(stamps.keys) == ["2026-03-01", "2026-03-02", "2026-03-03"])
+
+        #expect(store.reinstateJournalEntries(from: skeletons), "the idempotent re-merge's follow-up")
+        #expect(try Self.dayRowStamps(repository) == stamps, "no day row was rewritten")
+
+        let missing = Self.skeleton(dayKey: "2026-03-02")
+        #expect(store.reinstateJournalEntries(from: skeletons + [missing]))
+        let after = try Self.dayRowStamps(repository)
+        #expect(after["2026-03-01"] == stamps["2026-03-01"] && after["2026-03-03"] == stamps["2026-03-03"])
+        #expect(after["2026-03-02"] != stamps["2026-03-02"], "only the day that lacked a skeleton was written")
+        #expect(store.loadDay(for: "2026-03-02").journals.map(\.id).contains(missing.id))
+    }
+
+    /// D-B3-5: a set that authenticates but carries a feeling tag only a newer Fernlet knows NEEDS A
+    /// NEWER FERNLET — never a transient failure retried at every visit behind a row that promises the
+    /// entries "will be added the next time you open Private". Nothing is merged, the restore stays
+    /// unresolved (E1 still holds this iPhone's exports), and the set is not downloaded and decrypted
+    /// again in this process.
+    @MainActor
+    @Test func aSetWithAFeelingTagOnlyANewerFernletKnowsNeedsANewerFernlet() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        try await Self.writeSetANewerFernletWrote(cloud)
+        let newerSet = cloud.sealedRecordIdentities
+        let clock = ManualClock()
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone", clock: { clock.now })
+        let local = JournalBackupDevice.entry("written here", day: 2)
+        try phone.write(local)
+
+        await phone.coordinator.settleV2Backup(.journalNarratives)
+        #expect(phone.host.recordedOutcomes[.journalNarratives] == .needsNewerFernlet)
+        #expect(phone.rowState == .needsNewerFernlet, "no promise this build can never keep")
+        #expect(phone.storedIDs == [local.id], "nothing merged")
+        #expect(!phone.host.sealedBackupBookkeeping.restoreResolvedIsSet(.journalNarratives))
+        #expect(cloud.sealedRecordIdentities == newerSet, "nothing written over the newer set")
+
+        let decrypted = phone.engine.decryptCount
+        phone.engine.hubSessionEnded()
+        clock.advance(SealedBackupV2Engine.failureBackoff + 1)
+        await phone.coordinator.settleV2Backup(.journalNarratives)
+        #expect(phone.engine.decryptCount == decrypted, "not downloaded and decrypted again in this process")
+        #expect(phone.rowState == .needsNewerFernlet)
+    }
+
+    /// D-B3-5, the explicit path: "Restore it here" of a set only a newer Fernlet reads consumes the
+    /// choice and says so — not "Open Private to finish." forever, and not the held row with no reason.
+    @MainActor
+    @Test func restoreItHereOfASetOnlyANewerFernletReadsSaysSo() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let stamp = try await Self.writeSetANewerFernletWrote(cloud)
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        let local = JournalBackupDevice.entry("written here", day: 2)
+        try phone.write(local)
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
+        #expect(phone.rowState == .heldByAnotherDevice(stamp))
+
+        await phone.coordinator.restoreBackupHere(.journalNarratives, stamp)
+        #expect(phone.engine.intents[.journalNarratives] == nil, "the choice was consumed")
+        #expect(phone.rowState == .needsNewerFernlet)
+        #expect(phone.storedIDs == [local.id])
+    }
+
     // MARK: - The FernletStore wiring (§4.4, §7.6)
 
     /// BV9 at the store: every journal write the sealing coordinator makes — the seal, the re-seal and
@@ -595,5 +756,44 @@ struct SealedBackupJournalV2Tests {
         store.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
         store.recordSealedBackupReuploadDeferred(true, payloadType: .journalNarratives)
         #expect(store.journalBackupRowState == .catchUp)
+    }
+
+    // MARK: - Helpers
+
+    /// A past-day skeleton on `dayKey` with a fresh id.
+    static func skeleton(dayKey: String) -> JournalNarrativeSkeleton {
+        JournalNarrativeSkeleton(id: UUID(), dayKey: dayKey, tag: .good, entryDate: Date(timeIntervalSince1970: 1_772_000_000))
+    }
+
+    /// Every PAST day row's `updatedAt`, by its day — what a rewrite re-stamps (today's row is the
+    /// snapshot save's, written on its own schedule).
+    @MainActor
+    static func dayRowStamps(_ repository: CoreDataFernletRepository) throws -> [String: Date] {
+        let context = repository.persistenceController.container.viewContext
+        let today = FernletDate.dayKey(for: .now)
+        var stamps: [String: Date] = [:]
+        for row in try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "DayRecord")) {
+            guard let key = row.value(forKey: "dateKey") as? String, key != today,
+                  let stamp = row.value(forKey: "updatedAt") as? Date else { continue }
+            stamps[key] = stamp
+        }
+        return stamps
+    }
+
+    /// Writes a one-chunk v2 journal set into `cloud`, as another install, whose one entry carries a
+    /// feeling tag this build does not know — what a newer Fernlet writes. Returns its stamp.
+    @MainActor
+    @discardableResult
+    static func writeSetANewerFernletWrote(_ cloud: FakeSealedBackupCloud) async throws -> SealedBackupHeadStamp {
+        let writer = try PeriodBackupDevice.reader(cloud)
+        let tag = PeriodBackupDevice.tag("newer")
+        let envelope = SealedBackupV2Envelope(writer: tag, set: tag, total: 1, records: [JournalBackupDevice.entry("from a newer Fernlet", day: 1)])
+        let json = String(decoding: try SealedBackupV2Format.encode(envelope), as: UTF8.self)
+        #expect(json.contains(#""tag":"good""#))
+        let plaintext = Data(json.replacingOccurrences(of: #""tag":"good""#, with: #""tag":"radiant""#).utf8)
+        let head = try writer.sealChunk(plaintext, payloadType: .journalNarratives, chunkIndex: 0, chunkCount: 1,
+                                        generation: 3, keySalt: SealedBackupService.mintKeySalt())
+        try await writer.save(head, setTag: tag)
+        return SealedBackupHeadStamp(writer: tag, generation: 3)
     }
 }

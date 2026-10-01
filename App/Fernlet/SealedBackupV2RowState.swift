@@ -91,6 +91,8 @@ enum SealedBackupV2RowState: Equatable {
         case .waitingForRestore(.deferredKeyNotSynced?): return .waitingForKey(restoring: true)
         case .waitingForRestore(.notRecognized?): return .damaged
         case .waitingForRestore(.rolledBack?): return rolledBackStamp.map(SealedBackupV2RowState.olderThanSeen) ?? .waitingForRestore
+        // A set only a newer Fernlet reads: no "will be added next time" promise (review B3 fix round 1).
+        case .waitingForRestore(.needsNewerFernlet?): return .needsNewerFernlet
         case .waitingForRestore: return .waitingForRestore
         case .heldForOwner: return .none
         case .heldByAnotherDevice(let stamp): return .heldByAnotherDevice(stamp)
