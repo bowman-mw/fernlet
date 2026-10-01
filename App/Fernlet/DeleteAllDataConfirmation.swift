@@ -119,14 +119,21 @@ enum DeleteAllDataConfirmation {
         // (see below), so an unqualified "photos" here would contradict the kept list and re-open the exact
         // says-more-than-it-does gap this dialog exists to close. This enumeration is the invariant backstop
         // (there's no test coupling this text to the funnel) — keep it in step with what step 4/4b delete.
+        //
+        // "cycle history", not "cycle notes" (period-data design 2026-09-30, §9.11; review round 1,
+        // L-U4-2): since the cutover every period entry — flow, temperature, mucus, ovulation test,
+        // first-day and spotting flags with the note and symptoms — is one sealed record in Fernlet,
+        // and the wipe deletes them all. For a user who never copied cycle data to Apple Health that
+        // is the ONLY copy, so naming just the notes would understate the loss right beside the
+        // "keep Health" choice. A new key because the meaning changed (`.base` is retired).
         var scope = String(
-            localized: "deleteAll.scope.base",
+            localized: "deleteAll.scope.base.v2",
             defaultValue: """
                 This deletes your logged days, meals and their photos, gym progress photos, journal \
-                entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, \
+                entries, cycle history, intimate logs, Worry Box notes, saved recipes and their photos, \
                 custom items and coins.
                 """,
-            comment: "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'."
+            comment: "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'. 'Cycle history' is every period entry saved in Fernlet (flow, temperature and the other fields, plus notes and symptoms), not only the notes."
         )
         // Two INDEPENDENT claims, not one. The day-blob copy in iCloud (a live sync copy or one kept after
         // sync was turned off) and any sealed encrypted backups are removed by different legs of the

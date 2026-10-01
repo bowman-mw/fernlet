@@ -701,19 +701,19 @@ struct DeleteAllDataTests {
         #expect(outcome.incompleteStores.contains("your storage settings"))
     }
 
-    /// A single store can be named by two independent legs — the sealed cycle-notes rows and the
-    /// locked-note buffer both purge "your cycle notes". Both failing must still list it ONCE, or the
-    /// failure alert reads "…and your cycle notes and your cycle notes".
+    /// A single store can be named by two independent legs — the sealed cycle rows and the
+    /// locked-entry buffer both purge "your cycle history". Both failing must still list it ONCE, or
+    /// the failure alert reads "…and your cycle history and your cycle history".
     @Test func incompleteStoresAreDeduplicated() async {
         let store = makeStore("delete-all-dedupe")
-        store.periodDataDeleteHook = { false }            // names "your cycle notes"
+        store.periodDataDeleteHook = { false }            // names "your cycle history"
         store.intimacyDataDeleteHook = { true }
         store.journalDataDeleteHook = { true }
-        store.pendingNarrativeBufferPurgeHook = { false } // also names "your cycle notes"
+        store.pendingNarrativeBufferPurgeHook = { false } // also names "your cycle history"
 
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(outcome.incompleteStores.filter { $0 == "your cycle notes" }.count == 1)
+        #expect(outcome.incompleteStores.filter { $0 == "your cycle history" }.count == 1)
     }
 
     /// The guided-workout runner (new on this branch: it backs the interactive Live Activity) mirrors an
@@ -1216,7 +1216,7 @@ struct DeleteAllDataTests {
 
         #expect(Self.sealedRowCount(in: controller) == 0, "sealed rows survived a locked wipe")
         #expect(lock.contentKey(for: .privateHub) == nil, "the wipe produced a content key — deletion must never require the ability to read")
-        for named in ["your cycle notes", "your intimate logs", "your journal entries", "your Worry Box notes", "your sealed store"] {
+        for named in ["your cycle history", "your intimate logs", "your journal entries", "your Worry Box notes", "your sealed store"] {
             #expect(!outcome.incompleteStores.contains(named), "\(named) reported incomplete after a locked wipe")
         }
     }

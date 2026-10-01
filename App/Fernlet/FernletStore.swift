@@ -5724,10 +5724,10 @@ final class FernletStore {
             outcome.incompleteStores.append("your storage settings")
         }
 
-        // A single store can be named by two independent legs — the sealed cycle-notes rows and the
-        // locked-note buffer both purge "your cycle notes" — so collapse to first-seen (order preserved)
-        // before the failure alert formats them, or it would read "…and your cycle notes and your cycle
-        // notes". `isComplete` (empty vs not) is unaffected by the dedupe.
+        // A single store can be named by two independent legs — the sealed cycle rows and the
+        // locked-entry buffer both purge "your cycle history" — so collapse to first-seen (order
+        // preserved) before the failure alert formats them, or it would read "…and your cycle history
+        // and your cycle history". `isComplete` (empty vs not) is unaffected by the dedupe.
         var seenStores = Set<String>()
         outcome.incompleteStores = outcome.incompleteStores.filter { seenStores.insert($0).inserted }
 
@@ -5850,7 +5850,11 @@ final class FernletStore {
         return (sealedBackupDeleteFailed, cloudCopyDeleteFailed)
     }
 
-    /// Wipe leg 3: the sealed rows (cycle notes, intimate logs, journals) and the locked-note buffer.
+    /// Wipe leg 3: the sealed rows (cycle history, intimate logs, journals) and the locked-entry buffer.
+    ///
+    /// Both cycle legs are named "your cycle history", the dialog's own words (§9.11, review round 1
+    /// L-U4-2): since the cutover the sealed rows and the buffer hold whole entries — every clinical
+    /// field with the note — not notes alone.
     private func deleteSealedRows(into outcome: inout DeleteAllOutcome) {
         // Sealed rows: the most sensitive data and the only rows with no second chance. Each hook
         // drops rows WITHOUT decrypting, so this works while the app is locked and while a surface is
@@ -5863,7 +5867,7 @@ final class FernletStore {
         // half would re-import, at the next Private open, the Apple Health copies the user chose to
         // keep while deleting their Fernlet data. A write of two markers, never a clear.
         cycleLegacyImportLedger.markBothHalvesDone()
-        if periodDataDeleteHook?() != true { outcome.incompleteStores.append("your cycle notes") }
+        if periodDataDeleteHook?() != true { outcome.incompleteStores.append("your cycle history") }
         if intimacyDataDeleteHook?() != true { outcome.incompleteStores.append("your intimate logs") }
         if journalDataDeleteHook?() != true { outcome.incompleteStores.append("your journal entries") }
         // Worry Box rows are purged (and reported) inside `resetAll()` below — its ONE invocation per
@@ -5872,7 +5876,7 @@ final class FernletStore {
         // The buffer of notes written while LOCKED. Not covered by the row hooks above — it is a file
         // under a separate device key — and its next drain re-inserts every payload into the store we
         // just emptied, so skipping it turns "delete everything" into "delete until the next unlock".
-        if pendingNarrativeBufferPurgeHook?() != true { outcome.incompleteStores.append("your cycle notes") }
+        if pendingNarrativeBufferPurgeHook?() != true { outcome.incompleteStores.append("your cycle history") }
     }
 
     /// Wipe leg 3b: the HealthKit samples Fernlet itself authored, when the user asked for them too.

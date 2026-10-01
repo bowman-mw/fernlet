@@ -444,20 +444,24 @@ struct LocalizationBoundaryTests {
     @Test func theRetiredLossCopyKeysAreGoneFromSourceAndTheirV2KeysArePresent() throws {
         // The period sheet's refusals retired with the cutover (design §10.4): a log is never refused
         // for sharing any more, and the buffer sentences stopped saying "the rest already saved"
-        // (the record is kept FIRST now), so those two moved to `.v2` keys.
+        // (the record is kept FIRST now), so those two moved to `.v2` keys. And "Delete everything"
+        // stopped naming only "cycle notes" (§9.11, review L-U4-2): it deletes the whole cycle
+        // history, which for a user who never shared with Apple Health is the only copy.
         let retired = [
             "\"lock.disclosure.forgottenPasscode\"", "\"lock.reset.required.body\"",
             "\"lock.reset.confirm.message\"", "\"lock.hardBinding.message\"",
             "\"logPeriod.refusal.sharingOff.noLock\"", "\"logPeriod.refusal.notesNeedLock\"",
             "\"logPeriod.refusal.sharingOff\"", "\"logPeriod.refusal.sharingOff.edit\"",
             "\"logPeriod.refusal.healthDenied\"", "\"logPeriod.refusal.healthDenied.edit\"",
-            "\"logPeriod.error.bufferUnopenable\"", "\"logPeriod.error.bufferFull\""
+            "\"logPeriod.error.bufferUnopenable\"", "\"logPeriod.error.bufferFull\"",
+            "\"deleteAll.scope.base\""
         ]
         let required = [
             "\"lock.disclosure.forgottenPasscode.v2\"", "\"lock.reset.required.body.v2\"",
             "\"lock.reset.confirm.message.v2\"", "\"lock.hardBinding.message.v2\"",
             "\"settings.appLock.reset.message.v2\"",
-            "\"logPeriod.error.bufferUnopenable.v2\"", "\"logPeriod.error.bufferFull.v2\""
+            "\"logPeriod.error.bufferUnopenable.v2\"", "\"logPeriod.error.bufferFull.v2\"",
+            "\"deleteAll.scope.base.v2\""
         ]
         var sources = ""
         var fileCount = 0
