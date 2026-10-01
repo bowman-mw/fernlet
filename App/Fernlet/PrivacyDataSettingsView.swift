@@ -178,13 +178,9 @@ struct PrivacyDataSettingsView: View {
     /// The set "Restore it here" was tapped for — exactly the one the line named (review
     /// U5-backup-v2-C-U5-2), handed to the restore when the confirmation is accepted.
     @State private var periodRestoreHereHead: SealedBackupHeadStamp?
-    /// The intimate-log "Restore it here" / "Restore anyway" waiting for its confirmation (design
-    /// 2026-09-30, §10.1) — exactly the set the row named.
-    @State private var pendingIntimacyRestore: SealedBackupV2RowChoice?
-    /// The journal backup, when its pre-reset copy the owner released can't be restored here because
-    /// this iPhone already has entries from after the reset (review U5-backup-v2-C-U5-5) — a snapshot,
-    /// read with ``backupPayloadsKeptForOwner``.
-    @State private var backupPayloadsBlockedForOwner: Set<SealedBackupPayloadType> = []
+    /// The intimate-log or journal "Restore it here" / "Restore anyway" waiting for its confirmation
+    /// (design 2026-09-30, §10.1) — exactly the set the row named.
+    @State private var pendingV2Restore: PendingV2Restore?
     /// Presents the typed-gate ``DeleteEverythingSheet`` for this screen's delete buttons.
     @State private var showDeleteEverything = false
     private let cloudDataService: any PrivacyCloudDataManaging
@@ -202,7 +198,7 @@ struct PrivacyDataSettingsView: View {
     }
 
     var body: some View {
-        intimacyRestoreAlert(consentAlerts(screenContent))
+        v2RestoreAlert(consentAlerts(screenContent))
             .destructiveConfirmation($pendingDestructiveAction)
             // Success ("OK") just clears the flag — this is a pushed screen, so it stays put either way.
             .deleteEverythingAlerts(deleteFlow, successButtonTitle: "OK", successButtonRole: .cancel) {
@@ -278,31 +274,65 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    /// The intimate-log "Restore it here" / "Restore anyway" confirmation (design 2026-09-30, §10.1): a
-    /// merge — it adds logs and never removes one — so it is confirmed, not marked destructive.
-    private func intimacyRestoreAlert(_ content: some View) -> some View {
+    /// A v2 row's "Restore it here" / "Restore anyway" waiting for its confirmation: the payload and
+    /// the exact set it names.
+    struct PendingV2Restore: Equatable {
+        /// The intimate logs or the journal.
+        let payload: SealedBackupPayloadType
+        /// `.restoreHere` or `.restoreAnyway`, with the set.
+        let choice: SealedBackupV2RowChoice
+    }
+
+    /// The intimate-log and journal "Restore it here" / "Restore anyway" confirmation (design
+    /// 2026-09-30, §10.1): a merge — it adds entries and never removes one — so it is confirmed, not
+    /// marked destructive. Its words are the kind's own (never a spliced noun).
+    private func v2RestoreAlert(_ content: some View) -> some View {
         content
-            .alert(pendingIntimacyRestoreTitle, isPresented: $pendingIntimacyRestore.isPresent()) {
-                Button("Cancel", role: .cancel) { pendingIntimacyRestore = nil }
+            .alert(pendingV2RestoreTitle, isPresented: $pendingV2Restore.isPresent()) {
+                Button("Cancel", role: .cancel) { pendingV2Restore = nil }
                 Button("Restore") {
-                    if let choice = pendingIntimacyRestore { runIntimacyBackupChoice(choice) }
-                    pendingIntimacyRestore = nil
+                    if let pending = pendingV2Restore { runV2BackupChoice(pending.choice, payload: pending.payload) }
+                    pendingV2Restore = nil
                 }
             } message: {
-                if case .restoreAnyway = pendingIntimacyRestore {
-                    Text("Its logs are added here. After this, this iPhone backs up your intimate logs.",
-                         comment: "Privacy & Data: confirmation body for restoring an older intimate-log Sealed backup anyway.")
-                } else {
-                    Text("Its logs are added here. After this, this iPhone backs up your intimate logs, and your other iPhone will show that its backup was replaced.",
-                         comment: "Privacy & Data: confirmation body for adding another iPhone's intimate-log Sealed backup here.")
-                }
+                pendingV2RestoreMessage
             }
     }
 
-    /// The intimate-log restore confirmation's title.
-    private var pendingIntimacyRestoreTitle: LocalizedStringKey {
-        if case .restoreAnyway = pendingIntimacyRestore { return "Add the older intimate log backup to this iPhone?" }
-        return "Add the intimate log backup to this iPhone?"
+    /// Whether the pending restore is "Restore anyway" (an older set).
+    private var pendingV2RestoreIsAnyway: Bool {
+        if case .restoreAnyway = pendingV2Restore?.choice { return true }
+        return false
+    }
+
+    /// The v2 restore confirmation's title.
+    private var pendingV2RestoreTitle: LocalizedStringKey {
+        switch (pendingV2Restore?.payload, pendingV2RestoreIsAnyway) {
+        case (.journalNarratives?, true): return "Add the older journal backup to this iPhone?"
+        case (.journalNarratives?, false): return "Add the journal backup to this iPhone?"
+        case (_, true): return "Add the older intimate log backup to this iPhone?"
+        case (_, false): return "Add the intimate log backup to this iPhone?"
+        }
+    }
+
+    /// The v2 restore confirmation's body: the journal's names its fork rule (an entry changed on both
+    /// iPhones shows both versions) and that deleted entries may come back (design §10.1, Q-B6).
+    @ViewBuilder
+    private var pendingV2RestoreMessage: some View {
+        switch (pendingV2Restore?.payload, pendingV2RestoreIsAnyway) {
+        case (.journalNarratives?, true):
+            Text("Its entries are added here. If an entry was changed on both iPhones, you'll see both versions. Entries deleted since that backup was made may come back. After this, this iPhone backs up your journal.",
+                 comment: "Privacy & Data: confirmation body for restoring an older journal Sealed backup anyway.")
+        case (.journalNarratives?, false):
+            Text("Its entries are added here. If an entry was changed on both iPhones, you'll see both versions. Entries deleted since that backup was made may come back. After this, this iPhone backs up your journal, and your other iPhone will show that its backup was replaced.",
+                 comment: "Privacy & Data: confirmation body for adding another iPhone's journal Sealed backup here.")
+        case (_, true):
+            Text("Its logs are added here. After this, this iPhone backs up your intimate logs.",
+                 comment: "Privacy & Data: confirmation body for restoring an older intimate-log Sealed backup anyway.")
+        case (_, false):
+            Text("Its logs are added here. After this, this iPhone backs up your intimate logs, and your other iPhone will show that its backup was replaced.",
+                 comment: "Privacy & Data: confirmation body for adding another iPhone's intimate-log Sealed backup here.")
+        }
     }
 
     /// The three informed-consent alerts that gate anything leaving the device: turning iCloud sync
@@ -503,11 +533,10 @@ struct PrivacyDataSettingsView: View {
     }
 
     /// Re-reads the owner-hold snapshots — the payloads whose pre-reset copy an app-lock reset's hold
-    /// keeps, the ones of those whose restore cannot land here, and whether ambient restores still
-    /// wait for the owner — so `body` never touches defaults or the sealed stores.
+    /// keeps, and whether every restore still waits for the owner — so `body` never touches defaults or
+    /// the sealed stores.
     private func refreshOwnerHoldSnapshots() {
         backupPayloadsKeptForOwner = store?.sealedBackupPayloadsKeptForOwner ?? []
-        backupPayloadsBlockedForOwner = store?.sealedBackupPayloadsBlockedForOwner ?? []
         restoreAwaitsOwner = store?.sealedBackupRestoreAwaitsOwner ?? false
     }
 
@@ -1076,6 +1105,7 @@ struct PrivacyDataSettingsView: View {
                 reuploadDeferredLines
                 periodBackupStateLines
                 intimacyBackupStateLines
+                journalBackupStateLines
                 escrowConflictSection
                 attentionLines
                 if showsRetryRestore { retryRestoreButton }
@@ -1119,9 +1149,9 @@ struct PrivacyDataSettingsView: View {
     private var showsSealedBackupStatusBanner: Bool {
         guard let store else { return false }
         return store.sealedBackupEscrowConflict || showsPeriodCatchUpLine
-            || store.periodBackupExportState != .clear || !backupPayloadsBlockedForOwner.isEmpty
+            || store.periodBackupExportState != .clear
             || Self.showsOwnerHoldLine(kept: backupPayloadsKeptForOwner, preferences: storagePreferencesStore.preferences)
-            || store.sealedBackupJournalReuploadDeferred || store.intimacyBackupRowState != .none
+            || store.journalBackupRowState != .none || store.intimacyBackupRowState != .none
             || !sealedBackupAttentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
             || ownPhotoAttention != nil || ownPhotoBackupDisableFailed
             || store.ownPhotoBackupUploadFailed
@@ -1225,8 +1255,8 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    /// The period / journal / intimacy re-upload deferrals, each naming the remedy that works for
-    /// the state it is actually in.
+    /// The owner-hold lines and the period catch-up line (the intimate logs and the journal speak
+    /// through their own rows), each naming the remedy that works for the state it is actually in.
     @ViewBuilder
     private var reuploadDeferredLines: some View {
         let preferences = storagePreferencesStore.preferences
@@ -1235,15 +1265,13 @@ struct PrivacyDataSettingsView: View {
             // the only way back — shown only while it keeps a pre-reset copy of a backup that is on
             // (review U5-backup-v2-C-U5-5; a hold that keeps nothing is released on entry instead).
             ownerHoldLine
-        } else if !restoreAwaitsOwner,
-                  Self.showsOwnerHoldLine(kept: backupPayloadsKeptForOwner.subtracting(backupPayloadsBlockedForOwner),
-                                          preferences: preferences) {
-            // Released, and a kept payload's restore has not landed yet but can: its own deferral line
-            // would promise an upload the hold still stops (review C-U2-R1), so this one line speaks
-            // for it. A payload whose restore can't land here speaks for itself below.
+        } else if !restoreAwaitsOwner, Self.showsOwnerHoldLine(kept: backupPayloadsKeptForOwner, preferences: preferences) {
+            // Released, and a kept payload's restore has not landed yet: its own catch-up line would
+            // promise an upload the hold still stops (review C-U2-R1), so this one line speaks for it.
+            // Every restore is a merge now, so every kept payload's restore can land (design
+            // 2026-09-30, §7.3).
             ownerHoldReleasedLine
         }
-        blockedPreResetCopyLines
         reuploadDeferredPayloadLines
     }
 
@@ -1257,39 +1285,6 @@ struct PrivacyDataSettingsView: View {
     ///   - preferences: The storage preferences.
     static func showsOwnerHoldLine(kept: Set<SealedBackupPayloadType>, preferences: StoragePreferences) -> Bool {
         SealedBackupRestoreHold.keepsAnyEnabledCopy(kept, preferences: preferences)
-    }
-
-    /// The journal / intimacy backups whose pre-reset copy can't be restored here, because this iPhone
-    /// already has entries from after the reset (their restore writes only into an empty store) —
-    /// said by name, with the one explicit way forward. Nothing replaces the copy until the user
-    /// chooses it (review U5-backup-v2-C-U5-5 / L-U5-R5).
-    private var blockedPreResetCopyLines: some View {
-        ForEach(SealedBackupPayloadType.allCases.filter(backupPayloadsBlockedForOwner.contains), id: \.self) { payload in
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Your \(payload.displayNoun) backup from before the reset can't be restored, because this iPhone already has \(payload.displayNoun) entries from after the reset. Fernlet is keeping that backup in iCloud and won't back up this iPhone over it.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                    .accessibilityIdentifier("privacy.sealedBackup.preResetBlocked")
-                periodChoiceButton("Replace it with this iPhone's entries", identifier: "privacy.sealedBackup.preResetReplace") {
-                    confirmPreResetCopyReplace(payload)
-                }
-            }
-        }
-    }
-
-    /// "Replace it with this iPhone's entries" for a blocked pre-reset copy, behind its destructive
-    /// confirmation: the entries only that backup holds leave iCloud, never this iPhone.
-    private func confirmPreResetCopyReplace(_ payload: SealedBackupPayloadType) {
-        pendingDestructiveAction = DestructiveConfirmation(
-            title: "Replace the backup from before the reset?",
-            message: "Entries that are only in that backup will be gone from iCloud. The entries on this iPhone stay, and Fernlet backs them up the next time you open Private.",
-            confirmLabel: "Replace",
-            auditEvent: "privacy.sealedBackup.preResetReplaceConfirmed"
-        ) {
-            store?.replacePreResetSealedBackupWithThisIPhone(payload)
-            refreshOwnerHoldSnapshots()
-        }
     }
 
     /// After an app-lock reset: what Fernlet is (not) doing with the Sealed backup it made before the
@@ -1490,51 +1485,86 @@ struct PrivacyDataSettingsView: View {
     @ViewBuilder
     private var intimacyBackupStateLines: some View {
         if let store {
-            IntimacyBackupStatusRows(state: store.intimacyBackupRowState, isBusy: isSettlingPeriodBackupChoice) { choice in
-                confirmIntimacyBackupChoice(choice)
+            SealedBackupV2StatusRows(copy: .intimacy, state: store.intimacyBackupRowState, isBusy: isSettlingPeriodBackupChoice) { choice in
+                confirmV2BackupChoice(choice, payload: .intimacyLogs)
             }
         }
     }
 
-    /// Confirms one intimate-log choice: the restores behind their alert, Replace, Start a new backup
-    /// and Remove behind a destructive confirmation (design 2026-09-30, §10.1). Nothing runs until the
-    /// user confirms.
-    private func confirmIntimacyBackupChoice(_ choice: SealedBackupV2RowChoice) {
-        switch choice {
-        case .restoreHere, .restoreAnyway:
-            pendingIntimacyRestore = choice
-        case .replace:
-            pendingDestructiveAction = DestructiveConfirmation(
-                title: "Replace the intimate log backup with this iPhone's logs?",
-                message: "Logs that are only in the backup won't be in it anymore. If your other iPhone still has them, they stay on that iPhone.",
-                confirmLabel: "Replace",
-                auditEvent: "privacy.sealedBackup.intimacyReplaceConfirmed"
-            ) { runIntimacyBackupChoice(choice) }
-        case .startNew:
-            // The set it writes over may be the only copy, and its key usually arrives through iCloud
-            // Keychain even when the iPhone that saved it is gone (review B1 fix round 2 N-1).
-            pendingDestructiveAction = DestructiveConfirmation(
-                title: "Start a new intimate log backup?",
-                message: "This iPhone can't open the intimate log backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged.",
-                confirmLabel: "Start new backup",
-                auditEvent: "privacy.sealedBackup.intimacyStartNewConfirmed"
-            ) { runIntimacyBackupChoice(choice) }
-        case .remove(let ids):
-            pendingDestructiveAction = DestructiveConfirmation(
-                title: "Remove \(ids.count) intimate logs this iPhone can't open?",
-                message: "They'll be checked again first, and only logs that still can't be opened are removed. This can't be undone.",
-                confirmLabel: "Remove",
-                auditEvent: "privacy.sealedBackup.intimacyRemoveConfirmed"
-            ) { runIntimacyBackupChoice(choice) }
+    /// The journal Sealed backup's rows (design 2026-09-30, §10.1, unit B3), with the same states and
+    /// choices as the intimate logs'. Never shown during a duress session
+    /// (``FernletStore/journalBackupRowState`` is `.none` then, §7.6).
+    @ViewBuilder
+    private var journalBackupStateLines: some View {
+        if let store {
+            SealedBackupV2StatusRows(copy: .journal, state: store.journalBackupRowState, isBusy: isSettlingPeriodBackupChoice) { choice in
+                confirmV2BackupChoice(choice, payload: .journalNarratives)
+            }
         }
     }
 
-    /// Records a confirmed intimate-log choice as an intent (carried out now if the Private tab is
-    /// open, else at the next visit) and, when it waits for that visit, says so once.
-    private func runIntimacyBackupChoice(_ choice: SealedBackupV2RowChoice) {
+    /// Confirms one intimate-log or journal choice: the restores behind their alert, Replace, Start a
+    /// new backup and Remove behind a destructive confirmation (design 2026-09-30, §10.1). Nothing runs
+    /// until the user confirms.
+    private func confirmV2BackupChoice(_ choice: SealedBackupV2RowChoice, payload: SealedBackupPayloadType) {
+        switch choice {
+        case .restoreHere, .restoreAnyway:
+            pendingV2Restore = PendingV2Restore(payload: payload, choice: choice)
+        case .replace, .startNew, .remove:
+            pendingDestructiveAction = v2DestructiveConfirmation(choice, payload: payload)
+        }
+    }
+
+    /// The destructive confirmation for a v2 Replace, Start a new backup or Remove, in the kind's own
+    /// words.
+    private func v2DestructiveConfirmation(_ choice: SealedBackupV2RowChoice, payload: SealedBackupPayloadType) -> DestructiveConfirmation? {
+        let run = { runV2BackupChoice(choice, payload: payload) }
+        let journal = payload == .journalNarratives
+        switch choice {
+        case .replace:
+            return DestructiveConfirmation(
+                title: journal ? "Replace the journal backup with this iPhone's journal?" : "Replace the intimate log backup with this iPhone's logs?",
+                message: journal
+                    ? "Entries that are only in the backup won't be in it anymore. If your other iPhone still has them, they stay on that iPhone."
+                    : "Logs that are only in the backup won't be in it anymore. If your other iPhone still has them, they stay on that iPhone.",
+                confirmLabel: "Replace",
+                auditEvent: journal ? "privacy.sealedBackup.journalReplaceConfirmed" : "privacy.sealedBackup.intimacyReplaceConfirmed",
+                perform: run
+            )
+        case .startNew:
+            // The set it writes over may be the only copy, and its key usually arrives through iCloud
+            // Keychain even when the iPhone that saved it is gone (review B1 fix round 2 N-1).
+            return DestructiveConfirmation(
+                title: journal ? "Start a new journal backup?" : "Start a new intimate log backup?",
+                message: journal
+                    ? "This iPhone can't open the journal backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged."
+                    : "This iPhone can't open the intimate log backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged.",
+                confirmLabel: "Start new backup",
+                auditEvent: journal ? "privacy.sealedBackup.journalStartNewConfirmed" : "privacy.sealedBackup.intimacyStartNewConfirmed",
+                perform: run
+            )
+        case .remove(let ids):
+            return DestructiveConfirmation(
+                title: journal ? "Remove \(ids.count) entries this iPhone can't open?" : "Remove \(ids.count) intimate logs this iPhone can't open?",
+                message: journal
+                    ? "They'll be checked again first, and only entries that still can't be opened are removed. This can't be undone."
+                    : "They'll be checked again first, and only logs that still can't be opened are removed. This can't be undone.",
+                confirmLabel: "Remove",
+                auditEvent: journal ? "privacy.sealedBackup.journalRemoveConfirmed" : "privacy.sealedBackup.intimacyRemoveConfirmed",
+                perform: run
+            )
+        case .restoreHere, .restoreAnyway:
+            return nil
+        }
+    }
+
+    /// Records a confirmed intimate-log or journal choice as an intent (carried out now if the Private
+    /// tab is open, else at the next visit) and, when it waits for that visit, says so once.
+    private func runV2BackupChoice(_ choice: SealedBackupV2RowChoice, payload: SealedBackupPayloadType) {
         runPeriodBackupChoice { appStore in
-            await appStore.carryOutIntimacyBackupChoice(choice)
-            if appStore.intimacyBackupRowState == .finishing {
+            await appStore.carryOutSealedBackupChoice(choice, for: payload)
+            let state = payload == .journalNarratives ? appStore.journalBackupRowState : appStore.intimacyBackupRowState
+            if state == .finishing {
                 FernletAnnouncer.system.announce(.status, LocalizedStringResource(
                     "Open Private to finish.",
                     comment: "Privacy & Data: a Sealed backup choice waits for the next visit to the Private tab."
@@ -1572,20 +1602,6 @@ struct PrivacyDataSettingsView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
                 .accessibilityIdentifier("privacy.sealedBackup.periodDeferred")
-        }
-
-        // The journal equivalent (the intimate logs speak through their own rows, below the
-        // period card). The journal is sealed under the Private tab's key, so turning its backup
-        // on from here (Home → Settings, hub re-locked) always defers. The copy names the ONE
-        // remedy that always works and deliberately does not promise an unconditional automatic
-        // upload: the retry only runs from a store that actually holds entries this device can
-        // seal, because exporting an empty one would replace the cloud backup with nothing.
-        if let store, store.sealedBackupJournalReuploadDeferred, !backupPayloadsKeptForOwner.contains(.journalNarratives) {
-            Text("Your journal backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your journal entries are on it.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-                .accessibilityIdentifier("privacy.sealedBackup.journalDeferred")
         }
     }
 
@@ -1627,12 +1643,9 @@ struct PrivacyDataSettingsView: View {
 
     /// Whether "Retry restore" can actually do anything about the states on screen.
     ///
-    /// Also offered for a stuck journal re-upload deferral: with an empty local store there is no
-    /// retryable attention item (the ambient restore is fresh-install-only and records nothing), yet
-    /// the remedy IS a retry — `userInitiated` takes the targeted restore, and the same pass's
-    /// follow-through then re-uploads and clears the deferral. NOT for the v2 payloads' owed uploads
-    /// (period, intimate logs): they restore and export only with the Private tab's key, at the next
-    /// hub settle, which their own lines name (design 2026-09-30, §10.1, R2-F9).
+    /// NOT for the payload backups' owed uploads (period, intimate logs, journal): they restore and
+    /// export only with the Private tab's key, at the next hub settle, which their own lines name
+    /// (design 2026-09-30, §10.1, R2-F9) — a Retry from Settings could not run them.
     private var showsRetryRestore: Bool {
         guard let store else { return false }
         return sealedBackupAttentionItems.contains(where: { $0.outcome.isRetryable })
@@ -1649,10 +1662,6 @@ struct PrivacyDataSettingsView: View {
             // latches. NOT offered for the blocked-by-another-device state — that copy carries no
             // Retry invitation, because a Retry here structurally cannot clear it.
             || (showsHashMigrationPending && !store.sealedPhotoHashMigrationBlockedByOtherDevice)
-            // The journal (the one v1 payload left): a deferral with an empty local store records no
-            // retryable attention item, yet Retry IS the remedy — `userInitiated` takes its targeted
-            // restore, and the same pass's follow-through then re-uploads and clears the deferral.
-            || store.sealedBackupJournalReuploadDeferred
     }
 
     /// The one retry for both routes. Disabled while a retry is in flight (R3: one pass per tap —
@@ -1708,9 +1717,9 @@ struct PrivacyDataSettingsView: View {
         guard !isRetryingRestore else { return }
         FernletAuditLog.log("privacy.sealedBackup.retryRestore")
         isRetryingRestore = true
-        // `userInitiated` lets the period half fall back to the targeted restore. Without it, Retry on an
-        // in-use device can only ever hit the fresh-install-only gate, so it would clear the banner
-        // without having retried anything.
+        // `userInitiated` asks the Sealed backup v2 engine for an ambient pass of every payload (the
+        // owner hold, E1 and every gate honoured; a no-op while Private is closed) and makes the photo
+        // pass a full one.
         Task {
             await store.restoreSealedBackupsIfNeeded(userInitiated: true)
             await MainActor.run { isRetryingRestore = false }
@@ -2130,8 +2139,8 @@ struct PrivacyDataSettingsView: View {
         if enabled {
             // Require explicit, informed confirmation before any data leaves the device.
             pendingSealedBackupEnable = payload
-        } else if payload == .intimacyLogs {
-            confirmIntimacyBackupTurnOff()
+        } else if payload == .intimacyLogs || payload == .journalNarratives {
+            confirmV2BackupTurnOff(payload)
         } else if payload == .periodData, store?.periodBackupSlotIsAnotherIPhones == true {
             // The period slot holds another iPhone's backup (design 2026-09-30 §9, R2-F3): turning
             // this iPhone's switch off keeps it, so the confirmation says so instead of promising a
@@ -2162,29 +2171,36 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    /// Turning the intimate-log backup off (design 2026-09-30 §10.1, R2-F3): on a slot this iPhone last
-    /// observed as another iPhone's, the cloud copy is KEPT and the confirmation says so; otherwise the
-    /// backup is deleted from iCloud for every iPhone that uses it.
-    private func confirmIntimacyBackupTurnOff() {
-        let payload = SealedBackupPayloadType.intimacyLogs
-        if store?.intimacyBackupSlotIsAnotherIPhones == true {
+    /// Turning the intimate-log or journal backup off (design 2026-09-30 §10.1, R2-F3): on a slot this
+    /// iPhone last observed as another iPhone's, the cloud copy is KEPT and the confirmation says so;
+    /// otherwise the backup is deleted from iCloud for every iPhone that uses it. Each kind in its own
+    /// words.
+    private func confirmV2BackupTurnOff(_ payload: SealedBackupPayloadType) {
+        let journal = payload == .journalNarratives
+        let slotIsAnotherIPhones = journal
+            ? store?.journalBackupSlotIsAnotherIPhones == true
+            : store?.intimacyBackupSlotIsAnotherIPhones == true
+        let turnOff = { applySealedBackup(payload, enabled: false) }
+        if slotIsAnotherIPhones {
             pendingDestructiveAction = DestructiveConfirmation(
-                title: "Stop backing up this iPhone's intimate logs?",
-                message: "The intimate log backup saved from your other iPhone stays in iCloud.",
+                title: journal ? "Stop backing up this iPhone's journal?" : "Stop backing up this iPhone's intimate logs?",
+                message: journal
+                    ? "The journal backup saved from your other iPhone stays in iCloud."
+                    : "The intimate log backup saved from your other iPhone stays in iCloud.",
                 confirmLabel: "Stop",
-                auditEvent: "privacy.sealedBackup.disableKeepingOtherIPhonesConfirmed.\(payload.rawValue)"
-            ) {
-                applySealedBackup(payload, enabled: false)
-            }
+                auditEvent: "privacy.sealedBackup.disableKeepingOtherIPhonesConfirmed.\(payload.rawValue)",
+                perform: turnOff
+            )
         } else {
             pendingDestructiveAction = DestructiveConfirmation(
-                title: "Turn off Sealed backup for intimate logs?",
-                message: "This permanently deletes the intimate log backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your intimate logs can't be recovered.",
+                title: journal ? "Turn off Sealed backup for journal entries?" : "Turn off Sealed backup for intimate logs?",
+                message: journal
+                    ? "This permanently deletes the journal backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your journal can't be recovered."
+                    : "This permanently deletes the intimate log backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your intimate logs can't be recovered.",
                 confirmLabel: "Turn off",
-                auditEvent: "privacy.sealedBackup.disableConfirmed.\(payload.rawValue)"
-            ) {
-                applySealedBackup(payload, enabled: false)
-            }
+                auditEvent: "privacy.sealedBackup.disableConfirmed.\(payload.rawValue)",
+                perform: turnOff
+            )
         }
     }
 

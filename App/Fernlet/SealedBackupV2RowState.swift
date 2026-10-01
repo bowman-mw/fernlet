@@ -3,9 +3,9 @@ import Foundation
 
 /// What Privacy & Data says about one Sealed backup v2 payload's backup (journal and intimacy Sealed
 /// backup v2 design 2026-09-30, §10.1) — the ONE mapping from the engine's in-memory status and the
-/// persisted bookkeeping to a row, shared by `FernletStore` and the tests. Today the intimate-log
-/// rows use it (unit B2); the period card keeps its own ``PeriodBackupExportState`` (period design
-/// §10.6) and the journal joins in B3.
+/// persisted bookkeeping to a row, shared by `FernletStore` and the tests. The intimate-log rows
+/// (unit B2) and the journal rows (unit B3) use it; the period card keeps its own
+/// ``PeriodBackupExportState`` (period design §10.6).
 ///
 /// Nothing here is decrypted or fetched: it reads what the last pass left (``SealedBackupV2Status``)
 /// and, after a relaunch, what persists — the owner hold, an unresolved restore marker, the observed

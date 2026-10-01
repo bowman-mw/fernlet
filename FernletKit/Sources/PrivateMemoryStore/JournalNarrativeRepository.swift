@@ -116,6 +116,118 @@ public struct SealedRowOpenability: Equatable, Sendable {
     }
 }
 
+/// The journal DEVICE key as the Sealed backup reads it — never minted (journal and intimacy Sealed
+/// backup v2 design 2026-09-30, §7.2). A journal row is sealed under the Private tab's hub key, or —
+/// written while the tab was closed, from Home — under this iPhone's device key until the next fold, so
+/// the backup tries both. Absent and unreadable are different answers: with no device key a row the hub
+/// key does not open is dead, but a keychain that did not answer decides nothing.
+///
+/// `Sendable`: crosses `performAndWait`'s `@Sendable` closure.
+public nonisolated enum JournalBackupDeviceKey: Sendable {
+    /// The device key exists.
+    case present(SymmetricKey)
+    /// This iPhone holds no journal device key.
+    case absent
+    /// The keychain did not answer (a transient read failure, or before the first unlock).
+    case unreadable
+}
+
+/// One Sealed backup chunk's journal entries, classified (journal and intimacy Sealed backup v2 design
+/// 2026-09-30, §7.2), so the export can stop BEFORE its first save rather than ship a partial set:
+/// - ``records``: entries that opened under the hub key or the device key, one per id;
+/// - ``deadIDs``: ids whose rows open under no key this iPhone holds (never transient);
+/// - ``needsNewerBuildIDs``: ids whose row opens but carries a plaintext column this build cannot
+///   read (an unknown feeling tag, a missing day key or entry date) — never dead: a build that can
+///   read it would show it (missing key is not the same as unknown value);
+/// - ``transientCount``: rows this attempt could not decide (the install binding or the device-key
+///   keychain did not answer); a caller must never call anything dead while it is above zero.
+///
+/// An id with no row at all was deleted since the snapshot and is simply absent.
+public nonisolated struct JournalBackupPage: Equatable, Sendable {
+    /// Entries that opened, one per id, in the requested order.
+    public var records: [JournalNarrative]
+    /// Ids whose rows can never open on this iPhone.
+    public var deadIDs: [UUID]
+    /// Ids whose rows open but carry a plaintext column this build cannot read.
+    public var needsNewerBuildIDs: [UUID]
+    /// Rows this attempt could not decide (retryable).
+    public var transientCount: Int
+
+    /// Creates a page.
+    public init(records: [JournalNarrative] = [], deadIDs: [UUID] = [], needsNewerBuildIDs: [UUID] = [], transientCount: Int = 0) {
+        self.records = records
+        self.deadIDs = deadIDs
+        self.needsNewerBuildIDs = needsNewerBuildIDs
+        self.transientCount = transientCount
+    }
+}
+
+/// What one journal restore merge (``JournalNarrativeRepository/upsertMerged(_:hubKey:deviceKey:)``)
+/// changed, and which stored entries now carry the backup's content.
+///
+/// `Sendable`: a plain value returned out of `performAndWait`.
+public nonisolated struct JournalNarrativeMergeResult: Equatable, Sendable {
+    /// Ids that were absent and are now stored, with the backup's own stamps.
+    public var inserted = 0
+    /// Ids whose every stored row was dead, replaced by the backup's copy.
+    public var replaced = 0
+    /// Backup entries whose text or emotions differ from the local entry with the same id, added as
+    /// NEW entries beside it (the local one is kept as it is).
+    public var forked = 0
+    /// Backup entries this iPhone already holds with the same text and emotions (under their own id,
+    /// or — for a different local text — as an equal entry on the same day): nothing written.
+    public var unchanged = 0
+    /// The ids of the stored entries that now carry each backup entry's content — inserted, replaced,
+    /// forked and unchanged alike — so the follow-up rebuilds every day skeleton a restore needs, and
+    /// a retry after a skeleton write failed rebuilds the missing ones (the merge itself is then a
+    /// no-op).
+    public var followUpIDs: [UUID] = []
+
+    /// Creates an empty result.
+    public init() {}
+
+    /// How many entries the merge inserted, replaced or forked.
+    public var changedCount: Int { inserted + replaced + forked }
+    /// Whether the save changed anything on disk.
+    public var changedAnything: Bool { changedCount > 0 }
+}
+
+/// The plaintext half of one stored journal entry — what a day skeleton needs (its id, day, feeling
+/// tag and date), read without a key. The text and emotions stay sealed: a skeleton never carries
+/// them into the synced day blob.
+///
+/// `Sendable`: a plain value returned out of `performAndWait`.
+public nonisolated struct JournalNarrativeSkeleton: Equatable, Sendable {
+    /// The entry's id (the day blob's `JournalEntry.id`).
+    public let id: UUID
+    /// The owning day's key.
+    public let dayKey: String
+    /// The feeling tag the entry was written under.
+    public let tag: FeelingTag
+    /// When the entry was written within the day.
+    public let entryDate: Date
+
+    /// Creates a skeleton.
+    public init(id: UUID, dayKey: String, tag: FeelingTag, entryDate: Date) {
+        self.id = id
+        self.dayKey = dayKey
+        self.tag = tag
+        self.entryDate = entryDate
+    }
+}
+
+/// A journal batch call the repository refused, with nothing written.
+///
+/// `Sendable`: thrown out of `performAndWait`.
+public nonisolated enum JournalNarrativeRepositoryError: Error, Equatable, Sendable {
+    /// A stored row with an id this write touches could not be decided (the install binding or the
+    /// device-key keychain did not answer) or carries a column this build cannot read. Nothing was
+    /// written; retryable.
+    case undecidedRows(count: Int)
+    /// A call named more ids or records than one call accepts.
+    case batchTooLarge(count: Int, limit: Int)
+}
+
 /// ColumnCrypto-sealed journal storage in the local-only private Core Data store — the production
 /// ``JournalNarrativeStoring`` conformer on the protected side of the S3 wall.
 ///
@@ -144,11 +256,14 @@ public struct SealedRowOpenability: Equatable, Sendable {
 /// does not linger in the transaction log — best-effort (`try?`) after upserts, but rethrown after
 /// deletes.
 ///
-/// The app's `SealedBackupCoordinator` is the other caller: it exports via the paged
-/// ``narratives(offset:limit:contentKey:)`` / ``narrativeCount()`` pair, restores via
-/// ``insertAtomically(_:contentKey:)``, and consults ``hasEverStoredNarrative`` so a restore can never
-/// resurrect entries the user deliberately deleted. Every mutation — deletes included — sets that
-/// one-way latch.
+/// The app's Sealed backup v2 engine is the other caller, through its journal adapter (journal and
+/// intimacy Sealed backup v2 design 2026-09-30, §7): it snapshots the keyless ``allIDs()``, reads
+/// each chunk classified under the hub key OR the device key (``backupRecords(ids:hubKey:deviceKey:)``
+/// — a row still under the device key is backed up as it is, the fold is no backup precondition),
+/// restores through the id-keyed merge ``upsertMerged(_:hubKey:deviceKey:)`` (never a delete, never a
+/// local entry overwritten, a different text kept beside the local one) and rebuilds the day
+/// skeletons from the keyless ``skeletons(ids:)``. ``hasEverStoredNarrative`` now only seeds the
+/// journal backup's restore marker once. Every mutation — deletes included — sets that one-way latch.
 ///
 /// Failure modes: seal/open rethrow `ColumnCrypto` (CryptoKit/JSON) errors; a failed upsert save
 /// rolls back the in-memory change before rethrowing so the context is left clean.
@@ -262,41 +377,6 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
             // succeeded — but it is audit-logged rather than discarded.
             PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "JournalNarrative.insert")
             // Latch AFTER a successful save, so a failed write never claims this device has diverged.
-            markNarrativeStored()
-        }
-    }
-
-    /// Inserts many narratives in a SINGLE transaction: either all commit or none do. Used by the
-    /// sealed-backup RESTORE so a mid-batch failure cannot leave a partially-populated store — a partial
-    /// store would trip the restore no-clobber gate (`narrativeCount() != 0`) on the next launch and
-    /// never retry, silently dropping the un-inserted sealed records.
-    ///
-    /// Deliberately a PLAIN insert, not ``insert(_:contentKey:)``'s upsert: the caller has already
-    /// proven the store is empty, so the per-row existence fetch would be pure cost, and an upsert would
-    /// quietly overwrite a row this gate says cannot exist rather than surfacing the contradiction.
-    ///
-    /// - Important: Throws `FernletLockError.locked` when `contentKey` is `nil`. On any per-record
-    ///   failure the whole batch is rolled back and the error rethrown, leaving the store empty so the
-    ///   next launch re-pulls the full backup.
-    public func insertAtomically(_ narratives: [JournalNarrative], contentKey: SymmetricKey?) throws {
-        guard let contentKey else { throw FernletLockError.locked }
-        guard !narratives.isEmpty else { return }
-        try context.performAndWait {
-            do {
-                for narrative in narratives {
-                    let object = NSEntityDescription.insertNewObject(forEntityName: "JournalNarrative", into: context)
-                    try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
-                }
-                try context.saveSealed()
-            } catch {
-                context.rollback()
-                throw error
-            }
-            // Prune history after the atomic restore so no per-record transaction lingers in the
-            // persistent-history transaction log (best-effort, and logged when it fails).
-            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "JournalNarrative.insertAtomically")
-            // Latch AFTER the transaction commits. A restore that populates the store also counts as
-            // "this device has journal narratives", so a later delete-everything cannot re-pull them.
             markNarrativeStored()
         }
     }
@@ -630,13 +710,16 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
 
     // MARK: - Private
 
-    /// Writes `narrative` onto a managed object, sealing `text`/`emotions` and stamping
-    /// `updatedAt` while preserving the caller-resolved `createdAt`.
+    /// Writes `narrative` onto a managed object, sealing `text`/`emotions`, preserving the
+    /// caller-resolved `createdAt` and stamping `updatedAt` — now for a user's write, or the backup's
+    /// own stamp for a restore merge (journal and intimacy Sealed backup v2 design 2026-09-30, §7.3:
+    /// a restored entry keeps the stamps it was backed up with).
     private func apply(
         _ narrative: JournalNarrative,
         to object: NSManagedObject,
         contentKey: SymmetricKey,
-        createdAt: Date
+        createdAt: Date,
+        updatedAt: Date? = nil
     ) throws {
         object.setValue(narrative.id, forKey: "id")
         object.setValue(narrative.dayKey, forKey: "dayKey")
@@ -645,7 +728,7 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
         object.setValue(try crypto.sealString(narrative.text, contentKey: contentKey), forKey: "textCiphertext")
         object.setValue(try crypto.seal(narrative.emotions, contentKey: contentKey), forKey: "emotionsCiphertext")
         object.setValue(createdAt, forKey: "createdAt")
-        object.setValue(Date(), forKey: "updatedAt")
+        object.setValue(updatedAt ?? Date(), forKey: "updatedAt")
     }
 
     /// Rehydrates one row into a ``JournalNarrative``, opening its sealed columns.
@@ -680,4 +763,377 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
         return request
     }
 
+}
+
+// MARK: - Sealed backup v2 surface (journal and intimacy Sealed backup v2 design 2026-09-30, §7)
+
+extension JournalNarrativeRepository {
+    /// The most entries one backup snapshot or restore merge handles (the engine's record bound).
+    public static let maxBackupRecords = 100_000
+
+    /// How one stored row answered the keys.
+    private enum RowOpening {
+        case opened(JournalNarrative, NSManagedObject)
+        case dead
+        case needsNewerBuild
+        case undecided
+    }
+
+    /// How one row's sealed columns answered one key.
+    private enum ColumnOpening {
+        case opened(text: String, emotions: [String])
+        case refused
+        case undecided
+    }
+
+    /// Whether the context's coordinator has a persistent store attached — false when the sealed
+    /// store failed to load (the controller then runs against an empty coordinator, where every read
+    /// answers empty and would read as "no entries") or is between a failed rebuild and its heal. The
+    /// Sealed backup engine requires it before every snapshot and every restore write (R2-F2). Keyless.
+    public var isStoreHealthy: Bool {
+        context.performAndWait {
+            !(context.persistentStoreCoordinator?.persistentStores.isEmpty ?? true)
+        }
+    }
+
+    /// Every stored id, distinct, in the store's total order (`entryDate` ascending, then `id`) —
+    /// KEYLESS, decrypting nothing. The backup export's snapshot is these ids intersected with the
+    /// ids some day still references (§7.1); its chunks are read by id, so a page can never shift
+    /// under a concurrent write. Bounded at ``maxBackupRecords`` + 1 ids.
+    public func allIDs() throws -> [UUID] {
+        try context.performAndWait {
+            let request = NSFetchRequest<NSDictionary>(entityName: "JournalNarrative")
+            request.resultType = .dictionaryResultType
+            request.propertiesToFetch = ["id", "entryDate"]
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "entryDate", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
+            request.fetchLimit = Self.maxBackupRecords + 1
+            var seen = Set<UUID>()
+            return try context.fetch(request).compactMap { $0["id"] as? UUID }.filter { seen.insert($0).inserted }
+        }
+    }
+
+    /// The entries with these ids for a Sealed backup chunk, classified (see ``JournalBackupPage``):
+    /// each id's rows are tried under the hub key, then under the device key (read by the caller
+    /// WITHOUT minting), so an entry written from Home and not folded yet is backed up as it is.
+    ///
+    /// - Parameters:
+    ///   - ids: At most 500 ids (one chunk is 250).
+    ///   - hubKey: The Private tab's content key; nil throws `FernletLockError.locked` — this read
+    ///     never answers empty for want of a key.
+    ///   - deviceKey: The journal device key as read without minting.
+    /// - Throws: ``JournalNarrativeRepositoryError/batchTooLarge(count:limit:)``; `FernletLockError.locked`; a fetch error.
+    public func backupRecords(ids: [UUID], hubKey: SymmetricKey?, deviceKey: JournalBackupDeviceKey) throws -> JournalBackupPage {
+        guard ids.count <= Self.maxPageSize else {
+            throw JournalNarrativeRepositoryError.batchTooLarge(count: ids.count, limit: Self.maxPageSize)
+        }
+        guard let hubKey else { throw FernletLockError.locked }
+        guard !ids.isEmpty else { return JournalBackupPage() }
+        return try context.performAndWait {
+            let grouped = try fetchRows(ids: ids)
+            var page = JournalBackupPage()
+            var seen = Set<UUID>()
+            for id in ids where seen.insert(id).inserted {  // R2: bounded by `ids` (≤ maxPageSize).
+                guard let rows = grouped[id] else { continue }
+                switch opening(of: rows, hubKey: hubKey, deviceKey: deviceKey) {
+                case .opened(let narrative, _): page.records.append(narrative)
+                case .dead: page.deadIDs.append(id)
+                case .needsNewerBuild: page.needsNewerBuildIDs.append(id)
+                case .undecided: page.transientCount += 1
+                }
+            }
+            if !page.deadIDs.isEmpty || !page.needsNewerBuildIDs.isEmpty || page.transientCount > 0 {
+                FernletAuditLog.log("sealedRow.undecryptable", context: [
+                    "entity": "JournalNarrative",
+                    "dead": "\(page.deadIDs.count)",
+                    "newer": "\(page.needsNewerBuildIDs.count)",
+                    "undecided": "\(page.transientCount)"
+                ])
+            }
+            return page
+        }
+    }
+
+    /// THE journal restore write (design 2026-09-30, §7.3): an id-keyed MERGE of a restored set, in ONE
+    /// save that is rolled back on any throw. The batch is first reduced by id (the later `updatedAt`
+    /// wins; a tie keeps the first). Then, per id, against the local rows (opened under the hub key,
+    /// else the device key):
+    /// - absent → inserted with the backup's own `createdAt` / `updatedAt`;
+    /// - opens with the same text and emotions → nothing (a tag or date difference alone leaves the
+    ///   local entry as it is);
+    /// - opens with a DIFFERENT text or emotions → the local entry is KEPT, and the backup's copy is
+    ///   added as a NEW entry (a fresh id; its day, date, tag, text, emotions and stamps) — unless an
+    ///   entry on that day already has the same text and emotions;
+    /// - every row dead → replaced by the backup's copy (a dead row can never be read, so an openable
+    ///   copy of the same id loses nothing);
+    /// - undecided, or carrying a column this build cannot read → the WHOLE merge throws
+    ///   ``JournalNarrativeRepositoryError/undecidedRows(count:)`` and nothing is saved.
+    ///
+    /// It never deletes a row that opens, never modifies one, and never chooses between two texts by
+    /// their clocks — restore-time stamps, the same-id typing path with sync on and clock skew can
+    /// therefore never lose text. Idempotent: a second merge of the same set changes nothing (a fork's
+    /// equal content is found on its day). Everything new is sealed under the hub key. History is
+    /// pruned best-effort and the divergence latch set only when something changed.
+    ///
+    /// - Throws: `FernletLockError.locked` without a hub key; ``JournalNarrativeRepositoryError``; a seal
+    ///   or save error (rolled back).
+    public func upsertMerged(
+        _ incoming: [JournalNarrative],
+        hubKey: SymmetricKey?,
+        deviceKey: JournalBackupDeviceKey
+    ) throws -> JournalNarrativeMergeResult {
+        guard let hubKey else { throw FernletLockError.locked }
+        guard incoming.count <= Self.maxBackupRecords else {
+            throw JournalNarrativeRepositoryError.batchTooLarge(count: incoming.count, limit: Self.maxBackupRecords)
+        }
+        let batch = Self.reducedByID(incoming)
+        return try context.performAndWait {
+            let result: JournalNarrativeMergeResult
+            do {
+                result = try applyMerge(batch, hubKey: hubKey, deviceKey: deviceKey)
+                if context.hasChanges { try context.saveSealed() }
+            } catch {
+                context.rollback()
+                throw error
+            }
+            if result.changedAnything {
+                PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "JournalNarrative.upsertMerged")
+                markNarrativeStored()
+            }
+            return result
+        }
+    }
+
+    /// The plaintext half (id, day, tag, date) of the stored entries with these ids — KEYLESS, so the
+    /// restore's day skeletons are rebuilt without decrypting anything. A row whose tag this build
+    /// cannot read, or that lacks its day or date, is skipped (no skeleton could render it).
+    ///
+    /// - Parameter ids: At most ``maxBackupRecords`` ids.
+    public func skeletons(ids: [UUID]) throws -> [JournalNarrativeSkeleton] {
+        guard ids.count <= Self.maxBackupRecords else {
+            throw JournalNarrativeRepositoryError.batchTooLarge(count: ids.count, limit: Self.maxBackupRecords)
+        }
+        guard !ids.isEmpty else { return [] }
+        return try context.performAndWait {
+            let grouped = try fetchRows(ids: ids)
+            var skeletons: [JournalNarrativeSkeleton] = []
+            var seen = Set<UUID>()
+            for id in ids where seen.insert(id).inserted {  // R2: bounded by `ids`.
+                guard let row = grouped[id]?.first,
+                      let dayKey = row.value(forKey: "dayKey") as? String,
+                      let tagRaw = row.value(forKey: "tag") as? String,
+                      let tag = FeelingTag(rawValue: tagRaw),
+                      let entryDate = row.value(forKey: "entryDate") as? Date else { continue }
+                skeletons.append(JournalNarrativeSkeleton(id: id, dayKey: dayKey, tag: tag, entryDate: entryDate))
+            }
+            return skeletons
+        }
+    }
+
+    /// The per-id merge rule into the pending (unsaved) context — see ``upsertMerged(_:hubKey:deviceKey:)``.
+    /// Two passes: inserts, replacements and equal entries first, then the entries whose local text
+    /// differs, so a fork's same-day check sees every entry this merge added.
+    private func applyMerge(
+        _ batch: [JournalNarrative],
+        hubKey: SymmetricKey,
+        deviceKey: JournalBackupDeviceKey
+    ) throws -> JournalNarrativeMergeResult {
+        let existing = try fetchRows(ids: batch.map(\.id))
+        var result = JournalNarrativeMergeResult()
+        var differing: [JournalNarrative] = []
+        for incoming in batch {  // R2: bounded by the batch (≤ maxBackupRecords).
+            guard let rows = existing[incoming.id], let first = rows.first else {
+                try insertRow(incoming, hubKey: hubKey)
+                result.inserted += 1
+                result.followUpIDs.append(incoming.id)
+                continue
+            }
+            switch opening(of: rows, hubKey: hubKey, deviceKey: deviceKey) {
+            case .opened(let local, _):
+                guard Self.sameContent(local, incoming) else {
+                    differing.append(incoming)
+                    continue
+                }
+                result.unchanged += 1
+                result.followUpIDs.append(incoming.id)
+            case .dead:
+                try apply(incoming, to: first, contentKey: hubKey, createdAt: incoming.createdAt, updatedAt: incoming.updatedAt)
+                rows.dropFirst().forEach(context.delete)
+                result.replaced += 1
+                result.followUpIDs.append(incoming.id)
+            case .needsNewerBuild, .undecided:
+                throw JournalNarrativeRepositoryError.undecidedRows(count: rows.count)
+            }
+        }
+        try forkDiffering(differing, hubKey: hubKey, deviceKey: deviceKey, into: &result)
+        return result
+    }
+
+    /// The second pass: each backup entry whose text or emotions differ from the local entry with its
+    /// id is added as a new entry (a fresh id) — unless an entry on its day already holds the same
+    /// text and emotions, which then stands for it. Reads only the rows of the days those entries are
+    /// on (pending inserts included), once per day.
+    private func forkDiffering(
+        _ differing: [JournalNarrative],
+        hubKey: SymmetricKey,
+        deviceKey: JournalBackupDeviceKey,
+        into result: inout JournalNarrativeMergeResult
+    ) throws {
+        var dayContents: [String: [(id: UUID, text: String, emotions: [String])]] = [:]
+        for incoming in differing {  // R2: bounded by the batch.
+            if dayContents[incoming.dayKey] == nil {
+                dayContents[incoming.dayKey] = try openedContents(onDay: incoming.dayKey, hubKey: hubKey, deviceKey: deviceKey)
+            }
+            if let equal = dayContents[incoming.dayKey]?.first(where: { $0.text == incoming.text && $0.emotions == incoming.emotions }) {
+                result.unchanged += 1
+                result.followUpIDs.append(equal.id)
+                continue
+            }
+            var fork = incoming
+            fork.id = UUID()
+            try insertRow(fork, hubKey: hubKey)
+            dayContents[incoming.dayKey, default: []].append((fork.id, fork.text, fork.emotions))
+            result.forked += 1
+            result.followUpIDs.append(fork.id)
+        }
+    }
+
+    /// The text and emotions of every row on `dayKey` that opens under the hub key or the device key
+    /// (pending inserts of this merge included). Rows that open under neither are left out: they are
+    /// nobody's equal.
+    private func openedContents(
+        onDay dayKey: String,
+        hubKey: SymmetricKey,
+        deviceKey: JournalBackupDeviceKey
+    ) throws -> [(id: UUID, text: String, emotions: [String])] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
+        request.predicate = NSPredicate(format: "dayKey == %@", dayKey)
+        var contents: [(id: UUID, text: String, emotions: [String])] = []
+        for row in try context.fetch(request) {  // R2: bounded by one day's rows.
+            guard let id = row.value(forKey: "id") as? UUID else { continue }
+            for key in Self.candidateKeys(hubKey, deviceKey) {
+                guard case .opened(let text, let emotions) = openColumnsClassified(row, under: key) else { continue }
+                contents.append((id, text, emotions))
+                break
+            }
+        }
+        return contents
+    }
+
+    /// Inserts `narrative` as a new row sealed under `hubKey`, keeping its own stamps.
+    private func insertRow(_ narrative: JournalNarrative, hubKey: SymmetricKey) throws {
+        let object = NSEntityDescription.insertNewObject(forEntityName: "JournalNarrative", into: context)
+        try apply(narrative, to: object, contentKey: hubKey, createdAt: narrative.createdAt, updatedAt: narrative.updatedAt)
+    }
+
+    /// How an id's rows answer the keys: the first row that opens wins; else any undecided row (or an
+    /// unreadable device key) makes the id undecided; else a row that opens but carries a column this
+    /// build cannot read makes it needs-a-newer-build; else dead.
+    private func opening(of rows: [NSManagedObject], hubKey: SymmetricKey, deviceKey: JournalBackupDeviceKey) -> RowOpening {
+        var undecided = false
+        var needsNewer = false
+        for row in rows {  // R2: bounded by the id's rows.
+            switch open(row, hubKey: hubKey, deviceKey: deviceKey) {
+            case .opened(let narrative, let object): return .opened(narrative, object)
+            case .dead: continue
+            case .needsNewerBuild: needsNewer = true
+            case .undecided: undecided = true
+            }
+        }
+        if undecided { return .undecided }
+        return needsNewer ? .needsNewerBuild : .dead
+    }
+
+    /// Opens one row under the hub key, then the device key: its sealed columns first (a refusal under
+    /// both, with nothing undecided, is dead), then its plaintext columns (a row that opens but whose
+    /// tag this build does not know, or that lacks its day or date, needs a newer build — never dead).
+    private func open(_ object: NSManagedObject, hubKey: SymmetricKey, deviceKey: JournalBackupDeviceKey) -> RowOpening {
+        guard let id = object.value(forKey: "id") as? UUID else { return .dead }
+        var undecided = false
+        if case .unreadable = deviceKey { undecided = true }
+        for key in Self.candidateKeys(hubKey, deviceKey) {  // R2: at most two keys.
+            switch openColumnsClassified(object, under: key) {
+            case .opened(let text, let emotions):
+                return Self.narrative(object, id: id, text: text, emotions: emotions).map { .opened($0, object) } ?? .needsNewerBuild
+            case .refused:
+                continue
+            case .undecided:
+                undecided = true
+            }
+        }
+        return undecided ? .undecided : .dead
+    }
+
+    /// Both sealed columns of `object` under `key`, classified: an install-binding read that could not
+    /// answer is undecided; every other refusal is a refusal.
+    private func openColumnsClassified(_ object: NSManagedObject, under key: SymmetricKey) -> ColumnOpening {
+        do {
+            let text = try crypto.openString(object.value(forKey: "textCiphertext") as? Data, contentKey: key) ?? ""
+            let emotions: [String] = try crypto.open(object.value(forKey: "emotionsCiphertext") as? Data, contentKey: key) ?? []
+            return .opened(text: text, emotions: emotions)
+        } catch is DeviceBindingID.ReadError {
+            return .undecided
+        } catch {
+            return .refused
+        }
+    }
+
+    /// The rows of these ids, grouped by id — fetched `id IN` in slices of 500 (R2: `ids.count / 500`
+    /// rounded up fetches).
+    private func fetchRows(ids: [UUID]) throws -> [UUID: [NSManagedObject]] {
+        var grouped: [UUID: [NSManagedObject]] = [:]
+        for start in stride(from: 0, to: ids.count, by: Self.maxPageSize) {
+            let slice = Array(ids[start..<min(start + Self.maxPageSize, ids.count)])
+            let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
+            request.predicate = NSPredicate(format: "id IN %@", slice)
+            for row in try context.fetch(request) {
+                guard let id = row.value(forKey: "id") as? UUID else { continue }
+                grouped[id, default: []].append(row)
+            }
+        }
+        return grouped
+    }
+
+    /// The keys a backup read tries, in order: the hub key, then the device key when one exists.
+    private static func candidateKeys(_ hubKey: SymmetricKey, _ deviceKey: JournalBackupDeviceKey) -> [SymmetricKey] {
+        if case .present(let key) = deviceKey { return [hubKey, key] }
+        return [hubKey]
+    }
+
+    /// The entry a row holds, from its opened columns and its plaintext ones; nil when a plaintext
+    /// column this build reads is missing or unknown (the caller's needs-a-newer-build).
+    private static func narrative(_ object: NSManagedObject, id: UUID, text: String, emotions: [String]) -> JournalNarrative? {
+        guard let dayKey = object.value(forKey: "dayKey") as? String,
+              let tagRaw = object.value(forKey: "tag") as? String,
+              let tag = FeelingTag(rawValue: tagRaw),
+              let entryDate = object.value(forKey: "entryDate") as? Date else { return nil }
+        return JournalNarrative(
+            id: id, dayKey: dayKey, tag: tag, entryDate: entryDate, text: text, emotions: emotions,
+            createdAt: object.value(forKey: "createdAt") as? Date ?? entryDate,
+            updatedAt: object.value(forKey: "updatedAt") as? Date ?? entryDate
+        )
+    }
+
+    /// Whether two entries carry the same words: text and emotions (a tag or date difference alone is
+    /// not a different entry, §7.3).
+    private static func sameContent(_ lhs: JournalNarrative, _ rhs: JournalNarrative) -> Bool {
+        lhs.text == rhs.text && lhs.emotions == rhs.emotions
+    }
+
+    /// `narratives` with one copy per id: the later `updatedAt` wins, a tie keeps the first.
+    static func reducedByID(_ narratives: [JournalNarrative]) -> [JournalNarrative] {
+        var order: [UUID] = []
+        var chosen: [UUID: JournalNarrative] = [:]
+        for narrative in narratives {  // R2: bounded by the batch.
+            if let current = chosen[narrative.id] {
+                if narrative.updatedAt > current.updatedAt { chosen[narrative.id] = narrative }
+            } else {
+                chosen[narrative.id] = narrative
+                order.append(narrative.id)
+            }
+        }
+        return order.compactMap { chosen[$0] }
+    }
 }

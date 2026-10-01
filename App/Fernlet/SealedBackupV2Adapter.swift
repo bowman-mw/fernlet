@@ -68,8 +68,9 @@ struct SealedBackupMergeResult: Equatable {
     var replacedDead = 0
     /// Incoming copies added as new entries beside a local one that differs (journal only, §7.3).
     var forked = 0
-    /// The ids a follow-up write must cover (journal: the day skeletons of every inserted, replaced
-    /// and forked entry). Empty for a payload with no follow-up.
+    /// The ids a follow-up write must cover (journal: the day skeletons of every entry that carries a
+    /// backup entry's content — inserted, replaced, forked or already equal — so a retry after a failed
+    /// skeleton write rebuilds them). Empty for a payload with no follow-up.
     var followUpIDs: [UUID] = []
 
     /// How many records the merge inserted, merged, replaced or forked.

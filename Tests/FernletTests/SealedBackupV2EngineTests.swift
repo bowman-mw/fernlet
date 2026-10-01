@@ -679,10 +679,10 @@ struct SealedBackupV2EngineTests {
         #expect(!off.sealedBackupPeriodReuploadDeferred, "a backup that is off owes nothing")
     }
 
-    /// BV1 (shrinking allowlist): the period and intimate-log payloads reach a chunk upload only
-    /// through the engine. The legacy in-place `reconcileChunked` writer is called for the journal
-    /// payload only (until B3 moves it; B2 removed the intimacy caller), and the engine's set-scoped
-    /// `save` only by its commit.
+    /// BV1 (the shrinking allowlist, now empty): every payload — period, intimate logs and, since unit
+    /// B3, the journal — reaches a chunk upload only through the engine. No app file calls the legacy
+    /// in-place `reconcileChunked` writer any more, and the engine's set-scoped `save` is called only
+    /// by its commit.
     @Test func theV2PayloadsReachTheUploadOnlyThroughTheEngine() throws {
         let app = RepoRoot.url("App/Fernlet")
         let files = try FileManager.default.contentsOfDirectory(at: app, includingPropertiesForKeys: nil)
@@ -696,9 +696,7 @@ struct SealedBackupV2EngineTests {
             }
             if source.contains(".save(record, setTag:") { setScopedSavers.append(file.lastPathComponent) }
         }
-        #expect(legacyCallers.count == 1, "\(legacyCallers)")
-        #expect(legacyCallers.allSatisfy { $0.contains(".journalNarratives") },
-                "only the v1 journal payload may write in place: \(legacyCallers)")
+        #expect(legacyCallers.isEmpty, "no payload may write in place any more: \(legacyCallers)")
         #expect(setScopedSavers == ["SealedBackupV2Engine+Commit.swift"])
     }
 
@@ -884,7 +882,7 @@ struct SealedBackupV2EngineTests {
             controller: controller,
             latchDefaults: defaults,
             intimacyStore: IntimacyLogStore(repository: IntimacyLogRepository(controller: controller, defaults: defaults)),
-            restoresAfterRemoval: { _ in false },
+            restoresAfterRemoval: { false },
             bookkeepingCleared: { cleared.value += 1 }
         )
         entries.clearBackupBookkeeping()

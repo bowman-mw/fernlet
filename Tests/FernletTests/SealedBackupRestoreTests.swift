@@ -4,10 +4,11 @@
 //
 //  Covers Item 4 (Remaining-work doc): the sealed-backup *restore-into-stores* path. The CloudKit
 //  fetch + identity crypto are exercised by SealedBackupTests; these tests cover everything around
-//  it that is unit-testable without iCloud — the empty-store guard, the refusal to write back the
-//  RETIRED Tier-2 (sensitive notes) payload (owner decision 2026-09-23; the rest of its retirement is
-//  in SensitiveNotesRetirementTests), and the period-narrative Core Data writeback (incl. the
-//  locked-key path). Full end-to-end with live CloudKit remains device-runtime verification.
+//  it that is unit-testable without iCloud — the v2 merge restores' gates (no freshness or
+//  empty-store gate any more, the resolved marker instead), the refusal to write back the RETIRED
+//  Tier-2 (sensitive notes) payload (owner decision 2026-09-23; the rest of its retirement is in
+//  SensitiveNotesRetirementTests), the period and journal writebacks (incl. the locked-key path) and
+//  the journal day skeletons. Full end-to-end with live CloudKit remains device-runtime verification.
 //
 
 import CoreData
@@ -36,17 +37,76 @@ private func isolatedDefaults() -> UserDefaults {
 @Suite(.serialized)
 struct SealedBackupRestoreTests {
 
-    // MARK: - Empty-store guard
+    // MARK: - The journal restore is a merge: no freshness or empty-store gate (design 2026-09-30, §7)
 
-    /// The whole-device freshness gate refuses a device that already holds logged data. Journal is the
-    /// probe (the retired sensitive-notes payload used to be): the gate answers before the payload's own
-    /// store is ever read, so this never hits the network or the shared sealed store.
+    /// Rewritten for unit B3 (was `restoreSkippedWhenStoreHasLoggedData` and the bare-HealthKit-stamp
+    /// freshness cases): a device that is no longer a fresh install (populated days, meals, journal)
+    /// still runs the ambient journal restore — a merge has no freshness gate. With no CloudKit wired
+    /// in a unit test it lands on a deferred outcome, but it is not short-circuited.
     @MainActor
-    @Test func restoreSkippedWhenStoreHasLoggedData() async {
+    @Test func theJournalRestoreRunsOnADeviceThatIsNoLongerAFreshInstall() async {
         let store = makePopulatedTestStore()
-        let restored = await store.restoreSealedBackup(payloadType: .journalNarratives)
-        #expect(restored == false)
-        #expect(await store.restoreSealedBackupOutcome(payloadType: .journalNarratives) == .skippedStoreNotEmpty)
+        store.sealedBackupPreferencesProvider = { JournalBackupDevice.backupOn }
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: isolatedDefaults())
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
+        #expect(await store.restoreJournalBackup() != .skippedStoreNotEmpty)
+    }
+
+    /// The resurrection the latch used to stop, stopped by the resolved marker (design 2026-09-30,
+    /// §4.3): once this install's journal restore has resolved, the ambient restore never runs again —
+    /// so entries the user deleted can never come back from the stale cloud copy. Benign: no banner,
+    /// no network.
+    @MainActor
+    @Test func aResolvedJournalInstallNeverRestoresAmbientlyAgain() async {
+        let store = makeTestStore()
+        store.sealedBackupPreferencesProvider = { JournalBackupDevice.backupOn }
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: isolatedDefaults())
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
+        store.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+
+        let outcome = await store.restoreJournalBackup()
+        #expect(outcome == .skippedStoreNotEmpty)
+        #expect(outcome.needsAttention == false)
+        #expect(store.sealedBackupRestoreStatus[.journalNarratives] == nil)
+    }
+
+    /// §7.6: a duress session shuts the journal's decrypt seam, so the restore refuses — retryable, and
+    /// recorded as no status — with nothing fetched.
+    @MainActor
+    @Test func theJournalRestoreRefusesDuringADuressSession() async {
+        let store = makeTestStore()
+        store.sealedBackupPreferencesProvider = { JournalBackupDevice.backupOn }
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
+        store.duressSessionActive = true
+
+        let outcome = await store.restoreJournalBackup()
+        #expect(outcome.didRestore == false)
+        #expect(outcome.isRetryable)
+        #expect(store.sealedBackupRestoreStatus[.journalNarratives] == nil)
+    }
+
+    /// BV14 (design 2026-09-30, §4.3): the journal restore marker is seeded ONCE, at the launch wiring,
+    /// from THIS store's journal divergence latch (with its row-count backfill) — an install that
+    /// already held entries seeds it resolved — and an enabled journal backup owes one complete v2
+    /// export in the same step. A later write never seeds it again.
+    @MainActor
+    @Test func theJournalMarkerSeedsOnceFromTheStoresJournalLatchAndOwesOneExport() throws {
+        let (store, _, narratives) = makeTestStoreWithRepositories()
+        let entryDate = Date(timeIntervalSince1970: 1_780_000_000)
+        try narratives.insert(JournalNarrative(id: UUID(), dayKey: "2026-06-01", tag: .good, entryDate: entryDate,
+                                               text: "held before this build", emotions: [], createdAt: entryDate, updatedAt: entryDate),
+                              contentKey: SymmetricKey(size: .bits256))
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(
+            defaults: isolatedDefaults(),
+            legacyLatch: { [unowned store] payload in store.sealedBackupLegacyLatch(payload) }
+        )
+        store.sealedBackupPreferencesProvider = { StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true) }
+        store.recordSealedBackupReuploadDeferred(false, payloadType: .journalNarratives)
+
+        store.seedSealedBackupBookkeepingOnce()
+        #expect(store.sealedBackupBookkeeping.restoreResolvedIsSet(.journalNarratives), "seeded resolved from the latch")
+        #expect(store.sealedBackupJournalReuploadDeferred, "the enabled backup owes one export")
+        #expect(!store.sealedBackupBookkeeping.seedRestoreMarkerIfAbsent(.journalNarratives), "seeded once, never again")
     }
 
     // MARK: - The retired Tier-2 (sensitive notes) payload is never written back
@@ -181,72 +241,6 @@ struct SealedBackupRestoreTests {
         #expect(merged.clinical == backedUp.clinical, "the block the local copy did not know is filled in")
     }
 
-    // MARK: - Fresh-install gate treats a bare HealthKit sync stamp as "device already in use"
-
-    /// Finding 7 (deferred design-judgment): the auto-restore fresh-install gate was narrowed onto the
-    /// shared `FernletDay.hasLoggedContent`, which intentionally ignores a *bare, metric-less*
-    /// `healthContext` (a HealthKit sync stamp — `syncedAt` set, every metric nil) so the coin economy
-    /// doesn't award an "active day" for merely opening the app. But the RESTORE gate must be
-    /// conservative: a device that already holds any day row — including a bare sync stamp — is in use,
-    /// and auto-restore must NOT run over it. `isFreshInstallForRestore` therefore applies the stricter
-    /// "any `healthContext` present ⇒ not fresh" check locally. Here the only content on the device is a
-    /// past-day row carrying a bare `HealthDailyContext()`, so restore must be SKIPPED as non-empty.
-    @MainActor
-    @Test func restoreSkippedWhenOnlyContentIsBareHealthKitSyncStamp() async {
-        // Sanity: a bare sync stamp is NOT "logged content" (shared-model semantics the gate overrides).
-        #expect(FernletDay(date: "2026-06-10", healthContext: HealthDailyContext()).hasLoggedContent == false)
-
-        // Seed a PAST-day ROW whose only content is a bare, metric-less HealthKit sync stamp — the shape a
-        // migrated legacy day takes (migration fans blob days into rows without item G's empty-content guard).
-        // Seed the row directly via the day-record store, bypassing saveSnapshot/updateDay (which item G would
-        // skip for a content-less day, so it would never persist and the gate would never see it).
-        let controller = PersistenceController(inMemory: true)
-        let legacyURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
-        let dayRepo = DayRecordRepository(controller: controller)
-        #expect(dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-06-10", healthContext: HealthDailyContext()), updatedAt: Date())]) == true)
-        let repository = CoreDataFernletRepository(
-            controller: controller,
-            legacyRepository: LocalFernletRepository(fileURL: legacyURL),
-            dayRecordRepository: dayRepo
-        )
-        let narratives = JournalNarrativeRepository(controller: PrivatePersistenceController(inMemory: true))
-        let store = makeStoreSharingStores(
-            date: FernletDate.date(fromDayKey: "2026-06-20")!,
-            repository: repository,
-            narratives: narratives
-        )
-
-        // The device is now "in use" for the restore gate → auto-restore must refuse (never clobbers).
-        // Journal is the probe: the freshness verdict answers before its own store is ever read.
-        let outcome = await store.restoreSealedBackupOutcome(payloadType: .journalNarratives)
-        #expect(outcome == .skippedStoreNotEmpty)
-    }
-
-    /// Positive control: the stricter gate must NOT wrongly block a legitimately blank device. With zero
-    /// day rows and empty caches, `isFreshInstallForRestore` still returns true, so the restore is NOT
-    /// refused as "store not empty" — it gets past the gate to the next precondition, which with no
-    /// content key active is the locked-key refusal. Driven at the write point over an ISOLATED empty
-    /// journal store (the retired sensitive-notes payload, then period, used to be this probe; period's
-    /// v2 merge restore has no freshness gate at all, and every live payload's default store is the
-    /// shared on-device one, which other suites can populate).
-    @MainActor
-    @Test func restoreNotSkippedOnGenuinelyBlankDevice() throws {
-        let store = makeTestStore()
-        let journalRepository = JournalNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        let entryDate = Date(timeIntervalSince1970: 1_780_000_000)
-        let data = try JSONEncoder().encode([
-            JournalNarrative(id: UUID(), dayKey: "2026-06-01", tag: .good, entryDate: entryDate,
-                             text: "x", emotions: [], createdAt: entryDate, updatedAt: entryDate)
-        ])
-        #expect(throws: FernletStore.SealedBackupWiringError.locked) {
-            try store.applyRestoredPayload(data, payloadType: .journalNarratives, journalRepository: journalRepository)
-        }
-    }
-
     // MARK: - The ambient period restore (v2) through the store's wrappers
 
     /// Finding #2 of the 2026-07-19 review, the v2 way: a device that is no longer a fresh install
@@ -345,39 +339,6 @@ struct SealedBackupRestoreTests {
         #expect(try records.recordCount() == 0)
     }
 
-    /// The journal keeps the v1 no-clobber gate, which every journal restore funnels through — the
-    /// AMBIENT `.freshInstall` pass included: a completed delete-all makes the device classify as fresh
-    /// again, and the journal's divergence latch (set by its `deleteAll`) is what stops a backup that
-    /// survived a failed chunk delete from restoring the wiped journal at the next launch.
-    @MainActor
-    @Test func freshInstallScopedApplyRefusesADivergedEmptyJournalStore() throws {
-        let store = makeTestStore()   // blank → classifies as a fresh install
-        let key = SymmetricKey(size: .bits256)
-        store.openHubForTesting(contentKey: key)
-        let repository = JournalNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        let entryDate = Date(timeIntervalSince1970: 1_780_000_000)
-        let entry = JournalNarrative(id: UUID(), dayKey: "2026-04-01", tag: .good, entryDate: entryDate,
-                                     text: "Wiped.", emotions: [], createdAt: entryDate, updatedAt: entryDate)
-        try repository.insert(entry, contentKey: key)
-        try repository.deleteAll()
-        #expect(try repository.narrativeCount() == 0)
-        #expect(repository.hasEverStoredNarrative)
-
-        var stale = entry
-        stale.id = UUID()
-        stale.text = "Stale cloud copy."
-        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
-            try store.applyRestoredPayload(
-                try JSONEncoder().encode([stale]), payloadType: .journalNarratives,
-                journalRepository: repository, scope: .freshInstall
-            )
-        }
-        #expect(try repository.narrativeCount() == 0)
-    }
-
     // MARK: - Journal self-sufficiency (P3): restored entries must actually be VISIBLE
 
     /// The hazard the `reinstateJournalEntries` hook exists for. `JournalNarrative` carries the whole
@@ -408,8 +369,7 @@ struct SealedBackupRestoreTests {
         let count = try store.applyRestoredPayload(
             try JSONEncoder().encode([restored]),
             payloadType: .journalNarratives,
-            journalRepository: narratives,
-            scope: .payloadStoreOnly
+            journalRepository: narratives
         )
         #expect(count == 1)
 
@@ -445,8 +405,7 @@ struct SealedBackupRestoreTests {
         _ = try store.applyRestoredPayload(
             try JSONEncoder().encode([restored]),
             payloadType: .journalNarratives,
-            journalRepository: narratives,
-            scope: .payloadStoreOnly
+            journalRepository: narratives
         )
 
         #expect(store.day.journals.map(\.id) == [restored.id])
@@ -479,8 +438,7 @@ struct SealedBackupRestoreTests {
         _ = try store.applyRestoredPayload(
             try JSONEncoder().encode([existing, alsoRestored]),
             payloadType: .journalNarratives,
-            journalRepository: narratives,
-            scope: .payloadStoreOnly
+            journalRepository: narratives
         )
 
         #expect(store.day.journals.count == 2, "reconstruction duplicated an entry the day already had")
@@ -770,7 +728,7 @@ struct SealedBackupRestoreTests {
             controller: new.controller,
             latchDefaults: bookkeeping.defaults,
             intimacyStore: IntimacyLogStore(repository: IntimacyLogRepository(controller: new.controller, defaults: bookkeeping.defaults)),
-            restoresAfterRemoval: { _ in true }
+            restoresAfterRemoval: { true }
         )
         #expect(try entries.cycleEntryCount() == 2)
         #expect(entries.hasBackupBookkeeping())

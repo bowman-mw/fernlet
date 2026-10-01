@@ -993,48 +993,56 @@ struct DeleteAllDataTests {
         #expect(!store.sealedBackupIntimacyReuploadDeferred, "the leg-3 delete re-dirtied the intimacy backup")
     }
 
-    /// "Delete everything" KEEPS the intimate-log restore marker and accepted head (design 2026-09-30
-    /// §9, R2-F11) — a set that survived a failed cloud delete never merges back, and is this install's
-    /// own to the next export, which overwrites it — and clears the observed foreign head.
-    @Test func deleteAllKeepsTheIntimacyRestoreMarkerAndAcceptedHeadAndClearsTheObservation() async {
-        let store = makeStore("delete-all-intimacy-marker")
+    /// "Delete everything" KEEPS the intimate-log and journal restore markers and accepted heads (design
+    /// 2026-09-30 §9, R2-F11) — a set that survived a failed cloud delete never merges back, and is this
+    /// install's own to the next export, which overwrites it — and clears the observed foreign heads.
+    @Test(arguments: [SealedBackupPayloadType.intimacyLogs, .journalNarratives])
+    func deleteAllKeepsTheRestoreMarkerAndAcceptedHeadAndClearsTheObservation(_ payload: SealedBackupPayloadType) async {
+        let store = makeStore("delete-all-\(payload.rawValue)-marker")
         wireSucceedingSealedHooks(store)
         store.sealedBackupBookkeeping = SealedBackupBookkeeping(
-            defaults: UserDefaults(suiteName: "fernlet.tests.intimacyMarkerWipe.\(UUID().uuidString)") ?? .standard,
+            defaults: UserDefaults(suiteName: "fernlet.tests.markerWipe.\(UUID().uuidString)") ?? .standard,
             legacyLatch: { _ in false }
         )
-        store.sealedBackupBookkeeping.markRestoreResolved(.intimacyLogs)
+        store.sealedBackupBookkeeping.markRestoreResolved(payload)
         let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("phone".utf8)), generation: 4)
-        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), .intimacyLogs, installTag: "me")
-        store.sealedBackupBookkeeping.recordObservedHead(stamp, .intimacyLogs, installTag: "me")
+        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), payload, installTag: "me")
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, payload, installTag: "me")
 
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(store.sealedBackupBookkeeping.isRestoreResolved(.intimacyLogs))
-        #expect(store.sealedBackupBookkeeping.acceptedHead(.intimacyLogs, installTag: "me")?.stamp == stamp)
-        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(.intimacyLogs))
+        #expect(store.sealedBackupBookkeeping.isRestoreResolved(payload))
+        #expect(store.sealedBackupBookkeeping.acceptedHead(payload, installTag: "me")?.stamp == stamp)
+        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(payload))
     }
 
-    /// The reset funnel speaks for the intimate-log bookkeeping too (design 2026-09-30 §9): the marker
-    /// is REOPENED (written false, so its one-time seed never runs again) and the accepted and observed
-    /// heads are forgotten, so nothing exports over the pre-reset set until the owner's restore merged it.
-    @Test func theAppLockResetFunnelReopensTheIntimacyRestoreAndForgetsTheAcceptedSet() {
-        let store = makeStore("reset-intimacy-bookkeeping")
-        let defaults = UserDefaults(suiteName: "fernlet.tests.intimacyReset.\(UUID().uuidString)") ?? .standard
+    /// The reset funnel speaks for the intimate-log and journal bookkeeping too (design 2026-09-30 §9):
+    /// the marker is REOPENED (written false, so its one-time seed never runs again) and the accepted and
+    /// observed heads are forgotten, so nothing exports over the pre-reset set until the owner's restore
+    /// merged it.
+    @Test(arguments: [SealedBackupPayloadType.intimacyLogs, .journalNarratives])
+    func theAppLockResetFunnelReopensTheRestoreAndForgetsTheAcceptedSet(_ payload: SealedBackupPayloadType) {
+        let store = makeStore("reset-\(payload.rawValue)-bookkeeping")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.v2Reset.\(UUID().uuidString)") ?? .standard
         store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
         store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
         store.sealedBackupBookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
-        store.sealedBackupBookkeeping.markRestoreResolved(.intimacyLogs)
+        store.sealedBackupBookkeeping.markRestoreResolved(payload)
         let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("phone".utf8)), generation: 3)
-        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), .intimacyLogs, installTag: "me")
-        store.sealedBackupBookkeeping.recordObservedHead(stamp, .intimacyLogs, installTag: "me")
+        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), payload, installTag: "me")
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, payload, installTag: "me")
 
-        store.handleAppLockResetCompleted(preferences: StoragePreferences(sealedBackupIntimacyEnabled: true), clearBookkeeping: {})
+        store.handleAppLockResetCompleted(
+            preferences: StoragePreferences(sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true),
+            clearBookkeeping: {}
+        )
 
-        #expect(defaults.object(forKey: SealedBackupBookkeeping.intimacyRestoreResolvedKey) as? Bool == false)
-        #expect(!store.sealedBackupBookkeeping.hasAcceptedHeadRecord(.intimacyLogs))
-        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(.intimacyLogs))
-        #expect(store.sealedBackupRestoreHold.keepsPreResetCopy(of: .intimacyLogs), "held for the owner")
+        let markerKey = payload == .journalNarratives
+            ? SealedBackupBookkeeping.journalRestoreResolvedKey : SealedBackupBookkeeping.intimacyRestoreResolvedKey
+        #expect(defaults.object(forKey: markerKey) as? Bool == false)
+        #expect(!store.sealedBackupBookkeeping.hasAcceptedHeadRecord(payload))
+        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(payload))
+        #expect(store.sealedBackupRestoreHold.keepsPreResetCopy(of: payload), "held for the owner")
     }
 
     /// EVERY payload's re-upload deferral points at a backup the wipe just deleted (and at local data

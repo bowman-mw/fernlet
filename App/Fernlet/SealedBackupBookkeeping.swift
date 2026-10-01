@@ -40,16 +40,18 @@ struct SealedBackupAcceptedHead: Equatable, Sendable {
 /// | --- | --- | --- | --- | --- |
 /// | periodData | `fernlet.cycleRecord.periodRestoreResolved` | `fernlet.sealedBackup.periodAcceptedHead` | `fernlet.sealedBackup.periodObservedHead` | `fernlet.sealedBackup.periodInFlight` |
 /// | intimacyLogs | `fernlet.intimacyLog.restoreResolved` | `fernlet.sealedBackup.intimacyAcceptedHead` | `fernlet.sealedBackup.intimacyObservedHead` | `fernlet.sealedBackup.intimacyInFlight` |
+/// | journalNarratives | `fernlet.journalNarrative.restoreResolved` | `fernlet.sealedBackup.journalAcceptedHead` | `fernlet.sealedBackup.journalObservedHead` | `fernlet.sealedBackup.journalInFlight` |
 ///
-/// The journal joins in its own unit (B3), with its own keys and wipe rows; until then its arm answers
-/// "nothing recorded" and writes nothing, and its backup keeps the v1 model.
+/// The retired `sensitiveNotes` payload is never on v2: its arm answers "nothing recorded" and writes
+/// nothing.
 ///
 /// - **Marker.** Unresolved means "this install has not pulled this payload's backup". It resolves
 ///   only on a restore outcome of `.restored` or `.nothingToRestore`, or when a confirmed "Replace" or
 ///   "Start a new backup" commits — **never** because sync or the backup is off (R1-BR-2, R2-F4). An
 ///   absent key is seeded ONCE from the payload's legacy divergence latch (the period's is
-///   `fernlet.menstrualNarrative.everStored`, the intimate logs' `fernlet.intimacyLog.everStored`) and
-///   written, so a later write can never seed it again.
+///   `fernlet.menstrualNarrative.everStored`, the intimate logs' `fernlet.intimacyLog.everStored`, the
+///   journal's `fernlet.journalNarrative.everStored`) and written, so a later write can never seed it
+///   again.
 ///   Clearing writes `false`, never removes the key.
 /// - **Accepted head** `"<acceptor>:<writer>:<generation>:<salt8>"`. `acceptor` is this install's
 ///   writer tag when it was recorded; the value reads as ABSENT when the acceptor is not this
@@ -95,16 +97,24 @@ struct SealedBackupBookkeeping {
     static let intimacyObservedHeadKey = "fernlet.sealedBackup.intimacyObservedHead"
     /// The intimate-log in-flight generation's FROZEN key.
     static let intimacyInFlightKey = "fernlet.sealedBackup.intimacyInFlight"
+    /// The journal restore marker's FROZEN key (design 2026-09-30, §4.3, unit B3).
+    static let journalRestoreResolvedKey = "fernlet.journalNarrative.restoreResolved"
+    /// The journal accepted head's FROZEN key.
+    static let journalAcceptedHeadKey = "fernlet.sealedBackup.journalAcceptedHead"
+    /// The journal observed head's FROZEN key.
+    static let journalObservedHeadKey = "fernlet.sealedBackup.journalObservedHead"
+    /// The journal in-flight generation's FROZEN key.
+    static let journalInFlightKey = "fernlet.sealedBackup.journalInFlight"
 
     /// The payloads whose backup runs on the v2 engine in this build, in the order a hub settle asks
     /// for them.
-    static let v2Payloads: [SealedBackupPayloadType] = [.periodData, .intimacyLogs]
+    static let v2Payloads: [SealedBackupPayloadType] = [.periodData, .intimacyLogs, .journalNarratives]
 
     /// Where the bookkeeping lives.
     let defaults: UserDefaults
     /// The legacy divergence latch per payload, read only while that payload's marker is absent — the
     /// one-time seed (period: `MenstrualNarrativeRepository.hasEverStoredNarrative`; intimate logs:
-    /// `IntimacyLogStore.hasEverStoredLog`).
+    /// `IntimacyLogStore.hasEverStoredLog`; journal: `JournalNarrativeRepository.hasEverStoredNarrative`).
     let legacyLatch: @MainActor (SealedBackupPayloadType) -> Bool
 
     /// Creates the bookkeeping.
@@ -132,7 +142,12 @@ struct SealedBackupBookkeeping {
             let seeded = legacyLatch(payload)
             defaults.set(seeded, forKey: Self.intimacyRestoreResolvedKey)
             return seeded
-        case .journalNarratives, .sensitiveNotes:
+        case .journalNarratives:
+            if let decided = defaults.object(forKey: Self.journalRestoreResolvedKey) as? Bool { return decided }
+            let seeded = legacyLatch(payload)
+            defaults.set(seeded, forKey: Self.journalRestoreResolvedKey)
+            return seeded
+        case .sensitiveNotes:
             return false
         }
     }
@@ -150,7 +165,11 @@ struct SealedBackupBookkeeping {
             guard defaults.object(forKey: Self.intimacyRestoreResolvedKey) == nil else { return false }
             defaults.set(legacyLatch(payload), forKey: Self.intimacyRestoreResolvedKey)
             return true
-        case .journalNarratives, .sensitiveNotes:
+        case .journalNarratives:
+            guard defaults.object(forKey: Self.journalRestoreResolvedKey) == nil else { return false }
+            defaults.set(legacyLatch(payload), forKey: Self.journalRestoreResolvedKey)
+            return true
+        case .sensitiveNotes:
             return false
         }
     }
@@ -161,7 +180,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: return defaults.object(forKey: Self.periodRestoreResolvedKey) as? Bool == true
         case .intimacyLogs: return defaults.object(forKey: Self.intimacyRestoreResolvedKey) as? Bool == true
-        case .journalNarratives, .sensitiveNotes: return false
+        case .journalNarratives: return defaults.object(forKey: Self.journalRestoreResolvedKey) as? Bool == true
+        case .sensitiveNotes: return false
         }
     }
 
@@ -170,7 +190,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: defaults.set(true, forKey: Self.periodRestoreResolvedKey)
         case .intimacyLogs: defaults.set(true, forKey: Self.intimacyRestoreResolvedKey)
-        case .journalNarratives, .sensitiveNotes: return
+        case .journalNarratives: defaults.set(true, forKey: Self.journalRestoreResolvedKey)
+        case .sensitiveNotes: return
         }
     }
 
@@ -179,7 +200,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: defaults.set(false, forKey: Self.periodRestoreResolvedKey)
         case .intimacyLogs: defaults.set(false, forKey: Self.intimacyRestoreResolvedKey)
-        case .journalNarratives, .sensitiveNotes: return
+        case .journalNarratives: defaults.set(false, forKey: Self.journalRestoreResolvedKey)
+        case .sensitiveNotes: return
         }
     }
 
@@ -207,7 +229,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: defaults.set(token, forKey: Self.periodAcceptedHeadKey)
         case .intimacyLogs: defaults.set(token, forKey: Self.intimacyAcceptedHeadKey)
-        case .journalNarratives, .sensitiveNotes: return
+        case .journalNarratives: defaults.set(token, forKey: Self.journalAcceptedHeadKey)
+        case .sensitiveNotes: return
         }
     }
 
@@ -216,7 +239,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: defaults.removeObject(forKey: Self.periodAcceptedHeadKey)
         case .intimacyLogs: defaults.removeObject(forKey: Self.intimacyAcceptedHeadKey)
-        case .journalNarratives, .sensitiveNotes: return
+        case .journalNarratives: defaults.removeObject(forKey: Self.journalAcceptedHeadKey)
+        case .sensitiveNotes: return
         }
     }
 
@@ -225,7 +249,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: return defaults.string(forKey: Self.periodAcceptedHeadKey)
         case .intimacyLogs: return defaults.string(forKey: Self.intimacyAcceptedHeadKey)
-        case .journalNarratives, .sensitiveNotes: return nil
+        case .journalNarratives: return defaults.string(forKey: Self.journalAcceptedHeadKey)
+        case .sensitiveNotes: return nil
         }
     }
 
@@ -251,7 +276,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: defaults.set(token, forKey: Self.periodObservedHeadKey)
         case .intimacyLogs: defaults.set(token, forKey: Self.intimacyObservedHeadKey)
-        case .journalNarratives, .sensitiveNotes: return
+        case .journalNarratives: defaults.set(token, forKey: Self.journalObservedHeadKey)
+        case .sensitiveNotes: return
         }
     }
 
@@ -260,7 +286,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: defaults.removeObject(forKey: Self.periodObservedHeadKey)
         case .intimacyLogs: defaults.removeObject(forKey: Self.intimacyObservedHeadKey)
-        case .journalNarratives, .sensitiveNotes: return
+        case .journalNarratives: defaults.removeObject(forKey: Self.journalObservedHeadKey)
+        case .sensitiveNotes: return
         }
     }
 
@@ -275,7 +302,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: return defaults.string(forKey: Self.periodObservedHeadKey)
         case .intimacyLogs: return defaults.string(forKey: Self.intimacyObservedHeadKey)
-        case .journalNarratives, .sensitiveNotes: return nil
+        case .journalNarratives: return defaults.string(forKey: Self.journalObservedHeadKey)
+        case .sensitiveNotes: return nil
         }
     }
 
@@ -298,7 +326,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: defaults.set(token, forKey: Self.periodInFlightKey)
         case .intimacyLogs: defaults.set(token, forKey: Self.intimacyInFlightKey)
-        case .journalNarratives, .sensitiveNotes: return
+        case .journalNarratives: defaults.set(token, forKey: Self.journalInFlightKey)
+        case .sensitiveNotes: return
         }
     }
 
@@ -307,7 +336,8 @@ struct SealedBackupBookkeeping {
         switch payload {
         case .periodData: return defaults.string(forKey: Self.periodInFlightKey)
         case .intimacyLogs: return defaults.string(forKey: Self.intimacyInFlightKey)
-        case .journalNarratives, .sensitiveNotes: return nil
+        case .journalNarratives: return defaults.string(forKey: Self.journalInFlightKey)
+        case .sensitiveNotes: return nil
         }
     }
 

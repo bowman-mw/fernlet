@@ -32,14 +32,11 @@ import Foundation
 /// fresh device-owner check — calls ``release()``, which drops the AMBIENT-restore bit only. The
 /// per-payload record stays, so each payload's re-uploads stay held until ITS restore has landed
 /// (`.restored`, or `.nothingToRestore`: pulled back, or nothing there) and ``forgetPreResetCopy(of:)``
-/// is called for it — a pre-reset copy is never replaced before it was pulled back. A payload whose
-/// restore cannot land (the journal store already holds entries written since the reset, so its
-/// empty-store-only restore refuses; the period and intimate-log restores are merges and always can)
-/// stays held — and Privacy & Data says so, by name —
-/// until the user explicitly chooses to replace it with this iPhone's entries, or turns that backup
-/// off, which deletes the copy: an explicit act, never a silent replace (named in the design's §12;
-/// review U5-backup-v2-C-U5-5 / L-U5-R5). A hold that keeps no enabled backup's copy is released
-/// as soon as the owner enters Privacy & Data (``keepsAnyEnabledCopy(_:preferences:)``).
+/// is called for it — a pre-reset copy is never replaced before it was pulled back. Every payload's
+/// restore is an id-keyed merge (journal and intimacy Sealed backup v2 design 2026-09-30, §7.3, §8.2),
+/// so it lands whatever this iPhone wrote since the reset; until it has, the export holds (X2). A
+/// hold that keeps no enabled backup's copy is released as soon as the owner enters Privacy & Data
+/// (``keepsAnyEnabledCopy(_:preferences:)``).
 ///
 /// Set only by the app-lock reset funnel, never by a duress response (those never fire the reset
 /// hook). **Kept** by "delete everything" (both keys): a phone whose lock was reset and whose data was

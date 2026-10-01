@@ -149,9 +149,9 @@ final class SealedBackupUIKitBackgroundTasks: SealedBackupBackgroundTaskAssertin
     }
 }
 
-/// The ONE engine every Sealed backup v2 pass runs on (design 2026-09-30, §3, §4.2) — today the
-/// period and intimate-log backups' (``CycleRecordBackupAdapter``, ``IntimacyBackupAdapter``); the
-/// journal joins through its own adapter (B3).
+/// The ONE engine every Sealed backup v2 pass runs on (design 2026-09-30, §3, §4.2) — the period,
+/// intimate-log and journal backups' (``CycleRecordBackupAdapter``, ``IntimacyBackupAdapter``,
+/// ``JournalBackupAdapter``).
 ///
 /// **One serial worker.** A single held `Task` drains a FIFO holding at most one pass per payload, so
 /// no two passes ever run at once, for any payload or trigger (R2-F15). A later explicit intent

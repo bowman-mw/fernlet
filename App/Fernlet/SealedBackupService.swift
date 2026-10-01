@@ -239,8 +239,9 @@ private func bigEndianBytes(_ value: UInt64) -> Data {
 ///
 /// Composes ``SealedBackupCrypto`` with `CloudKitDataService`: ``reconcile(_:payloadType:enabled:)``
 /// handles single-record payloads (enable = seal + upload, disable = delete),
-/// ``reconcileChunked(payloadType:chunkCount:chunk:)`` pages the v1 payload (the journal)
-/// through bounded chunks with the head record written last as the commit marker, and
+/// ``reconcileChunked(payloadType:chunkCount:chunk:)`` writes a v1 set in place (bounded chunks, the
+/// head record written last as the commit marker — what an earlier build left; no shipping payload
+/// writes one since the journal moved to v2, design 2026-09-30 unit B3), and
 /// ``restoreChunks(payloadType:)`` fetches and opens a complete v1 set all-or-nothing. The Sealed backup
 /// v2 primitives (``fetchHeadRecord(payloadType:)``, ``fetchSuffixRecords(payloadType:chunkCount:setTag:)``,
 /// ``sealChunk(_:payloadType:chunkIndex:chunkCount:generation:keySalt:)``, ``save(_:setTag:)``,
@@ -304,8 +305,9 @@ final class SealedBackupService {
     /// a mixed-generation set fails closed on restore. The whole set shares one generation counter and
     /// one per-generation HKDF salt (record format v2), both stamped on every chunk.
     ///
-    /// The journal (v1) export writes through here, sealing each chunk as it uploads it,
-    /// at fixed, unscoped record names. The v2 payloads never do: the engine seals its whole set in
+    /// No shipping payload writes through here any more (every live payload is on v2 since unit B3):
+    /// it is the v1 shape an earlier build wrote — each chunk sealed as it uploads, at fixed, unscoped
+    /// record names — which the tests use to leave such a set. The v2 engine seals its whole set in
     /// memory first and writes set-scoped suffix chunks (design 2026-09-30, §5.2).
     ///
     /// - Parameters:

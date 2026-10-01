@@ -3,10 +3,12 @@
 //  FernletTests
 //
 //  Security-hardening Phase 3: journal narratives and intimacy logs as first-class sealed-backup
-//  payloads. These drive `SealedBackupCoordinator` directly through a fake `SealedBackupContext`, so
-//  the restore semantics (insert-into-empty, the one-way divergence latch, the locked-key deferral)
-//  and the empty-store-clobber guard are exercised against ISOLATED sealed stores — no CloudKit, no
-//  shared on-device store, no `UserDefaults.standard` latch bleed.
+//  payloads, since units B2 and B3 of the journal and intimacy Sealed backup v2 design (2026-09-30)
+//  on the v2 engine. These drive `SealedBackupCoordinator` directly through a fake `SealedBackupContext`,
+//  so the restore semantics (the id-keyed merge, the locked-key deferral, the owner hold over every
+//  restore and export) are exercised against ISOLATED sealed stores — no shared on-device store, no
+//  `UserDefaults.standard` latch bleed. The journal's own v2 end-to-end cases live in
+//  SealedBackupJournalV2Tests.
 //
 //  The FernletStore-level halves (journal skeleton reconstruction, the wiring of the store's own
 //  wrappers) live in SealedBackupRestoreTests, which needs a real store to observe.
@@ -59,15 +61,16 @@ final class FakeSealedBackupHost: SealedBackupContext {
     var isPeriodTrackingVisible = true
     var isIntimacyTrackingVisible = true
     /// The Sealed backup v2 bookkeeping (design 2026-09-30 §4.3) on an isolated suite. The period
-    /// marker's one-time seed answers ``periodRestoreSeed`` and the intimate-log marker's
-    /// ``intimacyRestoreSeed`` (false: a fresh install).
+    /// marker's one-time seed answers ``periodRestoreSeed``, the intimate-log marker's
+    /// ``intimacyRestoreSeed`` and the journal marker's ``journalRestoreSeed`` (false: a fresh install).
     lazy var sealedBackupBookkeeping = SealedBackupBookkeeping(
         defaults: UserDefaults(suiteName: "fernlet.tests.fakeBookkeeping.\(UUID().uuidString)") ?? .standard,
         legacyLatch: { [unowned self] payload in
             switch payload {
             case .periodData: return self.periodRestoreSeed
             case .intimacyLogs: return self.intimacyRestoreSeed
-            case .journalNarratives, .sensitiveNotes: return false
+            case .journalNarratives: return self.journalRestoreSeed
+            case .sensitiveNotes: return false
             }
         }
     )
@@ -75,6 +78,8 @@ final class FakeSealedBackupHost: SealedBackupContext {
     var periodRestoreSeed = false
     /// What the intimate-log restore marker's one-time seed reads (the legacy intimacy latch).
     var intimacyRestoreSeed = false
+    /// What the journal restore marker's one-time seed reads (the legacy journal latch).
+    var journalRestoreSeed = false
     /// Sealed-store mutations seen through the hook, per payload (the host's mutation epochs).
     private(set) var mutationEpochs: [SealedBackupPayloadType: Int] = [:]
     /// The v2 engine's statuses, as recorded on the host.
@@ -95,9 +100,20 @@ final class FakeSealedBackupHost: SealedBackupContext {
     var recentMeals: [Meal] = []
     var days: [String: FernletDay] = [:]
 
-    /// Narratives handed to ``reinstateJournalEntries(from:)``, in call order — the journal
+    /// Skeletons handed to ``reinstateJournalEntries(from:)``, in call order — the journal
     /// self-sufficiency hook's observable effect at this seam.
-    private(set) var reinstatedJournalNarratives: [[JournalNarrative]] = []
+    private(set) var reinstatedJournalSkeletons: [[JournalNarrativeSkeleton]] = []
+    /// Whether ``reinstateJournalEntries(from:)`` reports a failed day write (nothing written).
+    var failsSkeletonWrites = false
+    /// Journal entry ids referenced beyond the days and `previousJournals` (an in-memory today).
+    var extraReferencedJournalIDs: Set<UUID> = []
+    /// Mirrors `FernletStore.sealedBackupJournalReferencedIDs`: every day's journals, `previousJournals`
+    /// and the extra ids.
+    var sealedBackupJournalReferencedIDs: Set<UUID> {
+        var ids = extraReferencedJournalIDs.union(previousJournals.map(\.id))
+        for day in days.values { ids.formUnion(day.journals.map(\.id)) }
+        return ids
+    }
     private(set) var recordedOutcomes: [SealedBackupPayloadType: SealedBackupRestoreOutcome] = [:]
     /// Per-payload re-upload deferrals, as the coordinator recorded them.
     private(set) var reuploadDeferrals: [SealedBackupPayloadType: Bool] = [:]
@@ -157,11 +173,12 @@ final class FakeSealedBackupHost: SealedBackupContext {
     }
 
     /// Mirrors `FernletStore.reinstateJournalEntries(from:)`'s load-bearing SIDE EFFECT: it writes day
-    /// rows. Without that here, the pass-level freshness interaction (the journal arm's writeback
-    /// flipping the whole-device gate under the arms that follow it) is invisible to these tests.
-    func reinstateJournalEntries(from narratives: [JournalNarrative]) {
-        reinstatedJournalNarratives.append(narratives)
-        for (dayKey, rows) in Dictionary(grouping: narratives, by: \.dayKey) {
+    /// rows, only for ids a day lacks — or, with ``failsSkeletonWrites``, writes nothing and reports
+    /// the failure.
+    func reinstateJournalEntries(from skeletons: [JournalNarrativeSkeleton]) -> Bool {
+        reinstatedJournalSkeletons.append(skeletons)
+        guard !failsSkeletonWrites else { return false }
+        for (dayKey, rows) in Dictionary(grouping: skeletons, by: \.dayKey) {
             var day = days[dayKey] ?? FernletDay(date: dayKey)
             var known = Set(day.journals.map(\.id))
             for row in rows where !known.contains(row.id) {
@@ -172,6 +189,7 @@ final class FakeSealedBackupHost: SealedBackupContext {
             }
             days[dayKey] = day
         }
+        return true
     }
 }
 
@@ -241,7 +259,8 @@ struct SealedBackupPayloadCoverageTests {
         host: FakeSealedBackupHost,
         cloud: FakeSealedBackupCloud,
         preferences: StoragePreferences? = nil,
-        intimacyStore: IntimacyLogStore? = nil
+        intimacyStore: IntimacyLogStore? = nil,
+        journalRepository: JournalNarrativeRepository? = nil
     ) -> SealedBackupCoordinator {
         let keychainService = cloud.keychainService
         let generationDefaults = cloud.generationDefaults
@@ -264,9 +283,30 @@ struct SealedBackupPayloadCoverageTests {
             preferencesProvider: preferences.map { chosen in { chosen } },
             periodRecordStore: PeriodBackupDevice.makeRecordStore(),
             intimacyLogStore: intimacyStore,
-            writerTagProvider: { PeriodBackupDevice.tag("coverage") }
+            journalRepository: journalRepository ?? makeJournalRepository(),
+            journalDeviceKeyService: "com.fernlet.p3-coverage.journalDevice.\(UUID().uuidString)",
+            writerTagProvider: { PeriodBackupDevice.tag("coverage") },
+            backgroundTasks: RecordingBackgroundTasks()
         )
     }
+
+    /// Seals `narrative` into `repository` under `key` (the host's by default) and gives it a day
+    /// skeleton on the host, as `JournalSealingCoordinator` and the diary do — a journal entry the
+    /// backup snapshot counts (an orphan row is never exported, design 2026-09-30 §7.1).
+    private func seedJournal(
+        _ narrative: JournalNarrative,
+        into repository: JournalNarrativeRepository,
+        host: FakeSealedBackupHost,
+        key: SymmetricKey? = nil
+    ) throws {
+        try repository.insert(narrative, contentKey: key ?? host.sealedBackupContentKey)
+        var day = host.days[narrative.dayKey] ?? FernletDay(date: narrative.dayKey)
+        day.journals.append(JournalEntry(id: narrative.id, text: "", tag: narrative.tag, date: narrative.entryDate, emotions: []))
+        host.days[narrative.dayKey] = day
+    }
+
+    /// iCloud sync and the journal backup on.
+    private static let journalOn = StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true)
 
     private func makeCloud() throws -> FakeSealedBackupCloud {
         let cloud = FakeSealedBackupCloud(
@@ -281,211 +321,187 @@ struct SealedBackupPayloadCoverageTests {
         return cloud
     }
 
-    // MARK: - Export path: the empty-store-clobber guard, driven through the real seam
+    // MARK: - Export path: E1 instead of the empty-store-clobber guard (design 2026-09-30, §4.2, §7)
 
-    /// The clobber case the guard exists for, exercised through the USER-FACING enable rather than the
-    /// predicate in isolation. A populated cloud backup meets a local store this device has not restored
-    /// into yet: `reconcileChunked` writes a head record even for a count of 0, so an unguarded enable
-    /// would replace the whole chunk set with one empty chunk and destroy the very history the backup
-    /// exists to recover.
-    ///
-    /// The enable must still report success — returning false would drop the preference and bounce the
-    /// toggle — and must record a deferral so the upload is retried once there IS something to seal.
-    @Test func journalEnableFromAnEmptyStoreDefersInsteadOfClobberingTheCloudBackup() async throws {
+    /// Rewritten for unit B3 (was `journalEnableFromAnEmptyStoreDefersInsteadOfClobberingTheCloudBackup`):
+    /// a populated cloud backup meets an EMPTY store this install has not restored into yet. E1 holds
+    /// the export — nothing is written over the backup — and the enable still reports success with the
+    /// upload owed; the owed restore then merges the backup in, and only then does the export publish
+    /// the union. After resolution an empty store is real: deleting every entry reaches the backup.
+    @Test func journalEnableWaitsForTheRestoreAndAnEmptyStoreAfterResolutionIsReal() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
-        let host = makeHost()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
-
         // A device that HAS the history uploads it.
-        let populated = makeJournalRepository()
-        try populated.insert(journalNarrative("real history", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(
-            true, payloadType: .journalNarratives, journalRepository: populated
-        ))
-        let uploaded = cloud.sealedRecords
-        #expect(uploaded.isEmpty == false, "a populated store must actually upload")
+        let oldHost = makeHost()
+        let history = makeJournalRepository()
+        let old = makeCloudCoordinator(host: oldHost, cloud: cloud, preferences: Self.journalOn, journalRepository: history)
+        oldHost.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        let entry = journalNarrative("real history", at: 10)
+        try seedJournal(entry, into: history, host: oldHost)
+        #expect(await old.setSealedBackupEnabled(true, payloadType: .journalNarratives))
+        let uploaded = cloud.sealedRecordIdentities
+        #expect(!uploaded.isEmpty, "a populated store must actually upload")
 
-        // The same enable from a store that has not restored yet must NOT touch those records.
+        // A new install (same account key, empty store, restore unresolved) turns it on.
+        let host = makeHost()
+        host.sealedBackupContentKey = oldHost.sealedBackupContentKey
         let empty = makeJournalRepository()
-        #expect(await coordinator.setSealedBackupEnabled(
-            true, payloadType: .journalNarratives, journalRepository: empty
-        ), "an enable that cannot seal yet must defer, not fail — a false here reverts the toggle")
-        #expect(cloud.sealedRecordIdentities == uploaded.map(ObjectIdentifier.init),
-                "the empty store replaced the cloud backup")
-        #expect(host.reuploadDeferrals[.journalNarratives] == true,
-                "a skipped export nobody records is a skip nobody ever retries")
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: empty)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives),
+                "an enable that cannot export yet keeps the switch on")
+        #expect(cloud.sealedRecordIdentities == uploaded, "E1: the empty store wrote nothing over the backup")
+        #expect(host.v2Status[.journalNarratives] == .waitingForRestore(nil))
+        #expect(host.reuploadDeferrals[.journalNarratives] == true, "the upload stays owed")
+
+        // The owed restore merges the backup in; the follow-through export publishes it.
+        await coordinator.settleV2Backup(.journalNarratives)
+        #expect(Set(try empty.allIDs()) == [entry.id])
+        #expect(host.sealedBackupBookkeeping.isRestoreResolved(.journalNarratives))
+
+        // Resolved: deleting the entry (its skeleton goes) is a real, exportable empty journal.
+        host.days = [:]
+        try empty.delete(id: entry.id)
+        host.markSealedBackupDirty(.journalNarratives)
+        coordinator.engine.hubSessionEnded()
+        await coordinator.settleV2Backup(.journalNarratives)
+        #expect(host.v2Status[.journalNarratives] == .upToDate)
+        #expect(host.reuploadDeferrals[.journalNarratives] == false, "the delete reached the backup")
     }
 
-    /// The other half of the dual-key hazard: rows the export key CANNOT OPEN. Journal is the one sealed
-    /// store with two possible sealing keys (entries written before a lock existed are sealed under the
-    /// device journal key), and the pager `compactMap`s away every row it cannot decrypt. Sizing the
-    /// chunk set from the raw row count would therefore upload a set of empty chunks over a good backup
-    /// while logging a clean "reconciled".
-    @Test func journalEnableRefusesWhenTheExportKeyCannotOpenTheStoredRows() async throws {
+    /// Rewritten for unit B3 (was `journalEnableRefusesWhenTheExportKeyCannotOpenTheStoredRows`): an
+    /// entry that opens under NO key this iPhone holds pauses the export before its first save — never
+    /// exported as emptiness over a good backup — while an entry under the journal DEVICE key (written
+    /// from Home, not folded yet) is backed up as it is (design 2026-09-30, §7.2, BV5).
+    @Test func journalRowsNoKeyOpensPauseTheExportBeforeAnySave() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
         let host = makeHost()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
+        let journal = makeJournalRepository()
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: journal)
+        host.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("readable", at: 10), into: journal, host: host)
+        let lost = journalNarrative("sealed under a key that is gone", at: 20)
+        try seedJournal(lost, into: journal, host: host, key: SymmetricKey(size: .bits256))
 
-        // A good backup already in iCloud, from a device that could read its own rows.
-        let populated = makeJournalRepository()
-        try populated.insert(journalNarrative("real history", at: 10), contentKey: host.sealedBackupContentKey)
-        _ = await coordinator.setSealedBackupEnabled(
-            true, payloadType: .journalNarratives, journalRepository: populated
-        )
-        let uploaded = cloud.sealedRecordIdentities
-
-        // Rows sealed under a DIFFERENT key: they count, but none of them opens.
-        let otherKeyed = makeJournalRepository()
-        try otherKeyed.insert(journalNarrative("sealed under the device key", at: 20), contentKey: SymmetricKey(size: .bits256))
-        #expect(try otherKeyed.narrativeCount() == 1)
-        #expect(try otherKeyed.narratives(offset: 0, limit: 10, contentKey: host.sealedBackupContentKey).isEmpty)
-
-        #expect(await coordinator.setSealedBackupEnabled(
-            true, payloadType: .journalNarratives, journalRepository: otherKeyed
-        ))
-        #expect(cloud.sealedRecordIdentities == uploaded, "unopenable rows were exported as emptiness")
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
+        #expect(cloud.sealedRecords.isEmpty, "nothing is written while an entry cannot open")
+        #expect(host.v2Status[.journalNarratives] == .paused(unopenableIDs: [lost.id]))
         #expect(host.reuploadDeferrals[.journalNarratives] == true)
     }
 
-    /// The guard has to prove EXPORTABILITY, not row existence — a count cannot see whether the key can
-    /// open what it counted.
-    @Test func reuploadGuardProvesTheKeyCanOpenTheRowsNotJustThatRowsExist() throws {
-        let host = makeHost()
-        let coordinator = SealedBackupCoordinator(host: host)
-        let repository = makeJournalRepository()
-        try repository.insert(journalNarrative("under another key", at: 10), contentKey: SymmetricKey(size: .bits256))
+    // MARK: - The restore is a merge (design 2026-09-30, §7.3)
 
-        #expect(coordinator.journalNarrativeCount(repository: repository) == 1, "the row is really there")
-        #expect(coordinator.mayReuploadFromLocalStore(.journalNarratives, journalRepository: repository) == false,
-                "a row this key cannot open is not something to export")
-
-        // And with no key at all (the app is locked) nothing is exportable.
-        host.sealedBackupContentKey = nil
-        let openable = makeJournalRepository()
-        #expect(coordinator.mayReuploadFromLocalStore(.journalNarratives, journalRepository: openable) == false)
-    }
-
-    // MARK: - Compensating restore paths (the launch pass is fresh-install-only)
-
-    /// The launch arm can only ever answer `.skippedStoreNotEmpty` on a device that is already in use —
-    /// an outcome that is neither `needsAttention` nor `isRetryable`, i.e. silent AND terminal. The
-    /// targeted `.payloadStoreOnly` restore is the compensating path, and it must work on exactly that
-    /// device.
-    @Test func targetedJournalRestoreRecoversOnADeviceThatIsNoLongerFresh() async throws {
+    /// Rewritten for unit B3 (was `targetedJournalRestoreRecoversOnADeviceThatIsNoLongerFresh`): the
+    /// journal restore is an id-keyed MERGE with no freshness or empty-store gate — on a device already
+    /// in use (days synced down, entries of its own), the backup's entries are added beside them.
+    @Test func theJournalMergeRestoreRunsOnADeviceAlreadyInUse() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
-        let host = makeHost()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
-
+        let sourceHost = makeHost()
         let source = makeJournalRepository()
-        try source.insert(journalNarrative("only in the cloud", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(
-            true, payloadType: .journalNarratives, journalRepository: source
-        ))
+        let old = makeCloudCoordinator(host: sourceHost, cloud: cloud, preferences: Self.journalOn, journalRepository: source)
+        sourceHost.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("only in the cloud", at: 10), into: source, host: sourceHost)
+        #expect(await old.setSealedBackupEnabled(true, payloadType: .journalNarratives))
 
-        // The replacement device: day rows already synced down, so it is NOT a fresh install.
-        host.days = ["2026-06-01": FernletDay(date: "2026-06-01", bottleCount: 3)]
+        let host = makeHost()
+        host.sealedBackupContentKey = sourceHost.sealedBackupContentKey
+        host.days["2026-06-03"] = FernletDay(date: "2026-06-03", bottleCount: 3)
         let target = makeJournalRepository()
+        try seedJournal(journalNarrative("written here", dayKey: "2026-06-02", at: 20), into: target, host: host)
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: target)
 
-        #expect(await coordinator.restoreSealedBackupOutcome(payloadType: .journalNarratives) == .skippedStoreNotEmpty,
-                "the ambient launch arm is fresh-install-only by design")
-        let outcome = await coordinator.restoreJournalBackupTargeted(journalRepository: target)
-        #expect(outcome == .restored(1))
-        let readBack = try target.narratives(offset: 0, limit: 10, contentKey: host.sealedBackupContentKey)
-        #expect(readBack.map(\.text) == ["only in the cloud"])
+        #expect(await coordinator.restoreJournalBackup() == .restored(1))
+        let texts = try target.narratives(offset: 0, limit: 10, contentKey: host.sealedBackupContentKey).map(\.text)
+        #expect(Set(texts) == ["only in the cloud", "written here"])
+        #expect(host.days["2026-06-01"]?.journals.count == 1, "the restored entry has its day skeleton")
     }
 
-    /// After an app-lock reset the ambient restores wait for the device owner (period-data design
-    /// 2026-09-30, §5.3, Q14): the Private tab's settle calls the targeted restore AMBIENTLY, and it
-    /// must write nothing and record nothing — retryable, so an un-hide settle never re-uploads over
-    /// the cloud copy either. The user's own restore still runs.
-    @Test func anAppLockResetHoldsAmbientRestoresForTheOwner() async throws {
+    /// Design 2026-09-30 §4.6, R1-BR-15 (was `anAppLockResetHoldsAmbientRestoresForTheOwner`): after an
+    /// app-lock reset NO restore runs — ambient, Retry or "Restore it here" — until the device owner's
+    /// own "Restore", which releases the hold; only then does the merge land.
+    @Test func anAppLockResetHoldsEveryJournalRestoreUntilTheOwnersRelease() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
-        let host = makeHost()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
+        let sourceHost = makeHost()
         let source = makeJournalRepository()
-        try source.insert(journalNarrative("only in the cloud", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(
-            true, payloadType: .journalNarratives, journalRepository: source
-        ))
+        let old = makeCloudCoordinator(host: sourceHost, cloud: cloud, preferences: Self.journalOn, journalRepository: source)
+        sourceHost.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("only in the cloud", at: 10), into: source, host: sourceHost)
+        #expect(await old.setSealedBackupEnabled(true, payloadType: .journalNarratives))
+
+        let host = makeHost()
+        host.sealedBackupContentKey = sourceHost.sealedBackupContentKey
         host.sealedBackupRestoreAwaitsOwner = true
         let target = makeJournalRepository()
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: target)
 
-        let ambient = await coordinator.restoreJournalBackupTargeted(journalRepository: target)
-        #expect(ambient == .deferredTransient)
-        #expect(ambient.isRetryable, "retryable, so no settle treats the held restore as done and re-uploads")
-        #expect(try target.narrativeCount() == 0, "a held ambient restore writes nothing")
+        #expect(await coordinator.restoreJournalBackup() == .deferredTransient)
+        #expect(await coordinator.restoreJournalBackup(initiatedByUser: true) == .deferredTransient,
+                "Retry is ambient: it never skips the owner hold")
+        #expect(try target.narrativeCount() == 0, "a held restore writes nothing")
         #expect(host.recordedOutcomes[.journalNarratives] == nil, "nor does it raise a banner")
 
-        let explicit = await coordinator.restoreJournalBackupTargeted(journalRepository: target, initiatedByUser: true)
-        #expect(explicit == .restored(1), "the user's own restore is never held")
+        await coordinator.releaseRestoreHoldForOwner()
+        #expect(try target.narrativeCount() == 1, "the owner's release merges the backup in")
+        #expect(!host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "the restore landed: the copy is settled")
     }
 
-    /// Review C-U2-R1: holding the RESTORES after an app-lock reset is not enough — the Private tab's
-    /// settle, the launch follow-through and the Retry pass all re-upload afterwards, and with the hub
-    /// key now live on every section that re-upload would REPLACE the owner's pre-reset history in
-    /// iCloud with whatever was written since the reset. While the hold is set, every deferred
-    /// re-upload writes nothing; the control half proves it was the hold (not some other guard) that
-    /// held it.
-    @Test func anAppLockResetHoldsEveryReuploadSoThePreResetCloudCopyStays() async throws {
+    /// Review C-U2-R1 on the v2 engine: holding the RESTORES after an app-lock reset is not enough — an
+    /// export would REPLACE the owner's pre-reset history with whatever was written since. While the
+    /// hold keeps the journal's copy, every export stops at X2 (`.heldForOwner`); the control half
+    /// proves it was the hold that held it.
+    @Test func anAppLockResetHoldsEveryJournalExportSoThePreResetCloudCopyStays() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
-        let host = makeHost()
-        let preferences = StoragePreferences(
-            iCloudSyncEnabled: true,
-            sealedBackupJournalEnabled: true,
-            sealedBackupJournalReuploadDeferred: true
-        )
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
-        // The owner's history, backed up before the reset.
-        let journalHistory = makeJournalRepository()
-        try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
-        try journalHistory.insert(journalNarrative("also before", at: 20), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
+        let historyHost = makeHost()
+        let history = makeJournalRepository()
+        let before = makeCloudCoordinator(host: historyHost, cloud: cloud, preferences: Self.journalOn, journalRepository: history)
+        historyHost.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("before the reset", at: 10), into: history, host: historyHost)
+        #expect(await before.setSealedBackupEnabled(true, payloadType: .journalNarratives))
         let preReset = cloud.sealedRecordIdentities
-        #expect(!preReset.isEmpty)
 
-        // The reset: a fresh key, stores holding only what was written since, and the owner hold.
-        host.sealedBackupContentKey = SymmetricKey(size: .bits256)
-        host.sealedBackupRestoreAwaitsOwner = true
-        let journalSince = makeJournalRepository()
-        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        // After the reset: a fresh key, a store holding only what was written since, the hold.
+        let host = makeHost()
+        host.restoreHold.hold(keepingCopiesFrom: Self.journalOn)
+        host.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        let since = makeJournalRepository()
+        try seedJournal(journalNarrative("after the reset", at: 30), into: since, host: host)
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: since)
+        host.markSealedBackupDirty(.journalNarratives)
 
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
-        #expect(cloud.sealedRecordIdentities == preReset, "a held re-upload writes nothing over the pre-reset copy")
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives)
+        #expect(cloud.sealedRecordIdentities == preReset, "a held export writes nothing over the pre-reset copy")
+        #expect(host.v2Status[.journalNarratives] == .heldForOwner)
 
-        host.sealedBackupRestoreAwaitsOwner = false
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
-        #expect(cloud.sealedRecordIdentities != preReset, "control: without the hold the very same call re-uploads")
+        host.restoreHold.forgetPreResetCopy(of: .journalNarratives)
+        coordinator.engine.hubSessionEnded()
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives)
+        #expect(host.v2Status[.journalNarratives] != .heldForOwner, "control: without the kept copy it is not held")
     }
 
-    /// Review C-U2-R1, the escrow adopt: it switches keys and then re-seals every enabled payload from
-    /// the local stores — after a reset, that is the post-reset store. While the hold is set the key is
-    /// still adopted, nothing is written, and each enabled payload records the upload it owes.
+    /// Review C-U2-R1, the escrow adopt (design 2026-09-30 §4.5): it switches keys and marks every
+    /// enabled backup's upload owed — and writes nothing itself, so nothing is re-sealed over a
+    /// pre-reset copy the hold keeps (the export's X2 holds it at the next visit).
     @Test func anEscrowAdoptDuringTheOwnerHoldAdoptsTheKeyButWritesNothing() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
         let host = makeHost()
         let preferences = StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true)
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
-        let journalHistory = makeJournalRepository()
-        try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
+        let journal = makeJournalRepository()
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences, journalRepository: journal)
+        host.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("before the reset", at: 10), into: journal, host: host)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
         let preReset = cloud.sealedRecordIdentities
         let otherDevice = try seedSyncedEscrowKey(into: cloud.keychainService)
         defer { KeychainItem.deleteAll(service: otherDevice) }
 
         host.sealedBackupRestoreAwaitsOwner = true
-        let journalSince = makeJournalRepository()
-        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
-
-        #expect(await coordinator.adoptSyncedEscrowAndReupload(journalRepository: journalSince),
-                "the other device's key is still adopted")
+        #expect(await coordinator.adoptSyncedEscrowAndReupload(), "the other device's key is still adopted")
         #expect(cloud.sealedRecordIdentities == preReset, "nothing is re-sealed over the pre-reset copy")
-        #expect(host.reuploadDeferrals[.journalNarratives] == true)
+        #expect(host.reuploadDeferrals[.journalNarratives] == true, "the journal upload is owed")
         #expect(host.reuploadDeferrals[.intimacyLogs] == true,
                 "the intimate-log backup (v2) is marked owed; its export's own hold keeps the copy")
         #expect(host.reuploadDeferrals[.periodData] == nil, "a payload that is off owes nothing")
@@ -499,35 +515,34 @@ struct SealedBackupPayloadCoverageTests {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
         let host = makeHost()
-        let preferences = StoragePreferences(
-            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupJournalReuploadDeferred: true
-        )
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
-        let journalHistory = makeJournalRepository()
-        try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
+        let journal = makeJournalRepository()
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: journal)
+        host.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("before the reset", at: 10), into: journal, host: host)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
         let preReset = cloud.sealedRecordIdentities
 
         // The reset, with the journal backup on: its pre-reset copy is kept.
-        let resetKey = SymmetricKey(size: .bits256)
-        host.sealedBackupContentKey = resetKey
-        host.restoreHold.hold(keepingCopiesFrom: preferences)
-        let journalSince = makeJournalRepository()
-        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: resetKey)
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        host.restoreHold.hold(keepingCopiesFrom: Self.journalOn)
+        try seedJournal(journalNarrative("after the reset", at: 30), into: journal, host: host)
+        host.markSealedBackupDirty(.journalNarratives)
+        coordinator.engine.hubSessionEnded()
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives)
         #expect(cloud.sealedRecordIdentities == preReset, "control: while the copy is there, the upload is held")
 
         // Off (the copy is deleted), then on again from Settings with Private closed.
         #expect(await coordinator.setSealedBackupEnabled(false, payloadType: .journalNarratives))
         #expect(cloud.sealedRecords.isEmpty, "turning it off deleted the pre-reset copy")
         #expect(!host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "nothing pre-reset is left to keep")
+        let key = host.sealedBackupContentKey
         host.sealedBackupContentKey = nil
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalSince))
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
         #expect(host.reuploadDeferrals[.journalNarratives] == true, "Private is closed: the upload is owed")
 
         // The next Private settle uploads it.
-        host.sealedBackupContentKey = resetKey
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        host.sealedBackupContentKey = key
+        coordinator.engine.hubSessionEnded()
+        await coordinator.settleV2Backup(.journalNarratives)
         #expect(!cloud.sealedRecords.isEmpty, "the user's new entries reach the backup")
         #expect(host.reuploadDeferrals[.journalNarratives] == false, "and the owed upload is discharged")
         #expect(host.sealedBackupRestoreAwaitsOwner, "the ambient-restore half of the hold is untouched")
@@ -535,8 +550,8 @@ struct SealedBackupPayloadCoverageTests {
 
     /// Review N-1: a backup that was OFF at the reset had no pre-reset copy, so it uploads as usual —
     /// and after the escrow adopt it is re-sealed under the adopted key at the next Private visit —
-    /// while a payload whose copy is kept stays held beside it. (The intimate logs are on the v2
-    /// engine since unit B2: the hold is its export's X2, the adopt marks the upload owed.)
+    /// while a payload whose copy is kept stays held beside it. (Both are on the v2 engine: the hold is
+    /// the export's X2, the adopt marks the upload owed.)
     @Test func aBackupThatWasOffAtTheResetIsNeverHeld() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
@@ -547,13 +562,17 @@ struct SealedBackupPayloadCoverageTests {
             sealedBackupJournalReuploadDeferred: true, sealedBackupIntimacyReuploadDeferred: true
         )
         let intimacySince = makeIntimacyStore()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences, intimacyStore: intimacySince)
-        host.sealedBackupBookkeeping.markRestoreResolved(.intimacyLogs)
         let journalSince = makeJournalRepository()
-        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        let coordinator = makeCloudCoordinator(
+            host: host, cloud: cloud, preferences: preferences, intimacyStore: intimacySince, journalRepository: journalSince
+        )
+        host.sealedBackupBookkeeping.markRestoreResolved(.intimacyLogs)
+        host.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("after the reset", at: 30), into: journalSince, host: host)
         try intimacySince.insert(intimacyLog("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        host.markSealedBackupDirty(.journalNarratives)
 
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives)
         await coordinator.retryDeferredReuploadIfNeeded(payloadType: .intimacyLogs)
         #expect(names(in: cloud, for: .journalNarratives).isEmpty, "the kept journal copy is not replaced")
         #expect(!names(in: cloud, for: .intimacyLogs).isEmpty, "intimacy was off at the reset: it uploads")
@@ -561,14 +580,16 @@ struct SealedBackupPayloadCoverageTests {
         let otherDevice = try seedSyncedEscrowKey(into: cloud.keychainService)
         defer { KeychainItem.deleteAll(service: otherDevice) }
         let intimacyBefore = cloud.sealedRecordIdentities
-        #expect(await coordinator.adoptSyncedEscrowAndReupload(journalRepository: journalSince))
+        #expect(await coordinator.adoptSyncedEscrowAndReupload())
         #expect(names(in: cloud, for: .journalNarratives).isEmpty, "the adopt re-seals nothing over the kept copy")
         #expect(host.reuploadDeferrals[.journalNarratives] == true)
         #expect(host.reuploadDeferrals[.intimacyLogs] == true, "the adopt marks the unheld v2 payload owed")
         coordinator.engine.hubSessionEnded()
         await coordinator.settleV2Backup(.intimacyLogs)
+        await coordinator.settleV2Backup(.journalNarratives)
         #expect(cloud.sealedRecordIdentities != intimacyBefore, "the next Private visit re-seals it under the adopted key")
         #expect(host.reuploadDeferrals[.intimacyLogs] == false)
+        #expect(names(in: cloud, for: .journalNarratives).isEmpty, "and the kept journal copy is still not replaced")
     }
 
     /// Review N-1: only a delete that LANDED ends the hold's claim. A failed one may have left the
@@ -577,22 +598,21 @@ struct SealedBackupPayloadCoverageTests {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
         let host = makeHost()
-        let preferences = StoragePreferences(
-            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupJournalReuploadDeferred: true
-        )
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
-        let journalHistory = makeJournalRepository()
-        try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
+        let journal = makeJournalRepository()
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: journal)
+        host.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("before the reset", at: 10), into: journal, host: host)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
         let preReset = cloud.sealedRecordIdentities
-        host.restoreHold.hold(keepingCopiesFrom: preferences)
+        host.restoreHold.hold(keepingCopiesFrom: Self.journalOn)
 
         cloud.database.failsDeletes = true
         #expect(await !coordinator.setSealedBackupEnabled(false, payloadType: .journalNarratives), "the delete failed")
         #expect(host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "the copy may still be there: still kept")
-        let journalSince = makeJournalRepository()
-        try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
+        try seedJournal(journalNarrative("after the reset", at: 30), into: journal, host: host)
+        host.markSealedBackupDirty(.journalNarratives)
+        coordinator.engine.hubSessionEnded()
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives)
         #expect(cloud.sealedRecordIdentities == preReset, "and nothing is uploaded over it")
     }
 
@@ -646,81 +666,43 @@ struct SealedBackupPayloadCoverageTests {
                 "a hold released without its record keeps every copy: fail closed")
     }
 
-    /// The owner's release end to end for a v1-model payload: the journal re-upload stays held after the
-    /// release, the ambient restore then runs and lands, and only that settles the copy and lets this
-    /// iPhone back up again — so the pre-reset copy is pulled back before anything replaces it. A store
-    /// that already holds post-reset entries refuses the journal's empty-store restore, so its copy
-    /// stays kept (and its upload held) until the user turns that backup off — never a silent replace.
-    @Test func afterTheOwnersReleaseAJournalCopyIsRestoredBeforeItIsReplaced() async throws {
+    /// The owner's release end to end for the journal (design 2026-09-30, §4.6, §7.3; replaces the v1
+    /// `afterTheOwnersReleaseAJournalCopyIsRestoredBeforeItIsReplaced` and
+    /// `aReleasedCopyThatCannotRestoreIsNamedAndReplacedOnlyByChoice`): the hold holds every restore and
+    /// export; the owner's release reopens the restore, which MERGES the pre-reset copy into a store
+    /// that already holds post-reset entries (no empty-store refusal any more, so nothing is ever named
+    /// "can't be restored"), settles the copy, and the follow-through export publishes the union.
+    @Test func afterTheOwnersReleaseTheJournalCopyIsMergedBeforeAnythingReplacesIt() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
-        let host = makeHost()
-        let preferences = StoragePreferences(
-            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupJournalReuploadDeferred: true
-        )
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        let historyHost = makeHost()
         let history = makeJournalRepository()
-        try history.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: history))
+        let before = makeCloudCoordinator(host: historyHost, cloud: cloud, preferences: Self.journalOn, journalRepository: history)
+        historyHost.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        let old = journalNarrative("before the reset", at: 10)
+        try seedJournal(old, into: history, host: historyHost)
+        #expect(await before.setSealedBackupEnabled(true, payloadType: .journalNarratives))
         let preReset = cloud.sealedRecordIdentities
-        host.restoreHold.hold(keepingCopiesFrom: preferences)
-        host.sealedBackupContentKey = SymmetricKey(size: .bits256)
+
+        let host = makeHost()
+        host.sealedBackupContentKey = historyHost.sealedBackupContentKey
+        host.restoreHold.hold(keepingCopiesFrom: Self.journalOn)
+        host.sealedBackupBookkeeping.reopenRestore(.journalNarratives)
         let written = makeJournalRepository()
-        try written.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        let since = journalNarrative("after the reset", dayKey: "2026-06-02", at: 30)
+        try seedJournal(since, into: written, host: host)
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: written)
+        host.markSealedBackupDirty(.journalNarratives)
 
-        host.releaseSealedBackupRestoreHold()
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: written)
-        #expect(cloud.sealedRecordIdentities == preReset, "released, but nothing replaces the copy before its restore")
-        #expect(await coordinator.restoreJournalBackupTargeted(journalRepository: written) == .skippedStoreNotEmpty)
-        #expect(host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "a refused restore settles nothing")
+        await coordinator.settleV2Backup(.journalNarratives)
+        #expect(cloud.sealedRecordIdentities == preReset, "held: nothing replaces the copy before its restore")
+        #expect(Set(try written.allIDs()) == [since.id], "and nothing is restored before the owner asks")
 
-        let empty = makeJournalRepository()
-        #expect(await coordinator.restoreJournalBackupTargeted(journalRepository: empty) == .restored(1))
+        await coordinator.releaseRestoreHoldForOwner()
+        #expect(Set(try written.allIDs()) == [old.id, since.id], "the pre-reset copy merged into the post-reset store")
         #expect(!host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "the restore landed: the copy is settled")
-        try empty.insert(journalNarrative("after the restore", at: 40), contentKey: host.sealedBackupContentKey)
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: empty)
-        #expect(cloud.sealedRecordIdentities != preReset, "and now the restored journal backs up again")
-    }
-
-    /// Review U5-backup-v2-C-U5-5 / L-U5-R5: after the owner's release, a journal copy whose restore
-    /// can never land here (this iPhone already holds entries written since the reset, and the journal
-    /// restore writes only into an empty store) is NAMED — instead of "will restore the next time you
-    /// open Private" forever while the journal never backs up — and only the user's explicit replace
-    /// lets this iPhone's entries back up over it. While the hold still waits, nothing is named (the
-    /// restore has not been asked for); a payload whose store is empty is never named (its restore can
-    /// land).
-    @Test func aReleasedCopyThatCannotRestoreIsNamedAndReplacedOnlyByChoice() async throws {
-        let cloud = try makeCloud()
-        defer { cloud.tearDown() }
-        let host = makeHost()
-        let preferences = StoragePreferences(
-            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true,
-            sealedBackupJournalReuploadDeferred: true
-        )
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
-        let history = makeJournalRepository()
-        try history.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: history))
-        let preReset = cloud.sealedRecordIdentities
-        host.restoreHold.hold(keepingCopiesFrom: preferences)
-        host.sealedBackupContentKey = SymmetricKey(size: .bits256)
-        let written = makeJournalRepository()
-        try written.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
-
-        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written).isEmpty,
-                "held: the owner has not asked for the restore yet")
-        host.releaseSealedBackupRestoreHold()
-        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written)
-                == [.journalNarratives], "the journal is named; the intimate logs (a v2 merge) never are")
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: written)
-        #expect(cloud.sealedRecordIdentities == preReset, "named, still held: nothing replaced it silently")
-
-        coordinator.replacePreResetCopyWithThisIPhone(.journalNarratives)
-        #expect(!host.sealedBackupKeepsPreResetCopy(of: .journalNarratives))
-        #expect(host.reuploadDeferrals[.journalNarratives] == true, "the upload is owed")
-        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written).isEmpty)
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: written)
-        #expect(cloud.sealedRecordIdentities != preReset, "after the user's choice this iPhone's journal backs up")
+        #expect(cloud.sealedRecordIdentities != preReset, "and the union backs up")
+        #expect(host.reuploadDeferrals[.journalNarratives] == false)
     }
 
     /// Design 2026-09-30 §4.5 / §5.5 (R2-F1), replacing review U5-backup-v2-L-U5-R1's explicit replace:
@@ -784,30 +766,32 @@ struct SealedBackupPayloadCoverageTests {
         return otherService
     }
 
-    /// The targeted paths drop the whole-device freshness gate, so the one-way divergence latch is what
-    /// keeps them safe: a user who DELETED their entries must never have them resurrected from the
-    /// stale-by-construction cloud copy.
-    @Test func targetedRestoresRefuseAnEmptyButDivergedStore() async throws {
+    /// Rewritten for unit B3 (was `targetedRestoresRefuseAnEmptyButDivergedStore`): the one-way
+    /// divergence latch no longer gates a restore — it SEEDS the journal restore marker once (BV14). An
+    /// install that wrote and deleted its entries (count 0, latch set) seeds the marker RESOLVED, so no
+    /// ambient restore ever merges the stale cloud copy back over the user's deletes.
+    @Test func aDivergedJournalStoreSeedsItsMarkerResolvedAndNeverMergesTheStaleCopy() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
-        let host = makeHost()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
-
+        let sourceHost = makeHost()
         let source = makeJournalRepository()
-        try source.insert(journalNarrative("deleted on the other device", at: 10), contentKey: host.sealedBackupContentKey)
-        _ = await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: source)
+        let old = makeCloudCoordinator(host: sourceHost, cloud: cloud, preferences: Self.journalOn, journalRepository: source)
+        sourceHost.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+        try seedJournal(journalNarrative("deleted on this device", at: 10), into: source, host: sourceHost)
+        #expect(await old.setSealedBackupEnabled(true, payloadType: .journalNarratives))
 
-        // Written, then deleted: count 0, latch set.
-        let divergedJournal = makeJournalRepository()
+        let host = makeHost()
+        host.sealedBackupContentKey = sourceHost.sealedBackupContentKey
+        let diverged = makeJournalRepository()
         let entry = journalNarrative("written then deleted", at: 20)
-        try divergedJournal.insert(entry, contentKey: host.sealedBackupContentKey)
-        try divergedJournal.delete(id: entry.id)
+        try diverged.insert(entry, contentKey: host.sealedBackupContentKey)
+        try diverged.delete(id: entry.id)
+        host.journalRestoreSeed = diverged.hasEverStoredNarrative
+        #expect(host.sealedBackupBookkeeping.seedRestoreMarkerIfAbsent(.journalNarratives))
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: Self.journalOn, journalRepository: diverged)
 
-        #expect(await coordinator.restoreJournalBackupTargeted(journalRepository: divergedJournal) == .skippedStoreNotEmpty)
-        #expect(try divergedJournal.narrativeCount() == 0)
-        // (The intimate logs are a v2 merge: an install that already held or deleted logs seeds its
-        // restore marker RESOLVED from the same latch, so no restore ever merges the stale copy back —
-        // SealedBackupIntimacyV2Tests.aDivergedInstallSeedsItsMarkerResolvedAndNeverMergesTheStaleCopy.)
+        #expect(await coordinator.restoreJournalBackup() == .skippedStoreNotEmpty, "a resolved install never restores ambiently")
+        #expect(try diverged.narrativeCount() == 0)
     }
 
     // MARK: - Pass-level freshness (one arm must not sabotage the next)
@@ -824,12 +808,11 @@ struct SealedBackupPayloadCoverageTests {
         let intimacy = makeIntimacyStore()
         #expect(host.days.isEmpty, "the pass starts on a genuinely fresh device")
 
-        // Arm 1: journal, at the launch scope, on a device that really is fresh.
+        // Arm 1: journal, on a device that really is fresh.
         #expect(try coordinator.applyRestoredPayload(
             try encode([journalNarrative("restored", at: 100)]),
             payloadType: .journalNarratives,
-            journalRepository: journal,
-            scope: .freshInstall
+            journalRepository: journal
         ) == 1)
         #expect(host.days.isEmpty == false, "the journal arm writes day skeletons — that is the hazard")
 
@@ -837,30 +820,29 @@ struct SealedBackupPayloadCoverageTests {
         #expect(try coordinator.applyRestoredPayload(
             try encode([intimacyLog("restored", at: 100)]),
             payloadType: .intimacyLogs,
-            intimacyStore: intimacy,
-            scope: .freshInstall
+            intimacyStore: intimacy
         ) == 1)
         #expect(try intimacy.backupLogCount() == 1)
     }
 
-    /// Pinning the whole-device verdict must NOT weaken the per-payload no-clobber checks — they stay
-    /// live and unconditional, which is what actually protects the user's data.
-    @Test func pinnedFreshnessStillHonorsThePerPayloadStoreChecks() throws {
+    /// Design 2026-09-30 §7.3 (was `pinnedFreshnessStillHonorsThePerPayloadStoreChecks` and
+    /// `journalRestoreRefusesAPopulatedStore`): the journal restore is an id-keyed MERGE, never
+    /// empty-store-only — an entry already here stays exactly as it is, and the backup's entry is added
+    /// beside it with its day skeleton.
+    @Test func journalRestoreMergesIntoAPopulatedStore() throws {
         let host = makeHost()
         let coordinator = SealedBackupCoordinator(host: host)
         let journal = makeJournalRepository()
         try journal.insert(journalNarrative("written here", at: 10), contentKey: host.sealedBackupContentKey)
 
-        #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.storeNotEmpty) {
-            try coordinator.applyRestoredPayload(
-                try encode([journalNarrative("from the backup", at: 100)]),
-                payloadType: .journalNarratives,
-                journalRepository: journal,
-                scope: .freshInstall,
-                freshInstallOverride: true
-            )
-        }
-        #expect(try journal.narrativeCount() == 1)
+        #expect(try coordinator.applyRestoredPayload(
+            try encode([journalNarrative("from the backup", at: 100)]),
+            payloadType: .journalNarratives,
+            journalRepository: journal
+        ) == 1, "one entry added")
+        let texts = try journal.narratives(offset: 0, limit: 10, contentKey: host.sealedBackupContentKey).map(\.text)
+        #expect(texts == ["written here", "from the backup"])
+        #expect(host.reinstatedJournalSkeletons.first?.count == 1, "the added entry's skeleton is rebuilt")
     }
 
     // MARK: - Journal: restore into an empty store
@@ -877,61 +859,17 @@ struct SealedBackupPayloadCoverageTests {
         let count = try coordinator.applyRestoredPayload(
             try encode(narratives),
             payloadType: .journalNarratives,
-            journalRepository: repository,
-            scope: .payloadStoreOnly
+            journalRepository: repository
         )
         #expect(count == 2)
 
         let readBack = try repository.narratives(offset: 0, limit: 10, contentKey: host.sealedBackupContentKey)
         #expect(readBack.map(\.text) == ["Slept badly, wrote it down.", "Better today."])
         #expect(readBack.first?.emotions == ["calm"])
+        #expect(readBack.map(\.updatedAt) == narratives.map(\.updatedAt), "a restored entry keeps its own stamps")
         // Self-sufficiency: the skeletons hook fired with exactly what was written.
-        #expect(host.reinstatedJournalNarratives.count == 1)
-        #expect(host.reinstatedJournalNarratives.first?.count == 2)
-    }
-
-    /// Insert-into-empty, never overwrite: a store that already holds journal rows is refused outright
-    /// rather than merged, so a restore can never clobber or duplicate the user's own text.
-    @Test func journalRestoreRefusesAPopulatedStore() throws {
-        let host = makeHost()
-        let coordinator = SealedBackupCoordinator(host: host)
-        let repository = makeJournalRepository()
-        try repository.insert(journalNarrative("Written on this device.", at: 50), contentKey: host.sealedBackupContentKey)
-
-        #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.storeNotEmpty) {
-            try coordinator.applyRestoredPayload(
-                try encode([journalNarrative("From the backup.", at: 100)]),
-                payloadType: .journalNarratives,
-                journalRepository: repository,
-                scope: .payloadStoreOnly
-            )
-        }
-        #expect(try repository.narrativeCount() == 1)
-        #expect(host.reinstatedJournalNarratives.isEmpty, "a refused restore must not touch the day blob")
-    }
-
-    /// The empty-but-DIVERGED store: the user wrote entries and deleted them, so the row count is 0
-    /// while the cloud copy is stale-by-construction. Restoring there would resurrect deliberately
-    /// deleted journal text — the one-way latch is what carries that missing bit.
-    @Test func journalRestoreRefusesAnEmptyButDivergedStore() throws {
-        let host = makeHost()
-        let coordinator = SealedBackupCoordinator(host: host)
-        let repository = makeJournalRepository()
-        let entry = journalNarrative("Written, then deleted.", at: 50)
-        try repository.insert(entry, contentKey: host.sealedBackupContentKey)
-        try repository.delete(id: entry.id)
-        #expect(try repository.narrativeCount() == 0)
-        #expect(repository.hasEverStoredNarrative)
-
-        #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.storeNotEmpty) {
-            try coordinator.applyRestoredPayload(
-                try encode([journalNarrative("Resurrected?", at: 100)]),
-                payloadType: .journalNarratives,
-                journalRepository: repository,
-                scope: .payloadStoreOnly
-            )
-        }
-        #expect(try repository.narrativeCount() == 0)
+        #expect(host.reinstatedJournalSkeletons.count == 1)
+        #expect(Set(host.reinstatedJournalSkeletons.first?.map(\.id) ?? []) == Set(narratives.map(\.id)))
     }
 
     /// Locked at the write point → `.locked`, which the restore classifier maps to the RETRYABLE
@@ -943,10 +881,7 @@ struct SealedBackupPayloadCoverageTests {
         let payload = try encode([journalNarrative("Waiting for the unlock.", at: 100)])
 
         #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.locked) {
-            try coordinator.applyRestoredPayload(
-                payload, payloadType: .journalNarratives,
-                journalRepository: repository, scope: .payloadStoreOnly
-            )
+            try coordinator.applyRestoredPayload(payload, payloadType: .journalNarratives, journalRepository: repository)
         }
         #expect(try repository.narrativeCount() == 0)
         #expect(repository.hasEverStoredNarrative == false, "a deferred restore must not latch divergence")
@@ -954,12 +889,28 @@ struct SealedBackupPayloadCoverageTests {
 
         // The user unlocks; the same payload now lands.
         host.sealedBackupContentKey = SymmetricKey(size: .bits256)
-        let count = try coordinator.applyRestoredPayload(
-            payload, payloadType: .journalNarratives,
-            journalRepository: repository, scope: .payloadStoreOnly
-        )
+        let count = try coordinator.applyRestoredPayload(payload, payloadType: .journalNarratives, journalRepository: repository)
         #expect(count == 1)
         #expect(try repository.narrativeCount() == 1)
+    }
+
+    /// Design 2026-09-30 §7.6: a duress session shuts the journal's decrypt seam — the merge throws
+    /// (retryable) and writes nothing, and the same call lands once the session is over.
+    @Test func journalRestoreIsRefusedDuringADuressSession() throws {
+        let host = makeHost()
+        host.duressSessionActive = true
+        let coordinator = SealedBackupCoordinator(host: host)
+        let repository = makeJournalRepository()
+        let payload = try encode([journalNarrative("from the backup", at: 100)])
+
+        #expect(throws: JournalBackupSeamClosedError.self) {
+            try coordinator.applyRestoredPayload(payload, payloadType: .journalNarratives, journalRepository: repository)
+        }
+        #expect(try repository.narrativeCount() == 0)
+        #expect(host.reinstatedJournalSkeletons.isEmpty, "no skeleton written in duress")
+
+        host.duressSessionActive = false
+        #expect(try coordinator.applyRestoredPayload(payload, payloadType: .journalNarratives, journalRepository: repository) == 1)
     }
 
 
@@ -974,13 +925,12 @@ struct SealedBackupPayloadCoverageTests {
         let count = try coordinator.applyRestoredPayload(
             try encode(logs),
             payloadType: .intimacyLogs,
-            intimacyStore: store,
-            scope: .payloadStoreOnly
+            intimacyStore: store
         )
         #expect(count == 2)
         let readBack = try store.backupChunk(ids: try store.allIDs(), contentKey: host.sealedBackupContentKey)
         #expect(readBack.records.map(\.note) == ["first", "second"])
-        #expect(host.reinstatedJournalNarratives.isEmpty, "intimacy restore must not touch journal skeletons")
+        #expect(host.reinstatedJournalSkeletons.isEmpty, "intimacy restore must not touch journal skeletons")
     }
 
     /// Design 2026-09-30 §8.2 (was `intimacyRestoreRefusesAPopulatedStore`): the restore is an id-keyed
@@ -995,8 +945,7 @@ struct SealedBackupPayloadCoverageTests {
         #expect(try coordinator.applyRestoredPayload(
             try encode([intimacyLog("from the backup", at: 100)]),
             payloadType: .intimacyLogs,
-            intimacyStore: store,
-            scope: .payloadStoreOnly
+            intimacyStore: store
         ) == 1, "one log added")
         let notes = try store.backupChunk(ids: try store.allIDs(), contentKey: host.sealedBackupContentKey).records.map(\.note)
         #expect(notes == ["logged locally", "from the backup"])
@@ -1011,7 +960,7 @@ struct SealedBackupPayloadCoverageTests {
         #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.locked) {
             try coordinator.applyRestoredPayload(
                 payload, payloadType: .intimacyLogs,
-                intimacyStore: store, scope: .payloadStoreOnly
+                intimacyStore: store
             )
         }
         #expect(try store.backupLogCount() == 0)
@@ -1020,7 +969,7 @@ struct SealedBackupPayloadCoverageTests {
         host.sealedBackupContentKey = SymmetricKey(size: .bits256)
         #expect(try coordinator.applyRestoredPayload(
             payload, payloadType: .intimacyLogs,
-            intimacyStore: store, scope: .payloadStoreOnly
+            intimacyStore: store
         ) == 1)
     }
 
@@ -1038,7 +987,7 @@ struct SealedBackupPayloadCoverageTests {
         #expect(throws: IntimacyTrackingHiddenError.self) {
             try coordinator.applyRestoredPayload(
                 payload, payloadType: .intimacyLogs,
-                intimacyStore: store, scope: .payloadStoreOnly
+                intimacyStore: store
             )
         }
         #expect(try store.backupLogCount() == 0)
@@ -1046,7 +995,7 @@ struct SealedBackupPayloadCoverageTests {
         host.isIntimacyTrackingVisible = true
         #expect(try coordinator.applyRestoredPayload(
             payload, payloadType: .intimacyLogs,
-            intimacyStore: store, scope: .payloadStoreOnly
+            intimacyStore: store
         ) == 1)
     }
 
@@ -1063,40 +1012,11 @@ struct SealedBackupPayloadCoverageTests {
             try coordinator.applyRestoredPayload(
                 try encode([intimacyLog("from the backup", at: 100)]),
                 payloadType: .intimacyLogs,
-                intimacyStore: store,
-                scope: .payloadStoreOnly
+                intimacyStore: store
             )
         }
         #expect(try store.backupLogCount() == 1, "a hidden store must not count as empty")
         #expect(store.hasEverStoredLog, "a hidden store must not read as never-populated")
-    }
-
-    // MARK: - Empty-store clobber guards
-
-    /// `reconcileChunked` writes a head record even for a count of 0, so an export from a store this
-    /// device has not restored into yet would REPLACE a good cloud backup with a single empty chunk.
-    /// An empty store means "not restored yet", never "nothing to back up".
-    @Test func reuploadIsRefusedFromAnEmptyJournalStoreAndAllowedFromAPopulatedOne() throws {
-        let host = makeHost()
-        let coordinator = SealedBackupCoordinator(host: host)
-        let empty = makeJournalRepository()
-        #expect(coordinator.mayReuploadFromLocalStore(.journalNarratives, journalRepository: empty) == false)
-
-        let populated = makeJournalRepository()
-        try populated.insert(journalNarrative("real history", at: 10), contentKey: host.sealedBackupContentKey)
-        #expect(coordinator.mayReuploadFromLocalStore(.journalNarratives, journalRepository: populated))
-    }
-
-    /// The counts the guards read work with no content key in play — the guards run while the app may
-    /// be locked, and they fail CLOSED at 0 so "unknown" reads as "do not re-upload".
-    @Test func countsReadRowsWithoutAKeyAndStartAtZero() throws {
-        let host = makeHost()
-        let coordinator = SealedBackupCoordinator(host: host)
-        let journal = makeJournalRepository()
-        #expect(coordinator.journalNarrativeCount(repository: journal) == 0)
-
-        try journal.insert(journalNarrative("one", at: 1), contentKey: host.sealedBackupContentKey)
-        #expect(coordinator.journalNarrativeCount(repository: journal) == 1)
     }
 
     // MARK: - Chunked round trip (what the CloudKit path hands back)
@@ -1111,10 +1031,7 @@ struct SealedBackupPayloadCoverageTests {
             try encode([journalNarrative("chunk 0 a", at: 10), journalNarrative("chunk 0 b", at: 20)]),
             try encode([journalNarrative("chunk 1 a", at: 30)])
         ]
-        let count = try coordinator.applyRestoredChunks(
-            chunks, payloadType: .journalNarratives,
-            journalRepository: repository, scope: .payloadStoreOnly
-        )
+        let count = try coordinator.applyRestoredChunks(chunks, payloadType: .journalNarratives, journalRepository: repository)
         #expect(count == 3)
         #expect(try repository.narrativeCount() == 3)
     }
@@ -1127,10 +1044,7 @@ struct SealedBackupPayloadCoverageTests {
             try encode([intimacyLog("chunk 0 a", at: 10), intimacyLog("chunk 0 b", at: 20)]),
             try encode([intimacyLog("chunk 1 a", at: 30)])
         ]
-        let count = try coordinator.applyRestoredChunks(
-            chunks, payloadType: .intimacyLogs,
-            intimacyStore: store, scope: .payloadStoreOnly
-        )
+        let count = try coordinator.applyRestoredChunks(chunks, payloadType: .intimacyLogs, intimacyStore: store)
         #expect(count == 3)
         #expect(try store.backupLogCount() == 3)
     }

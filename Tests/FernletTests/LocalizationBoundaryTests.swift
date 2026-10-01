@@ -146,6 +146,7 @@ import CloudKitSync
 import FernletFoundation
 import LocalPersistence
 import PrivateHealthStore
+import PrivateMemoryStore
 @testable import FoodCatalog
 @testable import AIProviders
 @testable import Fernlet
@@ -651,6 +652,42 @@ struct LocalizationBoundaryTests {
                               healthKitExternalUUID: "hk", createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
         let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(log)) as? [String: Any])
         #expect(Set(object.keys) == ["id", "dayKey", "eventDate", "note", "healthKitExternalUUID", "createdAt", "updatedAt"])
+    }
+
+    /// Unit B3 (design 2026-09-30, §10.2): the journal backup's four defaults keys (a respelling would
+    /// reopen a resolved restore and merge a stale copy back in behind the user's deletes, or forget the
+    /// set this install may replace, the iPhone whose set it keeps, or what it wrote), each in its frozen
+    /// value grammar; the `JournalNarrative` coding keys every backup chunk carries (a renamed key would
+    /// make every older set unreadable); and the journal rows' accessibility identifiers, the catch-up
+    /// line keeping the pre-v2 deferral line's.
+    @MainActor
+    @Test func frozenJournalBackupV2Tokens() throws {
+        #expect(SealedBackupBookkeeping.journalRestoreResolvedKey == "fernlet.journalNarrative.restoreResolved")
+        #expect(SealedBackupBookkeeping.journalAcceptedHeadKey == "fernlet.sealedBackup.journalAcceptedHead")
+        #expect(SealedBackupBookkeeping.journalObservedHeadKey == "fernlet.sealedBackup.journalObservedHead")
+        #expect(SealedBackupBookkeeping.journalInFlightKey == "fernlet.sealedBackup.journalInFlight")
+        let defaults = try #require(UserDefaults(suiteName: "fernlet.tests.v2JournalGrammar.\(UUID().uuidString)"))
+        let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        #expect(bookkeeping.seedRestoreMarkerIfAbsent(.journalNarratives))
+        #expect(defaults.object(forKey: SealedBackupBookkeeping.journalRestoreResolvedKey) as? Bool == true)
+        let stamp = SealedBackupHeadStamp(writer: "w3", generation: 9)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "0c0d"), .journalNarratives, installTag: "me")
+        bookkeeping.recordObservedHead(stamp, .journalNarratives, installTag: "me")
+        bookkeeping.recordInFlight(9, .journalNarratives, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.journalAcceptedHeadKey) == "me:w3:9:0c0d")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.journalObservedHeadKey) == "me:w3:9")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.journalInFlightKey) == "me:9")
+        let date = Date(timeIntervalSince1970: 0)
+        let entry = JournalNarrative(id: UUID(), dayKey: "2026-01-02", tag: .good, entryDate: date, text: "t",
+                                     emotions: ["e"], createdAt: date, updatedAt: date)
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as? [String: Any])
+        #expect(Set(object.keys) == ["id", "dayKey", "tag", "entryDate", "text", "emotions", "createdAt", "updatedAt"])
+        let copy = SealedBackupV2RowCopy.journal
+        #expect(copy.identifier("heldByAnotherDevice") == "privacy.sealedBackup.journal.heldByAnotherDevice")
+        #expect(copy.identifier("removeUnopenable") == "privacy.sealedBackup.journal.removeUnopenable")
+        #expect(copy.catchUpIdentifier == "privacy.sealedBackup.journalDeferred")
+        #expect(SealedBackupV2RowCopy.intimacy.identifier("restoreHere") == "privacy.sealedBackup.intimacy.restoreHere")
+        #expect(SealedBackupV2RowCopy.intimacy.catchUpIdentifier == "privacy.sealedBackup.intimacyDeferred")
     }
 
     /// Sealed journal + trainer-export tokens.

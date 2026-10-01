@@ -22,6 +22,13 @@ protocol JournalSealingContext: AnyObject {
     /// leaked plaintext — outside the in-memory `previousJournals` window that the per-activation migrate
     /// visits — is eventually re-sealed and stripped instead of lingering in the synced blob forever (F1).
     func requestPastDayJournalRescrub()
+    /// A sealed journal row was written, re-sealed or deleted: the journal Sealed backup's upload is
+    /// owed (journal and intimacy Sealed backup v2 design 2026-09-30, §4.4), so the next hub settle
+    /// re-exports it. Called after every narrative-store mutation this coordinator makes — the seal,
+    /// the re-seal, the delete (success or not: the skeleton goes either way, so the export must drop
+    /// the entry), the migration and the past-day scrub when they inserted — but NOT after the
+    /// device-key fold, which changes ciphertext only (the backup reads both keys, §7.2).
+    func sealedJournalStoreDidChange()
 }
 
 /// Sealed journal management (Phase S2), extracted from ``FernletStore`` (plan §5d).
@@ -87,15 +94,6 @@ final class JournalSealingCoordinator {
 
     /// Whether the entry's text is sealed in the narrative store (so the snapshot strips it).
     func isSealed(_ id: UUID) -> Bool { sealedJournalIDs.contains(id) }
-
-    /// Whether in-memory journal text is waiting for a seal no key has taken yet — the entries the
-    /// next activation's ``migrateExistingJournalsToSealedStore(contentKey:)`` pass writes into the
-    /// narrative store. Read by the "can't be opened" card's backup promise: a store that gains rows at
-    /// the first open is not empty, so its empty-store-only restore would refuse.
-    var hasJournalTextAwaitingSeal: Bool {
-        let unsealed: (JournalEntry) -> Bool = { !$0.text.isEmpty && !self.sealedJournalIDs.contains($0.id) }
-        return host.previousJournals.contains(where: unsealed) || host.day.journals.contains(where: unsealed)
-    }
 
     /// True while the content key is active (the Private tab is open): sealed entries are hydrated
     /// with their text, so an EMPTY-text entry in memory is genuinely a tag-only mood check-in. While
@@ -175,6 +173,7 @@ final class JournalSealingCoordinator {
             try narrativeRepository.insert(narrative, contentKey: key)
             sealedJournalIDs.insert(entry.id)
             if journalContentKey == nil { deviceKeyMigrationPending = true }
+            host.sealedJournalStoreDidChange()
         } catch {
             // Carry the error (the `String(describing:)` form every peer audit line uses, e.g.
             // `mesh.encryptedMetadata.sealFailed`). This is the only record the exposure window
@@ -222,6 +221,7 @@ final class JournalSealingCoordinator {
         )
         do {
             try narrativeRepository.update(updated, contentKey: key)
+            host.sealedJournalStoreDidChange()
         } catch {
             // Re-seal failed. If the id stayed in sealedJournalIDs, the snapshot / past-day strip would
             // blank this entry against the now-STALE narrative copy — silently destroying the user's edit.
@@ -251,6 +251,9 @@ final class JournalSealingCoordinator {
             FernletAuditLog.log("journal.deleteSealed.failed", context: ["id": id.uuidString])
         }
         sealedJournalIDs.remove(id)
+        // Success or not: the entry's skeleton leaves the day either way, so the next export must drop
+        // it (an orphan row is never exported, design 2026-09-30 §7.1).
+        host.sealedJournalStoreDidChange()
     }
 
     // MARK: - Hydration (read paths)
@@ -426,6 +429,7 @@ final class JournalSealingCoordinator {
         if anyMigrated {
             // Trigger a save so the stripped (empty-text) version replaces the plaintext in the blob.
             host.scheduleSnapshotSave()
+            host.sealedJournalStoreDidChange()
         }
     }
 
@@ -467,6 +471,7 @@ final class JournalSealingCoordinator {
         }
         var changed: [String: FernletDay] = [:]
         var unsealedFailureCount = 0
+        var insertedAny = false
         for (dayKey, day) in allDays where dayKey != host.todayKey {
             var journals = day.journals
             var mutated = false
@@ -485,6 +490,7 @@ final class JournalSealingCoordinator {
                         continue
                     }
                     sealedJournalIDs.insert(entry.id)
+                    insertedAny = true
                 }
                 journals[index] = entry.strippedIfSealed(in: sealedJournalIDs)
                 mutated = true
@@ -495,6 +501,7 @@ final class JournalSealingCoordinator {
                 changed[dayKey] = scrubbed
             }
         }
+        if insertedAny { host.sealedJournalStoreDidChange() }
         return PastDayScrubOutcome(changedDays: changed, unsealedFailureCount: unsealedFailureCount, keyActive: true)
     }
 }

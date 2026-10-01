@@ -42,8 +42,9 @@ protocol PriorPrivateEntryStore: AnyObject {
     /// Worry Box rows classified under this iPhone's worry device key (absent key ⇒ every row dead).
     func worryOpenability() throws -> SealedRowOpenability
     /// Whether any backup bookkeeping speaks for an earlier key: the three sealed-backup divergence
-    /// latches, the period restore marker set to resolved, or the period compare-and-swap record
-    /// (period-data design 2026-09-30, §4.9 step 1).
+    /// latches, or any Sealed backup v2 record — a restore marker set to resolved, an accepted head or
+    /// an observed head, for period, the intimate logs or the journal (period-data design 2026-09-30,
+    /// §4.9 step 1; journal and intimacy Sealed backup v2 design 2026-09-30, §9).
     func hasBackupBookkeeping() -> Bool
     /// Keyless delete of every sealed cycle row (records and legacy narratives).
     func removeCycleEntries() throws
@@ -53,17 +54,14 @@ protocol PriorPrivateEntryStore: AnyObject {
     func removeJournalEntries(ids: [UUID]) throws
     /// Keyless delete of these Worry Box rows.
     func removeWorryEntries(ids: [UUID]) throws
-    /// Clears that bookkeeping — the three divergence latches, the period restore marker (reopened)
-    /// and the period compare-and-swap record — because it spoke for a key that no longer exists; the
-    /// app then drops every pending Sealed backup choice made over it (review B1-C-B1-3).
+    /// Clears that bookkeeping — the three divergence latches, and every v2 payload's restore marker
+    /// (reopened), accepted head and observed head — because it spoke for a key that no longer exists;
+    /// the app then drops every pending Sealed backup choice made over it (review B1-C-B1-3).
     func clearBackupBookkeeping()
     /// Whether a Sealed backup would really be restored once the unopenable rows are gone — the card
-    /// says so only then (review C-U2-R3).
-    ///
-    /// - Parameter journalKeepsOpenableRows: Whether journal rows that DO open stay behind the removal
-    ///   (they are folded under the new key, so the journal store is not empty and its empty-store-only
-    ///   restore refuses).
-    func sealedBackupRestoresAfterRemoval(journalKeepsOpenableRows: Bool) -> Bool
+    /// says so only then (review C-U2-R3). Every restore is a merge now (design 2026-09-30, §7.4), so
+    /// whatever rows stay behind the removal no longer stop it.
+    func sealedBackupRestoresAfterRemoval() -> Bool
     /// The derived period-tracking visibility. A hidden kind is never NAMED on the card: its rows are
     /// counted into the neutral "other private entries" line (review C-U2-R5).
     func isPeriodTrackingVisible() -> Bool
@@ -98,9 +96,10 @@ protocol PriorPrivateEntryStore: AnyObject {
 /// ``removeUnopenableEntriesAndOpen(named:)`` re-runs the whole check and compares the fresh counts
 /// with the ones on the card; any difference deletes nothing and re-shows the card. Only then are the
 /// dead rows deleted (keylessly), the latches cleared — after the deletes, which set them — and the
-/// fresh key minted. The latches are cleared because they speak for a key that no longer exists:
-/// the targeted restores at the next hub settle are then free to bring a Sealed backup back, re-sealed
-/// under the new key (the awaits-owner hold still stops that after an app-lock reset).
+/// fresh key minted. The latches and the Sealed backup v2 records are cleared because they speak for a
+/// key that no longer exists: every restore marker reopens, so the merge restores at the next hub
+/// settle bring each Sealed backup back, re-sealed under the new key (the awaits-owner hold still stops
+/// that after an app-lock reset).
 ///
 /// Stateless between calls (the card carries its own counts back), so a view may construct it.
 @MainActor
@@ -237,9 +236,7 @@ final class PrivateHubOpenCoordinator: FernletPrivateHubOpening {
         counts.worryEntries = worry.deadIDs.count
         counts.hasUnopenableHeldEntries = try custody.pendingNarrativesAreUnopenable()
         if !counts.isEmpty {
-            counts.sealedBackupRestoresAfterRemoval = entries.sealedBackupRestoresAfterRemoval(
-                journalKeepsOpenableRows: !journal.openableIDs.isEmpty
-            )
+            counts.sealedBackupRestoresAfterRemoval = entries.sealedBackupRestoresAfterRemoval()
         }
         return Survey(
             counts: counts,
@@ -339,9 +336,8 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     /// The keychain service holding the journal and worry device keys.
     private let deviceKeyService: String
     /// Whether a Sealed backup will really be restored after a removal (the app's backup switches, the
-    /// owner hold, and whether the journal store will be empty), given whether openable journal rows
-    /// stay behind.
-    private let restoresAfterRemoval: (_ journalKeepsOpenableRows: Bool) -> Bool
+    /// visibility and the owner hold).
+    private let restoresAfterRemoval: () -> Bool
     /// The derived period-tracking visibility; fail-closed (hidden) unless the app wires it.
     private let periodVisible: () -> Bool
     /// The derived intimacy-tracking visibility; fail-closed (hidden) unless the app wires it.
@@ -360,8 +356,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     ///   - deviceKeyService: The journal/worry device-key service.
     ///   - periodVisible: The derived period-tracking visibility (default: hidden, fail-closed).
     ///   - intimacyVisible: The derived intimacy-tracking visibility (default: hidden, fail-closed).
-    ///   - restoresAfterRemoval: Whether a Sealed backup comes back after a removal, given whether
-    ///     openable journal rows stay behind.
+    ///   - restoresAfterRemoval: Whether a Sealed backup comes back after a removal.
     ///   - bookkeepingCleared: Told after ``clearBackupBookkeeping()`` (default: nothing).
     init(
         controller: PrivatePersistenceController? = nil,
@@ -370,7 +365,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         deviceKeyService: String = KeychainItem.journalService,
         periodVisible: @escaping () -> Bool = { false },
         intimacyVisible: @escaping () -> Bool = { false },
-        restoresAfterRemoval: @escaping (_ journalKeepsOpenableRows: Bool) -> Bool,
+        restoresAfterRemoval: @escaping () -> Bool,
         bookkeepingCleared: (@MainActor () -> Void)? = nil
     ) {
         cycleRepository = MenstrualNarrativeRepository(controller: controller, defaults: latchDefaults)
@@ -413,19 +408,19 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         backupBookkeeping.clearForKeyLoss()
         bookkeepingCleared()
     }
-    func sealedBackupRestoresAfterRemoval(journalKeepsOpenableRows: Bool) -> Bool {
-        restoresAfterRemoval(journalKeepsOpenableRows)
+    func sealedBackupRestoresAfterRemoval() -> Bool {
+        restoresAfterRemoval()
     }
     func isPeriodTrackingVisible() -> Bool { periodVisible() }
     func isIntimacyTrackingVisible() -> Bool { intimacyVisible() }
 
-    /// A device key read WITHOUT minting: found → the key; absent → nil (every row is dead under a key
-    /// that does not exist); unreadable → a throw, so nothing is called dead on a read that did not
-    /// answer.
+    /// A device key read WITHOUT minting (the shared ``SealedDeviceKeyRead``, which the journal Sealed
+    /// backup reads too): found → the key; absent → nil (every row is dead under a key that does not
+    /// exist); unreadable → a throw, so nothing is called dead on a read that did not answer.
     private func deviceKey(_ account: KeychainItem.Account) throws -> SymmetricKey? {
-        switch KeychainItem.loadDistinguishingAbsence(account: account.rawValue, service: deviceKeyService) {
-        case .found(let data):
-            return SymmetricKey(data: data)
+        switch SealedDeviceKeyRead.read(account, service: deviceKeyService) {
+        case .found(let key):
+            return key
         case .absent:
             return nil
         case .unreadable(let status):

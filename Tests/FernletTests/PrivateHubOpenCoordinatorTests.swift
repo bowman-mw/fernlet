@@ -42,7 +42,7 @@ private struct CoordinatorRig {
     init(
         periodVisible: Bool = true,
         intimacyVisible: Bool = true,
-        restoresAfterRemoval: @escaping (_ journalKeepsOpenableRows: Bool) -> Bool = { _ in false }
+        restoresAfterRemoval: @escaping () -> Bool = { false }
     ) {
         service = fixture.makeService()
         entries = SealedPriorEntryStore(
@@ -274,48 +274,46 @@ struct PrivateHubOpenCoordinatorTests {
     // MARK: - The backup promise is made only when it will be kept (review C-U2-R3)
 
     /// The card's "Your Sealed backup will be restored after you continue" follows the real restore
-    /// conditions: the journal backup restores only into an EMPTY journal store, so a journal row
-    /// that opens (written from Home, folded in at the open) withholds the promise; with only dead
-    /// rows it is made; and while an app-lock reset holds every restore for the owner it never is.
+    /// conditions. Since the journal restore became a MERGE (design 2026-09-30, §7.4) a journal row
+    /// that opens and stays behind no longer withholds the promise — the removal reopens the journal
+    /// restore and the next hub settle merges the backup in beside it — while an app-lock reset that
+    /// holds every restore for the owner still never makes it.
     @MainActor
     @Test func theCardPromisesABackupRestoreOnlyWhenOneWillRun() async throws {
         let journalBackupOnly = StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true)
         let hold = HoldSwitch()
-        let decide: (Bool) -> Bool = { journalKeepsOpenableRows in
+        let decide: () -> Bool = {
             ContentView.sealedBackupRestoresAfterRemoval(
                 journalBackupOnly,
                 periodVisible: true,
                 intimacyVisible: true,
-                restoreHeldForOwner: hold.isHeld,
-                journalStoreEmptiesOnRemoval: !journalKeepsOpenableRows
+                restoreHeldForOwner: hold.isHeld
             )
         }
 
         let withLiveJournal = CoordinatorRig(restoresAfterRemoval: decide)
         defer { withLiveJournal.fixture.cleanup() }
         _ = try withLiveJournal.plantMixedPriorEntries()
-        #expect(await Self.promisesRestore(withLiveJournal) == false,
-                "a journal row that opens stays behind, so the empty-store journal restore would refuse")
-
-        let deadOnly = CoordinatorRig(restoresAfterRemoval: decide)
-        defer { deadOnly.fixture.cleanup() }
-        try deadOnly.journal.insert(CoordinatorRig.journalNarrative("sealed under the lost key"), contentKey: CoordinatorRig.lostKey)
-        #expect(await Self.promisesRestore(deadOnly) == true, "the journal store empties, so its backup comes back")
+        #expect(await Self.promisesRestore(withLiveJournal) == true,
+                "a journal row that opens stays behind, and the merge restore still brings the backup back")
 
         hold.isHeld = true
-        #expect(await Self.promisesRestore(deadOnly) == false, "after an app-lock reset nothing is restored on its own")
+        #expect(await Self.promisesRestore(withLiveJournal) == false, "after an app-lock reset nothing is restored on its own")
     }
 
-    /// The decision's intimacy half and its switches, beside the journal half above.
+    /// The decision's intimacy and journal halves and their switches.
     @MainActor
     @Test func theBackupPromiseNeedsSyncAndAVisibleIntimacyHalf() {
         let intimacyOnly = StoragePreferences(iCloudSyncEnabled: true, sealedBackupIntimacyEnabled: true)
-        #expect(ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: false))
-        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: true),
+        #expect(ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: false))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: false),
                 "a hidden intimacy backup defers its restore")
-        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: true, journalStoreEmptiesOnRemoval: true))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: true))
+        let journalOnly = StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true)
+        #expect(ContentView.sealedBackupRestoresAfterRemoval(journalOnly, periodVisible: false, intimacyVisible: false, restoreHeldForOwner: false),
+                "the journal has no hide switch: its merge restore runs whatever is hidden")
         let syncOff = StoragePreferences(sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true)
-        #expect(!ContentView.sealedBackupRestoresAfterRemoval(syncOff, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: true))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(syncOff, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: false))
     }
 
     /// The period half (design unit 5): the removal reopens this install's period restore and the
@@ -324,10 +322,10 @@ struct PrivateHubOpenCoordinatorTests {
     @MainActor
     @Test func theBackupPromiseCountsThePeriodMergeRestore() {
         let periodOnly = StoragePreferences(iCloudSyncEnabled: true, sealedBackupPeriodEnabled: true)
-        #expect(ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: false))
-        #expect(!ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: false, intimacyVisible: false, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: false),
+        #expect(ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: false))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: false, intimacyVisible: false, restoreHeldForOwner: false),
                 "a hidden period backup defers its restore")
-        #expect(!ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: true, journalStoreEmptiesOnRemoval: false))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: true))
     }
 
     /// The Sealed backup v2 bookkeeping travels in a device backup like the latches (design §4.9 step
@@ -353,6 +351,27 @@ struct PrivateHubOpenCoordinatorTests {
         #expect(!bookkeeping.hasAcceptedHeadRecord(.periodData))
         #expect(!bookkeeping.hasObservedHeadRecord(.periodData))
         #expect(!rig.entries.hasBackupBookkeeping())
+    }
+
+    /// The journal's v2 bookkeeping (design 2026-09-30 §9, unit B3) is cleared with the rest: its
+    /// marker reopened, its accepted and observed heads forgotten — so the next hub settle MERGES the
+    /// journal backup back in under the fresh key.
+    @MainActor
+    @Test func theJournalBackupBookkeepingIsClearedWithTheLatches() async throws {
+        let rig = CoordinatorRig()
+        defer { rig.fixture.cleanup() }
+        let bookkeeping = SealedBackupBookkeeping(defaults: rig.latches, legacyLatch: { _ in true })
+        bookkeeping.markRestoreResolved(.journalNarratives)
+        let install = SealedBackupWriterTag.tag(forBinding: Data("this".utf8))
+        let other = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("other".utf8)), generation: 2)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: other, saltPrefix: "ab"), .journalNarratives, installTag: install)
+        bookkeeping.recordObservedHead(other, .journalNarratives, installTag: install)
+        #expect(rig.entries.hasBackupBookkeeping())
+
+        #expect(await rig.coordinator.openPrivateHub() == .opened)
+        #expect(!bookkeeping.isRestoreResolved(.journalNarratives), "reopened, and the seed never ran")
+        #expect(!bookkeeping.hasAcceptedHeadRecord(.journalNarratives))
+        #expect(!bookkeeping.hasObservedHeadRecord(.journalNarratives))
     }
 
     /// An observed foreign head alone counts as bookkeeping too (R2-F13b's persisted observation).
