@@ -335,7 +335,9 @@ struct IngredientSubstitutionSheet: View {
 
     /// What choosing `substitute` from the manual search list would teach the recipe searches (F9b,
     /// ``RecipeSearchPick``): nil for an AI suggestion, the list's first row, the seeded search or a
-    /// search for the ingredient being replaced, or a word still being typed.
+    /// search for the ingredient being replaced, a row that does not say the words searched for while
+    /// another row does (a stand-in from the list's "coconut" or "oil" block for "coconut oil"), or a
+    /// word still being typed.
     private func searchPick(of substitute: FoodItem, in searchList: [FoodItem]?) -> FoodSearchCorrection? {
         guard let searchList,
               let query = RecipeSearchPick.query(

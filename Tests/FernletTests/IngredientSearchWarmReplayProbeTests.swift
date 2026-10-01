@@ -21,6 +21,12 @@
 //   4. AFTER. Every query is replayed again. The probe also replays quick-log's six (standard order),
 //      the meal resolver's pool (`candidates`, 18) and the swap sheet's pool (`candidates`, 12, identity
 //      order) before and after, so a pick leaking outside the recipe surfaces is counted.
+//   5. SWAP (fix round 1, finding s3-L-F9b-R1). For each query, every row below the first of the swap
+//      sheet's pool (before any pick) is offered to `RecipeSearchPick.query` as a swap-sheet pick,
+//      seeded with an ingredient whose name says none of the corpus's words, and the probe counts how
+//      many would teach and how many of those are STRAYS: rows whose name does not state the typed
+//      words while another row of the pool does — a stand-in from the pool's sub-phrase fallback
+//      blocks, which must teach nothing.
 //
 // OPT-IN, exactly like the cold probe: nothing runs unless the runner environment carries
 // `FERNLET_REPLAY`; output goes to `FERNLET_REPLAY_OUT` as `replay-warm-<label>.json` (or is printed
@@ -73,6 +79,11 @@ struct IngredientWarmReplayQuery: Codable, Equatable {
     let swapTopBefore: String?
     /// See ``swapTopBefore``.
     let swapTopAfter: String?
+    /// Rows below the first of the swap pool (before any pick) whose swap-sheet pick would teach.
+    let swapRowsTaught: Int
+    /// Of ``swapRowsTaught``, the rows whose name does not state the typed words while another pool
+    /// row's does — a stray stand-in; zero is the fix.
+    let swapStraysTaught: Int
 }
 
 /// One warm pass over the corpus against one catalog configuration.
@@ -93,6 +104,10 @@ struct IngredientWarmReplayRun: Codable, Equatable {
 struct IngredientSearchWarmReplayProbeTests {
     /// Every third corpus query contributes its quick-log first row to the history.
     static let historyStride = 3
+
+    /// The ingredient the swap pass "replaces": its name states none of the corpus's words, so the
+    /// replaced-ingredient rule never refuses a swap pick and every refusal counted is the pick rules'.
+    static let swapSeed = "Seaweed, agar, dried"
 
     @Test func replayWarmRecipePicks() throws {
         let env = ProcessInfo.processInfo.environment
@@ -121,7 +136,7 @@ struct IngredientSearchWarmReplayProbeTests {
         let recipe: [FoodItem]
         let quickLog: [UUID]
         let resolverPool: [UUID]
-        let swapTop: String?
+        let swapPool: [FoodItem]
     }
 
     private static func snapshot(_ query: String, catalog: FoodCatalog) -> Snapshot {
@@ -129,8 +144,28 @@ struct IngredientSearchWarmReplayProbeTests {
             recipe: catalog.results(for: query, context: .userTyped, ranking: .ingredientIdentity),
             quickLog: catalog.results(for: query, context: .userTyped).map(\.id),
             resolverPool: catalog.candidates(for: query, limit: 18).map(\.foodItem.id),
-            swapTop: catalog.candidates(for: query, limit: 12, ranking: .ingredientIdentity).first?.foodItem.name
+            swapPool: catalog.candidates(for: query, limit: 12, ranking: .ingredientIdentity).map(\.foodItem)
         )
+    }
+
+    /// How many rows below the first of `pool` a swap-sheet pick would teach for `query`, and how many
+    /// of those are strays (their name does not state the typed words while another pool row's does).
+    ///
+    /// The judge reads the words as the TYPED gate does (`FoodItemSearch.searchTokens`), not as the
+    /// rule under measurement does (the swap list's sub-phrase words), and a name states a word when
+    /// one of its words is that word in either number (`FoodIngredientIdentity.forms`).
+    private static func swapTeaching(_ query: String, pool: [FoodItem]) -> (taught: Int, strays: Int) {
+        let typed = FoodItemSearch.searchTokens(in: query).map(FoodIngredientIdentity.forms(of:))
+        let states = { (item: FoodItem) -> Bool in
+            let words = FoodItemSearch.normalized(item.name).split(separator: " ")
+                .map { FoodIngredientIdentity.forms(of: String($0)) }
+            return typed.allSatisfy { forms in words.contains { !$0.isDisjoint(with: forms) } }
+        }
+        let anyStates = pool.contains(where: states)
+        let taught = pool.dropFirst().filter {
+            RecipeSearchPick.query(typed: query, picked: $0, shown: pool, seededWith: swapSeed) != nil
+        }
+        return (taught.count, taught.filter { anyStates && !states($0) }.count)
     }
 
     private static func run(label: String, catalog: FoodCatalog, matchers: [IngredientCorpusMatcher]) throws -> IngredientWarmReplayRun {
@@ -208,6 +243,7 @@ struct IngredientSearchWarmReplayProbeTests {
             rows.firstIndex { matcher.accepts($0.name) && IngredientSearchCorpusTests.isPlausible($0) }.map { $0 + 1 }
         }
         let rank = { (rows: [FoodItem]) in decision.picked.flatMap { picked in rows.firstIndex { $0.id == picked.id } }.map { $0 + 1 } }
+        let swap = swapTeaching(judge.query, pool: before.swapPool)
         return IngredientWarmReplayQuery(
             category: category, query: judge.query,
             before: before.recipe.map(\.name), picked: decision.picked?.name, pickedRankBefore: rank(before.recipe),
@@ -217,7 +253,8 @@ struct IngredientSearchWarmReplayProbeTests {
             changedWithoutPick: !isKey(decision.taught) && before.recipe.map(\.id) != after.recipe.map(\.id),
             quickLogUnchanged: before.quickLog == after.quickLog,
             resolverPoolUnchanged: before.resolverPool == after.resolverPool,
-            swapTopBefore: before.swapTop, swapTopAfter: after.swapTop
+            swapTopBefore: before.swapPool.first?.name, swapTopAfter: after.swapPool.first?.name,
+            swapRowsTaught: swap.taught, swapStraysTaught: swap.strays
         )
     }
 

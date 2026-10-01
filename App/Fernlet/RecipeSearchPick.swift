@@ -34,6 +34,14 @@ import FernletDomainModel
 ///   The list is seeded with that ingredient's name, and a search for it (or for any of its words:
 ///   "butter" while swapping "Butter, salted") is a search for something to stand in for it, so the
 ///   pick answers "what can replace butter", not "what I mean by butter".
+/// - **In the swap sheet, the chosen row says the words searched for** — or no row shown does (fix
+///   round 1). That list pools four rows from each sub-phrase in turn ("coconut oil", then "coconut",
+///   then "oil"), so most of it is rows that never say what was typed; choosing "Coconut" or
+///   "Oil, canola" there picks a stand-in, and teaching it would put that row first on every recipe
+///   search for "coconut oil". When no row says the words ("evoo", a typo), any pick teaches, as in
+///   the editor.
+///   The editor needs no such rule: its typed gate shows only rows carrying every word, plus the
+///   curated alias row, which deliberately never says them.
 ///
 /// Everything the memory then does with a pick — one answer per query, a later pick replacing an
 /// earlier one, a correction always winning — is ``FoodSearchCorrectionMemory``'s.
@@ -49,7 +57,10 @@ enum RecipeSearchPick {
         let key = FoodItemSearch.normalized(typed)
         guard key.count >= FoodItemSearch.minimumQueryLength,
               shown.contains(where: { $0.id == picked.id }), shown.first?.id != picked.id else { return nil }
-        if let seed, namesReplacedIngredient(key, seed: seed) { return nil }
+        if let seed {
+            guard !namesReplacedIngredient(key, seed: seed), saysTheSearchedWords(key, picked: picked, shown: shown)
+            else { return nil }
+        }
         guard !endsMidWord(key, names: shown.map(\.name)) else { return nil }
         return key
     }
@@ -80,5 +91,29 @@ enum RecipeSearchPick {
     /// words the seed states.
     private static func namesReplacedIngredient(_ key: String, seed: String) -> Bool {
         FoodItemSearch.normalized(seed) == key || FoodItemSearch.nameStatesQueryAsWords(seed, query: key)
+    }
+
+    /// Whether a swap-sheet pick of `picked` answers `key`'s words: its name says every word the swap
+    /// list searched for, or no shown row's name does.
+    ///
+    /// "The words searched for" are the swap list's own: the single words
+    /// `FoodSelectionCandidateBuilder.searchPhrases` splits `key` into (three letters or more, not a
+    /// number, not a stop word), so "2% milk" asks only for "milk" and "half and half" for "half" —
+    /// the same reading that built the list, rather than the typed gate's. A name says a word when one
+    /// of its words is that word in either number (`FoodIngredientIdentity.forms`, the mid-word rule's
+    /// reading), so "Potatoes, red, raw" says "potato" and "Tomato, roma" says "tomatoes".
+    private static func saysTheSearchedWords(_ key: String, picked: FoodItem, shown: [FoodItem]) -> Bool {
+        let wordForms = FoodSelectionCandidateBuilder.searchPhrases(from: key)
+            .filter { !$0.contains(" ") }
+            .map(FoodIngredientIdentity.forms(of:))
+        let says = { (item: FoodItem) -> Bool in
+            // R2: bounded by the searched words × the name's words, for at most the shown rows.
+            let nameForms = FoodItemSearch.normalized(item.name).split(separator: " ")
+                .map { FoodIngredientIdentity.forms(of: String($0)) }
+            return !wordForms.isEmpty && wordForms.allSatisfy { forms in
+                nameForms.contains { !$0.isDisjoint(with: forms) }
+            }
+        }
+        return says(picked) || !shown.contains(where: says)
     }
 }

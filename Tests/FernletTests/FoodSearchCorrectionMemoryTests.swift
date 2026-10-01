@@ -353,6 +353,42 @@ struct FoodSearchCorrectionMemoryTests {
         #expect(RecipeSearchPick.query(typed: "unsalted butter", picked: unsalted, shown: shown, seededWith: seed) == "unsalted butter")
     }
 
+    /// The swap list pools four rows from each sub-phrase in turn ("coconut oil", then "coconut", then
+    /// "oil"), so most of it never says what was typed. A row from a fallback block is a stand-in the
+    /// person chose for the ingredient being replaced, not what the words mean, and teaches nothing
+    /// (fix round 1, finding s3-L-F9b-R1) — else "coconut oil" would put coconut milk, about a quarter
+    /// of the fat, first on every recipe search for it.
+    @Test func aSwapPickOfARowThatNeverSaysTheWordsTeachesNothing() {
+        let seed = "Butter, salted"
+        let coconutOil = Self.food("Oil, coconut")
+        let coconutMilk = Self.food("Nuts, coconut milk, canned")
+        let canola = Self.food("Oil, canola")
+        let shown = [Self.food("Oil, coconut, virgin"), coconutOil, coconutMilk, canola]
+        #expect(RecipeSearchPick.query(typed: "coconut oil", picked: coconutMilk, shown: shown, seededWith: seed) == nil,
+                "a row from the list's \"coconut\" block taught \"coconut oil\"")
+        #expect(RecipeSearchPick.query(typed: "coconut oil", picked: canola, shown: shown, seededWith: seed) == nil,
+                "a row from the list's \"oil\" block taught \"coconut oil\"")
+        #expect(RecipeSearchPick.query(typed: "coconut oil", picked: coconutOil, shown: shown, seededWith: seed) == "coconut oil")
+
+        // The words are the swap list's own: "2% milk" searched only "milk", "half and half" only "half".
+        let milks = [Self.food("Milk, sheep, fluid"), Self.food("Milk, low sodium, fluid")]
+        #expect(RecipeSearchPick.query(typed: "2% milk", picked: milks[1], shown: milks, seededWith: seed) == "2 milk")
+        let halves = [Self.food("Half & Half"), Self.food("Half & Half")]
+        #expect(RecipeSearchPick.query(typed: "half and half", picked: halves[1], shown: halves, seededWith: seed) == "half and half")
+        // A word is said in either number, as the mid-word rule reads it: "Potatoes" says "potato".
+        let potatoes = [Self.food("Potato, baked, flesh and skin"), Self.food("Potatoes, red, flesh and skin, raw")]
+        #expect(RecipeSearchPick.query(typed: "potato", picked: potatoes[1], shown: potatoes, seededWith: seed) == "potato")
+        let tomatoes = [Self.food("Tomatoes, grape, raw"), Self.food("Tomato, roma")]
+        #expect(RecipeSearchPick.query(typed: "tomatoes", picked: tomatoes[1], shown: tomatoes, seededWith: seed) == "tomatoes")
+
+        // When no row says the words — a word the catalog never spells, a typo — any pick teaches, as
+        // in the editor; and the editor itself has no such rule (the curated alias row never says them).
+        let olives = [Self.food("Oil, olive, salad or cooking"), Self.food("Oil, olive, extra virgin")]
+        #expect(RecipeSearchPick.query(typed: "evoo", picked: olives[1], shown: olives, seededWith: seed) == "evoo")
+        #expect(RecipeSearchPick.query(typed: "coconut oil", picked: coconutMilk, shown: shown) == "coconut oil",
+                "the editor's rules changed — this rule is the swap sheet's only")
+    }
+
     /// A save teaches only the rows still bound to the food they were picked for, as recipe picks.
     @Test func aSavedRecipeTeachesOnlyItsStillBoundPicks() {
         let butter = UUID()
@@ -605,6 +641,80 @@ struct FoodSearchCorrectionCatalogTests {
                     "a recipe pick reached the meal resolver's pool for \"\(bankCase.query)\"")
             #expect(warm.scoredResults(for: bankCase.query, limit: 6).map(\.item.id)
                         == cold.scoredResults(for: bankCase.query, limit: 6).map(\.item.id))
+        }
+    }
+
+    /// The swap-pool bank (fix round 1, finding s3-C-F9b-1): words the pool's sub-phrases never spell —
+    /// a number and a "%" ("2% milk" searches only "milk"), a stop word ("half and half" searches
+    /// "half half" and "half"), a fourth word (only three-word runs are searched) — and a picked row
+    /// the dish demotion would sink ("salad" is a carrier word). Each pick is read off the live pool.
+    static let swapPoolPickBank: [(query: String, picked: String)] = [
+        ("2% milk", "Milk, low sodium, fluid"),
+        ("half and half", "Half & Half"),
+        ("low sodium chicken broth", "Low Sodium Chicken Broth, Chicken"),
+        ("extra virgin olive oil", "Oil, olive, salad or cooking"),
+        ("semi sweet chocolate chips", "Chocolate Chips, Semi-sweet"),
+        ("salad dressing", "Salad dressing, NFS, for salads")
+    ]
+
+    /// The swap sheet's pool (`candidates` with the identity order) and its AI rebinding put a recipe
+    /// pick first for the whole typed text, not only when the text is one of the pool's sub-phrases and
+    /// the row is not a dish; the meal resolver's pool, which never sees a pick, is untouched.
+    @Test func aRecipePickLeadsTheSwapPoolForWordsItsSubPhrasesNeverSpell() throws {
+        let cold = try Self.catalog()
+        let warm = try Self.catalog()
+        for bankCase in Self.swapPoolPickBank {
+            let pool = cold.candidates(for: bankCase.query, limit: 12, ranking: .ingredientIdentity).map(\.foodItem)
+            let picked = try #require(pool.dropFirst().first { $0.name == bankCase.picked },
+                                      "\"\(bankCase.picked)\" is no longer below the top of the swap pool for \"\(bankCase.query)\"")
+            warm.setRecipeSearchPicks([FoodItemSearch.normalized(bankCase.query): picked.id])
+            let warmPool = warm.candidates(for: bankCase.query, limit: 12, ranking: .ingredientIdentity).map(\.foodItem)
+            #expect(warmPool.first?.id == picked.id, "the swap pool ignored the pick for \"\(bankCase.query)\"")
+            #expect(warmPool.count == pool.count, "the pick changed the pool's length for \"\(bankCase.query)\"")
+            #expect(warmPool.filter { $0.id == picked.id }.count == 1, "the pick is also further down the pool")
+            #expect(warm.candidates(for: bankCase.query, limit: 3, ranking: .ingredientIdentity).first?.foodItem.id == picked.id,
+                    "the AI rebinding (three rows) did not bind the pick for \"\(bankCase.query)\"")
+            #expect(warm.candidates(for: bankCase.query, limit: 1, ranking: .ingredientIdentity).map(\.foodItem.id) == [picked.id])
+            #expect(warm.candidates(for: bankCase.query, limit: 18).map(\.foodItem.id)
+                        == cold.candidates(for: bankCase.query, limit: 18).map(\.foodItem.id),
+                    "a recipe pick reached the meal resolver's pool for \"\(bankCase.query)\"")
+        }
+    }
+
+    /// The whole-text lookup is the identity surface's only: a correction for words that are not a
+    /// sub-phrase still answers the swap pool (a correction outranks a pick there too), while the meal
+    /// resolver's pool keeps the sub-phrase promotion alone, so its bind firewall measures the same pool.
+    @Test func theWholeTextAnswerIsTheSwapPoolsAndACorrectionStillWinsIt() throws {
+        let cold = try Self.catalog()
+        let pool = cold.candidates(for: "2% milk", limit: 12, ranking: .ingredientIdentity).map(\.foodItem)
+        let picked = try #require(pool.dropFirst().first)
+        let corrected = try #require(pool.last)
+        try #require(picked.id != corrected.id)
+        let both = try Self.catalog(aliases: ["2 milk": corrected.id])
+        both.setRecipeSearchPicks(["2 milk": picked.id])
+        #expect(both.candidates(for: "2% milk", limit: 12, ranking: .ingredientIdentity).first?.foodItem.id == corrected.id,
+                "a recipe pick outranked a correction in the swap pool")
+        #expect(both.candidates(for: "2% milk", limit: 18).map(\.foodItem.id) == cold.candidates(for: "2% milk", limit: 18).map(\.foodItem.id),
+                "the meal resolver's pool looked up the whole description")
+    }
+
+    /// The swap pool, live (finding s3-L-F9b-R1): for "coconut oil" it pools the "coconut" and "oil"
+    /// blocks beneath the coconut-oil rows, and a swap pick of any row that never says "coconut oil"
+    /// teaches nothing, while one that does still teaches.
+    @Test func aSwapPickTeachesOnlyARowThatSaysTheWords() throws {
+        let cold = try Self.catalog()
+        let query = "coconut oil"
+        let pool = cold.candidates(for: query, limit: 12, ranking: .ingredientIdentity).map(\.foodItem)
+        let says = { (item: FoodItem) in FoodItemSearch.nameStatesQueryAsWords(item.name, query: query) }
+        let strays = pool.dropFirst().filter { !says($0) }
+        let stating = pool.dropFirst().filter(says)
+        try #require(!strays.isEmpty && !stating.isEmpty, "the \"coconut oil\" swap pool no longer mixes blocks — re-read it")
+        for stray in strays {
+            #expect(RecipeSearchPick.query(typed: query, picked: stray, shown: pool, seededWith: "Butter, salted") == nil,
+                    "\"\(stray.name)\" taught \"coconut oil\" from the swap sheet")
+        }
+        for row in stating {
+            #expect(RecipeSearchPick.query(typed: query, picked: row, shown: pool, seededWith: "Butter, salted") == query)
         }
     }
 

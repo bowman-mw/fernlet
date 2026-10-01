@@ -54,8 +54,12 @@ A third, added for ingredient-search round F9b, is the **recipe picks** (`FoodCa
 normalized query → the food a person chose for it from below the top of a recipe ingredient list
 (the recipe editor's typeahead or the swap sheet). A pick is promoted exactly like a correction, but
 only for a search that asks for `.ingredientIdentity` — the recipe surfaces — where it goes first,
-above the identity order, history and a curated alias. A correction for the same query still answers
-first, and quick-log, the meal composer, Adjust meal, the resolver's pool and
+above the identity order, history and a curated alias. In the swap sheet's pool
+(``FoodCatalog/candidates(for:limit:ranking:)`` with that order) the remembered answer is looked up for
+the WHOLE description, not only per sub-phrase, and is exempt from the dish demotion — the sub-phrases
+drop stop words, numbers and every word past three, so "2% milk" or "low sodium chicken broth" is never
+one of them; the resolver's `.standard` pool keeps the per-sub-phrase promotion only. A correction for
+the same query still answers first, and quick-log, the meal composer, Adjust meal, the resolver's pool and
 `recentIngredientPersonalization()` never see a pick: the owner scoped learning from recipe picks to
 recipes. The app keeps picks and corrections in the same device-local memory under one cap, so the
 same wipe and "Forget corrected searches" clear both.

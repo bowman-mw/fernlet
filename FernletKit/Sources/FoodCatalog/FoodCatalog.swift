@@ -146,7 +146,9 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// A NARROWER signal than ``setSearchAliases(_:)``'s corrections, and kept in its own snapshot for
     /// that reason: a pick answers only a search that asks for ``FoodSearchRanking/ingredientIdentity``
     /// (the recipe editor's typeahead, the swap sheet's pool and its AI rebinding), where it goes first,
-    /// above the identity order, history and the curated alias. Quick-log, the meal composer, Adjust meal,
+    /// above the identity order, history and the curated alias — in the pool for the whole typed text,
+    /// not only for a sub-phrase, and never sunk as a dish (``candidates(for:limit:ranking:)``, fix
+    /// round 1). Quick-log, the meal composer, Adjust meal,
     /// the meal resolver's pool and ``recentIngredientPersonalization()`` never see it — the owner scoped
     /// this to recipes, and a pick is not the explicit "this search was wrong" a correction is. A query
     /// with both answers with the correction; the app's memory keeps one answer per query anyway.
@@ -220,7 +222,8 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// A third difference exists as of research §26 fix 1.10: a query the user has already corrected
     /// once returns their own choice first, ahead of — and independently of — the FTS gate. See
     /// ``promotingCorrection(_:for:limit:ranking:)``. `candidates(for:limit:ranking:)` inherits it by construction,
-    /// because it draws its pool from this method; ``scoredResults(for:limit:stripsStopwords:)``
+    /// per sub-phrase, because it draws its pool from this method (and on the identity surface it also
+    /// looks up the whole description, F9b fix round 1); ``scoredResults(for:limit:stripsStopwords:)``
     /// deliberately does NOT (see its doc).
     ///
     /// **A fourth difference, research §26 fix 1.9: the history tier applies to a TYPED query only.**
@@ -411,16 +414,25 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     private func promotingCorrection(
         _ ranked: [FoodItem], for query: String, limit: Int, ranking: FoodSearchRanking
     ) -> [FoodItem] {
-        let aliases = searchAliases
-        let picks = ranking == .ingredientIdentity ? recipeSearchPicks : [:]
-        guard !aliases.isEmpty || !picks.isEmpty, limit > 0 else { return ranked }
-        let key = FoodItemSearch.normalized(query)
-        guard key.count >= FoodItemSearch.minimumQueryLength,
-              let correctedID = aliases[key] ?? picks[key],
-              let corrected = item(id: correctedID) else { return ranked }
+        guard limit > 0, let corrected = rememberedAnswer(for: query, ranking: ranking) else { return ranked }
         var promoted: [FoodItem] = [corrected]
         promoted.append(contentsOf: ranked.filter { $0.id != corrected.id })
         return Array(promoted.prefix(limit))
+    }
+
+    /// The person's own remembered answer for exactly `query`'s words: their correction (fix 1.10), or —
+    /// on a ``FoodSearchRanking/ingredientIdentity`` search only — their recipe pick (F9b), the
+    /// correction winning. Nil when neither exists, when the query is under `minimumQueryLength`, or
+    /// when the food no longer resolves (a purged branded row, a deleted user item). The one lookup
+    /// ``promotingCorrection(_:for:limit:ranking:)`` and ``candidates(for:limit:ranking:)`` share.
+    private func rememberedAnswer(for query: String, ranking: FoodSearchRanking) -> FoodItem? {
+        let aliases = searchAliases
+        let picks = ranking == .ingredientIdentity ? recipeSearchPicks : [:]
+        guard !aliases.isEmpty || !picks.isEmpty else { return nil }
+        let key = FoodItemSearch.normalized(query)
+        guard key.count >= FoodItemSearch.minimumQueryLength,
+              let rememberedID = aliases[key] ?? picks[key] else { return nil }
+        return item(id: rememberedID)
     }
 
     /// The single food whose normalized name equals `normalizedName`, or nil. Priority: the user's
@@ -445,25 +457,51 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     ///   resolver keeps the default; the recipe swap sheet passes
     ///   ``FoodSearchRanking/ingredientIdentity`` (F5), so a pool built from an ingredient's name leads
     ///   with rows that ARE that ingredient.
+    ///
+    /// **On the identity surface the person's remembered answer for the WHOLE description leads**
+    /// (F9b, fix round 1): their correction or recipe pick for exactly those words is first, ahead of
+    /// every sub-phrase block and exempt from the dish demotion, and the pool keeps its limit. The
+    /// sub-phrases alone cannot carry it — they drop stop words, short and numeric tokens and every
+    /// word past three ("2% milk" searches only "milk", "low sodium chicken broth" only 3-word runs),
+    /// so a key the person typed is often never a sub-phrase, and a picked "Salad dressing, NFS, for
+    /// salads" carries the carrier word "salad", so the demotion sank it beneath "Dressing, honey
+    /// mustard, fat-free" (measured). The meal resolver (`.standard`) keeps
+    /// the sub-phrase promotion only, so its pool and bind firewall are untouched.
     public func candidates(
         for description: String, limit: Int = 18, ranking: FoodSearchRanking = .standard
     ) -> [FoodSelectionCandidate] {
+        let remembered = ranking == .ingredientIdentity && limit > 0
+            ? rememberedAnswer(for: description, ranking: ranking) : nil
+        let budget = remembered == nil ? limit : limit - 1
+        // A remembered answer that fills the whole limit leaves no budget; with none, the pool is the
+        // resolver's exactly as before this fix, whatever the limit.
+        let selected = budget > 0 || remembered == nil
+            ? pooledSubPhraseRows(for: description, limit: budget, ranking: ranking, excluding: remembered?.id)
+            : []
+        // Prefer raw ingredients over assembled/prepared dishes for a bare-ingredient query (mirrors
+        // FoodSelectionCandidateBuilder.candidates), so the candidate pool the resolver/AI draws from
+        // isn't dominated by FNDDS "sandwich"/"on-bun" composites that outrank raw foods on data-type.
+        let ordered = (remembered.map { [$0] } ?? []) + PreparedDishHeuristic.demotingDishes(selected, forQuery: description)
+        return ordered.enumerated().map { FoodSelectionCandidate(id: $0.offset + 1, foodItem: $0.element) }
+    }
+
+    /// Up to `limit` rows for `description`, four from each of its sub-phrases in turn, de-duplicated
+    /// and never `excluded` (the remembered answer ``candidates(for:limit:ranking:)`` puts first).
+    private func pooledSubPhraseRows(
+        for description: String, limit: Int, ranking: FoodSearchRanking, excluding excluded: UUID?
+    ) -> [FoodItem] {
         var selected: [FoodItem] = []
         for phrase in FoodSelectionCandidateBuilder.searchPhrases(from: description) {
             // These are synthesized SUB-PHRASES: keep quantity tokens and keep history cold.
             for match in results(
                 for: phrase, limit: 4, stripsStopwords: false, context: .machineGenerated, ranking: ranking
-            ) where !selected.contains(where: { $0.id == match.id }) {
+            ) where match.id != excluded && !selected.contains(where: { $0.id == match.id }) {
                 selected.append(match)
                 if selected.count >= limit { break }
             }
             if selected.count >= limit { break }
         }
-        // Prefer raw ingredients over assembled/prepared dishes for a bare-ingredient query (mirrors
-        // FoodSelectionCandidateBuilder.candidates), so the candidate pool the resolver/AI draws from
-        // isn't dominated by FNDDS "sandwich"/"on-bun" composites that outrank raw foods on data-type.
-        let ordered = PreparedDishHeuristic.demotingDishes(selected, forQuery: description)
-        return ordered.enumerated().map { FoodSelectionCandidate(id: $0.offset + 1, foodItem: $0.element) }
+        return selected
     }
 
     /// `stripsStopwords` reaches the SOURCE, not just the scorer: retrieval and scoring must gate on
