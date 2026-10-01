@@ -867,6 +867,39 @@
     "--" : {
 
     },
+    "1 %@ (%@ g)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 %1$@ (%2$@ g)"
+          }
+        }
+      }
+    },
+    "1 %@ (%@ g), USDA typical size, estimate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 %1$@ (%2$@ g), USDA typical size, estimate"
+          }
+        }
+      }
+    },
+    "1 %@ (%@ g), your size" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 %1$@ (%2$@ g), your size"
+          }
+        }
+      }
+    },
+    "1 %@ =" : {
+
+    },
     "1 bottle" : {
 
     },
@@ -1839,8 +1872,25 @@
     "Couldn't update your workout just now — please try again in a moment." : {
 
     },
-    "Counted as %@" : {
-
+    "Counted as %@ %@%@ (%@ g)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Counted as %1$@ %2$@%3$@ (%4$@ g)"
+          }
+        }
+      }
+    },
+    "Counted as ^[%@ %@](inflect: true)%@ (%@ g)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Counted as ^[%1$@ %2$@](inflect: true)%3$@ (%4$@ g)"
+          }
+        }
+      }
     },
     "Counting every sealed surface…" : {
 
@@ -2490,6 +2540,9 @@
     "Fernlet can't undo this." : {
 
     },
+    "Fernlet can't weigh this amount. Choose another unit, or say how many grams one is." : {
+
+    },
     "Fernlet companion" : {
 
     },
@@ -2602,7 +2655,7 @@
     "Fernlet records metadata only: which feature asked, where the call went, when, how it turned out, and the names of the fields that were sent — never your words, your entries, or the model's reply." : {
 
     },
-    "Fernlet remembers the food searches you've corrected on this device (%lld), so a search you fixed once stays fixed." : {
+    "Fernlet remembers the food searches you've corrected on this device (%lld): a food you replaced in Adjust meal, or an ingredient you picked from lower in a recipe's list. It comes up first the next time you search the same words." : {
 
     },
     "Fernlet removed everything it stored on this device." : {
@@ -2836,6 +2889,12 @@
     "Got it" : {
 
     },
+    "Grams" : {
+
+    },
+    "Grams in one %@" : {
+
+    },
     "Ground" : {
 
     },
@@ -2945,6 +3004,9 @@
 
     },
     "How many bottles of water to log." : {
+
+    },
+    "How many grams is one?" : {
 
     },
     "How many servings?" : {
@@ -5749,9 +5811,6 @@
     "Thinking of swaps…" : {
 
     },
-    "This amount needs an exact serving basis or one source-backed portion." : {
-
-    },
     "This came from Health — manage it in the Health app." : {
 
     },
@@ -6009,6 +6068,9 @@
 
     },
     "USDA macros" : {
+
+    },
+    "USDA typical size, estimate" : {
 
     },
     "Unblock" : {
@@ -6550,6 +6612,9 @@
     "Your shop is paused because items you shared were reported. It reopens automatically in %@ — your items are still saved." : {
 
     },
+    "Your size" : {
+
+    },
     "Your spaces" : {
 
     },
@@ -6563,6 +6628,9 @@
 
     },
     "^[%lld ingredient](inflect: true) not counted in this estimate" : {
+
+    },
+    "^[%lld ingredient](inflect: true) weighed by a USDA typical size (estimate)" : {
 
     },
     "^[%lld tasks](inflect: true)" : {
@@ -7105,6 +7173,9 @@
           }
         }
       }
+    },
+    "g" : {
+
     },
     "gap" : {
 
