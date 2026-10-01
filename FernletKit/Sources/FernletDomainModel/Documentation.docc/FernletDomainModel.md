@@ -235,6 +235,11 @@ COUNT stays strict — exactly one portion of that count unit. The amount a tap 
 ``FoodItem/preferredRecipeUnit`` × ``FoodItem/defaultRecipeQuantity(for:)``, carries an invariant
 (F1(c)): it converts. The unit the data suggests is kept only when ``FoodItem/tapDefaultConverts(_:)``
 holds, else grams, else "1 serving" — so no tap lands on an amount the recipe editor then refuses.
+"N servings" is N of the food's declared serving, except where that serving is itself counted in
+servings (2026-10-01): a custom editor row (``CustomIngredientUpsert``) and every imported
+`fernlet.recipe` line mint a food holding the line's amount as its serving and the whole line's grams
+as its macros, so "2 servings" of a food declaring "2 servings" is that food once. Every catalog row
+served in servings declares exactly 1, so catalog servings are unchanged.
 
 A portion is read TOLERANTLY (F4a, ``FoodPortionReader``): its leading measure word decides and the
 qualifiers go, so "cup, sliced" is a cup and "medium (7" to 7-7/8" long)" a size. "Each" is the
