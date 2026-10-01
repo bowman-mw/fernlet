@@ -514,10 +514,13 @@ struct MeshRoutedItemSealGoldenTests {
         // `Hash.moderationBanReporterTagV1` (1ceb336), a hash domain no item seal touches — acknowledged
         // here on 2026-09-24, when the mesh CI line first ran over it; 79 since the 2026-09-30
         // session-photo review registered the pending corpus's three at-rest AEAD domains
-        // (`AEAD.privatePendingSessionPhoto{Image,Thumbnail,Index}V1`), which no item seal touches.
-        // This count is a tripwire on the registry, not on the item seal: a new row must be
-        // acknowledged here, deliberately.
-        #expect(CryptographicDomainSeparationTests.allDomains.count == 79)
+        // (`AEAD.privatePendingSessionPhoto{Image,Thumbnail,Index}V1`), which no item seal touches;
+        // 81 since the period-data round (design 2026-09-30, §5.2) registered
+        // `KeyDerivation.cycleRecordV1` (the sealed cycle record's column) and
+        // `Hash.sealedBackupWriterTagV1` (the Sealed backup v2 writer tag) — two storage domains no
+        // item seal touches, acknowledged together when both rounds merged. This count is a tripwire on
+        // the registry, not on the item seal: a new row must be acknowledged here, deliberately.
+        #expect(CryptographicDomainSeparationTests.allDomains.count == 81)
         let rows = CryptographicDomainSeparationTests.allDomains.filter {
             $0.purpose.rawValue == FernletCryptoPurpose.AEAD.meshRoutedItemV1.rawValue
         }

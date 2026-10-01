@@ -584,4 +584,26 @@ struct CaptureOcclusionGatingTests {
         #expect(FernletLockGateOcclusion.overlayIsUp(
             active: true, state: .unlocked(scope: .appLockSettings), scope: .privateHub))
     }
+
+    /// The no-passcode Private tab (period-data design 2026-09-30, §9.15): the CLOSED tap gate — and
+    /// the "can't be opened" card it hosts in the same slot — is an overlay, exactly like the setup
+    /// call to action; the tab opened by the tap reveals the hub like a passcode unlock of its scope
+    /// and covers every other scope.
+    @MainActor
+    @Test func theNoPasscodeTapGateOccludesUntilOpenedAndOnlyForItsScope() async throws {
+        // Closed: the tap gate (or its card) covers the hub.
+        #expect(FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .notConfigured, scope: .privateHub))
+        // Opened by the tap: the hub is revealed…
+        #expect(!FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .openedWithoutPasscode(scope: .privateHub), scope: .privateHub))
+        // …and a tap-open is no other surface's unlock.
+        #expect(FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .openedWithoutPasscode(scope: .privateHub), scope: .progressPhotos))
+        #expect(FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .openedWithoutPasscode(scope: .privateHub), scope: .appLockSettings))
+        // The UI-test bypass never occludes, in either no-passcode state.
+        #expect(!FernletLockGateOcclusion.overlayIsUp(
+            active: false, state: .openedWithoutPasscode(scope: .privateHub), scope: .privateHub))
+    }
 }

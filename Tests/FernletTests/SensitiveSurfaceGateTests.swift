@@ -1,9 +1,11 @@
+import CloudKitSync
 import Combine
 import CoreData
 import CryptoKit
 import Foundation
 import Testing
 import FernletDomainModel
+import FernletFoundation
 import FernletLock
 import FernletPersistence
 import HealthKitGateway
@@ -131,8 +133,16 @@ struct SensitiveSurfaceGateTests {
         store.settings.intimacyTrackingVisible = true
 
         let all = Set(HealthCapability.allCases)
-        // Baseline: nothing hidden, and the store must be unlocked or the lock gate confounds this.
-        #expect(store.allowedHealthCapabilities(from: all).contains(.cycleTracking) == (store.lockState == .unlocked(scope: .privateHub)))
+        // Baseline: nothing hidden, and the Private tab OPEN — by a passcode or by the no-passcode tap
+        // (period-data design 2026-09-30): the tap opens the same `.privateHub` scope, so it gets the
+        // same cycle reads. The CLOSED no-passcode state is closed here too.
+        store.lockState = .openedWithoutPasscode(scope: .privateHub)
+        #expect(store.allowedHealthCapabilities(from: all).contains(.cycleTracking))
+        store.lockState = .notConfigured
+        #expect(!store.allowedHealthCapabilities(from: all).contains(.cycleTracking),
+                "no passcode is not 'open': the tab is closed until the tap")
+        store.lockState = .unlocked(scope: .privateHub)
+        #expect(store.allowedHealthCapabilities(from: all).contains(.cycleTracking))
 
         store.settings.periodTrackingVisible = false
         #expect(!store.allowedHealthCapabilities(from: all).contains(.cycleTracking))
@@ -667,6 +677,136 @@ struct SensitiveSurfaceGateTests {
         #expect(offenders.isEmpty,
                 "raw IntimacyLogRepository constructed outside the gated IntimacyLogStore funnel: \(offenders)")
     }
+
+    /// Unit B2 (design 2026-09-30, §4.4): the app target constructs exactly ONE intimacy funnel —
+    /// `ContentView`'s — and hands it to everything else (the log sheet, the calendar, the "can't open"
+    /// check, the Sealed backup). A second instance would carry no mutation hook, so a log written
+    /// through it would never reach the backup. Comments do not count; `attachIntimacyLogStore(` is
+    /// not a construction.
+    @Test func appTargetConstructsTheIntimacyFunnelOnlyInContentView() throws {
+        let appRoot = RepoRoot.url.appendingPathComponent("App/Fernlet")
+        let enumerator = try #require(
+            FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil),
+            "app-target source root not found — moved?")
+        var scanned = 0
+        var sites: [String] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            scanned += 1
+            for line in source.split(separator: "\n") {
+                let code = line.trimmingCharacters(in: .whitespaces)
+                guard !code.hasPrefix("//"),
+                      code.range(of: #"(^|[^A-Za-z0-9_])IntimacyLogStore\("#, options: .regularExpression) != nil else { continue }
+                sites.append("\(url.lastPathComponent): \(code)")
+            }
+        }
+        #expect(scanned > 50, "app-target scan collapsed to \(scanned) files — discovery is broken")
+        #expect(sites == ["ContentView.swift: @State private var intimacyStore = IntimacyLogStore()"],
+                "an intimacy funnel constructed outside ContentView carries no backup hook: \(sites)")
+    }
+
+    /// Unit B2 (design 2026-09-30, §8.1): the Sealed backup's intimacy seams are GATED at the funnel —
+    /// the chunk read, the restore merge and the backup-chunk decrypt all throw while hidden (and the
+    /// chunk read throws `locked` without a key) instead of answering empty — while the keyless ones
+    /// (the id snapshot, the store's health, the delete by id) work whatever the visibility.
+    @Test func theIntimacyBackupSeamsAreGatedAndNeverAnswerEmpty() throws {
+        let context = PrivatePersistenceController(inMemory: true).container.viewContext
+        let store = makeIntimacyStore(context: context)
+        let key = SymmetricKey(size: .bits256)
+        store.attachVisibilityGate { true }
+        let log = IntimacyLog(eventDate: Date(), note: "present")
+        try store.insert(log, contentKey: key)
+        #expect(throws: FernletLockError.self) { try store.backupChunk(ids: [log.id], contentKey: nil) }
+
+        store.attachVisibilityGate { false }
+        #expect(throws: IntimacyTrackingHiddenError.self) { try store.backupChunk(ids: [log.id], contentKey: key) }
+        #expect(throws: IntimacyTrackingHiddenError.self) {
+            try store.restoreMerging([IntimacyLog(eventDate: Date(), note: "from the backup")], contentKey: key)
+        }
+        let decrypted = IntimacyHookCount()
+        #expect(throws: IntimacyTrackingHiddenError.self) { try store.withBackupSeam { decrypted.value += 1 } }
+        #expect(decrypted.value == 0, "the backup decrypt never ran behind the closed gate")
+        #expect(try store.allIDs() == [log.id], "the keyless snapshot never reads a hidden store as empty")
+        #expect(store.isStoreHealthy)
+        #expect(try store.backupLogCount() == 1, "hiding never deletes")
+        #expect(try store.delete(ids: [log.id]) == 1, "deleting is never blocked by hiding")
+    }
+
+    /// Unit B2 (design 2026-09-30, §4.4): every write the funnel makes runs its mutation hook — the
+    /// app wires it to mark the intimate-log upload owed — and nothing that changed nothing does.
+    @Test func everyIntimacyFunnelWriteRunsItsMutationHook() throws {
+        let context = PrivatePersistenceController(inMemory: true).container.viewContext
+        let store = makeIntimacyStore(context: context)
+        let key = SymmetricKey(size: .bits256)
+        let hook = IntimacyHookCount()
+        store.attachVisibilityGate { true }
+        store.attachMutationHook { hook.value += 1 }
+        let log = IntimacyLog(eventDate: Date(), note: "one")
+        try store.insert(log, contentKey: key)
+        try store.markSavedToHealthKit(id: log.id, externalUUID: UUID())
+        #expect(hook.value == 2)
+        _ = try store.restoreMerging([log], contentKey: key)
+        #expect(hook.value == 2, "a merge that changed nothing runs nothing")
+        _ = try store.restoreMerging([IntimacyLog(eventDate: Date(), note: "two")], contentKey: key)
+        #expect(hook.value == 3)
+        try store.deleteAll()
+        try store.deleteAll()
+        #expect(hook.value == 4, "deleting an empty store changed nothing")
+    }
+
+    /// BV17 at the store (design 2026-09-30, §8.1, R2-F16c): while intimacy is hidden for ANY reason —
+    /// the user's setting, under 16, a duress session — Privacy & Data's intimate-log row says nothing,
+    /// even with another iPhone's set observed and an upload owed; visible again, it speaks.
+    @Test func aHiddenIntimacyBackupNamesNothingInPrivacyAndData() {
+        let store = makeStore("gate-intimacy-backup-row")
+        store.sealedBackupPreferencesProvider = {
+            StoragePreferences(iCloudSyncEnabled: true, sealedBackupIntimacyEnabled: true)
+        }
+        let defaults = UserDefaults(suiteName: "fernlet.tests.intimacyRow.\(UUID().uuidString)") ?? .standard
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in false })
+        store.sealedBackupBookkeeping.markRestoreResolved(.intimacyLogs)
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("other".utf8)), generation: 2)
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, .intimacyLogs, installTag: SealedBackupWriterTag.current() ?? "")
+        store.recordSealedBackupReuploadDeferred(true, payloadType: .intimacyLogs)
+
+        seedAgeMeetingIntimacyGate(store)
+        store.settings.intimacyTrackingVisible = true
+        #expect(store.intimacyBackupRowState != .none, "visible: the row speaks")
+
+        store.settings.intimacyTrackingVisible = false
+        #expect(store.intimacyBackupRowState == .none, "hidden by the setting")
+        store.settings.intimacyTrackingVisible = true
+        seedAgeBelowIntimacyGate(store)
+        #expect(store.intimacyBackupRowState == .none, "hidden by the 16+ gate")
+        seedAgeMeetingIntimacyGate(store)
+        store.duressSessionActive = true
+        #expect(store.intimacyBackupRowState == .none, "hidden by a duress session")
+        store.duressSessionActive = false
+        #expect(store.intimacyBackupRowState != .none)
+    }
+
+    /// The same wall for the sealed cycle records (period-data design 2026-09-30, §6.2): every app
+    /// touch goes through the gated `CycleRecordStore` (whose initializers build the repository INSIDE
+    /// `PrivateHealthStore`), so no call site can read or write a record around the visibility gate.
+    @Test func appTargetNeverConstructsARawCycleRecordRepository() throws {
+        let appRoot = RepoRoot.url.appendingPathComponent("App/Fernlet")
+        let enumerator = try #require(
+            FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil),
+            "app-target source root not found — moved?")
+        var scanned = 0
+        var offenders: [String] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            scanned += 1
+            if source.contains("CycleRecordRepository(") {
+                offenders.append(url.lastPathComponent)
+            }
+        }
+        #expect(scanned > 50, "app-target scan collapsed to \(scanned) files — discovery is broken")
+        #expect(offenders.isEmpty,
+                "raw CycleRecordRepository constructed outside the gated CycleRecordStore funnel: \(offenders)")
+    }
 }
 
 /// A repository wrapper that delivers a "remote change" through the REAL sync path — the coordinator
@@ -895,4 +1035,11 @@ struct SensitiveSurfaceGateDecodeTests {
         #expect(reconciled.settings.periodTrackingVisible == nil)
         #expect(reconciled.settings.intimacyTrackingVisible)
     }
+}
+
+/// A counter a test's hook or seam body bumps (a reference, so a `@MainActor` closure can move it).
+@MainActor
+final class IntimacyHookCount {
+    /// How many times it was bumped.
+    var value = 0
 }

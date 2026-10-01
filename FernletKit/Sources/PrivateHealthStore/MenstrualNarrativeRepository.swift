@@ -65,8 +65,36 @@ public nonisolated enum MenstrualNarrativeRangeError: Error, Equatable {
     case rangeTooWide(dayCount: Int, maximum: Int)
 }
 
+/// Every stored legacy narrative, classified under one key without keeping anything that did not
+/// open — the legacy import's input (period-data design 2026-09-30, §8.2 step 1).
+///
+/// `Sendable`: a plain value returned out of `performAndWait`.
+public nonisolated struct MenstrualNarrativeClassification: Sendable {
+    /// Rows that opened.
+    public var opened: [MenstrualNarrative]
+    /// Rows that can never open under this key (an authentication failure, a retired format, a
+    /// missing plaintext field) — by row id.
+    public var deadIDs: [UUID]
+    /// Rows this attempt could not decide (the install-binding read did not answer), or that carry
+    /// no id to name. A caller never calls the walk decided while this is above zero.
+    public var transientCount: Int
+
+    /// Creates a classification.
+    public init(opened: [MenstrualNarrative] = [], deadIDs: [UUID] = [], transientCount: Int = 0) {
+        self.opened = opened
+        self.deadIDs = deadIDs
+        self.transientCount = transientCount
+    }
+}
+
 /// Sealed at-rest CRUD for cycle-day narratives, plus the device-local "ever stored" divergence
 /// latch the sealed-backup restore depends on.
+///
+/// **A legacy store since the cutover** (period-data design 2026-09-30, §8): new cycle entries are
+/// sealed ``CycleRecord``s, and ``PeriodTrackerStore``'s legacy import moves every row that opens
+/// into a record (``classifiedNarratives(contentKey:)``) and retires it in the same save. What is
+/// left is only rows that cannot open here, removed on the user's tap (``delete(ids:)``). The type
+/// stays as that reader and as the delete-all leg; a later model version removes the entity.
 ///
 /// The persistence layer beneath ``PeriodTrackerStore``: notes, symptom flags, and custom symptom
 /// scales are sealed with `ColumnCrypto` (label `"menstrual-narrative"`) into
@@ -117,7 +145,8 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
     /// **standard (device-local, non-synced) defaults**: iOS drops the app container on uninstall, so a
     /// real reinstall clears it for free — which is exactly the "never populated" semantics we want —
     /// while a delete-all on a live install leaves it SET, so the wipe cannot be undone by a stale cloud
-    /// copy. Never cleared once set; it is a one-way "this device has diverged" latch.
+    /// copy. A one-way "this device has diverged" latch for every writer and for the wipe; cleared
+    /// only by ``clearDivergenceLatch()``, once the key the rows spoke for is provably gone.
     private static let everStoredDefaultsKey = "fernlet.menstrualNarrative.everStored"
 
     /// Injected so tests get an isolated suite — the latch is process-global otherwise, and one test
@@ -145,6 +174,15 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
 
     private func markNarrativeStored() {
         defaults.set(true, forKey: Self.everStoredDefaultsKey)
+    }
+
+    /// Clears the divergence latch (``hasEverStoredNarrative``). NOT a wipe step — "delete everything"
+    /// keeps the latch by design. Called only when the key every sealed row here spoke for is
+    /// provably gone: the app's new-key check after the unopenable rows were removed, and an app-lock
+    /// reset (period-data design 2026-09-30, §4.9, §9.21). The latch backfills from the row count, so
+    /// clearing it over rows that still exist is undone by the next read.
+    public func clearDivergenceLatch() {
+        defaults.removeObject(forKey: Self.everStoredDefaultsKey)
     }
 
     /// Creates a repository on a sealed-store stack.
@@ -294,6 +332,86 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
         // deleted (and the save + prune succeeded) — exactly what the helper's `true` return means.
         if try PrivateRowPlumbing.deleteRows(entityName: "MenstrualNarrative", in: context) {
             markNarrativeStored()
+        }
+    }
+
+    /// The most rows ``classifiedNarratives(contentKey:)`` walks — the bound the cycle-record store
+    /// itself has (R2/R3).
+    public static let maxClassifiedNarratives = 20_000
+
+    /// Every stored narrative classified under `contentKey` (period-data design 2026-09-30, §8.2):
+    /// opened, dead (can never open here), or undecided (the install binding did not answer). Walks
+    /// the table by id in pages of 500 inside ONE `performAndWait`, so no write interleaves the walk,
+    /// bounded by ``maxClassifiedNarratives``. Nothing that fails to open is kept. One audit line for
+    /// the whole walk, counts only.
+    public func classifiedNarratives(contentKey: SymmetricKey) throws -> MenstrualNarrativeClassification {
+        try context.performAndWait {
+            let total = min(try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")), Self.maxClassifiedNarratives)
+            var result = MenstrualNarrativeClassification()
+            for offset in stride(from: 0, to: total, by: Self.maxPageSize) {  // R2: ≤ total / maxPageSize pages.
+                let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
+                request.sortDescriptors = [NSSortDescriptor(key: "id", ascending: true)]
+                request.fetchOffset = offset
+                request.fetchLimit = Self.maxPageSize
+                for object in try context.fetch(request) {  // R2: ≤ maxPageSize rows.
+                    classify(object, contentKey: contentKey, into: &result)
+                }
+            }
+            if !result.deadIDs.isEmpty || result.transientCount > 0 {
+                FernletAuditLog.log("sealedRow.undecryptable", context: [
+                    "entity": "MenstrualNarrative", "dead": "\(result.deadIDs.count)", "undecided": "\(result.transientCount)"
+                ])
+            }
+            return result
+        }
+    }
+
+    /// Classifies one row into `result`.
+    private func classify(_ object: NSManagedObject, contentKey: SymmetricKey, into result: inout MenstrualNarrativeClassification) {
+        guard let rowID = object.value(forKey: "id") as? UUID else {
+            result.transientCount += 1
+            return
+        }
+        do {
+            guard let narrative = try decrypt(object, contentKey: contentKey) else {
+                result.deadIDs.append(rowID)
+                return
+            }
+            result.opened.append(narrative)
+        } catch is DeviceBindingID.ReadError {
+            result.transientCount += 1
+        } catch {
+            result.deadIDs.append(rowID)
+        }
+    }
+
+    /// Deletes the rows with these ids WITHOUT decrypting, in one save, then prunes the history
+    /// (rethrown) and sets the divergence latch when anything was removed. A failed save is rolled
+    /// back, so a delete that throws deleted nothing. The Cycle page's "Remove them" on legacy notes
+    /// that cannot open (§8.2 step 3).
+    ///
+    /// - Parameter ids: At most ``maxClassifiedNarratives`` ids.
+    /// - Returns: How many rows were removed.
+    public func delete(ids: [UUID]) throws -> Int {
+        guard !ids.isEmpty, ids.count <= Self.maxClassifiedNarratives else { return 0 }
+        return try context.performAndWait {
+            var rows: [NSManagedObject] = []
+            for start in stride(from: 0, to: ids.count, by: Self.maxPageSize) {  // R2: ids ≤ maxClassifiedNarratives.
+                let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
+                request.predicate = NSPredicate(format: "id IN %@", Array(ids[start..<min(start + Self.maxPageSize, ids.count)]))
+                rows += try context.fetch(request)
+            }
+            guard !rows.isEmpty else { return 0 }
+            do {
+                rows.forEach(context.delete)
+                try context.saveSealed()
+            } catch {
+                context.rollback()
+                throw error
+            }
+            try PrivatePersistentHistoryPruner.prune(context: context)
+            markNarrativeStored()
+            return rows.count
         }
     }
 

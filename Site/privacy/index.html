@@ -21,7 +21,7 @@
 
 <!--
   GENERATED PAGE — do not edit this prose in isolation.
-  Source of truth: Docs/Privacy-Policy.md (effective September 24, 2026).
+  Source of truth: Docs/Privacy-Policy.md (effective September 30, 2026).
   The same text is pinned in three places and they must always match:
     1. Docs/Privacy-Policy.md               (source)
     2. App/Fernlet/PrivacyPolicyView.swift  (in-app copy)
@@ -63,7 +63,7 @@
   <div class="eyebrow">Privacy policy</div>
   <h1>What Fernlet knows about you.</h1>
   <div class="policy-meta">
-    <span>Effective September 24, 2026</span>
+    <span>Effective September 30, 2026</span>
     <span>Michael Bowman Olay</span>
     <a href="mailto:fernletapp@gmail.com">fernletapp@gmail.com</a>
   </div>
@@ -161,7 +161,7 @@
       <p><strong>iCloud sync (optional):</strong> If enabled, your core app data (meals, the workouts you log in Fernlet, hydration, hygiene, the sleep you log yourself, scores, settings, derived signals, core memories, your friends list, and a log of your recent in-person sessions) is synced to <strong>your own iCloud private database</strong> using Apple's CloudKit. Your friends list holds the display names and public keys of the friends you added in person, when you added and last saw them, and any block or report you made; the session log records which friend, when, and what kind of item was sent or received — never the item itself. <strong>Nothing Fernlet reads from Apple Health is part of this sync</strong> (Section 3), and neither are your sensitive memories (Section 2). Journal <strong>text</strong> is not part of this sync: the days and structure of your journal sync, but the words you wrote are sealed on your device and leave it only as ciphertext, through the opt-in encrypted backup below. Core memories never hold your journal text either: a memory drawn from a journal entry syncs as the entry's mood or, if the on-device AI helper is on, as a short summary the on-device model wrote, which Fernlet checks is not a copy or an excerpt of your entry and uses no clinical language — though, being a summary, it does say what the entry was about. This is associated with your Apple ID under Apple's standard privacy model. We cannot see it. You can turn this off or delete the cloud copy at any time in Settings → Privacy &amp; Data. Deleting the cloud copy never deletes your local copy or your Apple Health history.</p>
       <p><strong>Encrypted sealed backup (separate, off by default):</strong> You may separately opt in to back up <strong>period data</strong>, <strong>journal entries</strong>, <strong>intimate logs</strong> and/or <strong>your own photos</strong> (see Section 5). Before this data leaves your device it is encrypted with a key derived from a dedicated backup key (AES-256-GCM). Apple stores only unreadable ciphertext.</p>
       <div class="callout"><p>Because the key lives in your iCloud Keychain, <strong>if you permanently lose access to your iCloud Keychain on all your devices, this encrypted data cannot be recovered.</strong> You are told this when you enable it. Period-data backup is a deliberate, clearly-warned opt-in because of the sensitivity of that information.</p></div>
-      <p>Because the sealed store's key is locked to this device's security hardware (Section 2), this opt-in backup is the <strong>only</strong> way the sealed categories can be recovered on another or an erased device — without it, sealed data is unrecoverable off this device, full stop. The journal, period-data and intimate-log parts of this backup require Fernlet's app lock: without one, those categories cannot be backed up at all. Sensitive memories are never backed up, by design; if you had switched on the former encrypted backup of sensitive memories, Fernlet deletes that copy from your iCloud automatically. And notes you let go of in the <strong>Worry Box</strong> are deliberately excluded from every backup — they exist only on this device and do not survive a device erase.</p>
+      <p>Because the sealed store's key is locked to this device's security hardware (Section 2), this opt-in backup is the <strong>only</strong> way the sealed categories can be recovered on another or an erased device — without it, sealed data is unrecoverable off this device, full stop. The journal, period-data and intimate-log parts of this backup work with or without a Fernlet passcode. Sensitive memories are never backed up, by design; if you had switched on the former encrypted backup of sensitive memories, Fernlet deletes that copy from your iCloud automatically. And notes you let go of in the <strong>Worry Box</strong> are deliberately excluded from every backup — they exist only on this device and do not survive a device erase.</p>
     </section>
 
     <section>

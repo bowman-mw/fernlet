@@ -22,6 +22,13 @@ protocol JournalSealingContext: AnyObject {
     /// leaked plaintext — outside the in-memory `previousJournals` window that the per-activation migrate
     /// visits — is eventually re-sealed and stripped instead of lingering in the synced blob forever (F1).
     func requestPastDayJournalRescrub()
+    /// A sealed journal row was written, re-sealed or deleted: the journal Sealed backup's upload is
+    /// owed (journal and intimacy Sealed backup v2 design 2026-09-30, §4.4), so the next hub settle
+    /// re-exports it. Called after every narrative-store mutation this coordinator makes — the seal,
+    /// the re-seal, the delete (success or not: the skeleton goes either way, so the export must drop
+    /// the entry), the migration and the past-day scrub when they inserted — but NOT after the
+    /// device-key fold, which changes ciphertext only (the backup reads both keys, §7.2).
+    func sealedJournalStoreDidChange()
 }
 
 /// Sealed journal management (Phase S2), extracted from ``FernletStore`` (plan §5d).
@@ -37,8 +44,9 @@ protocol JournalSealingContext: AnyObject {
 ///   `mutatePastDay`, and a seal/re-seal FAILURE deliberately keeps the id OUT of the set so the
 ///   plaintext survives in the blob (bounded transient exposure) rather than being blanked against
 ///   a missing or stale narrative — no data loss, ever.
-/// - Even with no lock configured, entries are sealed under a device-bound Keychain key, so the
-///   blob still never carries journal text.
+/// - While the Private tab is closed (with or without a passcode) entries are sealed under a
+///   device-bound Keychain key, so the blob never carries journal text; the next time the tab opens,
+///   EVERY such row is folded under the tab's content key (period-data design 2026-09-30, §9.17).
 /// - Tag-only mood check-ins (empty text) are never sealed, keeping "empty text + no narrative
 ///   row" unambiguous; see ``canIdentifyTagOnlyEntries`` for the locked-state caveat.
 ///
@@ -49,14 +57,16 @@ protocol JournalSealingContext: AnyObject {
 @MainActor
 final class JournalSealingCoordinator {
     /// The lock-lifecycle mode the coordinator was last activated into, which decides the active
-    /// key: none (inactive/locked), the device Keychain key (no lock configured), or the user
-    /// content key (unlocked).
+    /// key: none (inactive/closed) or the Private tab's content key (open, by passcode or by tap).
+    ///
+    /// There is no device-key READ mode any more: the no-passcode Private tab has a content key of
+    /// its own, so "no lock" no longer means "hydrate under the device key everywhere" — the device
+    /// key is only the write fallback while the tab is closed (period-data design 2026-09-30, §9.17).
     ///
     /// Set only by the activate/deactivate lifecycle calls; `activeJournalRefreshKey()` and
     /// ``canIdentifyTagOnlyEntries`` are its two readers.
     private enum JournalActivationMode {
         case inactive
-        case noLock
         case sealedUnlocked
         case sealedLocked
     }
@@ -64,19 +74,12 @@ final class JournalSealingCoordinator {
     private unowned let host: any JournalSealingContext
     private let narrativeRepository: any JournalNarrativeStoring
 
-    /// Content key available while the lock is open; nil when locked.
+    /// Content key available while the Private tab is open; nil when closed.
     private var journalContentKey: SymmetricKey?
     private var journalActivationMode: JournalActivationMode = .inactive
-    /// Whether the last `.noLock` activation actually hydrated sealed text.
-    ///
-    /// False when the device key could not be read, which leaves stripped sealed entries in memory
-    /// with empty text — indistinguishable from a tag-only mood check-in. ``canIdentifyTagOnlyEntries``
-    /// reads it so the one-tap mood row appends instead of overwriting a real sealed entry in that
-    /// window.
-    private var noLockHydrated = false
     /// Device-key rows are folded at most once per process session unless a new device-key write
-    /// occurs. User-key rows are intentionally undecryptable with that old key; rescanning them on
-    /// every unlock only repeats Core Data fetch/decrypt allocations and the same audit line.
+    /// occurs (or a fold left rows behind). Content-key rows do not open under the device key, so
+    /// rescanning them on every open only repeats the walk.
     private var deviceKeyMigrationPending = true
     /// IDs of journal entries whose text is sealed in JournalNarrativeRepository.
     /// Used by the store's `currentSnapshot()` to strip text before persisting to the cloud blob.
@@ -89,24 +92,16 @@ final class JournalSealingCoordinator {
         self.narrativeRepository = narrativeRepository
     }
 
-    /// The (private) journal content key, surfaced for the sealed period-data backup.
-    var contentKey: SymmetricKey? { journalContentKey }
-
     /// Whether the entry's text is sealed in the narrative store (so the snapshot strips it).
     func isSealed(_ id: UUID) -> Bool { sealedJournalIDs.contains(id) }
 
-    /// True while a journal key is active (no-lock or unlocked): sealed entries are hydrated with
-    /// their text, so an EMPTY-text entry in memory is genuinely a tag-only mood check-in. While
-    /// locked/inactive, stripped sealed entries also sit in memory with empty text — a tag-only
+    /// True while the content key is active (the Private tab is open): sealed entries are hydrated
+    /// with their text, so an EMPTY-text entry in memory is genuinely a tag-only mood check-in. While
+    /// closed/inactive, stripped sealed entries also sit in memory with empty text — a tag-only
     /// check-in is indistinguishable from them, and callers (e.g. the one-tap mood row's
     /// update-in-place) must fall back to appending instead of mutating what might be a real entry.
-    ///
-    /// The `.noLock` case additionally requires that hydration actually ran: a device key that could
-    /// not be read leaves sealed entries empty in memory, and treating those as tag-only check-ins
-    /// would let the update-in-place path overwrite a real sealed entry.
     var canIdentifyTagOnlyEntries: Bool {
         switch journalActivationMode {
-        case .noLock: noLockHydrated
         case .sealedUnlocked: true
         case .inactive, .sealedLocked: false
         }
@@ -114,26 +109,9 @@ final class JournalSealingCoordinator {
 
     // MARK: - Activation (lock lifecycle)
 
-    /// Call at startup when no lock is configured: seals any legacy plaintext blob entries
-    /// with the device key and populates in-memory journal text from the device-key-sealed store.
-    func activateNoLockJournals() {
-        // The mode is set even when the key is unavailable, so `activeJournalRefreshKey()` re-hits the
-        // keychain on every later call and self-heals in-session.
-        journalActivationMode = .noLock
-        guard let key = deviceJournalKey else {
-            // Nothing hydrated: sealed entries keep their empty in-memory text, so "empty text" is no
-            // longer proof of a tag-only mood check-in (see `canIdentifyTagOnlyEntries`).
-            noLockHydrated = false
-            FernletAuditLog.log("journal.deviceKey.unavailable", context: [:])
-            return
-        }
-        migrateExistingJournalsToSealedStore(contentKey: key)
-        refreshSealedJournals(contentKey: key)
-        noLockHydrated = true
-    }
-
-    /// Call on unlock: migrates any device-key-sealed entries, sets the content key,
-    /// populates in-memory journal text from the sealed store, and migrates legacy plaintext entries.
+    /// Call when the Private tab opens (by passcode or by tap): folds every device-key-sealed entry
+    /// under the content key, sets the key, populates in-memory journal text from the sealed store,
+    /// and migrates legacy plaintext entries.
     func activateSealedJournals(contentKey: SymmetricKey) {
         journalContentKey = contentKey
         journalActivationMode = .sealedUnlocked
@@ -195,6 +173,7 @@ final class JournalSealingCoordinator {
             try narrativeRepository.insert(narrative, contentKey: key)
             sealedJournalIDs.insert(entry.id)
             if journalContentKey == nil { deviceKeyMigrationPending = true }
+            host.sealedJournalStoreDidChange()
         } catch {
             // Carry the error (the `String(describing:)` form every peer audit line uses, e.g.
             // `mesh.encryptedMetadata.sealFailed`). This is the only record the exposure window
@@ -242,6 +221,7 @@ final class JournalSealingCoordinator {
         )
         do {
             try narrativeRepository.update(updated, contentKey: key)
+            host.sealedJournalStoreDidChange()
         } catch {
             // Re-seal failed. If the id stayed in sealedJournalIDs, the snapshot / past-day strip would
             // blank this entry against the now-STALE narrative copy — silently destroying the user's edit.
@@ -271,6 +251,9 @@ final class JournalSealingCoordinator {
             FernletAuditLog.log("journal.deleteSealed.failed", context: ["id": id.uuidString])
         }
         sealedJournalIDs.remove(id)
+        // Success or not: the entry's skeleton leaves the day either way, so the next export must drop
+        // it (an orphan row is never exported, design 2026-09-30 §7.1).
+        host.sealedJournalStoreDidChange()
     }
 
     // MARK: - Hydration (read paths)
@@ -311,15 +294,13 @@ final class JournalSealingCoordinator {
         switch journalActivationMode {
         case .inactive, .sealedLocked:
             return nil
-        case .noLock:
-            return deviceJournalKey
         case .sealedUnlocked:
             return journalContentKey
         }
     }
 
     /// Device-bound key generated on first use and stored in Keychain (not iCloud-synced).
-    /// Used to seal journal text when no user lock is configured, ensuring text never reaches the blob.
+    /// Used to seal journal text while the Private tab is closed, ensuring text never reaches the blob.
     ///
     /// Nil when the keychain row exists but could not be read (a transient failure, or a read before
     /// the first post-boot unlock) — the helper fails closed rather than minting over a key it could
@@ -330,8 +311,15 @@ final class JournalSealingCoordinator {
         KeychainItem.loadOrCreateSymmetricKey(for: .deviceJournalKey, service: KeychainItem.journalService)
     }
 
-    /// When the user sets up a lock for the first time, re-encrypts entries that were previously
-    /// sealed with the device key so they become protected by the user's content key.
+    /// Folds EVERY row sealed under the device key (written while the Private tab was closed — from
+    /// Home, or before any key existed) under the content key, in the repository's bounded pages.
+    ///
+    /// The whole table, not a window: the fold this replaced re-keyed only today and the in-memory
+    /// `previousJournals` days, so an older entry written from Home stayed under the device key and
+    /// never showed in the hub (period-data design 2026-09-30, §9.17). Rows already under the content
+    /// key do not open under the device key and are skipped. Anything left behind (a read, a re-seal
+    /// or a save that failed) keeps its device-key copy and leaves the fold pending for the next open
+    /// — a deferral, never a loss.
     private func migrateDeviceKeyEntriesToUserKey(userKey: SymmetricKey) {
         guard deviceKeyMigrationPending else { return }
         // No device key readable this instant ⇒ nothing can be decrypted to re-key. Pending remains
@@ -340,30 +328,15 @@ final class JournalSealingCoordinator {
             FernletAuditLog.log("journal.rekey.failed", context: [:])
             return
         }
-        let todayNarratives = loadNarratives("rekeyToday") {
-            try narrativeRepository.narratives(forDayKey: host.todayKey, contentKey: dKey)
-        }
-        let prevDayKeys = Array(Set(
-            host.previousJournals.filter { $0.text.isEmpty }.map { FernletDate.dayKey(for: $0.date) }
-        ))
-        let prevNarratives = prevDayKeys.isEmpty ? [] : loadNarratives("rekeyPrevious") {
-            try narrativeRepository.narratives(forDayKeys: prevDayKeys, contentKey: dKey)
-        }
-        var failed = 0
-        for narrative in todayNarratives + prevNarratives {
-            do {
-                try narrativeRepository.update(narrative, contentKey: userKey)
-            } catch {
-                // The row stays decryptable under the DEVICE key (no data loss). `failed` leaves the
-                // pending latch armed, so the next journal activation retries exactly this row.
-                failed += 1
-                FernletAuditLog.log("journal.rekey.failed", context: ["id": narrative.id.uuidString])
+        do {
+            let failed = try narrativeRepository.reencryptAll(from: dKey, to: userKey)
+            guard failed == 0 else {
+                FernletAuditLog.log("journal.rekey.incomplete", context: ["failed": String(failed)])
+                return
             }
-        }
-        if failed > 0 {
-            FernletAuditLog.log("journal.rekey.incomplete", context: ["failed": String(failed)])
-        } else {
             deviceKeyMigrationPending = false
+        } catch {
+            FernletAuditLog.log("journal.rekey.failed", context: ["error": "\(type(of: error))"])
         }
     }
 
@@ -456,6 +429,7 @@ final class JournalSealingCoordinator {
         if anyMigrated {
             // Trigger a save so the stripped (empty-text) version replaces the plaintext in the blob.
             host.scheduleSnapshotSave()
+            host.sealedJournalStoreDidChange()
         }
     }
 
@@ -497,6 +471,7 @@ final class JournalSealingCoordinator {
         }
         var changed: [String: FernletDay] = [:]
         var unsealedFailureCount = 0
+        var insertedAny = false
         for (dayKey, day) in allDays where dayKey != host.todayKey {
             var journals = day.journals
             var mutated = false
@@ -515,6 +490,7 @@ final class JournalSealingCoordinator {
                         continue
                     }
                     sealedJournalIDs.insert(entry.id)
+                    insertedAny = true
                 }
                 journals[index] = entry.strippedIfSealed(in: sealedJournalIDs)
                 mutated = true
@@ -525,6 +501,7 @@ final class JournalSealingCoordinator {
                 changed[dayKey] = scrubbed
             }
         }
+        if insertedAny { host.sealedJournalStoreDidChange() }
         return PastDayScrubOutcome(changedDays: changed, unsealedFailureCount: unsealedFailureCount, keyActive: true)
     }
 }

@@ -184,6 +184,15 @@ struct DeleteEverythingSheet: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
+            if hasSealedBackup {
+                // A Sealed backup slot is account-wide, one iPhone's at a time (journal and intimacy
+                // Sealed backup v2 design 2026-09-30, §12 item 2, Q-B1): the wipe deletes each enabled
+                // set whichever iPhone saved it, and the backup key with it.
+                Text("Sealed backups in iCloud are deleted for every iPhone that uses them.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
             if hasICloudDayCopy {
                 // Day records and custom items keep no tombstones (owner decision 2026-08-21:
                 // disclose, don't tombstone). The coin and milestone ledgers are deliberately NOT

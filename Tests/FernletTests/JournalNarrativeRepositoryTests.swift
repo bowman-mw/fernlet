@@ -188,7 +188,7 @@ struct JournalNarrativeRepositoryTests {
         #expect(journalKey != menstrualKey)
     }
 
-    // MARK: - Sealed-backup surface (P3): count, paged total order, atomic insert, divergence latch
+    // MARK: - Sealed-backup surface (P3): count, paged total order, divergence latch
 
     private func narrative(
         _ text: String,
@@ -259,54 +259,6 @@ struct JournalNarrativeRepositoryTests {
         #expect(try repo.narratives(offset: 0, limit: 10, contentKey: nil).isEmpty)
     }
 
-    @Test func insertAtomicallyWritesTheWholeBatch() throws {
-        let repo = makeRepository()
-        let key = makeKey()
-        try repo.insertAtomically([
-            narrative("a", entryDate: Date(timeIntervalSince1970: 10)),
-            narrative("b", entryDate: Date(timeIntervalSince1970: 20))
-        ], contentKey: key)
-        #expect(try repo.narrativeCount() == 2)
-        #expect(try repo.narratives(offset: 0, limit: 10, contentKey: key).map(\.text) == ["a", "b"])
-    }
-
-    /// Fail-closed: without a content key the batch is refused before a single row is written, and the
-    /// divergence latch stays UNSET (a failed write is not evidence this device ever held data).
-    @Test func insertAtomicallyWithNilKeyWritesNothingAndThrowsLocked() throws {
-        let repo = makeRepository()
-        #expect(throws: FernletLockError.self) {
-            try repo.insertAtomically([narrative("never", entryDate: Date())], contentKey: nil)
-        }
-        #expect(try repo.narrativeCount() == 0)
-        #expect(repo.hasEverStoredNarrative == false, "a failed batch must not latch divergence")
-    }
-
-    /// A mid-batch save failure rolls the WHOLE transaction back. Induced by a duplicate `id` inside
-    /// one batch against a store that already holds that row: the second insert of the same identity
-    /// is fine for Core Data, so the real lever is a save-time failure — modelled here by feeding the
-    /// batch through a context whose store has been torn down.
-    @Test func insertAtomicallyRollsBackWhenTheSaveFails() throws {
-        let controller = PrivatePersistenceController(inMemory: true)
-        let context = controller.container.viewContext
-        let repo = JournalNarrativeRepository(context: context, defaults: isolatedLatchDefaults())
-        let key = makeKey()
-        try repo.insert(narrative("pre-existing", entryDate: Date(timeIntervalSince1970: 1)), contentKey: key)
-
-        // Remove the persistent store out from under the context: the batch's inserts then fail at
-        // save time, after several objects are already registered in the context.
-        for store in controller.container.persistentStoreCoordinator.persistentStores {
-            try controller.container.persistentStoreCoordinator.remove(store)
-        }
-        #expect(throws: (any Error).self) {
-            try repo.insertAtomically([
-                narrative("batch-1", entryDate: Date(timeIntervalSince1970: 2)),
-                narrative("batch-2", entryDate: Date(timeIntervalSince1970: 3))
-            ], contentKey: key)
-        }
-        // The rollback left no batch objects behind in the context.
-        #expect(context.insertedObjects.isEmpty, "a failed atomic insert left objects in the context")
-    }
-
     // MARK: - One-way divergence latch
 
     @Test func latchIsUnsetOnAFreshStoreAndSetByAnInsert() throws {
@@ -316,9 +268,9 @@ struct JournalNarrativeRepositoryTests {
         #expect(repo.hasEverStoredNarrative)
     }
 
-    @Test func latchIsSetByInsertAtomically() throws {
+    @Test func latchIsSetByARestoreMerge() throws {
         let repo = makeRepository()
-        try repo.insertAtomically([narrative("restored", entryDate: Date())], contentKey: makeKey())
+        _ = try repo.upsertMerged([narrative("restored", entryDate: Date())], hubKey: makeKey(), deviceKey: .absent)
         #expect(repo.hasEverStoredNarrative, "a restore that populates the store must latch too")
     }
 
@@ -396,5 +348,297 @@ struct JournalNarrativeRepositoryTests {
         let repo = makeRepository()
         try repo.delete(id: UUID())
         #expect(repo.hasEverStoredNarrative == false)
+    }
+
+    // MARK: - The whole-table fold (period-data design 2026-09-30, §9.17)
+
+    /// EVERY device-key row is re-sealed under the hub key — however old, across more than one
+    /// page — and rows already under the hub key are left alone. The fold this replaced re-keyed
+    /// only today and the in-memory recent days, so an older entry written from Home while Private
+    /// was closed stayed under the device key and never showed in the hub.
+    @Test func reencryptAllFoldsEveryDeviceKeyRowAcrossPages() throws {
+        let repo = makeRepository()
+        let deviceKey = makeKey()
+        let hubKey = makeKey()
+        let old = Date(timeIntervalSince1970: 1_600_000_000)
+        for index in 0..<230 {
+            try repo.insert(narrative("home \(index)", dayKey: "2020-09-\(index % 28 + 1)", entryDate: old.addingTimeInterval(Double(index))), contentKey: deviceKey)
+        }
+        try repo.insert(narrative("already in the hub", entryDate: Date()), contentKey: hubKey)
+
+        #expect(try repo.reencryptAll(from: deviceKey, to: hubKey) == 0)
+
+        let underHub = try repo.openability(under: hubKey)
+        #expect(underHub.openableIDs.count == 231, "every row opens under the hub key after one fold")
+        #expect(underHub.deadIDs.isEmpty)
+        #expect(try repo.openability(under: deviceKey).openableIDs.isEmpty, "nothing is left under the device key")
+        #expect(try repo.reencryptAll(from: deviceKey, to: hubKey) == 0, "a second fold is a no-op")
+        let page = try repo.narratives(offset: 0, limit: 1, contentKey: hubKey)
+        #expect(page.first?.text == "home 0", "text survives the re-seal")
+    }
+
+    /// A row sealed under a key that is gone is neither folded nor deleted: the fold is a
+    /// classification, never a loss.
+    @Test func reencryptAllLeavesRowsUnderAnotherKeyUntouched() throws {
+        let repo = makeRepository()
+        let deviceKey = makeKey()
+        let lostKey = makeKey()
+        try repo.insert(narrative("sealed elsewhere", entryDate: Date()), contentKey: lostKey)
+
+        #expect(try repo.reencryptAll(from: deviceKey, to: makeKey()) == 0)
+        #expect(try repo.narrativeCount() == 1)
+        #expect(try repo.openability(under: lostKey).openableIDs.count == 1)
+    }
+
+    // MARK: - The unopenable-entries check (period-data design 2026-09-30, §4.9)
+
+    /// Openable, dead and (when the install binding cannot be read) undecided — never "dead" on a
+    /// read that did not answer; with no key at all every row is dead.
+    ///
+    /// `@MainActor` so the view context's `performAndWait` runs inline in THIS task: the binding
+    /// override is task-local, and a hop to the main queue from another thread would not see it.
+    @MainActor
+    @Test func openabilitySortsRowsIntoOpenableDeadAndUndecided() throws {
+        let repo = makeRepository()
+        let deviceKey = makeKey()
+        let live = narrative("live", entryDate: Date())
+        let dead = narrative("dead", entryDate: Date().addingTimeInterval(1))
+        try repo.insert(live, contentKey: deviceKey)
+        try repo.insert(dead, contentKey: makeKey())
+
+        let classified = try repo.openability(under: deviceKey)
+        #expect(classified.openableIDs == [live.id])
+        #expect(classified.deadIDs == [dead.id])
+        #expect(classified.transientCount == 0)
+
+        let undecided = try DeviceBindingID.$testOverride.withValue(.readError) {
+            try repo.openability(under: deviceKey)
+        }
+        #expect(undecided.transientCount == 2, "a binding read that did not answer decides nothing")
+        #expect(undecided.deadIDs.isEmpty)
+
+        #expect(Set(try repo.openability(under: nil).deadIDs) == [live.id, dead.id])
+    }
+
+    /// The card's removal is keyless and exact: only the named ids go, and a removal latches (it is a
+    /// deletion like any other) until the latch is explicitly cleared.
+    @Test func deleteByIDsRemovesExactlyThoseRowsAndLatchClearingIsExplicit() throws {
+        let repo = makeRepository()
+        let keep = narrative("keep", entryDate: Date())
+        let drop = narrative("drop", entryDate: Date().addingTimeInterval(1))
+        let key = makeKey()
+        try repo.insert(keep, contentKey: key)
+        try repo.insert(drop, contentKey: key)
+
+        try repo.delete(ids: [drop.id])
+
+        #expect(try repo.openability(under: key).openableIDs == [keep.id])
+        #expect(repo.hasEverStoredNarrative)
+        try repo.delete(ids: [keep.id])
+        #expect(repo.hasEverStoredNarrative, "a removal is a deletion: it latches")
+        repo.clearDivergenceLatch()
+        #expect(!repo.hasEverStoredNarrative, "cleared once the key the rows spoke for is gone")
+    }
+    // MARK: - Sealed backup v2 (journal and intimacy design 2026-09-30, §7.2, §7.3; BV11, BV22)
+
+    /// §7.2: the backup's classified read opens each entry under the hub key, else the device key; an
+    /// entry neither opens is dead; one that opens with an unknown feeling tag needs a newer build
+    /// (never dead); an install-binding read that did not answer, or an unreadable device key over an
+    /// entry the hub key cannot open, decides nothing; a missing id was deleted since the snapshot.
+    @MainActor
+    @Test func theBackupReadClassifiesUnderTheHubThenTheDeviceKey() throws {
+        let controller = PrivatePersistenceController(inMemory: true)
+        let repo = JournalNarrativeRepository(context: controller.container.viewContext, defaults: isolatedLatchDefaults())
+        let hub = makeKey()
+        let device = makeKey()
+        let underHub = narrative("hub", entryDate: Date(timeIntervalSince1970: 1))
+        let underDevice = narrative("device", entryDate: Date(timeIntervalSince1970: 2))
+        let dead = narrative("dead", entryDate: Date(timeIntervalSince1970: 3))
+        let future = narrative("future tag", entryDate: Date(timeIntervalSince1970: 4))
+        try repo.insert(underHub, contentKey: hub)
+        try repo.insert(underDevice, contentKey: device)
+        try repo.insert(dead, contentKey: makeKey())
+        try repo.insert(future, contentKey: hub)
+        let row = try #require(try controller.container.viewContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative"))
+            .first { $0.value(forKey: "id") as? UUID == future.id })
+        row.setValue("a-tag-from-the-future", forKey: "tag")
+        try controller.container.viewContext.save()
+        let ids = [underHub.id, underDevice.id, dead.id, future.id, UUID()]
+
+        let page = try repo.backupRecords(ids: ids, hubKey: hub, deviceKey: .present(device))
+        #expect(page.records.map(\.text) == ["hub", "device"])
+        #expect(page.deadIDs == [dead.id])
+        #expect(page.needsNewerBuildIDs == [future.id], "an unknown tag is never dead")
+        #expect(page.transientCount == 0)
+
+        let noDeviceKey = try repo.backupRecords(ids: ids, hubKey: hub, deviceKey: .absent)
+        #expect(noDeviceKey.deadIDs == [underDevice.id, dead.id], "no device key: the device row is dead")
+        let unreadable = try repo.backupRecords(ids: ids, hubKey: hub, deviceKey: .unreadable)
+        #expect(unreadable.deadIDs.isEmpty, "an unreadable keychain decides nothing")
+        #expect(unreadable.transientCount == 2)
+        let binding = try DeviceBindingID.$testOverride.withValue(.readError) {
+            try repo.backupRecords(ids: [underHub.id], hubKey: hub, deviceKey: .absent)
+        }
+        #expect(binding.transientCount == 1 && binding.records.isEmpty)
+        #expect(throws: FernletLockError.self) { try repo.backupRecords(ids: ids, hubKey: nil, deviceKey: .absent) }
+    }
+
+    /// The snapshot and the skeleton read are keyless: every id in the store's total order, distinct,
+    /// and the plaintext half of each entry (never its text).
+    @Test func allIDsAndSkeletonsAreKeyless() throws {
+        let repo = makeRepository()
+        let key = makeKey()
+        let second = narrative("second", dayKey: "2026-05-29", entryDate: Date(timeIntervalSince1970: 200))
+        let first = narrative("first", entryDate: Date(timeIntervalSince1970: 100))
+        try repo.insert(second, contentKey: key)
+        try repo.insert(first, contentKey: makeKey())
+        #expect(try repo.allIDs() == [first.id, second.id])
+        let skeletons = try repo.skeletons(ids: [second.id, first.id, UUID()])
+        #expect(skeletons == [
+            JournalNarrativeSkeleton(id: second.id, dayKey: "2026-05-29", tag: .good, entryDate: second.entryDate),
+            JournalNarrativeSkeleton(id: first.id, dayKey: "2026-05-28", tag: .good, entryDate: first.entryDate)
+        ])
+        #expect(repo.isStoreHealthy)
+    }
+
+    /// BV11 (§7.3): absent entries are inserted WITH their own stamps; an entry that opens (under the
+    /// hub OR the device key) is never modified; a different text keeps the local entry and adds the
+    /// backup's as a NEW entry; a dead row is replaced; nothing is ever deleted; the result names every
+    /// entry that carries a backup entry's content.
+    @Test func theMergeInsertsKeepsForksAndReplacesButNeverDeletes() throws {
+        let repo = makeRepository()
+        let hub = makeKey()
+        let device = makeKey()
+        let stamp = Date(timeIntervalSince1970: 1_000)
+        var absent = narrative("only in the backup", entryDate: Date(timeIntervalSince1970: 10))
+        absent.createdAt = stamp
+        absent.updatedAt = stamp
+        let same = narrative("same words", entryDate: Date(timeIntervalSince1970: 20))
+        let localDiffers = narrative("this iPhone's words", entryDate: Date(timeIntervalSince1970: 30))
+        var incomingDiffers = localDiffers
+        incomingDiffers.text = "the backup's words"
+        let deadLocal = narrative("unreadable here", entryDate: Date(timeIntervalSince1970: 40))
+        var deadIncoming = deadLocal
+        deadIncoming.text = "readable copy"
+        let untouched = narrative("not in the backup", entryDate: Date(timeIntervalSince1970: 50))
+        try repo.insert(same, contentKey: device)
+        try repo.insert(localDiffers, contentKey: hub)
+        try repo.insert(deadLocal, contentKey: makeKey())
+        try repo.insert(untouched, contentKey: hub)
+
+        let result = try repo.upsertMerged([absent, same, incomingDiffers, deadIncoming], hubKey: hub, deviceKey: .present(device))
+        #expect(result.inserted == 1 && result.unchanged == 1 && result.forked == 1 && result.replaced == 1)
+        let all = try repo.backupRecords(ids: try repo.allIDs(), hubKey: hub, deviceKey: .present(device))
+        #expect(all.deadIDs.isEmpty)
+        let texts = all.records.map(\.text)
+        #expect(Set(texts) == ["only in the backup", "same words", "this iPhone's words", "the backup's words",
+                               "readable copy", "not in the backup"])
+        #expect(texts.count == 6, "nothing deleted, one fork added")
+        #expect(all.records.first { $0.id == absent.id }?.updatedAt == stamp, "the backup's own stamps are kept")
+        #expect(all.records.first { $0.id == localDiffers.id }?.text == "this iPhone's words", "the local entry is kept")
+        let fork = try #require(all.records.first { $0.text == "the backup's words" })
+        #expect(fork.id != localDiffers.id && fork.dayKey == localDiffers.dayKey)
+        #expect(Set(result.followUpIDs) == [absent.id, same.id, fork.id, deadLocal.id])
+    }
+
+    /// Idempotent (§7.3): a second merge of the same set changes nothing — a fork's equal content is
+    /// found on its day — yet names the same entries, so a retry rebuilds any missing skeleton.
+    @Test func aSecondMergeOfTheSameSetChangesNothing() throws {
+        let repo = makeRepository()
+        let hub = makeKey()
+        let local = narrative("mine", entryDate: Date(timeIntervalSince1970: 10))
+        var theirs = local
+        theirs.text = "theirs"
+        let added = narrative("added", entryDate: Date(timeIntervalSince1970: 20))
+        try repo.insert(local, contentKey: hub)
+
+        let first = try repo.upsertMerged([theirs, added], hubKey: hub, deviceKey: .absent)
+        #expect(first.changedCount == 2)
+        let second = try repo.upsertMerged([theirs, added], hubKey: hub, deviceKey: .absent)
+        #expect(second.changedAnything == false)
+        #expect(Set(second.followUpIDs) == Set(first.followUpIDs))
+        #expect(try repo.narrativeCount() == 3)
+    }
+
+    /// The merge throws — and saves NOTHING — on an entry it cannot decide (the install binding did not
+    /// answer, or the device key could not be read) or one whose tag this build cannot read, and
+    /// refuses without the hub key.
+    @MainActor
+    @Test func theMergeDefersOnUndecidedOrNewerEntriesAndWritesNothing() throws {
+        let repo = makeRepository()
+        let hub = makeKey()
+        let device = makeKey()
+        let underDevice = narrative("under the device key", entryDate: Date(timeIntervalSince1970: 10))
+        try repo.insert(underDevice, contentKey: device)
+        var incoming = underDevice
+        incoming.text = "different"
+        let absent = narrative("absent", entryDate: Date(timeIntervalSince1970: 20))
+
+        #expect(throws: JournalNarrativeRepositoryError.undecidedRows(count: 1)) {
+            try repo.upsertMerged([absent, incoming], hubKey: hub, deviceKey: .unreadable)
+        }
+        #expect(try repo.allIDs() == [underDevice.id], "nothing saved: the insert before the throw rolled back")
+        #expect(throws: FernletLockError.self) { try repo.upsertMerged([absent], hubKey: nil, deviceKey: .absent) }
+        #expect(throws: JournalNarrativeRepositoryError.undecidedRows(count: 1)) {
+            try DeviceBindingID.$testOverride.withValue(.readError) {
+                try repo.upsertMerged([incoming], hubKey: hub, deviceKey: .present(device))
+            }
+        }
+        #expect(try repo.allIDs() == [underDevice.id])
+    }
+
+    /// Review B3 fix round 1 (R3 / D-B3-4): one entry changed on both iPhones, then "Restore it here"
+    /// on each in turn — the Q9 back-and-forth — settles at exactly TWO entries on each iPhone: both
+    /// versions, neither doubled. The fork phone A adds for B's words keeps the stamps of B's entry, so
+    /// when it comes back to B as an absent id it is recognised as B's own entry (the same words, the
+    /// same creation stamp), not inserted beside it. Further rounds change nothing.
+    @Test func restoreItHereOnBothIPhonesSettlesAtTwoEntriesEach() throws {
+        let phoneA = makeRepository()
+        let phoneB = makeRepository()
+        let keyA = makeKey()
+        let keyB = makeKey()
+        // The same id on both (the same-id typing path with sync on): each iPhone's own words and stamps.
+        let id = UUID()
+        try phoneA.insert(narrative("A's words", entryDate: Date(timeIntervalSince1970: 100), id: id), contentKey: keyA)
+        try phoneB.insert(narrative("B's words", entryDate: Date(timeIntervalSince1970: 200), id: id), contentKey: keyB)
+        func backup(_ repo: JournalNarrativeRepository, _ key: SymmetricKey) throws -> [JournalNarrative] {
+            try repo.backupRecords(ids: try repo.allIDs(), hubKey: key, deviceKey: .absent).records
+        }
+        func texts(_ repo: JournalNarrativeRepository, _ key: SymmetricKey) throws -> [String] {
+            try backup(repo, key).map(\.text).sorted()
+        }
+
+        _ = try phoneA.upsertMerged(try backup(phoneB, keyB), hubKey: keyA, deviceKey: .absent)
+        #expect(try texts(phoneA, keyA) == ["A's words", "B's words"], "A keeps its own and adds B's")
+        let atB = try phoneB.upsertMerged(try backup(phoneA, keyA), hubKey: keyB, deviceKey: .absent)
+        #expect(try texts(phoneB, keyB) == ["A's words", "B's words"], "B's own entry is not doubled")
+        #expect(atB.inserted == 0 && atB.forked == 1 && atB.unchanged == 1)
+        #expect(atB.followUpIDs.contains(id), "B's own entry stands for the copy that came back")
+
+        for _ in 0..<2 {
+            let again = try phoneA.upsertMerged(try backup(phoneB, keyB), hubKey: keyA, deviceKey: .absent)
+            #expect(!again.changedAnything)
+            #expect(!(try phoneB.upsertMerged(try backup(phoneA, keyA), hubKey: keyB, deviceKey: .absent)).changedAnything)
+        }
+        #expect(try phoneA.narrativeCount() == 2 && phoneB.narrativeCount() == 2)
+    }
+
+    /// The copy rule never swallows a real entry: an absent backup entry with the same words as a local
+    /// one on its day, but written at another moment (another creation stamp), is a different entry and
+    /// is inserted. One with the same words AND stamp — what the other iPhone kept of this iPhone's
+    /// entry after deleting its own version of the pair — stands as that entry and adds nothing.
+    @Test func anAbsentEntryWithTheSameWordsWrittenAtAnotherMomentIsKept() throws {
+        let repo = makeRepository()
+        let hub = makeKey()
+        let local = narrative("Feeling tired", entryDate: Date(timeIntervalSince1970: 100))
+        try repo.insert(local, contentKey: hub)
+        let laterSameWords = narrative("Feeling tired", entryDate: Date(timeIntervalSince1970: 900))
+        var copyOfLocal = local
+        copyOfLocal.id = UUID()
+
+        let result = try repo.upsertMerged([laterSameWords, copyOfLocal], hubKey: hub, deviceKey: .absent)
+        #expect(result.inserted == 1 && result.unchanged == 1)
+        #expect(Set(try repo.allIDs()) == [local.id, laterSameWords.id], "the later entry kept, the copy recognised")
+        #expect(Set(result.followUpIDs) == [local.id, laterSameWords.id])
     }
 }

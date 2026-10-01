@@ -3,11 +3,12 @@
 //
 // WS-4 (Docs/Sealed-Backup-Escrow-Recovery-FollowUp-2026-06-28.md): restore failures are VISIBLE and
 // RETRYABLE, never silently terminal. Covers the outcome enum's classification semantics and the
-// host-recording wiring (the store's observable status is updated) for the no-network short-circuit.
+// host-recording wiring (the observable status is updated) for a merge restore and the retired payload.
 
 import Foundation
 import Testing
 import CloudKitSync
+import PrivateMemoryStore
 @testable import Fernlet
 
 @MainActor
@@ -19,7 +20,7 @@ struct SealedBackupRestoreOutcomeTests {
         #expect(SealedBackupRestoreOutcome.restored(3).didRestore)
         for outcome: SealedBackupRestoreOutcome in [
             .nothingToRestore, .skippedStoreNotEmpty, .deferredKeyNotSynced,
-            .deferredLocked, .deferredTransient, .notRecognized, .rolledBack
+            .deferredLocked, .deferredTransient, .notRecognized, .rolledBack, .needsNewerFernlet
         ] {
             #expect(outcome.didRestore == false)
         }
@@ -28,7 +29,7 @@ struct SealedBackupRestoreOutcomeTests {
     @Test func deferredAndUnrecognizedNeedAttention() {
         // The deferred/unrecognized outcomes are the ones the user must see (WS-4 "visible").
         for outcome: SealedBackupRestoreOutcome in [
-            .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized, .rolledBack
+            .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized, .rolledBack, .needsNewerFernlet
         ] {
             #expect(outcome.needsAttention)
         }
@@ -54,6 +55,10 @@ struct SealedBackupRestoreOutcomeTests {
         // record. It must still be visible — a silent rollback is the whole failure mode.
         #expect(SealedBackupRestoreOutcome.rolledBack.isRetryable == false)
         #expect(SealedBackupRestoreOutcome.rolledBack.needsAttention)
+        // needsNewerFernlet (review B3 fix round 1): only an update reads the set — no Retry prompt,
+        // but never silent.
+        #expect(SealedBackupRestoreOutcome.needsNewerFernlet.isRetryable == false)
+        #expect(SealedBackupRestoreOutcome.needsNewerFernlet.needsAttention)
         // Benign outcomes are not "retry" prompts.
         for outcome: SealedBackupRestoreOutcome in [.restored(1), .nothingToRestore, .skippedStoreNotEmpty] {
             #expect(outcome.isRetryable == false)
@@ -62,18 +67,25 @@ struct SealedBackupRestoreOutcomeTests {
 
     // MARK: - Host status recording (no network)
 
-    /// A populated store short-circuits restore at the no-clobber gate (before any CloudKit/identity
-    /// work) — and the rich outcome is RECORDED on the observable status, not silently dropped.
-    /// Journal is the probe (the retired sensitive-notes payload used to be): the whole-device
-    /// freshness verdict answers before its own store is read.
-    @Test func restoreOutcomeRecordsSkippedOnPopulatedStore() async {
-        let store = makePopulatedTestStore()
-        #expect(store.sealedBackupRestoreStatus[.journalNarratives] == nil)
+    /// Rewritten for unit B3 (design 2026-09-30, R2-F16b; was `restoreOutcomeRecordsSkippedOnPopulatedStore`):
+    /// the journal's `.skippedStoreNotEmpty` no longer exists for a populated store — its restore is a
+    /// MERGE. A store that already holds entries of its own takes the backup's entries beside them, and
+    /// the rich outcome is RECORDED on the host, not silently dropped.
+    @Test func aJournalRestoreIntoAPopulatedStoreMergesAndRecordsItsOutcome() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let old = JournalBackupDevice(cloud: cloud, writer: "old", resolved: true)
+        try old.write(JournalBackupDevice.entry("from the backup", day: 1))
+        #expect(await old.coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone")
+        try phone.write(JournalBackupDevice.entry("written here", day: 2))
+        #expect(phone.host.recordedOutcomes[.journalNarratives] == nil)
 
-        let outcome = await store.restoreSealedBackupOutcome(payloadType: .journalNarratives)
+        let outcome = await phone.coordinator.restoreSealedBackupOutcome(payloadType: .journalNarratives)
 
-        #expect(outcome == .skippedStoreNotEmpty)
-        #expect(store.sealedBackupRestoreStatus[.journalNarratives] == .skippedStoreNotEmpty)
+        #expect(outcome == .restored(1))
+        #expect(phone.host.recordedOutcomes[.journalNarratives] == .restored(1))
+        #expect(Set(try phone.entries().map(\.text)) == ["from the backup", "written here"])
     }
 
     /// The retired sensitive-notes payload is never restored: the outcome is the benign

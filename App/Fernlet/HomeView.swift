@@ -1480,7 +1480,7 @@ struct HomeView: View {
         case .care:
             activeSheet = .hygiene
         case .logPeriod:
-            activeSheet = .logPeriod(targetDate: nil, editingEntry: nil)
+            activeSheet = .logPeriod(targetDate: nil, editingRecord: nil)
         case .periodTracking:
             privateHubSection = .cycle
             selectedTab = .personal

@@ -55,13 +55,20 @@ struct SealedBackupGenerationStore {
         Int64(defaults.integer(forKey: Self.key(for: payloadType)))
     }
 
-    /// Mints the next generation for a write and persists it immediately.
+    /// Mints the next generation for a write and persists it immediately — the v1 in-place export
+    /// (`SealedBackupService.reconcileChunked`), which no shipping payload uses since the journal moved
+    /// to v2 (design 2026-09-30, unit B3); the tests write the v1 sets an earlier build left with it.
     ///
-    /// Persisting *before* the upload is the fail-safe direction: if the upload then fails, this
-    /// device has burned a number and the next write skips it — harmless, since the counter only
-    /// has to be monotonic, not gapless. Persisting after a successful upload would be worse: a
-    /// crash between the two would let the next write reuse a number that is already in the cloud,
-    /// and the rollback check would then accept a substitution of the earlier one.
+    /// Persisting *before* the upload is the fail-safe direction FOR AN IN-PLACE WRITE: if the upload
+    /// then fails, this device has burned a number and the next write skips it — harmless, since the
+    /// counter only has to be monotonic, not gapless. Persisting after a successful upload would be
+    /// worse there: a crash between the two would let the next write reuse a number that is already
+    /// in the cloud, and the rollback check would then accept a substitution of the earlier one.
+    ///
+    /// The Sealed backup v2 sets (design 2026-09-30, §5.4) do NOT mint here: their generation is
+    /// computed above the cloud head the export just read (so a landed head is always exceeded) and
+    /// recorded through ``recordAccepted(_:for:)`` only once the commit verified — a burned mint would
+    /// raise the rollback floor above the other iPhone's set (review R1-BR-4).
     mutating func mintNext(for payloadType: SealedBackupPayloadType) -> Int64 {
         let next = lastSeen(for: payloadType) + 1
         defaults.set(Int(next), forKey: Self.key(for: payloadType))
@@ -77,9 +84,14 @@ struct SealedBackupGenerationStore {
         defaults.set(Int(generation), forKey: Self.key(for: payloadType))
     }
 
-    /// Clears every payload type's mark — chunked payloads AND the own-photo corpora. Wired into
-    /// the delete-all path: leaving a stale high-water mark behind would make a legitimate
-    /// post-wipe restore look like a rollback attack.
+    /// Clears every payload type's mark — chunked payloads AND the own-photo corpora. Wired into the
+    /// delete-all path: leaving a stale high-water mark behind would make a legitimate post-wipe
+    /// restore look like a rollback attack.
+    ///
+    /// It does NOT clear the Sealed backup v2 accepted heads (`SealedBackupBookkeeping`, design
+    /// 2026-09-30 §9, review R2-F11): a set that survives a failed delete must then be overwritten by
+    /// the next export, which finishes the wipe, rather than be named "another iPhone's" and offered
+    /// back.
     ///
     /// Driven off both `allCases` sets so a payload type or a photo corpus added later cannot leave
     /// a mark this wipe forgets.

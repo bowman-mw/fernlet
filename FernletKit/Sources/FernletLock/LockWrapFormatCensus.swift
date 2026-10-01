@@ -248,3 +248,69 @@ public nonisolated enum LockWrapFormatCensus {
         }
     }
 }
+
+/// What the census found in the DEVICE-CUSTODY row (`LockKeychainKey.deviceContentKey`, the
+/// no-passcode home of the content key — period-data design 2026-09-30, §4.2).
+///
+/// A second row with a format of its own, classified by the same rule as the wrap census: marker
+/// bytes only, never an open. `FDS1` (enclave-wrapped) is the only format written where an enclave
+/// exists; `FDR1` (raw) is written only where none does, so an ``raw`` row on enclave hardware is an
+/// upgrade candidate (the service upgrades it in place at the next open), and a count of them is how
+/// a device run proves the upgrade happened.
+public nonisolated enum DeviceCustodyFormatState: Sendable, Equatable {
+    /// The keychain positively reported no row: a passcode is configured (its setup retired the
+    /// row), or no Private tab has been opened without one on this install.
+    case absent
+    /// `FDS1` + an ECIES blob under this service's Secure-Enclave key.
+    case enclaveWrapped
+    /// `FDR1` + the raw key: expected on hardware with no enclave, an upgrade candidate elsewhere.
+    case raw
+    /// Non-empty, but neither marker (or too short to carry a body): a newer build's format, or a
+    /// corrupt slot. The service treats it as retryable, never terminal.
+    case unknownMarker
+    /// Zero bytes — unreachable through the house writer, which refuses an empty payload.
+    case malformedEmpty
+    /// The keychain call failed; the row's existence and format are UNKNOWN.
+    case unreadable(OSStatus)
+}
+
+nonisolated extension LockWrapFormatCensus {
+    /// The device-custody account, taken from the lock's own key enum rather than re-spelled.
+    nonisolated public static let deviceCustodyAccount = LockKeychainKey.deviceContentKey.rawValue
+
+    /// Inspects the device-custody row under `service` and reports its format. One
+    /// `SecItemCopyMatching`, no write, no open, no Secure-Enclave call.
+    public static func inspectDeviceCustody(service: String = KeychainItem.productionService) -> DeviceCustodyFormatState {
+        inspectDeviceCustody(service: service, loadingRow: { rowAccount, rowService in
+            KeychainItem.loadDistinguishingAbsence(account: rowAccount, service: rowService)
+        })
+    }
+
+    /// ``inspectDeviceCustody(service:)`` over an injected row loader, so the `unreadable` branch
+    /// is testable. An empty service reports `unreadable(errSecParam)`, never a clean absence.
+    static func inspectDeviceCustody(
+        service: String,
+        loadingRow load: (String, String) -> KeychainItem.ReadResult
+    ) -> DeviceCustodyFormatState {
+        guard !service.isEmpty else { return .unreadable(errSecParam) }
+        return classifyDeviceCustody(load(deviceCustodyAccount, service))
+    }
+
+    /// Classifies one three-way read of the device row by its marker — against the SAME constants
+    /// the writer stamps (`DeviceCustodyRecord`), so the two cannot drift.
+    static func classifyDeviceCustody(_ row: KeychainItem.ReadResult) -> DeviceCustodyFormatState {
+        switch row {
+        case .absent:
+            return .absent
+        case .unreadable(let status):
+            return .unreadable(status)
+        case .found(let bytes):
+            guard !bytes.isEmpty else { return .malformedEmpty }
+            switch DeviceCustodyRecord.decode(bytes) {
+            case .enclaveWrapped: return .enclaveWrapped
+            case .raw: return .raw
+            case .unknownMarker: return .unknownMarker
+            }
+        }
+    }
+}

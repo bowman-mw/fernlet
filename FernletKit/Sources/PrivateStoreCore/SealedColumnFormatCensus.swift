@@ -256,9 +256,10 @@ public struct SealedColumnFormatCensusResult: Sendable, Equatable {
 ///
 /// ## Memory posture (the jetsam hazard 269003c was chasing)
 ///
-/// All seven sealed columns use `allowsExternalBinaryDataStorage`, so any value over ~100 KB lives
-/// as a loose file in `.FernletPrivate_SUPPORT` and *faults the whole blob into memory* the moment
-/// the attribute is touched. Fetching every row and reading every column would therefore pull the
+/// The seven sealed columns of the four original entities use `allowsExternalBinaryDataStorage`, so
+/// any value over ~100 KB lives as a loose file in `.FernletPrivate_SUPPORT` and *faults the whole
+/// blob into memory* the moment the attribute is touched (the eighth, `CycleRecord.payloadCiphertext`,
+/// is stored inline and small, which the same page discipline covers anyway). Fetching every row and reading every column would therefore pull the
 /// entire sealed corpus into RAM to look at one byte per value. Instead the scan: fetches with a
 /// small `fetchBatchSize`, walks one page at a time inside an `autoreleasepool`, reads only
 /// `data.first` via the classifier, and immediately turns each row back into a fault with
@@ -280,10 +281,11 @@ public enum SealedColumnFormatCensus {
     /// The naming convention the drift guard keys off: every sealed binary column ends in this.
     public static let ciphertextAttributeSuffix = "Ciphertext"
 
-    /// The censused surface: the four sealed entities of `PrivatePersistenceController` and their
-    /// seven ciphertext columns. Written by hand and cross-checked against the live model by
-    /// ``verifyTable(matches:)`` — an eighth column or a fifth entity fails loudly instead of going
-    /// silently un-censused.
+    /// The censused surface: the five sealed entities of `PrivatePersistenceController` and their
+    /// eight ciphertext columns — `CycleRecord.payloadCiphertext` joined on 2026-09-30 (period-data
+    /// design §5.2; it is a V3 `ColumnCrypto` blob like the rest). Written by hand and cross-checked
+    /// against the live model by ``verifyTable(matches:)`` — a ninth column or a sixth entity fails
+    /// loudly instead of going silently un-censused.
     public static let censusedEntities: [SealedEntityColumns] = [
         SealedEntityColumns(
             entityName: "MenstrualNarrative",
@@ -300,6 +302,10 @@ public enum SealedColumnFormatCensus {
         SealedEntityColumns(
             entityName: "WorryNarrative",
             ciphertextAttributeNames: ["textCiphertext"]
+        ),
+        SealedEntityColumns(
+            entityName: "CycleRecord",
+            ciphertextAttributeNames: ["payloadCiphertext"]
         )
     ]
 
@@ -366,7 +372,7 @@ public enum SealedColumnFormatCensus {
     /// - Throws: ``Failure/tableDoesNotMatchModel(missing:unlisted:)``, with both directions listed.
     public static func verifyTable(matches model: NSManagedObjectModel) throws {
         var missing: [SealedColumnIdentifier] = []
-        for column in censusedColumns {  // R2: bounded by the seven-entry static table.
+        for column in censusedColumns {  // R2: bounded by the eight-entry static table.
             let attribute = model.entitiesByName[column.entityName]?.attributesByName[column.attributeName]
             if attribute?.attributeType != .binaryDataAttributeType {
                 missing.append(column)
@@ -443,7 +449,7 @@ public enum SealedColumnFormatCensus {
         var rowsScanned = 0
         var rowsAvailable = 0
         var truncated = false
-        for entity in censusedEntities {  // R2: bounded by the four-entry static table.
+        for entity in censusedEntities {  // R2: bounded by the five-entry static table.
             let budget = max(rowCap - rowsScanned, 0)
             let outcome = try scanEntity(entity, in: context, pageSize: pageSize, rowBudget: budget)
             for (column, tally) in outcome.tallies {  // R2: bounded by the entity's column list.

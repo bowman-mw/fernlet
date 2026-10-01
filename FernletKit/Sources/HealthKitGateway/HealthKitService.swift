@@ -438,7 +438,11 @@ public protocol HealthKitStoreControlling: AnyObject {
     /// by fetched sample requires read authorization, but a user may have granted write-only — so
     /// Fernlet could have written samples it cannot read back and therefore cannot delete one-by-one.
     /// `HKHealthStore.deleteObjects(of:predicate:)` deletes only the caller's OWN samples regardless.
-    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws
+    ///
+    /// - Returns: How many objects were deleted (HealthKit's own count) — what tells a cycle edit
+    ///   whether it really removed an older Apple Health copy (period-data design 2026-09-30, §6.3).
+    @discardableResult
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int
     /// Turns off background delivery registered for a type (part of integration teardown).
     func disableBackgroundDelivery(for type: HKObjectType) async throws
 }
@@ -554,9 +558,9 @@ final class SystemHealthKitStoreController: HealthKitStoreControlling {
         }
     }
 
-    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
-        guard let sampleType = type as? HKSampleType else { return }
-        _ = try await healthStore.deleteObjects(of: sampleType, predicate: predicate)
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int {
+        guard let sampleType = type as? HKSampleType else { return 0 }
+        return try await healthStore.deleteObjects(of: sampleType, predicate: predicate)
     }
 
     func disableBackgroundDelivery(for type: HKObjectType) async throws {
@@ -1321,11 +1325,11 @@ public final class HealthKitService: HealthKitServicing {
     /// Deletes specific fetched samples from Health.
     ///
     /// Deliberately NOT gated on Fernlet's sharing switches (decision 2026-09-23): the only callers
-    /// remove samples Fernlet itself wrote, at the user's request (a cycle day deleted or edited),
-    /// HealthKit refuses to delete another app's data, and a delete puts nothing INTO Health — so
-    /// "sharing is off" must not strand Fernlet's own samples, the same stance as
-    /// ``deleteAllAuthoredSamples()``. An edit is delete-then-write, so its caller checks the write
-    /// half FIRST (`checkPeriodEventWriteAllowed(_:)`) and cannot delete what it could not rewrite.
+    /// remove samples Fernlet itself wrote, at the user's request, HealthKit refuses to delete another
+    /// app's data, and a delete puts nothing INTO Health — so "sharing is off" must not strand
+    /// Fernlet's own samples, the same stance as ``deleteAllAuthoredSamples()``. (The cycle surfaces
+    /// delete through the period seam's own `deleteMirror(recordID:)` and `deleteFernletAuthored(_:)`
+    /// since the cutover; a cycle edit no longer deletes anything before its sealed record is saved.)
     public func delete(_ samples: [HKSample]) async throws {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         try await storeController.delete(samples)
@@ -2739,55 +2743,69 @@ extension HKAuthorizationStatus {
     }
 }
 
-/// Cycle-event read/write conformance for the narrow `PeriodHealthKitServicing` seam owned by
-/// `PeriodTrackerStore` (in the PrivateHealthStore module). The conformance lives here — beside
-/// ``HealthKitService`` — because it reaches into the service's internals (`save`,
-/// `categoryType`/`quantityType`); it is the reason this gateway target depends on
-/// PrivateHealthStore, a wall-legal edge (only AIProviders/CloudKitSync are barred from the
+/// What each gateway error means for a cycle entry's Apple Health copy, so `PeriodTrackerStore` can
+/// report it without naming this module (period-data design 2026-09-30, §6.3): a closed sharing
+/// switch is no failure (nothing was meant to be copied), no Health store is "unavailable", and the
+/// rest are failures.
+extension HealthKitServiceError: PeriodHealthCopyErrorClassifying {
+    public var periodHealthCopyFailure: PeriodLogOutcome.HealthCopyFailure? {
+        switch self {
+        case .sharingTurnedOff: nil
+        case .healthDataUnavailable: .healthUnavailable
+        case .missingHealthType, .cacheClearerUnavailable, .invalidMeasurement: .other
+        }
+    }
+}
+
+/// The Apple Health MIRROR of Fernlet's sealed cycle records, for the narrow `PeriodHealthKitServicing`
+/// seam owned by `PeriodTrackerStore` (in the PrivateHealthStore module; period-data design
+/// 2026-09-30, §7). The conformance lives here — beside ``HealthKitService`` — because it reaches into
+/// the service's internals (`save`, the store seam, the gate); it is the reason this gateway target
+/// depends on PrivateHealthStore, a wall-legal edge (only AIProviders/CloudKitSync are barred from the
 /// sealed stores).
+///
+/// Since the cutover the sealed record is the source of truth: a copy of its clinical block is written
+/// only while cycle sharing is on, every sample stamped with the record id twice
+/// (`HKMetadataKeyExternalUUID` and the frozen `FernletCycleRecordMirror.recordIDKey` that tells a
+/// mirror from a pre-cutover sample). Deletes of Fernlet's own copies are ungated; the legacy read
+/// throws rather than answering an empty "not asked".
 extension HealthKitService: PeriodHealthKitServicing {
-    /// Writes one logged cycle event as its constituent Health samples (flow, BBT, mucus,
-    /// ovulation test, spotting — whichever fields are present), each stamped with the sealed
-    /// store's external UUID so the encrypted narrative and the clinical samples stay correlated.
-    ///
-    /// Write-gated on cycle tracking whenever the event has a clinical field to write (2026-09-23;
-    /// it used to check the master switch only, via ``save(_:)``). An event with none — symptoms or
-    /// a note only — writes nothing to Health and needs neither sharing NOR Health itself: the
-    /// device check lives in the gate, after the empty-samples return, so a note-only log saves on
-    /// a device without Health exactly as ``checkPeriodEventWriteAllowed(_:)`` already promised
-    /// (it used to run first and refuse the note too). Audited on success.
-    public func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
-        let samples = try Self.periodSamples(for: event, externalUUID: externalUUID)
-        guard !samples.isEmpty else { return samples }
-        try requireWriteSharing(.cycleTracking)
-        try await save(samples)
-        FernletAuditLog.log("hk.write.saved", context: ["type": "cycle", "externalUUID": externalUUID.uuidString])
-        return samples
+    /// The write-sharing rule for cycle tracking (``isWriteSharingEnabled(for:)``).
+    public func isCycleMirrorEnabled() -> Bool {
+        isWriteSharingEnabled(for: .cycleTracking)
     }
 
-    /// Throws exactly when writing `event` would be refused — by Fernlet's sharing switches
-    /// (``HealthKitServiceError/sharingTurnedOff``) or by Apple Health's own share grant for any of
-    /// the event's sample types (an `HKError`, see ``requireHealthShareGrant(for:)``). The check
-    /// `PeriodTrackerStore.editEvent` runs BEFORE it deletes the entry it replaces, so an edit can
-    /// never delete a day it is not allowed to rewrite.
-    ///
-    /// Apple Health's half joined 2026-09-30. Fernlet's switches can be on while Health itself
-    /// refuses a type (the user allowed Menstrual Flow in the Health prompt but not Basal Body
-    /// Temperature, and one granted type is enough to count as a grant). The edit then deleted the
-    /// day's own flow sample and its sealed note, and only the re-log's batch save was refused.
-    /// Asking Health's share status first refuses that edit while the day is still whole.
-    public func checkPeriodEventWriteAllowed(_ event: UserLoggedCycleEvent) throws {
-        let samples = try Self.periodSamples(for: event, externalUUID: UUID())
+    /// Whether the cycle capability was requested and is switched on — the only state in which the
+    /// Cycle page reads Apple Health at all.
+    public func isCycleHealthReadEnabled() -> Bool {
+        isCapabilityRequestedAndEnabled(.cycleTracking)
+    }
+
+    /// Whether every cycle type has been asked about (no prompt would show), so an empty legacy read
+    /// is an honest "none" (§8.3 step 1). Never prompts.
+    public func cycleReadAuthorizationDetermined() async -> Bool {
+        await authorizationRequestStatus(for: .cycleTracking) == .unnecessary
+    }
+
+    /// Writes the record's clinical block as Apple Health samples (flow, temperature, mucus,
+    /// ovulation test, spotting — whichever are set). Gated twice before anything is built into the
+    /// store: Fernlet's cycle sharing (``HealthKitServiceError/sharingTurnedOff``) and Apple Health's
+    /// OWN share grant for every type (the `HKError` HealthKit's save would throw), then through the
+    /// one sample door, ``save(_:)``, which gates again by type. A record with no clinical field
+    /// writes nothing. Audited by type only.
+    public func writeMirror(of record: CycleRecord) async throws {
+        let samples = try Self.periodSamples(for: record)
         guard !samples.isEmpty else { return }
         try requireWriteSharing(.cycleTracking)
         try requireHealthShareGrant(for: samples)
+        try await save(samples)
+        FernletAuditLog.log("hk.write.saved", context: ["type": "cycle"])
     }
 
-    /// Throws the `HKError` HealthKit's own save would, before anything is written or deleted, when
-    /// Apple Health has not granted Fernlet share access to every type in `samples`:
-    /// `.errorAuthorizationDenied` for a type the user turned down, `.errorAuthorizationNotDetermined`
-    /// for one never asked. Share status is the half of HealthKit's authorization an app IS told,
-    /// so this answers exactly what the save would. Audited by type identifier only, never a value.
+    /// Throws the `HKError` HealthKit's own save would, before anything is written, when Apple Health
+    /// has not granted Fernlet share access to every type in `samples`: `.errorAuthorizationDenied`
+    /// for a type the user turned down, `.errorAuthorizationNotDetermined` for one never asked. Audited
+    /// by type identifier only, never a value.
     private func requireHealthShareGrant(for samples: [HKSample]) throws {
         for sample in samples {
             let status = storeController.authorizationStatus(for: sample.sampleType)
@@ -2797,17 +2815,98 @@ extension HealthKitService: PeriodHealthKitServicing {
         }
     }
 
+    /// Deletes Fernlet's own samples of the five cycle kinds whose external UUID is the record id —
+    /// a post-cutover mirror and a pre-cutover sample the import gave that id alike. UNGATED (a delete
+    /// puts nothing into Health, and "sharing off" must not strand Fernlet's copies) and own-source
+    /// only (`HKSource.default()`, which HealthKit enforces anyway). Every kind is attempted, so one
+    /// refused kind never strands the rest (the "delete everything" sweep's stance):
+    /// - a kind Fernlet was never granted, or with nothing matching, counts 0
+    ///   (``isExpectedDeleteSkip(_:)``);
+    /// - a kind whose share access the user DENIED is reported in
+    ///   `CycleMirrorDeletion.refusedKinds`, not thrown — HealthKit cannot say whether it was never
+    ///   granted (nothing of Fernlet's there) or taken away after a copy was written, so the store
+    ///   weighs it against the record (review round 1, R2);
+    /// - any other failure is rethrown once every kind was attempted.
+    ///
+    /// Audited by counts only.
+    ///
+    /// - Returns: How many samples were deleted (0 on a device without Health) and the refused kinds.
+    public func deleteMirror(recordID: UUID) async throws -> CycleMirrorDeletion {
+        guard isHealthDataAvailable() else { return CycleMirrorDeletion() }
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(from: HKSource.default()),
+            HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeyExternalUUID, allowedValues: [recordID.uuidString])
+        ])
+        var deletion = CycleMirrorDeletion()
+        var firstFailure: Error?
+        for kind in CycleMirrorSampleKind.allCases {  // R2: five kinds.
+            do {
+                deletion.deletedCount += try await storeController.deleteObjects(of: try Self.periodSampleType(for: kind), predicate: predicate)
+            } catch let error as HKError where Self.isExpectedDeleteSkip(error) {
+                continue
+            } catch let error as HKError where error.code == .errorAuthorizationDenied {
+                deletion.refusedKinds.insert(kind)
+            } catch {
+                firstFailure = firstFailure ?? error
+            }
+        }
+        FernletAuditLog.log("hk.cycleMirror.deleted", context: [
+            "count": "\(deletion.deletedCount)",
+            "refused": "\(deletion.refusedKinds.count)",
+            "failed": firstFailure == nil ? "false" : "true"
+        ])
+        if let firstFailure { throw firstFailure }
+        return deletion
+    }
+
+    /// Deletes Fernlet-authored samples a Health-only Fernlet day shows (an earlier install's or the
+    /// other iPhone's copies). Filtered again to Fernlet's own source (HealthKit refuses another app's
+    /// objects, and one foreign sample would fail the batch); ungated, like every delete of Fernlet's
+    /// own data.
+    ///
+    /// - Returns: How many samples were deleted; 0 on a device without Health.
+    public func deleteFernletAuthored(_ samples: [HKSample]) async throws -> Int {
+        guard isHealthDataAvailable() else { return 0 }
+        let ownBundleID = Bundle.main.bundleIdentifier ?? ""
+        let own = samples.filter { !ownBundleID.isEmpty && $0.sourceRevision.source.bundleIdentifier == ownBundleID }
+        guard !own.isEmpty else { return 0 }
+        try await storeController.delete(own)
+        FernletAuditLog.log("hk.cycleCopies.deleted", context: ["count": "\(own.count)"])
+        return own.count
+    }
+
+    /// The Cycle page's Health half: every cycle sample in the range (``loadPeriodEvents(in:)``,
+    /// empty where nothing is readable).
+    public func loadHealthCycleSamples(in range: DateInterval) async throws -> [HKSample] {
+        try await loadPeriodEvents(in: range)
+    }
+
+    /// Fernlet's OWN cycle samples with no ``FernletCycleRecordMirror/recordIDKey`` — the pre-cutover
+    /// ones the legacy import adopts (§8.3) — all time, at most `limit`. Deliberately WITHOUT the
+    /// unrequested-type-reads-empty rule of ``loadPeriodEvents(in:)``: every error throws, so an empty
+    /// answer can only mean "none" and the import never finishes without its data (R2-F8).
+    public func loadLegacyFernletCycleSamples(limit: Int) async throws -> [HKSample] {
+        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
+        guard limit > 0 else { return [] }
+        let ownSamples = HKQuery.predicateForObjects(from: HKSource.default())
+        var legacy: [HKSample] = []
+        for type in try Self.periodSampleTypes() {  // R2: five types.
+            try Task.checkCancellation()
+            let page = try await samples(for: type, predicate: ownSamples, limit: max(0, limit - legacy.count))
+            legacy += page.filter { $0.metadata?[FernletCycleRecordMirror.recordIDKey] == nil }
+            guard legacy.count < limit else { break }
+        }
+        return Array(legacy.prefix(limit))
+    }
+
     /// Fetches every cycle-related sample (all five period sample types, whatever their source
-    /// app) in the range, sorted by start date — the raw feed `PeriodTrackerStore` folds into its
-    /// sealed cycle entries.
+    /// app) in the range, sorted by start date — the Cycle page's Health half, and Home's recent-flow
+    /// highlight.
     ///
     /// Empty, not an error, where nothing is READABLE: on a device without Health, and for a type
-    /// Fernlet was never asked to read (``isUnrequestedReadError(_:)``). While Fernlet's cycle
-    /// sharing is off it never asks for cycle access, and HealthKit fails a query on a type that was
-    /// never requested, so the whole load threw and `PeriodTrackerStore.loadEntries` cleared the
-    /// page: a note-and-symptoms entry, which saves without Health, was sealed and then never shown
-    /// (2026-09-30). A type the user DENIED already reads as empty (HealthKit hides read denial), so
-    /// an unrequested one now reads the same way. Every other failure still throws.
+    /// Fernlet was never asked to read (``isUnrequestedReadError(_:)``). A type the user DENIED
+    /// already reads as empty (HealthKit hides read denial), so an unrequested one reads the same
+    /// way. Every other failure still throws.
     public func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
         guard isHealthDataAvailable() else { return [] }
         let predicate = HKQuery.predicateForSamples(withStart: dateRange.start, end: dateRange.end, options: .strictStartDate)
@@ -2837,54 +2936,66 @@ extension HealthKitService: PeriodHealthKitServicing {
         }
     }
 
-    /// Pure sample-construction for one cycle event: emits a sample per populated field, all
-    /// sharing the external UUID and the `HKMetadataKeyMenstrualCycleStart` flag (forced false on
-    /// the intermenstrual-bleeding sample — spotting never starts a cycle).
-    nonisolated public static func periodSamples(for event: UserLoggedCycleEvent, externalUUID: UUID) throws -> [HKSample] {
-        let start = event.date
-        let end = max(event.date.addingTimeInterval(60), event.date)
+    /// THE cycle sample builder: one sample per clinical field the record sets, all from the record's
+    /// time, each stamped with the record id as `HKMetadataKeyExternalUUID` AND
+    /// ``FernletCycleRecordMirror/recordIDKey`` (so the id alone identifies Fernlet's copy, §5.1), and
+    /// the `HKMetadataKeyMenstrualCycleStart` flag (forced false on the intermenstrual-bleeding sample —
+    /// spotting never starts a cycle). The temperature goes in the unit it was entered in. A record
+    /// whose clinical block is unknown or empty builds nothing.
+    nonisolated public static func periodSamples(for record: CycleRecord) throws -> [HKSample] {
+        guard let clinical = record.clinical else { return [] }
+        let start = record.loggedAt
+        let end = start.addingTimeInterval(60)
         var metadata: [String: Any] = [
-            HKMetadataKeyExternalUUID: externalUUID.uuidString,
-            HKMetadataKeyMenstrualCycleStart: event.isCycleStart
+            HKMetadataKeyExternalUUID: record.id.uuidString,
+            FernletCycleRecordMirror.recordIDKey: record.id.uuidString,
+            HKMetadataKeyMenstrualCycleStart: clinical.isCycleStart
         ]
         var samples: [HKSample] = []
-
-        if let flowLevel = event.flowLevel {
+        if let flowLevel = clinical.flowLevel {
             samples.append(HKCategorySample(type: try categoryType(.menstrualFlow), value: flowLevel.hkValue, start: start, end: end, metadata: metadata))
         }
-
-        if let temperature = event.basalBodyTemperature {
-            let unit: HKUnit = event.temperatureUnit == .fahrenheit ? .degreeFahrenheit() : .degreeCelsius()
+        if let temperature = clinical.basalBodyTemperature {
+            let unit: HKUnit = clinical.temperatureUnit == .fahrenheit ? .degreeFahrenheit() : .degreeCelsius()
             samples.append(HKQuantitySample(type: try quantityType(.basalBodyTemperature), quantity: HKQuantity(unit: unit, doubleValue: temperature), start: start, end: end, metadata: metadata))
         }
-        if let mucus = event.cervicalMucusQuality {
+        if let mucus = clinical.cervicalMucusQuality {
             samples.append(HKCategorySample(type: try categoryType(.cervicalMucusQuality), value: mucus.hkValue, start: start, end: end, metadata: metadata))
         }
-        if let ovulation = event.ovulationTestResult {
+        if let ovulation = clinical.ovulationTestResult {
             samples.append(HKCategorySample(type: try categoryType(.ovulationTestResult), value: ovulation.hkValue, start: start, end: end, metadata: metadata))
         }
-        if event.hasIntermenstrualBleeding {
+        if clinical.hasIntermenstrualBleeding {
             metadata[HKMetadataKeyMenstrualCycleStart] = false
             samples.append(HKCategorySample(type: try categoryType(.intermenstrualBleeding), value: HKCategoryValue.notApplicable.rawValue, start: start, end: end, metadata: metadata))
         }
         return samples
     }
 
-    /// The five cycle-tracking sample types the period seam reads and writes.
+    /// The five cycle-tracking sample types the period seam reads and writes, in
+    /// `CycleMirrorSampleKind` order.
     nonisolated static func periodSampleTypes() throws -> [HKSampleType] {
-        [
-            try categoryType(.menstrualFlow),
-            try quantityType(.basalBodyTemperature),
-            try categoryType(.cervicalMucusQuality),
-            try categoryType(.ovulationTestResult),
-            try categoryType(.intermenstrualBleeding)
-        ]
+        try CycleMirrorSampleKind.allCases.map(periodSampleType(for:))
     }
 
-    /// One-shot unsorted sample fetch for any sample type (period seam helper).
-    private func samples(for type: HKSampleType, predicate: NSPredicate?) async throws -> [HKSample] {
+    /// The Apple Health sample type one mirror kind is — the one mapping between the store's
+    /// `CycleMirrorSampleKind` and HealthKit, which ``periodSamples(for:)`` writes by
+    /// (`HealthKitWriteGateTests` pins the two against each other).
+    nonisolated public static func periodSampleType(for kind: CycleMirrorSampleKind) throws -> HKSampleType {
+        switch kind {
+        case .menstrualFlow: return try categoryType(.menstrualFlow)
+        case .basalBodyTemperature: return try quantityType(.basalBodyTemperature)
+        case .cervicalMucusQuality: return try categoryType(.cervicalMucusQuality)
+        case .ovulationTestResult: return try categoryType(.ovulationTestResult)
+        case .intermenstrualBleeding: return try categoryType(.intermenstrualBleeding)
+        }
+    }
+
+    /// One-shot unsorted sample fetch for any sample type (period seam helper). `limit` is HealthKit's
+    /// own: `HKObjectQueryNoLimit` (0) reads everything.
+    private func samples(for type: HKSampleType, predicate: NSPredicate?, limit: Int = HKObjectQueryNoLimit) async throws -> [HKSample] {
         try await executeOneShot { completion in
-            HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+            HKSampleQuery(sampleType: type, predicate: predicate, limit: limit, sortDescriptors: nil) { _, samples, error in
                 if let error { completion(.failure(error)) } else { completion(.success(samples ?? [])) }
             }
         }

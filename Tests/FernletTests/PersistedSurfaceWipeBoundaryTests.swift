@@ -221,6 +221,15 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.recentActivityTypes": .cleared(token: "RecentActivityTypeMemory.clearAll"),
         "fernlet.recipeWebImageAttempts.v1": .cleared(token: "RecipeWebImageAttemptMemory.clearAll"),
         "fernlet.sealedBackup.generation.*": .cleared(token: "generationStore.reset"),
+        // The period backup's observed foreign head (Sealed backup v2 design 2026-09-30, §4.3, §9):
+        // the set it names is deleted by the same leg.
+        "fernlet.sealedBackup.periodObservedHead": .cleared(token: "sealedBackupBookkeeping.clearObservedHeadsForWipe"),
+        // The intimate-log backup's observed foreign head (design 2026-09-30, §4.3, §9, unit B2): the
+        // set it names is deleted by the same leg.
+        "fernlet.sealedBackup.intimacyObservedHead": .cleared(token: "sealedBackupBookkeeping.clearObservedHeadsForWipe"),
+        // The journal backup's observed foreign head (design 2026-09-30, §4.3, §9, unit B3): the set it
+        // names is deleted by the same leg.
+        "fernlet.sealedBackup.journalObservedHead": .cleared(token: "sealedBackupBookkeeping.clearObservedHeadsForWipe"),
         "fernlet.sealedPhoto.generation.*": .cleared(token: "generationStore.reset"),
         "fernlet.sealedPhoto.restoreRepairIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
         "fernlet.sealedPhoto.uploadedIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
@@ -307,6 +316,45 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "fernlet.intent.pendingSheet": .kept(
             reason: "A self-clearing Siri/Shortcuts hand-off token naming a SCREEN, never content. `consume()` removes it on read whether or not it is honored, and anything older than 120 seconds is discarded."
+        ),
+        "fernlet.cycleRecord.legacyImport.narratives": .kept(
+            reason: "The legacy cycle import's narrative-half marker (period-data design 2026-09-30, §8.2). The wipe SETS it to done rather than clearing it: a pending half would only run again over a store the wipe emptied. Absent or 'done', no content."
+        ),
+        "fernlet.cycleRecord.legacyImport.samples": .kept(
+            reason: "The legacy cycle import's sample-half marker (§8.3). The wipe SETS it to done rather than clearing it: a pending sample half would re-import, at the next Private open, Fernlet's own Apple Health copies the user chose to keep while deleting their Fernlet data. Absent or 'done', no content."
+        ),
+        "fernlet.sealedBackup.periodAcceptedHead": .kept(
+            reason: "The period backup's accepted head (Sealed backup v2 design 2026-09-30, §4.3, §9, review R2-F11): two install tags, a counter and a salt prefix, no content. Kept so a set that survives a failed cloud delete is this install's own to the next export, which overwrites it and finishes the wipe, instead of being named another iPhone's and offered back."
+        ),
+        "fernlet.sealedBackup.periodInFlight": .kept(
+            reason: "The period backup's in-flight generation (Sealed backup v2, review B1-C-B1-2): an install tag and the highest generation this install's commits set out to save, no content. Kept because it only states what this install wrote, which the wipe does not make untrue: a set of this install's that survives a failed cloud delete stays its own to overwrite (finishing the wipe) instead of being merged back as a newer set."
+        ),
+        "fernlet.sealedBackup.intimacyAcceptedHead": .kept(
+            reason: "The intimate-log backup's accepted head (Sealed backup v2 design 2026-09-30, §4.3, §9, review R2-F11, unit B2): two install tags, a counter and a salt prefix, no content. Kept so a set that survives a failed cloud delete is this install's own to the next export, which overwrites it and finishes the wipe, instead of being named another iPhone's and offered back."
+        ),
+        "fernlet.sealedBackup.intimacyInFlight": .kept(
+            reason: "The intimate-log backup's in-flight generation (Sealed backup v2, unit B2): an install tag and the highest generation this install's commits set out to save, no content. Kept because it only states what this install wrote, which the wipe does not make untrue: a set of this install's that survives a failed cloud delete stays its own to overwrite (finishing the wipe) instead of being merged back as a newer set."
+        ),
+        "fernlet.sealedBackup.journalAcceptedHead": .kept(
+            reason: "The journal backup's accepted head (Sealed backup v2 design 2026-09-30, §4.3, §9, review R2-F11, unit B3): two install tags, a counter and a salt prefix, no content. Kept so a journal set that survives a failed cloud delete is this install's own to the next export, which overwrites it and finishes the wipe, instead of being named another iPhone's and offered back."
+        ),
+        "fernlet.sealedBackup.journalInFlight": .kept(
+            reason: "The journal backup's in-flight generation (Sealed backup v2, unit B3): an install tag and the highest generation this install's commits set out to save, no content. Kept because it only states what this install wrote, which the wipe does not make untrue: a journal set of this install's that survives a failed cloud delete stays its own to overwrite (finishing the wipe) instead of being merged back as a newer set."
+        ),
+        "fernlet.journalNarrative.restoreResolved": .kept(
+            reason: "The journal backup's restore marker (Sealed backup v2 design 2026-09-30, §4.3, unit B3): one bit, 'this install has finished pulling the journal backup'. It must outlive the wipe, or a journal chunk set that survived a failed cloud delete would merge itself back at the next Private visit — the resurrection the marker exists to stop."
+        ),
+        "fernlet.intimacyLog.restoreResolved": .kept(
+            reason: "The intimate-log backup's restore marker (Sealed backup v2 design 2026-09-30, §4.3, unit B2): one bit, 'this install has finished pulling the intimate-log backup'. It must outlive the wipe, or an intimacy chunk set that survived a failed cloud delete would merge itself back at the next Private visit — the resurrection the marker exists to stop."
+        ),
+        "fernlet.cycleRecord.periodRestoreResolved": .kept(
+            reason: "The period backup's restore marker (period-data design 2026-09-30, §5.3): one bit, 'this install has finished pulling the period backup'. It must outlive the wipe, or a period chunk set that survived a failed cloud delete would merge itself back at the next Cycle settle — the resurrection the marker exists to stop."
+        ),
+        "fernlet.sealedBackup.restoreAwaitsOwner": .kept(
+            reason: "The sealed-backup restore owner hold (period-data design 2026-09-30, §5.3, Q14): one bit set by the app-lock reset funnel, holding every AMBIENT restore until the device owner asks. It must outlive the wipe, or a phone whose lock was reset and whose data was then wiped would start restoring the cloud history on its own."
+        ),
+        "fernlet.sealedBackup.preResetCopies": .kept(
+            reason: "The owner hold's per-payload record (review N-1): the payload tokens whose backup was on at the app-lock reset, i.e. whose pre-reset iCloud copy the hold keeps from being replaced by a re-upload. The wipe's own delete leg removes each payload whose chunk set it actually deletes; one whose delete FAILED must stay recorded, or the post-wipe store could be uploaded over a copy the user never saw deleted."
         ),
         "fernlet.intimacyLog.everStored": .kept(
             reason: "A sealed-store divergence latch: one bit meaning 'this install held intimacy rows'. It must outlive the wipe, or a sealed-backup chunk that survived a failed delete could restore itself onto the device."
@@ -458,6 +506,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "hasSealedBackup",
         // Records the deferred-reupload flag for one sealed payload type.
         "recordSealedBackupReuploadDeferred",
+        // Drops the in-memory Sealed backup v2 statuses (an observable dictionary; no persisted
+        // surface) — what they named is deleted by the same leg (design 2026-09-30 §9).
+        "recordSealedBackupV2StatusesCleared",
         // P7 item 3: re-runs the proximity run policy from the last scene facts — radios and the
         // routed access gate only; reads the lock state and duress flag, writes no persisted surface.
         // The wipe funnel calls it at leg 0 (the raise) and after the lower, so every radio stands

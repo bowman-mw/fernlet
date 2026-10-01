@@ -413,9 +413,10 @@ private final class MockHealthKitStoreController: HealthKitStoreControlling {
     /// unexpected-failure branches of `deleteAllAuthoredSamples`.
     var deleteObjectsError: Error?
 
-    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int {
         if let deleteObjectsError { throw deleteObjectsError }
         deletedObjectTypeIdentifiers.append(type.identifier)
+        return 0
     }
 
     func disableBackgroundDelivery(for type: HKObjectType) async throws {

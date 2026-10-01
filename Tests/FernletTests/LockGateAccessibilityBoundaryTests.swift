@@ -89,6 +89,82 @@ import Testing
                 "overlayIsUp must delegate to the tested pure helper rather than restate its condition.")
     }
 
+    /// Design invariant I20 (period-data design 2026-09-30, §10.1): the no-passcode Private tab's
+    /// gate is ONE button and honest words — no credential field anywhere on it, nothing that fires
+    /// on its own, and no sentence calling the no-passcode state locked, protected or secured (the
+    /// button is friction, not security). A grep-wall for the reason this file gives: every one of
+    /// these fails silently on screen.
+    @Test func theTapGateIsOneButtonWithNoCredentialFieldAndHonestWords() throws {
+        let tapGate = try Self.source("FernletKit/Sources/FernletLockUI/FernletTapGate.swift")
+        let controls = try #require(
+            Self.slice(tapGate, from: "// BEGIN tap-gate controls", to: "// END tap-gate controls"),
+            "the tap gate's controls region markers are gone — the one-button pin has nothing to read"
+        )
+        let buttonCount = controls.components(separatedBy: "Button(").count - 1
+        #expect(buttonCount == 1, "the tap gate must offer exactly one interactive element; found \(buttonCount) Button(s)")
+        for control in ["Toggle(", "Link(", "Menu(", ".onTapGesture", "NavigationLink("] {
+            #expect(!controls.contains(control), "the tap gate's controls gained \(control) beside its one button")
+        }
+        for field in ["SecureField", "TextField", "FernletNumericPad", "passcode:"] {
+            #expect(!tapGate.contains(field), "the no-passcode gate must carry no credential entry (\(field))")
+        }
+        #expect(!tapGate.contains(".onAppear") && !tapGate.contains(".task {"),
+                "nothing on the tap gate may run on appear; opening is the user's tap alone")
+        #expect(controls.contains(".accessibilityIdentifier(\"lock.tapGate.unlock\")"))
+        #expect(controls.contains(".fernletTapTarget()"), "the Unlock button keeps its 44pt target")
+
+        let tapCopy = try #require(Self.slice(tapGate, from: "enum Tap {", to: "enum Unopenable {"))
+        let defaults = Self.defaultValues(in: tapCopy)
+        #expect(defaults.count >= 6, "the tap copy scan found only \(defaults.count) strings — it stopped reading")
+        // Whole words: "your unlocked iPhone" is a fact about the phone, not a claim about the page.
+        let claim = try Regex(#"\b(locked|protected|protects|secured|secure)\b"#).ignoresCase()
+        for text in defaults {
+            #expect(text.firstMatch(of: claim) == nil, "tap-gate copy calls the no-passcode page protected: \(text)")
+        }
+
+        let gate = try Self.source("FernletKit/Sources/FernletLockUI/FernletLockGate.swift")
+        #expect(gate.contains("FernletTapGateOverlay(opener:"),
+                "the tap gate must be hosted in the gate's modal not-configured slot")
+    }
+
+    /// Review C-U2-R5: the no-passcode screen and its "can't be opened" card are shown to whoever
+    /// holds the phone, so the copy used while a sensitive feature is HIDDEN names no kind — the tap
+    /// screen's no-cycle line, the "other private entries" count and the held-entries line (which can
+    /// show while cycle tracking is hidden) — and the card really does print the neutral count.
+    @Test func theNoPasscodeCopyForHiddenKindsNamesNoKind() throws {
+        let tapGate = try Self.source("FernletKit/Sources/FernletLockUI/FernletTapGate.swift")
+        let kinds = try Regex(#"\b(cycle|period|intimacy|intimate|sex|sexual)\b"#).ignoresCase()
+        for key in ["lock.tapGate.body.noCycle", "lock.unopenable.count.other", "lock.unopenable.heldEntries"] {
+            let text = try #require(Self.defaultValue(for: key, in: tapGate), "\(key) is gone — this wall reads nothing")
+            #expect(text.firstMatch(of: kinds) == nil, "\(key) names a kind that may be hidden: \(text)")
+        }
+        #expect(tapGate.contains("GateCopy.Unopenable.otherCount(counts.otherEntries)"),
+                "the card must print hidden kinds' rows as the neutral count")
+        #expect(tapGate.contains("GateCopy.Tap.body(namingCycle: opener.tapGateNamesCycleEntries)"),
+                "the tap screen's line must follow period visibility")
+    }
+
+    /// The `defaultValue` of the localized string keyed `key` in `text`, or nil.
+    static func defaultValue(for key: String, in text: String) -> String? {
+        guard let keyRange = text.range(of: "\"\(key)\"") else { return nil }
+        let rest = text[keyRange.upperBound...]
+        guard let start = rest.range(of: "defaultValue: \"") else { return nil }
+        return rest[start.upperBound...].components(separatedBy: "\"").first
+    }
+
+    /// The text between two markers, or nil when either is missing.
+    private static func slice(_ text: String, from start: String, to end: String) -> String? {
+        guard let lower = text.range(of: start), let upper = text.range(of: end, range: lower.upperBound..<text.endIndex) else {
+            return nil
+        }
+        return String(text[lower.upperBound..<upper.lowerBound])
+    }
+
+    /// Every `defaultValue: "…"` literal in `text`.
+    private static func defaultValues(in text: String) -> [String] {
+        text.components(separatedBy: "defaultValue: \"").dropFirst().compactMap { $0.components(separatedBy: "\"").first }
+    }
+
     /// Pins the audited pad shape of every file that renders the shared keypad.
     ///
     /// **The guarded invariant, precisely.** Every screen that renders a ``FernletNumericPad`` puts

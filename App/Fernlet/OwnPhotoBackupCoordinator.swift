@@ -42,8 +42,8 @@ protocol OwnPhotoBackupContext: AnyObject {
 ///   (``SealedPhotoCorpus``), not three consent questions. They are all "your own photos".
 /// - **Per-corpus no-clobber gate, in two halves.** Own-photo ownership is scattered
 ///   (`Meal.photoID`, the recipe id, the progress index), so "is this device empty?" cannot be a
-///   whole-device check — it is a per-corpus check, the same shape as the sealed narratives'
-///   `isEmptyStoreForRestore`. File presence (`isEmptyForRestore()`) is the first half; **openable**
+///   whole-device check — it is a per-corpus check, the shape the sealed narratives' (since retired)
+///   empty-store restore gate had. File presence (`isEmptyForRestore()`) is the first half; **openable**
 ///   presence (`holdsOnlyUnopenableFiles()`) is the second, and it is what makes the route work in
 ///   the scenario it exists for. Once the own-photos key is device-bound, a device-backup restore
 ///   onto a NEW phone brings the sealed photo FILES back but not the key, so every one of them is
@@ -663,7 +663,7 @@ final class OwnPhotoBackupCoordinator {
             if restored.examined { result.examined = true }
             observeManifestMinimum(restored.observedMinimum, corpus: corpus, into: &result)
             switch result.outcome {
-            case .notRecognized, .rolledBack, .deferredKeyNotSynced, .deferredTransient, .deferredLocked:
+            case .notRecognized, .rolledBack, .needsNewerFernlet, .deferredKeyNotSynced, .deferredTransient, .deferredLocked:
                 // Nothing here is fixable by uploading, and a corpus we could not fully restore must
                 // not have its (possibly larger) cloud set rewritten from this device's partial one.
                 // Leaving the cloud copy alone is the whole point of a retryable restore failure.

@@ -120,18 +120,23 @@ enum DeleteAllDataConfirmation {
         // says-more-than-it-does gap this dialog exists to close. This enumeration is the invariant backstop
         // (there's no test coupling this text to the funnel) — keep it in step with what step 4/4b/4c/4d delete.
         //
-        // Step 4d (2026-09-30) deletes the session photos nobody has chosen yet — held apart from the kept
-        // wall until the person's review — so they are named here. A NEW key rather than a reworded
-        // `deleteAll.scope.base`: the sentence now promises more, and a translation of the old one must not
-        // be shown for it.
+        // Two 2026-09-30 rounds changed this sentence's meaning, so it carries both under one new key:
+        // - "cycle history", not "cycle notes" (period-data design §9.11; review L-U4-2): since the
+        //   cutover every period entry — flow, temperature, mucus, ovulation test, first-day and spotting
+        //   flags with the note and symptoms — is one sealed record in Fernlet, and the wipe deletes them
+        //   all. For a user who never copied cycle data to Apple Health that is the ONLY copy.
+        // - Step 4d deletes the session photos nobody has chosen yet (held apart from the kept wall until
+        //   the person's review), so they are named here.
+        // `deleteAll.scope.base` is retired; `.v2` carries both changes (the session-photo round's interim
+        // `deleteAll.scope.withUnchosenSessionPhotos` key folded into it when the two rounds merged).
         var scope = String(
-            localized: "deleteAll.scope.withUnchosenSessionPhotos",
+            localized: "deleteAll.scope.base.v2",
             defaultValue: """
                 This deletes your logged days, meals and their photos, gym progress photos, journal \
-                entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, \
+                entries, cycle history, intimate logs, Worry Box notes, saved recipes and their photos, \
                 photos from a Friends session you haven't chosen yet, custom items and coins.
                 """,
-            comment: "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'. 'Photos from a Friends session you haven't chosen yet' are the in-person session photos still waiting in the keep-or-delete review; photos already kept stay (see the kept paragraph)."
+            comment: "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'. 'Cycle history' is every period entry saved in Fernlet (flow, temperature and the other fields, plus notes and symptoms), not only the notes. 'Photos from a Friends session you haven't chosen yet' are the in-person session photos still waiting in the keep-or-delete review; photos already kept stay (see the kept paragraph)."
         )
         // Two INDEPENDENT claims, not one. The day-blob copy in iCloud (a live sync copy or one kept after
         // sync was turned off) and any sealed encrypted backups are removed by different legs of the

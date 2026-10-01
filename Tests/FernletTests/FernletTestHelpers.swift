@@ -1,4 +1,5 @@
 import XCTest
+import CryptoKit
 import LocalPersistence
 import FernletDomainModel
 import PrivateMemoryStore
@@ -340,6 +341,14 @@ func makeTestStoreWithRepositories(
     // The recipe editor's "grams in one" memory (F4b) is a defaults SUITE too; nothing reads it during
     // init, so a fresh suite set here keeps every test store off `.standard`.
     store.recipePortionGramsDefaults = uniqueRecipePortionGramsDefaults()
+    // The Sealed backup v2 bookkeeping (restore markers, accepted and observed heads, design
+    // 2026-09-30 §4.3) lives in `.standard` in production, which is process-global under the test
+    // runner: a THROWAWAY suite, and a seed that reads "fresh install" instead of the shared on-device
+    // narrative store's latch.
+    store.sealedBackupBookkeeping = SealedBackupBookkeeping(
+        defaults: UserDefaults(suiteName: "fernlet.tests.periodLedger.\(UUID().uuidString)") ?? .standard,
+        legacyLatch: { _ in false }
+    )
     return (store, repository, journalNarrativeRepository)
 }
 
@@ -423,5 +432,25 @@ extension FernletDay {
     /// A minimal day for testing with a known date key.
     static func stub(dateKey: String = "2026-05-19") -> FernletDay {
         FernletDay(date: dateKey)
+    }
+}
+
+extension SymmetricKey {
+    /// A fixed Private-tab content key for journal tests. Journals open only under the hub key since
+    /// the no-passcode Private tab (period-data design 2026-09-30, §9.17) retired the device-key
+    /// "no lock" activation, so a test that needs hydrated journal text opens them under this key —
+    /// one fixed value, so a second store over the same sealed repository (a "relaunch") reads what
+    /// the first wrote.
+    static let journalTestKey = SymmetricKey(data: Data(repeating: 0x4A, count: 32))
+}
+
+extension FernletStore {
+    /// Simulates a Private-tab session for the sealed-backup tests: journals opened under `key`, and
+    /// the backups' hub-key provider (period-data design §9.10) answering the same key — the two
+    /// halves `ContentView` wires in production.
+    @MainActor
+    func openHubForTesting(contentKey key: SymmetricKey) {
+        hubContentKeyProvider = { key }
+        activateSealedJournals(contentKey: key)
     }
 }

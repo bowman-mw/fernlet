@@ -4,6 +4,7 @@ import LocalAuthentication
 import Security
 import Testing
 import FernletFoundation
+import PrivateStoreCore
 @testable import FernletLock
 
 /// Proves the Secure-Enclave wrap of the lock content key behaves correctly in BOTH custody
@@ -758,6 +759,11 @@ struct SecureEnclaveWrapTests {
     // credential. Ordering is the property: a throw (or an app kill) between the first write and a
     // trailing delete would leave a stale biometric bypass — holding the previous content key —
     // paired with the new passcode, i.e. a Face ID unlock that installs the wrong key.
+    //
+    // Driven through an ADOPTION (the key is in a device-custody row, so the bypass beside it is
+    // residue). With NO device row and no salt, the same bypass may be the last copy of a key that
+    // still opens every sealed entry, so a fresh setup refuses rather than deleting it (period-data
+    // design review L-U1-R1) — pinned first, below.
     @MainActor
     @Test func configureClearsStaleKeyCopiesBeforeWritingTheNewCredential() async throws {
         let service = "com.fernlet.lock.test.se.configorder.\(UUID().uuidString)"
@@ -770,17 +776,86 @@ struct SecureEnclaveWrapTests {
                                   service: service) == errSecSuccess)
         #expect(KeychainItem.store(Data([1]), for: .biometricEnabledFlag, service: service) == errSecSuccess)
 
-        // A configure that dies at its very FIRST write.
-        let failing = makeService(keychainService: service, refusingWritesFor: [.salt])
+        // No device row: a fresh key would destroy the bypass's copy, so setup refuses and keeps it.
+        do {
+            try await makeService(keychainService: service).configure(credential: .pin6("414243"), grantingScope: .privateHub)
+            Issue.record("a fresh setup minted over a surviving bypass copy of a key")
+        } catch FernletLockError.deviceCustodyInconsistent { }
+        #expect(KeychainItem.load(for: .biometricBypass, service: service) != nil, "a refused setup must delete nothing")
+
+        // The device row holds the key: an adoption that dies at its very FIRST write — the
+        // verifier, since the mint writes the salt LAST (period-data design §4.3).
+        #expect(KeychainItem.store(Data("FDR1".utf8) + Data(repeating: 0x22, count: 32), for: .deviceContentKey,
+                                  service: service) == errSecSuccess)
+        let failing = FernletLockService(
+            keychainService: service,
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+            narrativeBufferScope: uniqueNarrativeBufferScope(),
+            keychainStore: { data, key, service in
+                key == .verifier ? errSecSuccess : KeychainItem.store(data, for: key, service: service)
+            },
+            deviceOwnerVerifier: ScriptedDeviceOwnerVerifier(answer: .verified),
+            privatePersistenceController: PrivatePersistenceController(inMemory: true)
+        )
         do {
             try await failing.configure(credential: .pin6("414243"), grantingScope: .privateHub)
-            Issue.record("configure succeeded although the salt write was refused")
+            Issue.record("configure succeeded although the verifier write was refused")
         } catch FernletLockError.keychainFailure { }
 
         #expect(KeychainItem.load(for: .biometricBypass, service: service) == nil,
                 "the stale bypass must already be gone when the first write is attempted")
         #expect(KeychainItem.load(for: .biometricEnabledFlag, service: service) == nil)
         #expect(KeychainItem.load(for: .salt, service: service) == nil)
+        #expect(KeychainItem.load(for: .deviceContentKey, service: service) != nil, "the key's home must survive the failed adoption")
+    }
+
+    // MARK: The salt-LAST mint with rollback (period-data design §4.3, review R1-F1): a setup whose
+    // write fails at ANY of its five rows leaves none of them behind — above all never a salt, which
+    // is what makes a state read as configured. The salt-first generation left `.locked` with no
+    // verifier here: a lock nobody could open and nobody could set up again.
+    @MainActor
+    @Test func aConfigureFailingAtAnyCredentialWriteRollsBackEveryRowItWrote() async throws {
+        let rows: [LockKeychainKey] = [.verifier, .kind, .scryptN, .wrappedContentKey, .salt]
+        for refused in rows {
+            let service = "com.fernlet.lock.test.se.saltlast.\(UUID().uuidString)"
+            defer {
+                KeychainItem.deleteAll(service: service)
+                _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            }
+            let failing = makeService(keychainService: service, refusingWritesFor: [refused])
+            do {
+                try await failing.configure(credential: .pin6("515253"), grantingScope: .privateHub)
+                Issue.record("configure succeeded although \(refused.rawValue) was refused")
+            } catch FernletLockError.keychainFailure { }
+            for row in rows {
+                #expect(KeychainItem.load(for: row, service: service) == nil,
+                        "refusing \(refused.rawValue) left \(row.rawValue) behind")
+            }
+            #expect(makeService(keychainService: service).state == .notConfigured,
+                    "refusing \(refused.rawValue): the next launch must be able to set up again")
+        }
+    }
+
+    // MARK: Create-only-on-absent (period-data design §4.2, review R1-F8): a key read that could not
+    // answer must never mint a SECOND enclave key under the same tag — the lookup returns one
+    // arbitrary match, so every blob sealed under the first key would read as `blobRejected`, a
+    // terminal loss produced by a transient.
+    @Test func theEnclaveKeyIsNeverMintedOverAnUnreadableRead() {
+        var mints = 0
+        let unreadable = SecureEnclaveContentKeyWrap.loadOrCreateKey(
+            service: "com.fernlet.lock.test.se.createonabsent",
+            readKey: { _ in .unreadable(errSecInteractionNotAllowed) },
+            create: { _ in mints += 1; return nil }
+        )
+        #expect(unreadable == nil)
+        #expect(mints == 0, "an unreadable key read minted a replacement")
+
+        _ = SecureEnclaveContentKeyWrap.loadOrCreateKey(
+            service: "com.fernlet.lock.test.se.createonabsent",
+            readKey: { _ in .absent },
+            create: { _ in mints += 1; return nil }
+        )
+        #expect(mints == 1, "a definitive absence is the one state that mints")
     }
 
     // MARK: Proves a partially applied re-key is rolled back. `changeCredential` writes five rows;

@@ -28,6 +28,7 @@ import Security
 import Testing
 import FernletCrypto
 import FernletFoundation
+import PrivateStoreCore
 import ProximityKit
 @testable import Fernlet
 @testable import FernletLock
@@ -1325,5 +1326,225 @@ struct DuressRecoveryIdentityRotationTests {
         )
         #expect(!coordinator.reconcileEnrollmentWithLocalIdentity())
         #expect(!fixture.service.hasRecoveryCustodian)
+    }
+}
+
+// MARK: - The recovery-lock beside the no-passcode device custody (period-data design 2026-09-30)
+
+/// Where the recovery-lock meets the device-custody row (unit 1): the response destroys the row —
+/// the one copy of the key that opens with NO credential — while keeping what recovery needs; a
+/// recovery-locked phone never opens by tap and never mints; and the salt-LAST mint keeps the
+/// recovery route through an interrupted re-establish.
+@MainActor
+@Suite(.serialized)
+struct DuressRecoveryDeviceCustodyTests {
+
+    /// A configured lock with a custodian enrolled and `.recoveryLock` armed.
+    private func armedFixture() async throws -> RecoveryFixture {
+        let fixture = try await RecoveryFixture()
+        try await fixture.enrollCustodian()
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        return fixture
+    }
+
+    /// A lingering device-custody row holding `key` (the adoption's leftover a failed retire leaves).
+    private func plantDeviceRow(_ key: Data, _ harness: LockTestHarness) {
+        #expect(KeychainItem.store(Data("FDR1".utf8) + key, for: .deviceContentKey, service: harness.serviceID) == errSecSuccess)
+    }
+
+    /// The recovery-lock destroys the device row too — a surviving one would open the "destroyed"
+    /// corpus with a tap — but, like the journal device keys, it KEEPS the pending buffer, which no
+    /// recovery blob could give back (design §4.3, §12).
+    @Test func aRecoveryLockDestroysTheDeviceRowAndKeepsTheBuffer() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        plantDeviceRow(fixture.contentKey, fixture.harness)
+        try fixture.service.bufferPendingNarrative(PendingNarrativePayload(
+            hkExternalUUID: UUID().uuidString, dateKey: "2026-09-30",
+            noteBytes: Data("logged while closed".utf8), symptomFlagsBytes: nil, customSymptomScalesBytes: nil
+        ))
+        fixture.service.lock(reason: .manual)
+
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+
+        #expect(recoveryRow(.deviceContentKey, fixture.harness) == nil, "the recovery-lock left a tap-openable key")
+        #expect(fixture.service.hasRecoveryCustodian)
+        #expect(!KeychainItem.loadAll(service: fixture.harness.narrativeBufferScope.keychainService).isEmpty,
+                "the recovery-lock must keep the buffer key")
+        #expect(FileManager.default.fileExists(
+            atPath: PendingNarrativeBuffer.fileURL(in: fixture.harness.narrativeBufferScope.directory).path))
+    }
+
+    /// A recovery-locked phone is a keyless decoy in this launch and a phone awaiting its custodian
+    /// in the next: the tap is refused in the first, and in the second the mint-safety proof refuses
+    /// to mint a key over the corpus the custodian is holding the old one for (invariant I8).
+    @Test func aRecoveryLockedPhoneNeverOpensByTapAndNeverMints() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        fixture.service.lock(reason: .manual)
+        fixture.service.refreshStateFromKeychain()
+        #expect(fixture.service.state == .notConfigured)
+        #expect(throws: FernletLockError.locked) {
+            try fixture.service.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        }
+
+        let nextLaunch = fixture.harness.makeService()
+        #expect(nextLaunch.isAwaitingCustodianRecovery)
+        #expect(throws: FernletLockError.deviceCustodyInconsistent) {
+            try nextLaunch.openWithoutPasscode(for: .privateHub, allowingMint: true)
+        }
+        #expect(recoveryRow(.deviceContentKey, fixture.harness) == nil, "a key was minted over a recovery-locked corpus")
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+    }
+
+    /// A recovery-locked phone's entries are sealed under the key its recovery device holds, so
+    /// they are RECOVERABLE — never "entries this iPhone can't open" (review N-U1-1). The read-only
+    /// check says so on both routes instead of `.noEarlierKeySurvives`, the answer the open
+    /// coordinator's removal card rests on; and a setup that did not acknowledge prior data mints
+    /// as it always has here (the enrollment kept, marked superseded) instead of refusing with
+    /// `priorSealedDataPending`, which would route the user to that card. Nothing is deleted, and
+    /// the blob still opens to the key the entries are sealed under.
+    @Test func aRecoveryLockedPhonesEntriesAreRecoverableNeverUnopenable() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        let store = PrivatePersistenceController(inMemory: true)
+        try DeviceCustodyFixture.plantSealedRow(in: store, sealedUnder: SymmetricKey(data: fixture.contentKey))
+        let nextLaunch = FernletLockService(
+            keychainService: fixture.harness.serviceID,
+            sealedContentKeyServices: [fixture.harness.sealedContentKeyServiceID],
+            mediaKeychainServices: [fixture.harness.mediaKeychainServiceID],
+            narrativeBufferScope: fixture.harness.narrativeBufferScope,
+            dateProvider: fixture.harness.clock,
+            uptimeProvider: fixture.harness.uptime,
+            cryptoProvider: fixture.harness.crypto,
+            privatePersistenceController: store
+        )
+        #expect(nextLaunch.isAwaitingCustodianRecovery, "precondition: recovery is owed")
+        #expect(try store.sealedRowCount() == 1, "precondition: an entry sealed under the recovered key")
+
+        for forPasscodeSetup in [false, true] {
+            #expect(try nextLaunch.checkFreshKeyMintIsSafe(forPasscodeSetup: forPasscodeSetup) == .earlierKeyHeldByRecoveryDevice,
+                    "the check called recoverable entries unopenable (setup: \(forPasscodeSetup))")
+        }
+        try await nextLaunch.configure(credential: .pin6("999999"), grantingScope: .privateHub, acknowledgedPriorData: false)
+
+        #expect(nextLaunch.state == .unlocked(scope: .privateHub))
+        #expect(nextLaunch.hasSupersededRecoveryBlob, "the setup must keep the enrollment, marked superseded")
+        #expect(try store.sealedRowCount() == 1, "an entry the recovery device can still open was removed")
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+    }
+
+    /// The mint writes the salt LAST, so a re-establish killed after its verifier write leaves
+    /// "custodian present, verifier present, salt absent". That must still read as AWAITING
+    /// recovery — the verifier-keyed reading called it "not awaiting", and the next setup then
+    /// deleted the only route back to the corpus.
+    @Test func anInterruptedReestablishKeepsTheRecoveryRoute() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        let recovered = try fixture.custodianOpensTheBlob()
+
+        let dying = FaultInjectingKeychain()
+        dying.dyingAfterStoring = .verifier
+        let interrupted = FernletLockService(
+            keychainService: fixture.harness.serviceID,
+            sealedContentKeyServices: [fixture.harness.sealedContentKeyServiceID],
+            mediaKeychainServices: [fixture.harness.mediaKeychainServiceID],
+            narrativeBufferScope: fixture.harness.narrativeBufferScope,
+            cryptoProvider: fixture.harness.crypto,
+            keychainStore: { data, key, service in dying.store(data, key, service) },
+            keychainDelete: { key, service in dying.delete(key, service) }
+        )
+        await #expect(throws: FernletLockError.self) {
+            try await interrupted.reestablishLocalUnlock(contentKey: recovered, credential: .pin6("222222"), grantingScope: .privateHub)
+        }
+        #expect(recoveryRow(.verifier, fixture.harness) != nil && recoveryRow(.salt, fixture.harness) == nil,
+                "precondition: killed between the verifier write and the salt write")
+
+        let nextLaunch = fixture.harness.makeService()
+        #expect(nextLaunch.state == .notConfigured)
+        #expect(nextLaunch.isAwaitingCustodianRecovery, "an interrupted re-establish must still read as awaiting recovery")
+        try await nextLaunch.configure(credential: .pin6("333333"), grantingScope: .privateHub)
+        #expect(nextLaunch.hasRecoveryCustodian, "a setup after the interrupted re-establish destroyed the recovery blob")
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+    }
+
+    /// A recovery-locked phone whose user set a new passcode before reaching their custodian holds a
+    /// SUPERSEDED recovery blob: the only route back to everything written before the lock fired.
+    /// Turning the passcode off would take the recovery device with it (Q8), so the removal refuses —
+    /// only after the passcode is proven (a wrong one is still just a mistype), with nothing written
+    /// — the blob still opens to the original key, and removing the recovery device stays the
+    /// user's own explicit step, after which the removal goes through (review L-U1-R2).
+    @Test func turningOffThePasscodeNeverTakesASupersededRecoveryBlob() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        let relaunched = fixture.harness.makeService()
+        try await relaunched.configure(credential: .pin6("999999"), grantingScope: .privateHub)
+        #expect(relaunched.hasSupersededRecoveryBlob, "precondition: a superseded enrollment")
+        let salt = try #require(recoveryRow(.salt, fixture.harness))
+
+        await #expect(throws: FernletLockError.invalidPasscode) {
+            try await relaunched.removeCredential(current: "000000")
+        }
+        await #expect(throws: FernletLockError.recoveryDeviceHoldsEarlierKey) {
+            try await relaunched.removeCredential(current: "999999")
+        }
+        #expect(recoveryRow(.salt, fixture.harness) == salt, "the refused removal changed the passcode lock")
+        #expect(recoveryRow(.deviceContentKey, fixture.harness) == nil, "the refused removal wrote a device row")
+        #expect(relaunched.hasSupersededRecoveryBlob, "the refused removal deleted the recovery set")
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+
+        try relaunched.removeRecoveryCustodian()
+        try await relaunched.removeCredential(current: "999999")
+        #expect(relaunched.state == .notConfigured)
+    }
+
+    /// The belt to that brace: a superseded recovery set found beside a live device row (the removal
+    /// above now refuses to produce one) is never swept by the tap. The key in hand from the device
+    /// row is not the key that blob protects, so "the key is safe" says nothing about it.
+    @Test func theTapSweepNeverDeletesASupersededRecoverySet() async throws {
+        let fixture = try await armedFixture()
+        defer { fixture.cleanup() }
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        let relaunched = fixture.harness.makeService()
+        try await relaunched.configure(credential: .pin6("999999"), grantingScope: .privateHub)
+        let interimKey = try #require(relaunched.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
+        // An interrupted removal's shape, planted: the device row holds the interim key, the salt is gone.
+        plantDeviceRow(interimKey, fixture.harness)
+        KeychainItem.delete(for: .salt, service: fixture.harness.serviceID)
+
+        let tapping = fixture.harness.makeService()
+        #expect(tapping.state == .notConfigured)
+        try tapping.openWithoutPasscode(for: .privateHub, allowingMint: false)
+        #expect(tapping.contentKey(for: .privateHub).map { $0.withUnsafeBytes { Data($0) } } == interimKey)
+        #expect(recoveryRow(.verifier, fixture.harness) == nil, "the passcode leftovers are still swept")
+        #expect(tapping.hasSupersededRecoveryBlob, "the tap's sweep deleted a superseded recovery set")
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+    }
+
+    /// A re-establish retires a leftover device row holding the SAME key once the new passcode
+    /// custody is proven, and never deletes one holding a different key.
+    @Test func reestablishingRetiresOnlyADeviceRowHoldingTheSameKey() async throws {
+        for sameKey in [true, false] {
+            let fixture = try await armedFixture()
+            defer { fixture.cleanup() }
+            fixture.service.lock(reason: .manual)
+            _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+            let recovered = try fixture.custodianOpensTheBlob()
+            plantDeviceRow(sameKey ? recovered : Data(repeating: 0x77, count: 32), fixture.harness)
+
+            try await fixture.service.reestablishLocalUnlock(contentKey: recovered, credential: .pin6("222222"), grantingScope: .privateHub)
+
+            #expect((recoveryRow(.deviceContentKey, fixture.harness) == nil) == sameKey,
+                    sameKey ? "the proven leftover row must be retired" : "a row holding another key must never be deleted")
+        }
     }
 }

@@ -81,6 +81,10 @@ struct PrivacyPolicyParityTests {
     ///   device and never saved, synced, shown to friends or exported (six of them reach the Home Screen
     ///   widget through the file it shares with the app, which Delete Everything removes);
     /// - `if you made it in parts` — a recipe made in parts carries the name of each part in a Messages card.
+    ///
+    /// The marker added 2026-09-30 (period-data design, §10.5) pins the correction of a sentence that
+    /// became false in all three copies at once: the journal, period-data and intimate-log backups
+    /// "require Fernlet's app lock". Since the no-passcode Private tab they work either way.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -103,7 +107,8 @@ struct PrivacyPolicyParityTests {
         "right after the age check",
         "how long is left",
         "never synced to iCloud, never shown to friends",
-        "if you made it in parts"
+        "if you made it in parts",
+        "work with or without a Fernlet passcode"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

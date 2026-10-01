@@ -239,11 +239,17 @@ private func bigEndianBytes(_ value: UInt64) -> Data {
 ///
 /// Composes ``SealedBackupCrypto`` with `CloudKitDataService`: ``reconcile(_:payloadType:enabled:)``
 /// handles single-record payloads (enable = seal + upload, disable = delete),
-/// ``reconcileChunked(payloadType:chunkCount:chunk:)`` pages large payloads through bounded chunks
-/// with the head record written last as the commit marker, and ``restoreChunks(payloadType:)``
-/// fetches and opens a complete set all-or-nothing. ``SealedBackupCoordinator`` owns the policy
-/// (visibility gates, no-clobber checks, escrow reconciliation) and is the only production caller;
-/// this class stays mechanism-only. Main-actor isolated, matching its `IdentityService` dependency.
+/// ``reconcileChunked(payloadType:chunkCount:chunk:)`` writes a v1 set in place (bounded chunks, the
+/// head record written last as the commit marker — what an earlier build left; no shipping payload
+/// writes one since the journal moved to v2, design 2026-09-30 unit B3), and
+/// ``restoreChunks(payloadType:)`` fetches and opens a complete v1 set all-or-nothing. The Sealed backup
+/// v2 primitives (``fetchHeadRecord(payloadType:)``, ``fetchSuffixRecords(payloadType:chunkCount:setTag:)``,
+/// ``sealChunk(_:payloadType:chunkIndex:chunkCount:generation:keySalt:)``, ``save(_:setTag:)``,
+/// ``pruneSets(payloadType:keepingSetTag:belowGeneration:)``) are single steps the
+/// ``SealedBackupV2Engine`` sequences, so it can re-check its gates between any two of them.
+/// ``SealedBackupCoordinator`` and the engine own the policy (visibility gates, no-clobber checks,
+/// escrow reconciliation, the order) and are the only production callers; this class stays
+/// mechanism-only. Main-actor isolated, matching its `IdentityService` dependency.
 @MainActor
 final class SealedBackupService {
     private let cloudDataService: CloudKitDataService
@@ -298,11 +304,24 @@ final class SealedBackupService {
     /// from a previously larger backup are then pruned. Each chunk's GCM AAD binds its index/count, so
     /// a mixed-generation set fails closed on restore. The whole set shares one generation counter and
     /// one per-generation HKDF salt (record format v2), both stamped on every chunk.
+    ///
+    /// No shipping payload writes through here any more (every live payload is on v2 since unit B3):
+    /// it is the v1 shape an earlier build wrote — each chunk sealed as it uploads, at fixed, unscoped
+    /// record names — which the tests use to leave such a set. The v2 engine seals its whole set in
+    /// memory first and writes set-scoped suffix chunks (design 2026-09-30, §5.2).
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload being written.
+    ///   - chunkCount: How many chunks (at least one is always written).
+    ///   - chunk: The plaintext for a chunk index.
+    /// - Returns: The generation the set was written under. Discardable: no caller records it; a
+    ///   failure is always a throw.
+    @discardableResult
     func reconcileChunked(
         payloadType: SealedBackupPayloadType,
         chunkCount: Int,
         chunk: (Int) throws -> Data
-    ) async throws {
+    ) async throws -> Int64 {
         let count = max(1, chunkCount)
         // ONE generation for the whole set, minted before the first write. Minting per chunk would
         // make every multi-chunk backup look mixed-generation and fail its own restore check.
@@ -330,7 +349,9 @@ final class SealedBackupService {
             keySalt: keySalt
         )
         try await cloudDataService.deleteSealedBackupChunks(payloadType: payloadType, withIndexAtLeast: count)
+        return generation
     }
+
 
     /// Seals one chunk and uploads it (shared by both `reconcileChunked` write phases).
     private func saveChunk(
@@ -359,7 +380,7 @@ final class SealedBackupService {
     /// **Never empty.** An empty salt would mean record format v1 at the seal seam, silently
     /// reintroducing the static derivation this hardening exists to remove (the versioned info string
     /// is the second line of defense, not the first). Every production write goes through here.
-    private static func mintKeySalt() -> Data {
+    static func mintKeySalt() -> Data {
         let salt = Data((0..<Self.keySaltByteCount).map { _ in UInt8.random(in: .min ... .max) })
         assert(salt.count == Self.keySaltByteCount)
         return salt
@@ -417,6 +438,86 @@ final class SealedBackupService {
         }
         generationStore.recordAccepted(generation, for: payloadType)
         return plaintexts
+    }
+
+    // MARK: - Sealed backup v2 primitives (design 2026-09-30, §4.2, §5)
+    //
+    // Mechanism only: `SealedBackupV2Engine` owns the order (gates, E1–E3, prepare then commit) and
+    // calls these one step at a time, so a gate can be re-checked between any two of them.
+
+    /// The head record (chunk 0) of a payload's set as CloudKit holds it — unopened — or nil when none.
+    func fetchHeadRecord(payloadType: SealedBackupPayloadType) async throws -> SealedBackupRecord? {
+        try await cloudDataService.sealedBackup(payloadType: payloadType)
+    }
+
+    /// The suffix chunks of the set a head names, unopened: a v2 set's scoped chunks when `setTag` is
+    /// given, a v1 set's unscoped ones otherwise (CloudKit checks contiguity, count and generation).
+    func fetchSuffixRecords(
+        payloadType: SealedBackupPayloadType,
+        chunkCount: Int,
+        setTag: String?
+    ) async throws -> [SealedBackupRecord] {
+        try await cloudDataService.sealedBackupSuffixChunks(payloadType: payloadType, chunkCount: chunkCount, setTag: setTag)
+    }
+
+    /// Opens one record under this device's escrow keys (no key is ever minted here).
+    func open(_ record: SealedBackupRecord) throws -> Data {
+        try SealedBackupCrypto.open(record, identityService: identityService)
+    }
+
+    /// Seals one v2 chunk in memory under this device's escrow key (nothing is uploaded).
+    func sealChunk(
+        _ plaintext: Data,
+        payloadType: SealedBackupPayloadType,
+        chunkIndex: Int,
+        chunkCount: Int,
+        generation: Int64,
+        keySalt: Data
+    ) throws -> SealedBackupRecord {
+        try SealedBackupCrypto.seal(
+            plaintext,
+            payloadType: payloadType,
+            identityService: identityService,
+            chunkIndex: chunkIndex,
+            chunkCount: chunkCount,
+            generation: generation,
+            keySalt: keySalt
+        )
+    }
+
+    /// Uploads one sealed chunk under its set-scoped name (the head under the bare name).
+    func save(_ record: SealedBackupRecord, setTag: String) async throws {
+        try await cloudDataService.saveSealedBackup(record, setTag: setTag)
+    }
+
+    /// Whether every suffix chunk of the v2 set `setTag` is in iCloud — checked by record name, with no
+    /// record body or asset downloaded and nothing decrypted: the commit's verify (review B1-C-B1-4).
+    func isSuffixPresent(payloadType: SealedBackupPayloadType, chunkCount: Int, setTag: String) async throws -> Bool {
+        try await cloudDataService.sealedBackupSuffixIsPresent(payloadType: payloadType, chunkCount: chunkCount, setTag: setTag)
+    }
+
+    /// Deletes the stale sets a committed set left behind (best-effort for the caller).
+    ///
+    /// - Returns: How many records were deleted.
+    func pruneSets(payloadType: SealedBackupPayloadType, keepingSetTag: String, belowGeneration: Int64) async throws -> Int {
+        try await cloudDataService.pruneSealedBackupSets(
+            payloadType: payloadType, keepingSetTag: keepingSetTag, belowGeneration: belowGeneration
+        )
+    }
+
+    /// This install's signing public key — bound into every record's AAD, device-only, so a v1 head
+    /// whose authenticated `signingPublicKey` equals it was written by this install (§5.5).
+    var localSigningPublicKey: Data { identityService.localSigningPublicKey }
+
+    /// The highest generation this device has committed or accepted for `payloadType` — the rollback
+    /// floor (§5.4). Raised only by a verified commit or an accepted restore.
+    func lastSeenGeneration(for payloadType: SealedBackupPayloadType) -> Int64 {
+        generationStore.lastSeen(for: payloadType)
+    }
+
+    /// Raises the rollback floor after a verified commit or an accepted restore (never lowers it).
+    func recordCommittedOrAccepted(_ generation: Int64, for payloadType: SealedBackupPayloadType) {
+        generationStore.recordAccepted(generation, for: payloadType)
     }
 }
 

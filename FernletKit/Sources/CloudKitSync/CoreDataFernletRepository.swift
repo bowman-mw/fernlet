@@ -72,6 +72,14 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// only the resident copy is refused), so the cache's memory use has a named ceiling instead of
     /// following the store, which is itself fed by CloudKit sync.
     private var cachedAllDays: [String: FernletDay]?
+    /// The day rows that would not decode in the read ``cachedAllDays`` was installed from — or nil
+    /// when that read did not account for every row (a failed fetch memoized as an empty history, a
+    /// row with no date key; review B3 fix rounds 1 and 2). A memo without them still serves
+    /// ``loadAllDays()`` as it always did, but is never served by ``loadAllDaysWithUnreadable()``, which
+    /// reads again instead. Patching the memo in place leaves this as it was (a day this iPhone then
+    /// rewrote stays named — naming a readable day only keeps more); every reset of the memo makes it
+    /// irrelevant until the next install.
+    private var cachedUnreadableDayKeys: Set<String>?
 
     /// Ceiling on the day-history memo — roughly twenty years of daily rows. Above it the memo is not
     /// installed (and the skip is audit-logged) rather than holding an unbounded decoded history.
@@ -481,8 +489,29 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// memoizing the result only once migration has completed and the store is readable.
     public func loadAllDays() -> [String: FernletDay] {
         if let cached = cachedAllDays { return cached }
+        return readAllDays().days
+    }
+
+    /// The entire day history like ``loadAllDays()``, naming the day rows that would not decode, and
+    /// not accounting for every row under read-only recovery (the blob's fetch or decode failed), after
+    /// a day-row fetch that failed, or with a row that has no date key (see ``DayHistoryRead``). A memo
+    /// installed from a read that did not account for every row is dropped and read again — a failed
+    /// fetch must not keep answering "no days" to the one caller that asked to be told.
+    public func loadAllDaysWithUnreadable() -> DayHistoryRead {
+        if let cached = cachedAllDays, let unreadable = cachedUnreadableDayKeys {
+            return DayHistoryRead(days: cached, unreadableDayKeys: unreadable, accountsForEveryRow: !isPersistenceBlocked)
+        }
+        cachedAllDays = nil
+        return readAllDays()
+    }
+
+    /// The uncached read behind ``loadAllDays()`` and ``loadAllDaysWithUnreadable()``: the rows (with
+    /// the ones that would not decode, and whether every one was accounted for), the blob-only days
+    /// overlaid, and the memo installed under the rules below, with its unreadable days.
+    private func readAllDays() -> DayHistoryRead {
         let database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))  // ensure decoded + migration attempted
-        var all = dayRecordRepository.loadAll()
+        let rows = dayRecordRepository.loadAllWithUnreadable()
+        var all = rows.days
         // Blob fallback (safety net for the not-fully-migrated state): if migration hasn't completed (a
         // failed batch leaves `daysMigratedToRows` false), a day may live ONLY in the blob with no row yet.
         // Overlay those blob-only days so history doesn't read short — mirroring loadDay/snapshot(from:).
@@ -499,6 +528,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         if cachedDatabase?.daysMigratedToRows == true, !isPersistenceBlocked {
             if all.count <= Self.maxMemoizedDayRows {
                 cachedAllDays = all
+                cachedUnreadableDayKeys = rows.accountsForEveryRow ? rows.unreadableDayKeys : nil
             } else {
                 FernletAuditLog.log("coredata.dayMemo.skipped", context: [
                     "days": "\(all.count)",
@@ -506,7 +536,11 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
                 ])
             }
         }
-        return all
+        return DayHistoryRead(
+            days: all,
+            unreadableDayKeys: rows.unreadableDayKeys,
+            accountsForEveryRow: rows.accountsForEveryRow && !isPersistenceBlocked
+        )
     }
 
     /// Reads the Tier-2 memory records from the device-local sidecar — never the mirrored blob, which

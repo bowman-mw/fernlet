@@ -355,8 +355,9 @@ private final class MockHKStoreController: HealthKitStoreControlling {
     func authorizationRequestStatus(toShare: Set<HKSampleType>, read: Set<HKObjectType>) async -> HKAuthorizationRequestStatus { .unknown }
     func delete(_ samples: [HKSample]) async throws { deleteCallCount += 1 }
     var deletedObjectTypeIdentifiers: [String] = []
-    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int {
         deletedObjectTypeIdentifiers.append(type.identifier)
+        return 0
     }
     func disableBackgroundDelivery(for type: HKObjectType) async throws {
         disabledBackgroundDeliveryIdentifiers.append(type.identifier)

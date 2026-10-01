@@ -17,6 +17,11 @@ import HealthKitGateway
 /// Never turns the MASTER switch on: every caller here asks only while Fernlet's Health is already
 /// on (the system prompt is master-gated), and a user who switched Health off is not second-guessed.
 /// The first-workout offer, which is allowed to, is `WorkoutHealthAccessOffer`.
+///
+/// Since the cycle cutover (period-data design 2026-09-30, owner question Q4, default "remove it")
+/// the period sheet and the Cycle page no longer ask: every cycle entry saves in Fernlet without
+/// Health, and cycle sharing is turned on only in Settings › Health. ``requestInContext(_:source:authorization:preferences:)``
+/// stays — with its tests — so reinstating the ask, if the owner overrides Q4, is one call.
 @MainActor
 enum HealthAccessGrant {
     /// Flips `capability`'s Fernlet switch on, presents the prompt through `authorization`, and

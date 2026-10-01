@@ -132,6 +132,7 @@ on the reasoning.
 | `worryNarrativeLegacyV1` | `worry-box` | `ColumnCrypto`, `WorryNarrativeRepository` |
 | `menstrualNarrativeLegacyV1` | `menstrual-narrative` | `ColumnCrypto`, `MenstrualNarrativeRepository` |
 | `intimacyLogLegacyV1` | `intimacy-log` | `ColumnCrypto`, `IntimacyLogRepository` |
+| `cycleRecordV1` | `fernlet.cycle-record.v1` | `ColumnCrypto`, `CycleRecordRepository` (the sealed cycle record's one blob column — period-data design 2026-09-30, §5.2) |
 
 #### HMAC
 
@@ -180,6 +181,7 @@ on the reasoning.
 | `meshRecipientReceiptIDV1` | `fernlet.mesh.recipient-receipt-id.hash.v1` | `MeshRecipientReceipt` (the derived dedup id — `(itemID, origin, recipient)`, excluding both the hedged signature and `receivedAt`; ONE id per `(recipient, item)`, which is the wire-level statement that a recipient receipt is whole-item and never per chunk) |
 | `recoveryContentKeyV1` | `fernlet.lock.recovery.contentkey.v1` | `FernletLockService` |
 | `moderationBanReporterTagV1` | `fernlet.moderation.ban-evidence.reporter-tag.hash.v1` | `ModerationBanStore` (the salted reporter tag a store ban's evidence records instead of a key — 2026-09-24, tracker §3.5) |
+| `sealedBackupWriterTagV1` | `fernlet.sealed-backup.writer-tag.v1` | The Sealed backup v2 writer tag (period-data design §9.10; journal and intimacy Sealed backup v2 design 2026-09-30 §5.1): the first 16 bytes of `SHA256(tag ‖ DeviceBindingID)`, hex, carried inside every chunk of a v2 set's escrow-sealed plaintext (`SealedBackupWriterTag`, `App/Fernlet/SealedBackupV2Format.swift`) — the writer-first compare-and-swap that keeps two iPhones from silently overwriting one account-wide slot, and the acceptor stamp that binds the accepted and observed heads to this install. One purpose for every v2 payload (no new purpose for journal or intimacy). An identifier, not a secret |
 
 ### A drift note, 2026-09-03 (P5 item 3)
 

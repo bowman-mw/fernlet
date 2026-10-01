@@ -233,6 +233,33 @@ enum FernletLockCopy {
                    bundle: .module,
                    comment: "Toast when the lock was created but the biometric opt-in failed. Both halves matter: the lock IS on, the biometric unlock is NOT. 'Settings → App lock' is a path through the app's own settings; translate both names the same way they are translated on those screens.")
         }
+
+        /// A setup that would mint a FRESH key over entries no key on this iPhone can open. The
+        /// Private tab's card names them and asks before anything is removed (period-data design
+        /// 2026-09-30, §4.4 step 2, §4.9), so the setup sends the user there and writes nothing.
+        static var openPrivateFirst: String {
+            String(localized: "lock.setup.error.openPrivateFirst",
+                   defaultValue: "Some entries on this iPhone can't be opened. Open the Private tab to review them, then set a passcode.",
+                   bundle: .module,
+                   comment: "Shown on the passcode setup screen when this iPhone holds entries sealed under a key that no longer exists. The Private tab ('Private' is the tab's name) shows them and asks before removing anything. Nothing was set up and nothing was deleted.")
+        }
+
+        /// No coordinator reached this sheet (nothing the app wired), so the entries already here are
+        /// checked on the Private tab instead, by the gate's own tap.
+        static var openPrivateOnce: String {
+            String(localized: "lock.setup.error.openPrivateOnce",
+                   defaultValue: "Open the Private tab once, then set a passcode. Fernlet checks the entries already on this iPhone there.",
+                   bundle: .module,
+                   comment: "Shown on the passcode setup screen when the entries already on this iPhone could not be checked from where the setup was opened. 'Private' is the tab's name. Nothing was set up and nothing was deleted.")
+        }
+
+        /// The entries check could not be decided this instant (the keychain did not answer).
+        static var priorEntriesUndecided: String {
+            String(localized: "lock.setup.error.priorEntriesUndecided",
+                   defaultValue: "Fernlet can't check the entries on this iPhone right now, so the passcode wasn't set. Try again in a moment.",
+                   bundle: .module,
+                   comment: "Shown on the passcode setup screen when checking the entries already on this iPhone failed for a reason that can pass. Nothing was set up and nothing was deleted.")
+        }
     }
 
     // MARK: No-recovery disclosure
@@ -257,12 +284,22 @@ enum FernletLockCopy {
                    comment: "Headline of the no-recovery disclosure. Literally true: no support channel, no backup code, no way back. Do not soften it into 'recovery may be difficult'.")
         }
 
-        /// Loss mode one: a forgotten passcode.
+        /// Loss mode one: a forgotten passcode. A `.v2` key because the meaning changed
+        /// (period-data design 2026-09-30, §10.5): cycle history is now saved in Fernlet whether or
+        /// not it was copied to Apple Health, so the old "entries remain in Apple Health" promise no
+        /// longer holds. Unconditional wording on purpose — this module cannot see the Health
+        /// switches, and "anything Fernlet copied stays there" is true either way.
+        ///
+        /// Its backup sentence is true since design unit 5: a forgotten passcode ends in a reset,
+        /// after which the Sealed backup restores from Privacy & Data, behind its fresh device-owner
+        /// check (review C-U2-R4). Conditional on purpose: it is a promise only while the backup is on,
+        /// and only before new entries are added (the journal and intimacy restores write only into
+        /// an empty store — review U5-backup-v2-L-U5-R5).
         static var forgottenPasscode: String {
-            String(localized: "lock.disclosure.forgottenPasscode",
-                   defaultValue: "If you forget your passcode, private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.",
+            String(localized: "lock.disclosure.forgottenPasscode.v2",
+                   defaultValue: "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on in Privacy & Data, it keeps an encrypted copy you can restore after a reset, before you add new entries.",
                    bundle: .module,
-                   comment: "First loss mode in the no-recovery disclosure. 'Permanently unreadable' means the data is destroyed for practical purposes — no support path exists. The second sentence is the one piece of good news and must stay accurate: the clinical samples in Apple Health are untouched, only Fernlet's own notes are lost.")
+                   comment: "First loss mode in the no-recovery disclosure. 'Can't be opened again' is literal: no support path exists. Only what Fernlet copied to Apple Health (if anything) survives there, and the encrypted Sealed backup in iCloud, which the user has to have turned on. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
         }
 
         /// Loss mode two, on Secure-Enclave hardware: losing the device's key, passcode or not.
@@ -329,6 +366,8 @@ public struct FernletLockSetupView: View {
     /// up from Settings doesn't also hand over the Private Hub.
     let grantingScope: FernletLockScope
     @Environment(FernletLockService.self) private var lockService
+    /// The app's open coordinator — asked before a setup mints a fresh key over sealed entries.
+    @Environment(\.fernletPrivateHubOpener) private var privateHubOpener
     @Environment(\.dismiss) private var dismiss
 
     @State private var step: SetupStep = .kindPicker
@@ -747,7 +786,7 @@ public struct FernletLockSetupView: View {
                 case .pin6: credential = .pin6(passcode)
                 case .alphanumeric: credential = .alphanumeric(passcode)
                 }
-                try await lockService.configure(credential: credential, grantingScope: grantingScope)
+                try await configureCheckingPriorEntries(credential)
 
                 if biometricEnabled {
                     do {
@@ -768,11 +807,59 @@ public struct FernletLockSetupView: View {
                     // Cancelled: skip the toast dwell and dismiss immediately.
                 }
                 dismiss()
+            } catch let refusal as PriorEntriesRefusal {
+                errorMessage = refusal.message
+                step = .entry
+                passcode = ""
+                confirmation = ""
             } catch {
                 errorMessage = error.localizedDescription
                 step = .entry
                 passcode = ""
                 confirmation = ""
+            }
+        }
+    }
+
+    /// Why a setup stopped before writing anything because of the entries already on this iPhone.
+    private enum PriorEntriesRefusal: Error {
+        /// Some entries can never be opened here; the Private tab's card is where they are handled.
+        case unopenableEntries
+        /// The check could not be decided this instant.
+        case undecided
+        /// No coordinator reached this sheet, so the check cannot run here; the Private tab runs it.
+        case uncheckedHere
+
+        /// The sentence the setup shows. Main-actor like the copy it reads (an `Error` is otherwise
+        /// nonisolated).
+        @MainActor var message: String {
+            switch self {
+            case .unopenableEntries: FernletLockCopy.Setup.openPrivateFirst
+            case .undecided: FernletLockCopy.Setup.priorEntriesUndecided
+            case .uncheckedHere: FernletLockCopy.Setup.openPrivateOnce
+            }
+        }
+    }
+
+    /// Configures the credential WITHOUT acknowledging prior data first: the service adopts the
+    /// no-passcode key when there is one (after a fresh device-owner check over existing entries).
+    /// When it would mint a FRESH key over sealed entries instead (`priorSealedDataPending`), the
+    /// app's open coordinator checks them — the same check the Private tab's gate runs — and only a
+    /// "nothing here is unopenable" answer lets the setup mint, with the acknowledgement (period-data
+    /// design 2026-09-30, §4.4 step 2, §4.9). Anything else writes nothing and says why.
+    private func configureCheckingPriorEntries(_ credential: FernletLockCredential) async throws {
+        do {
+            try await lockService.configure(credential: credential, grantingScope: grantingScope, acknowledgedPriorData: false)
+        } catch FernletLockError.priorSealedDataPending {
+            switch await privateHubOpener?.reviewPriorEntriesBeforeFreshKey() {
+            case .nothingUnopenable:
+                try await lockService.configure(credential: credential, grantingScope: grantingScope, acknowledgedPriorData: true)
+            case .unopenableEntries:
+                throw PriorEntriesRefusal.unopenableEntries
+            case .tryAgain:
+                throw PriorEntriesRefusal.undecided
+            case nil:
+                throw PriorEntriesRefusal.uncheckedHere
             }
         }
     }
@@ -948,11 +1035,14 @@ extension FernletLockCopy {
         }
 
         /// The end of the cooldown ladder: nothing but a destructive reset continues from here.
+        ///
+        /// A `.v2` key (design §10.5): what the reset deletes is now the whole cycle history saved in
+        /// Fernlet, not "notes" beside a Health copy.
         static var resetRequiredBody: String {
-            String(localized: "lock.reset.required.body",
-                   defaultValue: "You must reset app lock to continue. Private journal, cycle, and intimacy notes will become permanently unreadable.",
+            String(localized: "lock.reset.required.body.v2",
+                   defaultValue: "You must reset app lock to continue. Your journal, cycle history and intimacy entries saved in Fernlet will be deleted.",
                    bundle: .module,
-                   comment: "Body of the final lockout card. The reset is the only way forward AND it destroys the sealed notes for good — both halves have to survive translation.")
+                   comment: "Body of the final lockout card. The reset is the only way forward AND it deletes the entries saved in Fernlet for good. Both halves have to survive translation.")
         }
 
         /// Heading of the lost-key card. The passcode was right; the device's key is gone.

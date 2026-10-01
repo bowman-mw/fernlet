@@ -162,32 +162,44 @@ struct WorryBoxServiceTests {
         return (WorryBoxService(repository: repository, defaults: defaults), repository)
     }
 
-    @Test func noLockModeWritesAndReadsWithDeviceKey() throws {
-        let (service, _) = makeService()
+    /// The Private tab opened by the no-passcode tap (period-data design 2026-09-30, §9.17): the
+    /// same `.privateHub` scope, so the same key and the same fold as a passcode unlock.
+    private static let tapOpened = FernletLockState.openedWithoutPasscode(scope: .privateHub)
+
+    /// With no passcode the tab is CLOSED until the tap: a worry written from First Aid seals under
+    /// the device key and is NOT readable (no device-key read mode any more); the tap opens it,
+    /// folded under the hub key.
+    @Test func aClosedNoPasscodeTabHidesWorriesAndTheTapFoldsThem() throws {
+        let (service, repository) = makeService()
         service.updateActivation(lockState: .notConfigured, contentKey: nil)
 
         try service.addWorry("  a small worry  ")
+        #expect(service.worries.isEmpty, "with no passcode and the tab closed, nothing is decrypted")
+
+        let hubKey = SymmetricKey(size: .bits256)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: hubKey)
 
         #expect(service.worries.map(\.text) == ["a small worry"])
-        service.reload()
-        #expect(service.worries.map(\.text) == ["a small worry"])
+        #expect(try repository.worries(contentKey: hubKey).map(\.text) == ["a small worry"],
+                "the tap-open folds device-key worries under the hub key, as a passcode unlock does")
     }
 
     @Test func lockedModeHidesWorriesButStillAcceptsWrites() throws {
         let (service, _) = makeService()
+        let hubKey = SymmetricKey(size: .bits256)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: hubKey)
+        try service.addWorry("kept before closing")
+
         service.updateActivation(lockState: .notConfigured, contentKey: nil)
-        try service.addWorry("kept before locking")
+        #expect(service.worries.isEmpty, "a closed tab must not hold plaintext worries in memory")
 
-        service.updateActivation(lockState: .locked(cooldownDeadline: nil), contentKey: nil)
-        #expect(service.worries.isEmpty, "locked mode must not hold plaintext worries in memory")
-
-        // Writing from First Aid while locked still lands sealed (device-key fallback)...
-        try service.addWorry("written while locked")
+        // Writing from First Aid while closed still lands sealed (device-key fallback)...
+        try service.addWorry("written while closed")
         #expect(service.worries.isEmpty)
 
-        // ...and both become readable again in no-lock mode (same device key).
-        service.updateActivation(lockState: .notConfigured, contentKey: nil)
-        #expect(Set(service.worries.map(\.text)) == ["kept before locking", "written while locked"])
+        // ...and both are readable once the tab opens again (the closed-tab write is folded in).
+        service.updateActivation(lockState: Self.tapOpened, contentKey: hubKey)
+        #expect(Set(service.worries.map(\.text)) == ["kept before closing", "written while closed"])
     }
 
     @Test func unlockMigratesDeviceKeyWorriesToUserKey() throws {
@@ -203,22 +215,34 @@ struct WorryBoxServiceTests {
         #expect(try repository.worries(contentKey: userKey).map(\.text) == ["from before the lock existed"])
     }
 
+    /// A tap-open held by another scope is a closed hub: only `.privateHub` opens the Worry Box.
+    @Test func aForeignScopeNeverOpensTheWorryBox() throws {
+        let (service, _) = makeService()
+        let hubKey = SymmetricKey(size: .bits256)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: hubKey)
+        try service.addWorry("private")
+
+        service.updateActivation(lockState: .openedWithoutPasscode(scope: .progressPhotos), contentKey: hubKey)
+        #expect(service.worries.isEmpty, "a foreign scope lands in the closed branch whatever key it hands over")
+    }
+
     @Test func sectionDeactivationReleasesPlaintextAndReactivationReloads() throws {
         let (service, _) = makeService()
-        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        let hubKey = SymmetricKey(size: .bits256)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: hubKey)
         try service.addWorry("bounded to the selected section")
         #expect(service.worries.count == 1)
 
         service.deactivate()
         #expect(service.worries.isEmpty)
 
-        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: hubKey)
         #expect(service.worries.map(\.text) == ["bounded to the selected section"])
     }
 
     @Test func releaseDeletesAndUpdatesList() throws {
         let (service, _) = makeService()
-        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: SymmetricKey(size: .bits256))
         try service.addWorry("let this one go")
         let id = try #require(service.worries.first?.id)
 
@@ -231,7 +255,7 @@ struct WorryBoxServiceTests {
 
     @Test func emptyWorryIsIgnored() throws {
         let (service, _) = makeService()
-        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: SymmetricKey(size: .bits256))
 
         try service.addWorry("   \n ")
 
@@ -244,7 +268,7 @@ struct WorryBoxServiceTests {
         // once per worry, keyed to the write — so a later hub "Release" of the same worry doesn't
         // double-count it. And the count is DEVICE-LOCAL (never the synced milestone ledger, #6).
         let (service, _) = makeService()
-        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: SymmetricKey(size: .bits256))
 
         try service.addWorry("one")
         try service.addWorry("two")
@@ -259,7 +283,7 @@ struct WorryBoxServiceTests {
         // Finding #4: "Reset everything" must purge the sealed worry rows AND the device-local count —
         // even while locked (rows are dropped by id, not decrypted).
         let (service, _) = makeService()
-        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        service.updateActivation(lockState: Self.tapOpened, contentKey: SymmetricKey(size: .bits256))
         try service.addWorry("kept a")
         try service.addWorry("kept b")
         #expect(service.lifetimeLetGoCount == 2)
@@ -268,8 +292,8 @@ struct WorryBoxServiceTests {
 
         #expect(service.worries.isEmpty)
         #expect(service.lifetimeLetGoCount == 0)
-        // The sealed rows are physically gone: a fresh read under the still-active device key (no-lock
-        // mode) finds nothing.
+        // The sealed rows are physically gone: a fresh read under the still-active hub key finds
+        // nothing.
         service.reload()
         #expect(service.worries.isEmpty)
     }

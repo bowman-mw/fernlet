@@ -4,13 +4,15 @@
 //
 //  Covers Item 4 (Remaining-work doc): the sealed-backup *restore-into-stores* path. The CloudKit
 //  fetch + identity crypto are exercised by SealedBackupTests; these tests cover everything around
-//  it that is unit-testable without iCloud — the empty-store guard, the refusal to write back the
-//  RETIRED Tier-2 (sensitive notes) payload (owner decision 2026-09-23; the rest of its retirement is
-//  in SensitiveNotesRetirementTests), and the period-narrative Core Data writeback (incl. the
-//  locked-key path). Full end-to-end with live CloudKit remains device-runtime verification.
+//  it that is unit-testable without iCloud — the v2 merge restores' gates (no freshness or
+//  empty-store gate any more, the resolved marker instead), the refusal to write back the RETIRED
+//  Tier-2 (sensitive notes) payload (owner decision 2026-09-23; the rest of its retirement is in
+//  SensitiveNotesRetirementTests), the period and journal writebacks (incl. the locked-key path) and
+//  the journal day skeletons. Full end-to-end with live CloudKit remains device-runtime verification.
 //
 
 import CoreData
+import ProximityKit
 import LocalPersistence
 import FernletFoundation
 import CryptoKit
@@ -32,19 +34,113 @@ private func isolatedDefaults() -> UserDefaults {
     UserDefaults(suiteName: "fernlet.tests.narrativeLatch.\(UUID().uuidString)") ?? .standard
 }
 
+@Suite(.serialized)
 struct SealedBackupRestoreTests {
 
-    // MARK: - Empty-store guard
+    // MARK: - The journal restore is a merge: no freshness or empty-store gate (design 2026-09-30, §7)
 
-    /// The whole-device freshness gate refuses a device that already holds logged data. Journal is the
-    /// probe (the retired sensitive-notes payload used to be): the gate answers before the payload's own
-    /// store is ever read, so this never hits the network or the shared sealed store.
+    /// Rewritten for unit B3 (was `restoreSkippedWhenStoreHasLoggedData` and the bare-HealthKit-stamp
+    /// freshness cases): a device that is no longer a fresh install (populated days, meals, journal)
+    /// still runs the ambient journal restore — a merge has no freshness gate. With no CloudKit wired
+    /// in a unit test it lands on a deferred outcome, but it is not short-circuited.
     @MainActor
-    @Test func restoreSkippedWhenStoreHasLoggedData() async {
+    @Test func theJournalRestoreRunsOnADeviceThatIsNoLongerAFreshInstall() async {
         let store = makePopulatedTestStore()
-        let restored = await store.restoreSealedBackup(payloadType: .journalNarratives)
-        #expect(restored == false)
-        #expect(await store.restoreSealedBackupOutcome(payloadType: .journalNarratives) == .skippedStoreNotEmpty)
+        store.sealedBackupPreferencesProvider = { JournalBackupDevice.backupOn }
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: isolatedDefaults())
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
+        #expect(await store.restoreJournalBackup() != .skippedStoreNotEmpty)
+    }
+
+    /// The resurrection the latch used to stop, stopped by the resolved marker (design 2026-09-30,
+    /// §4.3): once this install's journal restore has resolved, the ambient restore never runs again —
+    /// so entries the user deleted can never come back from the stale cloud copy. Benign: no banner,
+    /// no network.
+    @MainActor
+    @Test func aResolvedJournalInstallNeverRestoresAmbientlyAgain() async {
+        let store = makeTestStore()
+        store.sealedBackupPreferencesProvider = { JournalBackupDevice.backupOn }
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: isolatedDefaults())
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
+        store.sealedBackupBookkeeping.markRestoreResolved(.journalNarratives)
+
+        let outcome = await store.restoreJournalBackup()
+        #expect(outcome == .skippedStoreNotEmpty)
+        #expect(outcome.needsAttention == false)
+        #expect(store.sealedBackupRestoreStatus[.journalNarratives] == nil)
+    }
+
+    /// §7.6: a duress session shuts the journal's decrypt seam, so the restore refuses — retryable, and
+    /// recorded as no status — with nothing fetched.
+    @MainActor
+    @Test func theJournalRestoreRefusesDuringADuressSession() async {
+        let store = makeTestStore()
+        store.sealedBackupPreferencesProvider = { JournalBackupDevice.backupOn }
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
+        store.duressSessionActive = true
+
+        let outcome = await store.restoreJournalBackup()
+        #expect(outcome.didRestore == false)
+        #expect(outcome.isRetryable)
+        #expect(store.sealedBackupRestoreStatus[.journalNarratives] == nil)
+    }
+
+    /// BV14 (design 2026-09-30, §4.3): the journal restore marker is seeded ONCE, at the launch wiring,
+    /// from THIS store's journal divergence latch (with its row-count backfill) — an install that
+    /// already held entries seeds it resolved — and an enabled journal backup owes one complete v2
+    /// export in the same step. A later write never seeds it again.
+    @MainActor
+    @Test func theJournalMarkerSeedsOnceFromTheStoresJournalLatchAndOwesOneExport() throws {
+        let (store, _, narratives) = makeTestStoreWithRepositories()
+        let entryDate = Date(timeIntervalSince1970: 1_780_000_000)
+        try narratives.insert(JournalNarrative(id: UUID(), dayKey: "2026-06-01", tag: .good, entryDate: entryDate,
+                                               text: "held before this build", emotions: [], createdAt: entryDate, updatedAt: entryDate),
+                              contentKey: SymmetricKey(size: .bits256))
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(
+            defaults: isolatedDefaults(),
+            legacyLatch: { [unowned store] payload in store.sealedBackupLegacyLatch(payload) }
+        )
+        store.sealedBackupPreferencesProvider = { StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true) }
+        store.recordSealedBackupReuploadDeferred(false, payloadType: .journalNarratives)
+
+        store.seedSealedBackupBookkeepingOnce()
+        #expect(store.sealedBackupBookkeeping.restoreResolvedIsSet(.journalNarratives), "seeded resolved from the latch")
+        #expect(store.sealedBackupJournalReuploadDeferred, "the enabled backup owes one export")
+        #expect(!store.sealedBackupBookkeeping.seedRestoreMarkerIfAbsent(.journalNarratives), "seeded once, never again")
+    }
+
+    /// Review B3 fix round 1 (D-B3-2): an install upgrading with an app-lock reset's owner hold that was
+    /// RELEASED but still keeps its pre-reset journal copy — the earlier empty-store-only restore was
+    /// refused because entries were written since the reset, and those entries set the journal latch —
+    /// seeds its journal marker UNRESOLVED, not from the latch. A marker seeded resolved would never
+    /// run the restore that pulls the copy back and settles the hold, so the hold would keep every
+    /// journal export waiting forever while Privacy & Data promised a restore. A payload whose copy the
+    /// hold does not keep still seeds from its latch.
+    @MainActor
+    @Test func aPreResetCopyTheOwnerHoldStillKeepsSeedsItsMarkerUnresolved() throws {
+        let (store, _, narratives) = makeTestStoreWithRepositories()
+        let entryDate = Date(timeIntervalSince1970: 1_780_000_000)
+        try narratives.insert(JournalNarrative(id: UUID(), dayKey: "2026-06-01", tag: .good, entryDate: entryDate,
+                                               text: "written since the reset", emotions: [], createdAt: entryDate, updatedAt: entryDate),
+                              contentKey: SymmetricKey(size: .bits256))
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: isolatedDefaults())
+        store.sealedBackupRestoreHold.hold(keepingCopiesFrom: StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true))
+        store.sealedBackupRestoreHold.release()
+        #expect(store.sealedBackupRestoreHold.keepsPreResetCopy(of: .journalNarratives), "released, the copy still kept")
+        #expect(store.sealedBackupLegacyLatch(.journalNarratives), "the entries written since the reset set the latch")
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(
+            defaults: isolatedDefaults(),
+            legacyLatch: { [unowned store] payload in store.sealedBackupMarkerSeed(payload) }
+        )
+        store.sealedBackupPreferencesProvider = { StoragePreferences(iCloudSyncEnabled: true, sealedBackupJournalEnabled: true) }
+
+        store.seedSealedBackupBookkeepingOnce()
+        #expect(!store.sealedBackupBookkeeping.restoreResolvedIsSet(.journalNarratives),
+                "unresolved: the next settle merges the pre-reset copy and settles the hold")
+        #expect(store.sealedBackupBookkeeping.seedRestoreMarkerIfAbsent(.journalNarratives) == false, "seeded once")
+
+        store.sealedBackupRestoreHold.forgetPreResetCopy(of: .journalNarratives)
+        #expect(store.sealedBackupMarkerSeed(.journalNarratives), "with no copy kept, the seed is the latch again")
     }
 
     // MARK: - The retired Tier-2 (sensitive notes) payload is never written back
@@ -62,17 +158,28 @@ struct SealedBackupRestoreTests {
         #expect(store.tierTwoMemories == before)
     }
 
+    /// The period restore is a MERGE (period-data design 2026-09-30, §9.10): on a device that already
+    /// holds cycle history — and that is "in use" by every other measure — it adds the backup's entries
+    /// beside the local ones and overwrites none of them. (The v1 store-empty refusal is gone: a merge
+    /// cannot clobber, and the resolved marker is what stops resurrection.)
     @MainActor
-    @Test func applyRestoredPeriodRefusesToClobberPopulatedStore() throws {
-        // The no-clobber guard runs before the locked-key check, so a populated store throws
-        // `storeNotEmpty` even when no content key is active.
+    @Test func applyRestoredPeriodMergesIntoAPopulatedStoreWithoutClobbering() throws {
         let store = makePopulatedTestStore()
-        let data = try JSONEncoder().encode([
-            MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "x", symptomFlags: [])
-        ])
-        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
-            try store.applyRestoredPayload(data, payloadType: .periodData)
-        }
+        store.settings.periodTrackingVisible = true
+        let key = SymmetricKey(size: .bits256)
+        store.openHubForTesting(contentKey: key)
+        let records = PeriodBackupDevice.makeRecordStore()
+        records.attachVisibilityGate { true }
+        let local = PeriodBackupDevice.record(day: 1, note: "Logged locally.")
+        try records.insert(local, contentKey: key)
+        let backedUp = PeriodBackupDevice.record(day: 2, note: "From backup.")
+        let data = try PeriodBackupDevice.v2Chunk([backedUp], total: 1)
+
+        #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 1)
+
+        let after = try records.allRecords(contentKey: key).records
+        #expect(after.count == 2)
+        #expect(after.first { $0.id == local.id } == local, "the local entry is untouched")
     }
 
     /// The blank-device half of the same refusal: the case the retired payload used to "restore" into —
@@ -89,472 +196,181 @@ struct SealedBackupRestoreTests {
         #expect(store.tierTwoMemories.isEmpty)
     }
 
-    // MARK: - Period narrative writeback
+    // MARK: - Period record writeback (v2 merge)
 
+    /// A v1 set (bare `[MenstrualNarrative]`) restores as narrative-only records under their legacy
+    /// ids, re-sealed under this iPhone's key.
     @MainActor
-    @Test func applyRestoredPeriodWritesNarratives() throws {
+    @Test func applyRestoredPeriodWritesV1NarrativesAsRecords() throws {
         let store = makeTestStore()
+        store.settings.periodTrackingVisible = true
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
+        let records = PeriodBackupDevice.makeRecordStore()
+        let ids = [UUID(), UUID()]
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: ids[0].uuidString, dateKey: "2026-06-01", note: "Cramps, low energy.", symptomFlags: []),
+            MenstrualNarrative(hkExternalUUID: ids[1].uuidString, dateKey: "2026-06-02", note: "Better.", symptomFlags: [])
+        ])
 
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        let narratives = [
-            MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "Cramps, low energy.", symptomFlags: []),
-            MenstrualNarrative(hkExternalUUID: "uuid-2", dateKey: "2026-06-02", note: "Better.", symptomFlags: [])
-        ]
-        let data = try JSONEncoder().encode(narratives)
+        #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 2)
 
-        let count = try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
-        #expect(count == 2)
-
-        let interval = DateInterval(
-            start: try #require(FernletDate.date(fromDayKey: "2026-05-31")),
-            end: try #require(FernletDate.date(fromDayKey: "2026-06-03"))
-        )
-        let readBack = try narrativeRepository.narratives(in: interval, contentKey: key)
-        #expect(readBack.count == 2)
-        #expect(readBack.contains { $0.note == "Cramps, low energy." })
+        let readBack = try records.allRecords(contentKey: key).records
+        #expect(Set(readBack.map(\.id)) == Set(ids))
+        #expect(readBack.contains { $0.narrative?.note == "Cramps, low energy." && $0.origin == .restored })
     }
 
     @MainActor
     @Test func applyRestoredPeriodThrowsWhenContentKeyLocked() throws {
-        let store = makeTestStore() // no lock activated → no content key
+        let store = makeTestStore() // no hub key wired → no content key
+        let records = PeriodBackupDevice.makeRecordStore()
         let data = try JSONEncoder().encode([
             MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "x", symptomFlags: [])
         ])
         #expect(throws: FernletStore.SealedBackupWiringError.self) {
-            try store.applyRestoredPayload(data, payloadType: .periodData)
+            try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records)
         }
+        #expect(try records.recordCount() == 0)
     }
 
-    // MARK: - Period no-clobber guard consults the narrative store (WI-5)
-
-    /// WI-5 (Docs/Security-Hardening-Plan-2026-06-27.md): the period-data no-clobber guard previously
-    /// only checked the days/memory caches (`isFreshInstallForRestore`), never the separate sealed
-    /// narrative store. Period narratives live in PrivateHealthStore and are written independently, so a
-    /// device could hold N sealed narratives while still looking "fresh", and restore (insert-only, run
-    /// every launch) duplicated that history. The guard now also gates on the narrative count.
+    /// WI-5's duplicate hazard, closed the v2 way: the merge is keyed by record id, so restoring the
+    /// same set twice changes nothing the second time and duplicates nothing.
     @MainActor
     @Test func applyRestoredPeriodDoesNotDuplicateOnSecondRestore() throws {
-        let store = makeTestStore()                         // fresh by the day/memory checks
-        let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)       // unlock so the period insert path has a key
-
-        // One in-memory narrative store shared across both restores (mirrors production's shared store).
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        let data = try JSONEncoder().encode([
-            MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "Cramps.", symptomFlags: []),
-            MenstrualNarrative(hkExternalUUID: "uuid-2", dateKey: "2026-06-02", note: "Better.", symptomFlags: [])
-        ])
-
-        // First restore into an empty narrative store succeeds.
-        let first = try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
-        #expect(first == 2)
-        #expect(try narrativeRepository.narrativeCount() == 2)
-
-        // Second restore is refused — the narrative store already holds sealed history. No duplication.
-        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
-            try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
-        }
-        #expect(try narrativeRepository.narrativeCount() == 2)
-    }
-
-    /// The exact bug scenario: the device looks "fresh" (no logged days/memories) but the separate
-    /// narrative store was already seeded locally (as PeriodTrackerStore.logEvent would). A restore must
-    /// be refused rather than duplicating/clobbering that sealed history.
-    @MainActor
-    @Test func applyRestoredPeriodRefusedWhenNarrativeStorePreSeeded() throws {
         let store = makeTestStore()
+        store.settings.periodTrackingVisible = true
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
+        let records = PeriodBackupDevice.makeRecordStore()
+        let data = try PeriodBackupDevice.v2Chunk([PeriodBackupDevice.record(day: 1), PeriodBackupDevice.record(day: 2)], total: 2)
 
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        try narrativeRepository.insert(
-            MenstrualNarrative(hkExternalUUID: "local-1", dateKey: "2026-05-20", note: "Logged locally.", symptomFlags: []),
-            contentKey: key
-        )
-        #expect(try narrativeRepository.narrativeCount() == 1)
-
-        let data = try JSONEncoder().encode([
-            MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: [])
-        ])
-        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
-            try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
-        }
-        #expect(try narrativeRepository.narrativeCount() == 1)   // unchanged
+        #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 2)
+        #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 0,
+                "the second merge finds nothing new")
+        #expect(try records.recordCount() == 2)
     }
 
-    // MARK: - Fresh-install gate treats a bare HealthKit sync stamp as "device already in use"
-
-    /// Finding 7 (deferred design-judgment): the auto-restore fresh-install gate was narrowed onto the
-    /// shared `FernletDay.hasLoggedContent`, which intentionally ignores a *bare, metric-less*
-    /// `healthContext` (a HealthKit sync stamp — `syncedAt` set, every metric nil) so the coin economy
-    /// doesn't award an "active day" for merely opening the app. But the RESTORE gate must be
-    /// conservative: a device that already holds any day row — including a bare sync stamp — is in use,
-    /// and auto-restore must NOT run over it. `isFreshInstallForRestore` therefore applies the stricter
-    /// "any `healthContext` present ⇒ not fresh" check locally. Here the only content on the device is a
-    /// past-day row carrying a bare `HealthDailyContext()`, so restore must be SKIPPED as non-empty.
+    /// The merge never regresses a block: a local copy of the same entry whose note was edited AFTER
+    /// the backup keeps the edit, while the backup completes the block the local copy did not know.
     @MainActor
-    @Test func restoreSkippedWhenOnlyContentIsBareHealthKitSyncStamp() async {
-        // Sanity: a bare sync stamp is NOT "logged content" (shared-model semantics the gate overrides).
-        #expect(FernletDay(date: "2026-06-10", healthContext: HealthDailyContext()).hasLoggedContent == false)
-
-        // Seed a PAST-day ROW whose only content is a bare, metric-less HealthKit sync stamp — the shape a
-        // migrated legacy day takes (migration fans blob days into rows without item G's empty-content guard).
-        // Seed the row directly via the day-record store, bypassing saveSnapshot/updateDay (which item G would
-        // skip for a content-less day, so it would never persist and the gate would never see it).
-        let controller = PersistenceController(inMemory: true)
-        let legacyURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
-        let dayRepo = DayRecordRepository(controller: controller)
-        #expect(dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-06-10", healthContext: HealthDailyContext()), updatedAt: Date())]) == true)
-        let repository = CoreDataFernletRepository(
-            controller: controller,
-            legacyRepository: LocalFernletRepository(fileURL: legacyURL),
-            dayRecordRepository: dayRepo
-        )
-        let narratives = JournalNarrativeRepository(controller: PrivatePersistenceController(inMemory: true))
-        let store = makeStoreSharingStores(
-            date: FernletDate.date(fromDayKey: "2026-06-20")!,
-            repository: repository,
-            narratives: narratives
-        )
-
-        // The device is now "in use" for the restore gate → auto-restore must refuse (never clobbers).
-        // Journal is the probe: the freshness verdict answers before its own store is ever read.
-        let outcome = await store.restoreSealedBackupOutcome(payloadType: .journalNarratives)
-        #expect(outcome == .skippedStoreNotEmpty)
-    }
-
-    /// Positive control: the stricter gate must NOT wrongly block a legitimately blank device. With zero
-    /// day rows and empty caches, `isFreshInstallForRestore` still returns true, so the restore is NOT
-    /// refused as "store not empty" — it gets past the gate to the next precondition, which with no
-    /// content key active is the locked-key refusal. Driven at the write point over an ISOLATED empty
-    /// narrative store (the retired sensitive-notes payload used to be this probe; every live payload's
-    /// default store is the shared on-device one, which other suites can populate).
-    @MainActor
-    @Test func restoreNotSkippedOnGenuinelyBlankDevice() throws {
+    @Test func applyRestoredPeriodNeverRegressesANewerLocalBlock() throws {
         let store = makeTestStore()
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        let data = try JSONEncoder().encode([
-            MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "x", symptomFlags: [])
-        ])
-        #expect(throws: FernletStore.SealedBackupWiringError.locked) {
-            try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
-        }
+        store.settings.periodTrackingVisible = true
+        let key = SymmetricKey(size: .bits256)
+        store.openHubForTesting(contentKey: key)
+        let records = PeriodBackupDevice.makeRecordStore()
+        records.attachVisibilityGate { true }
+        let backedUp = PeriodBackupDevice.record(day: 1, note: "Before the edit.")
+        var local = backedUp
+        local.clinical = nil
+        local.narrative?.note = "After the edit."
+        local.narrative?.updatedAt = backedUp.createdAt.addingTimeInterval(3_600)
+        try records.insert(local, contentKey: key)
+        let data = try PeriodBackupDevice.v2Chunk([backedUp], total: 1)
+
+        #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 1)
+
+        let merged = try #require(try records.allRecords(contentKey: key).records.first)
+        #expect(merged.narrative?.note == "After the edit.", "the newer local note survives the older backup")
+        #expect(merged.clinical == backedUp.clinical, "the block the local copy did not know is filled in")
     }
 
-    // MARK: - Un-hide restore path (pre-merge review 2026-07-19, finding #2)
+    // MARK: - The ambient period restore (v2) through the store's wrappers
 
-    /// The bug: the G5 gate correctly skips the launch-time period restore while cycle tracking is
-    /// hidden, but there was NO compensating restore afterwards. `restoreSealedBackupsIfNeeded` only ever
-    /// restores into a fresh install, so once the day blob syncs down the device is permanently "not
-    /// fresh" and every remaining period seam (un-hide, escrow-adopt, launch follow-through) RE-UPLOADS
-    /// rather than restores — a user who hid period tracking on device A and reinstalled on device B could
-    /// never get their sealed cycle history back.
-    ///
-    /// Here the device is in use (populated days/meals/journal) but holds no cycle history. The launch
-    /// restore must still refuse it as non-fresh; the targeted un-hide restore must NOT be short-circuited
-    /// (with no CloudKit/escrow wired in a unit test it lands on a deferred outcome, exactly as
-    /// `restoreNotSkippedOnGenuinelyBlankDevice` does).
+    /// Finding #2 of the 2026-07-19 review, the v2 way: a device that is no longer a fresh install
+    /// (populated days, meals, journal) still runs the ambient period restore — there is no freshness
+    /// gate on a merge. With no CloudKit wired in a unit test it lands on a deferred outcome, but it is
+    /// not short-circuited.
     @MainActor
-    @Test func unhideRestoreRunsOnDeviceThatIsNoLongerAFreshInstall() async {
+    @Test func theAmbientPeriodRestoreRunsOnADeviceThatIsNoLongerAFreshInstall() async {
         let store = makePopulatedTestStore()
         store.settings.periodTrackingVisible = true
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-
-        // Baseline: the launch/auto path is permanently blocked on this device — the bug's mechanism.
-        let launchOutcome = await store.restoreSealedBackupOutcome(payloadType: .periodData)
-        #expect(launchOutcome == .skippedStoreNotEmpty)
-
-        // The compensating path gets past the freshness gate.
-        let unhideOutcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
-        #expect(unhideOutcome != .skippedStoreNotEmpty)
+        store.sealedBackupPreferencesProvider = { PeriodBackupDevice.backupOn }
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
+        #expect(await store.restorePeriodBackup() != .skippedStoreNotEmpty)
     }
 
-    /// The un-hide restore relaxes ONLY the whole-device freshness gate. Cycle history the user already
-    /// has on this device is still never clobbered or duplicated. (Mechanically the refusal now comes
-    /// from the `hasEverStoredNarrative` latch — the insert latches before the count is ever consulted —
-    /// and the count check remains behind it as defense in depth; the populated-but-UNLATCHED
-    /// configuration is exercised by `latchBackfillsFromExistingRowsWrittenBeforeTheLatchShipped`.)
+    /// The fail-closed-at-the-decrypt-seam property: the period restore decrypts cycle history and
+    /// seals it in, so it refuses while period tracking is hidden — retryable, and recorded as no
+    /// status (un-hiding IS the retry).
     @MainActor
-    @Test func unhideRestoreStillRefusesPopulatedNarrativeStore() async throws {
-        let store = makeTestStore()
-        store.settings.periodTrackingVisible = true
-        let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
-
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        try narrativeRepository.insert(
-            MenstrualNarrative(hkExternalUUID: "local-1", dateKey: "2026-05-20", note: "Logged locally.", symptomFlags: []),
-            contentKey: key
-        )
-
-        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
-        #expect(outcome == .skippedStoreNotEmpty)
-        #expect(try narrativeRepository.narrativeCount() == 1)   // unchanged
-    }
-
-    /// The fail-closed-at-the-decrypt-seam property is preserved: this path decrypts cycle narratives and
-    /// writes them into the sealed store, so it must refuse while period tracking is hidden. Reported as
-    /// RETRYABLE, which is also what stops the caller from re-uploading this device's still-gated
-    /// narrative store over the cloud backup.
-    @MainActor
-    @Test func unhideRestoreRefusesWhilePeriodTrackingHidden() async {
+    @Test func theAmbientPeriodRestoreRefusesWhilePeriodTrackingHidden() async {
         let store = makeTestStore()
         store.settings.periodTrackingVisible = false
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
 
-        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+        let outcome = await store.restorePeriodBackup()
         #expect(outcome.didRestore == false)
         #expect(outcome.isRetryable)
+        #expect(store.sealedBackupRestoreStatus[.periodData] == nil)
     }
 
-    /// The regression the first cut of this fix shipped, caught by adversarial review: an empty narrative
-    /// store is NOT self-evidently safe to restore into. `PeriodTrackerStore.deleteEntry` hard-deletes the
-    /// row and never reconciles the sealed backup, so after the user deletes their cycle entries the store
-    /// is empty while the CLOUD copy is stale-but-populated. `.payloadStoreOnly` dropped the whole-device
-    /// freshness gate that had been standing in for "has this device diverged from the cloud snapshot?",
-    /// so un-hiding — a mere visibility toggle — silently resurrected deliberately-deleted cycle notes
-    /// (`.restored` has needsAttention == false, so not even a banner). The device-local
-    /// `hasEverStoredNarrative` latch carries that missing bit.
-    ///
-    /// Here the store is empty because a narrative was written and then deleted. The targeted restore must
-    /// refuse, even though the row count is 0 and period tracking is visible.
+    /// The resurrection the latch used to stop, stopped by the resolved marker (design §5.3): once this
+    /// install's period restore has resolved, the ambient restore never runs again — so entries the
+    /// user deleted can never come back from the stale cloud copy by an un-hide or a settle. Benign:
+    /// no banner, no network.
     @MainActor
-    @Test func unhideRestoreRefusesAfterTheUserDeletedTheirCycleHistory() async throws {
+    @Test func aResolvedInstallNeverRestoresAmbientlyAgain() async {
         let store = makeTestStore()
         store.settings.periodTrackingVisible = true
-        let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.sealedBackupPreferencesProvider = { PeriodBackupDevice.backupOn }
+        store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
+        store.sealedBackupBookkeeping.markRestoreResolved(.periodData)
 
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        let narrative = MenstrualNarrative(
-            hkExternalUUID: "local-1", dateKey: "2026-05-20", note: "Logged, then deleted.", symptomFlags: []
-        )
-        try narrativeRepository.insert(narrative, contentKey: key)
-        #expect(narrativeRepository.hasEverStoredNarrative)   // latched by the write
-
-        // The user deletes it — the store is now empty, but the cloud backup still holds it.
-        try narrativeRepository.delete(id: narrative.id)
-        #expect(try narrativeRepository.narrativeCount() == 0)
-        #expect(narrativeRepository.hasEverStoredNarrative)   // latch is one-way, survives the delete
-
-        // Un-hiding must NOT resurrect the deleted note, despite the empty store.
-        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+        let outcome = await store.restorePeriodBackup()
         #expect(outcome == .skippedStoreNotEmpty)
-        #expect(outcome.didRestore == false)
-        #expect(outcome.needsAttention == false)   // a deliberate, benign refusal — no banner
-        #expect(try narrativeRepository.narrativeCount() == 0)
+        #expect(outcome.needsAttention == false)
+        #expect(store.sealedBackupRestoreStatus[.periodData] == nil)
     }
 
-    /// The upgrade configuration: rows written by a build that PREDATES the latch (simulated by reading
-    /// the same populated context through fresh defaults, where the insert never latched). The getter
-    /// must backfill from the row count — without it, an upgrading install reads as "never populated"
-    /// and the whole latch scheme silently no-ops for exactly the users with history to protect.
+    /// The marker's one-time migration (design §5.3): an install that already held cycle data — its
+    /// legacy `fernlet.menstrualNarrative.everStored` latch is set — had its ambient restore closed by
+    /// that latch, and keeps it closed; the seed is read once and written, never read again.
     @MainActor
-    @Test func latchBackfillsFromExistingRowsWrittenBeforeTheLatchShipped() async throws {
-        let store = makeTestStore()
-        store.settings.periodTrackingVisible = true
-        let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+    @Test func theRestoreMarkerSeedsOnceFromTheLegacyLatch() {
+        let defaults = isolatedDefaults()
+        let latchReads = ReadCounter()
+        let inUse = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in latchReads.value += 1; return true })
+        #expect(inUse.isRestoreResolved(.periodData), "an install that held cycle data stays resolved")
+        #expect(inUse.isRestoreResolved(.periodData))
+        #expect(latchReads.value == 1, "the latch is read once, then never again for period")
 
-        let context = PrivatePersistenceController(inMemory: true).container.viewContext
-        // The "old build" writes a narrative; its defaults suite is then discarded, like an app update
-        // shipping the latch after the data already exists.
-        let preLatchRepository = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
-        try preLatchRepository.insert(
-            MenstrualNarrative(hkExternalUUID: "pre-1", dateKey: "2026-04-01", note: "Pre-upgrade.", symptomFlags: []),
-            contentKey: key
-        )
-        // The "new build" sees the same rows through defaults that never latched.
-        let upgraded = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
-        #expect(upgraded.hasEverStoredNarrative, "the latch did not backfill from existing rows")
-
-        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: upgraded)
-        #expect(outcome == .skippedStoreNotEmpty)
+        let fresh = SealedBackupBookkeeping(defaults: isolatedDefaults(), legacyLatch: { _ in false })
+        #expect(!fresh.isRestoreResolved(.periodData))
+        fresh.markRestoreResolved(.periodData)
+        #expect(fresh.isRestoreResolved(.periodData))
+        fresh.reopenRestore(.periodData)
+        #expect(!fresh.isRestoreResolved(.periodData), "reopened is an explicit false: the seed never runs again")
+        #expect(!fresh.restoreResolvedIsSet(.periodData))
+        #expect(!fresh.seedRestoreMarkerIfAbsent(.periodData), "a present marker is never re-seeded")
     }
 
-    /// The resurrection the backfill alone cannot stop: the upgrading user DELETES their pre-latch
-    /// history first (nothing ever read the latch while rows existed), leaving an empty store behind
-    /// unlatched defaults — indistinguishable from a fresh install by count. The DELETE itself must
-    /// latch: removing a row is proof this device diverged from the cloud snapshot, so a later un-hide
-    /// must refuse to re-pull the deliberately-deleted notes.
-    @MainActor
-    @Test func targetedRestoreRefusesAfterPreLatchHistoryIsDeleted() async throws {
-        let store = makeTestStore()
-        store.settings.periodTrackingVisible = true
-        let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
-
-        let context = PrivatePersistenceController(inMemory: true).container.viewContext
-        let preLatchRepository = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
-        let narrative = MenstrualNarrative(
-            hkExternalUUID: "pre-1", dateKey: "2026-04-01", note: "Pre-upgrade, then deleted.", symptomFlags: []
-        )
-        try preLatchRepository.insert(narrative, contentKey: key)
-
-        // The upgraded build's first touch of the store is the DELETE — no read ever backfilled.
-        let upgraded = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
-        try upgraded.delete(id: narrative.id)
-        #expect(try upgraded.narrativeCount() == 0)
-        #expect(upgraded.hasEverStoredNarrative, "the delete did not latch the diverged marker")
-
-        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: upgraded)
-        #expect(outcome == .skippedStoreNotEmpty)
-        #expect(try upgraded.narrativeCount() == 0)
-    }
-
-    /// The diverged latch is enforced in `isEmptyStoreForRestore` itself — the gate EVERY restore path
-    /// funnels through — so the AMBIENT `.freshInstall` pass honors it too. The scenario: delete-all
-    /// empties the day blob (the device classifies as fresh again) but the sealed-backup chunk delete
-    /// failed, so a stale cloud backup survives; the next launch must NOT quietly restore the wiped
-    /// cycle history. The write point throws rather than inserting.
-    @MainActor
-    @Test func freshInstallScopedApplyRefusesADivergedEmptyStore() throws {
-        let store = makeTestStore()   // blank → classifies as a fresh install
-        let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
-
-        let repository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        // Populate then wipe THROUGH the repository, the way the delete-all funnel's period hook does:
-        // the deleteAll latches, leaving an empty-but-diverged store.
-        try repository.insert(
-            MenstrualNarrative(hkExternalUUID: "wiped-1", dateKey: "2026-04-01", note: "Wiped.", symptomFlags: []),
-            contentKey: key
-        )
-        try repository.deleteAll()
-        #expect(try repository.narrativeCount() == 0)
-        #expect(repository.hasEverStoredNarrative)
-
-        let data = try JSONEncoder().encode([
-            MenstrualNarrative(hkExternalUUID: "stale-1", dateKey: "2026-03-01", note: "Stale cloud copy.", symptomFlags: [])
-        ])
-        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
-            try store.applyRestoredPayload(
-                data, payloadType: .periodData, narrativeRepository: repository, scope: .freshInstall
-            )
-        }
-        #expect(try repository.narrativeCount() == 0)
-    }
-
-    /// Delete-all cancels the in-flight un-hide settle Task, and the restore write point honors that
-    /// cancellation: a settle suspended in its CloudKit fetch when the wipe runs must not resume and
-    /// re-insert cycle narratives into the just-emptied store.
+    /// The write point honors a cancelled surrounding Task: a settle suspended in its CloudKit fetch
+    /// when "delete everything" cancels it must not resume and merge cycle records into the
+    /// just-emptied store.
     @MainActor
     @Test func applyRefusesToWriteInsideACancelledTask() async throws {
         let store = makeTestStore()
+        store.settings.periodTrackingVisible = true
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
-
-        let repository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        let data = try JSONEncoder().encode([
-            MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: [])
-        ])
+        store.openHubForTesting(contentKey: key)
+        let records = PeriodBackupDevice.makeRecordStore()
+        let data = try PeriodBackupDevice.v2Chunk([PeriodBackupDevice.record(day: 1)], total: 1)
 
         let restore = Task { () -> Result<Int, Error> in
             // Deterministically wait out the cancel below — models the settle suspended in its fetch
             // when "delete everything" cancels it.
             while !Task.isCancelled { await Task.yield() }
-            return Result { try store.applyRestoredPayload(
-                data, payloadType: .periodData, narrativeRepository: repository, scope: .payloadStoreOnly
-            ) }
+            return Result { try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) }
         }
         restore.cancel()
 
         guard case .failure(let error) = await restore.value else {
-            Issue.record("a cancelled restore still wrote \((try? repository.narrativeCount()) ?? -1) records")
+            Issue.record("a cancelled restore still wrote \((try? records.recordCount()) ?? -1) records")
             return
         }
         #expect(error is CancellationError)
-        #expect(try repository.narrativeCount() == 0)
-    }
-
-    /// The latch must be set by the RESTORE path too, not just ordinary logging — otherwise a user who
-    /// restores a backup, then deletes it all, could re-pull it by toggling visibility.
-    @MainActor
-    @Test func restoringNarrativesLatchesTheEverStoredMarker() throws {
-        let store = makePopulatedTestStore()
-        let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
-
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        #expect(narrativeRepository.hasEverStoredNarrative == false)
-        let data = try JSONEncoder().encode([
-            MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: [])
-        ])
-        _ = try store.applyRestoredPayload(
-            data, payloadType: .periodData, narrativeRepository: narrativeRepository, scope: .payloadStoreOnly
-        )
-        #expect(narrativeRepository.hasEverStoredNarrative)
-    }
-
-    /// The write point honors the relaxed scope too (defense in depth cuts both ways): with
-    /// `.payloadStoreOnly` an in-use device with an EMPTY narrative store accepts the restored history,
-    /// where the default `.freshInstall` scope would refuse it.
-    @MainActor
-    @Test func applyRestoredPeriodWritesUnderPayloadStoreOnlyScopeOnInUseDevice() throws {
-        let store = makePopulatedTestStore()
-        let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
-
-        let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults()
-        )
-        let data = try JSONEncoder().encode([
-            MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: []),
-            MenstrualNarrative(hkExternalUUID: "backup-2", dateKey: "2026-06-02", note: "Also from backup.", symptomFlags: [])
-        ])
-
-        // Default scope: refused, because the device is in use.
-        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
-            try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
-        }
-        #expect(try narrativeRepository.narrativeCount() == 0)
-
-        // Targeted scope: accepted, because the narrative store itself is empty.
-        let count = try store.applyRestoredPayload(
-            data,
-            payloadType: .periodData,
-            narrativeRepository: narrativeRepository,
-            scope: .payloadStoreOnly
-        )
-        #expect(count == 2)
-        #expect(try narrativeRepository.narrativeCount() == 2)
+        #expect(try records.recordCount() == 0)
     }
 
     // MARK: - Journal self-sufficiency (P3): restored entries must actually be VISIBLE
@@ -573,7 +389,7 @@ struct SealedBackupRestoreTests {
             date: try #require(FernletDate.date(fromDayKey: "2026-06-10"))
         )
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         // No days blob whatsoever — the post-reset state.
         #expect(store.loadDay(for: "2026-06-01").journals.isEmpty)
@@ -587,8 +403,7 @@ struct SealedBackupRestoreTests {
         let count = try store.applyRestoredPayload(
             try JSONEncoder().encode([restored]),
             payloadType: .journalNarratives,
-            journalRepository: narratives,
-            scope: .payloadStoreOnly
+            journalRepository: narratives
         )
         #expect(count == 1)
 
@@ -615,7 +430,7 @@ struct SealedBackupRestoreTests {
         let today = try #require(FernletDate.date(fromDayKey: "2026-06-10"))
         let (store, _, narratives) = makeTestStoreWithRepositories(date: today)
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         let restored = JournalNarrative(
             id: UUID(), dayKey: "2026-06-10", tag: .good, entryDate: today,
@@ -624,8 +439,7 @@ struct SealedBackupRestoreTests {
         _ = try store.applyRestoredPayload(
             try JSONEncoder().encode([restored]),
             payloadType: .journalNarratives,
-            journalRepository: narratives,
-            scope: .payloadStoreOnly
+            journalRepository: narratives
         )
 
         #expect(store.day.journals.map(\.id) == [restored.id])
@@ -640,7 +454,7 @@ struct SealedBackupRestoreTests {
         let today = try #require(FernletDate.date(fromDayKey: "2026-06-10"))
         let (store, _, narratives) = makeTestStoreWithRepositories(date: today)
         let key = SymmetricKey(size: .bits256)
-        store.activateSealedJournals(contentKey: key)
+        store.openHubForTesting(contentKey: key)
 
         // An entry this device already has (skeleton + sealed row), as a mid-restore race would leave it.
         let existing = JournalNarrative(
@@ -658,11 +472,317 @@ struct SealedBackupRestoreTests {
         _ = try store.applyRestoredPayload(
             try JSONEncoder().encode([existing, alsoRestored]),
             payloadType: .journalNarratives,
-            journalRepository: narratives,
-            scope: .payloadStoreOnly
+            journalRepository: narratives
         )
 
         #expect(store.day.journals.count == 2, "reconstruction duplicated an entry the day already had")
         #expect(Set(store.day.journals.map(\.id)) == [existing.id, alsoRestored.id])
     }
+
+    // MARK: - Period backup v2 restore through the coordinator (design §9.10; I15, I16)
+
+    /// I15: the ambient period restore runs iff this install's restore is unresolved AND no app-lock
+    /// reset holds it for the owner. Held: nothing written, nothing recorded. Unresolved: it merges,
+    /// resolves the marker and accepts the set. Resolved: it never runs again.
+    @MainActor
+    @Test func theAmbientPeriodRestoreRunsOnlyWhileUnresolvedAndNotHeld() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let first = PeriodBackupDevice(cloud: cloud, writer: "first", resolved: true)
+        try first.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await first.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        let head = try #require(try await PeriodBackupDevice.cloudHead(cloud))
+
+        let second = PeriodBackupDevice(cloud: cloud, writer: "second")
+        second.host.sealedBackupRestoreAwaitsOwner = true
+        #expect(await second.coordinator.restorePeriodBackup() == .deferredTransient)
+        #expect(try second.records.recordCount() == 0)
+        #expect(second.host.recordedOutcomes[.periodData] == nil)
+        #expect(!second.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+
+        second.host.sealedBackupRestoreAwaitsOwner = false
+        #expect(await second.coordinator.restorePeriodBackup() == .restored(1))
+        #expect(second.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(second.acceptedStamp == head, "the merged set is the accepted one")
+
+        try second.records.deleteAll()
+        #expect(await second.coordinator.restorePeriodBackup() == .skippedStoreNotEmpty)
+        #expect(try second.records.recordCount() == 0, "a deleted entry never comes back ambiently")
+    }
+
+    /// Fail closed at the decrypt seam, for every caller of the period restore — the bare outcome
+    /// wrapper included: while period tracking is hidden, or with no Private tab key, the cycle set in
+    /// iCloud is never even fetched and opened (the rollback mark it would have raised stays at 0).
+    @MainActor
+    @Test func thePeriodRestoreNeverOpensTheCloudSetWhileHiddenOrKeyless() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let first = PeriodBackupDevice(cloud: cloud, writer: "first", resolved: true)
+        try first.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await first.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+
+        let second = PeriodBackupDevice(cloud: cloud, writer: "second")
+        second.host.isPeriodTrackingVisible = false
+        #expect(await second.coordinator.restoreSealedBackupOutcome(payloadType: .periodData) == .deferredTransient)
+        second.host.isPeriodTrackingVisible = true
+        second.host.sealedBackupContentKey = nil
+        #expect(await second.coordinator.restoreSealedBackupOutcome(payloadType: .periodData) == .deferredLocked)
+        #expect(SealedBackupGenerationStore(defaults: second.generationDefaults).lastSeen(for: .periodData) == 0,
+                "nothing was fetched and opened")
+    }
+
+    /// I15: the marker resolves only on a non-retryable outcome that pulled the set or proved there is
+    /// none. No escrow key yet stays unresolved (retried at the next settle); a set this account's key
+    /// cannot open stays unresolved with its needs-attention status; an empty cloud resolves.
+    @MainActor
+    @Test func theRestoreMarkerResolvesOnlyWhenTheRestoreLandsForGood() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let first = PeriodBackupDevice(cloud: cloud, writer: "first", resolved: true)
+        try first.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await first.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+
+        let noEscrow = "com.fernlet.period-v2.noescrow.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: noEscrow) }
+        let notSynced = PeriodBackupDevice(cloud: cloud, writer: "notSynced", keychainService: noEscrow)
+        #expect(await notSynced.coordinator.restorePeriodBackup() == .deferredKeyNotSynced)
+        #expect(!notSynced.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+
+        let otherAccount = "com.fernlet.period-v2.otheraccount.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: otherAccount) }
+        let identity = IdentityService(keychainService: otherAccount)
+        try identity.ensureProvisioned()
+        identity.provisionBackupEscrowKeyForSealing()
+        let stranger = PeriodBackupDevice(cloud: cloud, writer: "stranger", keychainService: otherAccount)
+        // Design 2026-09-30 §4.8 item 6 / §5.6: a key MISMATCH is a retryable wait for the synced
+        // key, never the terminal `.notRecognized` — a locally minted key beside a synced key that
+        // has not arrived yet reads exactly like a mismatch. `.notRecognized` is for a set tagged
+        // with this iPhone's key that will not authenticate.
+        #expect(await stranger.coordinator.restorePeriodBackup() == .deferredKeyNotSynced)
+        #expect(!stranger.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(stranger.host.recordedOutcomes[.periodData] == .deferredKeyNotSynced)
+
+        let emptyCloud = try PeriodBackupDevice.makeCloud()
+        defer { emptyCloud.tearDown() }
+        let alone = PeriodBackupDevice(cloud: emptyCloud, writer: "alone")
+        #expect(await alone.coordinator.restorePeriodBackup() == .nothingToRestore)
+        #expect(alone.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+    }
+
+    /// Design 2026-09-30 §4.8 item 13 / BV13 (R1-BR-2, R2-F4), replacing period I15's "nothing to
+    /// restore from" rule: the marker NEVER resolves because iCloud sync or the backup is off. A new
+    /// iPhone whose first Private visit happens before either switch is on would otherwise close its
+    /// restore for good, and the backup turned on later would be written over without ever being
+    /// pulled. Turned on, the same install restores first (a merge) and only then exports.
+    @MainActor
+    @Test func theRestoreMarkerNeverResolvesBecauseSyncOrTheBackupIsOff() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let first = PeriodBackupDevice(cloud: cloud, writer: "first", resolved: true)
+        try first.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await first.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        let firstSet = cloud.sealedRecordIdentities
+
+        let backupOff = PeriodBackupDevice(cloud: cloud, writer: "a", preferences: StoragePreferences(iCloudSyncEnabled: true))
+        await backupOff.coordinator.settlePeriodBackup()
+        #expect(!backupOff.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "the backup off decides nothing")
+
+        let syncOff = PeriodBackupDevice(cloud: cloud, writer: "b", preferences: StoragePreferences(sealedBackupPeriodEnabled: true))
+        try syncOff.seed([PeriodBackupDevice.record(day: 7)])
+        await syncOff.coordinator.settlePeriodBackup()
+        #expect(!syncOff.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "sync off decides nothing")
+        #expect(cloud.sealedRecordIdentities == firstSet)
+
+        syncOff.preferences = PeriodBackupDevice.backupOn
+        await syncOff.coordinator.settlePeriodBackup()
+        #expect(syncOff.host.recordedOutcomes[.periodData] == .restored(1), "turned on, it restores first")
+        #expect(syncOff.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(try syncOff.records.allIDs()),
+                "and then publishes the union over the set it pulled")
+    }
+
+    /// I16, restore half: a restore is a merge that never deletes or regresses an openable local record
+    /// — a local-only entry stays, a local entry edited after the backup keeps its edit, and the
+    /// backup's other entries arrive. A v1 narrative merges with the same entry's clinical-only record
+    /// (imported from Apple Health) into one record carrying both blocks.
+    @MainActor
+    @Test func theRestoreMergesWithoutDeletingOrRegressingLocalRecords() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let shared = PeriodBackupDevice.record(day: 1, note: "In the backup.")
+        let backedUpOnly = PeriodBackupDevice.record(day: 2)
+        let first = PeriodBackupDevice(cloud: cloud, writer: "first", resolved: true)
+        try first.seed([shared, backedUpOnly])
+        #expect(await first.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+
+        let second = PeriodBackupDevice(cloud: cloud, writer: "second")
+        var edited = shared
+        edited.narrative?.note = "Edited here later."
+        edited.narrative?.updatedAt = shared.createdAt.addingTimeInterval(86_400)
+        let localOnly = PeriodBackupDevice.record(day: 3)
+        try second.seed([edited, localOnly])
+
+        #expect(await second.coordinator.restorePeriodBackup() == .restored(1))
+        let after = try second.records.allRecords(contentKey: second.key).records
+        #expect(Set(after.map(\.id)) == [shared.id, backedUpOnly.id, localOnly.id])
+        #expect(after.first { $0.id == shared.id }?.narrative?.note == "Edited here later.")
+        #expect(after.first { $0.id == localOnly.id } == localOnly)
+    }
+
+    /// v1 sets keep restoring after the update: their narratives become narrative-only records under
+    /// their legacy ids, so one merges with the clinical-only record the legacy import built from the
+    /// same entry's Apple Health samples.
+    @MainActor
+    @Test func aV1SetRestoresAndMergesWithTheSameEntrysImportedRecord() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let legacyID = UUID()
+        let writer = PeriodBackupDevice(cloud: cloud, writer: "old")
+        try await writer.writeV1Set([MenstrualNarrative(hkExternalUUID: legacyID.uuidString, dateKey: "2026-05-01", note: "From the old backup.")])
+
+        let phone = PeriodBackupDevice(cloud: cloud, writer: "phone")
+        var imported = PeriodBackupDevice.record(day: 1)
+        imported.id = legacyID
+        imported.narrative = nil
+        imported.origin = .importedLegacy
+        try phone.seed([imported])
+
+        #expect(await phone.coordinator.restorePeriodBackup() == .restored(1))
+        let merged = try #require(try phone.records.allRecords(contentKey: phone.key).records.first)
+        #expect(merged.id == legacyID)
+        #expect(merged.clinical == imported.clinical && merged.narrative?.note == "From the old backup.")
+        #expect(phone.acceptedStamp == SealedBackupHeadStamp(writer: SealedBackupHeadStamp.v1Writer, generation: 1))
+    }
+
+    /// After an app-lock reset (design §5.3, Q14): nothing restores and nothing exports until the
+    /// device owner's "Restore". Then the history comes back, the pre-reset copy is settled, and only
+    /// then may this iPhone back up over it — with the merged history, never the post-reset store alone.
+    @MainActor
+    @Test func theOwnersRestoreBringsThePeriodHistoryBackBeforeAnythingIsBackedUpOverIt() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let before = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        let history = PeriodBackupDevice.record(day: 1)
+        try before.seed([history])
+        #expect(await before.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        let preReset = cloud.sealedRecordIdentities
+
+        let after = PeriodBackupDevice(cloud: cloud, writer: "phone")
+        after.host.restoreHold.hold(keepingCopiesFrom: PeriodBackupDevice.backupOn)
+        try after.seed([PeriodBackupDevice.record(day: 9)])
+        await after.coordinator.settlePeriodBackup()
+        #expect(cloud.sealedRecordIdentities == preReset, "held: nothing restored, nothing written over it")
+        #expect(try after.records.recordCount() == 1)
+
+        await after.coordinator.releaseRestoreHoldForOwner()
+        #expect(!after.host.sealedBackupRestoreAwaitsOwner)
+        #expect(!after.host.sealedBackupKeepsPreResetCopy(of: .periodData), "the restore landed: the copy is settled")
+        #expect(try after.records.recordCount() == 2, "the pre-reset history is back")
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(try after.records.allIDs()),
+                "and the backup now holds the merged history")
+    }
+
+    /// Review U5-backup-v2-C-U5-1 / L-U5-R2: "nothing to restore from" is not "nothing up there"
+    /// while an app-lock reset keeps the period backup's pre-reset copy. With iCloud sync off at the
+    /// Cycle settle the restore used to be marked resolved — and then the owner's later "Restore"
+    /// found it resolved and restored nothing, while the hold (waiting for that restore) kept the
+    /// period backup from ever uploading again. The marker now stays open, and the history comes back
+    /// once sync is on and the owner asks.
+    @MainActor
+    @Test func aResetWithICloudSyncOffStillRestoresThePreResetHistoryLater() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let before = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        try before.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await before.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+
+        let after = PeriodBackupDevice(cloud: cloud, writer: "phone")
+        after.host.restoreHold.hold(keepingCopiesFrom: PeriodBackupDevice.backupOn)
+        try after.seed([PeriodBackupDevice.record(day: 9)])
+        after.preferences = StoragePreferences(sealedBackupPeriodEnabled: true, sealedBackupPeriodReuploadDeferred: true)
+        await after.coordinator.settlePeriodBackup()
+        #expect(!after.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "sync off: the pre-reset copy is out of reach, not gone")
+
+        after.preferences = PeriodBackupDevice.backupOn
+        await after.coordinator.releaseRestoreHoldForOwner()
+        #expect(try after.records.recordCount() == 2, "the pre-reset history is back")
+        #expect(!after.host.sealedBackupKeepsPreResetCopy(of: .periodData), "and the hold has nothing left to keep")
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(try after.records.allIDs()),
+                "so the period backup uploads again, with the merged history")
+    }
+
+    /// Review U5-backup-v2-L-U5-R2, the release half: the owner's "Restore" reopens this install's
+    /// period restore while the hold keeps the period copy, so no marker resolved in the meantime can
+    /// stand between the owner and the pre-reset history. A period copy the hold does not keep leaves
+    /// the marker alone.
+    @MainActor
+    @Test func theOwnersRestoreReopensAResolvedPeriodRestoreOnlyWhileItsCopyIsKept() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let before = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        try before.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await before.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+
+        let after = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        after.host.restoreHold.hold(keepingCopiesFrom: PeriodBackupDevice.backupOn)
+        await after.coordinator.releaseRestoreHoldForOwner()
+        #expect(try after.records.recordCount() == 1, "the kept copy is restored although the marker read resolved")
+
+        let other = PeriodBackupDevice(cloud: cloud, writer: "other", resolved: true)
+        other.host.restoreHold.hold(keepingCopiesFrom: StoragePreferences())
+        await other.coordinator.releaseRestoreHoldForOwner()
+        #expect(other.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "nothing kept: the resolved restore stays resolved")
+        #expect(try other.records.recordCount() == 0)
+    }
+
+    /// The new-iPhone scenario end to end (design §9.10 consequence 2, §4.9): an iPhone set up from a
+    /// device backup arrives with the sealed rows of the old iPhone (sealed under a key that never
+    /// migrates, so dead here) and the old iPhone's bookkeeping (the marker resolved, its accepted
+    /// head). The "can't open" check names the rows and clears that bookkeeping on Remove; the next
+    /// Cycle settle then merges the backup in, re-sealed under this iPhone's key, and backs up again.
+    @MainActor
+    @Test func aNewIPhoneFromADeviceBackupRemovesTheDeadRowsAndRestoresTheBackup() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let old = PeriodBackupDevice(cloud: cloud, writer: "old", resolved: true)
+        let history = [PeriodBackupDevice.record(day: 1), PeriodBackupDevice.record(day: 2)]
+        try old.seed(history)
+        #expect(await old.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+
+        let new = PeriodBackupDevice(cloud: cloud, writer: "new")
+        try new.seed(history, key: old.key)
+        // The old iPhone's bookkeeping, as it travels in a device backup: the marker, and an accepted
+        // head bound to the OLD install's tag — which reads as absent here (R1-BR-2).
+        let bookkeeping = new.host.sealedBackupBookkeeping
+        bookkeeping.markRestoreResolved(.periodData)
+        let travelled = try #require(old.host.sealedBackupBookkeeping.acceptedHead(.periodData, installTag: old.writer))
+        bookkeeping.recordAcceptedHead(travelled, .periodData, installTag: old.writer)
+        #expect(new.acceptedStamp == nil, "a travelled accepted head never reads as this install's")
+        let entries = SealedPriorEntryStore(
+            controller: new.controller,
+            latchDefaults: bookkeeping.defaults,
+            intimacyStore: IntimacyLogStore(repository: IntimacyLogRepository(controller: new.controller, defaults: bookkeeping.defaults)),
+            restoresAfterRemoval: { true }
+        )
+        #expect(try entries.cycleEntryCount() == 2)
+        #expect(entries.hasBackupBookkeeping())
+
+        // The card's Remove: exactly the dead rows go, then the bookkeeping that spoke for the old key.
+        try entries.removeCycleEntries()
+        entries.clearBackupBookkeeping()
+        #expect(!new.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(!bookkeeping.hasAcceptedHeadRecord(.periodData))
+
+        await new.coordinator.settlePeriodBackup()
+        let restored = try new.records.allRecords(contentKey: new.key)
+        #expect(restored.isFullyOpen && restored.records.count == 2, "the history is back, under this iPhone's key")
+        #expect(new.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(try await PeriodBackupDevice.cloudHead(cloud)?.writer == new.writer, "and this iPhone backs it up again")
+    }
+}
+
+/// A mutable count a `@MainActor` closure can bump.
+@MainActor
+final class ReadCounter {
+    var value = 0
 }

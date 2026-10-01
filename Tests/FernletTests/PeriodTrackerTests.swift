@@ -1,10 +1,8 @@
-import Combine
 import FernletFoundation
 import CoreData
 import CryptoKit
 import Foundation
 import HealthKit
-import LocalAuthentication
 import Testing
 import FernletDomainModel
 import PrivateStoreCore
@@ -13,8 +11,15 @@ import HealthKitGateway
 import FernletLock
 @testable import Fernlet
 
+/// The period store after the cutover (period-data design 2026-09-30, §6.3): Fernlet's sealed record
+/// is the source of truth, a save seals FIRST and mirrors to Apple Health second (only while cycle
+/// sharing is on), an edit updates in place, a delete removes Fernlet's rows before Health's copies,
+/// and the visibility gate keeps the store inert while hidden. Driven over `CycleStoreHarness` (one
+/// in-memory sealed stack, the mock Health seam, the mock lock seam).
 @MainActor
 struct PeriodTrackerTests {
+    // MARK: - The legacy narrative repository (still the import's source)
+
     @Test func narrativeRepositoryRoundTripsWithFixedKey() throws {
         let repository = makeRepository()
         let key = SymmetricKey(data: Data(repeating: 7, count: 32))
@@ -34,23 +39,6 @@ struct PeriodTrackerTests {
         #expect(read.customSymptomScales["cramps"] == 6)
     }
 
-    @Test func narrativeRepositoryRoundTripsCustomSymptomScales() throws {
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 7, count: 32))
-        let narrative = MenstrualNarrative(
-            hkExternalUUID: "hk-scales",
-            dateKey: "2026-05-20",
-            symptomFlags: [.cramps, .fatigue],
-            customSymptomScales: ["cramps": 8, "fatigue": 4]
-        )
-
-        try repo.insert(narrative, contentKey: key)
-        let read = try #require(try repo.narrative(forHKUUID: "hk-scales", contentKey: key))
-
-        #expect(read.customSymptomScales["cramps"] == 8)
-        #expect(read.customSymptomScales["fatigue"] == 4)
-    }
-
     @Test func narrativeRepositoryRejectsWrongKey() throws {
         let repository = makeRepository()
         let key = SymmetricKey(data: Data(repeating: 1, count: 32))
@@ -62,597 +50,823 @@ struct PeriodTrackerTests {
         }
     }
 
-    @Test func logEventWritesHealthKitMetadata() async throws {
-        let health = MockPeriodHealthKitService()
-        let periodStore = makePeriodStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .notConfigured))
+    // MARK: - Save: seal first, mirror second (I1, I2, I3)
 
-        _ = try await periodStore.logEvent(UserLoggedCycleEvent(flowLevel: .medium, isCycleStart: true), unlockedContentKey: nil)
-        let sample = try #require(health.savedSamples.first as? HKCategorySample)
+    /// I2: with sharing OFF and the Private tab open, a log with every field set is SEALED — every
+    /// field kept in Fernlet — and nothing reaches Apple Health (I1).
+    @Test func withSharingOffAFullLogIsSealedAndNothingReachesHealth() async throws {
+        let harness = CycleStoreHarness()
 
-        #expect(sample.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue)
-        #expect(sample.metadata?[HKMetadataKeyExternalUUID] as? String != nil)
-        #expect(sample.metadata?[HKMetadataKeyMenstrualCycleStart] as? Bool == true)
+        let outcome = try await harness.store.logEvent(Self.fullEvent(), unlockedContentKey: harness.key)
+
+        #expect(outcome == PeriodLogOutcome(storage: .sealed, healthCopy: .notShared))
+        #expect(harness.health.count("writeMirror") == 0, "sharing is off: nothing may reach Health")
+        let stored = try #require(try harness.storedRecords().first)
+        #expect(stored.clinical?.flowLevel == .medium)
+        #expect(stored.clinical?.isCycleStart == true)
+        #expect(stored.clinical?.basalBodyTemperature == 36.6)
+        #expect(stored.clinical?.temperatureUnit == .celsius)
+        #expect(stored.clinical?.cervicalMucusQuality == .eggWhite)
+        #expect(stored.clinical?.ovulationTestResult == .positive)
+        #expect(stored.clinical?.hasIntermenstrualBleeding == true)
+        #expect(stored.narrative?.note == "cramps after lunch")
+        #expect(stored.narrative?.symptomFlags == [.cramps])
     }
 
-    @Test func cycleEventWithoutFlowDoesNotEmitMenstrualFlowSample() throws {
-        let samples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(date: Date(), basalBodyTemperature: 98.6),
-            externalUUID: UUID()
-        )
+    /// I2: with NO passcode, sharing off and the Private tab closed, the same full log is HELD in the
+    /// pending buffer as a whole record — never refused, never dropped — and nothing reaches Health.
+    @Test func withNoPasscodeAndTheTabClosedAFullLogIsHeldNotRefused() async throws {
+        let harness = CycleStoreHarness(lockState: .notConfigured)
 
-        #expect(samples.contains { sample in
-            sample.sampleType.identifier == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue
-        })
-        #expect(samples.compactMap { $0 as? HKCategorySample }.allSatisfy { sample in
-            sample.categoryType.identifier != HKCategoryTypeIdentifier.menstrualFlow.rawValue
-        })
+        let outcome = try await harness.store.logEvent(Self.fullEvent(), unlockedContentKey: nil)
+
+        #expect(outcome == PeriodLogOutcome(storage: .pendingUntilPrivateOpens, healthCopy: .notShared))
+        #expect(harness.health.count("writeMirror") == 0)
+        let payload = try #require(harness.lock.pending.first)
+        let held = try CycleRecord(frozenJSON: try #require(payload.cycleRecordJSON))
+        #expect(held.clinical?.flowLevel == .medium && held.narrative?.note == "cramps after lunch")
+        #expect(payload.hkExternalUUID == held.id.uuidString)
+        #expect(try harness.records.recordCount() == 0, "no key was live, so nothing is sealed yet")
     }
 
-    @Test func logEventWithDefaultFlowSavesNoHealthKitSamples() async throws {
-        let health = MockPeriodHealthKitService()
-        let periodStore = makePeriodStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .notConfigured))
+    /// I1 + I3: with sharing ON the mirror is written — AFTER the record is sealed, never before.
+    @Test func withSharingOnTheMirrorIsWrittenAfterTheSeal() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+        var sealedWhenHealthWasTouched: Int?
+        let records = harness.records
+        harness.health.onHealthWrite = { _ in sealedWhenHealthWasTouched = try? records.recordCount() }
 
-        let result = try await periodStore.logEvent(UserLoggedCycleEvent(), unlockedContentKey: nil)
+        let outcome = try await harness.store.logEvent(Self.fullEvent(), unlockedContentKey: harness.key)
 
-        #expect(result == .saved)
-        #expect(health.savedSamples.isEmpty)
+        #expect(outcome.healthCopy == .written)
+        #expect(sealedWhenHealthWasTouched == 1, "the record is sealed before Health is touched")
+        #expect(harness.health.writtenMirrors.map(\.id) == (try harness.storedRecords()).map(\.id))
     }
 
-    @Test func explicitUnspecifiedFlowEmitsHealthKitUnspecifiedSample() throws {
-        let samples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(date: Date(), flowLevel: .unspecified),
-            externalUUID: UUID()
-        )
-        let sample = try #require(samples.first as? HKCategorySample)
+    /// A refused mirror keeps the entry and says what happened; "sharing is off" is not a failure.
+    @Test func aMirrorFailureKeepsTheEntry() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+        harness.health.writeMirrorError = HKError(.errorAuthorizationDenied)
 
-        #expect(sample.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue)
-        #expect(sample.value == HKCategoryValueVaginalBleeding.unspecified.rawValue)
+        let denied = try await harness.store.logEvent(UserLoggedCycleEvent(flowLevel: .light), unlockedContentKey: harness.key)
+        #expect(denied == PeriodLogOutcome(storage: .sealed, healthCopy: .failed(.healthDenied)))
+
+        harness.health.writeMirrorError = SharingOffForTest()
+        let off = try await harness.store.logEvent(UserLoggedCycleEvent(flowLevel: .heavy), unlockedContentKey: harness.key)
+        #expect(off.healthCopy == .notShared)
+        #expect(try harness.records.recordCount() == 2, "both entries are kept whatever Health said")
     }
 
-    @Test func logEventPersistsProvidedDate() async throws {
-        let health = MockPeriodHealthKitService()
-        let key = SymmetricKey(data: Data(repeating: 6, count: 32))
-        let store = makePeriodStore(
-            healthService: health,
+    /// I3: a buffer that refuses throws with NO Health call — nothing is mirrored for an entry Fernlet
+    /// did not keep.
+    @Test func aBufferFailureMakesNoHealthCall() async throws {
+        let harness = CycleStoreHarness(lockState: .locked(cooldownDeadline: nil))
+        harness.health.mirrorEnabled = true
+        harness.lock.bufferError = PendingNarrativeBufferError.full
+
+        await #expect(throws: PendingNarrativeBufferError.full) {
+            _ = try await harness.store.logEvent(UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: nil)
+        }
+        #expect(harness.health.calls.isEmpty, "nothing was kept, so nothing may reach Health")
+    }
+
+    /// I3: an entry with nothing in it is refused before anything — no seal, no buffer, no Health.
+    @Test func anEmptyEntryIsRefusedBeforeAnything() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+
+        await #expect(throws: CycleRecordRepositoryError.self) {
+            _ = try await harness.store.logEvent(UserLoggedCycleEvent(), unlockedContentKey: harness.key)
+        }
+        #expect(harness.health.calls.isEmpty)
+        #expect(try harness.records.recordCount() == 0)
+    }
+
+    /// Notes and symptoms alone are never copied to Health, sharing on or not.
+    @Test func aNotesOnlyEntryIsNeverMirrored() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+
+        let outcome = try await harness.store.logEvent(UserLoggedCycleEvent(note: "tired", symptoms: [.fatigue]), unlockedContentKey: harness.key)
+
+        #expect(outcome == PeriodLogOutcome(storage: .sealed, healthCopy: .notShared))
+        #expect(harness.health.calls.isEmpty)
+    }
+
+    /// The store with no lock seam wired refuses a closed-tab save instead of claiming a buffer.
+    @Test func anUnwiredLockSeamRefusesRatherThanClaimingABuffer() async throws {
+        let store = PeriodTrackerStore(
+            healthService: MockCycleHealthService(),
             narrativeRepository: makeRepository(),
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
+            recordStore: CycleRecordStore(controller: PrivatePersistenceController(inMemory: true))
         )
-        let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: Date())!
+        store.attachVisibilityGate { true }
 
-        _ = try await store.logEvent(
-            UserLoggedCycleEvent(date: fiveDaysAgo, flowLevel: .light, note: "back-dated", symptoms: [.bloating]),
-            unlockedContentKey: key
-        )
-        let sample = try #require(health.savedSamples.first as? HKCategorySample)
-
-        #expect(Calendar.current.isDate(sample.startDate, inSameDayAs: fiveDaysAgo))
+        await #expect(throws: FernletLockError.self) {
+            _ = try await store.logEvent(UserLoggedCycleEvent(note: "nowhere to go"), unlockedContentKey: nil)
+        }
     }
 
-    @Test func lockedLogEventBuffersNarrative() async throws {
-        let lock = MockLockService(state: .locked(cooldownDeadline: nil))
-        let periodStore = makePeriodStore(healthService: MockPeriodHealthKitService(), narrativeRepository: makeRepository(), lockService: lock)
+    // MARK: - The visibility gate (I10)
 
-        let result = try await periodStore.logEvent(UserLoggedCycleEvent(note: "save later", symptoms: [.headache]), unlockedContentKey: nil)
+    @Test func hiddenLogEventIsRefusedBeforeAnything() async throws {
+        let harness = CycleStoreHarness(visible: false)
+        harness.health.mirrorEnabled = true
 
-        #expect(result == .savedWithBufferedNarrative)
-        #expect(lock.pending.count == 1)
-        #expect(lock.pending.first?.noteBytes.flatMap { String(data: $0, encoding: .utf8) } == "save later")
+        await #expect(throws: PeriodTrackingHiddenError.self) {
+            _ = try await harness.store.logEvent(UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: harness.key)
+        }
+        #expect(harness.health.calls.isEmpty)
+        #expect(harness.lock.pending.isEmpty)
+        #expect(try harness.records.recordCount() == 0)
     }
 
-    @Test func lockedLogEventBuffersCustomSymptomScales() async throws {
-        let lock = MockLockService(state: .locked(cooldownDeadline: nil))
-        let store = makePeriodStore(
-            healthService: MockPeriodHealthKitService(),
-            narrativeRepository: makeRepository(),
-            lockService: lock
-        )
+    /// While hidden a load performs NO Health read and NO decrypt, and scrubs.
+    @Test func hiddenLoadPerformsNoHealthReadAndNoDecrypt() async throws {
+        let harness = CycleStoreHarness(visible: false)
+        try harness.records.insert(PeriodTestSupport.record(on: Date(), flow: .heavy), contentKey: harness.key)
 
-        _ = try await store.logEvent(
-            UserLoggedCycleEvent(symptoms: [.cramps], customSymptomScales: ["cramps": 9]),
-            unlockedContentKey: nil
-        )
-        let payload = try #require(lock.pending.first)
-        let scales = try JSONDecoder().decode([String: Int].self, from: #require(payload.customSymptomScalesBytes))
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
 
-        #expect(scales["cramps"] == 9)
+        #expect(harness.health.count("load") == 0)
+        #expect(harness.store.entries.isEmpty)
+        #expect(harness.store.prediction == nil)
     }
 
-    @Test func loggingWithoutNarrativeDoesNotTouchRepositoryOrBuffer() async throws {
-        let lock = MockLockService(state: .unlocked(scope: .privateHub))
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 3, count: 32))
-        let store = makePeriodStore(
-            healthService: MockPeriodHealthKitService(),
-            narrativeRepository: repo,
-            lockService: lock
-        )
+    /// The pending buffer unseals under a DEVICE key, so the drain must refuse explicitly while hidden,
+    /// leaving the buffer intact (hiding is not deleting).
+    @Test func hiddenDrainIsRefusedAndLeavesBufferIntact() async throws {
+        let harness = CycleStoreHarness(visible: false)
+        harness.lock.pending = [try Self.v2Payload(PeriodTestSupport.record(on: Date(), flow: .light))]
 
-        let result = try await store.logEvent(UserLoggedCycleEvent(flowLevel: .light), unlockedContentKey: key)
+        try await harness.store.drainPendingBuffer(contentKey: harness.key)
 
-        #expect(result == .saved)
-        #expect(lock.pending.isEmpty)
-        let range = DateInterval(start: Date().addingTimeInterval(-86_400), end: Date())
-        #expect(try repo.narratives(in: range, contentKey: key).isEmpty)
+        #expect(harness.lock.pending.count == 1)
+        #expect(try harness.records.recordCount() == 0)
     }
 
-    @Test func loadEntriesWithNilKeyReturnsSamplesWithoutNarrative() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 4, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .medium),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "should not surface"
-        ), contentKey: key)
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .locked(cooldownDeadline: nil))
-        )
-
-        await store.loadEntries(unlockedContentKey: nil)
-
-        let today = store.entries.first { $0.dateKey == FernletDate.dayKey(for: Date()) }
-        #expect(today?.samples.isEmpty == false)
-        #expect(today?.narrative == nil)
-    }
-
-    // MARK: - Visibility gate (hide = inert, never delete)
-
-    /// The load-bearing guarantee: while hidden, Fernlet performs NO cycle decrypt AND no cycle
-    /// HealthKit read. The HealthKit half is the one a key-withholding gate would miss.
-    @Test func hiddenLoadPerformsNoHealthKitReadAndNoDecrypt() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 9, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .heavy),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "must never surface while hidden",
-            symptomFlags: [.cramps]
-        ), contentKey: key)
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
-        store.attachVisibilityGate { false }
-
-        // Unlocked, with a valid key and real data present — the gate is the only thing stopping this.
-        await store.loadEntries(unlockedContentKey: key)
-
-        #expect(health.loadPeriodEventsCallCount == 0)
-        #expect(store.entries.isEmpty)
-        #expect(store.currentPhase == .unknown)
-        #expect(store.prediction == nil)
-    }
-
-    /// Hiding mid-session must DROP plaintext already resident, not merely refuse the next load —
-    /// otherwise up to 240 days of decrypted narratives stay in memory until the process dies.
-    @Test func hidingMidSessionScrubsResidentPlaintext() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 10, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .medium),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "loaded while visible"
-        ), contentKey: key)
+    /// An edit racing a hide is refused before anything changes.
+    @Test func hiddenEditIsRefusedBeforeAnythingChanges() async throws {
         var visible = true
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
-        store.attachVisibilityGate { visible }
-
-        await store.loadEntries(unlockedContentKey: key)
-        #expect(!store.entries.isEmpty)
+        let harness = CycleStoreHarness()
+        harness.store.attachVisibilityGate { visible }
+        let record = PeriodTestSupport.record(on: Date(), flow: .medium)
+        try harness.records.insert(record, contentKey: harness.key)
 
         visible = false
-        store.scrubCycleState()
-
-        #expect(store.entries.isEmpty)
-        #expect(store.currentPhase == .unknown)
-        #expect(store.prediction == nil)
+        await #expect(throws: PeriodTrackingHiddenError.self) {
+            _ = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .heavy), unlockedContentKey: harness.key)
+        }
+        #expect(try harness.storedRecords().first?.clinical?.flowLevel == .medium)
+        #expect(harness.health.calls.isEmpty)
     }
 
-    /// The gate is checked BEFORE the HealthKit await, and that await is arbitrarily long. Hiding
-    /// while it is in flight must abandon the load rather than publish narratives decrypted for a
-    /// surface the app is now presenting as off.
-    @Test func hidingDuringTheHealthKitAwaitAbandonsTheLoad() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 21, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .medium),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "must not surface after hiding"
-        ), contentKey: key)
+    /// I10/I14: deleting works hidden and with no key — hiding must never block "delete my data".
+    @Test func deleteDayWorksWhileHidden() async throws {
+        let harness = CycleStoreHarness(visible: false)
+        let record = PeriodTestSupport.record(on: Date(), flow: .medium)
+        let funnel = harness.records
+        try funnel.insert(record, contentKey: harness.key)
+        let entry = CycleDayEntry(date: Date(), dateKey: record.dayKey, records: [record])
+
+        let outcome = try await harness.store.deleteDay(entry)
+
+        #expect(outcome.removedRecordCount == 1)
+        #expect(try funnel.recordCount() == 0)
+    }
+
+    // MARK: - Load (§6.3)
+
+    /// G1: a load with no key scrubs — the records are the calendar, and they need the key.
+    @Test func aKeylessLoadScrubsAndReadsNothing() async throws {
+        let harness = CycleStoreHarness()
+        try harness.records.insert(PeriodTestSupport.record(on: Date(), flow: .medium), contentKey: harness.key)
+
+        await harness.store.loadEntries(unlockedContentKey: nil)
+
+        #expect(harness.store.entries.isEmpty)
+        #expect(harness.health.calls.isEmpty)
+    }
+
+    /// With the cycle capability off, the calendar is Fernlet-only and NO Health read happens.
+    @Test func withHealthReadOffNoHealthCallIsMade() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.readEnabled = false
+        try harness.records.insert(PeriodTestSupport.record(on: Date(), flow: .medium), contentKey: harness.key)
+
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        #expect(harness.health.count("load") == 0)
+        #expect(Self.today(in: harness.store)?.flowLevel == .medium, "the record alone puts the day on the calendar")
+    }
+
+    /// I12 dedupe: a Fernlet mirror whose record's clinical block is KNOWN is hidden (the record is
+    /// authoritative); a Fernlet copy with no record here stays, as a Health-only Fernlet day; other
+    /// apps' samples stay, read-only, and are never sealed.
+    @Test func mirrorsOfKnownRecordsAreHiddenAndEverythingElseStaysReadOnly() async throws {
+        let harness = CycleStoreHarness()
+        let today = Date()
+        let record = PeriodTestSupport.record(on: today, flow: .medium)
+        try harness.records.insert(record, contentKey: harness.key)
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today) ?? today
+        let otherPhone = PeriodTestSupport.record(on: yesterday, flow: .heavy)
+        let twoDaysAgo = Calendar.current.date(byAdding: .day, value: -2, to: today) ?? today
+        harness.health.loadedSamples = try HealthKitService.periodSamples(for: record)
+            + HealthKitService.periodSamples(for: otherPhone)
+            + CycleStoreHarness.otherAppSamples(flow: .light, on: twoDaysAgo)
+
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        let todays = try #require(Self.entry(on: today, in: harness.store))
+        #expect(todays.records.map(\.id) == [record.id])
+        #expect(todays.fernletHealthSamples.isEmpty, "the record's own mirror is hidden")
+        let healthOnly = try #require(Self.entry(on: yesterday, in: harness.store))
+        #expect(healthOnly.isHealthOnlyFernletDay, "a Fernlet copy with no record here stays, read-only")
+        let otherApp = try #require(Self.entry(on: twoDaysAgo, in: harness.store))
+        #expect(otherApp.records.isEmpty && otherApp.otherHealthSamples.count == 1)
+        #expect(otherApp.flowLevel == .light, "other apps' data counts toward the calendar")
+        #expect(try harness.records.recordCount() == 1, "Health samples are never sealed")
+    }
+
+    /// Fill-on-read (§6.3 step 6): a record whose clinical block is UNKNOWN (a legacy narrative-only
+    /// one) is completed from its own Fernlet samples and written back; its samples are then hidden.
+    @Test func fillOnReadCompletesAnUnknownClinicalBlock() async throws {
+        let harness = CycleStoreHarness()
+        let samplesSource = PeriodTestSupport.record(on: Date(), flow: .heavy)
+        var narrativeOnly = samplesSource
+        narrativeOnly.clinical = nil
+        narrativeOnly.narrative = CycleNarrativeFields(note: "from before", symptomFlags: [], customSymptomScales: [:], updatedAt: Date())
+        try harness.records.insert(narrativeOnly, contentKey: harness.key)
+        harness.health.loadedSamples = try PeriodTestSupport.legacySamples(for: samplesSource)
+
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        let stored = try #require(try harness.storedRecords().first)
+        #expect(stored.clinical?.flowLevel == .heavy, "the clinical block was filled and written back")
+        #expect(stored.narrative?.note == "from before", "the narrative block is untouched")
+        let today = try #require(Self.today(in: harness.store))
+        #expect(today.fernletHealthSamples.isEmpty)
+        #expect(today.flowLevel == .heavy)
+    }
+
+    /// Fill-on-read completes a record; it never CREATES one (a sample with no record stays a sample).
+    @Test func fillOnReadNeverCreatesARecord() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.loadedSamples = try PeriodTestSupport.legacySamples(for: PeriodTestSupport.record(on: Date(), flow: .light))
+
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        #expect(try harness.records.recordCount() == 0)
+        #expect(Self.today(in: harness.store)?.isHealthOnlyFernletDay == true)
+    }
+
+    /// The post-await recheck (§8.4): writers stopped while the Health read is in flight (delete-all's
+    /// first leg) — the fill-on-read that load would have written never lands.
+    @Test func aFillOnReadBegunBeforeTheWritersStopNeverLands() async throws {
+        let harness = CycleStoreHarness()
+        let samplesSource = PeriodTestSupport.record(on: Date(), flow: .heavy)
+        var narrativeOnly = samplesSource
+        narrativeOnly.clinical = nil
+        narrativeOnly.narrative = CycleNarrativeFields(note: "from before", symptomFlags: [], customSymptomScales: [:], updatedAt: Date())
+        try harness.records.insert(narrativeOnly, contentKey: harness.key)
+        harness.health.loadedSamples = try PeriodTestSupport.legacySamples(for: samplesSource)
+        let store = harness.store
+        harness.health.duringLoad = { store.cancelBackgroundWriters() }
+
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        #expect(try harness.storedRecords().count == 1)
+        #expect(try harness.storedRecords().first?.clinical == nil, "the epoch moved: nothing was written")
+    }
+
+    /// Hiding while the Health read is in flight abandons the load — no plaintext published.
+    @Test func hidingDuringTheHealthAwaitAbandonsTheLoad() async throws {
         var visible = true
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
-        store.attachVisibilityGate { visible }
-        health.duringLoad = { visible = false }
+        let harness = CycleStoreHarness()
+        harness.store.attachVisibilityGate { visible }
+        try harness.records.insert(PeriodTestSupport.record(on: Date(), flow: .medium), contentKey: harness.key)
+        harness.health.duringLoad = { visible = false }
 
-        await store.loadEntries(unlockedContentKey: key)
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
 
-        #expect(store.entries.isEmpty)
-        #expect(store.prediction == nil)
-        #expect(store.currentPhase == .unknown)
+        #expect(harness.store.entries.isEmpty)
+        #expect(harness.store.prediction == nil)
     }
 
-    /// The same race in the LOCK dimension: the caller's content key was live when the load started,
-    /// and the hub can lock during the HealthKit await. The load must be abandoned rather than
-    /// decrypt 240 days of narratives with a key the hub has already dropped.
-    @Test func lockingDuringTheHealthKitAwaitAbandonsTheLoad() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 22, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .medium),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "must not surface after locking"
-        ), contentKey: key)
-        var liveKey: SymmetricKey? = key
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
-        store.attachLiveContentKeyProvider { liveKey }
+    /// The same race in the lock dimension: the hub closes (or re-keys) during the Health read.
+    @Test func lockingDuringTheHealthAwaitAbandonsTheLoad() async throws {
+        let harness = CycleStoreHarness()
+        try harness.records.insert(PeriodTestSupport.record(on: Date(), flow: .medium), contentKey: harness.key)
+        var liveKey: SymmetricKey? = harness.key
+        harness.store.attachLiveContentKeyProvider { liveKey }
 
-        // Control: with the hub still holding the same key, the load publishes normally.
-        await store.loadEntries(unlockedContentKey: key)
-        #expect(!store.entries.isEmpty)
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+        #expect(!harness.store.entries.isEmpty)
 
-        // The hub locks mid-await → abandon, scrubbing what the previous load left resident.
-        health.duringLoad = { liveKey = nil }
-        await store.loadEntries(unlockedContentKey: key)
-        #expect(store.entries.isEmpty)
+        harness.health.duringLoad = { liveKey = nil }
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+        #expect(harness.store.entries.isEmpty)
 
-        // A re-key mid-await is the same verdict: this load's authorization no longer exists.
-        health.duringLoad = { liveKey = SymmetricKey(data: Data(repeating: 23, count: 32)) }
-        await store.loadEntries(unlockedContentKey: key)
-        #expect(store.entries.isEmpty)
+        harness.health.duringLoad = { liveKey = SymmetricKey(data: Data(repeating: 23, count: 32)) }
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+        #expect(harness.store.entries.isEmpty)
     }
 
-    /// Hidden must never mean deleted: the sealed rows survive and come back on un-hide.
+    /// Hiding never deletes: hidden, the store reads nothing; un-hidden, the same record is back.
     @Test func hidingKeepsDataAndUnhidingRestoresIt() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 11, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .light),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "survives hiding"
-        ), contentKey: key)
         var visible = false
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
-        store.attachVisibilityGate { visible }
+        let harness = CycleStoreHarness()
+        harness.store.attachVisibilityGate { visible }
+        let funnel = harness.records
+        try funnel.insert(PeriodTestSupport.record(on: Date(), flow: .light, symptoms: [.acne]), contentKey: harness.key)
 
-        await store.loadEntries(unlockedContentKey: key)
-        #expect(store.entries.isEmpty)
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+        #expect(harness.store.entries.isEmpty)
 
         visible = true
-        await store.loadEntries(unlockedContentKey: key)
-
-        let today = store.entries.first { $0.dateKey == FernletDate.dayKey(for: Date()) }
-        #expect(today?.narrative?.note == "survives hiding")
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+        #expect(Self.today(in: harness.store)?.symptomFlags == [.acne])
     }
 
-    @Test func hiddenLogEventIsRefused() async throws {
-        let health = MockPeriodHealthKitService()
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: makeRepository(),
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
-        store.attachVisibilityGate { false }
+    /// A logged "None" is a logged none — not menstrual (today's "any flow sample is menstrual" fix).
+    @Test func aLoggedNoneFlowIsNotMenstrual() async throws {
+        let harness = CycleStoreHarness()
+        try harness.records.insert(PeriodTestSupport.record(on: Date(), flow: PeriodFlowLevel.none), contentKey: harness.key)
 
-        await #expect(throws: PeriodTrackingHiddenError.self) {
-            _ = try await store.logEvent(
-                UserLoggedCycleEvent(flowLevel: .medium),
-                unlockedContentKey: SymmetricKey(data: Data(repeating: 12, count: 32))
-            )
-        }
-        #expect(health.savedSamples.isEmpty)
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        #expect(Self.today(in: harness.store)?.flowLevel == PeriodFlowLevel.none)
+        #expect(Self.today(in: harness.store)?.phase == .unknown)
+        #expect(harness.store.currentPhase == .unknown)
     }
 
-    /// The pending buffer unseals under a DEVICE key, not the content key, so withholding the content
-    /// key does nothing here — the gate must refuse explicitly. The buffer is left intact to drain
-    /// later, because hiding is not deleting.
-    @Test func hiddenDrainIsRefusedAndLeavesBufferIntact() async throws {
-        let lock = MockLockService(state: .unlocked(scope: .privateHub))
-        let key = SymmetricKey(data: Data(repeating: 13, count: 32))
-        lock.pending = [PendingNarrativePayload(
-            hkExternalUUID: UUID().uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            noteBytes: Data("buffered".utf8),
-            symptomFlagsBytes: nil,
-            customSymptomScalesBytes: nil
-        )]
-        let store = makePeriodStore(
-            healthService: MockPeriodHealthKitService(),
-            narrativeRepository: makeRepository(),
-            lockService: lock
-        )
-        store.attachVisibilityGate { false }
+    @Test func currentPhaseUsesObservedFlowOnly() async throws {
+        let harness = CycleStoreHarness()
+        try harness.records.insert(PeriodTestSupport.record(on: Date(), flow: .light), contentKey: harness.key)
 
-        try await store.drainPendingBuffer(contentKey: key)
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
 
-        #expect(lock.pending.count == 1)
+        #expect(harness.store.currentPhaseFromObservations() == .menstrual)
     }
 
-    /// Regression: `editEvent` is delete-then-recreate. When the gate lived only inside `logEvent`, an
-    /// edit racing a hide deleted the HealthKit samples AND the sealed narrative, then threw without
-    /// writing the replacement — the gate itself destroying data it was built to preserve.
-    @Test func hiddenEditIsRefusedBeforeAnythingIsDeleted() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 14, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .medium),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "must survive a refused edit"
-        ), contentKey: key)
-        var visible = true
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
-        store.attachVisibilityGate { visible }
-        await store.loadEntries(unlockedContentKey: key)
-        let entry = try #require(store.entries.first { $0.narrative != nil })
-
-        visible = false
-        await #expect(throws: PeriodTrackingHiddenError.self) {
-            _ = try await store.editEvent(
-                UserLoggedCycleEvent(flowLevel: .heavy),
-                replacingEntry: entry,
-                unlockedContentKey: key
-            )
+    @Test func loadEntriesBuildsPredictionFromRecords() async throws {
+        let harness = CycleStoreHarness()
+        let calendar = Calendar.current
+        let firstStart = try #require(calendar.date(byAdding: .day, value: -140, to: Date()))
+        for cycleIndex in 0..<6 {
+            let start = try #require(calendar.date(byAdding: .day, value: cycleIndex * 28, to: firstStart))
+            try harness.records.insert(PeriodTestSupport.record(on: start, flow: .medium), contentKey: harness.key)
         }
 
-        // The narrative must still be readable — the refused edit deleted nothing.
-        let surviving = try repo.narrative(forHKUUID: externalUUID.uuidString, contentKey: key)
-        #expect(surviving?.note == "must survive a refused edit")
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        let prediction = try #require(harness.store.prediction)
+        #expect(prediction.confidence > 0.5)
     }
 
-    /// The same hazard from the Health side (2026-09-23). Deleting Fernlet's own samples is allowed
-    /// with cycle sharing off; re-writing them is not. An edit that did not ask first would delete the
-    /// day's samples and its sealed note, then have its re-log refused — so the write check must run,
-    /// and refuse, BEFORE anything is deleted.
-    @Test func editWithCycleSharingOffIsRefusedBeforeAnythingIsDeleted() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 15, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .medium),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "must survive a sharing-off edit"
-        ), contentKey: key)
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
-        await store.loadEntries(unlockedContentKey: key)
-        let entry = try #require(store.entries.first { $0.narrative != nil })
-        health.writeCheckError = HealthKitServiceError.sharingTurnedOff
+    // MARK: - Edit (§6.3)
 
-        await #expect(throws: HealthKitServiceError.self) {
-            _ = try await store.editEvent(
-                UserLoggedCycleEvent(flowLevel: .heavy),
-                replacingEntry: entry,
-                unlockedContentKey: key
-            )
-        }
+    /// An edit updates the record IN PLACE: same id, the creation time kept, one row.
+    @Test func anEditUpdatesTheRecordInPlace() async throws {
+        let harness = CycleStoreHarness()
+        let original = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(original, contentKey: harness.key)
 
-        #expect(health.writeCheckCallCount == 1)
-        #expect(health.deleteCallCount == 0, "nothing may be deleted before the re-log is known to be allowed")
-        #expect(health.savedSamples.isEmpty)
-        let surviving = try repo.narrative(forHKUUID: externalUUID.uuidString, contentKey: key)
-        #expect(surviving?.note == "must survive a sharing-off edit")
+        let outcome = try await harness.store.editRecord(
+            original.id, with: UserLoggedCycleEvent(date: original.loggedAt, flowLevel: .heavy, note: "worse"), unlockedContentKey: harness.key
+        )
+
+        #expect(outcome == PeriodLogOutcome(storage: .sealed, healthCopy: .notShared))
+        let stored = try harness.storedRecords()
+        #expect(stored.count == 1)
+        #expect(stored.first?.id == original.id)
+        #expect(stored.first?.createdAt == original.createdAt)
+        #expect(stored.first?.clinical?.flowLevel == .heavy)
+        #expect(stored.first?.narrative?.note == "worse")
     }
 
-    /// Regression: `deleteEntry` used to recompute `prediction` with no key check, while the identical
-    /// assignment in `loadEntries` was gated — so deleting an entry re-enabled phase resolution (and
-    /// the scoring softening riding on it) with no content key, punching through both lock and gate.
-    @Test func deleteEntryDoesNotResurrectPredictionWithoutContentKey() async throws {
-        let health = MockPeriodHealthKitService()
-        let calendar = PeriodTestSupport.gmtCalendar()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .medium),
-            externalUUID: UUID()
-        )
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: makeRepository(),
-            lockService: MockLockService(state: .locked(cooldownDeadline: nil)),
-            calendar: calendar
-        )
+    /// Q1: with sharing OFF an edit removes Fernlet's older Health copy, and says so ONLY when a
+    /// sample was really deleted; it never writes.
+    @Test func withSharingOffAnEditRemovesTheStaleCopyAndSaysSoOnlyWhenOneWent() async throws {
+        let harness = CycleStoreHarness()
+        let record = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(record, contentKey: harness.key)
 
-        await store.loadEntries(unlockedContentKey: nil)
-        #expect(store.prediction == nil)
+        harness.health.deleteMirrorResult = 2
+        let removed = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: harness.key)
+        #expect(removed.healthCopy == .removedStaleCopy)
 
-        if let entry = store.entries.first(where: { !$0.samples.isEmpty }) {
-            try await store.deleteEntry(entry)
-        }
-
-        #expect(store.prediction == nil)
+        harness.health.deleteMirrorResult = 0
+        let nothing = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .heavy), unlockedContentKey: harness.key)
+        #expect(nothing.healthCopy == .notShared, "no copy was there: nothing to say")
+        #expect(harness.health.count("writeMirror") == 0)
     }
 
-    @Test func loadEntriesJoinsNarrativeToSampleByExternalUUID() async throws {
-        let health = MockPeriodHealthKitService()
-        let repo = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 5, count: 32))
-        let externalUUID = UUID()
-        health.loadedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(flowLevel: .heavy),
-            externalUUID: externalUUID
-        )
-        try repo.insert(MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: Date()),
-            note: "joined",
-            symptomFlags: [.cramps]
-        ), contentKey: key)
-        let store = makePeriodStore(
-            healthService: health,
-            narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked(scope: .privateHub))
-        )
+    /// With sharing ON an edit deletes Fernlet's copy and writes the new one, in that order.
+    @Test func withSharingOnAnEditRewritesTheMirror() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+        let record = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(record, contentKey: harness.key)
 
-        await store.loadEntries(unlockedContentKey: key)
+        let outcome = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: harness.key)
 
-        let today = store.entries.first { $0.dateKey == FernletDate.dayKey(for: Date()) }
-        #expect(today?.narrative?.note == "joined")
-        #expect(today?.narrative?.symptomFlags == [.cramps])
+        #expect(outcome.healthCopy == .written)
+        #expect(harness.health.calls == ["deleteMirror", "writeMirror"])
+        #expect(harness.health.writtenMirrors.first?.clinical?.flowLevel == .medium)
     }
 
-    @Test func drainPendingBufferWritesNarrativeRows() async throws {
-        let lock = MockLockService(state: .unlocked(scope: .privateHub))
-        lock.pending = [PendingNarrativePayload(
-            hkExternalUUID: "hk-drain",
+    /// A rewrite refused after the delete is reported; the edit itself stays saved.
+    @Test func aRewriteRefusedAfterTheDeleteIsReported() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+        harness.health.writeMirrorError = HKError(.errorAuthorizationDenied)
+        let record = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(record, contentKey: harness.key)
+
+        let outcome = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: harness.key)
+
+        #expect(outcome.healthCopy == .failed(.healthDenied))
+        #expect(try harness.storedRecords().first?.clinical?.flowLevel == .medium)
+    }
+
+    /// An edit that leaves an UNKNOWN block empty leaves it unknown: a legacy narrative-only record
+    /// edited for its note does not gain a "none" clinical block — and its Fernlet samples in Apple
+    /// Health, the block's not-yet-imported source, are never touched, so they can still complete it
+    /// (review round 1, C-U4-R1 / L-U4-1: the edit used to delete them, sharing on or off, and say
+    /// "removed its older copy"). Health here holds three such samples; neither sharing state may
+    /// reach them.
+    @Test(arguments: [false, true])
+    func anEditKeepsAnUnknownBlockUnknown(sharing: Bool) async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = sharing
+        harness.health.deleteMirrorResult = 3
+        let narrativeOnly = Self.narrativeOnlyRecord()
+        try harness.records.insert(narrativeOnly, contentKey: harness.key)
+
+        let outcome = try await harness.store.editRecord(
+            narrativeOnly.id, with: UserLoggedCycleEvent(note: "edited", symptoms: [.cramps]), unlockedContentKey: harness.key
+        )
+
+        let stored = try #require(try harness.storedRecords().first)
+        #expect(stored.clinical == nil)
+        #expect(stored.narrative?.note == "edited")
+        #expect(harness.health.count("deleteMirror") == 0, "the record's pre-cutover samples were deleted")
+        #expect(harness.health.deletedMirrorIDs.isEmpty)
+        #expect(harness.health.calls.isEmpty, "a note-only edit of an unknown block has nothing for Apple Health")
+        #expect(outcome.healthCopy == .notShared)
+    }
+
+    /// An edit that gives an UNKNOWN block fields still never deletes the record's pre-cutover
+    /// samples: with sharing on, the new block is written BESIDE them (the next edit, of a now-known
+    /// block, replaces the lot); with sharing off, Apple Health is not touched at all.
+    @Test func anEditThatFillsAnUnknownBlockWritesBesideItsLegacySamples() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorResult = 3
+        let sharingOff = Self.narrativeOnlyRecord()
+        let sharingOn = Self.narrativeOnlyRecord()
+        try harness.records.insert(sharingOff, contentKey: harness.key)
+        try harness.records.insert(sharingOn, contentKey: harness.key)
+        let event = UserLoggedCycleEvent(date: sharingOff.loggedAt, flowLevel: .medium, note: "with flow", symptoms: [.cramps])
+
+        let off = try await harness.store.editRecord(sharingOff.id, with: event, unlockedContentKey: harness.key)
+        #expect(off.healthCopy == .notShared)
+        #expect(harness.health.calls.isEmpty)
+
+        harness.health.mirrorEnabled = true
+        let on = try await harness.store.editRecord(sharingOn.id, with: event, unlockedContentKey: harness.key)
+        #expect(on.healthCopy == .written)
+        #expect(harness.health.calls == ["writeMirror"], "the legacy samples were deleted before the write")
+        #expect(try harness.storedRecords().allSatisfy { $0.clinical?.flowLevel == .medium })
+    }
+
+    /// An emptied edit of a record whose clinical block is UNKNOWN removes the entry and keeps its
+    /// Fernlet samples in Apple Health (review round 1, C-U4-R1): emptying a note must not silently
+    /// delete flow history the sheet never showed. The same emptied edit of a KNOWN block still
+    /// removes its copy — the control that keeps this from passing vacuously.
+    @Test func anEmptiedEditOfAnUnknownBlockKeepsItsHealthSamples() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorResult = 3
+        let narrativeOnly = Self.narrativeOnlyRecord()
+        let logged = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(narrativeOnly, contentKey: harness.key)
+        try harness.records.insert(logged, contentKey: harness.key)
+
+        let kept = try await harness.store.deleteRecord(narrativeOnly)
+        #expect(kept == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .none))
+        #expect(harness.health.count("deleteMirror") == 0)
+
+        let removed = try await harness.store.deleteRecord(logged)
+        #expect(removed == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .removed))
+        #expect(harness.health.deletedMirrorIDs == [logged.id])
+        #expect(try harness.records.recordCount() == 0)
+    }
+
+    /// Review round 1, R2 (b): with sharing ON and a partial grant — flow allowed, temperature denied —
+    /// editing a flow-only day still REWRITES the mirror. The refused kind is one the entry never
+    /// held, so nothing of Fernlet's was left behind and the write's own share check decides. The edit
+    /// used to stop at the refusal, so every edit silently removed the day from Apple Health.
+    @Test func withSharingOnARefusedKindTheEntryNeverHeldStillRewritesTheMirror() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+        harness.health.deleteMirrorResult = 1
+        harness.health.deleteMirrorRefused = [.basalBodyTemperature]
+        let record = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(record, contentKey: harness.key)
+
+        let outcome = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: harness.key)
+
+        #expect(outcome.healthCopy == .written)
+        #expect(harness.health.calls == ["deleteMirror", "writeMirror"])
+        #expect(harness.health.writtenMirrors.first?.clinical?.flowLevel == .medium)
+    }
+
+    /// Review round 1, R2 (a): a user who declined every cycle type on Apple Health's share sheet and
+    /// has sharing off is never told Apple Health kept a copy Fernlet never wrote — not on an edit,
+    /// not on a delete. HealthKit reports "never granted" exactly as it reports "taken away", and with
+    /// sharing off a logged entry was never copied.
+    @Test func withSharingOffARefusalOfALoggedEntryIsNeverReported() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorRefused = Set(CycleMirrorSampleKind.allCases)
+        let record = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(record, contentKey: harness.key)
+
+        let edit = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .heavy), unlockedContentKey: harness.key)
+        #expect(edit.healthCopy == .notShared)
+
+        let delete = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: record.dayKey, records: [record]))
+        #expect(delete == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .none))
+    }
+
+    /// The other side of R2: a refusal IS reported where a Fernlet copy can really be left behind — a
+    /// refused kind the entry held, with sharing on (it was copied) or on an entry built from
+    /// Fernlet's own Apple Health samples (the copy existed by construction), on an edit and on a
+    /// delete alike. A rewrite that succeeded beside a refused older kind still reports it: Apple
+    /// Health keeps that kind's stale copy.
+    @Test func aRefusalIsReportedWhereAFernletCopyCanRemain() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorRefused = [.menstrualFlow]
+        var imported = PeriodTestSupport.record(on: Date(), flow: .light)
+        imported.origin = .importedLegacy
+        try harness.records.insert(imported, contentKey: harness.key)
+
+        let offEdit = try await harness.store.editRecord(imported.id, with: UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: harness.key)
+        #expect(offEdit.healthCopy == .failed(.healthDenied), "an imported entry's Health copy existed")
+
+        harness.health.mirrorEnabled = true
+        let logged = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(logged, contentKey: harness.key)
+        let temperatureOnly = UserLoggedCycleEvent(date: logged.loggedAt, basalBodyTemperature: 97.9)
+        let onEdit = try await harness.store.editRecord(logged.id, with: temperatureOnly, unlockedContentKey: harness.key)
+        #expect(onEdit.healthCopy == .failed(.healthDenied), "the old flow copy stayed beside the new temperature")
+        #expect(harness.health.count("writeMirror") == 1, "the rewrite was still attempted")
+
+        let edited = try #require(try harness.storedRecords().first { $0.id == imported.id })
+        let delete = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: edited.dayKey, records: [edited]))
+        #expect(delete.healthCopy == .stillInHealth(.healthDenied))
+    }
+
+    /// Review round 2, N-1: a legacy note-only day whose flow the user ADDS in the sheet is not
+    /// "built from Fernlet's Apple Health samples". A user who declined Apple Health's share sheet
+    /// (every cycle kind refused), with sharing off, edits such a day twice and then deletes it, and
+    /// is never told Apple Health kept a copy: Fernlet never wrote one, and the sample half found
+    /// none for that day. The record's origin follows its new clinical block (`logged`), so the
+    /// refusal counts only while sharing is on. The record used to stay `importedLegacy`, and every
+    /// later edit and delete of the day said "Apple Health still has Fernlet's copy".
+    @Test func aFlowAddedToALegacyNotesOnlyDayIsNeverReportedAsLeftInHealth() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorRefused = Set(CycleMirrorSampleKind.allCases)
+        let legacy = Self.narrativeOnlyRecord()
+        try harness.records.insert(legacy, contentKey: harness.key)
+
+        let fill = UserLoggedCycleEvent(date: legacy.loggedAt, flowLevel: .medium, symptoms: [.cramps])
+        let first = try await harness.store.editRecord(legacy.id, with: fill, unlockedContentKey: harness.key)
+        #expect(first.healthCopy == .notShared)
+        #expect(harness.health.calls.isEmpty, "a stored-unknown block deletes nothing")
+        let filled = try #require(try harness.storedRecords().first)
+        #expect(filled.clinical?.flowLevel == .medium)
+        #expect(filled.origin == .logged, "the clinical block is the user's own entry now")
+
+        let again = UserLoggedCycleEvent(date: legacy.loggedAt, flowLevel: .heavy, symptoms: [.cramps])
+        let second = try await harness.store.editRecord(legacy.id, with: again, unlockedContentKey: harness.key)
+        #expect(second.healthCopy == .notShared, "Fernlet never wrote this day to Apple Health")
+        #expect(harness.health.count("deleteMirror") == 1, "the known block's copy was still looked for")
+
+        let edited = try #require(try harness.storedRecords().first)
+        let delete = try await harness.store.deleteDay(CycleDayEntry(date: edited.loggedAt, dateKey: edited.dayKey, records: [edited]))
+        #expect(delete == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .none))
+    }
+
+    /// Review round 2, N-1, the inverse: a RESTORED note-only record (the v1 backup's shape) that
+    /// fill-on-read completes from its own Fernlet samples has a block built from those samples, so
+    /// its copy is in Apple Health by construction and a refused delete says so even with sharing
+    /// off. Fill-on-read used to keep `restored`, which counted the refusal only while sharing is on.
+    @Test func aRestoredNotesOnlyRecordCompletedFromItsSamplesCountsItsHealthCopy() async throws {
+        let harness = CycleStoreHarness()
+        let samplesSource = PeriodTestSupport.record(on: Date(), flow: .heavy)
+        var restored = samplesSource
+        restored.clinical = nil
+        restored.narrative = CycleNarrativeFields(note: "from the backup", symptomFlags: [], customSymptomScales: [:], updatedAt: Date())
+        restored.origin = .restored
+        try harness.records.insert(restored, contentKey: harness.key)
+        harness.health.loadedSamples = try PeriodTestSupport.legacySamples(for: samplesSource)
+
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        let completed = try #require(try harness.storedRecords().first)
+        #expect(completed.clinical?.flowLevel == .heavy)
+        #expect(completed.origin == .importedLegacy, "the clinical block came from Fernlet's own Apple Health samples")
+        let today = try #require(Self.today(in: harness.store))
+        #expect(today.records.map(\.origin) == [.importedLegacy], "the published copy says the same")
+
+        harness.health.deleteMirrorRefused = [.menstrualFlow]
+        let delete = try await harness.store.deleteDay(today)
+        #expect(delete == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .stillInHealth(.healthDenied)))
+    }
+
+    /// A narrative-only record — the legacy import's (or a v1 drain's) shape: clinical block UNKNOWN,
+    /// origin `importedLegacy`.
+    private static func narrativeOnlyRecord() -> CycleRecord {
+        var record = PeriodTestSupport.record(on: Date(), flow: nil, symptoms: [.cramps])
+        record.clinical = nil
+        record.origin = .importedLegacy
+        return record
+    }
+
+    // MARK: - Delete (§6.3, I32)
+
+    /// I32: Fernlet's rows go FIRST — the store is already empty when Health is first touched.
+    @Test func deleteDayRemovesFernletsRowsBeforeHealth() async throws {
+        let harness = CycleStoreHarness()
+        let record = PeriodTestSupport.record(on: Date(), flow: .medium)
+        let funnel = harness.records
+        try funnel.insert(record, contentKey: harness.key)
+        var rowsWhenHealthWasTouched: Int?
+        harness.health.onHealthWrite = { _ in rowsWhenHealthWasTouched = try? funnel.recordCount() }
+        harness.health.deleteMirrorResult = 1
+
+        let outcome = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: record.dayKey, records: [record]))
+
+        #expect(rowsWhenHealthWasTouched == 0)
+        #expect(outcome == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .removed))
+        #expect(harness.health.deletedMirrorIDs == [record.id])
+    }
+
+    /// I32: Health failing leaves Fernlet's rows GONE and reports `.stillInHealth` — never a throw
+    /// that would make the day undeletable in Fernlet. Both shapes: a delete that failed outright, and
+    /// a refused kind the copy held while sharing is on (R2).
+    @Test func aHealthFailureLeavesTheRowsGoneAndSaysStillInHealth() async throws {
+        let harness = CycleStoreHarness()
+        let record = PeriodTestSupport.record(on: Date(), flow: .medium)
+        try harness.records.insert(record, contentKey: harness.key)
+        harness.health.deleteMirrorError = HKError(.errorDatabaseInaccessible)
+
+        let outcome = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: record.dayKey, records: [record]))
+
+        #expect(outcome == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .stillInHealth(.other)))
+        #expect(try harness.records.recordCount() == 0)
+
+        harness.health.deleteMirrorError = nil
+        harness.health.deleteMirrorRefused = [.menstrualFlow]
+        harness.health.mirrorEnabled = true
+        let second = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(second, contentKey: harness.key)
+        let refused = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: second.dayKey, records: [second]))
+        #expect(refused == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .stillInHealth(.healthDenied)))
+    }
+
+    /// R2: a delete refused only for a kind the entry never held reports what really happened —
+    /// `.removed` here — never `.stillInHealth`, and every record of the day is still attempted.
+    @Test func aDeleteRefusedOnlyForAKindTheEntryNeverHeldIsNotStillInHealth() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+        harness.health.deleteMirrorResult = 1
+        harness.health.deleteMirrorRefused = [.basalBodyTemperature, .cervicalMucusQuality]
+        let first = PeriodTestSupport.record(on: Date(), flow: .light)
+        let second = PeriodTestSupport.record(on: Date(), flow: .medium)
+        try harness.records.insert(first, contentKey: harness.key)
+        try harness.records.insert(second, contentKey: harness.key)
+
+        let outcome = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: first.dayKey, records: [first, second]))
+
+        #expect(outcome == PeriodDeleteOutcome(removedRecordCount: 2, healthCopy: .removed))
+        #expect(Set(harness.health.deletedMirrorIDs) == [first.id, second.id])
+    }
+
+    /// Nothing in Health is `.none`; a day's orphan Fernlet copies (no record here) go too.
+    @Test func deleteDayReportsNoneAndRemovesOrphanCopies() async throws {
+        let harness = CycleStoreHarness()
+        let record = PeriodTestSupport.record(on: Date(), flow: .medium)
+        try harness.records.insert(record, contentKey: harness.key)
+
+        let none = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: record.dayKey, records: [record]))
+        #expect(none.healthCopy == PeriodDeleteOutcome.HealthCopy.none)
+
+        let orphans = try HealthKitService.periodSamples(for: PeriodTestSupport.record(on: Date(), flow: .light))
+        let orphanDay = CycleDayEntry(date: Date(), dateKey: record.dayKey, fernletHealthSamples: orphans)
+        let removed = try await harness.store.deleteDay(orphanDay)
+        #expect(removed.healthCopy == .removed)
+        #expect(harness.health.deletedAuthoredCount == orphans.count)
+    }
+
+    // MARK: - Drain (§6.3)
+
+    @Test func drainSealsWholeRecordsAndPurges() async throws {
+        let harness = CycleStoreHarness()
+        let record = PeriodTestSupport.record(on: Date(), flow: .medium, symptoms: [.bloating])
+        harness.lock.pending = [try Self.v2Payload(record)]
+
+        try await harness.store.drainPendingBuffer(contentKey: harness.key)
+
+        #expect(harness.lock.pending.isEmpty)
+        #expect(try harness.storedRecords() == [record])
+    }
+
+    /// A v1 payload (a narrative buffered before the cutover) becomes a narrative-only record under
+    /// its legacy external id, so it later merges with that entry's legacy samples.
+    @Test func drainConvertsAV1NarrativeUnderItsLegacyID() async throws {
+        let harness = CycleStoreHarness()
+        let external = UUID()
+        harness.lock.pending = [PendingNarrativePayload(
+            hkExternalUUID: external.uuidString,
             dateKey: "2026-05-20",
             noteBytes: Data("drained note".utf8),
             symptomFlagsBytes: try JSONEncoder().encode([PeriodSymptom.bloating.rawValue]),
             customSymptomScalesBytes: try JSONEncoder().encode(["bloating": 4])
         )]
-        let repository = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 9, count: 32))
-        let periodStore = makePeriodStore(healthService: MockPeriodHealthKitService(), narrativeRepository: repository, lockService: lock)
 
-        try await periodStore.drainPendingBuffer(contentKey: key)
-        let read = try #require(try repository.narrative(forHKUUID: "hk-drain", contentKey: key))
+        try await harness.store.drainPendingBuffer(contentKey: harness.key)
 
-        #expect(lock.pending.isEmpty)
-        #expect(read.note == "drained note")
-        #expect(read.symptomFlags == [.bloating])
+        let stored = try #require(try harness.storedRecords().first)
+        #expect(stored.id == external)
+        #expect(stored.clinical == nil)
+        #expect(stored.narrative?.note == "drained note")
+        #expect(stored.narrative?.symptomFlags == [.bloating])
+        #expect(stored.dayKey == "2026-05-20")
+        #expect(stored.origin == .importedLegacy)
     }
 
-    /// Regression for prior finding #37: a partial failure while draining the pending
-    /// buffer must leave the buffer intact so the notes are retried on the next unlock,
-    /// never silently dropped. The first payload decodes and inserts fine; the second
-    /// has undecodable symptom bytes, so the drain throws partway through.
-    @Test func drainPendingBufferPreservesBufferOnPartialFailure() async throws {
-        let lock = MockLockService(state: .unlocked(scope: .privateHub))
-        lock.pending = [
-            PendingNarrativePayload(
-                hkExternalUUID: "hk-good",
-                dateKey: "2026-05-20",
-                noteBytes: Data("good note".utf8),
-                symptomFlagsBytes: try JSONEncoder().encode([PeriodSymptom.cramps.rawValue]),
-                customSymptomScalesBytes: nil
-            ),
-            PendingNarrativePayload(
-                hkExternalUUID: "hk-bad",
-                dateKey: "2026-05-21",
-                noteBytes: Data("bad note".utf8),
-                symptomFlagsBytes: Data("not-json".utf8),   // fails JSONDecoder.decode([String])
-                customSymptomScalesBytes: nil
-            )
+    /// A drain whose purge failed re-drains without duplicates (one merge write, deterministic ids).
+    @Test func aPartialDrainReDrainsWithoutDuplicates() async throws {
+        let harness = CycleStoreHarness()
+        harness.lock.pending = [try Self.v2Payload(PeriodTestSupport.record(on: Date(), flow: .light))]
+        harness.lock.purgeErrorOnce = PendingNarrativeBufferError.full
+
+        await #expect(throws: PendingNarrativeBufferError.self) {
+            try await harness.store.drainPendingBuffer(contentKey: harness.key)
+        }
+        try await harness.store.drainPendingBuffer(contentKey: harness.key)
+
+        #expect(try harness.records.recordCount() == 1)
+        #expect(harness.lock.pending.isEmpty)
+    }
+
+    /// A payload that will not decode throws before anything is written; the buffer is kept.
+    @Test func aDrainThatCannotDecodeKeepsTheBuffer() async throws {
+        let harness = CycleStoreHarness()
+        harness.lock.pending = [
+            try Self.v2Payload(PeriodTestSupport.record(on: Date(), flow: .light)),
+            PendingNarrativePayload(hkExternalUUID: UUID().uuidString, dateKey: "2026-05-21", noteBytes: nil,
+                                    symptomFlagsBytes: Data("not-json".utf8), customSymptomScalesBytes: nil)
         ]
-        let repository = makeRepository()
-        let key = SymmetricKey(data: Data(repeating: 7, count: 32))
-        let periodStore = makePeriodStore(healthService: MockPeriodHealthKitService(), narrativeRepository: repository, lockService: lock)
 
         await #expect(throws: (any Error).self) {
-            try await periodStore.drainPendingBuffer(contentKey: key)
+            try await harness.store.drainPendingBuffer(contentKey: harness.key)
         }
-
-        // Buffer is NOT purged on failure, so the user's notes survive for the next attempt.
-        #expect(!lock.pending.isEmpty)
+        #expect(harness.lock.pending.count == 2)
+        #expect(try harness.records.recordCount() == 0)
     }
 
-    @Test func currentPhaseUsesObservedFlowOnly() async throws {
-        let health = MockPeriodHealthKitService()
-        health.loadedSamples = try HealthKitService.periodSamples(for: UserLoggedCycleEvent(date: Date(), flowLevel: .light), externalUUID: UUID())
-        let periodStore = makePeriodStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .unlocked(scope: .privateHub)))
+    // MARK: - Health-only Fernlet days (§7.3)
 
-        await periodStore.loadEntries(unlockedContentKey: SymmetricKey(data: Data(repeating: 1, count: 32)))
-        #expect(periodStore.currentPhaseFromObservations() == .menstrual)
+    /// "Keep in Fernlet" adopts the day's Fernlet copies as one record per copy group, under the
+    /// copy's own record id, clinical known and narrative unknown.
+    @Test func keepInFernletAdoptsTheDaysCopies() async throws {
+        let harness = CycleStoreHarness()
+        let otherPhone = PeriodTestSupport.record(on: Date(), flow: .heavy)
+        let day = CycleDayEntry(date: Date(), dateKey: otherPhone.dayKey, fernletHealthSamples: try HealthKitService.periodSamples(for: otherPhone))
 
-        health.loadedSamples = []
-        await periodStore.loadEntries(unlockedContentKey: nil)
-        #expect(periodStore.currentPhaseFromObservations() == .unknown)
-        #expect(periodStore.prediction == nil)
+        #expect(try harness.store.keepHealthOnlyDay(day, contentKey: harness.key) == 1)
+
+        let adopted = try #require(try harness.storedRecords().first)
+        #expect(adopted.id == otherPhone.id)
+        #expect(adopted.origin == .adoptedFromHealth)
+        #expect(adopted.clinical?.flowLevel == .heavy)
+        #expect(adopted.narrative == nil)
     }
 
-    @Test func loadEntriesBuildsPredictionWhenUnlocked() async throws {
-        let health = MockPeriodHealthKitService()
-        let calendar = Calendar.current
-        let key = SymmetricKey(data: Data(repeating: 8, count: 32))
-        let firstStart = calendar.date(byAdding: .day, value: -140, to: Date())!
-        health.loadedSamples = try (0..<6).flatMap { cycleIndex in
-            let start = calendar.date(byAdding: .day, value: cycleIndex * 28, to: firstStart)!
-            return try HealthKitService.periodSamples(
-                for: UserLoggedCycleEvent(date: start, flowLevel: .medium),
-                externalUUID: UUID()
-            )
-        }
-        let periodStore = makePeriodStore(
-            healthService: health,
-            narrativeRepository: makeRepository(),
-            lockService: MockLockService(state: .unlocked(scope: .privateHub)),
-            calendar: calendar
-        )
+    @Test func deleteFromHealthRemovesOnlyTheDaysFernletCopies() async throws {
+        let harness = CycleStoreHarness()
+        let copies = try HealthKitService.periodSamples(for: PeriodTestSupport.record(on: Date(), flow: .light))
+        let day = CycleDayEntry(date: Date(), dateKey: FernletDate.dayKey(for: Date()), fernletHealthSamples: copies)
 
-        await periodStore.loadEntries(unlockedContentKey: key)
-        let prediction = try #require(periodStore.prediction)
-
-        #expect(prediction.confidence > 0.5)
-        #expect(prediction.predictedFlow.count >= 3)
+        #expect(try await harness.store.deleteHealthOnlyCopies(day) == copies.count)
+        #expect(harness.health.calls == ["deleteAuthored"])
     }
+
+    // MARK: - Source walls
 
     @Test func menstrualFlowCountReferenceIsRestrictedToAllowedFiles() throws {
         let root = RepoRoot.url
@@ -673,140 +887,34 @@ struct PeriodTrackerTests {
         #expect(leakingFiles.isEmpty)
     }
 
+    // MARK: - Helpers
+
     private func makeRepository() -> MenstrualNarrativeRepository {
         MenstrualNarrativeRepository(context: PrivatePersistenceController(inMemory: true).container.viewContext)
     }
 
-    /// `PeriodTrackerStore.isVisible` now defaults to fail-CLOSED (`{ false }`), so a store must OPT IN
-    /// to visibility. These tests exercise the visible load/log/drain paths, so this factory injects
-    /// `isVisible = { true }` by default; the visibility-gate tests below override it to `{ false }` /
-    /// `{ visible }` after construction to assert the inert path.
-    private func makePeriodStore(
-        healthService: any PeriodHealthKitServicing,
-        narrativeRepository: MenstrualNarrativeRepository? = nil,
-        lockService: (any PeriodLockContext)? = nil,
-        calendar: Calendar = .current,
-        isVisible: @escaping () -> Bool = { true }
-    ) -> PeriodTrackerStore {
-        let store = PeriodTrackerStore(
-            healthService: healthService,
-            narrativeRepository: narrativeRepository,
-            lockService: lockService,
-            calendar: calendar
+    /// A log with every field set.
+    static func fullEvent() -> UserLoggedCycleEvent {
+        UserLoggedCycleEvent(
+            flowLevel: .medium, basalBodyTemperature: 36.6, temperatureUnit: .celsius,
+            cervicalMucusQuality: .eggWhite, ovulationTestResult: .positive, hasIntermenstrualBleeding: true,
+            isCycleStart: true, note: "cramps after lunch", symptoms: [.cramps], customSymptomScales: ["cramps": 6]
         )
-        store.attachVisibilityGate(isVisible)
-        return store
-    }
-}
-
-// `@MainActor` like the suite that owns it: its call logs are mutated from the async witnesses,
-// and the HealthKitGateway value types it builds (`AuthorizationOutcome`, `HealthBodyProfile`)
-// have main-actor-isolated initializers.
-@MainActor
-private final class MockPeriodHealthKitService: PeriodHealthKitServicing {
-    var savedSamples: [HKSample] = []
-    var loadedSamples: [HKSample] = []
-
-    func isHealthDataAvailable() -> Bool { true }
-    func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome { AuthorizationOutcome(writeStatuses: [:]) }
-    func currentAuthorizationSnapshot() -> AuthorizationSnapshot { AuthorizationSnapshot(isAvailable: true, writeStatuses: [:]) }
-    func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws { }
-    func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws { }
-    func stopObservingWorkouts() { }
-    func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout] { [] }
-    func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout] { [] }
-    func save(_ samples: [HKObject]) async throws { savedSamples += samples.compactMap { $0 as? HKSample } }
-    /// How many delete batches reached the seam.
-    var deleteCallCount = 0
-    func delete(_ samples: [HKSample]) async throws { deleteCallCount += 1 }
-    func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool { false }
-    func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] { [] }
-    func requestBodyProfileAuthorization() async throws -> HealthBodyProfile { HealthBodyProfile() }
-    func loadBodyProfile() async throws -> HealthBodyProfile { HealthBodyProfile() }
-    func saveBodyProfileMeasurements(_ profile: UserNutritionProfile) async throws { }
-    func saveWorkout(_ workout: Workout) async throws -> UUID { UUID() }
-    func loadLastNightSleepHours(referenceDate: Date) async throws -> Double? { nil }
-    func loadDailyHealthContext(referenceDate: Date, capabilities: Set<HealthCapability>?) async throws -> HealthDailyContext { HealthDailyContext() }
-    func disableIntegration() async throws { }
-    func enableIntegration() async throws { }
-    func openHealthPrivacySettings() async { }
-
-    func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
-        let samples = try HealthKitService.periodSamples(for: event, externalUUID: externalUUID)
-        savedSamples += samples
-        return samples
     }
 
-    /// When set, the pre-edit write check throws it — standing in for Fernlet's cycle sharing being
-    /// off (the production conformer throws `HealthKitServiceError.sharingTurnedOff`).
-    var writeCheckError: Error?
-    /// How many times the pre-edit write check ran.
-    var writeCheckCallCount = 0
-
-    func checkPeriodEventWriteAllowed(_ event: UserLoggedCycleEvent) throws {
-        writeCheckCallCount += 1
-        if let writeCheckError { throw writeCheckError }
+    /// A v2 pending-buffer payload carrying `record`.
+    static func v2Payload(_ record: CycleRecord) throws -> PendingNarrativePayload {
+        PendingNarrativePayload(cycleRecordID: record.id, dayKey: record.dayKey, cycleRecordJSON: try record.frozenJSON())
     }
 
-    /// Counts HealthKit cycle reads so the visibility gate can assert ZERO of them — the flow samples
-    /// this returns are unencrypted Health data, so "we withheld the content key" is not evidence the
-    /// gate held.
-    var loadPeriodEventsCallCount = 0
-
-    /// Runs INSIDE the HealthKit read, standing in for "the world changed while the await was in
-    /// flight" — the user hides cycle tracking, or the hub locks. The store re-checks both after this
-    /// returns, so a test can drive the race deterministically.
-    var duringLoad: (@MainActor () -> Void)?
-
-    func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
-        loadPeriodEventsCallCount += 1
-        duringLoad?()
-        return loadedSamples
-    }
-}
-
-// The isolated conformance (`@MainActor FernletLockServicing`) mirrors the production
-// `FernletLockService` declaration: the protocol refines `PeriodLockContext`, whose requirements
-// this main-actor mock satisfies with main-actor members.
-@MainActor
-private final class MockLockService: @MainActor FernletLockServicing {
-    var state: FernletLockState
-    var statePublisher: AnyPublisher<FernletLockState, Never> { Just(state).eraseToAnyPublisher() }
-    var requiresReset = false
-    var biometricEnabled = false
-    var biometricType: LABiometryType = .none
-    var credentialKind: FernletLockCredentialKind?
-    var currentAttemptCount = 0
-    var pending: [PendingNarrativePayload] = []
-    private var key: SymmetricKey?
-
-    init(state: FernletLockState) {
-        self.state = state
-        if state.unlockedScope != nil { key = SymmetricKey(data: Data(repeating: 3, count: 32)) }
+    /// The published entry for today.
+    static func today(in store: PeriodTrackerStore) -> CycleDayEntry? {
+        entry(on: Date(), in: store)
     }
 
-    func configure(credential: FernletLockCredential, grantingScope: FernletLockScope) async throws {
-        state = .unlocked(scope: grantingScope)
+    /// The published entry for `date`'s day.
+    static func entry(on date: Date, in store: PeriodTrackerStore) -> CycleDayEntry? {
+        let key = FernletDate.dayKey(for: date)
+        return store.entries.first { $0.dateKey == key }
     }
-    func changeCredential(current: String, new: FernletLockCredential) async throws { }
-    func unlock(passcode: String, for scope: FernletLockScope) async throws -> UnlockResult {
-        state = .unlocked(scope: scope); return UnlockResult(method: .passcode)
-    }
-    func unlockWithBiometrics(for scope: FernletLockScope) async throws -> UnlockResult {
-        state = .unlocked(scope: scope); return UnlockResult(method: .biometric)
-    }
-    func lock(reason: FernletLockReason) { state = .locked(cooldownDeadline: nil) }
-    func revokeUnlockOutside(_ scope: FernletLockScope) {
-        guard let current = state.unlockedScope, current != scope else { return }
-        lock(reason: .scopeChanged)
-    }
-    func reset() throws { state = .notConfigured; pending = [] }
-    func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws { biometricEnabled = enabled }
-    func contentKey(for scope: FernletLockScope) -> SymmetricKey? {
-        guard scope == .privateHub, state.isUnlocked(for: scope) else { return nil }
-        return key
-    }
-    func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws { pending.append(payload) }
-    func drainPendingNarratives() throws -> [PendingNarrativePayload] { pending }
-    func purgePendingNarratives() throws { pending = [] }
 }

@@ -37,7 +37,10 @@ import FernletUI
 /// strip the one warning the user gets. The shared verbs ("Reset app lock", "Cancel", "OK") come
 /// from ``FernletLockCopy/Action`` so the same button never drifts between the dialog here and the
 /// cards in ``FernletLockView``.
-private enum GateCopy {
+///
+/// Module-internal rather than private so `FernletTapGate.swift` can add the no-passcode screen's
+/// copy as `GateCopy.Tap` and `GateCopy.Unopenable` beside it.
+enum GateCopy {
     /// The not-configured overlay's heading and its button — deliberately the same words twice on
     /// one screen, so one key rather than two that could drift apart.
     static var setUpCallToAction: String {
@@ -51,12 +54,24 @@ private enum GateCopy {
                comment: "Title of the confirmation dialog for resetting the app lock. Keep it a question — it is the last chance to back out.")
     }
 
-    /// What the reset costs, named before it happens.
+    /// What the reset costs, named before it happens. A `.v2` key because the meaning changed
+    /// (period-data design 2026-09-30, §10.5): cycle history now lives in Fernlet whether or not it
+    /// was ever copied to Apple Health, so "entries remain in Apple Health" stopped being the
+    /// promise. The wording is unconditional on purpose — this module cannot see the Health
+    /// switches, and "anything Fernlet copied to Apple Health stays there" is true either way.
+    ///
+    /// Its closing sentence promises the Sealed backup restore, which is true since design unit 5:
+    /// after a reset every AMBIENT restore waits for the device owner (the app's restore hold), and
+    /// Privacy & Data's "Restore", behind its fresh device-owner check, releases it (review C-U2-R4;
+    /// `LocalizationBoundaryTests` lets the sentence in only while that release exists). It says to
+    /// restore BEFORE adding new entries: the journal and intimacy restores write only into an empty
+    /// store, so a pre-reset copy cannot come back once entries were written since (review
+    /// U5-backup-v2-L-U5-R5; Privacy & Data then names that state and its explicit replace).
     static var resetConfirmMessage: String {
-        String(localized: "lock.reset.confirm.message",
-               defaultValue: "Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.",
+        String(localized: "lock.reset.confirm.message.v2",
+               defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries.",
                bundle: .module,
-               comment: "Message in the reset confirmation dialog. 'Permanently unreadable' is literal — there is no recovery. The second sentence is the one thing that survives and must stay accurate: the clinical samples in Apple Health are untouched.")
+               comment: "Message in the reset confirmation dialog. 'Permanently deleted' is literal: there is no recovery on this iPhone. Only what Fernlet copied to Apple Health (if anything) stays there, and an encrypted Sealed backup in iCloud (if the user turned it on) can be restored from Privacy & Data after the reset. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
     }
 
     /// Title of the nothing-silent alert after a reset that could not finish cleanly.
@@ -82,11 +97,14 @@ private enum GateCopy {
     }
 
     /// The disclosure itself: a strictly larger loss mode than the one the user originally accepted.
+    ///
+    /// A `.v2` key (design §10.5): what is at stake is now the whole cycle history saved in Fernlet,
+    /// not "notes" beside a Health copy.
     static var hardBindingMessage: String {
-        String(localized: "lock.hardBinding.message",
-               defaultValue: "Fernlet moved the key for your sealed journal, cycle, and intimacy notes into this iPhone's Secure Enclave, where it can't be copied off the device. Those notes are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware — even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives.",
+        String(localized: "lock.hardBinding.message.v2",
+               defaultValue: "Fernlet moved the key for your sealed journal, cycle history and intimacy entries into this iPhone's Secure Enclave, where it can't be copied off the device. Those entries are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware, even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives.",
                bundle: .module,
-               comment: "One-time disclosure for users who set their passcode under an older build and have just acquired a larger loss mode. 'Even with the right passcode' is the sentence that must not soften — remembering the passcode does not save the notes on replaced hardware. 'Secure Enclave' is Apple hardware terminology; 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app, so match how they are translated there.")
+               comment: "One-time disclosure for users who set their passcode under an older build and have just acquired a larger loss mode. 'Even with the right passcode' is the phrase that must not soften: remembering the passcode does not save the entries on replaced hardware. 'Secure Enclave' is Apple hardware terminology; 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app, so match how they are translated there.")
     }
 }
 
@@ -102,8 +120,11 @@ private enum GateCopy {
 /// progress-photo timeline. Its responsibilities:
 ///
 /// - While the service reports `.locked`, a non-dismissible ``FernletLockView`` overlay covers
-///   the content; while it reports `.notConfigured`, a setup call-to-action overlay offers
-///   ``FernletLockSetupView`` instead.
+///   the content. While it reports `.notConfigured` (no passcode), the Private tab's gate — the one
+///   given a ``FernletPrivateHubOpening`` coordinator — shows the no-passcode unlock screen with its
+///   single Unlock button (``FernletTapGateOverlay``, period-data design 2026-09-30 §10.1); every
+///   other gate, and the Private tab while a custodian recovery is owed, shows the setup
+///   call-to-action offering ``FernletLockSetupView`` instead.
 /// - When the gated view genuinely disappears, it calls `lock(reason: .viewDisappeared)`,
 ///   which scrubs the in-memory content key — one unlock session never outlives the screen.
 ///   Child sheets do not trigger `onDisappear` on the covered view, so sheets presented over
@@ -135,6 +156,10 @@ struct FernletLockGateModifier: ViewModifier {
     /// strip): one unlock session should cover strip → detail → pop-back, and the parent's own
     /// disappear re-lock still guards the genuine departure. Defaults to always-lock.
     var shouldLockOnDisappear: () -> Bool = { true }
+    /// The app's open coordinator for the no-passcode Private tab. Non-nil only on the Private tab's
+    /// own gate: it is what turns this gate's not-configured slot into the tap screen. `nil` keeps
+    /// the setup call to action (every other gate, and every caller that predates the tap screen).
+    var privateHubOpener: (any FernletPrivateHubOpening)?
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.scenePhase) private var scenePhase
 
@@ -164,6 +189,9 @@ struct FernletLockGateModifier: ViewModifier {
     /// Set when handleDisappear fires while suppressRelock is active; the lock is
     /// executed when the suppression window expires if the gate hasn't re-appeared.
     @State private var pendingRelock = false
+    /// Bumped by a reset so the tap screen starts over (a reset leaves the state `.notConfigured`,
+    /// so nothing else would recreate the overlay out of its lost-key card).
+    @State private var tapGateGeneration = 0
 
     func body(content: Content) -> some View {
         ZStack {
@@ -185,9 +213,9 @@ struct FernletLockGateModifier: ViewModifier {
                     .accessibilityAddTraits(.isModal)
             }
 
-            // Not-configured CTA overlay
+            // Not-configured overlay: the no-passcode tap screen, or the setup call to action
             if active && isNotConfigured {
-                setupCTAOverlay
+                notConfiguredOverlay
                     .zIndex(100)
                     .accessibilityAddTraits(.isModal)
             }
@@ -287,6 +315,7 @@ struct FernletLockGateModifier: ViewModifier {
     /// Performs the destructive reset the confirmation dialog just authorised, surfacing the
     /// nothing-silent alert when the keys and rows went but the sealed store could not be rebuilt.
     private func performReset() {
+        defer { tapGateGeneration += 1 }
         do {
             try lockService.reset()
         } catch {
@@ -409,6 +438,21 @@ struct FernletLockGateModifier: ViewModifier {
         }
     }
 
+    /// What covers the content while no passcode exists: the tap screen on the Private tab's gate
+    /// (it has an opener), the setup call to action everywhere else — and on the Private tab too
+    /// while a custodian recovery is owed, because the recovery-locked phone's way back is a setup
+    /// or the recovery ceremony, never a tap (the tap refuses to mint there; design §4.7).
+    ///
+    /// One slot, one `.isModal` (applied by the caller), whichever it hosts.
+    @ViewBuilder private var notConfiguredOverlay: some View {
+        if let privateHubOpener, scope == .privateHub, !lockService.isAwaitingCustodianRecovery {
+            FernletTapGateOverlay(opener: privateHubOpener, onResetRequested: { showReset = true })
+                .id(tapGateGeneration)
+        } else {
+            setupCTAOverlay
+        }
+    }
+
     /// The call-to-action overlay shown when no lock is configured, offering the
     /// ``FernletLockSetupView`` sheet rather than exposing the gated content.
     @ViewBuilder private var setupCTAOverlay: some View {
@@ -456,9 +500,11 @@ struct FernletLockGateModifier: ViewModifier {
 // MARK: - Gate occlusion (for capture friction)
 
 /// The one pure decision other surfaces need from the lock gate: whether
-/// `fernletLockGate(scope:active:)` is currently painting an opaque overlay — the unlock screen
-/// or the not-configured setup CTA, both full-bleed parchment at `zIndex(100)` — over its
-/// content.
+/// `fernletLockGate(scope:active:)` is currently painting an opaque overlay — the unlock screen,
+/// the not-configured setup CTA, or the no-passcode tap screen and its "can't be opened" card, all
+/// full-bleed parchment at `zIndex(100)` — over its content. A Private tab opened by the tap
+/// (`.openedWithoutPasscode(.privateHub)`) reads as revealed exactly like a passcode unlock of that
+/// scope, and as covered for every other scope.
 ///
 /// Exists for capture-FRICTION composition: `PrivateHubView` ANDs `!overlayIsUp(...)` into its
 /// `captureProtected(surface:isFrontmost:)` flag, so a screenshot of the LOCKED hub — where the
@@ -500,6 +546,10 @@ public extension View {
     /// `shouldLockOnDisappear` (default always-true) can veto the disappear re-lock when the gate is
     /// popping back to an also-gated, still-visible parent that owns the session's re-lock.
     ///
+    /// `privateHubOpener` is what makes a `.privateHub` gate show the no-passcode tap screen while no
+    /// passcode is set (period-data design 2026-09-30, §10.1): pass the app's open coordinator on the
+    /// Private tab's gate only. Without it the not-configured gate offers passcode setup, as before.
+    ///
     /// - Parameters:
     ///   - scope: The locked surface this gate is. No default — a new gated screen must name
     ///     itself rather than silently inherit another surface's unlock.
@@ -507,6 +557,7 @@ public extension View {
     ///     ungated (e.g. while a UI-test bypass flag is set).
     ///   - automaticallyPromptsBiometrics: Whether the unlock overlay may automatically present
     ///     biometrics when it appears. The manual biometric button remains available when false.
+    ///   - privateHubOpener: The app's no-passcode open coordinator, on the Private tab's gate only.
     ///   - shouldLockOnDisappear: Consulted at the moment the gated view disappears;
     ///     returning `false` skips that re-lock entirely so one unlock session can span a
     ///     push onto — and pop back from — a child screen whose parent is also gated.
@@ -515,13 +566,15 @@ public extension View {
         scope: FernletLockScope,
         active: Bool = true,
         automaticallyPromptsBiometrics: Bool = true,
+        privateHubOpener: (any FernletPrivateHubOpening)? = nil,
         shouldLockOnDisappear: @escaping () -> Bool = { true }
     ) -> some View {
         modifier(FernletLockGateModifier(
             scope: scope,
             active: active,
             automaticallyPromptsBiometrics: automaticallyPromptsBiometrics,
-            shouldLockOnDisappear: shouldLockOnDisappear
+            shouldLockOnDisappear: shouldLockOnDisappear,
+            privateHubOpener: privateHubOpener
         ))
     }
 }

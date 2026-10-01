@@ -21,36 +21,44 @@ enum PeriodTestSupport {
         calendar.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
-    /// A cycle entry carrying real menstrual-flow HealthKit samples (built via the production sample
-    /// factory, no HealthKit access) and an optional encrypted-narrative stand-in for symptoms.
+    /// A cycle day as the store publishes it after the cutover: one sealed record carrying the flow
+    /// level (a "None" flow is a logged none, not menstrual) and, optionally, symptoms in its narrative
+    /// block — so the bridge's symptom load sees a narrative only when symptoms were given.
     static func entry(
         on date: Date,
         flow: PeriodFlowLevel?,
         symptoms: [PeriodSymptom] = []
     ) -> CycleDayEntry {
-        let samples: [HKSample]
-        if let flow {
-            samples = (try? HealthKitService.periodSamples(
-                for: UserLoggedCycleEvent(date: date, flowLevel: flow),
-                externalUUID: UUID()
-            )) ?? []
-        } else {
-            samples = []
+        let dayKey = FernletDate.dayKey(for: date)
+        guard flow != nil || !symptoms.isEmpty else { return CycleDayEntry(date: date, dateKey: dayKey) }
+        return CycleDayEntry(date: date, dateKey: dayKey, records: [record(on: date, flow: flow, symptoms: symptoms)])
+    }
+
+    /// A logged record for `date`: the clinical block known (with `flow`), the narrative block known
+    /// only when `symptoms` are given.
+    static func record(on date: Date, flow: PeriodFlowLevel?, symptoms: [PeriodSymptom] = []) -> CycleRecord {
+        var record = CycleRecord(event: UserLoggedCycleEvent(date: date, flowLevel: flow, symptoms: Set(symptoms)), now: date)
+        if symptoms.isEmpty { record.narrative = nil }
+        return record
+    }
+
+    /// Apple Health samples shaped like a PRE-cutover Fernlet write of `record`: the external UUID,
+    /// no `FernletCycleRecordID` marker (what the legacy import adopts).
+    static func legacySamples(for record: CycleRecord) throws -> [HKSample] {
+        try HealthKitService.periodSamples(for: record).map(stripMarker)
+    }
+
+    /// The same sample without the mirror marker.
+    static func stripMarker(_ sample: HKSample) -> HKSample {
+        var metadata = sample.metadata ?? [:]
+        metadata.removeValue(forKey: FernletCycleRecordMirror.recordIDKey)
+        if let category = sample as? HKCategorySample {
+            return HKCategorySample(type: category.categoryType, value: category.value, start: category.startDate, end: category.endDate, metadata: metadata)
         }
-        let narrative: MenstrualNarrative? = symptoms.isEmpty ? nil : MenstrualNarrative(
-            hkExternalUUID: UUID().uuidString,
-            dateKey: FernletDate.dayKey(for: date),
-            note: nil,
-            symptomFlags: symptoms,
-            customSymptomScales: [:]
-        )
-        return CycleDayEntry(
-            date: date,
-            dateKey: FernletDate.dayKey(for: date),
-            samples: samples,
-            narrative: narrative,
-            phase: flow != nil ? .menstrual : .unknown
-        )
+        if let quantity = sample as? HKQuantitySample {
+            return HKQuantitySample(type: quantity.quantityType, quantity: quantity.quantity, start: quantity.startDate, end: quantity.endDate, metadata: metadata)
+        }
+        return sample
     }
 
     static func prediction(

@@ -6,14 +6,13 @@ import HealthKit
 import FernletDomainModel
 import PrivateStoreCore
 
-/// Everything the user entered in the log-period sheet for one cycle event, before it is split
-/// between HealthKit and the sealed store.
+/// Everything the user entered in the log-period sheet for one cycle event.
 ///
-/// The write-side counterpart of ``CycleDayEntry``: ``PeriodTrackerStore/logEvent(_:unlockedContentKey:)``
-/// sends the clinical fields (flow, temperature, mucus, ovulation test, bleeding and cycle-start
-/// flags) to HealthKit through ``PeriodHealthKitServicing`` and routes the narrative fields
-/// (``note``, ``symptoms``, ``customSymptomScales``) into the sealed ``MenstrualNarrative`` — or,
-/// while locked, into the pending buffer. A plain value type the log and edit sheets bind to.
+/// The write-side input of ``PeriodTrackerStore/logEvent(_:unlockedContentKey:)`` and
+/// ``PeriodTrackerStore/editRecord(_:with:unlockedContentKey:)``: it becomes ONE sealed
+/// ``CycleRecord`` (both blocks known), and — only while the user's cycle sharing with Apple Health
+/// is on — an Apple Health mirror of its clinical fields (period-data design 2026-09-30, §6.3). A plain
+/// value type the log and edit sheets bind to.
 public nonisolated struct UserLoggedCycleEvent: Equatable {
     public var date: Date = Date()
     public var flowLevel: PeriodFlowLevel?
@@ -53,24 +52,95 @@ public nonisolated struct UserLoggedCycleEvent: Equatable {
         self.customSymptomScales = customSymptomScales
     }
 
-    /// Whether any sealed-store content exists: a nonempty trimmed note, any symptom, or any custom
-    /// scale. `false` means logging this event writes HealthKit only.
+    /// Whether any narrative content exists: a nonempty trimmed note, any symptom, or any custom
+    /// scale.
     public var hasNarrative: Bool {
         !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !symptoms.isEmpty || !customSymptomScales.isEmpty
     }
 }
 
-/// What happened to a logged cycle event's narrative half.
+/// What a cycle save did, in two independent halves (period-data design 2026-09-30, §6.3): where
+/// Fernlet's own copy is, and what happened to the Apple Health copy.
 ///
-/// Returned by ``PeriodTrackerStore/logEvent(_:unlockedContentKey:)`` (and the edit path) so the
-/// sheet can tell the user when their note was deferred or lost rather than sealed immediately.
-public nonisolated enum PeriodLogResult: Equatable {
-    /// The HealthKit samples saved and the narrative, if any, was sealed immediately.
-    case saved
-    /// The app was locked: the narrative sits sealed in the pending buffer until the next unlock.
-    case savedWithBufferedNarrative
-    /// No lock is configured, so there was no safe place to keep the narrative — it was dropped.
-    case savedWithDroppedNarrative
+/// The record is kept FIRST — sealed, or held in the pending buffer until the Private tab next opens
+/// — and only then mirrored, so a Health refusal can never cost the user the entry.
+public nonisolated struct PeriodLogOutcome: Equatable {
+    /// Where Fernlet's copy is.
+    public enum Storage: Equatable {
+        /// Sealed into the store now.
+        case sealed
+        /// Held in the pending buffer; sealed the next time the Private tab opens (either mode).
+        case pendingUntilPrivateOpens
+    }
+
+    /// What happened to the Apple Health copy.
+    public enum HealthCopy: Equatable {
+        /// No copy was made: cycle sharing is off, or the entry has nothing Apple Health holds.
+        case notShared
+        /// The copy was written (or rewritten, for an edit).
+        case written
+        /// Cycle sharing is off, and an EDIT removed Fernlet's older copy of the day from Apple Health
+        /// (owner question Q1). Only when at least one sample was really deleted.
+        case removedStaleCopy
+        /// The Apple Health half failed; Fernlet's copy is kept regardless.
+        case failed(HealthCopyFailure)
+    }
+
+    /// Why an Apple Health copy failed.
+    public enum HealthCopyFailure: Equatable {
+        /// Apple Health refused Fernlet (share access denied, or never granted, for a type).
+        case healthDenied
+        /// Apple Health is not available on this device.
+        case healthUnavailable
+        /// Anything else.
+        case other
+    }
+
+    /// Where Fernlet's copy is.
+    public var storage: Storage
+    /// What happened to the Apple Health copy.
+    public var healthCopy: HealthCopy
+
+    /// Creates an outcome.
+    public init(storage: Storage, healthCopy: HealthCopy) {
+        self.storage = storage
+        self.healthCopy = healthCopy
+    }
+}
+
+/// What deleting a day (or one record) did (period-data design 2026-09-30, §6.3, R2-F11). Fernlet's
+/// rows go FIRST — a failure there throws and nothing was deleted anywhere — then Fernlet's own
+/// Apple Health copies.
+public nonisolated struct PeriodDeleteOutcome: Equatable {
+    /// What happened to Fernlet's Apple Health copies.
+    public enum HealthCopy: Equatable {
+        /// There was nothing of Fernlet's in Apple Health for it.
+        case none
+        /// At least one Fernlet-authored sample was deleted.
+        case removed
+        /// Fernlet's rows are gone, but its Apple Health copy could not be removed right now.
+        case stillInHealth(PeriodLogOutcome.HealthCopyFailure)
+    }
+
+    /// How many sealed records were deleted.
+    public var removedRecordCount: Int
+    /// What happened to the Apple Health copies.
+    public var healthCopy: HealthCopy
+
+    /// Creates an outcome.
+    public init(removedRecordCount: Int, healthCopy: HealthCopy) {
+        self.removedRecordCount = removedRecordCount
+        self.healthCopy = healthCopy
+    }
+}
+
+/// An error a gateway outside this module throws, able to say what it means for an Apple Health
+/// copy — how ``PeriodTrackerStore`` classifies the seam's errors without naming the gateway
+/// (`HealthKitGateway`'s `HealthKitServiceError` conforms). `nil` means "sharing is off": nothing was
+/// meant to be copied, which is not a failure.
+public protocol PeriodHealthCopyErrorClassifying: Error {
+    /// The failure this error is, or `nil` when it only says cycle sharing is off.
+    var periodHealthCopyFailure: PeriodLogOutcome.HealthCopyFailure? { get }
 }
 
 /// Thrown when a cycle write is attempted while cycle tracking is hidden. Reaching this means a
@@ -86,7 +156,7 @@ public nonisolated struct PeriodTrackingHiddenError: Error, Equatable {
 /// ``PredictedFlowLevel`` (forecast-only, includes spotting): this one maps onto the HealthKit
 /// category values via ``hkValue`` on write, and ``CycleDayEntry/flowLevel`` recovers it from
 /// samples on read.
-public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable, Sendable {
     case none, light, medium, heavy, unspecified
     public var id: String { rawValue }
     /// Display label for pickers and the calendar detail.
@@ -108,7 +178,7 @@ public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Cod
 /// Sheet-level input state carried on ``UserLoggedCycleEvent`` so the HealthKit gateway knows how
 /// to interpret the entered value; reads come back normalized through
 /// ``CycleDayEntry/basalBodyTemperatureFahrenheit``.
-public nonisolated enum PeriodTemperatureUnit: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum PeriodTemperatureUnit: String, CaseIterable, Identifiable, Codable, Sendable {
     case fahrenheit, celsius
     public var id: String { rawValue }
     /// Single-letter unit suffix for the input field.
@@ -119,7 +189,7 @@ public nonisolated enum PeriodTemperatureUnit: String, CaseIterable, Identifiabl
 ///
 /// Fertility-signal input on ``UserLoggedCycleEvent``: ``hkValue`` carries it into the HealthKit
 /// sample on write and ``CycleDayEntry/cervicalMucusQuality`` recovers it from samples on read.
-public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable, Codable, Sendable {
     case dry, sticky, creamy, watery, eggWhite
     public var id: String { rawValue }
     /// Display label for pickers and the calendar detail.
@@ -140,7 +210,7 @@ public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable
 ///
 /// Input on ``UserLoggedCycleEvent``; `positive` deliberately maps to `luteinizingHormoneSurge` on
 /// write, and ``CycleDayEntry/ovulationTestResult`` recovers the value from samples on read.
-public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable, Codable, Sendable {
     case negative, positive, indeterminate
     public var id: String { rawValue }
     /// Display label for pickers and the calendar detail.
@@ -157,10 +227,10 @@ public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable,
 
 /// The fixed vocabulary of built-in period symptoms a narrative can flag.
 ///
-/// Stored SEALED: symptom flags live in ``MenstrualNarrative/symptomFlags`` as an encrypted column,
-/// never in HealthKit. `Comparable` by declaration order so the symptom set on
-/// ``UserLoggedCycleEvent`` serializes in a stable, display-matching order. User-defined symptoms
-/// travel separately in ``MenstrualNarrative/customSymptomScales``.
+/// Stored SEALED: symptom flags live in a record's ``CycleNarrativeFields/symptomFlags`` (and, for
+/// entries from before the cutover, ``MenstrualNarrative/symptomFlags``), never in Apple Health.
+/// `Comparable` by declaration order so a symptom set serializes in a stable, display-matching order.
+/// User-defined symptoms travel separately in ``CycleNarrativeFields/customSymptomScales``.
 public nonisolated enum PeriodSymptom: String, CaseIterable, Identifiable, Codable, Comparable, Sendable {
     case cramps, headache, breastTenderness, moodSwings, fatigue, bloating, acne, backPain, foodCravings
     public var id: String { rawValue }
@@ -201,140 +271,62 @@ public nonisolated enum CyclePhase: String, CaseIterable, Identifiable {
     public var title: String { rawValue.capitalized }
 }
 
-/// One calendar day of cycle data: the day's HealthKit samples joined with its sealed narrative and
-/// a resolved phase.
-///
-/// The read-side unit ``PeriodTrackerStore`` publishes — one entry per day of the 240-day load
-/// window, present whether or not anything was observed that day. The computed accessors decode the
-/// raw `HKSample`s on demand so views and the prediction engine never touch HealthKit values
-/// directly. Identified by its day key, so a collection holds at most one entry per day.
-public nonisolated struct CycleDayEntry: Identifiable, Equatable {
-    public var id: String { dateKey }
-    public var date: Date
-    /// Canonical `yyyy-MM-dd` day key; doubles as the identity.
-    public var dateKey: String
-    /// Raw HealthKit samples starting on this day — all sources, not just Fernlet's own.
-    public var samples: [HKSample]
-    /// The sealed narrative joined to this day (by sample external UUID, else by day key), or `nil`
-    /// when none exists or the store was loaded without a content key.
-    public var narrative: MenstrualNarrative?
-    /// Phase resolved at load time: `menstrual` when a flow sample exists, else `unknown` — richer
-    /// calendar-math resolution happens downstream in `PeriodContextBridge`.
-    public var phase: CyclePhase
-
-    public init(
-        date: Date,
-        dateKey: String,
-        samples: [HKSample],
-        narrative: MenstrualNarrative?,
-        phase: CyclePhase
-    ) {
-        self.date = date
-        self.dateKey = dateKey
-        self.samples = samples
-        self.narrative = narrative
-        self.phase = phase
-    }
-
-    /// Whether anything at all was logged on this day (a sample or a narrative).
-    public var hasObservedEvent: Bool { !samples.isEmpty || narrative != nil }
-    /// The day's samples filtered to the menstrual-flow category.
-    public var menstrualFlowSamples: [HKCategorySample] {
-        samples.compactMap { $0 as? HKCategorySample }.filter { $0.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue }
-    }
-    /// True when this day carries any HealthKit menstrual-flow sample recording actual bleeding
-    /// (a decodable `HKCategoryValueVaginalBleeding` above `.none`). The single definition of an
-    /// "observed bleeding day" — the store's published phase and the bridge's phase resolution
-    /// both key off this, so the two can never drift.
-    public var hasActualBleedingFlow: Bool {
-        menstrualFlowSamples.contains { sample in
-            guard let flow = HKCategoryValueVaginalBleeding(rawValue: sample.value) else { return false }
-            return flow != .none
-        }
-    }
-    /// Observed flow decoded from the day's first menstrual-flow sample, or `nil` with no sample.
-    public var flowLevel: PeriodFlowLevel? {
-        guard let sample = menstrualFlowSamples.first else { return nil }
-        switch HKCategoryValueVaginalBleeding(rawValue: sample.value) {
-        case .some(HKCategoryValueVaginalBleeding.none): return PeriodFlowLevel.none
-        case .some(.light): return .light
-        case .some(.medium): return .medium
-        case .some(.heavy): return .heavy
-        default: return .unspecified
-        }
-    }
-    /// Display string for the observed flow ("No flow" when no sample exists).
-    public var flowLabel: String {
-        guard let value = menstrualFlowSamples.first?.value else { return "No flow" }
-        switch HKCategoryValueVaginalBleeding(rawValue: value) {
-        case .some(.none): return "None"
-        case .some(.light): return "Light"
-        case .some(.medium): return "Medium"
-        case .some(.heavy): return "Heavy"
-        default: return "Unspecified"
-        }
-    }
-    /// Whether the first flow sample carries the `HKMetadataKeyMenstrualCycleStart` flag.
-    public var isCycleStart: Bool {
-        menstrualFlowSamples.first?.metadata?[HKMetadataKeyMenstrualCycleStart] as? Bool ?? false
-    }
-    /// Whether any sample records intermenstrual (between-period) bleeding.
-    public var hasIntermenstrualBleeding: Bool {
-        samples.contains { ($0 as? HKCategorySample)?.categoryType.identifier == HKCategoryTypeIdentifier.intermenstrualBleeding.rawValue }
-    }
-    /// Mucus quality decoded from the day's first cervical-mucus sample, if any.
-    public var cervicalMucusQuality: CervicalMucusQuality? {
-        guard let sample = samples.compactMap({ $0 as? HKCategorySample }).first(where: { $0.categoryType.identifier == HKCategoryTypeIdentifier.cervicalMucusQuality.rawValue }) else { return nil }
-        return CervicalMucusQuality.allCases.first { $0.hkValue == sample.value }
-    }
-    /// Test outcome decoded from the day's first ovulation-test sample, if any.
-    public var ovulationTestResult: OvulationTestResult? {
-        guard let sample = samples.compactMap({ $0 as? HKCategorySample }).first(where: { $0.categoryType.identifier == HKCategoryTypeIdentifier.ovulationTestResult.rawValue }) else { return nil }
-        return OvulationTestResult.allCases.first { $0.hkValue == sample.value }
-    }
-    /// The day's first basal-body-temperature reading converted to Fahrenheit, if any.
-    public var basalBodyTemperatureFahrenheit: Double? {
-        guard let sample = samples.compactMap({ $0 as? HKQuantitySample }).first(where: { $0.quantityType.identifier == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue }) else { return nil }
-        return sample.quantity.doubleValue(for: .degreeFahrenheit())
-    }
-}
-
-/// Narrow HealthKit seam consumed by ``PeriodTrackerStore``. The concrete `HealthKitService`
-/// conformance lives in the `HealthKitGateway` module (it uses HealthKitService internals — a
-/// wall-legal edge, since the wall only constrains `AIProviders`/`CloudKitSync`); this module only
-/// needs the three cycle operations and never refines the fat `HealthKitServicing` protocol.
+/// Narrow Apple Health seam consumed by ``PeriodTrackerStore`` (period-data design 2026-09-30, §7.1).
+/// The concrete `HealthKitService` conformance lives in the `HealthKitGateway` module (it uses the
+/// service's internals — a wall-legal edge, since the wall only constrains `AIProviders`/`CloudKitSync`).
 /// Tests substitute a mock so the store is exercisable without a Health store.
+///
+/// Apple Health is a MIRROR now: Fernlet's sealed ``CycleRecord`` is the source of truth, a copy of
+/// its clinical block goes to Health only while the user's cycle sharing is on, and every Health
+/// write passes the gateway's sharing gate. Deletes of Fernlet's own copies are deliberately
+/// ungated — removing what Fernlet wrote, at the user's request, must work with sharing off.
 public protocol PeriodHealthKitServicing: AnyObject {
-    /// Writes the event's clinical fields as HealthKit samples stamped with `externalUUID` — the
-    /// key ``MenstrualNarrative/hkExternalUUID`` later joins on.
-    /// - Returns: The samples that were saved.
-    func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample]
-    /// Throws exactly when writing `event` would be refused: Fernlet's sharing for cycle tracking is
-    /// off, or Apple Health has not granted Fernlet share access to one of the event's sample types
-    /// (an event with no clinical field writes nothing and never throws). Never writes.
-    /// ``PeriodTrackerStore/editEvent(_:replacingEntry:unlockedContentKey:)`` runs it BEFORE
-    /// deleting the entry it replaces.
-    func checkPeriodEventWriteAllowed(_ event: UserLoggedCycleEvent) throws
-    /// All cycle-relevant samples (from any source app) starting in `dateRange` — empty, not an
-    /// error, where nothing is readable (no Health on the device, or a type Fernlet was never asked
-    /// to read), so the sealed note-only entries ``PeriodTrackerStore/loadEntries(unlockedContentKey:)``
-    /// joins onto the samples still load.
-    func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample]
-    /// Deletes the given samples; callers pre-filter to Fernlet-owned samples, since HealthKit
-    /// refuses deletes of other apps' data. Not gated on Fernlet's sharing switches — removing
-    /// what Fernlet wrote, at the user's request, must work with sharing off.
-    func delete(_ samples: [HKSample]) async throws
+    /// Whether a record's clinical block may be copied to Apple Health right now (the gateway's
+    /// write-sharing rule for cycle tracking: Health exists, the master switch and the cycle switch
+    /// are on).
+    func isCycleMirrorEnabled() -> Bool
+    /// Whether Fernlet reads cycle samples from Apple Health (the cycle capability was requested and
+    /// is switched on). Otherwise the calendar is Fernlet-only and no Health read happens.
+    func isCycleHealthReadEnabled() -> Bool
+    /// Whether every cycle type has been asked about, so an empty read is an honest "none" — the
+    /// legacy sample import's precondition (§8.3 step 1). Never prompts.
+    func cycleReadAuthorizationDetermined() async -> Bool
+    /// Writes the record's clinical block to Apple Health, every sample stamped with the record id
+    /// (`HKMetadataKeyExternalUUID` and ``FernletCycleRecordMirror/recordIDKey``). Gated: refused
+    /// while cycle sharing is off or Apple Health has not granted every type. A record with no
+    /// clinical field writes nothing.
+    func writeMirror(of record: CycleRecord) async throws
+    /// Deletes Fernlet's own Apple Health samples carrying this record id. UNGATED, own source only.
+    /// Every kind is attempted. A kind Apple Health refuses (share access denied) is REPORTED in the
+    /// result, not thrown — it may hold nothing of Fernlet's (review round 1, R2); any other failure
+    /// throws once every kind was attempted.
+    ///
+    /// - Returns: How many samples were deleted (0 on a device without Health) and the refused kinds.
+    func deleteMirror(recordID: UUID) async throws -> CycleMirrorDeletion
+    /// Deletes these Fernlet-authored samples (the caller passes only Fernlet's own; the conformer
+    /// filters again). UNGATED.
+    ///
+    /// - Returns: How many samples were deleted.
+    func deleteFernletAuthored(_ samples: [HKSample]) async throws -> Int
+    /// Every cycle sample (any source) starting in `range` — empty, not an error, where nothing is
+    /// readable (no Health, or a type Fernlet was never asked to read).
+    func loadHealthCycleSamples(in range: DateInterval) async throws -> [HKSample]
+    /// Fernlet's OWN cycle samples that carry no ``FernletCycleRecordMirror/recordIDKey`` (the
+    /// pre-cutover ones), all time, at most `limit`. THROWS on any error — an empty answer here must
+    /// mean "none", never "not asked" (§8.3, R2-F8).
+    func loadLegacyFernletCycleSamples(limit: Int) async throws -> [HKSample]
 }
 
-/// Narrow lock seam consumed by ``PeriodTrackerStore`` for buffering narratives while the app is
-/// locked. `FernletLockServicing` (in the `FernletLock` module) refines this, so `FernletLockService`
+/// Narrow lock seam consumed by ``PeriodTrackerStore`` for holding entries while the Private tab is
+/// closed. `FernletLockServicing` (in the `FernletLock` module) refines this, so `FernletLockService`
 /// is the production conformer — the seam is owned HERE so `PrivateHealthStore` never names the lock
 /// module (a one-directional edge; the lock module depends on this one, not the reverse).
+///
+/// It no longer asks whether a passcode exists (period-data design 2026-09-30, §4.3): the buffer has
+/// its own device key and every install now has a hub key to drain into — opened by a passcode or by
+/// a tap — so a closed-tab entry is always buffered, never dropped.
 public protocol PeriodLockContext: AnyObject {
-    /// Whether an app lock exists at all. Without one there is no buffer key and no later unlock to
-    /// drain at, so a locked-state narrative is dropped rather than buffered.
-    var isLockConfigured: Bool { get }
-    /// Seals `payload` into the device-key pending buffer to await the next unlock.
+    /// Seals `payload` into the device-key pending buffer to await the next time Private opens.
     func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws
     /// Unseals and returns every buffered payload WITHOUT clearing the buffer —
     /// ``purgePendingNarratives()`` is the explicit clear, called only once re-sealing succeeded.
@@ -343,30 +335,28 @@ public protocol PeriodLockContext: AnyObject {
     func purgePendingNarratives() throws
 }
 
-/// The observable store for the period tracker: joins HealthKit cycle samples with sealed
-/// narratives, enforces the cycle-visibility gate, and publishes entries, current phase, and
-/// prediction.
+/// The observable store for the period tracker: Fernlet's sealed cycle records joined with Apple
+/// Health's read-only samples, the cycle-visibility gate, and the published entries, phase and
+/// prediction (period-data design 2026-09-30, §6.3).
 ///
 /// This is the S3 funnel for cycle data — every cycle read and write in the app goes through it.
-/// Splits each event across two stores: clinical samples (flow, temperature, mucus, ovulation
-/// tests) live in HealthKit behind the ``PeriodHealthKitServicing`` seam (conformed to by
-/// `HealthKitService` in `HealthKitGateway`), while notes/symptoms are sealed into
-/// ``MenstrualNarrativeRepository``. While locked, narratives detour through the pending buffer via
-/// the ``PeriodLockContext`` seam (`FernletLockService`) and are re-sealed on the next unlock by
-/// ``drainPendingBuffer(contentKey:)``. ``CyclePredictionEngine`` supplies ``prediction``; the
-/// period calendar, Home surface, and `PeriodContextBridge` (the sanctioned scoring egress) are the
-/// consumers.
+/// **Fernlet's sealed ``CycleRecord`` is the source of truth** (through the gated
+/// ``CycleRecordStore``), in both passcode modes and whatever the Health switches say. A save SEALS
+/// FIRST — into the store while the Private tab is open, or into the pending buffer (via the
+/// ``PeriodLockContext`` seam) while it is closed, drained by ``drainPendingBuffer(contentKey:)`` —
+/// and only then copies the clinical block to Apple Health, while the user's cycle sharing is on
+/// (the ``PeriodHealthKitServicing`` seam). A Health refusal is reported, never fatal. Edits update
+/// the record IN PLACE; deletes remove Fernlet's rows first, then Fernlet's Health copies.
 ///
 /// The load-bearing invariant is ``isVisible``, the fail-closed hard gate at the data seam rather
 /// than in any view: while hidden the store is INERT — ``loadEntries(unlockedContentKey:)`` scrubs
-/// and returns before the HealthKit read (gate G1), writes and the buffer drain refuse (gate G2) —
-/// yet ``deleteEntry(_:)`` stays ungated so hiding never blocks deletion. Orthogonally, the content
-/// key gates the *narrative* and *prediction* half: a keyless load still lists samples but carries
-/// no decrypted notes and no prediction.
+/// and returns before any read (gate G1), writes, the drain and the legacy import refuse (gate G2) —
+/// yet the deletes stay ungated so hiding never blocks deletion. A load needs the live hub key: a
+/// keyless load scrubs, because the records are the calendar now.
 ///
 /// `@MainActor` `@Observable`: SwiftUI observes ``entries``/``currentPhase``/``prediction``
-/// directly; repository and buffer calls are synchronous on the main actor, HealthKit calls are
-/// awaited. Load failures scrub to the empty state rather than surfacing stale cycle data.
+/// directly; record and buffer calls are synchronous on the main actor, Health calls are awaited, and
+/// every write that follows an await rechecks visibility, the live key and the writer epoch first.
 @MainActor
 @Observable
 public final class PeriodTrackerStore {
@@ -376,87 +366,100 @@ public final class PeriodTrackerStore {
     /// Today's phase from direct observation only (`menstrual` when actual flow was logged today,
     /// else `unknown`); richer calendar-math phases live in `PeriodContextBridge`.
     public var currentPhase: CyclePhase = .unknown
-    /// The latest ``CyclePredictionEngine`` fit — non-`nil` only when the last load ran with a
-    /// content key and enough usable history existed.
+    /// The latest ``CyclePredictionEngine`` fit — non-`nil` only after a keyed load with enough
+    /// usable history.
     public var prediction: CyclePrediction?
+    /// The legacy cycle notes this iPhone cannot open (§8.2) — ids only, found by the legacy import
+    /// and named on the Cycle page's card. Scrubbed with the rest of the cycle state.
+    public internal(set) var unopenableLegacyNarrativeIDs: [UUID] = []
 
-    @ObservationIgnored private let healthService: PeriodHealthKitServicing
-    @ObservationIgnored private let narrativeRepository: MenstrualNarrativeRepository
+    @ObservationIgnored let healthService: PeriodHealthKitServicing
+    /// The gated sealed-record funnel this store composes. Public so the app can install the backup's
+    /// mutation hook on it; its visibility gate is this store's (see ``attachVisibilityGate(_:)``).
+    @ObservationIgnored public let recordStore: CycleRecordStore
+    @ObservationIgnored let narrativeRepository: MenstrualNarrativeRepository
+    @ObservationIgnored let importLedger: CycleLegacyImportLedger
     @ObservationIgnored private var lockService: (any PeriodLockContext)?
-    @ObservationIgnored private let calendar: Calendar
+    @ObservationIgnored let calendar: Calendar
+    /// Whether a Health sample was written by Fernlet (by its source). Injectable for tests, which
+    /// cannot mint another app's samples.
+    @ObservationIgnored let isOwnSample: (HKSample) -> Bool
+    /// The held legacy-import task (§8.4), cancelled by ``cancelBackgroundWriters()``.
+    @ObservationIgnored var legacyImportTask: Task<Void, Never>?
+    /// Moves on every ``cancelBackgroundWriters()``; a write that began under an older epoch never
+    /// lands (§8.4). In memory only.
+    @ObservationIgnored public private(set) var writerEpoch = 0
 
-    /// R3 cap on the HealthKit samples one load may hold — roughly 20 samples/day over the 240-day
+    /// R3 cap on the Health samples one load may hold — roughly 20 samples/day over the 240-day
     /// window. A third-party cycle app writing hourly samples would otherwise grow this without bound.
-    private static let maxLoadedSamples = 5_000
-    /// R3 cap on the number of user-authored custom symptom entries sealed with one event.
-    private static let maxCustomSymptoms = 40
-    /// R3 cap on the length of one custom symptom's name.
-    private static let maxCustomSymptomNameLength = 40
+    static let maxLoadedSamples = 5_000
+    /// The load window in days.
+    static let loadWindowDays = 240
 
     /// Hard visibility gate. While this returns false the store is INERT: it performs no cycle
-    /// decrypt, no cycle HealthKit read, and holds no cycle plaintext. This is deliberately enforced
-    /// here rather than in a `View` body — cycle data is read on ambient paths that no view drives
-    /// (cold launch, lock-state changes, the Home tab's health-context refresh), so a UI-level check
-    /// would hide the surface while the data kept flowing behind it.
+    /// decrypt, no cycle Health read, and holds no cycle plaintext. Enforced here rather than in a
+    /// `View` body, because cycle data is read on ambient paths no view drives.
     ///
-    /// Injected as a closure because this store is a `nonisolated` leaf with no access to settings,
-    /// and because reading it lazily (rather than caching a Bool) means a toggle mid-session takes
-    /// effect on the very next call. Defaults to fail-CLOSED (`{ false }`): a store nobody wired must
-    /// read nothing, so a construction that races ahead of its wiring can never leak cycle data. The
-    /// real derived closure is installed in `ContentView`'s launch task, via ``attachVisibilityGate(_:)``,
-    /// before any load call runs; tests that exercise the visible path install `{ true }` explicitly.
-    ///
-    /// R6: readable everywhere, writable only through ``attachVisibilityGate(_:)`` — a gate any
-    /// holder of the store could reassign in passing is not a gate; installing one is a deliberate
-    /// wiring act with a name.
+    /// Injected as a closure read lazily, so a toggle mid-session takes effect on the very next call.
+    /// Defaults to fail-CLOSED (`{ false }`); the app installs the derived gate in its launch wiring
+    /// via ``attachVisibilityGate(_:)`` before any load. Readable everywhere, writable only there.
     @ObservationIgnored public private(set) var isVisible: () -> Bool = { false }
 
-    /// Installs the visibility gate. Called from the app's launch wiring (and by the sealed-backup
-    /// coordinator on its own instance) before anything loads; until then the store refuses.
+    /// Installs the visibility gate on this store AND on its ``recordStore`` (one gate for both, so
+    /// the funnel can never be visible while the store is hidden). Called from the app's launch
+    /// wiring before anything loads; until then both refuse.
     ///
     /// - Parameter gate: The derived visibility verdict, re-read on every call.
     public func attachVisibilityGate(_ gate: @escaping () -> Bool) {
         isVisible = gate
+        recordStore.attachVisibilityGate(gate)
     }
 
-    /// The live private-hub content key, when the app has wired one.
-    ///
-    /// The second half of the post-`await` recheck in ``loadEntries(unlockedContentKey:)``: the key a
-    /// caller passed in was live when the load STARTED, and a lock can engage during the HealthKit
-    /// await. Wired by the app to `FernletLockService.contentKey(for: .privateHub)`; left `nil` where
-    /// nobody wired it (tests, and any caller with no lock at all), in which case the caller's key is
-    /// the only authority there is and only the visibility half of the recheck applies.
+    /// The live private-hub content key, when the app has wired one — the post-`await` recheck's
+    /// second half. Left `nil` where nobody wired it (tests), in which case the caller's key is the
+    /// only authority and only the visibility half of the recheck applies.
     @ObservationIgnored private var liveContentKey: (() -> SymmetricKey?)?
 
     /// Installs the live-content-key provider used by the post-`await` staleness recheck.
     ///
-    /// - Parameter provider: Returns the hub's current content key, or `nil` while locked.
+    /// - Parameter provider: Returns the hub's current content key, or `nil` while closed.
     public func attachLiveContentKeyProvider(_ provider: @escaping () -> SymmetricKey?) {
         liveContentKey = provider
     }
 
-    /// Whether the last `loadEntries` ran with a content key, i.e. whether `entries` carry narratives
-    /// and a prediction is legitimately derivable. Guards the recompute in `deleteEntry`, which has no
-    /// key of its own to check.
+    /// Whether the last published load ran with a key, i.e. whether a prediction is derivable. Guards
+    /// the recompute after a delete.
     @ObservationIgnored private var lastLoadHadContentKey = false
 
-    /// Creates the store over its two persistence seams.
+    /// Creates the store over its seams.
     ///
     /// - Parameters:
-    ///   - healthService: The HealthKit seam (production: `HealthKitService`; tests: a mock).
-    ///   - narrativeRepository: Sealed narrative store; `nil` builds one on the shared private stack.
+    ///   - healthService: The Apple Health seam (production: `HealthKitService`; tests: a mock).
+    ///   - narrativeRepository: The legacy narrative store the import reads; `nil` builds one on the
+    ///     shared private stack.
     ///   - lockService: The lock seam, or `nil` to wire later via ``attachLockService(_:)``.
     ///   - calendar: Calendar for all day math.
+    ///   - recordStore: The sealed-record funnel; `nil` builds one on the shared private stack. It
+    ///     must share the narrative repository's store so the import retires narratives atomically.
+    ///   - importLedger: The legacy-import markers; `nil` uses standard defaults.
+    ///   - ownSampleFilter: Whether a Health sample is Fernlet's; `nil` compares its source bundle id.
     public init(
         healthService: PeriodHealthKitServicing,
         narrativeRepository: MenstrualNarrativeRepository? = nil,
         lockService: (any PeriodLockContext)? = nil,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        recordStore: CycleRecordStore? = nil,
+        importLedger: CycleLegacyImportLedger? = nil,
+        ownSampleFilter: ((HKSample) -> Bool)? = nil
     ) {
         self.healthService = healthService
         self.narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()
         self.lockService = lockService
         self.calendar = calendar
+        self.recordStore = recordStore ?? CycleRecordStore()
+        self.importLedger = importLedger ?? CycleLegacyImportLedger()
+        let ownBundleID = Bundle.main.bundleIdentifier ?? ""
+        self.isOwnSample = ownSampleFilter ?? { !ownBundleID.isEmpty && $0.sourceRevision.source.bundleIdentifier == ownBundleID }
     }
 
     /// Wires the lock seam after construction — the lock service and this store are built in
@@ -465,71 +468,60 @@ public final class PeriodTrackerStore {
         self.lockService = lockService
     }
 
-    /// Rebuilds ``entries`` (plus phase and prediction) for the trailing 240 days.
+    // MARK: - Load
+
+    /// Rebuilds ``entries`` (plus phase and prediction) for the trailing 240 days (§6.3 Load).
     ///
-    /// Gate G1: while hidden this scrubs any resident plaintext and returns BEFORE the HealthKit
-    /// read (see the inline note — the samples are the larger exposure). With a `nil` key the
-    /// entries still carry samples but no narratives and no prediction. Any load error scrubs to
-    /// the empty state rather than leaving stale cycle data visible.
+    /// G1: hidden, or no key, scrubs and returns before any read. The Health half is read only while
+    /// the cycle capability is on; after that await, visibility and the live key are rechecked. The
+    /// records are decrypted, a record whose clinical block is UNKNOWN is completed from its own
+    /// Health samples (fill-on-read), Fernlet's samples are hidden where their record's clinical
+    /// block is known, and every other sample stays, read-only. Any failure scrubs.
     public func loadEntries(unlockedContentKey: SymmetricKey?) async {
-        // G1 — the hard gate. Returns BEFORE `loadPeriodEvents`, because that HealthKit read is the
-        // larger exposure here: flow, cycle dates, and BBT are ordinary unencrypted Health samples,
-        // so withholding the content key alone would still leave "is she bleeding today" resolvable.
-        // Scrubs on the way out so flipping to hidden mid-session drops plaintext already resident
-        // (up to 240 days of it) rather than merely refusing the next load.
-        guard isVisible() else {
+        guard isVisible(), let key = unlockedContentKey else {
             scrubCycleState()
             return
         }
-        let range = DateInterval(start: calendar.date(byAdding: .day, value: -240, to: Date()) ?? Date().addingTimeInterval(-240 * 86_400), end: Date())
+        let range = loadWindow()
+        let epoch = writerEpoch
         do {
-            // R3: HealthKit is external input — cap the sample array where it enters the store.
-            let samples = Array(try await healthService.loadPeriodEvents(in: range).prefix(Self.maxLoadedSamples))
-            // G1 (post-await half). The gate above was checked BEFORE the HealthKit await, and that
-            // await is arbitrarily long: the user can hide cycle tracking, or the app can lock, while
-            // it is in flight. Re-check both before the decrypt below, not just before assigning —
-            // otherwise a load begun while visible+unlocked decrypts narratives with a key the hub has
-            // since dropped and publishes 240 days of cycle plaintext into a locked, hidden session.
-            guard isVisible() else {
+            let samples = try await readHealthHalf(in: range)
+            // G1 (post-await half): the user can hide cycle tracking, or the hub can close, while the
+            // Health read is in flight. Decrypting after that would publish cycle plaintext into a
+            // session that is no longer entitled to it.
+            guard isVisible(), isContentKeyStillLive(key) else {
                 scrubCycleState()
                 return
             }
-            guard isContentKeyStillLive(unlockedContentKey) else {
-                scrubCycleState()
-                return
-            }
-            let narratives = loadNarratives(in: range, contentKey: unlockedContentKey)
-            // R5: `uniqueKeysWithValues` traps on a duplicate `hkExternalUUID`, a state a partial
-            // buffer drain can genuinely produce. Newest row wins instead of aborting the process.
-            let narrativeByUUID = Dictionary(
-                narratives.map { ($0.hkExternalUUID, $0) },
-                uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
-            )
-            entries = buildEntries(samples: samples, narratives: narrativeByUUID, range: range)
-            currentPhase = currentPhaseFromObservations()
-            lastLoadHadContentKey = unlockedContentKey != nil
-            if unlockedContentKey != nil {
-                prediction = CyclePredictionEngine.predict(from: entries, today: Date(), calendar: calendar)
-            } else {
-                prediction = nil
-            }
+            let windowKeys = Set(FernletDate.dayKeys(in: range, calendar: calendar))
+            let stored = try recordStore.allRecords(contentKey: key).records.filter { windowKeys.contains($0.dayKey) }
+            let ownSamples = samples.filter(isOwnSample)
+            let records = fillOnRead(stored, ownSamples: ownSamples, contentKey: key, epoch: epoch)
+            publish(records: records, ownSamples: ownSamples, otherSamples: samples.filter { !isOwnSample($0) }, range: range)
         } catch {
-            entries = []
-            currentPhase = .unknown
-            prediction = nil
-            lastLoadHadContentKey = false
+            FernletAuditLog.log("period.loadFailed", context: ["error": "\(type(of: error))"])
+            scrubCycleState()
         }
     }
 
-    /// Whether `key` — captured by the caller before the HealthKit await — is still the hub's live
-    /// content key, i.e. whether decrypting with it now is still legitimate.
-    ///
-    /// `true` for a keyless load (there is nothing to go stale) and when no provider is wired (the
-    /// caller's key is then the only authority in the process). Otherwise the hub must still hold a
-    /// key and it must be the SAME key: a re-key or a lock during the await both mean this load's
-    /// authorization expired mid-flight, and the recovery is to scrub rather than publish.
-    private func isContentKeyStillLive(_ key: SymmetricKey?) -> Bool {
-        guard let key, let liveContentKey else { return true }
+    /// The load window: the trailing ``loadWindowDays`` days to now.
+    func loadWindow() -> DateInterval {
+        let start = calendar.date(byAdding: .day, value: -Self.loadWindowDays, to: Date())
+            ?? Date().addingTimeInterval(-Double(Self.loadWindowDays) * 86_400)
+        return DateInterval(start: start, end: Date())
+    }
+
+    /// The Health half of a load: nothing — and no Health call — unless the cycle capability is on.
+    /// R3: capped where it enters the store.
+    private func readHealthHalf(in range: DateInterval) async throws -> [HKSample] {
+        guard healthService.isCycleHealthReadEnabled() else { return [] }
+        return Array(try await healthService.loadHealthCycleSamples(in: range).prefix(Self.maxLoadedSamples))
+    }
+
+    /// Whether `key` — captured before an await — is still the hub's live content key. `true` when no
+    /// provider is wired; otherwise the hub must hold a key and it must be the same one.
+    func isContentKeyStillLive(_ key: SymmetricKey) -> Bool {
+        guard let liveContentKey else { return true }
         guard let live = liveContentKey() else {
             FernletAuditLog.log("period.loadAbandoned", context: ["reason": "lockedDuringLoad"])
             return false
@@ -541,224 +533,407 @@ public final class PeriodTrackerStore {
         return true
     }
 
-    /// Fetches the sealed narratives for `range`, distinguishing "no notes" from "notes unavailable".
+    /// Whether a write that began under `epoch` (before an await) may still land: visible, the key
+    /// live, no ``cancelBackgroundWriters()`` since, and the task not cancelled (§8.4 step 5).
+    func mayWriteAfterAwait(contentKey: SymmetricKey, epoch: Int) -> Bool {
+        isVisible() && isContentKeyStillLive(contentKey) && writerEpoch == epoch && !Task.isCancelled
+    }
+
+    /// Fill-on-read (§6.3 step 6): a record whose clinical block is UNKNOWN takes it from its own
+    /// Fernlet-authored Health samples, written through ``CycleRecordStore/upsertMerged(_:retiringNarrativeIDs:contentKey:)``
+    /// under the import's checks. Completes a record; never creates one or resurrects a deleted one
+    /// (only ids already stored are touched). A refused write keeps the unfilled records (their
+    /// samples then stay on the page).
     ///
-    /// A fetch/decrypt failure is audit-logged and rendered as an empty set so the samples still
-    /// render — R7: the `?? []` this replaces made a Core Data failure indistinguishable from a user
-    /// who had simply written nothing.
-    private func loadNarratives(in range: DateInterval, contentKey: SymmetricKey?) -> [MenstrualNarrative] {
+    /// The completion is `importedLegacy` whatever the record's own origin — the block IS built
+    /// from Fernlet's Health samples — and the merge hands that origin to the completed record
+    /// (``CycleRecord/merged(_:_:)``), so a restored note-only record completed here counts its Health
+    /// copy when a delete is refused (review round 2, N-1).
+    private func fillOnRead(_ records: [CycleRecord], ownSamples: [HKSample], contentKey: SymmetricKey, epoch: Int) -> [CycleRecord] {
+        let groups = Dictionary(
+            CycleHealthSamples.groupedByRecordID(ownSamples).map { ($0.id, $0.samples) },
+            uniquingKeysWith: +
+        )
+        let completions = records.compactMap { record -> CycleRecord? in
+            guard record.clinical == nil, let samples = groups[record.id] else { return nil }
+            return CycleHealthSamples.clinicalRecord(id: record.id, samples: samples, origin: .importedLegacy)
+        }
+        guard !completions.isEmpty, mayWriteAfterAwait(contentKey: contentKey, epoch: epoch) else { return records }
         do {
-            return try narrativeRepository.narratives(in: range, contentKey: contentKey)
+            _ = try recordStore.upsertMerged(completions, retiringNarrativeIDs: [], contentKey: contentKey)
         } catch {
-            FernletAuditLog.log("period.narrativeLoadFailed", context: ["error": "\(error)"])
-            return []
+            FernletAuditLog.log("period.fillOnReadFailed", context: ["error": "\(type(of: error))"])
+            return records
+        }
+        let byID = Dictionary(completions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return records.map { stored in byID[stored.id].map { CycleRecord.merged(stored, $0) } ?? stored }
+    }
+
+    /// Publishes a load: Fernlet's samples are hidden where their record's clinical block is known
+    /// (the record is authoritative, §6.3 step 7), the entries built, and the phase and prediction
+    /// derived.
+    private func publish(records: [CycleRecord], ownSamples: [HKSample], otherSamples: [HKSample], range: DateInterval) {
+        let authoritative = Set(records.filter { $0.clinical != nil }.map(\.id))
+        let shownOwn = ownSamples.filter { !authoritative.contains(CycleHealthSamples.recordID(of: $0)) }
+        entries = buildEntries(records: records, fernletSamples: shownOwn, otherSamples: otherSamples, range: range)
+        currentPhase = currentPhaseFromObservations()
+        lastLoadHadContentKey = true
+        prediction = CyclePredictionEngine.predict(from: entries, today: Date(), calendar: calendar)
+    }
+
+    /// One ``CycleDayEntry`` per day key in `range`, oldest first: the day's records (newest first,
+    /// id as the tiebreak) and its samples by start day.
+    private func buildEntries(records: [CycleRecord], fernletSamples: [HKSample], otherSamples: [HKSample], range: DateInterval) -> [CycleDayEntry] {
+        let recordsByDay = Dictionary(grouping: records, by: \.dayKey).mapValues { dayRecords in
+            dayRecords.sorted { $0.updatedAt != $1.updatedAt ? $0.updatedAt > $1.updatedAt : $0.id.uuidString < $1.id.uuidString }
+        }
+        let ownByDay = Dictionary(grouping: fernletSamples) { FernletDate.dayKey(for: $0.startDate) }
+        let otherByDay = Dictionary(grouping: otherSamples) { FernletDate.dayKey(for: $0.startDate) }
+        return FernletDate.dayKeys(in: range, calendar: calendar).compactMap { key in
+            guard let day = FernletDate.date(fromDayKey: key) else { return nil }
+            return CycleDayEntry(
+                date: day,
+                dateKey: key,
+                records: recordsByDay[key] ?? [],
+                fernletHealthSamples: ownByDay[key] ?? [],
+                otherHealthSamples: otherByDay[key] ?? []
+            )
         }
     }
 
-    /// Drops every piece of cycle plaintext this store holds. Safe to call when already empty.
+    /// Drops every piece of cycle plaintext this store holds (and the unopenable-note ids). Safe to
+    /// call when already empty.
     public func scrubCycleState() {
         entries.removeAll(keepingCapacity: false)
         currentPhase = .unknown
         prediction = nil
         lastLoadHadContentKey = false
+        unopenableLegacyNarrativeIDs.removeAll(keepingCapacity: false)
     }
 
-    /// Saves one user-logged cycle event: clinical fields to HealthKit, narrative to the sealed store.
+    // MARK: - Save
+
+    /// Saves one logged cycle event (§6.3 Save): G2, then SEAL FIRST — into the store with a live
+    /// key, else into the pending buffer until the Private tab next opens (either passcode mode;
+    /// nothing is ever dropped) — then, only while cycle sharing is on and the entry has a clinical
+    /// field, the Apple Health mirror. A seal or buffer failure throws with nothing written to
+    /// Health; a mirror failure is reported in the outcome and the entry stays saved.
     ///
-    /// Gate G2 (write half): throws ``PeriodTrackingHiddenError`` while hidden. The narrative lands
-    /// in the sealed store when the content key is available, in the lock service's pending buffer
-    /// while locked, and is dropped when no lock is configured — the result says which happened so
-    /// the sheet can tell the user. The note is trimmed and capped at 1000 characters before sealing.
-    ///
-    /// - Returns: What happened to the narrative half; see ``PeriodLogResult``.
-    public func logEvent(_ event: UserLoggedCycleEvent, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
-        // G2 (write half). Refuse before touching HealthKit: logging while hidden would both write
-        // cycle data the user asked Fernlet to leave alone and, via the buffer path below, decrypt
-        // the whole pending buffer to re-seal it. Entry points are suppressed in the UI, so reaching
-        // here means a caller bypassed the gate.
+    /// - Throws: ``PeriodTrackingHiddenError``; `CycleRecordRepositoryError` (nothing to store, store
+    ///   full); a seal error; a `PendingNarrativeBufferError`; `FernletLockError` when no lock seam is
+    ///   wired for a closed-tab save.
+    public func logEvent(_ event: UserLoggedCycleEvent, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogOutcome {
         guard isVisible() else { throw PeriodTrackingHiddenError() }
-        let externalUUID = UUID()
-        _ = try await healthService.savePeriodEvent(event, externalUUID: externalUUID)
-        guard event.hasNarrative else { return .saved }
+        let record = CycleRecord(event: event)
+        guard record.isStorable else { throw CycleRecordRepositoryError.recordNotStorable(record.id) }
+        let storage = try keep(record, contentKey: unlockedContentKey)
+        return PeriodLogOutcome(storage: storage, healthCopy: await mirrorNewRecord(record))
+    }
 
-        let narrative = MenstrualNarrative(
-            hkExternalUUID: externalUUID.uuidString,
-            dateKey: FernletDate.dayKey(for: event.date),
-            note: String(event.note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000)),
-            symptomFlags: event.symptoms.sorted(),
-            customSymptomScales: Self.boundedCustomScales(event.customSymptomScales)
-        )
-
-        if let unlockedContentKey {
-            try narrativeRepository.insert(narrative, contentKey: unlockedContentKey)
-            return .saved
+    /// Seals `record` now, or buffers it for the next open.
+    private func keep(_ record: CycleRecord, contentKey: SymmetricKey?) throws -> PeriodLogOutcome.Storage {
+        if let contentKey {
+            try recordStore.insert(record, contentKey: contentKey)
+            return .sealed
         }
-
-        if lockService?.isLockConfigured == false {
-            return .savedWithDroppedNarrative
-        }
-
-        try lockService?.bufferPendingNarrative(PendingNarrativePayload(
-            hkExternalUUID: narrative.hkExternalUUID,
-            dateKey: narrative.dateKey,
-            noteBytes: narrative.note.map { Data($0.utf8) },
-            symptomFlagsBytes: try JSONEncoder().encode(narrative.symptomFlags.map(\.rawValue)),
-            customSymptomScalesBytes: try JSONEncoder().encode(narrative.customSymptomScales)
+        // No seam wired means nowhere to keep the entry: refuse loudly rather than report a buffer
+        // that never happened.
+        guard let lockService else { throw FernletLockError.internalError("pending narrative buffer is not wired") }
+        try lockService.bufferPendingNarrative(PendingNarrativePayload(
+            cycleRecordID: record.id,
+            dayKey: record.dayKey,
+            cycleRecordJSON: try record.frozenJSON()
         ))
-        return .savedWithBufferedNarrative
+        return .pendingUntilPrivateOpens
     }
 
-    /// Caps the user-authored custom symptom dictionary at ``maxCustomSymptoms`` entries and each
-    /// key at ``maxCustomSymptomNameLength`` characters, alongside the note's 1000-character cap.
-    /// R3: this dictionary is unbounded user input that is sealed into the store and the pending
-    /// buffer. Truncated keys that collide keep the larger value, so the merge cannot trap.
-    private static func boundedCustomScales(_ scales: [String: Int]) -> [String: Int] {
-        let bounded = scales
-            .sorted { $0.key < $1.key }
-            .prefix(maxCustomSymptoms)
-            .map { (String($0.key.prefix(maxCustomSymptomNameLength)), $0.value) }
-        return Dictionary(bounded, uniquingKeysWith: { lhs, rhs in max(lhs, rhs) })
+    /// The mirror half of a new entry: nothing unless the entry has a clinical field, the store is
+    /// still visible and cycle sharing is on.
+    private func mirrorNewRecord(_ record: CycleRecord) async -> PeriodLogOutcome.HealthCopy {
+        guard record.hasClinicalFields, isVisible(), healthService.isCycleMirrorEnabled() else { return .notShared }
+        do {
+            try await healthService.writeMirror(of: record)
+            return .written
+        } catch {
+            return Self.healthCopy(after: error)
+        }
     }
 
-    /// Replaces an existing entry: deletes its Fernlet-owned samples and sealed narrative, then
-    /// re-logs `event` through ``logEvent(_:unlockedContentKey:)``. Gated up front — on visibility
-    /// AND on the Health write the re-log will need — so neither a hide racing the edit nor
-    /// sharing that is turned off can delete without re-creating (see the inline note). Samples
-    /// written by other apps are left untouched.
-    public func editEvent(_ event: UserLoggedCycleEvent, replacingEntry entry: CycleDayEntry, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
-        // Gate BEFORE the deletes below. This is delete-then-recreate: it drops the old HealthKit
-        // samples and the sealed narrative, then re-adds via `logEvent`. If the gate only fired inside
-        // `logEvent`, an edit racing a hide would destroy the entry and then throw without writing the
-        // replacement — turning the hide gate itself into the cause of data loss.
+    /// Updates a stored record IN PLACE (§6.3 Edit) — no delete-then-recreate of the source of truth
+    /// — then re-mirrors: with cycle sharing on, Fernlet's Health copy is deleted and rewritten (a
+    /// rewrite refused after the delete leaves Health without the day, never a wrong one, and is
+    /// reported); with sharing off, Fernlet's older copy is removed (owner question Q1) and the outcome
+    /// says so only when a sample was really deleted.
+    ///
+    /// An edit that leaves an UNKNOWN block empty leaves it unknown (a legacy narrative-only record
+    /// edited for its note does not gain a "none" clinical block). And an edit of a record whose
+    /// STORED clinical block is unknown never deletes anything from Apple Health: Fernlet never wrote
+    /// a mirror for such a record, so every Fernlet sample carrying its id is a pre-cutover sample —
+    /// the block's not-yet-imported source, not a stale copy (review round 1, C-U4-R1 / L-U4-1). An
+    /// emptied edit is a delete (``deleteRecord(_:)``), never this.
+    ///
+    /// - Throws: ``PeriodTrackingHiddenError``; `CycleRecordRepositoryError.recordNotFound` /
+    ///   `.undecidedRows` / `.recordNotStorable`; a seal error.
+    public func editRecord(_ id: UUID, with event: UserLoggedCycleEvent, unlockedContentKey: SymmetricKey) async throws -> PeriodLogOutcome {
         guard isVisible() else { throw PeriodTrackingHiddenError() }
-        // The same hazard from the Health side (2026-09-23): the delete below is allowed with
-        // Fernlet's cycle sharing off, the re-log's write is not — so ask first, or the edit would
-        // destroy the day and then fail to write it back.
-        try healthService.checkPeriodEventWriteAllowed(event)
-        let bundleID = Bundle.main.bundleIdentifier ?? ""
-        let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
-        if !ownedSamples.isEmpty {
-            try await healthService.delete(ownedSamples)
-        }
-        if let narrative = entry.narrative {
-            do {
-                try narrativeRepository.delete(id: narrative.id)
-            } catch {
-                // Recovery: continue to the re-log. Throwing here would destroy the entry without
-                // writing its replacement — the hazard the gate comment above describes — so the
-                // superseded row is named in the log instead of vanishing silently.
-                FernletAuditLog.log(
-                    "period.narrativeDeleteFailedOnEdit",
-                    context: ["id": narrative.id.uuidString, "error": "\(error)"]
-                )
-            }
-        }
-        return try await logEvent(event, unlockedContentKey: unlockedContentKey)
+        let page = try recordStore.records(ids: [id], contentKey: unlockedContentKey)
+        guard page.transientCount == 0 else { throw CycleRecordRepositoryError.undecidedRows(count: page.transientCount) }
+        guard let stored = page.records.first else { throw CycleRecordRepositoryError.recordNotFound(id) }
+        let edited = Self.editedRecord(stored, with: event)
+        try recordStore.update(edited, contentKey: unlockedContentKey)
+        return PeriodLogOutcome(storage: .sealed, healthCopy: await remirrorEdited(edited, replacing: stored))
     }
 
-    /// Deletes one day's Fernlet-owned samples and sealed narrative, then recomputes local state.
-    /// Deliberately not visibility-gated — hiding must never block deletion — and the prediction
-    /// recompute is key-gated (see the inline note) so a delete can never resurrect a prediction
-    /// the load was not entitled to.
-    public func deleteEntry(_ entry: CycleDayEntry) async throws {
-        let bundleID = Bundle.main.bundleIdentifier ?? ""
-        let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
-        if !ownedSamples.isEmpty {
-            try await healthService.delete(ownedSamples)
+    /// The record an edit writes: `event` under the stored id and creation time, with an unknown
+    /// block kept unknown when the edit leaves it empty. The stored origin is kept — unless the edit
+    /// gives an UNKNOWN clinical block fields: that block is the user's own entry, so the record
+    /// becomes `logged` (``CycleRecord/combinedOrigin(_:_:)``; review round 2, N-1). A legacy
+    /// note-only day the user adds a flow to is not "built from Fernlet's Apple Health samples",
+    /// and a refused Health delete of it must not say a copy was left there.
+    static func editedRecord(_ stored: CycleRecord, with event: UserLoggedCycleEvent, now: Date = Date()) -> CycleRecord {
+        var edited = CycleRecord(event: event, id: stored.id, origin: .logged, now: now)
+        if stored.clinical == nil, edited.clinical?.isEmpty == true { edited.clinical = nil }
+        if stored.narrative == nil, edited.narrative?.isEmpty == true { edited.narrative = nil }
+        edited.origin = CycleRecord.combinedOrigin(stored, edited)
+        edited.createdAt = stored.createdAt
+        return edited
+    }
+
+    /// The mirror half of an edit (see ``editRecord(_:with:unlockedContentKey:)``): `record` is what
+    /// was just sealed, `stored` what it replaced.
+    ///
+    /// - A stored block that is UNKNOWN: nothing is deleted (its Fernlet samples are its source, not
+    ///   a copy); with sharing on, a block the edit made known is written beside them.
+    /// - Otherwise the old copy is deleted first. A kind Apple Health refused to delete counts only
+    ///   when ``refusalMayLeaveCopy(of:refused:sharing:)`` says a copy can really be there (R2) —
+    ///   and with sharing on the rewrite is always attempted after it, its own share check deciding.
+    ///   An unexpected delete failure is reported and nothing is rewritten (an old copy beside a new
+    ///   one would be a wrong copy).
+    private func remirrorEdited(_ record: CycleRecord, replacing stored: CycleRecord) async -> PeriodLogOutcome.HealthCopy {
+        guard isVisible() else { return .notShared }
+        let sharing = healthService.isCycleMirrorEnabled()
+        guard stored.clinical != nil else { return sharing ? await mirrorNewRecord(record) : .notShared }
+        let deletion: CycleMirrorDeletion
+        do {
+            deletion = try await healthService.deleteMirror(recordID: record.id)
+        } catch {
+            return Self.healthCopy(after: error)
         }
-        if let narrative = entry.narrative {
+        let copyMayRemain = Self.refusalMayLeaveCopy(of: stored, refused: deletion.refusedKinds, sharing: sharing)
+        guard sharing else {
+            if copyMayRemain { return .failed(.healthDenied) }
+            return deletion.deletedCount > 0 ? .removedStaleCopy : .notShared
+        }
+        let rewrite = await mirrorNewRecord(record)
+        if case .failed = rewrite { return rewrite }
+        return copyMayRemain ? .failed(.healthDenied) : rewrite
+    }
+
+    /// Whether Apple Health refusing to delete `refused` may have left a Fernlet copy of `record`
+    /// there — the only refusal worth telling the user about (review round 1, R2). HealthKit reports
+    /// share access never granted exactly as it reports access taken away after a copy was written,
+    /// so the record decides:
+    ///
+    /// - Only a kind the record's copy could hold counts (``CycleMirrorSampleKind/possibleCopyKinds(of:)``):
+    ///   a refused kind the entry never set left nothing behind.
+    /// - A record whose clinical block was BUILT from Fernlet's Apple Health samples (the legacy
+    ///   import, fill-on-read, "Keep in Fernlet": `CycleRecord.clinicalBlockIsFromFernletHealthSamples`)
+    ///   had a copy there by construction. The origin can say so because a clinical block supplied
+    ///   to an unknown slot brings its own origin (review round 2, N-1): a flow the user added to a
+    ///   legacy note-only day makes it `logged`, and a restored note-only record completed from its
+    ///   samples becomes `importedLegacy`.
+    /// - Any other record — an UNKNOWN block included, whose pre-cutover samples exist only if they
+    ///   were written while sharing was on — had a copy only if it was copied with cycle sharing on;
+    ///   with sharing off now, a refusal most likely means the access was never granted, and saying
+    ///   "Apple Health still has Fernlet's copy" on every edit and delete would be false.
+    static func refusalMayLeaveCopy(of record: CycleRecord, refused: Set<CycleMirrorSampleKind>, sharing: Bool) -> Bool {
+        guard !refused.isDisjoint(with: CycleMirrorSampleKind.possibleCopyKinds(of: record)) else { return false }
+        return record.clinicalBlockIsFromFernletHealthSamples || sharing
+    }
+
+    /// The Health-copy outcome a mirror error means: "sharing is off" is no failure.
+    static func healthCopy(after error: any Error) -> PeriodLogOutcome.HealthCopy {
+        guard let failure = healthCopyFailure(for: error) else { return .notShared }
+        return .failed(failure)
+    }
+
+    /// Classifies a Health error; `nil` when it only says cycle sharing is off.
+    static func healthCopyFailure(for error: any Error) -> PeriodLogOutcome.HealthCopyFailure? {
+        if let classified = error as? PeriodHealthCopyErrorClassifying { return classified.periodHealthCopyFailure }
+        guard let healthError = error as? HKError else { return .other }
+        switch healthError.code {
+        case .errorAuthorizationDenied, .errorAuthorizationNotDetermined: return .healthDenied
+        case .errorHealthDataUnavailable, .errorHealthDataRestricted: return .healthUnavailable
+        default: return .other
+        }
+    }
+
+    // MARK: - Delete
+
+    /// Deletes a day (§6.3 Delete): Fernlet's rows FIRST, keyless and ungated, in one save — a failure
+    /// there throws and nothing was deleted anywhere — then Fernlet's Apple Health copies: each
+    /// record's mirror, plus the day's Fernlet-authored samples that have no record (an earlier
+    /// install's or the other iPhone's copies). Health refusing is reported, not thrown: the user
+    /// asked to delete the entry and Fernlet's copy is the source of truth (§6.3).
+    ///
+    /// Deliberately not visibility-gated — hiding must never block deletion.
+    public func deleteDay(_ entry: CycleDayEntry) async throws -> PeriodDeleteOutcome {
+        try await deleteRecords(entry.records, removingCopiesOf: entry.records, orphanCopies: entry.fernletHealthSamples)
+    }
+
+    /// Deletes one record — the emptied edit (§6.3 Edit). Same order and outcome as ``deleteDay(_:)``,
+    /// with one difference: a record whose clinical block is UNKNOWN keeps its Fernlet samples in
+    /// Apple Health. Fernlet never mirrored such a record, so those samples are pre-cutover data the
+    /// user never saw in this sheet — the legacy import or "Keep in Fernlet" brings them in later, and
+    /// the day's confirmed Delete removes them (review round 1, C-U4-R1). Emptying a note must not
+    /// silently delete flow history behind it.
+    public func deleteRecord(_ record: CycleRecord) async throws -> PeriodDeleteOutcome {
+        try await deleteRecords([record], removingCopiesOf: record.clinical == nil ? [] : [record], orphanCopies: [])
+    }
+
+    /// The shared delete: rows first, then the local state, then Health.
+    private func deleteRecords(
+        _ records: [CycleRecord],
+        removingCopiesOf mirrored: [CycleRecord],
+        orphanCopies: [HKSample]
+    ) async throws -> PeriodDeleteOutcome {
+        let ids = records.map(\.id)
+        let removed = try recordStore.delete(ids: ids)
+        dropFromEntries(ids: Set(ids))
+        let healthCopy = await removeHealthCopies(of: mirrored, orphanCopies: orphanCopies)
+        return PeriodDeleteOutcome(removedRecordCount: removed, healthCopy: healthCopy)
+    }
+
+    /// Fernlet's Apple Health copies of deleted records, plus `orphanCopies`. Every record is
+    /// attempted. `.stillInHealth` only when something of Fernlet's can really be left there: a delete
+    /// that failed outright, or a refused kind ``refusalMayLeaveCopy(of:refused:sharing:)`` counts
+    /// (R2) — a refused kind the entry never held left nothing behind.
+    private func removeHealthCopies(of records: [CycleRecord], orphanCopies: [HKSample]) async -> PeriodDeleteOutcome.HealthCopy {
+        let sharing = healthService.isCycleMirrorEnabled()
+        var deleted = 0
+        var failure: PeriodLogOutcome.HealthCopyFailure?
+        for record in records {  // R2: bounded by the day's records.
             do {
-                try narrativeRepository.delete(id: narrative.id)
+                let deletion = try await healthService.deleteMirror(recordID: record.id)
+                deleted += deletion.deletedCount
+                if Self.refusalMayLeaveCopy(of: record, refused: deletion.refusedKinds, sharing: sharing) {
+                    failure = failure ?? .healthDenied
+                }
             } catch {
-                // Recovery: report. A deletion the UI claims happened must not leave the user's
-                // sealed note on disk, so the caller surfaces the failure instead of "day removed".
-                FernletAuditLog.log("period.narrativeDeleteFailed", context: ["error": "\(error)"])
-                throw error
+                FernletAuditLog.log("period.healthCopyDeleteFailed", context: ["error": "\(type(of: error))"])
+                failure = failure ?? Self.healthCopyFailure(for: error) ?? .other
             }
         }
-        entries.removeAll { $0.id == entry.id }
-        // Only recompute a prediction we were entitled to in the first place. This used to run
-        // unconditionally, while the identical assignment in `loadEntries` is key-gated — so deleting
-        // an entry re-enabled full phase resolution (and the scoring softening that rides on it) with
-        // no content key at all, and would have punched straight through the visibility gate.
-        if lastLoadHadContentKey {
-            prediction = CyclePredictionEngine.predict(from: entries, today: Date(), calendar: calendar)
-        } else {
-            prediction = nil
+        if !orphanCopies.isEmpty {
+            do {
+                deleted += try await healthService.deleteFernletAuthored(orphanCopies)
+            } catch {
+                FernletAuditLog.log("period.healthCopyDeleteFailed", context: ["error": "\(type(of: error))"])
+                failure = failure ?? Self.healthCopyFailure(for: error) ?? .other
+            }
         }
+        if let failure { return .stillInHealth(failure) }
+        return deleted > 0 ? .removed : .none
+    }
+
+    /// Removes deleted records from the published entries and recomputes local state. The prediction
+    /// is recomputed only when the last load was entitled to one (a keyed load).
+    private func dropFromEntries(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        entries = entries.map { entry in
+            var trimmed = entry
+            trimmed.records.removeAll { ids.contains($0.id) }
+            return trimmed
+        }
+        prediction = lastLoadHadContentKey ? CyclePredictionEngine.predict(from: entries, today: Date(), calendar: calendar) : nil
         currentPhase = currentPhaseFromObservations()
     }
 
-    /// Re-seals every pending-buffer narrative into the sealed store after an unlock.
+    // MARK: - Health-only Fernlet days (§7.3)
+
+    /// "Keep in Fernlet": adopts a Health-only Fernlet day — one record per group of Fernlet's samples
+    /// (`id` = the samples' record id, clinical known, narrative unknown, origin `adoptedFromHealth`)
+    /// through the one merge write. Gated (it writes).
     ///
-    /// Gate G2 (drain half): a silent no-op while hidden — the buffer unseals under a device key
-    /// the content-key gate never sees, so this path must refuse explicitly, and the buffer stays
-    /// intact for a later un-hide. The buffer is purged only after every insert succeeds, so a
-    /// partial failure leaves it drainable on the next unlock.
+    /// - Returns: How many records were inserted, completed or replaced.
+    public func keepHealthOnlyDay(_ entry: CycleDayEntry, contentKey: SymmetricKey) throws -> Int {
+        guard isVisible() else { throw PeriodTrackingHiddenError() }
+        let records = CycleHealthSamples.groupedByRecordID(entry.fernletHealthSamples).compactMap { group in
+            CycleHealthSamples.clinicalRecord(id: group.id, samples: group.samples, origin: .adoptedFromHealth)
+        }
+        guard !records.isEmpty else { return 0 }
+        let result = try recordStore.upsertMerged(records, retiringNarrativeIDs: [], contentKey: contentKey)
+        return result.inserted + result.merged + result.replaced
+    }
+
+    /// "Delete from Apple Health": removes a Health-only Fernlet day's copies. Ungated.
+    ///
+    /// - Returns: How many samples were deleted.
+    public func deleteHealthOnlyCopies(_ entry: CycleDayEntry) async throws -> Int {
+        guard !entry.fernletHealthSamples.isEmpty else { return 0 }
+        return try await healthService.deleteFernletAuthored(entry.fernletHealthSamples)
+    }
+
+    // MARK: - Drain
+
+    /// Seals every buffered entry into the store (§6.3 Drain) through ONE merge write, then purges the
+    /// buffer — so a partial drain (or a failed purge) re-drains without duplicates.
+    ///
+    /// A v2 payload is a whole record; a v1 payload (a narrative buffered before the cutover) becomes
+    /// a narrative-only record under its legacy external id, so it later merges with that entry's
+    /// legacy Health samples. G2: a silent no-op while hidden — the buffer unseals under a device key
+    /// the content-key gate never sees — and the buffer stays intact for a later un-hide. A payload
+    /// that will not decode throws before anything is written, leaving the buffer intact.
     public func drainPendingBuffer(contentKey: SymmetricKey) async throws {
-        // G2 (drain half). `PendingNarrativeBuffer.loadEntries` unseals with a device key that has
-        // nothing to do with the content key, so this path is invisible to key-withholding and must
-        // be refused explicitly. Not an error: an unlock while hidden is ordinary, and the buffer is
-        // left intact to drain later if the user un-hides.
-        guard isVisible() else { return }
-        guard let lockService else { return }
+        guard isVisible(), let lockService else { return }
         let pending = try lockService.drainPendingNarratives()
         guard !pending.isEmpty else { return }
-        for payload in pending {
-            // Idempotent drain. The purge below runs only after EVERY insert succeeds, so a partial
-            // drain (or a failed purge) leaves payloads both buffered and inserted; re-inserting them
-            // on the next unlock would create duplicate `hkExternalUUID` rows. Skip what is already
-            // sealed instead.
-            if try narrativeRepository.narrative(forHKUUID: payload.hkExternalUUID, contentKey: contentKey) != nil {
-                continue
-            }
-            let symptomsRaw = try payload.symptomFlagsBytes.map { try JSONDecoder().decode([String].self, from: $0) } ?? []
-            let scales = try payload.customSymptomScalesBytes.map { try JSONDecoder().decode([String: Int].self, from: $0) } ?? [:]
-            try narrativeRepository.insert(MenstrualNarrative(
-                hkExternalUUID: payload.hkExternalUUID,
-                dateKey: payload.dateKey,
-                note: payload.noteBytes.flatMap { String(data: $0, encoding: .utf8) },
-                symptomFlags: symptomsRaw.compactMap(PeriodSymptom.init(rawValue:)),
-                customSymptomScales: scales
-            ), contentKey: contentKey)
-        }
-        // Purge only after all inserts succeed, so a partial failure leaves the buffer intact.
+        let now = Date()
+        let records = try pending.map { try Self.record(fromPending: $0, now: now) }
+        _ = try recordStore.upsertMerged(records, retiringNarrativeIDs: [], contentKey: contentKey)
         try lockService.purgePendingNarratives()
     }
 
-    /// The phase derivable from today's direct observation alone: `menstrual` when an actual
-    /// (non-none) flow sample exists today, `unknown` otherwise. Needs no prediction and no content
-    /// key, so it is safe on every path.
+    /// The record one buffered payload carries.
+    static func record(fromPending payload: PendingNarrativePayload, now: Date) throws -> CycleRecord {
+        if let json = payload.cycleRecordJSON { return try CycleRecord(frozenJSON: json) }
+        // The lossy seam, as the sealed narrative column has always been: `PeriodSymptom`'s raw values
+        // are FROZEN tokens, so this `compactMap` never drops a symptom in practice.
+        let symptoms = try payload.symptomFlagsBytes.map { try JSONDecoder().decode([String].self, from: $0) } ?? []
+        let scales = try payload.customSymptomScalesBytes.map { try JSONDecoder().decode([String: Int].self, from: $0) } ?? [:]
+        return CycleRecord(
+            id: CycleLegacyIdentity.recordID(forLegacyExternalID: payload.hkExternalUUID),
+            dayKey: payload.dateKey,
+            loggedAt: FernletDate.date(fromDayKey: payload.dateKey) ?? now,
+            clinical: nil,
+            narrative: CycleNarrativeFields(
+                note: payload.noteBytes.flatMap { String(data: $0, encoding: .utf8) },
+                symptomFlags: symptoms.compactMap(PeriodSymptom.init(rawValue:)),
+                customSymptomScales: scales,
+                updatedAt: now
+            ),
+            origin: .importedLegacy,
+            createdAt: now,
+            updatedAt: now
+        )
+    }
+
+    // MARK: - Writers
+
+    /// Stops the background writers before "Delete everything" (§8.4): cancels the held legacy
+    /// import and moves ``writerEpoch``, so neither the import nor a fill-on-read that began before
+    /// this call can write afterwards.
+    public func cancelBackgroundWriters() {
+        legacyImportTask?.cancel()
+        legacyImportTask = nil
+        writerEpoch &+= 1
+    }
+
+    /// The phase derivable from today's direct observation alone: `menstrual` when today records
+    /// actual bleeding, `unknown` otherwise. Needs no prediction, so it is safe on every path.
     public func currentPhaseFromObservations() -> CyclePhase {
         let todayKey = FernletDate.dayKey(for: Date())
         guard let entry = entries.first(where: { $0.dateKey == todayKey }) else { return .unknown }
         return entry.hasActualBleedingFlow ? .menstrual : .unknown
-    }
-
-    /// Assembles one ``CycleDayEntry`` per day key in `range`, attaching each day's samples and its
-    /// narrative — matched by sample external UUID first, then by day key (see the inline note on
-    /// note-only events with no backing sample).
-    private func buildEntries(samples: [HKSample], narratives: [String: MenstrualNarrative], range: DateInterval) -> [CycleDayEntry] {
-        let grouped = Dictionary(grouping: samples) { FernletDate.dayKey(for: $0.startDate) }
-        // Note/symptom-only events have no backing HealthKit sample, so they can't be matched
-        // by sample external UUID. Index narratives by their own day key so those entries still
-        // surface instead of being silently orphaned in the encrypted store.
-        var narrativesByDayKey: [String: [MenstrualNarrative]] = [:]
-        for narrative in narratives.values {
-            narrativesByDayKey[narrative.dateKey, default: []].append(narrative)
-        }
-        var result: [CycleDayEntry] = []
-        for key in FernletDate.dayKeys(in: range, calendar: calendar) {
-            guard let day = FernletDate.date(fromDayKey: key) else { continue }
-            let daySamples = grouped[key] ?? []
-            let sampleUUIDs = Set(daySamples.compactMap { $0.metadata?[HKMetadataKeyExternalUUID] as? String })
-            let narrative = sampleUUIDs.compactMap { narratives[$0] }.first
-                ?? narrativesByDayKey[key]?.first { !sampleUUIDs.contains($0.hkExternalUUID) }
-            let phase: CyclePhase = daySamples.contains { sample in
-                (sample as? HKCategorySample)?.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue
-            } ? .menstrual : .unknown
-            result.append(CycleDayEntry(date: day, dateKey: key, samples: daySamples, narrative: narrative, phase: phase))
-        }
-        return result
     }
 }

@@ -141,10 +141,12 @@
 
 import Foundation
 import Testing
+import CloudKitSync
 @testable import FernletDomainModel
 import FernletFoundation
 import LocalPersistence
 import PrivateHealthStore
+import PrivateMemoryStore
 @testable import FoodCatalog
 @testable import AIProviders
 @testable import Fernlet
@@ -429,6 +431,93 @@ struct LocalizationBoundaryTests {
         #expect(Self.localizedCalls(in: fakedBundle).first?.passesBundle == false)
     }
 
+    // MARK: - A2. Retired meanings get new keys (period-data design 2026-09-30, §10.5)
+
+    /// The app-lock loss copy changed MEANING when cycle history started living in Fernlet whether or
+    /// not it was copied to Apple Health ("entries remain in Apple Health" stopped being the promise),
+    /// so each string moved to a NEW key and its old key is retired: a new meaning under an old key
+    /// keeps every translation of the old promise. The same for the period sheet's two "notes need an
+    /// app lock" sentences, which stopped being true when notes began saving without a passcode.
+    ///
+    /// Source half only: no shipping source may name a retired key, and every new key must be named.
+    /// The catalog half (new keys present, retired keys pruned from BOTH catalogs) lands with the
+    /// catalog sync that follows this round — it is asserted there rather than here because this
+    /// round does not edit `.xcstrings` files.
+    @Test func theRetiredLossCopyKeysAreGoneFromSourceAndTheirV2KeysArePresent() throws {
+        // The period sheet's refusals retired with the cutover (design §10.4): a log is never refused
+        // for sharing any more, and the buffer sentences stopped saying "the rest already saved"
+        // (the record is kept FIRST now), so those two moved to `.v2` keys. And "Delete everything"
+        // stopped naming only "cycle notes" (§9.11, review L-U4-2): it deletes the whole cycle
+        // history, which for a user who never shared with Apple Health is the only copy.
+        let retired = [
+            "\"lock.disclosure.forgottenPasscode\"", "\"lock.reset.required.body\"",
+            "\"lock.reset.confirm.message\"", "\"lock.hardBinding.message\"",
+            "\"logPeriod.refusal.sharingOff.noLock\"", "\"logPeriod.refusal.notesNeedLock\"",
+            "\"logPeriod.refusal.sharingOff\"", "\"logPeriod.refusal.sharingOff.edit\"",
+            "\"logPeriod.refusal.healthDenied\"", "\"logPeriod.refusal.healthDenied.edit\"",
+            "\"logPeriod.error.bufferUnopenable\"", "\"logPeriod.error.bufferFull\"",
+            "\"deleteAll.scope.base\""
+        ]
+        let required = [
+            "\"lock.disclosure.forgottenPasscode.v2\"", "\"lock.reset.required.body.v2\"",
+            "\"lock.reset.confirm.message.v2\"", "\"lock.hardBinding.message.v2\"",
+            "\"settings.appLock.reset.message.v2\"",
+            "\"logPeriod.error.bufferUnopenable.v2\"", "\"logPeriod.error.bufferFull.v2\"",
+            "\"deleteAll.scope.base.v2\""
+        ]
+        var sources = ""
+        var fileCount = 0
+        for root in ["App", "FernletKit/Sources"] {
+            let rootURL = RepoRoot.url(root)
+            guard let walker = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+                Issue.record("could not enumerate \(root)")
+                continue
+            }
+            for case let url as URL in walker where url.pathExtension == "swift" {
+                sources += try String(contentsOf: url, encoding: .utf8)
+                fileCount += 1
+            }
+        }
+        #expect(fileCount > 300, "scanned only \(fileCount) files — the walk broke and this wall reads nothing")
+        for key in retired {
+            #expect(!sources.contains(key), "\(key) is retired (its meaning changed); use its .v2 key")
+        }
+        for key in required {
+            #expect(sources.contains(key), "\(key) is missing — the rewritten loss copy was reverted")
+        }
+    }
+
+    /// Review C-U2-R4: after an app-lock reset every Sealed backup restore waits for the device owner
+    /// (`SealedBackupRestoreHold`). While nothing can RELEASE that hold, no reset or forgotten-passcode
+    /// copy may promise a restore. Since design unit 5 the owner's "Restore" in Privacy & Data releases
+    /// it (`release()`), and the design's restore sentences are back (§10.5) — so the wall now pins
+    /// the other direction too: those four sites DO name the restore, and the lockout card (which is
+    /// about the deletion only) still does not.
+    @Test func theResetCopyPromisesARestoreExactlyWhenTheOwnerHoldCanBeReleased() throws {
+        let hold = try String(contentsOf: RepoRoot.url("App/Fernlet/SealedBackupRestoreHold.swift"), encoding: .utf8)
+        #expect(hold.contains("struct SealedBackupRestoreHold"), "the hold moved — this wall reads nothing")
+        let releasable = hold.contains("func release(")
+        let sites: [(file: String, key: String, promises: Bool)] = [
+            ("FernletKit/Sources/FernletLockUI/FernletLockGate.swift", "lock.reset.confirm.message.v2", true),
+            ("FernletKit/Sources/FernletLockUI/FernletLockView.swift", "lock.disclosure.forgottenPasscode.v2", true),
+            ("FernletKit/Sources/FernletLockUI/FernletLockView.swift", "lock.reset.required.body.v2", false),
+            ("FernletKit/Sources/FernletLockUI/FernletTapGate.swift", "lock.tapGate.unrecoverable.body", true),
+            ("App/Fernlet/SettingsSheet.swift", "settings.appLock.reset.message.v2", true)
+        ]
+        for site in sites {
+            let source = try String(contentsOf: RepoRoot.url(site.file), encoding: .utf8)
+            let text = try #require(LockGateAccessibilityBoundaryTests.defaultValue(for: site.key, in: source),
+                                    "\(site.key) is gone from \(site.file) — this wall reads nothing")
+            let names = text.localizedCaseInsensitiveContains("restore")
+            #expect(names == (releasable && site.promises),
+                    "\(site.key) \(names ? "promises" : "omits") a restore (hold releasable: \(releasable)): \(text)")
+            // Review U5-backup-v2-L-U5-R5: the journal and intimacy restores write only into an empty
+            // store, so a promise of the restore must say to restore before adding new entries.
+            #expect(!names || text.contains("before you add new entries"),
+                    "\(site.key) promises a restore new entries would block: \(text)")
+        }
+    }
+
     // MARK: - B. Frozen token canaries
 
     /// Sealed cycle symptoms. `PeriodSymptom` raw values ride the ChaChaPoly-encrypted
@@ -452,6 +541,153 @@ struct LocalizationBoundaryTests {
             are localizing symptom names, add a display property and leave `rawValue` alone.
             """
         )
+    }
+
+    /// The sealed cycle record's at-rest shape (period-data design 2026-09-30, §5.1, §10.7). One
+    /// `CycleRecord` is ONE ciphertext blob whose plaintext is this JSON — the same bytes the pending
+    /// buffer's v2 payload and the Sealed backup's chunks carry. Every key and every raw value in it is
+    /// a TOKEN: a renamed key reads as a missing field (a block goes UNKNOWN, a record goes dead), a
+    /// renamed raw value decodes as `nil` (the tolerant decoder drops it). Localize `title`, never these.
+    @Test func frozenCycleRecordTokens() throws {
+        #expect(PeriodFlowLevel.allCases.map(\.rawValue) == ["none", "light", "medium", "heavy", "unspecified"])
+        #expect(CervicalMucusQuality.allCases.map(\.rawValue) == ["dry", "sticky", "creamy", "watery", "eggWhite"])
+        #expect(OvulationTestResult.allCases.map(\.rawValue) == ["negative", "positive", "indeterminate"])
+        #expect(PeriodTemperatureUnit.allCases.map(\.rawValue) == ["fahrenheit", "celsius"])
+        #expect(CycleRecordOrigin.allCases.map(\.rawValue) == ["logged", "importedLegacy", "restored", "adoptedFromHealth"])
+
+        let full = CycleRecord(
+            event: UserLoggedCycleEvent(
+                date: Date(timeIntervalSinceReferenceDate: 800_000_000), flowLevel: .light, basalBodyTemperature: 97.7,
+                cervicalMucusQuality: .creamy, ovulationTestResult: .negative, hasIntermenstrualBleeding: true,
+                isCycleStart: true, note: "n", symptoms: [.cramps], customSymptomScales: ["k": 1]
+            ),
+            now: Date(timeIntervalSinceReferenceDate: 800_000_000)
+        )
+        let object = try #require(try JSONSerialization.jsonObject(with: full.frozenJSON()) as? [String: Any])
+        #expect(Set(object.keys) == ["v", "id", "dayKey", "loggedAt", "clinical", "narrative", "origin", "createdAt", "updatedAt"])
+        #expect(object["v"] as? Int == 2)
+        let clinical = try #require(object["clinical"] as? [String: Any])
+        #expect(Set(clinical.keys) == [
+            "flowLevel", "isCycleStart", "hasIntermenstrualBleeding", "basalBodyTemperature", "temperatureUnit",
+            "cervicalMucusQuality", "ovulationTestResult", "updatedAt"
+        ])
+        let narrative = try #require(object["narrative"] as? [String: Any])
+        #expect(Set(narrative.keys) == ["note", "symptomFlags", "customSymptomScales", "updatedAt"])
+        #expect(narrative["symptomFlags"] as? [String] == ["cramps"], "symptoms are stored as their frozen raw values")
+        #expect(clinical["temperatureUnit"] as? String == "fahrenheit")
+    }
+
+    /// The cutover's at-rest tokens outside the sealed blob (period-data design 2026-09-30, §10.7): the
+    /// Apple Health metadata key every mirror sample carries — a renamed key would make the legacy
+    /// import re-adopt every post-cutover mirror as an "unmarked" pre-cutover sample — and the two
+    /// legacy-import markers and their value, whose respelling would re-run a finished import (or
+    /// re-import the Health copies a user kept through "Delete everything").
+    @Test func frozenCycleCutoverTokens() {
+        #expect(FernletCycleRecordMirror.recordIDKey == "FernletCycleRecordID")
+        #expect(CycleLegacyImportLedger.narrativesKey == "fernlet.cycleRecord.legacyImport.narratives")
+        #expect(CycleLegacyImportLedger.samplesKey == "fernlet.cycleRecord.legacyImport.samples")
+        #expect(CycleLegacyImportLedger.doneValue == "done")
+    }
+
+    /// The Sealed backup v2 at-rest tokens (design 2026-09-30, §5.1, §5.2, §10.2): the chunk
+    /// envelope's keys and version — a renamed key makes every set in iCloud unreadable to the next
+    /// build — the v1 writer token, the grammars of the accepted head
+    /// (`"<acceptor>:<writer>:<generation>:<salt8>"`) and the observed head
+    /// (`"<acceptor>:<writer>:<generation>"`) and the in-flight generation (`"<acceptor>:<generation>"`),
+    /// the period's four defaults keys (a respelling would reopen a resolved restore, resurrecting
+    /// deleted entries, forget the set this install may replace, or forget what this install wrote)
+    /// and the set-scoped suffix record name.
+    @MainActor
+    @Test func frozenSealedBackupV2Tokens() throws {
+        let tag = SealedBackupWriterTag.tag(forBinding: Data("w".utf8))
+        let head = try SealedBackupV2Format.encode(SealedBackupV2Envelope<CycleRecord>(writer: tag, set: tag, total: 0, records: []))
+        let headObject = try #require(try JSONSerialization.jsonObject(with: head) as? [String: Any])
+        #expect(Set(headObject.keys) == ["v", "writer", "set", "total", "records"])
+        #expect(headObject["v"] as? Int == 2)
+        let tail = try SealedBackupV2Format.encode(SealedBackupV2Envelope<CycleRecord>(writer: tag, set: tag, total: nil, records: []))
+        let tailObject = try #require(try JSONSerialization.jsonObject(with: tail) as? [String: Any])
+        #expect(Set(tailObject.keys) == ["v", "writer", "set", "records"])
+        #expect(SealedBackupHeadStamp.v1Writer == "v1")
+        #expect(SealedBackupBookkeeping.periodRestoreResolvedKey == "fernlet.cycleRecord.periodRestoreResolved")
+        #expect(SealedBackupBookkeeping.periodAcceptedHeadKey == "fernlet.sealedBackup.periodAcceptedHead")
+        #expect(SealedBackupBookkeeping.periodObservedHeadKey == "fernlet.sealedBackup.periodObservedHead")
+        #expect(SealedBackupBookkeeping.periodInFlightKey == "fernlet.sealedBackup.periodInFlight")
+        let defaults = try #require(UserDefaults(suiteName: "fernlet.tests.v2Grammar.\(UUID().uuidString)"))
+        let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in false })
+        let stamp = SealedBackupHeadStamp(writer: "w2", generation: 7)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "0a0b"), .periodData, installTag: "me")
+        bookkeeping.recordObservedHead(stamp, .periodData, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.periodAcceptedHeadKey) == "me:w2:7:0a0b")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.periodObservedHeadKey) == "me:w2:7")
+        bookkeeping.recordInFlight(7, .periodData, installTag: "me")
+        bookkeeping.recordInFlight(5, .periodData, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.periodInFlightKey) == "me:7", "<acceptor>:<generation>, only ever raised")
+        #expect(CloudKitDataService.parseSealedBackupSuffixName("sealed-backup.periodData.chunk.3.\(tag)", base: "sealed-backup.periodData")?.setTag == tag,
+                "the set-scoped suffix name: <base>.chunk.<i>.<set>")
+    }
+
+    /// Unit B2 (design 2026-09-30, §10.2): the intimate-log backup's four defaults keys (a respelling
+    /// would reopen a resolved restore and merge a stale copy back in behind the user's deletes, or
+    /// forget the set this install may replace, the iPhone whose set it keeps, or what it wrote), each
+    /// in its frozen value grammar, and the `IntimacyLog` coding keys every backup chunk carries (a
+    /// renamed key would make every older set unreadable).
+    @MainActor
+    @Test func frozenIntimacyBackupV2Tokens() throws {
+        #expect(SealedBackupBookkeeping.intimacyRestoreResolvedKey == "fernlet.intimacyLog.restoreResolved")
+        #expect(SealedBackupBookkeeping.intimacyAcceptedHeadKey == "fernlet.sealedBackup.intimacyAcceptedHead")
+        #expect(SealedBackupBookkeeping.intimacyObservedHeadKey == "fernlet.sealedBackup.intimacyObservedHead")
+        #expect(SealedBackupBookkeeping.intimacyInFlightKey == "fernlet.sealedBackup.intimacyInFlight")
+        let defaults = try #require(UserDefaults(suiteName: "fernlet.tests.v2IntimacyGrammar.\(UUID().uuidString)"))
+        let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        #expect(bookkeeping.seedRestoreMarkerIfAbsent(.intimacyLogs))
+        #expect(defaults.object(forKey: SealedBackupBookkeeping.intimacyRestoreResolvedKey) as? Bool == true)
+        let stamp = SealedBackupHeadStamp(writer: "w2", generation: 7)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "0a0b"), .intimacyLogs, installTag: "me")
+        bookkeeping.recordObservedHead(stamp, .intimacyLogs, installTag: "me")
+        bookkeeping.recordInFlight(7, .intimacyLogs, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.intimacyAcceptedHeadKey) == "me:w2:7:0a0b")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.intimacyObservedHeadKey) == "me:w2:7")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.intimacyInFlightKey) == "me:7")
+        let log = IntimacyLog(id: UUID(), dayKey: "2026-01-02", eventDate: Date(timeIntervalSince1970: 0), note: "n",
+                              healthKitExternalUUID: "hk", createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(log)) as? [String: Any])
+        #expect(Set(object.keys) == ["id", "dayKey", "eventDate", "note", "healthKitExternalUUID", "createdAt", "updatedAt"])
+    }
+
+    /// Unit B3 (design 2026-09-30, §10.2): the journal backup's four defaults keys (a respelling would
+    /// reopen a resolved restore and merge a stale copy back in behind the user's deletes, or forget the
+    /// set this install may replace, the iPhone whose set it keeps, or what it wrote), each in its frozen
+    /// value grammar; the `JournalNarrative` coding keys every backup chunk carries (a renamed key would
+    /// make every older set unreadable); and the journal rows' accessibility identifiers, the catch-up
+    /// line keeping the pre-v2 deferral line's.
+    @MainActor
+    @Test func frozenJournalBackupV2Tokens() throws {
+        #expect(SealedBackupBookkeeping.journalRestoreResolvedKey == "fernlet.journalNarrative.restoreResolved")
+        #expect(SealedBackupBookkeeping.journalAcceptedHeadKey == "fernlet.sealedBackup.journalAcceptedHead")
+        #expect(SealedBackupBookkeeping.journalObservedHeadKey == "fernlet.sealedBackup.journalObservedHead")
+        #expect(SealedBackupBookkeeping.journalInFlightKey == "fernlet.sealedBackup.journalInFlight")
+        let defaults = try #require(UserDefaults(suiteName: "fernlet.tests.v2JournalGrammar.\(UUID().uuidString)"))
+        let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        #expect(bookkeeping.seedRestoreMarkerIfAbsent(.journalNarratives))
+        #expect(defaults.object(forKey: SealedBackupBookkeeping.journalRestoreResolvedKey) as? Bool == true)
+        let stamp = SealedBackupHeadStamp(writer: "w3", generation: 9)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "0c0d"), .journalNarratives, installTag: "me")
+        bookkeeping.recordObservedHead(stamp, .journalNarratives, installTag: "me")
+        bookkeeping.recordInFlight(9, .journalNarratives, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.journalAcceptedHeadKey) == "me:w3:9:0c0d")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.journalObservedHeadKey) == "me:w3:9")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.journalInFlightKey) == "me:9")
+        let date = Date(timeIntervalSince1970: 0)
+        let entry = JournalNarrative(id: UUID(), dayKey: "2026-01-02", tag: .good, entryDate: date, text: "t",
+                                     emotions: ["e"], createdAt: date, updatedAt: date)
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as? [String: Any])
+        #expect(Set(object.keys) == ["id", "dayKey", "tag", "entryDate", "text", "emotions", "createdAt", "updatedAt"])
+        let copy = SealedBackupV2RowCopy.journal
+        #expect(copy.identifier("heldByAnotherDevice") == "privacy.sealedBackup.journal.heldByAnotherDevice")
+        #expect(copy.identifier("removeUnopenable") == "privacy.sealedBackup.journal.removeUnopenable")
+        #expect(copy.catchUpIdentifier == "privacy.sealedBackup.journalDeferred")
+        #expect(SealedBackupV2RowCopy.intimacy.identifier("restoreHere") == "privacy.sealedBackup.intimacy.restoreHere")
+        #expect(SealedBackupV2RowCopy.intimacy.catchUpIdentifier == "privacy.sealedBackup.intimacyDeferred")
     }
 
     /// Sealed journal + trainer-export tokens.

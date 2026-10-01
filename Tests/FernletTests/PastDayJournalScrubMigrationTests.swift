@@ -50,6 +50,9 @@ private final class FailableJournalNarrativeStore: JournalNarrativeStoring {
     func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative] {
         try wrapped.narratives(forDayKeys: dayKeys, contentKey: contentKey)
     }
+    func reencryptAll(from oldKey: SymmetricKey, to newKey: SymmetricKey) throws -> Int {
+        try wrapped.reencryptAll(from: oldKey, to: newKey)
+    }
 }
 
 /// Test double whose `insert` (the seal path) ALWAYS throws, forwarding every other call. Lets a test
@@ -71,6 +74,9 @@ private final class AlwaysFailSealStore: JournalNarrativeStoring {
     func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative] {
         try wrapped.narratives(forDayKeys: dayKeys, contentKey: contentKey)
     }
+    func reencryptAll(from oldKey: SymmetricKey, to newKey: SymmetricKey) throws -> Int {
+        try wrapped.reencryptAll(from: oldKey, to: newKey)
+    }
 }
 
 /// Test double whose `update` (the re-SEAL path) ALWAYS throws, while `insert` forwards (succeeds). Lets a
@@ -91,6 +97,9 @@ private final class FailUpdateNarrativeStore: JournalNarrativeStoring {
     }
     func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative] {
         try wrapped.narratives(forDayKeys: dayKeys, contentKey: contentKey)
+    }
+    func reencryptAll(from oldKey: SymmetricKey, to newKey: SymmetricKey) throws -> Int {
+        try wrapped.reencryptAll(from: oldKey, to: newKey)
     }
 }
 
@@ -134,7 +143,7 @@ struct PastDayJournalScrubMigrationTests {
         #expect(store.loadDayWithDecryptedJournals(for: pastKey).journals.first?.text == "historical leaked secret")
 
         // Run the one-time scrub (fires inside activation, when the device journal key is live).
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
 
         // The blob (what mirrors to iCloud) no longer carries the plaintext...
         #expect(store.loadDay(for: pastKey).journals.first?.text == "")
@@ -146,7 +155,7 @@ struct PastDayJournalScrubMigrationTests {
         #expect(scrubDefaults.integer(forKey: FernletStore.pastDayJournalScrubFlagKey) == FernletStore.pastDayJournalScrubVersion)
 
         // Idempotent: a second activation neither loses the text nor resurrects plaintext in the blob.
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         #expect(store.loadDay(for: pastKey).journals.first?.text == "")
         #expect(store.loadDayWithDecryptedJournals(for: pastKey).journals.first?.text == "historical leaked secret")
     }
@@ -171,7 +180,7 @@ struct PastDayJournalScrubMigrationTests {
         leakedDay.journals = [JournalEntry(text: "untouched legacy entry", tag: .quiet)]
         #expect(repository.updateDay(leakedDay, for: pastKey, todayKey: todayKey))
 
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
 
         // Flag already at the current version → the bulk scan is skipped, so this stays as-is.
         #expect(store.loadDay(for: pastKey).journals.first?.text == "untouched legacy entry")
@@ -205,7 +214,7 @@ struct PastDayJournalScrubMigrationTests {
         #expect(repository.updateDay(leakedDay, for: pastKey, todayKey: todayKey))
 
         // Pass 1: the seal throws → plaintext preserved (no data loss) and the run-once flag stays UNSET.
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         #expect(failingStore.insertAttempts(for: leakedEntry.id) == 1)
         #expect(store.loadDay(for: pastKey).journals.first?.text == "historical leaked secret")
         #expect(scrubDefaults.integer(forKey: FernletStore.pastDayJournalScrubFlagKey) < FernletStore.pastDayJournalScrubVersion)
@@ -213,7 +222,7 @@ struct PastDayJournalScrubMigrationTests {
 
         // Pass 2: the day is retried (flag still unset). The seal now succeeds → blanked in the blob,
         // sealed in the narrative store, run-once flag advanced, retry counter cleared.
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         #expect(failingStore.insertAttempts(for: leakedEntry.id) == 2)
         #expect(store.loadDay(for: pastKey).journals.first?.text == "")
         #expect(store.loadDayWithDecryptedJournals(for: pastKey).journals.first?.text == "historical leaked secret")
@@ -221,7 +230,7 @@ struct PastDayJournalScrubMigrationTests {
         #expect(scrubDefaults.object(forKey: FernletStore.pastDayJournalScrubAttemptsKey) == nil)
 
         // Idempotent: a third activation does not re-scan (flag set) and does not lose data.
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         #expect(failingStore.insertAttempts(for: leakedEntry.id) == 2)
         #expect(store.loadDayWithDecryptedJournals(for: pastKey).journals.first?.text == "historical leaked secret")
     }
@@ -257,7 +266,7 @@ struct PastDayJournalScrubMigrationTests {
         // counts launches, not activations (#2), so each pass simulates a fresh launch.
         for _ in 0..<FernletStore.pastDayJournalScrubMaxAttempts {
             store.resetPastDayScrubSessionBudgetForTesting()
-            store.activateNoLockJournals()
+            store.activateSealedJournals(contentKey: .journalTestKey)
         }
 
         // Attempted exactly `maxAttempts` times, then gave up: flag set, retry counter cleared.
@@ -267,9 +276,9 @@ struct PastDayJournalScrubMigrationTests {
 
         // Bounded: further launches do NOT re-scan — no additional seal attempts, no unbounded loop.
         store.resetPastDayScrubSessionBudgetForTesting()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         store.resetPastDayScrubSessionBudgetForTesting()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         #expect(failingStore.insertAttempts(for: leakedEntry.id) == FernletStore.pastDayJournalScrubMaxAttempts)
 
         // No data loss: the still-unsealed plaintext is preserved and remains readable.
@@ -323,7 +332,7 @@ struct PastDayJournalScrubMigrationTests {
         // Many activations in ONE session (no relaunch) — more than the cap.
         let activations = FernletStore.pastDayJournalScrubMaxAttempts + 3
         for _ in 0..<activations {
-            store.activateNoLockJournals()
+            store.activateSealedJournals(contentKey: .journalTestKey)
         }
 
         // Only ONE retry-budget unit consumed this session, and NOT given up (flag stays unset) so a real
@@ -372,7 +381,7 @@ struct PastDayJournalScrubMigrationTests {
         defer { scrubDefaults.removePersistentDomain(forName: suiteName) }
 
         // Activate so a journal key is live (insert succeeds, so the initial scrub is a clean pass).
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
 
         let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-130 * 86_400))
         #expect(pastKey != store.todayKey)
@@ -394,7 +403,7 @@ struct PastDayJournalScrubMigrationTests {
 
         // Next launch: the re-armed scrub re-seals the EDITED text (upsert) and strips the blob.
         store.resetPastDayScrubSessionBudgetForTesting()
-        store.activateNoLockJournals()
+        store.activateSealedJournals(contentKey: .journalTestKey)
         #expect(store.loadDay(for: pastKey).journals.first?.text == "")                                  // blob stripped
         #expect(store.loadDayWithDecryptedJournals(for: pastKey).journals.first?.text == "edited")       // edit survived (no loss)
         #expect(scrubDefaults.integer(forKey: FernletStore.pastDayJournalScrubFlagKey) == FernletStore.pastDayJournalScrubVersion)

@@ -62,7 +62,7 @@ struct HealthKitWriteGateTests {
             case .intimacy:
                 try await service.saveIntimacyEvent(date: end, protectionUsed: nil, externalUUID: UUID())
             case .cycle:
-                _ = try await service.savePeriodEvent(UserLoggedCycleEvent(flowLevel: .medium), externalUUID: UUID())
+                try await service.writeMirror(of: CycleRecord(event: UserLoggedCycleEvent(flowLevel: .medium)))
             case .genericSave:
                 try await service.save([try WriteGateHarness.mindfulSample(start: start, end: end)])
             }
@@ -106,6 +106,9 @@ struct HealthKitWriteGateTests {
         try #require(HKHealthStore.isHealthDataAvailable(), "this host has no Health store, so the whole suite proves nothing")
         let harness = WriteGateHarness(masterEnabled: true, enabledCapabilities: [kind.capability])
         defer { harness.cleanup() }
+        // The cycle mirror also asks Apple Health's own share grant (I1); granting every type is the
+        // "share grant in place" this control promises, and only ever allows.
+        harness.controller.grantAllShareTypes()
 
         try await kind.perform(on: harness.service)
 
@@ -189,8 +192,8 @@ struct HealthKitWriteGateTests {
 
     /// Removing samples Fernlet wrote — a cycle day the user deleted — works with sharing OFF: a delete
     /// puts nothing into Health, HealthKit only lets Fernlet delete its own samples, and "sharing off"
-    /// must not strand them. If this ever flips, `PeriodTrackerStore.deleteEntry` stops working for a
-    /// user who turned sharing off, and the decision needs revisiting on purpose.
+    /// must not strand them. If this ever flips, `PeriodTrackerStore.deleteDay` stops removing
+    /// Fernlet's copies for a user who turned sharing off, and the decision needs revisiting on purpose.
     @Test func removingFernletsOwnSamplesIsNotSwitchGated() async throws {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let harness = WriteGateHarness(masterEnabled: false, enabledCapabilities: [])
@@ -203,25 +206,122 @@ struct HealthKitWriteGateTests {
         #expect(harness.controller.writeCount == 0)
     }
 
-    /// A period EDIT is delete-then-write, so its pre-check must refuse exactly when the write would
-    /// be — and pass for an entry with no clinical field, which writes nothing to Health. Since
-    /// 2026-09-30 "would be" includes Apple Health's own share grant, which HealthKit's save
-    /// enforces after Fernlet's switches (`PeriodLogSharingOffTests` drives the edit end to end).
-    @Test func thePeriodEditPreCheckMatchesTheWriteGate() throws {
+    /// I1 (period-data design 2026-09-30, §7.1): the cycle MIRROR is refused exactly when a write
+    /// would be — Fernlet's switches first, then Apple Health's own share grant for every type the
+    /// record writes — and a record with no clinical field writes nothing and never throws, sharing or
+    /// not. `PeriodTrackerStore` calls it only after the record is sealed.
+    @Test func theCycleMirrorIsRefusedByTheSwitchesAndByHealthsOwnGrant() async throws {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let harness = WriteGateHarness(masterEnabled: true, enabledCapabilities: [])
         defer { harness.cleanup() }
+        let flow = CycleRecord(event: UserLoggedCycleEvent(flowLevel: .light))
 
-        #expect(throws: HealthKitServiceError.self) {
-            try harness.service.checkPeriodEventWriteAllowed(UserLoggedCycleEvent(flowLevel: .light))
-        }
-        try harness.service.checkPeriodEventWriteAllowed(UserLoggedCycleEvent(note: "a note only"))
+        await #expect(throws: HealthKitServiceError.self) { try await harness.service.writeMirror(of: flow) }
+        try await harness.service.writeMirror(of: CycleRecord(event: UserLoggedCycleEvent(note: "a note only")))
         harness.enable(.cycleTracking)
-        #expect(throws: HKError.self, "Fernlet's switches are on, but Health never granted the type") {
-            try harness.service.checkPeriodEventWriteAllowed(UserLoggedCycleEvent(flowLevel: .light))
+        await #expect(throws: HKError.self, "Fernlet's switches are on, but Health never granted the type") {
+            try await harness.service.writeMirror(of: flow)
         }
+        #expect(harness.controller.writeCount == 0, "nothing reached Health before the grant")
         harness.controller.grantAllShareTypes()
-        try harness.service.checkPeriodEventWriteAllowed(UserLoggedCycleEvent(flowLevel: .light))
+        try await harness.service.writeMirror(of: flow)
+        #expect(harness.controller.writeCount == 1)
+    }
+
+    /// The mirror's own delete is ungated and counts what it removed: with every switch off it still
+    /// reaches the store, own source only, once per cycle kind, and returns HealthKit's count — the
+    /// number an edit's "removed Fernlet's older copy" sentence is conditioned on (§6.3, R2-F11). A
+    /// kind never granted counts 0 instead of failing the delete.
+    @Test func theMirrorDeleteIsUngatedAndCounts() async throws {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let harness = WriteGateHarness(masterEnabled: false, enabledCapabilities: [])
+        defer { harness.cleanup() }
+        harness.controller.deleteObjectsCount = 1
+
+        #expect(try await harness.service.deleteMirror(recordID: UUID()) == CycleMirrorDeletion(deletedCount: 5), "five cycle kinds, one sample each")
+        #expect(harness.controller.deletedObjectTypes.count == 5)
+        #expect(harness.controller.writeCount == 0)
+
+        harness.controller.deleteObjectsError = HKError(.errorAuthorizationNotDetermined)
+        #expect(try await harness.service.deleteMirror(recordID: UUID()) == CycleMirrorDeletion(), "a never-granted kind left nothing behind")
+    }
+
+    /// Review round 1, R2: a kind whose share access Apple Health DENIES is reported, not thrown —
+    /// HealthKit says "denied" both for access never granted (nothing of Fernlet's there) and for
+    /// access taken away after a copy was written, so the store weighs it against the record. Every
+    /// other kind is still deleted and counted (one refused kind never strands the rest), and an
+    /// unexpected failure is still thrown, after every kind was attempted.
+    @Test func theMirrorDeleteReportsRefusedKindsAndThrowsOnlyOtherFailures() async throws {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let harness = WriteGateHarness(masterEnabled: false, enabledCapabilities: [])
+        defer { harness.cleanup() }
+        harness.controller.deleteObjectsCount = 1
+
+        harness.controller.deleteObjectsError = HKError(.errorAuthorizationDenied)
+        #expect(try await harness.service.deleteMirror(recordID: UUID())
+                == CycleMirrorDeletion(deletedCount: 0, refusedKinds: Set(CycleMirrorSampleKind.allCases)),
+                "Don't Allow on every cycle kind: refused, not thrown")
+
+        harness.controller.deleteObjectsError = nil
+        harness.controller.deleteObjectsErrorByType = [
+            HKQuantityTypeIdentifier.basalBodyTemperature.rawValue: HKError(.errorAuthorizationDenied)
+        ]
+        let partial = try await harness.service.deleteMirror(recordID: UUID())
+        #expect(partial == CycleMirrorDeletion(deletedCount: 4, refusedKinds: [.basalBodyTemperature]))
+
+        harness.controller.deleteObjectsErrorByType = [
+            HKCategoryTypeIdentifier.menstrualFlow.rawValue: HKError(.errorDatabaseInaccessible)
+        ]
+        let attemptedBefore = harness.controller.deletedObjectTypes.count
+        await #expect(throws: HKError.self) { _ = try await harness.service.deleteMirror(recordID: UUID()) }
+        #expect(harness.controller.deletedObjectTypes.count - attemptedBefore == 4, "the four other kinds were still deleted")
+    }
+
+    /// The store's kind vocabulary and the gateway's sample builder agree, kind by kind: a block that
+    /// sets one field is mirrored as exactly one sample, of exactly the type that kind maps to — so a
+    /// refusal the gateway reports for a kind names the samples the record's copy really holds (R2).
+    @Test func eachMirrorKindIsTheSampleTypeTheBuilderWrites() throws {
+        let now = Date()
+        let oneFieldEach: [(CycleMirrorSampleKind, CycleClinicalFields)] = [
+            (.menstrualFlow, CycleClinicalFields(flowLevel: .light, isCycleStart: true, updatedAt: now)),
+            (.basalBodyTemperature, CycleClinicalFields(basalBodyTemperature: 97.9, updatedAt: now)),
+            (.cervicalMucusQuality, CycleClinicalFields(cervicalMucusQuality: .creamy, updatedAt: now)),
+            (.ovulationTestResult, CycleClinicalFields(ovulationTestResult: .positive, updatedAt: now)),
+            (.intermenstrualBleeding, CycleClinicalFields(hasIntermenstrualBleeding: true, updatedAt: now))
+        ]
+        #expect(Set(oneFieldEach.map(\.0)) == Set(CycleMirrorSampleKind.allCases), "a kind is missing from this pin")
+        for (kind, clinical) in oneFieldEach {
+            var record = CycleRecord(event: UserLoggedCycleEvent(flowLevel: .light), now: now)
+            record.clinical = clinical
+            let samples = try HealthKitService.periodSamples(for: record)
+            let expectedType = try HealthKitService.periodSampleType(for: kind)
+            #expect(samples.count == 1, "\(kind)")
+            #expect(samples.first?.sampleType == expectedType, "\(kind)")
+            #expect(CycleMirrorSampleKind.kinds(writtenFor: clinical) == [kind], "\(kind)")
+        }
+        var unknown = CycleRecord(event: UserLoggedCycleEvent(note: "note only"), now: now)
+        unknown.clinical = nil
+        #expect(CycleMirrorSampleKind.possibleCopyKinds(of: unknown) == Set(CycleMirrorSampleKind.allCases),
+                "an unknown block's pre-cutover samples could be of any kind")
+    }
+
+    /// Every mirror sample carries the record id twice — `HKMetadataKeyExternalUUID` and the frozen
+    /// `FernletCycleRecordID` that tells a post-cutover mirror from a pre-cutover sample — and the
+    /// temperature in the unit it was entered in.
+    @Test func mirrorSamplesCarryTheRecordIDAndTheMarker() throws {
+        let record = CycleRecord(event: UserLoggedCycleEvent(
+            flowLevel: .medium, basalBodyTemperature: 36.6, temperatureUnit: .celsius, isCycleStart: true
+        ))
+        let samples = try HealthKitService.periodSamples(for: record)
+
+        #expect(samples.count == 2)
+        for sample in samples {
+            #expect(sample.metadata?[HKMetadataKeyExternalUUID] as? String == record.id.uuidString)
+            #expect(sample.metadata?[FernletCycleRecordMirror.recordIDKey] as? String == record.id.uuidString)
+        }
+        let temperature = try #require(samples.compactMap { $0 as? HKQuantitySample }.first)
+        #expect(abs(temperature.quantity.doubleValue(for: .degreeCelsius()) - 36.6) < 0.001)
+        #expect(try HealthKitService.periodSamples(for: CycleRecord(event: UserLoggedCycleEvent(note: "n"))).isEmpty)
     }
 
     // MARK: - The callers' quiet checks
@@ -318,7 +418,7 @@ struct HealthKitWriteGateTests {
 
         #expect(harness.preferences.preferences.healthKitCapabilityEnabled[HealthCapability.cycleTracking.rawValue] == true)
         #expect(viewModel.hasRequested(.cycleTracking))
-        _ = try await harness.service.savePeriodEvent(UserLoggedCycleEvent(flowLevel: .light), externalUUID: UUID())
+        try await harness.service.writeMirror(of: CycleRecord(event: UserLoggedCycleEvent(flowLevel: .light)))
         #expect(harness.controller.writeCount == 1)
     }
 
@@ -625,7 +725,23 @@ final class WriteRecordingStoreController: HealthKitStoreControlling {
     }
 
     func delete(_ samples: [HKSample]) async throws { deleteCallCount += 1 }
-    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws { }
+
+    /// What each bulk delete reports deleting.
+    var deleteObjectsCount = 0
+    /// When set, every bulk delete throws it.
+    var deleteObjectsError: Error?
+    /// The type of every bulk delete that reached the store.
+    private(set) var deletedObjectTypes: [String] = []
+
+    /// When set for a type, that type's bulk delete throws it.
+    var deleteObjectsErrorByType: [String: Error] = [:]
+
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int {
+        if let deleteObjectsError { throw deleteObjectsError }
+        if let typeError = deleteObjectsErrorByType[type.identifier] { throw typeError }
+        deletedObjectTypes.append(type.identifier)
+        return deleteObjectsCount
+    }
     func disableBackgroundDelivery(for type: HKObjectType) async throws { }
 }
 

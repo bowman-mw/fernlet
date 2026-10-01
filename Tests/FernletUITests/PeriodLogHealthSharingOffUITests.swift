@@ -1,23 +1,19 @@
 import XCTest
 
-/// The on-screen half of the owner's report of 2026-09-29: "When you click save for period
-/// tracking, but you're not sharing to HealthKit, it doesn't work."
+/// The on-screen half of the owner's report of 2026-09-29 — "When you click save for period
+/// tracking, but you're not sharing to HealthKit, it doesn't work." — and of their answer the next
+/// day, Option B: every period log is saved in Fernlet's own encrypted store whatever the Health
+/// switches say (period-data design 2026-09-30, §6.3, §10.4).
 ///
-/// With Fernlet's Health sharing off (the default), a flow level is refused by the write gate, and
-/// the whole log with it. The sheet used to say so only in a success-green sentence at the very
-/// end of its scroll, below the note box, so tapping Save looked like tapping nothing. This drives
-/// that exact path — open the sheet, tap a flow chip, tap Save — and asks that the notice is up
-/// front, that the refusal is drawn where the user is looking (hittable, not scrolled away), and
-/// that the sheet stayed open with the entry. It then takes the route the refusal used to offer
-/// every user, clearing the flow and saving a symptom alone, which with no app lock stores nothing:
-/// the sheet must refuse it in words, never announce "Health event saved".
-/// `PeriodLogSharingOffTests` pins the store contract.
+/// The default user, end to end: no Health sharing, no passcode. Open the log sheet, tap a flow chip
+/// and a symptom, tap Save — the save SUCCEEDS (with the Private tab closed it is held until the tab
+/// next opens, and the sheet says so), then open Private with its one Unlock button and the day is on
+/// the cycle calendar with its flow. `PeriodLogSharingOffTests` pins the store contract.
 ///
 /// Sharing is pinned OFF at launch (`FERNLET_UI_TEST_HEALTH_SHARING_OFF`) rather than read off the
-/// sheet: the preferences keychain outlives the app and two Settings suites seed it ON, and a probe
-/// that looked at the notice under test skipped exactly when the notice regressed. No UI suite sets
-/// up an app lock (a fresh simulator has none; see `LockGateObservabilityUITests`), so this runs
-/// the default user: no sharing, no lock.
+/// sheet: the preferences keychain outlives the app and two Settings suites seed it ON. The app lock
+/// is reset at launch (`FERNLET_UI_TEST_RESET_APP_LOCK`), so this runs with no passcode and the
+/// Private tab's tap gate.
 final class PeriodLogHealthSharingOffUITests: XCTestCase {
     override func setUp() {
         super.setUp()
@@ -25,44 +21,56 @@ final class PeriodLogHealthSharingOffUITests: XCTestCase {
     }
 
     @MainActor
-    func testARefusedFlowLogIsExplainedBesideSave() {
+    func testAFlowLogSavesWithSharingOffAndTheDayShows() {
         let app = UXTestApp.launch(
             openSheet: "logPeriod",
-            extraEnvironment: ["FERNLET_UI_TEST_HEALTH_SHARING_OFF": "1"]
+            extraEnvironment: ["FERNLET_UI_TEST_HEALTH_SHARING_OFF": "1", "FERNLET_UI_TEST_RESET_APP_LOCK": "1"]
         )
         let sheet = app.descendants(matching: .any)["sheet.logPeriod"]
         XCTAssertTrue(sheet.exists || sheet.waitForExistence(timeout: 15), "the period log sheet never opened")
 
         let notice = app.staticTexts["logPeriod.healthNotice"]
         XCTAssertTrue(notice.exists || notice.waitForExistence(timeout: 5),
-                      "with cycle sharing off the sheet must say up front which fields need Apple Health")
-        XCTAssertTrue(notice.label.contains("only when app lock is on"),
-                      "with no app lock the notice must not promise that notes save: \(notice.label)")
+                      "with cycle sharing off the sheet must say up front that the entry is not copied to Health")
+        XCTAssertTrue(notice.label.contains("Saved privately in Fernlet"), "the notice must promise the private save: \(notice.label)")
 
         app.buttons["Medium"].firstMatch.tap()
+        turnOnCramps(in: app)
         app.buttons["Save"].firstMatch.tap()
 
         let status = app.staticTexts["logPeriod.status"]
-        XCTAssertTrue(status.exists || status.waitForExistence(timeout: 10), "a refused Save must say why")
-        XCTAssertTrue(status.isHittable, "the refusal must be on screen beside Save, not scrolled out of sight")
-        XCTAssertTrue(status.label.contains("Nothing was saved"), "the refusal must not read as a save: \(status.label)")
-        XCTAssertFalse(status.label.contains("clear the flow"),
-                       "with no app lock, clearing the flow keeps nothing, so the refusal must not offer it")
-        XCTAssertTrue(sheet.exists, "a refused Save keeps the sheet, and the entry, open")
-        attachScreenshot(of: app, named: "Log period · refused for sharing off")
+        let held = NSPredicate(format: "label CONTAINS %@", "next time you open Private")
+        wait(for: [expectation(for: held, evaluatedWith: status)], timeout: 10)
+        XCTAssertFalse(status.label.contains("Nothing was saved"), "a flow log with sharing off saves: \(status.label)")
+        XCTAssertTrue(status.isHittable, "the outcome must be on screen beside the bar")
+        attachScreenshot(of: app, named: "Log period · saved with sharing off")
 
-        assertASymptomOnlyEntryIsRefusedWithoutALock(app, sheet: sheet, status: status)
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 10), "Done closes the sheet")
+
+        assertTheDayIsOnTheCalendar(app)
     }
 
-    /// Clears the flow chip, turns one symptom on and saves: nothing of that entry can be kept
-    /// without an app lock, so the sheet must refuse it in words and stay open with it.
+    /// Opens Private with its one button, goes to Cycle, and finds today's cell carrying the flow.
     @MainActor
-    private func assertASymptomOnlyEntryIsRefusedWithoutALock(
-        _ app: XCUIApplication,
-        sheet: XCUIElement,
-        status: XCUIElement
-    ) {
-        app.buttons["Medium"].firstMatch.tap()
+    private func assertTheDayIsOnTheCalendar(_ app: XCUIApplication) {
+        app.buttons["Private"].firstMatch.tap()
+        let unlock = app.buttons["lock.tapGate.unlock"].firstMatch
+        XCTAssertTrue(unlock.waitForExistence(timeout: 15), "with no passcode the Private tab shows the tap screen")
+        unlock.tap()
+        XCTAssertTrue(unlock.waitForNonExistence(timeout: 15), "one tap opens Private")
+
+        let cycle = app.buttons["Cycle"].firstMatch
+        XCTAssertTrue(cycle.waitForExistence(timeout: 8), "the Private hub has no Cycle section")
+        cycle.tap()
+        let today = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Today, day", "Medium")).firstMatch
+        XCTAssertTrue(today.waitForExistence(timeout: 15), "the day saved with sharing off must be on the calendar with its flow")
+        attachScreenshot(of: app, named: "Cycle · the day saved with sharing off")
+    }
+
+    /// Turns the Cramps symptom on.
+    @MainActor
+    private func turnOnCramps(in app: XCUIApplication) {
         let cramps = app.switches["Cramps"].firstMatch
         XCTAssertTrue(cramps.exists || cramps.waitForExistence(timeout: 5), "the Cramps symptom toggle is missing")
         cramps.tap()
@@ -71,18 +79,6 @@ final class PeriodLogHealthSharingOffUITests: XCTestCase {
             cramps.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         }
         XCTAssertEqual(cramps.value as? String, "1", "could not turn the Cramps symptom on")
-
-        app.buttons["Save"].firstMatch.tap()
-
-        let refused = NSPredicate(format: "label CONTAINS %@", "nothing else to save")
-        let sawRefusal = expectation(for: refused, evaluatedWith: status)
-        wait(for: [sawRefusal], timeout: 10)
-        XCTAssertTrue(status.label.contains("Nothing was saved"), "a symptom-only entry with no lock stores nothing: \(status.label)")
-        XCTAssertFalse(status.label.contains("Health event saved"), "nothing reached Health, so nothing may say it did")
-        XCTAssertTrue(status.isHittable, "the refusal must be on screen beside Save")
-        XCTAssertTrue(sheet.exists, "a refused Save keeps the sheet, and the entry, open")
-        XCTAssertTrue(app.buttons["Save"].firstMatch.exists, "a refused Save leaves Save armed, not a frozen Done")
-        attachScreenshot(of: app, named: "Log period · symptom only, no app lock")
     }
 
     @MainActor

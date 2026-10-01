@@ -329,6 +329,18 @@ public nonisolated enum FernletCryptoPurpose {
         public static let worryNarrativeLegacyV1 = CryptographicPurpose("worry-box")
         public static let menstrualNarrativeLegacyV1 = CryptographicPurpose("menstrual-narrative")
         public static let intimacyLogLegacyV1 = CryptographicPurpose("intimacy-log")
+        /// **Registered 2026-09-30 (period-data design §5.2).** The `ColumnCrypto` purpose of the
+        /// sealed `CycleRecord` entity's one ciphertext column: the HKDF `info` its column key is
+        /// derived under from the Private tab's hub key, and — with the install's binding ID — the
+        /// column's authenticated data. One purpose for the whole record, because the record is one
+        /// blob (no plaintext date, day key or HealthKit id beside it).
+        ///
+        /// Its own versioned spelling rather than a reuse of ``menstrualNarrativeLegacyV1``: a
+        /// cycle-record blob must never open as a narrative column or the reverse, and the two
+        /// entities coexist in one store while the legacy import runs. No registered spelling is a
+        /// prefix of it and it prefixes none (`noPurposeIsAPrefixOfAnother`). Changing it orphans
+        /// every cycle record on every device.
+        public static let cycleRecordV1 = CryptographicPurpose("fernlet.cycle-record.v1")
     }
 
     /// Domains embedded in HMAC messages.
@@ -475,5 +487,17 @@ public nonisolated enum FernletCryptoPurpose {
         /// ``FernletCryptoPurpose/Signature/moderationReportV2``: that one tags bytes a reporter SIGNS,
         /// this one bytes that are hashed, and the spellings share no prefix.
         public static let moderationBanReporterTagV1 = CryptographicPurpose("fernlet.moderation.ban-evidence.reporter-tag.hash.v1")
+        /// **Registered 2026-09-30, written by the period backup v2 (period-data design §9.10).** The
+        /// domain a Sealed backup set's WRITER tag is computed under: SHA-256 over this tag followed
+        /// by the install's `DeviceBindingID`, of which the first 16 bytes (hex) name the install that
+        /// wrote a period backup set. It rides inside the escrow-sealed head chunk, so it adds no
+        /// plaintext field to CloudKit; the export's compare-and-swap reads it to refuse overwriting
+        /// another iPhone's set without the user choosing to.
+        ///
+        /// Registered with ``FernletCryptoPurpose/KeyDerivation/cycleRecordV1`` in one review so the
+        /// registry's pinned size moves once (76 → 78). Its own domain rather than a reuse of the
+        /// backup's AEAD domain (`fernlet.sealed-backup.aad.v2`): that one tags bytes a seal
+        /// authenticates, this one bytes that are hashed. Neither spelling prefixes the other.
+        public static let sealedBackupWriterTagV1 = CryptographicPurpose("fernlet.sealed-backup.writer-tag.v1")
     }
 }

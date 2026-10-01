@@ -165,19 +165,9 @@ private func entriesForPeriods(
 }
 
 private func flowEntries(start: Date, pattern: [PeriodFlowLevel], calendar: Calendar) throws -> [CycleDayEntry] {
-    try pattern.enumerated().map { index, level in
+    pattern.enumerated().map { index, level in
         let day = calendar.date(byAdding: .day, value: index, to: start)!
-        let samples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(date: day, flowLevel: level),
-            externalUUID: UUID()
-        )
-        return CycleDayEntry(
-            date: day,
-            dateKey: FernletDate.dayKey(for: day),
-            samples: samples,
-            narrative: nil,
-            phase: .menstrual
-        )
+        return PeriodTestSupport.entry(on: day, flow: level)
     }
 }
 

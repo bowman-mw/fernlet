@@ -62,6 +62,10 @@ public nonisolated struct DayRecordUpsert {
 public protocol DayRecordRepositoring {
     /// Every stored day, keyed by `dateKey`, duplicate rows collapsed by most-recent `updatedAt`.
     func loadAll() -> [String: FernletDay]
+    /// Every stored day like ``loadAll()``, with the date key of every row that would not decode and
+    /// whether every row was accounted for — false when the fetch failed or a row has no date key (see
+    /// ``DayHistoryRead``). ``loadAll()`` answers each of those as absent days. One fetch.
+    func loadAllWithUnreadable() -> DayHistoryRead
     /// Only the requested days (one-or-few-row predicate fetch), collapsed like `loadAll`.
     func load(dateKeys: [String]) -> [String: FernletDay]
     /// The most recent `limit` days, newest-first — for bounded derived-table rebuilds that must not load
@@ -73,4 +77,13 @@ public protocol DayRecordRepositoring {
     func delete(dateKeys: [String]) -> Bool
     /// Removes every row (used only by a full account reset).
     func deleteAll() -> Bool
+}
+
+public extension DayRecordRepositoring {
+    // INVARIANT for the default below: a conformer whose read can fail MUST override it. The default
+    // calls every ``loadAll()`` whole, which is true only for a double that cannot fail a fetch or hold
+    // a row it cannot decode.
+    func loadAllWithUnreadable() -> DayHistoryRead {
+        DayHistoryRead(days: loadAll())
+    }
 }

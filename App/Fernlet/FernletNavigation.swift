@@ -329,7 +329,7 @@ extension View {
 /// Every modal sheet the app can present, routed through `ContentView`'s single
 /// `activeSheet` slot (one sheet at a time; chained handoffs dismiss-then-represent).
 ///
-/// Cases with payloads carry the edit target (recipe, period entry) or a deep-link hint
+/// Cases with payloads carry the edit target (recipe, cycle record) or a deep-link hint
 /// (`firstAid`'s optional tool). The string `id` is also the contract for the
 /// `FERNLET_UI_TEST_OPEN_SHEET` launch hook (see `UITestSupport`) and the notification/App
 /// Intent deep-link tokens, so renaming an id is a cross-file change.
@@ -353,7 +353,9 @@ enum FernletSheet: Identifiable {
     /// Calm first-aid tools (breathing / grounding / worry box); the optional tool deep-links
     /// straight into one of them (gentle-offer cards use it).
     case firstAid(FirstAidTool?)
-    case logPeriod(targetDate: Date?, editingEntry: CycleDayEntry?)
+    /// Log a cycle day (optionally pre-dated) or edit one sealed record (period-data design
+    /// 2026-09-30, §9.3: the sheet edits a ``CycleRecord`` in place, seeded losslessly from its blocks).
+    case logPeriod(targetDate: Date?, editingRecord: CycleRecord?)
     case logIntimacy
     case editRecipe(RecipeDefinition)
     case editSavedRecipe(RecipeDefinition)

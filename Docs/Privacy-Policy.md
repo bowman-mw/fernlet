@@ -53,13 +53,17 @@
      switch and the bedtime are device-only settings. §6 a recipe made in parts carries the name of
      each part in a Messages card. Both are new disclosures — of processing that stays on the
      device, and of recipe content the user chooses to send — so nothing new leaves the device and
-     no existing promise is weakened under §13). Before
+     no existing promise is weakened under §13), and 2026-09-30 (period-data design §10.5: §4 the
+     journal, period-data and intimate-log backups work with or without a Fernlet passcode; the old
+     sentence said they required the app lock, which stopped being true when the Private tab gained
+     its no-passcode mode. A clarification that widens an option; nothing new leaves the device and
+     no promise is weakened under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** September 24, 2026
+**Effective date:** September 30, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -242,8 +246,8 @@ During setup you choose whether to keep your data **only on this device** or **s
   sensitivity of that information. Because the sealed store's key is locked to this device's
   security hardware (Section 2), this opt-in backup is the **only** way the sealed categories can be
   recovered on another or an erased device — without it, sealed data is unrecoverable off this
-  device, full stop. The journal, period-data and intimate-log parts of this backup require
-  Fernlet's app lock: without one, those categories cannot be backed up at all. Sensitive memories
+  device, full stop. The journal, period-data and intimate-log parts of this backup
+  work with or without a Fernlet passcode. Sensitive memories
   are never backed up, by design; if you had switched on the former encrypted backup of sensitive
   memories, Fernlet deletes that copy from your iCloud automatically. And notes you let go of in the
   **Worry Box** are deliberately excluded from every backup — they exist only on this device and do

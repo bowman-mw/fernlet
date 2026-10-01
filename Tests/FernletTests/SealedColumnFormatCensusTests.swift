@@ -2,6 +2,7 @@ import CoreData
 import CryptoKit
 import FernletCrypto
 import Foundation
+import PrivateHealthStore
 import PrivateStoreCore
 import Testing
 
@@ -194,6 +195,23 @@ struct SealedColumnFormatCensusTests {
         #expect(census.rowsScanned == 2)
     }
 
+    // MARK: The sealed cycle record (period-data design 2026-09-30, §5.2) is censused like every
+    // other column: a record sealed by the production repository lands in the v3 bucket of its one
+    // column, `CycleRecord.payloadCiphertext`.
+    @Test func aSealedCycleRecordIsCensusedAsVersionThree() throws {
+        let controller = makeController()
+        let record = CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .medium, note: "censused"))
+        try CycleRecordRepository(controller: controller).insert(record, contentKey: Self.fixtureKey)
+
+        let census = try SealedColumnFormatCensus.run(controller: controller)
+
+        let column = SealedColumnIdentifier(entityName: "CycleRecord", attributeName: "payloadCiphertext")
+        #expect(census.tally(for: column).v3Marked == 1)
+        #expect(census.tally(for: column).total == 1)
+        #expect(census.definitelyLegacy == 0)
+        #expect(census.rowsScanned == 1)
+    }
+
     // MARK: THE AMBIGUITY PIN. A legacy blob whose first nonce byte happens to be 0x03 is counted
     // as v3Marked, NOT as legacy — because a byte-only classifier cannot tell it from a real v3
     // blob (the shipping reader disambiguates by attempted decrypt, which a keyless census must
@@ -255,12 +273,13 @@ struct SealedColumnFormatCensusTests {
     }
 
     // MARK: An empty store reports zeroes for every censused column — a real answer, and the shape
-    // the Phase 3 gate is looking for. Every one of the seven columns must be present in the
-    // result, so "no key for this column" can never be mistaken for "zero legacy in this column".
-    @Test func anEmptyStoreReportsAZeroTallyForAllSevenColumns() throws {
+    // the Phase 3 gate is looking for. Every one of the eight columns (seven since the census began,
+    // plus `CycleRecord.payloadCiphertext` from 2026-09-30) must be present in the result, so "no key
+    // for this column" can never be mistaken for "zero legacy in this column".
+    @Test func anEmptyStoreReportsAZeroTallyForAllEightColumns() throws {
         let census = try SealedColumnFormatCensus.run(controller: makeController())
 
-        #expect(census.columns.count == 7)
+        #expect(census.columns.count == 8)
         for column in SealedColumnFormatCensus.censusedColumns {
             #expect(census.columns[column] == SealedColumnFormatTally(), "\(column) is missing from the census")
         }
@@ -273,7 +292,7 @@ struct SealedColumnFormatCensusTests {
 
     // MARK: The census table is hand-written, so it can silently fall behind the model. This
     // independently enumerates every model attribute whose name ends in "Ciphertext" and demands
-    // an exact match — a fifth sealed entity or an eighth ciphertext column fails HERE instead of
+    // an exact match — a sixth sealed entity or a ninth ciphertext column fails HERE instead of
     // going quietly un-censused and letting a legacy row hide from the Phase 3 gate.
     @Test func theCensusTableCoversExactlyTheModelsCiphertextColumns() {
         let model = PrivatePersistenceController(inMemory: true).container.managedObjectModel
@@ -286,7 +305,7 @@ struct SealedColumnFormatCensusTests {
         }
 
         #expect(discovered == Set(SealedColumnFormatCensus.censusedColumns))
-        #expect(discovered.count == 7, "the sealed store should have exactly 7 ciphertext columns")
+        #expect(discovered.count == 8, "the sealed store should have exactly 8 ciphertext columns")
         // And the production guard agrees with the independent enumeration.
         #expect(throws: Never.self) {
             try SealedColumnFormatCensus.verifyTable(matches: model)
@@ -308,7 +327,7 @@ struct SealedColumnFormatCensusTests {
             Issue.record("expected a table/model mismatch")
             return
         }
-        #expect(missing.count == 7, "every censused column should be reported missing")
+        #expect(missing.count == 8, "every censused column should be reported missing")
         #expect(unlisted.isEmpty)
     }
 

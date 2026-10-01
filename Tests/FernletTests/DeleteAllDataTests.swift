@@ -737,19 +737,19 @@ struct DeleteAllDataTests {
         #expect(outcome.incompleteStores.contains("your storage settings"))
     }
 
-    /// A single store can be named by two independent legs — the sealed cycle-notes rows and the
-    /// locked-note buffer both purge "your cycle notes". Both failing must still list it ONCE, or the
-    /// failure alert reads "…and your cycle notes and your cycle notes".
+    /// A single store can be named by two independent legs — the sealed cycle rows and the
+    /// locked-entry buffer both purge "your cycle history". Both failing must still list it ONCE, or
+    /// the failure alert reads "…and your cycle history and your cycle history".
     @Test func incompleteStoresAreDeduplicated() async {
         let store = makeStore("delete-all-dedupe")
-        store.periodDataDeleteHook = { false }            // names "your cycle notes"
+        store.periodDataDeleteHook = { false }            // names "your cycle history"
         store.intimacyDataDeleteHook = { true }
         store.journalDataDeleteHook = { true }
-        store.pendingNarrativeBufferPurgeHook = { false } // also names "your cycle notes"
+        store.pendingNarrativeBufferPurgeHook = { false } // also names "your cycle history"
 
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(outcome.incompleteStores.filter { $0 == "your cycle notes" }.count == 1)
+        #expect(outcome.incompleteStores.filter { $0 == "your cycle history" }.count == 1)
     }
 
     /// The guided-workout runner (new on this branch: it backs the interactive Live Activity) mirrors an
@@ -785,32 +785,300 @@ struct DeleteAllDataTests {
         #expect(store.day.workouts.isEmpty, "a guided run re-logged a workout after the wipe")
     }
 
-    /// The un-hide period-backup settle is a live writer like the guided run and the widget queue: a
-    /// settle suspended in its CloudKit fetch when the wipe runs would resume afterwards and re-insert
-    /// cycle narratives (and possibly re-upload a backup) into the just-emptied store. The funnel must
-    /// cancel it; `applyRestoredChunks`' cancellation check then stops the write
-    /// (`applyRefusesToWriteInsideACancelledTask` in SealedBackupRestoreTests covers that half).
-    @Test func deleteAllCancelsTheInFlightPeriodBackupSettle() async {
-        let store = makeStore("delete-all-settle")
-        let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
-        store.periodBackupSettleTask = inFlight
+    /// BV15 / design 2026-09-30 §4.7: the Sealed backup v2 engine (the period settle, the un-hide
+    /// settle, every intent) is a live writer like the guided run and the widget queue. The funnel
+    /// quiesces it — moves its epoch, cancels its worker and WAITS until it stopped — after its first
+    /// leg and BEFORE its cloud leg, so a pass suspended in a CloudKit call resumes into a failed gate
+    /// and nothing it started can race the cloud deletes. (The engine tests drive a pass suspended in
+    /// a fake fetch through the same stop.)
+    @Test func deleteAllQuiescesTheSealedBackupEngineBeforeItsCloudLeg() async {
+        let store = makeStore("delete-all-engine-quiesce")
+        let before = store.sealedBackupEngine.quiesceEpoch
+        var seenAtTheCloudLeg: Int?
+        store.legacyCloudRecordDeleteHook = { [weak store] in
+            seenAtTheCloudLeg = store?.sealedBackupEngine.quiesceEpoch
+            return true
+        }
 
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(inFlight.isCancelled, "the wipe left the period-backup settle running")
+        #expect(seenAtTheCloudLeg.map { $0 > before } == true, "quiesced before the cloud leg ran")
     }
 
-    /// The intimacy un-hide settle is the same class of live writer as the period one, added with the
-    /// intimacy backup payload: suspended in its CloudKit fetch it would resume after the wipe and
-    /// re-insert intimate logs into the just-emptied store.
-    @Test func deleteAllCancelsTheInFlightIntimacyBackupSettle() async {
-        let store = makeStore("delete-all-intimacy-settle")
+    /// Review U5-backup-v2-C-U5-3 / L-U5-R4: the Private tab's section settle now runs the period
+    /// export, so it is held on the store and the wipe cancels it with the other writers — suspended in
+    /// a chunk upload it would otherwise resume after the wipe and write a fresh set over the deletes.
+    @Test func deleteAllCancelsTheInFlightPrivateSectionSettle() async {
+        let store = makeStore("delete-all-section-settle")
         let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
-        store.intimacyBackupSettleTask = inFlight
+        store.privateSectionBackupSettleTask = inFlight
 
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(inFlight.isCancelled, "the wipe left the intimacy-backup settle running")
+        #expect(inFlight.isCancelled, "the wipe left the Private tab's backup settle running")
+    }
+
+    /// Design 2026-09-30 §4.7: a Sealed backup v2 commit does not stop for the Private tab closing
+    /// (it decrypts nothing, and set-scoped names make a stop harmless anyway), so the wipe says "wipe"
+    /// through the store's work epoch — moved in the first leg, before the cycle writers stop and before
+    /// any backup or row is deleted — which every pass checks at every gate and before every save.
+    @Test func deleteAllMovesTheSealedBackupWorkEpochInItsFirstLeg() async {
+        let store = makeStore("delete-all-work-epoch")
+        let before = store.sealedBackupWorkEpoch
+        var seenWhenTheCycleWritersStop: Int?
+        store.periodWritersStopHook = { [weak store] in seenWhenTheCycleWritersStop = store?.sealedBackupWorkEpoch }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(seenWhenTheCycleWritersStop == before + 1, "moved ahead of the other first-leg stops")
+        #expect(store.sealedBackupWorkEpoch == before + 1)
+    }
+
+    /// I14 / §8.4 (R2-F7): the period store's own writers — the held legacy cycle import and a
+    /// fill-on-read begun before the wipe — are stopped in the FIRST leg, before any row is deleted,
+    /// and both legacy-import halves are set to DONE (a write, never a clear), so the next Private open
+    /// cannot re-import the Apple Health copies the user kept. The marker write lands before the period
+    /// rows go, and the funnel calls the stop hook exactly once.
+    @Test func deleteAllStopsTheCycleWritersAndFinishesBothImportHalves() async {
+        let store = makeStore("delete-all-cycle-writers")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.cycleImportWipe.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        var events: [String] = []
+        store.periodWritersStopHook = { events.append("stopWriters") }
+        store.periodDataDeleteHook = {
+            events.append(CycleLegacyImportLedger(defaults: defaults).isSampleHalfDone ? "rows(markersDone)" : "rows(markersPending)")
+            return true
+        }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(events == ["stopWriters", "rows(markersDone)"])
+        let ledger = CycleLegacyImportLedger(defaults: defaults)
+        #expect(ledger.isNarrativeHalfDone && ledger.isSampleHalfDone)
+    }
+
+    /// The app-lock reset funnel finishes both import halves too (§9.21): the reset purged every
+    /// sealed row, so a pending half would only re-import Fernlet's own Apple Health copies.
+    @Test func theAppLockResetFunnelFinishesBothImportHalves() {
+        let store = makeStore("reset-import-halves")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.cycleImportReset.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+
+        store.handleAppLockResetCompleted(preferences: StoragePreferences(), clearBookkeeping: {})
+
+        let ledger = CycleLegacyImportLedger(defaults: defaults)
+        #expect(ledger.isNarrativeHalfDone && ledger.isSampleHalfDone)
+    }
+
+    /// The reset funnel speaks for the v2 bookkeeping too (design 2026-09-30 §4.7, §9): the work epoch
+    /// moves FIRST (a suspended pass fails its gate), the restore marker is REOPENED (so the owner's
+    /// restore can pull the history back; an explicit false, so its one-time seed never runs again) and
+    /// the accepted and observed heads are forgotten (so nothing exports over the pre-reset set until
+    /// that restore has merged it).
+    @Test func theAppLockResetFunnelReopensThePeriodRestoreAndForgetsTheAcceptedSet() {
+        let store = makeStore("reset-period-ledger")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.periodLedgerReset.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        store.sealedBackupBookkeeping.markRestoreResolved(.periodData)
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("phone".utf8)), generation: 3)
+        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: ""), .periodData, installTag: "me")
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, .periodData, installTag: "me")
+        let epoch = store.sealedBackupWorkEpoch
+
+        store.handleAppLockResetCompleted(preferences: StoragePreferences(), clearBookkeeping: {})
+
+        #expect(store.sealedBackupWorkEpoch == epoch + 1, "a suspended pass fails its next gate")
+        #expect(!store.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(!store.sealedBackupBookkeeping.hasAcceptedHeadRecord(.periodData))
+        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(.periodData))
+    }
+
+    /// Review B1-C-B1-3: the reset funnel drops every pending Sealed backup choice with the bookkeeping
+    /// it was made over. A "Replace" left pending would take the owner's release's place, skip the
+    /// restore the hold keeps, and sit behind that hold for the rest of the process.
+    @Test func theAppLockResetFunnelDropsEveryPendingBackupChoice() {
+        let store = makeStore("reset-pending-choices")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.resetPendingChoices.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("other".utf8)), generation: 3)
+        store.sealedBackupEngine.recordIntent(.replace(stamp), for: .periodData)
+        #expect(store.sealedBackupEngine.intents[.periodData] == .replace(stamp))
+
+        store.handleAppLockResetCompleted(preferences: StoragePreferences(), clearBookkeeping: {})
+
+        #expect(store.sealedBackupEngine.intents.isEmpty, "no choice made over the destroyed key survives the reset")
+    }
+
+    /// Review U5-backup-v2-C-U5-5: an app-lock reset with every Sealed backup off keeps no pre-reset
+    /// copy, so Privacy & Data — once its device-owner check passed — releases the hold instead of
+    /// asking the owner to "Restore" a backup that does not exist (and the held bit would otherwise
+    /// stop the restore of any backup turned on later). A hold that keeps an enabled backup's copy
+    /// stays for the owner's "Restore".
+    @Test func aResetHoldKeepingNoEnabledBackupIsReleasedOnTheOwnersEntry() {
+        let store = makeStore("reset-hold-keeping-nothing")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.holdKeepingNothing.\(UUID().uuidString)") ?? .standard
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        let journalOn = StoragePreferences(sealedBackupJournalEnabled: true)
+
+        store.sealedBackupRestoreHold.hold(keepingCopiesFrom: journalOn)
+        #expect(!store.releaseSealedBackupRestoreHoldKeepingNothing(preferences: journalOn))
+        #expect(store.sealedBackupRestoreAwaitsOwner, "a kept, enabled copy waits for the owner's Restore")
+
+        store.sealedBackupRestoreHold.hold(keepingCopiesFrom: StoragePreferences())
+        #expect(store.releaseSealedBackupRestoreHoldKeepingNothing(preferences: journalOn))
+        #expect(!store.sealedBackupRestoreAwaitsOwner, "nothing kept: released on the owner's entry")
+        #expect(store.sealedBackupPayloadsKeptForOwner.isEmpty)
+        #expect(!store.releaseSealedBackupRestoreHoldKeepingNothing(preferences: journalOn), "nothing left to release")
+    }
+
+    /// "Delete everything" KEEPS the period restore marker (design §5.3, §9.11): a cloud copy that
+    /// survived a failed cloud delete must not come back by an ambient restore at the next settle. It
+    /// KEEPS the accepted head too (design 2026-09-30 §9, R2-F11): that surviving set is then this
+    /// install's own to the next export, which overwrites it and finishes the wipe. The observed
+    /// foreign head goes — the set it named is deleted by the same leg.
+    @Test func deleteAllKeepsThePeriodRestoreMarkerAndAcceptedHeadAndClearsTheObservation() async {
+        let store = makeStore("delete-all-period-marker")
+        wireSucceedingSealedHooks(store)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(
+            defaults: UserDefaults(suiteName: "fernlet.tests.periodMarkerWipe.\(UUID().uuidString)") ?? .standard,
+            legacyLatch: { _ in false }
+        )
+        store.sealedBackupBookkeeping.markRestoreResolved(.periodData)
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("phone".utf8)), generation: 3)
+        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), .periodData, installTag: "me")
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, .periodData, installTag: "me")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(store.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(store.sealedBackupBookkeeping.acceptedHead(.periodData, installTag: "me")?.stamp == stamp)
+        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(.periodData))
+    }
+
+    /// The sealed-store mutation hook (design 2026-09-30 §4.4, R2-F3, R2-F8, R2-F14): every mutation
+    /// moves the host's mutation epoch — the ONE "did it move" witness — and records the upload as
+    /// owed WITHOUT reading the preferences (the export and Privacy & Data check the switch), persisted
+    /// once through the deferral hook. It never touches the backup's switch: there is no hook for it.
+    @Test func everyCycleRecordChangeMovesTheEpochAndMarksTheUploadOwed() {
+        let store = makeStore("period-dirty")
+        var persisted: [Bool] = []
+        store.sealedBackupDeferralPersistHook = { deferred, payload in
+            if payload == .periodData { persisted.append(deferred) }
+        }
+        store.recordSealedBackupReuploadDeferred(false, payloadType: .periodData)
+        persisted = []
+        store.sealedBackupPreferencesProvider = {
+            Issue.record("the dirty mark read the preferences")
+            return StoragePreferences()
+        }
+
+        store.markSealedBackupDirty(.periodData)
+        store.markSealedBackupDirty(.periodData)
+        store.markSealedBackupDirty(.periodData)
+        #expect(store.sealedBackupMutationEpoch(.periodData) == 3)
+        #expect(store.sealedBackupPeriodReuploadDeferred)
+        #expect(persisted == [true], "persisted once, not on every mutation")
+        #expect(store.sealedBackupMutationEpoch(.journalNarratives) == 0, "one epoch per payload")
+    }
+
+    /// BV15 / R2-F10: after "Delete everything" every owed-upload flag is false WHATEVER the hooks did —
+    /// a leg-3 row delete fires the mutation hook, and while the wipe runs that moves the epoch but sets
+    /// no flag, so nothing is owed for a backup the same wipe deleted.
+    @Test func deleteAllLeavesNoUploadOwedEvenWhenItsRowDeletesFireTheMutationHook() async {
+        let store = makeStore("delete-all-dirty-hook")
+        wireSucceedingSealedHooks(store)
+        store.periodDataDeleteHook = { [weak store] in
+            store?.markSealedBackupDirty(.periodData)
+            return true
+        }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!store.sealedBackupPeriodReuploadDeferred, "the leg-3 hook re-dirtied the period backup")
+        #expect(store.sealedBackupMutationEpoch(.periodData) == 1, "the mutation still moved the epoch")
+    }
+
+    /// BV15 / R2-F10 for the intimate logs (design 2026-09-30, unit B2): the wipe's leg-3 delete runs
+    /// through the app's ONE intimacy funnel, whose mutation hook fires when rows go — and while the
+    /// wipe runs that moves the epoch but sets no flag, so no upload is owed for a backup the same
+    /// wipe deleted. (The intimacy un-hide settle is no longer a task of its own: it is a pass on the
+    /// Sealed backup v2 engine, which the funnel quiesces before its cloud leg —
+    /// `deleteAllQuiescesTheSealedBackupEngineBeforeItsCloudLeg`.)
+    @Test func deleteAllLeavesNoIntimacyUploadOwedWhenItsRowDeleteFiresTheHook() async throws {
+        let store = makeStore("delete-all-intimacy-hook")
+        wireSucceedingSealedHooks(store)
+        let funnel = IntimacyLogStore(repository: IntimacyLogRepository(
+            controller: PrivatePersistenceController(inMemory: true),
+            defaults: UserDefaults(suiteName: "fernlet.tests.wipeIntimacyFunnel.\(UUID().uuidString)") ?? .standard
+        ))
+        store.attachIntimacyLogStore(funnel)
+        funnel.attachVisibilityGate { true }
+        try funnel.insert(IntimacyLog(eventDate: Date(), note: "logged"), contentKey: SymmetricKey(size: .bits256))
+        let epochBefore = store.sealedBackupMutationEpoch(.intimacyLogs)
+        store.intimacyDataDeleteHook = { (try? funnel.deleteAll()) != nil }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(try funnel.backupLogCount() == 0)
+        #expect(store.sealedBackupMutationEpoch(.intimacyLogs) == epochBefore + 1, "the delete still moved the epoch")
+        #expect(!store.sealedBackupIntimacyReuploadDeferred, "the leg-3 delete re-dirtied the intimacy backup")
+    }
+
+    /// "Delete everything" KEEPS the intimate-log and journal restore markers and accepted heads (design
+    /// 2026-09-30 §9, R2-F11) — a set that survived a failed cloud delete never merges back, and is this
+    /// install's own to the next export, which overwrites it — and clears the observed foreign heads.
+    @Test(arguments: [SealedBackupPayloadType.intimacyLogs, .journalNarratives])
+    func deleteAllKeepsTheRestoreMarkerAndAcceptedHeadAndClearsTheObservation(_ payload: SealedBackupPayloadType) async {
+        let store = makeStore("delete-all-\(payload.rawValue)-marker")
+        wireSucceedingSealedHooks(store)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(
+            defaults: UserDefaults(suiteName: "fernlet.tests.markerWipe.\(UUID().uuidString)") ?? .standard,
+            legacyLatch: { _ in false }
+        )
+        store.sealedBackupBookkeeping.markRestoreResolved(payload)
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("phone".utf8)), generation: 4)
+        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), payload, installTag: "me")
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, payload, installTag: "me")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(store.sealedBackupBookkeeping.isRestoreResolved(payload))
+        #expect(store.sealedBackupBookkeeping.acceptedHead(payload, installTag: "me")?.stamp == stamp)
+        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(payload))
+    }
+
+    /// The reset funnel speaks for the intimate-log and journal bookkeeping too (design 2026-09-30 §9):
+    /// the marker is REOPENED (written false, so its one-time seed never runs again) and the accepted and
+    /// observed heads are forgotten, so nothing exports over the pre-reset set until the owner's restore
+    /// merged it.
+    @Test(arguments: [SealedBackupPayloadType.intimacyLogs, .journalNarratives])
+    func theAppLockResetFunnelReopensTheRestoreAndForgetsTheAcceptedSet(_ payload: SealedBackupPayloadType) {
+        let store = makeStore("reset-\(payload.rawValue)-bookkeeping")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.v2Reset.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        store.sealedBackupBookkeeping.markRestoreResolved(payload)
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("phone".utf8)), generation: 3)
+        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), payload, installTag: "me")
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, payload, installTag: "me")
+
+        store.handleAppLockResetCompleted(
+            preferences: StoragePreferences(sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true),
+            clearBookkeeping: {}
+        )
+
+        let markerKey = payload == .journalNarratives
+            ? SealedBackupBookkeeping.journalRestoreResolvedKey : SealedBackupBookkeeping.intimacyRestoreResolvedKey
+        #expect(defaults.object(forKey: markerKey) as? Bool == false)
+        #expect(!store.sealedBackupBookkeeping.hasAcceptedHeadRecord(payload))
+        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(payload))
+        #expect(store.sealedBackupRestoreHold.keepsPreResetCopy(of: payload), "held for the owner")
     }
 
     /// EVERY payload's re-upload deferral points at a backup the wipe just deleted (and at local data
@@ -1126,10 +1394,33 @@ struct DeleteAllDataTests {
         #expect(try repository.narratives(forDayKey: "2026-08-10", contentKey: key).count == 1)
     }
 
+    /// The period leg on its own (period-data design 2026-09-30, §9.11), with no store rebuild behind
+    /// it to hide a leg that skipped a table: the production helper the ContentView hook calls removes
+    /// the sealed cycle RECORDS and the legacy narratives, keylessly, and reports cleared — and an
+    /// empty store still reports cleared (nothing to delete is not a failure).
+    @Test func thePeriodLegDeletesCycleRecordsAndLegacyNarratives() throws {
+        let controller = PrivatePersistenceController(inMemory: true)
+        let suiteName = "fernlet-tests-period-leg-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let key = SymmetricKey(size: .bits256)
+        let records = CycleRecordRepository(controller: controller)
+        let narratives = MenstrualNarrativeRepository(controller: controller, defaults: defaults)
+        try records.insert(CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .medium)), contentKey: key)
+        try narratives.insert(MenstrualNarrative(hkExternalUUID: "hk-leg", dateKey: "2026-09-30", note: "legacy"), contentKey: key)
+
+        // An unwired (fail-closed, hidden) funnel: the delete must not need visibility or a key.
+        #expect(ContentView.deletePeriodRows(records: CycleRecordStore(controller: controller), narratives: narratives))
+
+        #expect(try records.recordCount() == 0, "the period leg left sealed cycle records behind")
+        #expect(try narratives.narrativeCount() == 0)
+        #expect(ContentView.deletePeriodRows(records: CycleRecordStore(controller: controller), narratives: narratives))
+    }
+
     /// The reversibility trap, asserted end to end: every deletion path must stay reachable while
     /// the app is LOCKED, so nothing in it — row-delete or rebuild — may need the content key.
     ///
-    /// Seals one row in each of the four sealed entities under a real `FernletLockService` content
+    /// Seals one row in each of the five sealed entities under a real `FernletLockService` content
     /// key, engages the lock (scrubbing that key), then drives the real funnel with the real
     /// repositories wired to the hooks. The rows must be gone, the store file rebuilt, and the lock
     /// must still hold no key on the way out — a wipe that had to decrypt to delete would have had
@@ -1165,13 +1456,22 @@ struct DeleteAllDataTests {
                 contentKey: key
             )
         try WorryNarrativeRepository(controller: controller).insert(WorryNarrative(text: "a worry"), contentKey: key)
-        #expect(Self.sealedRowCount(in: controller) == 4, "precondition: the four sealed rows were not seeded")
+        // The sealed cycle record (period-data design 2026-09-30, §9.11): the period leg must take it
+        // AND the legacy narrative, through the production helper the ContentView hook calls.
+        try CycleRecordRepository(controller: controller)
+            .insert(CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .heavy, note: "cycle record")), contentKey: key)
+        #expect(Self.sealedRowCount(in: controller) == 5, "precondition: the five sealed rows were not seeded")
 
         lock.lock(reason: .manual)
         #expect(lock.contentKey(for: .privateHub) == nil, "precondition: the wipe must run with the lock engaged")
 
         let store = makeStore("delete-all-locked")
-        store.periodDataDeleteHook = { (try? MenstrualNarrativeRepository(controller: controller, defaults: defaults).deleteAll()) != nil }
+        store.periodDataDeleteHook = {
+            ContentView.deletePeriodRows(
+                records: CycleRecordStore(controller: controller),
+                narratives: MenstrualNarrativeRepository(controller: controller, defaults: defaults)
+            )
+        }
         store.intimacyDataDeleteHook = { (try? IntimacyLogRepository(controller: controller).deleteAll()) != nil }
         store.journalDataDeleteHook = { (try? JournalNarrativeRepository(controller: controller).deleteAll()) != nil }
         store.worryBoxResetHook = { (try? WorryNarrativeRepository(controller: controller).deleteAll()) != nil }
@@ -1183,7 +1483,7 @@ struct DeleteAllDataTests {
 
         #expect(Self.sealedRowCount(in: controller) == 0, "sealed rows survived a locked wipe")
         #expect(lock.contentKey(for: .privateHub) == nil, "the wipe produced a content key — deletion must never require the ability to read")
-        for named in ["your cycle notes", "your intimate logs", "your journal entries", "your Worry Box notes", "your sealed store"] {
+        for named in ["your cycle history", "your intimate logs", "your journal entries", "your Worry Box notes", "your sealed store"] {
             #expect(!outcome.incompleteStores.contains(named), "\(named) reported incomplete after a locked wipe")
         }
     }
@@ -1321,11 +1621,12 @@ struct DeleteAllDataTests {
         return "\(inode)@\(created)"
     }
 
-    /// Rows across all four sealed entities.
+    /// Rows across every sealed entity (named here rather than read from `sealedEntityNames`, so a
+    /// shrunken production list cannot make this count agree with it).
     private static func sealedRowCount(in controller: PrivatePersistenceController) -> Int {
         let context = controller.container.viewContext
         return context.performAndWait {
-            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"].reduce(0) { total, entityName in
+            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord"].reduce(0) { total, entityName in
                 let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
                 return total + ((try? context.fetch(request).count) ?? 0)
             }

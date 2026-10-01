@@ -359,30 +359,11 @@ struct FernletLockTests {
         #expect(afterPurge.isEmpty)
     }
 
-    // MARK: - PendingNarrativeBuffer eviction at 50
+    // MARK: - PendingNarrativeBuffer cap
 
-    @Test func pendingNarrativeBufferEvictsAt50() throws {
-        let scope = uniqueNarrativeBufferScope()
-        defer { KeychainItem.deleteAll(service: scope.keychainService) }
-        let buffer = PendingNarrativeBuffer(scope: scope)
-        try buffer.purge()
-
-        for i in 0..<55 {
-            let payload = PendingNarrativePayload(
-                hkExternalUUID: "uuid-\(i)",
-                dateKey: "2026-05-\(String(format: "%02d", (i % 28) + 1))",
-                noteBytes: nil,
-                symptomFlagsBytes: nil,
-                customSymptomScalesBytes: nil
-            )
-            try buffer.append(payload)
-        }
-
-        let all = try buffer.drainAll()
-        #expect(all.count == 50)
-        #expect(all.first?.hkExternalUUID == "uuid-5")
-        #expect(all.last?.hkExternalUUID == "uuid-54")
-    }
+    // The 50-entry EVICTION test that lived here is gone with the eviction: the buffer now refuses
+    // at 200 entries and drops nothing (period-data design 2026-09-30, §6.5). The cap is pinned in
+    // `PendingNarrativeBufferTests.aFullBufferRefusesTheNextEntryAndDropsNothing`.
 
     // MARK: - PendingNarrativeBuffer encryption (ChaChaPoly)
 

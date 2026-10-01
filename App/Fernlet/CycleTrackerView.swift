@@ -2,6 +2,7 @@ import SwiftUI
 import FernletFoundation
 import FernletDomainModel
 import FernletLock
+import FernletLockUI
 import PrivateHealthStore
 import PeriodContextBridge
 import HealthKitGateway
@@ -12,12 +13,11 @@ import FernletUI
 /// `PeriodFlowLevel` lives in `PrivateHealthStore` — a SEALED module with, deliberately, no string
 /// catalog: its job is ciphertext and HealthKit samples, and giving it one would invite copy to
 /// accumulate behind the seal. Its `title` is `rawValue.capitalized`, i.e. a storage token wearing
-/// paint, and `CycleDayEntry.flowLabel` returns the same English words. So the fork lands HERE, in
-/// the app target, where `Bundle.main` is the right bundle and every consumer already lives.
+/// paint. So the fork lands HERE, in the app target, where `Bundle.main` is the right bundle and
+/// every consumer already lives.
 ///
-/// Switching on the CASE rather than matching the label string is the point: the sealed module can
-/// reword `flowLabel` freely and this stays correct, and a new case is a compiler error rather than
-/// a silently English row.
+/// Switching on the CASE rather than matching a label string is the point: a new case is a compiler
+/// error rather than a silently English row.
 extension PeriodFlowLevel {
     /// The localized flow word shown on the cycle calendar and its day detail.
     var displayName: String {
@@ -95,10 +95,10 @@ extension OvulationTestResult {
 }
 
 extension CycleDayEntry {
-    /// The localized replacement for the sealed store's English ``flowLabel``.
+    /// The localized flow word for the day.
     ///
-    /// Distinguishes "no sample at all" from a sample that records `PeriodFlowLevel.none`, exactly
-    /// as `flowLabel` does — the two mean different things to someone reading their own history.
+    /// Distinguishes "no flow recorded at all" from a recorded `PeriodFlowLevel.none` — the two mean
+    /// different things to someone reading their own history.
     var flowDisplayName: String {
         guard let flowLevel else {
             return String(localized: "cycle.flow.noFlow", defaultValue: "No flow",
@@ -117,20 +117,23 @@ extension CycleDayEntry {
 /// only while at least one is visible (``PrivateHubView`` owns that), and the hidden half gets NO
 /// on-page mention — Settings' AgeGateNotice owns the true reason.
 ///
-/// Data rules carried over unchanged from the two retired pages:
+/// Data rules:
 /// - Period reads go through `PeriodTrackerStore` (fail-closed `isVisible` seam), reloaded via
 ///   `.task(id:)` keyed on ``LoadTrigger`` — the lock state PLUS both DERIVED visibility gates,
 ///   so un-hiding a half mid-mount restarts the load by construction (pre-merge the hub
 ///   re-created each page on un-hide; the merged page survives via the other half, so the flip
-///   itself must be a load trigger). The view additionally skips the HealthKit *authorization
-///   request* while period is hidden, since that prompt is view-level and outside the seam.
+///   itself must be a load trigger). After an unlock the order is fixed (period-data design
+///   2026-09-30, §9.1): drain the held entries, run the legacy import, then load. There is no
+///   Apple Health prompt here (owner question Q4): cycle sharing is turned on in Settings › Health.
 /// - Intimacy presence max-merges the sealed `IntimacyLogStore` funnel with HealthKit per-day
 ///   counts, and the view-level guard in `loadIntimacyCalendar` both SKIPS the HealthKit read
 ///   while hidden (the sealed seam never covered that read) and scrubs the decrypted @State the
 ///   moment the derived gate flips off.
 /// Day taps push ``CycleDayDetailView`` with both halves, each gated the same way; the header
-/// plus-menu routes through ``FernletSheet`` `.logPeriod` / `.logIntimacy` so the sheets own all
-/// writes. The optional `PeriodContextBridge` is refreshed after loads and deletes so cached
+/// plus-menu routes through ``FernletSheet`` `.logPeriod` / `.logIntimacy` so the sheets own the
+/// logging writes, while the day's Delete and its two Apple Health actions run here. Earlier cycle
+/// notes the legacy import could not open are named on a card (§8.2) and removed only on its
+/// Remove tap. The optional `PeriodContextBridge` is refreshed after loads and deletes so cached
 /// phase trends never outlive the entries they were computed from.
 struct CycleTrackerView: View {
     var store: FernletStore
@@ -146,9 +149,6 @@ struct CycleTrackerView: View {
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
     @Environment(FernletLockService.self) private var lockService
-    /// The app's single preferences store, for the contextual cycle ask (see ``HealthAccessGrant``).
-    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
-    @State private var authorization: HealthKitAuthorizationViewModel
     @State private var selectedDay: SelectedCycleDay?
     /// The root page's own scroll-to-top token; `tabReselect` bumps it only when no day is pushed.
     @State private var scrollToTopToken = 0
@@ -161,6 +161,13 @@ struct CycleTrackerView: View {
     /// Set when a day delete failed, so the detail stays open with an honest message instead of
     /// popping as though the entry were gone.
     @State private var deleteErrorMessage: String?
+    /// Set when a day action landed with something to say (Fernlet's copy is gone but Apple Health's
+    /// is not), or one of the Apple Health actions failed.
+    @State private var dayNoticeMessage: String?
+    /// "Not now" on the earlier-notes card hides it for this visit; nothing is removed.
+    @State private var earlierNotesCardDismissed = false
+    /// Single-flight for the card's Remove.
+    @State private var isRemovingEarlierNotes = false
 
     /// Identity for the page's load task: any change restarts it. Folds the DERIVED
     /// `sensitiveSurfaceVisibility` in alongside the lock state, so flipping either half visible
@@ -193,7 +200,6 @@ struct CycleTrackerView: View {
         self.isInHub = isInHub
         _isTabBarCompact = isTabBarCompact
         _tabResetToken = tabResetToken
-        _authorization = State(initialValue: HealthKitAuthorizationViewModel(service: service))
     }
 
     var body: some View {
@@ -247,6 +253,13 @@ struct CycleTrackerView: View {
             } message: {
                 Text(deleteErrorMessage ?? "")
             }
+            .alert("About this day",
+                   isPresented: Binding(get: { dayNoticeMessage != nil },
+                                        set: { if !$0 { dayNoticeMessage = nil } })) {
+                Button("OK", role: .cancel) { dayNoticeMessage = nil }
+            } message: {
+                Text(dayNoticeMessage ?? "")
+            }
         }
         // Re-tapping Private pops the day detail back to the Cycle page; at the page it scrolls up.
         .tabReselect(token: $tabResetToken, scrollToTopToken: $scrollToTopToken, isAtRoot: { selectedDay == nil }) {
@@ -267,6 +280,9 @@ struct CycleTrackerView: View {
                     PredictionsCard(prediction: prediction)
                 }
                 phaseTrendsCard
+            }
+            if store.isPeriodTrackingVisible {
+                earlierNotesCard
             }
             CycleCalendarCard(
                 displayedMonth: $displayedMonth,
@@ -318,32 +334,102 @@ struct CycleTrackerView: View {
                 ? intimacyLogs.filter { $0.dayKey == dayKey }.sorted { $0.eventDate < $1.eventDate }
                 : [],
             intimacyEventCount: store.isIntimacyTrackingVisible ? (intimacyEventsByDay[dayKey] ?? 0) : 0,
-            // A day with nothing logged opens "Log period" for that date, not "Edit period" over a
-            // placeholder entry — `entry(for:)` synthesizes an empty entry for every untouched day.
-            onEdit: {
-                let hasLog = dayEntry.hasObservedEvent || dayEntry.narrative != nil
-                activeSheet = .logPeriod(targetDate: day.date, editingEntry: hasLog ? dayEntry : nil)
-            },
-            onDelete: { deleteDay(dayEntry, dayKey: dayKey) }
+            // A day with no Fernlet record opens "Log period" for that date; one with records edits
+            // its newest record in place.
+            onEdit: { activeSheet = .logPeriod(targetDate: day.date, editingRecord: dayEntry.primaryRecord) },
+            onDelete: { deleteDay(dayEntry, dayKey: dayKey) },
+            onKeepInFernlet: { keepInFernlet(dayEntry) },
+            onDeleteFromHealth: { deleteFromHealth(dayEntry) }
         )
     }
 
-    /// Deletes a day's cycle entry, keeping the detail open (and saying so) when the delete fails.
+    /// Deletes a day's cycle entries (§6.3 Delete): Fernlet's first, then its Apple Health copies.
+    /// A failure of Fernlet's half keeps the detail open and says so; Apple Health still holding a
+    /// copy pops to the calendar — where the day now shows as a Health-only Fernlet day — and says
+    /// that (§10.4).
     private func deleteDay(_ dayEntry: CycleDayEntry, dayKey: String) {
         Task {
+            let outcome: PeriodDeleteOutcome
             do {
-                try await periodStore.deleteEntry(dayEntry)
+                outcome = try await periodStore.deleteDay(dayEntry)
             } catch {
-                // The entry (HealthKit sample and/or sealed narrative) is still there: leave the
-                // detail open rather than popping as if the day were gone.
+                // Nothing was deleted anywhere: leave the detail open rather than popping as if the
+                // day were gone.
                 FernletAuditLog.log("cycle.deleteEntry.failed", context: ["dayKey": dayKey])
-                deleteErrorMessage = "That day is still here — try again in a moment."
+                deleteErrorMessage = String(localized: "cycle.delete.failed",
+                                            defaultValue: "That day is still here. Try again in a moment.",
+                                            comment: "Alert message when deleting a cycle day failed and nothing was removed.")
                 return
             }
-            // Keep the bridge's cached trends from outliving the deleted data (§5.3
-            // "deliberate forgetfulness"): recompute from the now-smaller entry set.
-            refreshContext()
             selectedDay = nil
+            await loadPeriodIfUnlocked()
+            if case .stillInHealth = outcome.healthCopy {
+                dayNoticeMessage = LogPeriodSheet.stillInHealthSentence
+            }
+        }
+    }
+
+    /// "Keep in Fernlet" on a Health-only Fernlet day (§7.3): adopts the day's Fernlet copies as
+    /// records, then reloads.
+    private func keepInFernlet(_ dayEntry: CycleDayEntry) {
+        guard let contentKey = lockService.contentKey(for: .privateHub) else { return }
+        do {
+            _ = try periodStore.keepHealthOnlyDay(dayEntry, contentKey: contentKey)
+        } catch {
+            FernletAuditLog.log("cycle.keepInFernlet.failed", context: ["error": "\(type(of: error))"])
+            dayNoticeMessage = String(localized: "cycle.keepInFernlet.failed",
+                                      defaultValue: "Fernlet couldn't keep this day just now. Nothing was changed. Try again in a moment.",
+                                      comment: "Alert message when 'Keep in Fernlet' (saving Fernlet's Apple Health copy of a day as a Fernlet entry) failed.")
+            return
+        }
+        Task { await loadPeriodIfUnlocked() }
+    }
+
+    /// "Delete from Apple Health" on a Health-only Fernlet day (§7.3), after its confirmation.
+    private func deleteFromHealth(_ dayEntry: CycleDayEntry) {
+        Task {
+            do {
+                _ = try await periodStore.deleteHealthOnlyCopies(dayEntry)
+            } catch {
+                FernletAuditLog.log("cycle.deleteFromHealth.failed", context: ["error": "\(type(of: error))"])
+                dayNoticeMessage = String(localized: "cycle.deleteFromHealth.failed",
+                                          defaultValue: "Fernlet can't remove its copy from Apple Health right now. You can delete it in the Health app.",
+                                          comment: "Alert message when deleting Fernlet's own copy of a cycle day from Apple Health failed (for example, Fernlet's access was turned off in the Health app).")
+                return
+            }
+            selectedDay = nil
+            await loadPeriodIfUnlocked()
+        }
+    }
+
+    /// Earlier cycle notes the legacy import could not open on this iPhone (§8.2): named by count,
+    /// removed only on "Remove them"; "Not now" hides the card for this visit and removes nothing.
+    @ViewBuilder
+    private var earlierNotesCard: some View {
+        let count = periodStore.unopenableLegacyNarrativeIDs.count
+        if count > 0, !earlierNotesCardDismissed {
+            FernletUnopenableEntriesCard(
+                counts: FernletUnopenableEntryCounts(cycleEntries: count),
+                isWorking: isRemovingEarlierNotes,
+                wording: .earlierCycleNotes,
+                onRemove: removeEarlierNotes,
+                onNotNow: { earlierNotesCardDismissed = true }
+            )
+        }
+    }
+
+    /// The card's Remove: deletes exactly the notes it named (keyless), single-flight.
+    private func removeEarlierNotes() {
+        guard !isRemovingEarlierNotes else { return }
+        isRemovingEarlierNotes = true
+        defer { isRemovingEarlierNotes = false }
+        do {
+            _ = try periodStore.removeUnopenableLegacyNarratives()
+        } catch {
+            FernletAuditLog.log("cycle.earlierNotes.removeFailed", context: ["error": "\(type(of: error))"])
+            dayNoticeMessage = String(localized: "cycle.earlierNotes.removeFailed",
+                                      defaultValue: "Those notes are still here. Try again in a moment.",
+                                      comment: "Alert message when removing earlier cycle notes that cannot be opened failed; nothing was removed.")
         }
     }
 
@@ -379,7 +465,7 @@ struct CycleTrackerView: View {
         if store.isPeriodTrackingVisible && store.isIntimacyTrackingVisible {
             Menu {
                 Button {
-                    activeSheet = .logPeriod(targetDate: nil, editingEntry: nil)
+                    activeSheet = .logPeriod(targetDate: nil, editingRecord: nil)
                 } label: {
                     Label("Log period", systemImage: "drop.fill")
                 }
@@ -404,7 +490,7 @@ struct CycleTrackerView: View {
             .accessibilityLabel("Log")
         } else if store.isPeriodTrackingVisible {
             HeaderActionButton(systemImage: "plus", accessibilityLabel: "Log period") {
-                activeSheet = .logPeriod(targetDate: nil, editingEntry: nil)
+                activeSheet = .logPeriod(targetDate: nil, editingRecord: nil)
             }
         } else if store.isIntimacyTrackingVisible {
             HeaderActionButton(systemImage: "plus", accessibilityLabel: "Log intimacy") { activeSheet = .logIntimacy }
@@ -548,7 +634,7 @@ struct CycleTrackerView: View {
                                 .foregroundStyle(Color.bark)
                             HStack(spacing: 6) {
                                 Text(verbatim: entry.flowDisplayName)
-                                ForEach(entry.narrative?.symptomFlags.sorted() ?? []) { symptom in
+                                ForEach(entry.symptomFlags) { symptom in
                                     Text(symptom.title)
                                 }
                             }
@@ -564,28 +650,22 @@ struct CycleTrackerView: View {
         }
     }
 
+    /// The period half's load after an unlock, in the fixed order of §9.1: drain the entries held
+    /// while Private was closed, run the legacy import, then load. Never prompts for Apple Health.
     private func loadPeriodIfUnlocked() async {
         periodStore.attachLockService(lockService)
-        // The store's own `isVisible` seam already refuses hidden loads (fail-closed), but the
-        // HealthKit AUTHORIZATION prompt below is view-level and outside that seam — never ask
-        // for cycle-tracking permission while the user has the period surface hidden.
+        // The store's own `isVisible` seam already refuses hidden loads (fail-closed); this skips the
+        // whole sequence while the period surface is hidden.
         guard store.isPeriodTrackingVisible else { return }
         guard let contentKey = lockService.contentKey(for: .privateHub) else { return }
-        if !authorization.hasRequested(.cycleTracking) {
-            await HealthAccessGrant.requestInContext(
-                .cycleTracking,
-                source: "cycleTracker",
-                authorization: authorization,
-                preferences: storagePreferencesStore
-            )
-        }
         do {
             try await periodStore.drainPendingBuffer(contentKey: contentKey)
         } catch {
             FernletAuditLog.log("periodNarratives.pendingDrainFailed", context: [
-                "error": String(describing: error)
+                "error": String(describing: type(of: error))
             ])
         }
+        await periodStore.runLegacyImportIfNeeded(contentKey: contentKey)
         await periodStore.loadEntries(unlockedContentKey: contentKey)
         refreshContext()
     }
@@ -641,7 +721,7 @@ struct CycleTrackerView: View {
     /// plaintext into the detail push. Internal so the gate is testable.
     func entry(for date: Date) -> CycleDayEntry {
         let key = FernletDate.dayKey(for: date)
-        let placeholder = CycleDayEntry(date: date, dateKey: key, samples: [], narrative: nil, phase: .unknown)
+        let placeholder = CycleDayEntry(date: date, dateKey: key)
         guard store.isPeriodTrackingVisible else { return placeholder }
         return periodStore.entries.first { $0.dateKey == key } ?? placeholder
     }

@@ -31,15 +31,58 @@ escalating-cooldown countdown card, and a reset-required card whose only exit is
 destructive reset. ``FernletNumericPad`` is the shared 3×4 PIN keypad both flows (and the
 app's passcode-change settings) use instead of the system keyboard. Tying them together,
 `FernletLockGateModifier` — applied through the public
-`fernletLockGate(scope:active:shouldLockOnDisappear:)` extension on `View` — overlays
-``FernletLockView`` over gated content while the service is locked *for that gate's scope*,
-offers ``FernletLockSetupView`` when no lock is configured yet, and re-locks with
+`fernletLockGate(scope:active:automaticallyPromptsBiometrics:privateHubOpener:shouldLockOnDisappear:)`
+extension on `View` — overlays ``FernletLockView`` over gated content while the service is locked
+*for that gate's scope*, shows the no-passcode tap screen on the Private tab's gate (below) or offers
+``FernletLockSetupView`` elsewhere when no passcode is configured, and re-locks with
 `lock(reason: .viewDisappeared)` when the gated screen genuinely departs. One small pure helper
 rides alongside the gate: ``FernletLockGateOcclusion`` answers "is the gate's opaque overlay
 above the content right now?" for other surfaces to compose — its consumer is the Private hub's
 capture-friction attachment, which sits *inner* to the gate and must not react to a screenshot
 taken while the gate's overlay hides it. The helper mirrors the modifier's own overlay
 conditions exactly and must change with them.
+
+**A passcode is optional, and without one the Private tab keeps an unlock screen with exactly one
+button (period-data design 2026-09-30, §10.1–§10.2).** The owner's words: "Keep the unlock screen,
+but with only an unlock button. Makes showing this information have a little friction." The gate
+given a ``FernletPrivateHubOpening`` coordinator (the app passes its `PrivateHubOpenCoordinator` on
+the Private tab's gate only) fills its one not-configured slot with that screen instead of the setup
+call to action: a decorative symbol, the heading "Private", one line on what is there, the honest
+line — "No passcode is set, so anyone using your unlocked iPhone can open this page. Your entries
+stay encrypted on this iPhone. You can add a passcode in Settings." — and **Unlock**, the only
+interactive element (`lock.tapGate.unlock`, ≥ 44 pt, nothing fires on appear). The tap is friction,
+not security, and no copy here ever calls the no-passcode state locked, protected or secured;
+`LockGateAccessibilityBoundaryTests` pins the one button, the missing credential field and the words
+(design invariant I20). The button hands the tap to the coordinator and shows its answer
+(``FernletTapOpenOutcome``): opened (the overlay goes); "Fernlet can't open this right now. Try again
+in a moment." with the button kept; the lost-key card whose only control is the reset; or
+``FernletUnopenableEntriesCard`` — "Some entries can't be opened here" — naming, by kind
+(``FernletUnopenableEntryCounts``), the entries a fresh key would be minted over while no key on the
+iPhone can open them, with "Remove them and open Private" (destructive) and "Not now". A kind the
+user has HIDDEN (period or intimacy tracking) is never named on either screen — they are shown to
+whoever holds the phone: its rows appear only as "Other private entries", the held-entries line
+names no kind, and the tap screen's line names cycle entries only while the coordinator's
+``FernletPrivateHubOpening/tapGateNamesCycleEntries`` says period tracking is visible. Nothing is
+deleted without that tap, and the card hands its own counts back with it so the coordinator deletes
+only what the user saw. The Cycle page shows the same component for earlier cycle notes the legacy
+import could not open (period-data design 2026-09-30, §8.2): its ``FernletUnopenableEntriesCard/Wording/earlierCycleNotes``
+wording swaps the heading, the body, the one count line and the Remove label ("Remove them" — the tab
+is already open there) and the two identifiers (`cycle.unopenableNotes.remove` / `.notNow`). While a custodian recovery is owed the Private tab keeps the setup call to
+action — that phone's way back is a setup or the recovery ceremony, never a tap. The same slot
+carries the same `.isModal`, so ``FernletLockGateOcclusion/overlayIsUp(active:state:scope:)`` is
+unchanged: closed tap screen and card are overlays, a tab opened by the tap is revealed for
+`.privateHub` alone. ``FernletLockSetupView`` never acknowledges prior data: it adopts the
+no-passcode key where there is one (the service asks a fresh device-owner check first when entries
+exist), and a setup that would mint a fresh key over unchecked entries answers "Open the Private tab
+once first", where the check runs. The loss copy moved to `.v2` keys because its meaning changed —
+cycle history now lives in Fernlet whether or not it was copied to Apple Health — worded
+unconditionally, since this module cannot see the Health switches. The reset confirmation, the
+forgotten-passcode disclosure and the tap screen's lost-key card also say the Sealed backup can be
+restored afterwards from Privacy & Data, before new entries are added (the journal and intimacy
+restores write only into an empty store): after a reset every ambient restore waits for the device
+owner, and Privacy & Data's "Restore", behind its fresh device-owner check, releases that hold (design
+unit 5). `LocalizationBoundaryTests` pins the sentence to the release: present exactly while the hold
+can be released.
 
 **Every entry point in this module names a `FernletLockScope`, and none of them defaults it.**
 ``FernletLockView(scope:onUnlocked:onResetRequested:)``, ``FernletLockSetupView(grantingScope:)``
@@ -176,7 +219,15 @@ internally — so a service-side policy change updates the counter automatically
 
 ### Gating content behind the lock
 
-- ``SwiftUICore/View/fernletLockGate(scope:active:shouldLockOnDisappear:)``
+- ``SwiftUICore/View/fernletLockGate(scope:active:automaticallyPromptsBiometrics:privateHubOpener:shouldLockOnDisappear:)``
+- ``FernletLockGateOcclusion``
+
+### The no-passcode Private tab
+
+- ``FernletPrivateHubOpening``
+- ``FernletTapOpenOutcome``
+- ``FernletUnopenableEntryCounts``
+- ``FernletUnopenableEntriesCard``
 
 ### Setting up the lock
 

@@ -29,6 +29,7 @@ import HealthKitGateway
 import LocalPersistence
 import PrivateHealthStore
 import PrivateMediaStore
+import PrivateStoreCore
 @testable import Fernlet
 @testable import FernletLock
 
@@ -350,7 +351,7 @@ struct DuressSilentWipeTests {
         #expect(replacement != originalBlob)
     }
 
-    /// Two of the four sealed entities are NOT sealed under the content key: journal and Worry Box
+    /// Two of the five sealed entities are NOT sealed under the content key: journal and Worry Box
     /// rows written while the lock was closed use device fallback keys instead. Destroying the
     /// content key alone would leave exactly those rows openable, so "crypto-erased" would be false
     /// for them — the same three-sweep argument `reset()` makes.
@@ -675,5 +676,44 @@ private final class WipeAuditCapture {
     func anyEventNameContains(_ needle: String) -> Bool {
         lock.lock(); defer { lock.unlock() }
         return events.contains { $0.event.localizedCaseInsensitiveContains(needle) }
+    }
+}
+
+// MARK: - The wipe reaches the no-passcode custody and the pending buffer (period-data design
+// 2026-09-30, §4.3, review R1-F5, invariant I25)
+
+extension DuressSilentWipeTests {
+
+    /// The silent wipe's "every key that can open a sealed byte here" now covers two more: the
+    /// device-custody row (the copy of the content key that opens with NO credential — a leftover
+    /// beside a passcode is the adoption window the design names) and the pending buffer's own key
+    /// and file, which seal entries logged while Private was closed. All three are gone in the same
+    /// synchronous pass as the lock rows — observable the moment the duress unlock returns, before
+    /// any purge hook could have run — and `reset()`'s hook never fires for a duress response.
+    @Test func silentWipeDestroysTheDeviceRowAndThePendingBufferKeyAndFile() async throws {
+        let fixture = try await makeWipeFixture()
+        defer { fixture.harness.cleanup() }
+        let service = fixture.service
+        let harness = fixture.harness
+        #expect(KeychainItem.store(Data("FDR1".utf8) + fixture.originalContentKey, for: .deviceContentKey,
+                                   service: harness.serviceID) == errSecSuccess)
+        try service.bufferPendingNarrative(PendingNarrativePayload(
+            hkExternalUUID: UUID().uuidString, dateKey: "2026-09-30",
+            noteBytes: Data("logged while closed".utf8), symptomFlagsBytes: nil, customSymptomScalesBytes: nil
+        ))
+        let bufferFile = PendingNarrativeBuffer.fileURL(in: harness.narrativeBufferScope.directory)
+        #expect(FileManager.default.fileExists(atPath: bufferFile.path), "precondition: an entry is buffered")
+        #expect(!KeychainItem.loadAll(service: harness.narrativeBufferScope.keychainService).isEmpty)
+        let resetHookFired = DuressTestFlag()
+        service.onResetCompleted = { resetHookFired.raise() }
+        service.lock(reason: .manual)
+
+        _ = try await service.unlock(passcode: "654321", for: .privateHub)
+
+        #expect(lockRow(.deviceContentKey, harness) == nil, "the wipe left a key that opens with no credential")
+        #expect(KeychainItem.loadAll(service: harness.narrativeBufferScope.keychainService).isEmpty,
+                "the wipe left the pending buffer's key")
+        #expect(!FileManager.default.fileExists(atPath: bufferFile.path), "the wipe left the pending buffer's file")
+        #expect(!resetHookFired.isRaised, "a duress response must never fire the reset hook")
     }
 }

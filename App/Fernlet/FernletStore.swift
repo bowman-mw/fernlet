@@ -436,7 +436,14 @@ final class FernletStore {
     @ObservationIgnored private var workoutHealthAccessOfferTask: Task<Void, Never>?
     @ObservationIgnored private lazy var workoutPlanningService = WorkoutPlanningService(host: self)
     @ObservationIgnored private lazy var mealResolutionService = MealResolutionService(host: self)
-    @ObservationIgnored private lazy var sealedBackupCoordinator = SealedBackupCoordinator(host: self)
+    /// The Sealed backup coordinator (and through it the v2 engine). The journal backup reads and
+    /// merges into THIS store's sealed journal repository when it is the concrete one (tests inject an
+    /// isolated store; a decorator falls back to the shared one) — the same rows `JournalSealingCoordinator`
+    /// writes, whose hook marks the journal upload owed (design 2026-09-30, §4.4).
+    @ObservationIgnored private lazy var sealedBackupCoordinator = SealedBackupCoordinator(
+        host: self,
+        journalRepository: providedJournalNarrativeRepository as? JournalNarrativeRepository
+    )
     /// The opt-in own-photo escrow backup (security-hardening Phase 5, step 5b) — the sanctioned
     /// cross-device route for meal / recipe / progress photos once their key is device-bound.
     /// Owns its own store instances over `photoDocumentsDirectory`; see `OwnPhotoBackupCoordinator`.
@@ -1155,62 +1162,31 @@ final class FernletStore {
         }
     }
 
-    /// The in-flight un-hide settle, held so the delete-all funnel can cancel it (see
-    /// `settlePeriodBackupAfterUnhide`). Internal-settable ONLY so the delete-all tests can seed a live
-    /// task; production writes it solely in `settlePeriodBackupAfterUnhide`.
-    @ObservationIgnored var periodBackupSettleTask: Task<Void, Never>?
+    /// The Private tab's in-flight settle request — `ContentView`'s 300 ms wait after the hub opens,
+    /// before it asks the Sealed backup v2 engine for the hub session's pass (design 2026-09-30, §4.5)
+    /// — held, not fire-and-forget, so "delete everything" and the tab closing can cancel it before it
+    /// asks. Every backup pass itself runs on the engine's own held worker, which the wipe quiesces
+    /// (``deleteAllData(includingHealthKitSamples:)``).
+    @ObservationIgnored var privateSectionBackupSettleTask: Task<Void, Never>?
 
-    /// Settles BOTH halves of the sealed period backup at the one moment the sealed narrative store
-    /// becomes reachable again. Order is load-bearing:
+    /// The Sealed backup work epoch (design 2026-09-30, §4.7): moved first thing in "Delete
+    /// everything"'s first leg (`stopWritersForWipe`) and by the app-lock reset funnel. A v2 pass
+    /// captures it at its start and stops at its next gate once it moved — before any decrypt, local
+    /// write or upload — and records no bookkeeping. The task's cancellation cannot carry this: the
+    /// Private tab closing must not stop a commit whose chunks are already sealed. Memory-only.
+    @ObservationIgnored private(set) var sealedBackupWorkEpoch = 0
+
+    /// Settles the sealed period backup when cycle tracking is un-hidden: asks the v2 engine for an
+    /// ambient pass — restore while this install's restore is unresolved, then export behind its
+    /// gates (design 2026-09-30, §4.5). Both halves need the Private tab's key, and an un-hide happens
+    /// in Settings, so this usually finds the tab closed and does nothing; the next hub settle then
+    /// runs it. The engine's worker is held and serial, and "delete everything" quiesces it, so a pass
+    /// suspended in a CloudKit fetch when the wipe runs fails its gate on resuming and writes nothing.
     ///
-    /// 1. **Restore first.** `restoreSealedBackupsIfNeeded` only ever restores into a fresh install, and by
-    ///    the time a user un-hides, the day blob has synced down and the device is permanently "not
-    ///    fresh" — so without this, someone who hides cycle tracking on one device and reinstalls on
-    ///    another never gets their sealed history back, and every other period seam re-uploads instead.
-    ///    The targeted restore drops only the whole-device freshness gate; a narrative store that already
-    ///    holds history still refuses, so this can add data back but never overwrite.
-    /// 2. **Re-upload second, and only if the restore left nothing retryable AND this device actually has
-    ///    narratives to seal.** This is the deferral banner's promised remedy (G5) — the escrow adopt
-    ///    couldn't re-seal while hidden. But re-sealing pages the LOCAL narrative store and rewrites the
-    ///    whole chunk set, so running it over an empty store would overwrite the good cloud backup with a
-    ///    single empty chunk. A retryable outcome leaves the deferral flag set; the coordinator clears the
-    ///    deferral only on an ACTUAL re-seal success, so a failure keeps the banner honest.
-    ///
-    ///    Note the deferral does NOT fully self-heal at next launch: the ambient launch pass is
-    ///    fresh-install-only and does not take the targeted-restore fallback (that is reserved for the
-    ///    user's explicit Retry), so on an in-use device the restore half stays pending until the user
-    ///    taps Retry. The launch follow-through re-upload is guarded on the same non-empty check, so a
-    ///    pending restore can never be overwritten in the meantime.
-    ///
-    /// Both halves are gated on the pref so a backup the user has since turned off is never touched.
-    ///
-    /// The Task is HELD in `periodBackupSettleTask` (not fire-and-forget) so "delete everything" can
-    /// cancel it: a settle suspended in the CloudKit fetch when the wipe runs would otherwise resume
-    /// afterwards and re-insert cycle narratives into the just-emptied store — the same live-writer
-    /// class as the debounced save and the guided run, which the funnel already stops.
-    /// `applyRestoredChunks` checks for cancellation at the write point, and the `Task.isCancelled`
-    /// guard here keeps a cancelled settle from re-uploading.
+    /// Gated on the pref so a backup the user has since turned off is never touched.
     private func settlePeriodBackupAfterUnhide() {
-        let preferences = StoragePreferencesStore.currentPreferences()
-        guard preferences.sealedBackupPeriodEnabled else { return }
-        let reuploadDeferred = sealedBackupPeriodReuploadDeferred
-        // A re-toggle while a settle is in flight replaces it — two concurrent settles could interleave
-        // their restore/re-upload halves.
-        periodBackupSettleTask?.cancel()
-        periodBackupSettleTask = Task {
-            if preferences.iCloudSyncEnabled {
-                let outcome = await restorePeriodBackupTargeted()
-                guard !outcome.isRetryable else { return }
-            }
-            guard !Task.isCancelled else { return }
-            if reuploadDeferred, sealedBackupCoordinator.periodNarrativeCount() > 0 {
-                // R7: the re-upload is a success/failure signal. The coordinator's deferral flag keeps
-                // the Settings banner honest on failure, so the audit line is the recovery here.
-                if await !setSealedBackupEnabled(true, payloadType: .periodData) {
-                    FernletAuditLog.log("sealedBackup.period.reuploadAfterUnhide.failed")
-                }
-            }
-        }
+        guard sealedBackupPreferences.sealedBackupPeriodEnabled else { return }
+        sealedBackupCoordinator.engine.request([.periodData], trigger: .unhide)
     }
 
     func setIntimacyTrackingVisible(_ visible: Bool) {
@@ -1223,40 +1199,19 @@ final class FernletStore {
         }
     }
 
-    /// The in-flight intimacy un-hide settle, held so the delete-all funnel can cancel it — the exact
-    /// twin of `periodBackupSettleTask` and for the same reason (a settle suspended in the CloudKit
-    /// fetch would otherwise resume after the wipe and re-insert logs into the just-emptied store).
-    @ObservationIgnored var intimacyBackupSettleTask: Task<Void, Never>?
-
-    /// Settles both halves of the sealed intimacy backup at the moment the gated log store becomes
-    /// reachable again — the intimacy twin of `settlePeriodBackupAfterUnhide()`, and what makes the
-    /// launch arm's "hidden only DEFERS; it restores when the user un-hides" claim true.
+    /// Settles the sealed intimate-log backup when intimacy tracking is un-hidden — the intimacy
+    /// counterpart of `settlePeriodBackupAfterUnhide()`: asks the v2 engine for an ambient pass, a
+    /// MERGE restore while this install's restore is unresolved, then the export behind its gates
+    /// (design 2026-09-30, §4.5, §8). Both halves need the Private tab's key, and an un-hide happens in
+    /// Settings, so this usually finds the tab closed and does nothing; the next hub settle runs it.
+    /// The engine's worker is held and serial — no second settle can interleave with this one (R2-F15)
+    /// — and "delete everything" quiesces it, so a pass suspended in a CloudKit fetch when the wipe
+    /// runs fails its gate on resuming and writes nothing.
     ///
-    /// Order is load-bearing and identical to period's:
-    ///
-    /// 1. **Restore first**, via the targeted `.payloadStoreOnly` path. The launch pass only restores
-    ///    into a fresh install, and by the time someone un-hides, the day blob has synced down and the
-    ///    device is permanently "not fresh" — so without this the sealed logs are unrestorable forever.
-    ///    The targeted restore still refuses a non-empty store and still honors the one-way divergence
-    ///    latch, so it can add data back but never overwrite or resurrect deleted logs.
-    /// 2. **Re-upload second**, and only when the restore left nothing retryable AND a deferral is
-    ///    actually outstanding. The retry re-checks `mayReuploadFromLocalStore(.intimacyLogs)`, so an
-    ///    un-restored (empty) store can never replace the cloud copy with the single head record
-    ///    `reconcileChunked` writes for a count of 0.
+    /// Gated on the in-memory pref so a backup the user has since turned off is never touched.
     private func settleIntimacyBackupAfterUnhide() {
-        let preferences = StoragePreferencesStore.currentPreferences()
-        guard preferences.sealedBackupIntimacyEnabled else { return }
-        // A re-toggle while a settle is in flight replaces it — two concurrent settles could interleave
-        // their restore/re-upload halves.
-        intimacyBackupSettleTask?.cancel()
-        intimacyBackupSettleTask = Task {
-            if preferences.iCloudSyncEnabled {
-                let outcome = await restoreIntimacyBackupTargeted()
-                guard !outcome.isRetryable else { return }
-            }
-            guard !Task.isCancelled else { return }
-            await retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
-        }
+        guard sealedBackupPreferences.sealedBackupIntimacyEnabled else { return }
+        sealedBackupCoordinator.engine.request([.intimacyLogs], trigger: .unhide)
     }
 
     // MARK: - Sensitive-surface visibility resolution (device-local, never synced)
@@ -3550,6 +3505,296 @@ final class FernletStore {
     /// Aliased here so existing `FernletStore.SealedBackupWiringError` references resolve.
     typealias SealedBackupWiringError = SealedBackupCoordinator.SealedBackupWiringError
 
+    /// Where the Private tab's content key comes from for the sealed backups — set by `ContentView` to
+    /// `lockService.contentKey(for: .privateHub)`, so it answers the hub key in BOTH passcode modes,
+    /// on every Private section, and nil whenever the tab is closed (period-data design 2026-09-30,
+    /// §9.10 "Key", review R2-F1).
+    ///
+    /// It replaced the journal section's key. That one was nil on the Cycle section (the journal is
+    /// deactivated there), so the Cycle settle's intimacy restore and period/intimacy re-uploads ran
+    /// with no key and deferred as `.locked` on every unlock — a live bug for intimacy before this.
+    /// Nil (unwired: tests, previews) means no key, which fails closed.
+    @ObservationIgnored var hubContentKeyProvider: (() -> SymmetricKey?)?
+
+    /// The persisted "ambient restores wait for the device owner" bit — see ``SealedBackupRestoreHold``.
+    /// Internal-settable ONLY so tests can point it at an isolated defaults suite.
+    @ObservationIgnored var sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: .standard)
+
+    /// The Sealed backup v2 bookkeeping — restore markers, accepted heads, observed foreign heads (see
+    /// ``SealedBackupBookkeeping``). Each marker's one-time seed is ``sealedBackupMarkerSeed(_:)``: its
+    /// payload's legacy divergence latch, unless the owner hold still keeps that payload's pre-reset
+    /// copy. Internal-settable ONLY so tests can point it at an isolated suite (and a fixed seed).
+    @ObservationIgnored lazy var sealedBackupBookkeeping = SealedBackupBookkeeping(
+        defaults: .standard,
+        legacyLatch: { [unowned self] payload in self.sealedBackupMarkerSeed(payload) }
+    )
+
+    /// What `payload`'s v2 restore marker is seeded with, once (design 2026-09-30 §4.3): unresolved
+    /// while the app-lock reset's owner hold still keeps that payload's pre-reset iCloud copy — held,
+    /// or released and not yet pulled back — else its legacy divergence latch.
+    ///
+    /// The hold's copy is the one thing a seeded-resolved marker would strand (review B3 fix round 1).
+    /// An install upgrading with a released hold whose earlier empty-store-only restore was refused
+    /// (entries written since the reset set the latch) would seed resolved, so the restore that would
+    /// pull the pre-reset copy back and settle the hold never runs — and the hold then keeps every
+    /// export of that payload waiting, forever, while Privacy & Data promises a restore. Seeded
+    /// unresolved, the next ambient restore (the owner's release, when still held) merges the copy in
+    /// and settles the hold, and the union is exported.
+    func sealedBackupMarkerSeed(_ payload: SealedBackupPayloadType) -> Bool {
+        guard !sealedBackupRestoreHold.keepsPreResetCopy(of: payload) else { return false }
+        return sealedBackupLegacyLatch(payload)
+    }
+
+    /// The legacy divergence latch that seeds `payload`'s v2 restore marker once (design 2026-09-30,
+    /// §4.3): the cycle narratives' for period; the attached intimacy funnel's for the intimate logs
+    /// (false while none is attached — ``seedSealedBackupBookkeepingOnce()`` never seeds then); the
+    /// sealed journal store's for the journal (backfilled from its keyless row count).
+    func sealedBackupLegacyLatch(_ payload: SealedBackupPayloadType) -> Bool {
+        switch payload {
+        case .periodData: return MenstrualNarrativeRepository().hasEverStoredNarrative
+        case .intimacyLogs: return sealedBackupCoordinator.intimacyDivergenceLatch ?? false
+        case .journalNarratives: return sealedBackupCoordinator.journalDivergenceLatch
+        case .sensitiveNotes: return false
+        }
+    }
+
+    /// Hands the Sealed backup the app's ONE intimacy funnel (`ContentView`'s) — its visibility gate
+    /// and the mutation hook that marks the intimate-log upload owed after every write any surface
+    /// makes are installed on it (design 2026-09-30, §4.4). Called by the launch wiring BEFORE the
+    /// bookkeeping is seeded, so the intimate-log marker's one-time seed reads this funnel's latch.
+    ///
+    /// - Parameter store: The app's intimacy funnel.
+    func attachIntimacyLogStore(_ store: IntimacyLogStore) {
+        sealedBackupCoordinator.attachIntimacyLogStore(store)
+    }
+
+    /// Where the Sealed backup gates read the storage preferences — set by `ContentView` to the app's
+    /// in-memory `StoragePreferencesStore.preferences` (design 2026-09-30 §4.2 G4: never a keychain
+    /// read per check). Nil (tests, previews) reads the persisted preferences.
+    @ObservationIgnored var sealedBackupPreferencesProvider: (() -> StoragePreferences)?
+
+    /// The per-payload sealed-store mutation epochs — the ONE "did it move" witness every store
+    /// instance's hook moves (design 2026-09-30 §4.4, R2-F8). In memory; one store per process.
+    @ObservationIgnored private var sealedBackupMutationEpochs: [SealedBackupPayloadType: Int] = [:]
+
+    /// The Sealed backup v2 engine's status per payload (observable; Privacy & Data reads it). In
+    /// memory: after a relaunch the rows are derived from persisted state (§10.1).
+    private(set) var sealedBackupV2Status: [SealedBackupPayloadType: SealedBackupV2Status] = [:]
+
+    /// What the period backup has to tell Privacy & Data (period design §10.6): the engine's status
+    /// this process, else — after a relaunch — the persisted observation of another iPhone's set
+    /// (design 2026-09-30 §10.1, R2-F13b). Nothing while a duress session runs or period tracking is
+    /// hidden.
+    var periodBackupExportState: PeriodBackupExportState {
+        guard !duressSessionActive, isPeriodTrackingVisible else { return .clear }
+        // The user's choice is waiting for the next Private visit (§4.6): nothing to offer again.
+        guard sealedBackupEngine.intents[.periodData] == nil else { return .clear }
+        return PeriodBackupExportState.derive(
+            status: sealedBackupV2Status[.periodData],
+            rolledBackStamp: sealedBackupEngine.rolledBackStamps[.periodData],
+            observed: { sealedBackupBookkeeping.observedHead(.periodData, installTag: SealedBackupWriterTag.current()) }
+        )
+    }
+
+    /// Whether the period slot in iCloud was last observed as another iPhone's (the persisted
+    /// observation, install-bound) — turning this iPhone's switch off then keeps it (R2-F3), and
+    /// Privacy & Data's confirmation says so.
+    var periodBackupSlotIsAnotherIPhones: Bool {
+        sealedBackupBookkeeping.observedHead(.periodData, installTag: SealedBackupWriterTag.current()) != nil
+    }
+
+    /// What the intimate-log backup has to tell Privacy & Data (design 2026-09-30, §10.1): the
+    /// engine's status this process, else — after a relaunch — what persists (an unresolved restore,
+    /// another iPhone's set, an owed upload). NOTHING while intimacy tracking is hidden for any reason
+    /// (the setting, under 16, a duress session) — no held, paused, waiting or catch-up row names
+    /// intimacy then (BV17, R2-F16c) — and nothing while the owner hold keeps its pre-reset copy (the
+    /// shared owner line speaks for every kind).
+    var intimacyBackupRowState: SealedBackupV2RowState {
+        guard !duressSessionActive, isIntimacyTrackingVisible else { return .none }
+        let prefs = sealedBackupPreferences
+        let tag = SealedBackupWriterTag.current()
+        return SealedBackupV2RowState.derive(
+            status: sealedBackupV2Status[.intimacyLogs],
+            intentPending: sealedBackupEngine.intents[.intimacyLogs] != nil,
+            rolledBackStamp: sealedBackupEngine.rolledBackStamps[.intimacyLogs],
+            persisted: SealedBackupV2RowState.Persisted(
+                syncAndBackupOn: prefs.iCloudSyncEnabled && prefs.sealedBackupIntimacyEnabled,
+                keptForOwner: sealedBackupRestoreHold.keepsPreResetCopy(of: .intimacyLogs),
+                restoreResolved: sealedBackupBookkeeping.restoreResolvedIsSet(.intimacyLogs),
+                observed: sealedBackupBookkeeping.observedHead(.intimacyLogs, installTag: tag),
+                dirty: sealedBackupIntimacyReuploadDeferred
+            )
+        )
+    }
+
+    /// Whether the intimate-log slot in iCloud was last observed as another iPhone's (the persisted
+    /// observation, install-bound) — turning this iPhone's switch off then keeps it (R2-F3), and
+    /// Privacy & Data's confirmation says so.
+    var intimacyBackupSlotIsAnotherIPhones: Bool {
+        sealedBackupBookkeeping.observedHead(.intimacyLogs, installTag: SealedBackupWriterTag.current()) != nil
+    }
+
+    /// What the journal backup has to tell Privacy & Data (design 2026-09-30, §10.1, unit B3): the
+    /// engine's status this process, else — after a relaunch — what persists (an unresolved restore,
+    /// another iPhone's set, an owed upload). NOTHING during a duress session (§7.6: no journal held,
+    /// paused, waiting or catch-up row, and no backup action) and nothing while the owner hold keeps its
+    /// pre-reset copy (the shared owner line speaks for every kind). The journal has no hide switch.
+    var journalBackupRowState: SealedBackupV2RowState {
+        guard !duressSessionActive else { return .none }
+        let prefs = sealedBackupPreferences
+        let tag = SealedBackupWriterTag.current()
+        return SealedBackupV2RowState.derive(
+            status: sealedBackupV2Status[.journalNarratives],
+            intentPending: sealedBackupEngine.intents[.journalNarratives] != nil,
+            rolledBackStamp: sealedBackupEngine.rolledBackStamps[.journalNarratives],
+            persisted: SealedBackupV2RowState.Persisted(
+                syncAndBackupOn: prefs.iCloudSyncEnabled && prefs.sealedBackupJournalEnabled,
+                keptForOwner: sealedBackupRestoreHold.keepsPreResetCopy(of: .journalNarratives),
+                restoreResolved: sealedBackupBookkeeping.restoreResolvedIsSet(.journalNarratives),
+                observed: sealedBackupBookkeeping.observedHead(.journalNarratives, installTag: tag),
+                dirty: sealedBackupJournalReuploadDeferred
+            )
+        )
+    }
+
+    /// Whether the journal slot in iCloud was last observed as another iPhone's (the persisted
+    /// observation, install-bound) — turning this iPhone's switch off then keeps it (R2-F3), and
+    /// Privacy & Data's confirmation says so.
+    var journalBackupSlotIsAnotherIPhones: Bool {
+        sealedBackupBookkeeping.observedHead(.journalNarratives, installTag: SealedBackupWriterTag.current()) != nil
+    }
+
+    /// The restore-status sentence Privacy & Data shows for `payload`: for a v2 payload whose engine
+    /// is waiting on something the existing sentences already name — the backup key from iCloud
+    /// Keychain, a set that will not authenticate, a set or rows a newer build wrote — that status;
+    /// otherwise the last restore outcome. Nothing for period while a duress session runs or period
+    /// tracking is hidden (the surface's rows never name it then), and nothing for the intimate logs
+    /// or the journal at all: their own rows speak (``intimacyBackupRowState``,
+    /// ``journalBackupRowState``).
+    func sealedBackupAttentionOutcome(_ payload: SealedBackupPayloadType) -> SealedBackupRestoreOutcome? {
+        if payload == .periodData, duressSessionActive || !isPeriodTrackingVisible { return nil }
+        // The intimate-log and journal backups speak through their own rows, which name every restore
+        // and export state with the choice that answers it — and never while hidden or in duress.
+        if payload == .intimacyLogs || payload == .journalNarratives { return nil }
+        switch sealedBackupV2Status[payload] {
+        case .waitingForBackupKey?: return .deferredKeyNotSynced
+        case .headDamaged?: return .notRecognized
+        // Its own sentence since the restore can end there too (review B3 fix round 1): "update
+        // Fernlet", never "couldn't reach … tap Retry", which a Retry can never clear.
+        case .needsNewerFernlet?: return .needsNewerFernlet
+        case .tooLarge?: return .deferredTransient
+        default: return sealedBackupRestoreStatus[payload]
+        }
+    }
+
+    /// Every sealed-store mutation hook (design 2026-09-30 §4.4): moves `payload`'s mutation epoch and
+    /// records its upload as owed — the existing persisted re-upload flag, which the next hub settle
+    /// discharges behind the engine's gates. No keychain read: the flag is set whether the backup is
+    /// on or off (the export and Privacy & Data check the switch, R2-F14), never during "Delete
+    /// everything" (R2-F10: its leg 2 has just cleared every flag, and a leg-3 row delete must not set
+    /// one again), and it NEVER touches an enabled switch (owner rule).
+    func markSealedBackupDirty(_ payload: SealedBackupPayloadType) {
+        sealedBackupMutationEpochs[payload, default: 0] &+= 1
+        guard !deleteAllInProgress, !isSealedBackupReuploadOwed(payload) else { return }
+        recordSealedBackupReuploadDeferred(true, payloadType: payload)
+    }
+
+    /// `payload`'s mutation epoch (see ``markSealedBackupDirty(_:)``).
+    func sealedBackupMutationEpoch(_ payload: SealedBackupPayloadType) -> Int {
+        sealedBackupMutationEpochs[payload, default: 0]
+    }
+
+    /// Seeds every v2 payload's restore marker once (the first launch of this build, or the first
+    /// after an uninstall) from ``sealedBackupMarkerSeed(_:)`` — its legacy latch, or unresolved while
+    /// the owner hold keeps its pre-reset copy — and marks the upload owed for each one seeded while
+    /// its backup is on — so every install exports one complete v2 set at its first Private visit,
+    /// through E2 (design 2026-09-30 §4.3, R1-BR-11). A present marker is never re-seeded. Called once
+    /// by `ContentView`'s launch wiring, before any settle.
+    func seedSealedBackupBookkeepingOnce() {
+        let prefs = sealedBackupPreferences
+        // The intimate-log seed reads the attached funnel's latch; with none attached it would read
+        // "never stored" and a later restore could merge a stale copy back in behind the user's
+        // deletes, so nothing is seeded until the funnel is here (the launch wiring attaches it first).
+        let seedable = SealedBackupBookkeeping.v2Payloads.filter {
+            $0 != .intimacyLogs || sealedBackupCoordinator.intimacyDivergenceLatch != nil
+        }
+        for payload in seedable where sealedBackupBookkeeping.seedRestoreMarkerIfAbsent(payload) {
+            if prefs.isSealedBackupEnabled(for: payload) { markSealedBackupDirty(payload) }
+        }
+    }
+
+    /// The Sealed backup v2 engine this store owns (through its coordinator) — every v2 pass runs on
+    /// its one serial worker. Internal so the wipe tests can watch its quiesce.
+    var sealedBackupEngine: SealedBackupV2Engine { sealedBackupCoordinator.engine }
+
+    /// The first Private section of a hub session appeared — any section, Worry Box included (design
+    /// 2026-09-30 §4.5): every v2 payload settles now (the hub key is the same on every section).
+    /// `ContentView` calls it after its 300 ms settle wait, with the tab selected and the hub open.
+    func requestSealedBackupHubSettle() {
+        sealedBackupCoordinator.engine.request(SealedBackupBookkeeping.v2Payloads, trigger: .hubSettle)
+    }
+
+    /// The hub closed: the engine's once-per-session spacing resets (§4.5). The engine is NOT
+    /// stopped — a commit decrypts nothing and finishes; a restore or prepare fails its next gate.
+    func sealedBackupHubSessionEnded() {
+        sealedBackupCoordinator.engine.hubSessionEnded()
+    }
+
+    /// "Stop syncing and delete iCloud data": iCloud sync is already off in memory, so every v2 gate
+    /// fails from here; this waits until no pass is still uploading, so the cloud delete that follows
+    /// can never be followed by a set landing after it (review finding on 8f808232).
+    func stopSealedBackupsBeforeCloudDelete() async {
+        await sealedBackupCoordinator.engine.quiesce()
+    }
+
+    /// The app-lock reset funnel (period-data design 2026-09-30, §9.21), fired by
+    /// `FernletLockService.onResetCompleted` after `reset()` destroyed every key and purged the rows:
+    /// the Sealed backup work epoch moves FIRST (a suspended v2 restore fails its gate and writes
+    /// nothing; a prepare fails at its next chunk; a commit already past its first save finishes
+    /// uploading the pre-reset ciphertext it sealed, with no bookkeeping — design 2026-09-30 §4.7);
+    /// then the backup bookkeeping that spoke for the destroyed key is cleared (`clearBookkeeping` —
+    /// the three divergence latches — and every v2 marker reopened, accepted head and observation
+    /// forgotten, with every pending explicit choice, review B1-C-B1-3), and ambient restores are held
+    /// for the device owner (Q14), so the cleared latches
+    /// cannot turn the next hub settle into an automatic restore. The re-uploads that would replace a
+    /// pre-reset copy are held too — for the payload backups that are on right now, the only ones that
+    /// can have a copy in iCloud (review N-1).
+    ///
+    /// Both legacy cycle-import halves are set to done here (design unit 4). Never called by a duress
+    /// response.
+    ///
+    /// - Parameters:
+    ///   - preferences: The storage preferences at the reset; nil (production) reads the live ones.
+    ///     Injectable for tests only.
+    ///   - clearBookkeeping: Clears the three divergence latches.
+    func handleAppLockResetCompleted(preferences: StoragePreferences? = nil, clearBookkeeping: () -> Void) {
+        sealedBackupWorkEpoch &+= 1
+        sealedBackupRestoreHold.hold(keepingCopiesFrom: preferences ?? sealedBackupPreferences)
+        clearBookkeeping()
+        sealedBackupBookkeeping.clearForKeyLoss()
+        sealedBackupKeyLossForgotPendingChoices()
+        recordSealedBackupV2StatusesCleared()
+        // The reset purged every sealed row; a pending legacy-import half would re-import Fernlet's
+        // own Apple Health copies at the next Private open (§8.4, §9.21).
+        cycleLegacyImportLedger.markBothHalvesDone()
+        FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "appLockReset"])
+    }
+
+    /// The v2 bookkeeping was cleared because the key it spoke for is gone — the reset funnel, and the
+    /// "entries this iPhone can't open" check (`SealedPriorEntryStore.clearBackupBookkeeping`): every
+    /// pending explicit choice ("Restore it here", "Replace", "Start a new backup", "Remove them") is
+    /// dropped with it (review B1-C-B1-3). A "Replace" left pending across a reset would take the
+    /// owner's release's place, skip the restore it waits for, and stay stuck behind the hold.
+    func sealedBackupKeyLossForgotPendingChoices() {
+        sealedBackupCoordinator.engine.dropPendingChoices()
+    }
+
+    /// Drops every v2 status (the reset and the wipe: what they named is gone).
+    func recordSealedBackupV2StatusesCleared() {
+        guard !sealedBackupV2Status.isEmpty else { return }
+        sealedBackupV2Status = [:]
+    }
+
     /// Per-payload status of the most recent sealed-backup restore attempt, surfaced (observably) in
     /// Privacy & Data so a deferred/failed restore is VISIBLE and retryable (WS-4) instead of silently
     /// swallowed. Written by `SealedBackupCoordinator` via the `SealedBackupContext` callback.
@@ -3567,11 +3812,10 @@ final class FernletStore {
     private(set) var sealedBackupPeriodReuploadDeferred =
         StoragePreferencesStore.currentPreferences().sealedBackupPeriodReuploadDeferred
 
-    /// Whether the sealed JOURNAL backup still owes an upload — turned on from Settings while the
-    /// Private tab held no unlock, skipped by an escrow adopt, or waiting on a store this device has not
-    /// restored into yet. Same persistence and surfacing contract as
-    /// ``sealedBackupPeriodReuploadDeferred``; discharged by the launch pass or the next `.privateHub`
-    /// unlock, both of which re-check the empty-store guard first.
+    /// Whether the sealed JOURNAL backup still owes an upload — the v2 dirty flag every journal change
+    /// sets through `JournalSealingCoordinator`'s hook (design 2026-09-30, §4.4), set too by turning the
+    /// backup on and by an escrow adopt. Same persistence and surfacing contract as
+    /// ``sealedBackupPeriodReuploadDeferred``; discharged only by a verified commit at a hub settle.
     private(set) var sealedBackupJournalReuploadDeferred =
         StoragePreferencesStore.currentPreferences().sealedBackupJournalReuploadDeferred
 
@@ -3582,28 +3826,108 @@ final class FernletStore {
         StoragePreferencesStore.currentPreferences().sealedBackupIntimacyReuploadDeferred
 
     /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload; returns whether it
-    /// succeeded. Delegates to `SealedBackupCoordinator`.
-    func setSealedBackupEnabled(_ enabled: Bool, payloadType: SealedBackupPayloadType) async -> Bool {
-        await sealedBackupCoordinator.setSealedBackupEnabled(enabled, payloadType: payloadType)
+    /// succeeded. Delegates to `SealedBackupCoordinator`. Delete-all deletes whoever wrote the set
+    /// (`deletingAnySlot` true, the default); the user's own switch passes false, so a period slot
+    /// this install observed as another iPhone's is kept (design 2026-09-30 §9, R2-F3).
+    func setSealedBackupEnabled(_ enabled: Bool, payloadType: SealedBackupPayloadType, deletingAnySlot: Bool = true) async -> Bool {
+        await sealedBackupCoordinator.setSealedBackupEnabled(enabled, payloadType: payloadType, deletingAnySlot: deletingAnySlot)
     }
 
-    /// Discharges a period re-upload that was deferred because the sealed narratives weren't readable
-    /// at the time (typically: the user turned the backup on from Settings while the Private tab held
-    /// no unlock). Driven from the lock-state observer when `.privateHub` unlocks. Delegates to
-    /// `SealedBackupCoordinator`, which owns the guards and is a no-op when nothing is outstanding.
+    /// Discharges an owed period re-upload (every cycle-record change marks one): an export pass on the
+    /// Sealed backup v2 engine. A no-op while the Private tab is closed.
     func retryDeferredSealedPeriodBackupIfNeeded() async {
         await sealedBackupCoordinator.retryDeferredPeriodReuploadIfNeeded()
     }
 
-    /// Discharges a deferred re-upload of any paged payload. Same contract as
-    /// `retryDeferredSealedPeriodBackupIfNeeded()`: the coordinator owns the guards (sync on, pref on,
-    /// deferral outstanding, and the local store actually exportable) and it is a no-op otherwise.
-    func retryDeferredSealedBackupIfNeeded(payloadType: SealedBackupPayloadType) async {
-        await sealedBackupCoordinator.retryDeferredReuploadIfNeeded(payloadType: payloadType)
+    /// The period backup's settle on the v2 engine: restore (while unresolved), then export. Delegates
+    /// to ``SealedBackupCoordinator/settlePeriodBackup()``; a no-op without the Private tab's key.
+    func settleSealedPeriodBackup() async {
+        await sealedBackupCoordinator.settlePeriodBackup()
     }
 
-    /// Pulls any sealed iCloud backups into the local stores at launch (and on the user's Retry, which
-    /// passes `userInitiated: true` so the period half can use the targeted restore).
+    /// Privacy & Data's "Restore it here" (§10.6) of the set it showed, `stamp`. Delegates to
+    /// ``SealedBackupCoordinator/restorePeriodBackupHere(_:)``.
+    func restorePeriodBackupHere(_ stamp: SealedBackupHeadStamp) async {
+        await sealedBackupCoordinator.restorePeriodBackupHere(stamp)
+    }
+
+    /// Privacy & Data's "Start a new backup" for a period set this iPhone cannot open. Delegates to
+    /// ``SealedBackupCoordinator/startNewPeriodBackup()``.
+    func startNewPeriodBackup() async {
+        await sealedBackupCoordinator.startNewPeriodBackup()
+    }
+
+    /// Privacy & Data's intimate-log choices (design 2026-09-30, §4.6, §10.1) —
+    /// ``carryOutSealedBackupChoice(_:for:)`` for `.intimacyLogs`.
+    ///
+    /// - Parameter choice: The confirmed choice.
+    func carryOutIntimacyBackupChoice(_ choice: SealedBackupV2RowChoice) async {
+        await carryOutSealedBackupChoice(choice, for: .intimacyLogs)
+    }
+
+    /// Privacy & Data's journal choices (design 2026-09-30, §4.6, §10.1, unit B3) —
+    /// ``carryOutSealedBackupChoice(_:for:)`` for `.journalNarratives`.
+    ///
+    /// - Parameter choice: The confirmed choice.
+    func carryOutJournalBackupChoice(_ choice: SealedBackupV2RowChoice) async {
+        await carryOutSealedBackupChoice(choice, for: .journalNarratives)
+    }
+
+    /// One v2 payload's Privacy & Data choice (design 2026-09-30, §4.6): an in-memory intent the next
+    /// Private visit carries out (now, if the tab is open) — "Restore it here" / "Restore anyway" (a
+    /// merge of exactly `stamp`), "Replace" (an export over exactly `stamp`), "Start a new backup" (over
+    /// a set this iPhone cannot open), "Remove them" (exactly the shown ids still dead). Each honours
+    /// the owner hold and every gate; nothing is decrypted from Settings. Delegates to the
+    /// coordinator's generic v2 façades.
+    ///
+    /// - Parameters:
+    ///   - choice: The confirmed choice.
+    ///   - payload: A v2 payload (intimate logs, journal).
+    func carryOutSealedBackupChoice(_ choice: SealedBackupV2RowChoice, for payload: SealedBackupPayloadType) async {
+        switch choice {
+        case .restoreHere(let stamp), .restoreAnyway(let stamp):
+            await sealedBackupCoordinator.restoreBackupHere(payload, stamp)
+        case .replace(let stamp):
+            await sealedBackupCoordinator.replaceBackupWithThisIPhone(payload, stamp)
+        case .startNew:
+            await sealedBackupCoordinator.startNewBackup(payload)
+        case .remove(let ids):
+            await sealedBackupCoordinator.removeUnopenableEntries(payload, ids: ids)
+        }
+    }
+
+    /// Releases an app-lock reset's owner hold that keeps no enabled backup's pre-reset copy, called by
+    /// Privacy & Data once its fresh device-owner check passed (review U5-backup-v2-C-U5-5): there is
+    /// nothing of this install's for the owner to restore, so the "Restore" prompt would only claim a
+    /// backup that does not exist — and an unreleased bit would hold the ambient restore of every
+    /// backup turned on later, period's first among them, for good. A hold that keeps something stays.
+    ///
+    /// - Parameter preferences: The storage preferences (which backups are on).
+    /// - Returns: Whether a hold was released.
+    func releaseSealedBackupRestoreHoldKeepingNothing(preferences: StoragePreferences) -> Bool {
+        guard sealedBackupRestoreHold.isHeld,
+              !SealedBackupRestoreHold.keepsAnyEnabledCopy(
+                  sealedBackupRestoreHold.payloadsKeepingPreResetCopy, preferences: preferences
+              ) else { return false }
+        sealedBackupRestoreHold.release()
+        FernletAuditLog.log("sealedBackup.restoreHoldReleasedKeepingNothing")
+        return true
+    }
+
+    /// Privacy & Data's "Replace it with this iPhone's history" (§10.6). Delegates to
+    /// ``SealedBackupCoordinator/replacePeriodBackupWithThisIPhone(_:)``.
+    func replacePeriodBackupWithThisIPhone(_ stamp: SealedBackupHeadStamp) async {
+        await sealedBackupCoordinator.replacePeriodBackupWithThisIPhone(stamp)
+    }
+
+    /// Privacy & Data's owner-checked "Restore" after an app-lock reset (§5.3, Q14). Delegates to
+    /// ``SealedBackupCoordinator/releaseRestoreHoldForOwner()``.
+    func releaseSealedBackupRestoreHoldForOwner() async {
+        await sealedBackupCoordinator.releaseRestoreHoldForOwner()
+    }
+
+    /// The launch pass (and the user's Retry, `userInitiated: true`, which asks the Sealed backup v2
+    /// engine for an ambient pass of every payload — a no-op while the Private tab is closed).
     /// Delegates to `SealedBackupCoordinator`, then to `OwnPhotoBackupCoordinator` for the own-photo
     /// escrow route — one launch/adopt seam for both, so the photo route is retried by the same
     /// banner button and the same launch pass as everything else. Both are no-ops unless their own
@@ -3819,29 +4143,22 @@ final class FernletStore {
         await sealedBackupCoordinator.restoreSealedBackupOutcome(payloadType: payloadType)
     }
 
-    /// Targeted period-only restore (un-hide + explicit Retry) — the compensating restore path for the
-    /// fresh-install-only launch pass. Delegates to `SealedBackupCoordinator`.
-    func restorePeriodBackupTargeted(
-        narrativeRepository: MenstrualNarrativeRepository? = nil
-    ) async -> SealedBackupRestoreOutcome {
-        await sealedBackupCoordinator.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+    /// The period backup's ambient merge restore (§9.10). Delegates to
+    /// ``SealedBackupCoordinator/restorePeriodBackup(initiatedByUser:)``.
+    func restorePeriodBackup() async -> SealedBackupRestoreOutcome {
+        await sealedBackupCoordinator.restorePeriodBackup()
     }
 
-    /// Targeted journal-only restore (the `.privateHub` unlock + explicit Retry) — the compensating
-    /// restore path for the fresh-install-only launch pass. Delegates to `SealedBackupCoordinator`.
-    func restoreJournalBackupTargeted(
-        journalRepository: JournalNarrativeRepository? = nil
-    ) async -> SealedBackupRestoreOutcome {
-        await sealedBackupCoordinator.restoreJournalBackupTargeted(journalRepository: journalRepository)
+    /// The journal backup's merge restore on its own (design 2026-09-30, §7) — an engine pass of the
+    /// restore phase. Delegates to ``SealedBackupCoordinator/restoreJournalBackup(initiatedByUser:)``.
+    func restoreJournalBackup() async -> SealedBackupRestoreOutcome {
+        await sealedBackupCoordinator.restoreJournalBackup()
     }
 
-    /// Targeted intimacy-only restore (un-hide, `.privateHub` unlock, explicit Retry) — the
-    /// compensating restore path for the fresh-install-only launch pass. Delegates to
-    /// `SealedBackupCoordinator`.
-    func restoreIntimacyBackupTargeted(
-        intimacyStore: IntimacyLogStore? = nil
-    ) async -> SealedBackupRestoreOutcome {
-        await sealedBackupCoordinator.restoreIntimacyBackupTargeted(intimacyStore: intimacyStore)
+    /// The intimate-log backup's merge restore on its own (design 2026-09-30, §8) — an engine pass of
+    /// the restore phase. Delegates to ``SealedBackupCoordinator/restoreIntimacyBackup(initiatedByUser:)``.
+    func restoreIntimacyBackup() async -> SealedBackupRestoreOutcome {
+        await sealedBackupCoordinator.restoreIntimacyBackup()
     }
 
     /// Decodes a decrypted sealed-backup payload into the local stores, returning records written.
@@ -3850,18 +4167,16 @@ final class FernletStore {
     func applyRestoredPayload(
         _ plaintext: Data,
         payloadType: SealedBackupPayloadType,
-        narrativeRepository: MenstrualNarrativeRepository? = nil,
+        cycleRecordStore: CycleRecordStore? = nil,
         journalRepository: JournalNarrativeRepository? = nil,
-        intimacyStore: IntimacyLogStore? = nil,
-        scope: SealedBackupCoordinator.RestoreScope = .freshInstall
+        intimacyStore: IntimacyLogStore? = nil
     ) throws -> Int {
         try sealedBackupCoordinator.applyRestoredPayload(
             plaintext,
             payloadType: payloadType,
-            narrativeRepository: narrativeRepository,
+            cycleRecordStore: cycleRecordStore,
             journalRepository: journalRepository,
-            intimacyStore: intimacyStore,
-            scope: scope
+            intimacyStore: intimacyStore
         )
     }
 
@@ -3871,14 +4186,14 @@ final class FernletStore {
     func applyRestoredChunks(
         _ chunks: [Data],
         payloadType: SealedBackupPayloadType,
-        narrativeRepository: MenstrualNarrativeRepository? = nil,
+        cycleRecordStore: CycleRecordStore? = nil,
         journalRepository: JournalNarrativeRepository? = nil,
         intimacyStore: IntimacyLogStore? = nil
     ) throws -> Int {
         try sealedBackupCoordinator.applyRestoredChunks(
             chunks,
             payloadType: payloadType,
-            narrativeRepository: narrativeRepository,
+            cycleRecordStore: cycleRecordStore,
             journalRepository: journalRepository,
             intimacyStore: intimacyStore
         )
@@ -5449,6 +5764,16 @@ final class FernletStore {
     /// sensitive rows in the app and the confirm dialog promises they are gone — a hook that swallowed
     /// its own failure would let a wipe that left the journal behind report success.
     @ObservationIgnored var periodDataDeleteHook: (() -> Bool)?
+    /// Stops the period store's background writers (the held legacy cycle import and a fill-on-read
+    /// that began before the wipe) in the funnel's first leg — `PeriodTrackerStore.cancelBackgroundWriters()`,
+    /// wired in `ContentView` (period-data design 2026-09-30, §8.4). Nil in an unwired test store,
+    /// where there is no period store to stop.
+    @ObservationIgnored var periodWritersStopHook: (() -> Void)?
+    /// The two legacy cycle-import markers (period-data design 2026-09-30, §8.2–§8.4). "Delete
+    /// everything" and the app-lock reset funnel set BOTH to done: a pending sample half would
+    /// otherwise re-import, at the next Private open, the Apple Health copies the user chose to keep.
+    /// Internal-settable ONLY so tests can point it at an isolated defaults suite.
+    @ObservationIgnored var cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: .standard)
     @ObservationIgnored var intimacyDataDeleteHook: (() -> Bool)?
     @ObservationIgnored var journalDataDeleteHook: (() -> Bool)?
     /// Returns whether the HealthKit delete cleared — and HOW it fell short when it didn't, for the same
@@ -5580,13 +5905,10 @@ final class FernletStore {
     /// on it would skip the delete for exactly the user who most needs it, and the dialog would promise
     /// a deletion that never ran.
     private static func hasSealedBackup(_ payloadType: SealedBackupPayloadType, _ preferences: StoragePreferences) -> Bool {
-        switch payloadType {
         // Retired: the flag now means "a copy may still be up there" until the launch sweep deletes it.
-        case .sensitiveNotes: return preferences.sealedBackupSensitiveNotesEnabled
-        case .periodData: return preferences.sealedBackupPeriodEnabled
-        case .journalNarratives: return preferences.sealedBackupJournalEnabled
-        case .intimacyLogs: return preferences.sealedBackupIntimacyEnabled
-        }
+        guard payloadType != .sensitiveNotes else { return preferences.sealedBackupSensitiveNotesEnabled }
+        // The one payload-to-switch helper (design 2026-09-30 §4.4, R2-F14).
+        return preferences.isSealedBackupEnabled(for: payloadType)
     }
 
     /// What a wipe actually managed to remove.
@@ -5656,8 +5978,12 @@ final class FernletStore {
             reapplyProximityRunPolicy()
         }
 
-        // 1. Stop the writers first (see `stopWritersForWipe`).
+        // 1. Stop the writers first (see `stopWritersForWipe`), then wait for the Sealed backup v2
+        // worker to stop: a pass suspended in a CloudKit call resumes into a failed gate and lands no
+        // row, chunk, head or bookkeeping — and nothing it started can race the cloud deletes below
+        // (design 2026-09-30, §4.7, R1-BR-1).
         stopWritersForWipe()
+        await sealedBackupCoordinator.engine.quiesceForWipe()
 
         // 2. Sealed iCloud backups + the kept cloud copy, BEFORE the preference reset that would gate
         // them off (see `deleteSealedCloudBackups`).
@@ -5732,10 +6058,10 @@ final class FernletStore {
             outcome.incompleteStores.append("your storage settings")
         }
 
-        // A single store can be named by two independent legs — the sealed cycle-notes rows and the
-        // locked-note buffer both purge "your cycle notes" — so collapse to first-seen (order preserved)
-        // before the failure alert formats them, or it would read "…and your cycle notes and your cycle
-        // notes". `isComplete` (empty vs not) is unaffected by the dedupe.
+        // A single store can be named by two independent legs — the sealed cycle rows and the
+        // locked-entry buffer both purge "your cycle history" — so collapse to first-seen (order
+        // preserved) before the failure alert formats them, or it would read "…and your cycle history
+        // and your cycle history". `isComplete` (empty vs not) is unaffected by the dedupe.
         var seenStores = Set<String>()
         outcome.incompleteStores = outcome.incompleteStores.filter { seenStores.insert($0).inserted }
 
@@ -5753,15 +6079,22 @@ final class FernletStore {
     /// `stopHealthKitWorkoutObservation` matters most when the user chose to KEEP their Health
     /// samples — that is precisely when the observer still has data to re-import.
     private func stopWritersForWipe() {
+        // First, before any writer below is cancelled or any backup deleted: every Sealed backup v2
+        // pass fails its next gate — no decrypt, merge, chunk, head or bookkeeping after this — and a
+        // commit already uploading stops before its next save (design 2026-09-30, §4.7). The funnel
+        // then awaits the engine's quiesce before its cloud leg.
+        sealedBackupWorkEpoch &+= 1
         snapshotSaveCoordinator.cancelPending()
         stopHealthKitWorkoutObservation()
-        // The un-hide settle is a third writer: suspended in its CloudKit fetch it would resume AFTER
-        // the wipe and re-insert cycle narratives (and possibly re-upload a fresh backup) into the
-        // just-emptied store. `applyRestoredChunks` honors the cancellation at its write point, and the
-        // diverged-device latch backstops any restore this cancel arrives too late for.
-        periodBackupSettleTask?.cancel()
-        // The intimacy un-hide settle is the same class of writer, added with the intimacy payload.
-        intimacyBackupSettleTask?.cancel()
+        // The Private tab's settle request (its 300 ms wait before it asks the engine) is cancelled so
+        // it never asks after the wipe began (review U5-backup-v2-C-U5-3 / L-U5-R4). Every backup pass —
+        // period, intimate logs, journal, the un-hide settles included — runs on the Sealed backup v2
+        // engine, which the epoch above stops and the funnel quiesces.
+        privateSectionBackupSettleTask?.cancel()
+        // The period store's own writers: the held legacy cycle import and a fill-on-read begun before
+        // the wipe would otherwise write records back into the emptied store (period-data design
+        // 2026-09-30, §8.4). The hook cancels the import task and moves the store's writer epoch.
+        periodWritersStopHook?()
         // The journal → Core Memory summary upgrade. It only ever updates an existing memory by id,
         // so it cannot resurrect a wiped one; cancelled anyway so no model call outlives the wipe.
         journalMemorySummaryTask?.cancel()
@@ -5824,6 +6157,11 @@ final class FernletStore {
         // Safe to clear precisely because the records it protected are gone in the same breath.
         var generationStore = SealedBackupGenerationStore()
         generationStore.reset()
+        // The v2 observed foreign heads name sets this leg just deleted. The markers and accepted heads
+        // are KEPT (design 2026-09-30 §9, R2-F11): a set that survived a failed delete is then this
+        // install's own to the next export, which overwrites it and finishes the wipe.
+        sealedBackupBookkeeping.clearObservedHeadsForWipe()
+        recordSealedBackupV2StatusesCleared()
 
         // 2b. The "Stop syncing, keep cloud data" copy. Sync is OFF, so the per-row deletes below can't
         // reach the server by propagating over a live session — but a full copy of the day blob is still
@@ -5854,7 +6192,11 @@ final class FernletStore {
         return (sealedBackupDeleteFailed, cloudCopyDeleteFailed)
     }
 
-    /// Wipe leg 3: the sealed rows (cycle notes, intimate logs, journals) and the locked-note buffer.
+    /// Wipe leg 3: the sealed rows (cycle history, intimate logs, journals) and the locked-entry buffer.
+    ///
+    /// Both cycle legs are named "your cycle history", the dialog's own words (§9.11, review round 1
+    /// L-U4-2): since the cutover the sealed rows and the buffer hold whole entries — every clinical
+    /// field with the note — not notes alone.
     private func deleteSealedRows(into outcome: inout DeleteAllOutcome) {
         // Sealed rows: the most sensitive data and the only rows with no second chance. Each hook
         // drops rows WITHOUT decrypting, so this works while the app is locked and while a surface is
@@ -5863,7 +6205,11 @@ final class FernletStore {
         // `!= true` (not `== false`): a NIL hook — an unwired run — must count as a failure, not a skip.
         // `== false` treated nil as success, so an unwired funnel would silently miss the app's most
         // sensitive rows and still report a complete wipe. Only an explicit `true` clears the store.
-        if periodDataDeleteHook?() != true { outcome.incompleteStores.append("your cycle notes") }
+        // Both legacy-import halves are set to DONE before the cycle rows go (§8.4): a pending sample
+        // half would re-import, at the next Private open, the Apple Health copies the user chose to
+        // keep while deleting their Fernlet data. A write of two markers, never a clear.
+        cycleLegacyImportLedger.markBothHalvesDone()
+        if periodDataDeleteHook?() != true { outcome.incompleteStores.append("your cycle history") }
         if intimacyDataDeleteHook?() != true { outcome.incompleteStores.append("your intimate logs") }
         if journalDataDeleteHook?() != true { outcome.incompleteStores.append("your journal entries") }
         // Worry Box rows are purged (and reported) inside `resetAll()` below — its ONE invocation per
@@ -5872,7 +6218,7 @@ final class FernletStore {
         // The buffer of notes written while LOCKED. Not covered by the row hooks above — it is a file
         // under a separate device key — and its next drain re-inserts every payload into the store we
         // just emptied, so skipping it turns "delete everything" into "delete until the next unlock".
-        if pendingNarrativeBufferPurgeHook?() != true { outcome.incompleteStores.append("your cycle notes") }
+        if pendingNarrativeBufferPurgeHook?() != true { outcome.incompleteStores.append("your cycle history") }
     }
 
     /// Wipe leg 3b: the HealthKit samples Fernlet itself authored, when the user asked for them too.
@@ -6930,15 +7276,22 @@ final class FernletStore {
 // MARK: - Sealed Journal Management (Phase S2) — see JournalSealingCoordinator
 
 extension FernletStore: JournalSealingContext {
-    func activateNoLockJournals() {
-        journalSealingCoordinator.activateNoLockJournals()
-        scrubLeakedPastDayJournalsIfNeeded()
-    }
+    /// Activates the journal under the Private tab's content key — opened by a passcode or, with no
+    /// passcode, by the tap. There is no device-key activation any more: while the tab is closed the
+    /// journal is closed too, and the device key is only the WRITE fallback (period-data design
+    /// 2026-09-30, §9.17).
     func activateSealedJournals(contentKey: SymmetricKey) {
         journalSealingCoordinator.activateSealedJournals(contentKey: contentKey)
         scrubLeakedPastDayJournalsIfNeeded()
     }
     func deactivateSealedJournals() { journalSealingCoordinator.deactivateSealedJournals() }
+
+    /// A sealed journal row was written, re-sealed or deleted (`JournalSealingContext`): the journal
+    /// Sealed backup's mutation epoch moves and its upload is owed, so the next hub settle re-exports
+    /// it (design 2026-09-30, §4.4). No keychain read; never the enabled switch.
+    func sealedJournalStoreDidChange() {
+        markSealedBackupDirty(.journalNarratives)
+    }
 
     /// WI-1 one-time scrub: seal + blank historical past-day journal plaintext that leaked into the days
     /// blob before the past-day strip (`DiaryStore.mutatePastDay`) existed. The snapshot sanitizer and
@@ -7190,10 +7543,50 @@ extension FernletStore: MealResolutionContext {}
 extension FernletStore: OwnPhotoBackupContext {}
 
 extension FernletStore: SealedBackupContext {
-    /// Narrow read of the (private) journal content key for sealed period-data backup. This is the
-    /// ONE SealedBackupContext member the facade does NOT forward to DiaryStore — the key lives in
-    /// the facade-owned `journalSealingCoordinator` and never enters DiaryStore.
-    var sealedBackupContentKey: SymmetricKey? { journalSealingCoordinator.contentKey }
+    /// The Private tab's content key for every sealed backup payload, from ``hubContentKeyProvider``
+    /// — never the journal section's key (design §9.10, review R2-F1). Nil while the tab is closed.
+    var sealedBackupContentKey: SymmetricKey? { hubContentKeyProvider?() }
+    /// Whether ambient restores wait for the device owner (``SealedBackupRestoreHold``).
+    var sealedBackupRestoreAwaitsOwner: Bool { sealedBackupRestoreHold.isHeld }
+    /// Whether the owner hold keeps `payloadType`'s pre-reset iCloud copy, so its re-uploads wait.
+    func sealedBackupKeepsPreResetCopy(of payloadType: SealedBackupPayloadType) -> Bool {
+        sealedBackupRestoreHold.keepsPreResetCopy(of: payloadType)
+    }
+    /// A disable reconcile deleted `payloadType`'s chunk set: nothing pre-reset is left to keep.
+    func recordSealedBackupCloudCopyDeleted(_ payloadType: SealedBackupPayloadType) {
+        sealedBackupRestoreHold.forgetPreResetCopy(of: payloadType)
+    }
+    /// `payloadType`'s restore landed for good: nothing pre-reset is left to keep from a re-upload.
+    func recordSealedBackupPreResetCopySettled(_ payloadType: SealedBackupPayloadType) {
+        sealedBackupRestoreHold.forgetPreResetCopy(of: payloadType)
+    }
+    /// The device owner's release of the ambient-restore hold (``SealedBackupRestoreHold/release()``).
+    func releaseSealedBackupRestoreHold() {
+        sealedBackupRestoreHold.release()
+    }
+    /// Records the v2 engine's status for `payloadType` (observable; nil drops it).
+    func recordSealedBackupV2Status(_ status: SealedBackupV2Status?, payloadType: SealedBackupPayloadType) {
+        guard sealedBackupV2Status[payloadType] != status else { return }
+        sealedBackupV2Status[payloadType] = status
+    }
+    /// Whether `payload`'s upload is owed (its in-memory mirror of the persisted re-upload flag).
+    func isSealedBackupReuploadOwed(_ payload: SealedBackupPayloadType) -> Bool {
+        switch payload {
+        case .periodData: return sealedBackupPeriodReuploadDeferred
+        case .journalNarratives: return sealedBackupJournalReuploadDeferred
+        case .intimacyLogs: return sealedBackupIntimacyReuploadDeferred
+        case .sensitiveNotes: return false
+        }
+    }
+    /// The storage preferences the Sealed backup gates read: the app's in-memory copy when wired.
+    var sealedBackupPreferences: StoragePreferences {
+        sealedBackupPreferencesProvider?() ?? StoragePreferencesStore.currentPreferences()
+    }
+    /// The payloads whose pre-reset iCloud copy the owner hold keeps right now (Privacy & Data's
+    /// status line reads this snapshot on appear and after a switch changes).
+    var sealedBackupPayloadsKeptForOwner: Set<SealedBackupPayloadType> {
+        sealedBackupRestoreHold.payloadsKeepingPreResetCopy
+    }
     func recordRetiredSealedBackupDeleted(_ payloadType: SealedBackupPayloadType) {
         retiredSealedBackupClearedHook?(payloadType)
     }
@@ -7217,8 +7610,44 @@ extension FernletStore: SealedBackupContext {
         sealedBackupDeferralPersistHook?(deferred, payloadType)
     }
 
-    /// Rebuilds day-blob journal skeletons for restored journal narratives (P3 journal
-    /// self-sufficiency). See `SealedBackupContext.reinstateJournalEntries(from:)` for why this exists.
+    /// What the days reference for the journal backup (`SealedBackupContext`): the ids every persisted
+    /// day that decodes holds, plus the in-memory today and `previousJournals` (a write not saved yet),
+    /// and the days whose stored row would not decode. The journal backup exports the sealed rows among
+    /// those ids and every sealed row on those days, so an orphan row on a readable day is never
+    /// exported (design 2026-09-30, §7.1). Keyless.
+    ///
+    /// NIL — never a partial set — when the day store's read cannot account for every row
+    /// (`FernletRepository.loadAllDaysWithUnreadable()`: read-only recovery, a failed day-row fetch, a
+    /// row with no date key). A partial set would make every entry on an unread day an orphan, and the
+    /// export would publish that truncated set over the full backup exactly when the day store is
+    /// broken (review B3 fix round 1). A day row that merely will not decode names its day instead
+    /// (fix round 2): nothing heals it, so failing over it would stop the journal backup for good.
+    var sealedBackupJournalReferences: SealedBackupJournalReferences? {
+        let stored = repository.loadAllDaysWithUnreadable()
+        // The adapter audits the refused snapshot (`sealedBackup.v2.journalDaysUnreadable`).
+        guard stored.accountsForEveryRow else { return nil }
+        var ids = Set(day.journals.map(\.id)).union(previousJournals.map(\.id))
+        for storedDay in stored.days.values {  // R2: bounded by the stored days.
+            ids.formUnion(storedDay.journals.map(\.id))
+        }
+        return SealedBackupJournalReferences(ids: ids, unreadableDayKeys: stored.unreadableDayKeys)
+    }
+
+    /// The journal ids the days already hold — the in-memory today and every stored day — read to
+    /// decide which restored entries still need a skeleton. A read that came back short only makes a
+    /// day look like it lacks one (an unneeded but harmless write, re-checked inside the write), never
+    /// the other way round, so the plain read serves here.
+    private var journalIDsTheDaysHold: Set<UUID> {
+        var ids = Set(day.journals.map(\.id))
+        for stored in diary.loadAllDaysFromRepository().values {  // R2: bounded by the stored days.
+            ids.formUnion(stored.journals.map(\.id))
+        }
+        return ids
+    }
+
+    /// Rebuilds day-blob journal skeletons for restored journal entries (P3 journal
+    /// self-sufficiency; design 2026-09-30, §7.4). See `SealedBackupContext.reinstateJournalEntries(from:)`
+    /// for why this exists.
     ///
     /// The skeleton is written with **empty text and no emotions** on purpose. Both are sealed columns;
     /// writing the decrypted values into the day blob would put journal content back into the very
@@ -7229,9 +7658,22 @@ extension FernletStore: SealedBackupContext {
     ///
     /// Existing ids are never touched, so a restore that races a partially-present day cannot duplicate
     /// or overwrite an entry. Entries are kept in date order to match how the diary renders them.
-    func reinstateJournalEntries(from narratives: [JournalNarrative]) {
-        guard !narratives.isEmpty else { return }
-        for (dayKey, rows) in Dictionary(grouping: narratives, by: \.dayKey) {
+    ///
+    /// Only a day that LACKS one of its skeletons is written (review B3 fix round 1). The merge names
+    /// every entry carrying a backup entry's content — unchanged ones too, so a retry after a failed
+    /// skeleton write rebuilds what is missing — and a past-day write re-stamps and re-saves the day
+    /// row (with iCloud sync on, re-uploads it); rewriting every day of a two-year journal on each merge
+    /// would hang the main actor and could put this iPhone's stale copy of a day over the other
+    /// iPhone's newer one. An idempotent re-merge writes no day.
+    ///
+    /// - Returns: False when any day write failed (each failure is audited): the restore then stays
+    ///   unresolved and the next session's idempotent merge re-adds the missing skeletons (R1-BR-6).
+    func reinstateJournalEntries(from skeletons: [JournalNarrativeSkeleton]) -> Bool {
+        guard !skeletons.isEmpty else { return true }
+        let held = journalIDsTheDaysHold
+        let missing = skeletons.filter { !held.contains($0.id) }
+        var allWritten = true
+        for (dayKey, rows) in Dictionary(grouping: missing, by: \.dayKey) {
             let written = diary.mutateDay(date: dayKey) { day in
                 var known = Set(day.journals.map(\.id))
                 for row in rows where !known.contains(row.id) {
@@ -7243,16 +7685,20 @@ extension FernletStore: SealedBackupContext {
                 day.journals.sort { $0.date < $1.date }
             }
             // R7: a failed past-day write leaves restored narratives with no skeleton to render
-            // through; the restore still proceeds for the other days, but the gap is recorded.
+            // through; the restore still proceeds for the other days, but the gap is recorded — and
+            // reported, so the restore stays unresolved and is retried.
             if !written {
+                allWritten = false
                 FernletAuditLog.log("diary.pastDayWriteFailed",
                                     context: ["op": "reinstateJournals", "dayKey": dayKey])
             }
         }
-        scheduleSnapshotSave()
-        // Hydrate the text back in by id (today + the previousJournals window). Older days hydrate
-        // lazily on read via `loadDayWithDecryptedJournals`, so nothing is lost for them either.
+        if !missing.isEmpty { scheduleSnapshotSave() }
+        // Hydrate the text back in by id (today + the previousJournals window) — even when no skeleton
+        // was missing: a replaced dead row's words still need showing. Older days hydrate lazily on read
+        // via `loadDayWithDecryptedJournals`, so nothing is lost for them either.
         journalSealingCoordinator.refreshAfterSnapshotApply()
+        return allWritten
     }
 }
 
