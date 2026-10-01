@@ -397,9 +397,18 @@ shipped; the rest are still open.
    `Docs/FernletSpecificationV3.md` § "Encrypted Sealed Backup" rather than left to drift.
    Two gaps remain, both deliberate and both narrowing what #1 may promise:
    the **Worry Box stays out by design** ("let it go" notes are device-only and are accepted to die
-   on a device reset), and **no-lock installs are uncovered** — the backup pages the lock content
-   key, which is nil when no lock is configured, so a no-lock user's device-key-sealed journals are
-   not backed up (§6.2 is the same trade for the same users).
+   on a device reset), and **no-lock installs were uncovered** — the backup paged the lock content
+   key, which was nil when no lock was configured. **That second gap is CLOSED (period-data design
+   2026-09-30):** every install now has the Private tab's content key K, held in device custody
+   (Secure-Enclave-wrapped where an enclave exists) when there is no passcode and opened by a
+   deliberate tap, and every backup reads K through one provider — so the journal, period and
+   intimacy backups work in both passcode modes, and journal rows written from Home under the device
+   key are folded under K when Private opens. After an app-lock reset every ambient restore waits
+   for Privacy & Data's device-owner-checked "Restore" (Q14), and the period backup moved to v2 —
+   an id-keyed merge restore gated by a persisted "restore resolved" marker, and an export that
+   replaces only the set this install last wrote or merged (a compare-and-swap on a writer tag
+   sealed inside the head), after a full decrypt pre-pass (`Docs/FernletSpecificationV3.md` §
+   "Encrypted Sealed Backup"). §6.2 below is a separate decision that stands as it was.
    A third, narrower gap found in the P3 review and now surfaced rather than silent: a
    lock-CONFIGURED device can still hold journal rows sealed under the **device journal key** —
    entries written before the lock existed, outside the window

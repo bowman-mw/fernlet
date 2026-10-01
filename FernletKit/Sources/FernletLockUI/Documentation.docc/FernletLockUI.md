@@ -76,10 +76,12 @@ no-passcode key where there is one (the service asks a fresh device-owner check 
 exist), and a setup that would mint a fresh key over unchecked entries answers "Open the Private tab
 once first", where the check runs. The loss copy moved to `.v2` keys because its meaning changed —
 cycle history now lives in Fernlet whether or not it was copied to Apple Health — worded
-unconditionally, since this module cannot see the Health switches. It promises no Sealed backup
-restore yet: after a reset every restore waits for the device owner, and nothing can release that
-hold until the owner's restore action (design unit 5), which brings the design's restore sentence
-back (`LocalizationBoundaryTests` pins the two together).
+unconditionally, since this module cannot see the Health switches. The reset confirmation, the
+forgotten-passcode disclosure and the tap screen's lost-key card also say the Sealed backup can be
+restored afterwards from Privacy & Data: after a reset every ambient restore waits for the device
+owner, and Privacy & Data's "Restore", behind its fresh device-owner check, releases that hold (design
+unit 5). `LocalizationBoundaryTests` pins the sentence to the release: present exactly while the hold
+can be released.
 
 **Every entry point in this module names a `FernletLockScope`, and none of them defaults it.**
 ``FernletLockView(scope:onUnlocked:onResetRequested:)``, ``FernletLockSetupView(grantingScope:)``

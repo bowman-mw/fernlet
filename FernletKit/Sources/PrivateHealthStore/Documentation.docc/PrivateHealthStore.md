@@ -80,8 +80,9 @@ openable ``MenstrualNarrative`` becomes a narrative-only record under its legacy
 in the same save; Fernlet's own UNMARKED Health samples become clinical-only records — only once
 every cycle type has been asked about, through a read that throws rather than answering an empty "not
 asked". Ids are deterministic (``CycleLegacyIdentity``) and every write is ``CycleRecord/merged(_:_:)``,
-so the halves, the drain and (from unit 5) the Sealed backup restore commute and re-running changes
-nothing. A narrative that will not open is left, named on the Cycle page's card, and removed only on
+so the halves, the drain and the Sealed backup restore commute and re-running changes nothing — a
+v1 backup's narrative becomes the same narrative-only record (``CycleRecord/init(legacyNarrative:origin:)``,
+origin `restored`) as the import's. A narrative that will not open is left, named on the Cycle page's card, and removed only on
 its tap. Every write that follows an await rechecks the writer epoch, which "Delete everything" moves
 (``PeriodTrackerStore/cancelBackgroundWriters()``), and the wipe and the app-lock reset set both import
 halves done.
@@ -104,7 +105,9 @@ under its legacy id. The drain is itself visibility-gated, because the buffer's 
 invisible to content-key withholding. Nothing is ever dropped (§6.3): a buffer that refuses, or a
 store with no seam wired, throws instead.
 ``MenstrualNarrativeRepository`` and — since the 2026-08-10 backup-coverage work —
-``IntimacyLogRepository`` each own a one-way "ever stored" divergence latch (device-local,
+``IntimacyLogRepository`` each own a one-way "ever stored" divergence latch (the cycle one no longer
+gates any restore since the period backup v2: it is read once, as the seed of the app's period restore
+marker, and kept for the legacy reader) (device-local,
 non-synced `UserDefaults`, injected so tests get isolation) plus the paged/atomic
 fetch-and-restore surface the app-side `SealedBackupCoordinator` uses: a keyless row count, a
 paged reader in a *total* order (`dateKey`/`eventDate` then the unique id, so successive export
@@ -136,9 +139,11 @@ mutation hook and counter for the backup's dirty flag. Its sealed-backup seam (p
 restore) never answers empty for want of a key either: visible but keyless, each throws
 `FernletLockError.locked`, because an empty chunk is a legitimate "deleted mid-export" answer and a
 keyless one must not look like it. ``PeriodTrackerStore`` composes one (public as
-``PeriodTrackerStore/recordStore`` so the app can install the backup's mutation hook in unit 5); the
-app also constructs one for the keyless count and delete. Until unit 5's backup v2 the period Sealed
-backup's export AND restore are paused in the app as non-destructive deferrals.
+``PeriodTrackerStore/recordStore``, where the app installs the backup's mutation hook); the app also
+constructs one for the keyless count and delete, and its `SealedBackupCoordinator` one for the period
+backup v2 — whose export is the pre-pass plus snapshot-sliced chunks, and whose restore is
+``CycleRecordStore/restoreMerging(_:contentKey:)``, an id-keyed merge that never deletes or regresses
+an openable record (period-data design 2026-09-30, §9.10).
 
 The intimacy backup still goes through ``IntimacyLogStore``, never the raw repository — the app
 target is grep-walled against constructing ``IntimacyLogRepository`` so no call site can read or
