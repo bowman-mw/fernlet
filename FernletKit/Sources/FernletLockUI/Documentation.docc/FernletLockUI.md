@@ -64,7 +64,10 @@ whoever holds the phone: its rows appear only as "Other private entries", the he
 names no kind, and the tap screen's line names cycle entries only while the coordinator's
 ``FernletPrivateHubOpening/tapGateNamesCycleEntries`` says period tracking is visible. Nothing is
 deleted without that tap, and the card hands its own counts back with it so the coordinator deletes
-only what the user saw. While a custodian recovery is owed the Private tab keeps the setup call to
+only what the user saw. The Cycle page shows the same component for earlier cycle notes the legacy
+import could not open (period-data design 2026-09-30, §8.2): its ``FernletUnopenableEntriesCard/Wording/earlierCycleNotes``
+wording swaps the heading, the body, the one count line and the Remove label ("Remove them" — the tab
+is already open there) and the two identifiers (`cycle.unopenableNotes.remove` / `.notNow`). While a custodian recovery is owed the Private tab keeps the setup call to
 action — that phone's way back is a setup or the recovery ceremony, never a tap. The same slot
 carries the same `.isModal`, so ``FernletLockGateOcclusion/overlayIsUp(active:state:scope:)`` is
 unchanged: closed tap screen and card are overlays, a tab opened by the tap is revealed for
