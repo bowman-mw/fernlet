@@ -105,16 +105,14 @@ under its legacy id. The drain is itself visibility-gated, because the buffer's 
 invisible to content-key withholding. Nothing is ever dropped (§6.3): a buffer that refuses, or a
 store with no seam wired, throws instead.
 ``MenstrualNarrativeRepository`` and — since the 2026-08-10 backup-coverage work —
-``IntimacyLogRepository`` each own a one-way "ever stored" divergence latch (the cycle one no longer
-gates any restore since the period backup v2: it is read once, as the seed of the app's period restore
-marker, and kept for the legacy reader) (device-local,
-non-synced `UserDefaults`, injected so tests get isolation) plus the paged/atomic
-fetch-and-restore surface the app-side `SealedBackupCoordinator` uses: a keyless row count, a
-paged reader in a *total* order (`dateKey`/`eventDate` then the unique id, so successive export
-chunks never overlap or skip), and an all-or-nothing `insertAtomically`. Every mutation — deletes
-included — sets the latch, so a sealed-backup restore can never resurrect rows the user
-deliberately deleted, and the latch deliberately survives "delete everything" so the wipe cannot
-be undone by a stale cloud copy. `clearDivergenceLatch()` (on both repositories, and ungated on
+``IntimacyLogRepository`` each own a one-way "ever stored" divergence latch (neither gates a restore
+any more: since the period backup v2 and — unit B2 of the journal and intimacy Sealed backup v2
+design 2026-09-30 — the intimate-log backup v2, each is read ONCE, as the seed of the app's restore
+marker for its payload, so an install that already held or deleted rows never merges a stale cloud
+copy back; the cycle one is also kept for the legacy reader) (device-local, non-synced `UserDefaults`,
+injected so tests get isolation), a keyless row count, and a paged reader in a *total* order
+(`dateKey`/`eventDate` then the unique id). Every mutation — deletes included — sets the latch, and
+it deliberately survives "delete everything" so the wipe cannot be undone by a stale cloud copy. `clearDivergenceLatch()` (on both repositories, and ungated on
 ``IntimacyLogStore``) is the one way back, for when the key the rows spoke for is provably gone: the
 app's "entries this iPhone can't open" check and its app-lock reset funnel (period-data design
 2026-09-30, §4.9, §9.21).
@@ -151,15 +149,26 @@ an openable record), and every decrypt of a period BACKUP chunk runs inside
 controller whose store failed to load can never export an empty set over the cloud copy. The engine
 owns the snapshot and the prepare; ``CycleRecordStore/backupPrePass(contentKey:)`` is not on its path.
 
-The intimacy backup still goes through ``IntimacyLogStore``, never the raw repository — the app
-target is grep-walled against constructing ``IntimacyLogRepository`` so no call site can read or
-write around the hard gate. The funnel's sealed-backup seam splits gating per member: the row count
-and the latch are UNGATED (they decrypt nothing, and a hidden store reading as "empty" would let a
-restore write in behind the gate), while the paged export and the restore insert are GATED and
-throw rather than degrading to `[]` — a silently-empty export would replace the user's cloud backup
-with nothing. Above that, the coordinator skips the payload entirely while hidden: a hidden
-reconcile is a silent no-op, never a preference flip, because turning the preference off would
-delete the iCloud backup and make hiding destructive.
+**The intimate-log backup is the Sealed backup v2 engine's intimacy adapter** (journal and intimacy
+Sealed backup v2 design 2026-09-30, §8, unit B2). It still goes through ``IntimacyLogStore``, never
+the raw repository — the app target is grep-walled against constructing ``IntimacyLogRepository``,
+and constructs exactly ONE funnel (`ContentView`'s), which the app hands to the backup so every write
+any surface makes runs the funnel's mutation hook (``IntimacyLogStore/attachMutationHook(_:)``: after
+an insert, a Health link recorded, a restore merge that changed anything, a delete that removed rows),
+which marks the upload owed. The funnel's sealed-backup seam splits gating per member: the row count,
+the latch, the id snapshot ``IntimacyLogStore/allIDs()``, ``IntimacyLogStore/isStoreHealthy`` and the
+delete by id are UNGATED (they decrypt nothing, and a hidden store must never read as "empty"),
+while the classified chunk read ``IntimacyLogStore/backupChunk(ids:contentKey:)`` (opened, dead,
+needs a newer build, undecided — never a silent skip), the restore
+``IntimacyLogStore/restoreMerging(_:contentKey:)`` and ``IntimacyLogStore/withBackupSeam(_:)`` — the
+engine's every decrypt of an intimacy BACKUP chunk — are GATED and throw (`IntimacyTrackingHiddenError`
+while hidden, under 16 or in duress; `FernletLockError.locked` without a key) rather than answering
+empty: a silently-empty export would replace the user's cloud backup with nothing. The restore is
+``IntimacyLogRepository/upsertMerged(_:contentKey:)``, an id-keyed MERGE in one save: an absent log is
+inserted with the backup's own stamps and its note capped at 1 000 characters; a log that opens here
+is kept exactly as it is, only a missing Health link filled in; a log that can never open is replaced;
+nothing is ever deleted, and an undecided row refuses the whole merge. Hiding never deletes and never
+flips the backup's switch — the engine simply does nothing while the seam is closed.
 
 One invariant *inside* those sealed columns is easy to mistake for a display concern, and it is
 the most destructive thing on this page to get wrong. ``PeriodSymptom``'s raw values ARE the storage
