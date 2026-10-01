@@ -112,6 +112,9 @@ struct MemoryLifecycleBoundaryTests {
             rule: "ML1", path: "App/Fernlet/CompanionRefresh/CompanionRefreshCoordinator.swift",
             invariant: "`CompanionRefreshCoordinator` is a process-lifetime `shared` singleton (the same shape as FernletStoreAccess), so it has no deinit to cancel from; `pipelineRun` is a single in-flight refresh run that captures [weak self], is cancelled by the expiration door before that door completes the task, is replaced by the next delivery, and may complete only the handle it was started for and only while that handle is still held — so a run that outlives its task ends without doing anything."),
         Exemption(
+            rule: "ML1", path: "FernletKit/Sources/PrivateHealthStore/PeriodTrackerStore.swift",
+            invariant: "`PeriodTrackerStore` is ContentView's root `@State`, alive for the process; `legacyImportTask` is the held legacy cycle import (period-data design 2026-09-30, §8.4), which captures [weak self], is awaited to completion by `runLegacyImportIfNeeded` — a method of the store, so the store is held for the whole run and cannot be released under it — clears itself when it finishes, and is cancelled by `cancelBackgroundWriters()` in the first leg of \"Delete everything\"."),
+        Exemption(
             rule: "ML2", path: "App/Fernlet/FernletStore.swift",
             invariant: "The cooking-intent observer is installed once on the process-lifetime store and must outlive every scene; there is no earlier moment at which removing it would be correct."),
     ]
