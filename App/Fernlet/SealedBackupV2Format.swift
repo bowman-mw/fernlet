@@ -206,9 +206,17 @@ enum PeriodBackupExportState: Equatable {
     /// another iPhone). Nothing is written over it until the user chooses "Restore it here" or
     /// "Replace it with this iPhone's history".
     case heldByAnotherDevice(SealedBackupHeadStamp)
-    /// The cycle backup in iCloud is sealed to a backup key this iPhone does not hold. Nothing is
-    /// written over it until the user chooses to replace it ("Start a new backup", §4.6).
+    /// The cycle backup in iCloud is sealed to a backup key this iPhone does not hold, is damaged, or
+    /// will not authenticate (a restore that ended `.notRecognized`). Nothing is written over it until
+    /// the user chooses "Start a new backup" (§4.6), behind its own confirmation.
     case sealedWithAnotherKey
+    /// This install's restore waits for the backup key iCloud Keychain syncs: a set exists in iCloud
+    /// that no key here opens yet (`.deferredKeyNotSynced` — on a new iPhone a missing key and one
+    /// that does not match read the same, §5.6). Every export waits on it (E1). Named as waiting,
+    /// never as a set this iPhone can't restore or another iPhone's: it may be the only copy of the
+    /// history, and its key is usually on its way. "Start a new backup" stays available behind its
+    /// own confirmation, which says so (design §10.1, review B1 fix round 2 N-1).
+    case waitingForKey
     /// This many cycle records can never open on this iPhone, so the backup is paused (nothing
     /// written).
     case unopenableEntries(Int)
@@ -218,11 +226,14 @@ enum PeriodBackupExportState: Equatable {
     case olderThanSeen(SealedBackupHeadStamp)
 
     /// The state for the engine's period `status` — the one mapping `FernletStore` and the tests
-    /// share. A restore waiting on a set this iPhone cannot open (`.deferredKeyNotSynced`,
-    /// `.notRecognized`) offers what a head sealed with another key offers — "Start a new backup"
-    /// behind its confirmation — so an install whose restore can never land is never left with no way
-    /// out (review B1-D-B1-R1); one refused as older names that set with both choices. With no status
-    /// this process (after a relaunch) the persisted observation of another iPhone's set is read.
+    /// share. A restore waiting for its synced key (`.deferredKeyNotSynced`) is named as waiting
+    /// (``waitingForKey``), never as a set sealed with another key: on a new iPhone that is the normal
+    /// wait for iCloud Keychain, and the set may be the only copy of the history (review B1 fix round 2
+    /// N-1). One whose set will not authenticate (`.notRecognized`) offers what a head sealed with
+    /// another key offers. Both keep "Start a new backup" behind its confirmation, so an install whose
+    /// restore can never land is never left with no way out (review B1-D-B1-R1); one refused as older
+    /// names that set with both choices. With no status this process (after a relaunch) the persisted
+    /// observation of another iPhone's set is read.
     ///
     /// - Parameters:
     ///   - status: The engine's period status, nil when none this process.
@@ -236,7 +247,8 @@ enum PeriodBackupExportState: Equatable {
         switch status {
         case .heldByAnotherDevice(let stamp)?: return .heldByAnotherDevice(stamp)
         case .headSealedWithOtherKey?, .headDamaged?: return .sealedWithAnotherKey
-        case .waitingForRestore(.deferredKeyNotSynced)?, .waitingForRestore(.notRecognized)?: return .sealedWithAnotherKey
+        case .waitingForRestore(.deferredKeyNotSynced)?: return .waitingForKey
+        case .waitingForRestore(.notRecognized)?: return .sealedWithAnotherKey
         case .waitingForRestore(.rolledBack)?: return rolledBackStamp.map(PeriodBackupExportState.olderThanSeen) ?? .clear
         case .paused(let ids)?: return .unopenableEntries(ids.count)
         case .some: return .clear

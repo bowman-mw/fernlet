@@ -726,8 +726,9 @@ struct SealedBackupV2EngineTests {
     }
 
     /// B1-D-B1-R1: a restore that waits on a set this iPhone cannot open (its key has not synced) is
-    /// not a dead end — Privacy & Data offers the confirmed "Start a new backup", which writes this
-    /// iPhone's history over it and resolves the restore. Nothing is minted before that choice.
+    /// not a dead end — Privacy & Data names it as waiting for its key (B1 fix round 2 N-1) and offers
+    /// the confirmed "Start a new backup", which writes this iPhone's history over it and resolves the
+    /// restore. Nothing is minted before that choice.
     @MainActor
     @Test func aRestoreWaitingOnASetItCannotOpenOffersStartNew() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -743,7 +744,7 @@ struct SealedBackupV2EngineTests {
         await phone.coordinator.settlePeriodBackup()
         #expect(phone.host.recordedOutcomes[.periodData] == .deferredKeyNotSynced)
         #expect(PeriodBackupDevice.escrowKeyCount(bare) == 0, "nothing minted beside the key still syncing")
-        #expect(phone.host.periodExportState == .sealedWithAnotherKey, "Start a new backup is offered")
+        #expect(phone.host.periodExportState == .waitingForKey, "named as waiting, with Start a new backup")
 
         await phone.coordinator.startNewPeriodBackup()
         #expect(try await PeriodBackupDevice.cloudHead(cloud, keychainService: bare)?.writer == phone.writer)
@@ -1079,6 +1080,88 @@ struct SealedBackupV2EngineTests {
         #expect(await phoneB.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(cloud.sealedRecordIdentities == newer, "never written over")
         #expect(phoneB.host.periodExportState == .heldByAnotherDevice(stamp))
+    }
+
+    // MARK: - Fix round 2 (review of B1 fix round 1)
+
+    /// B1 fix round 2 N-1: a new iPhone whose restore waits for the backup key iCloud Keychain is
+    /// still syncing is told it is WAITING — never that its backup "was saved with a key this iPhone
+    /// doesn't have" beside a Replace that says "your other iPhone keeps its own entries" (there may be
+    /// no other iPhone, and the set may be the only copy of the history). Nothing is minted or written
+    /// while it waits, and once the key arrives the next visit restores the whole set, which stays in
+    /// iCloud. (Before: `derive` mapped `.deferredKeyNotSynced` to `.sealedWithAnotherKey`.)
+    @MainActor
+    @Test func aNewIPhoneWaitingForItsKeyIsToldToWaitAndRestoresWhenItArrives() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let lost = PeriodBackupDevice(cloud: cloud, writer: "lost", resolved: true)
+        let history = [PeriodBackupDevice.record(day: 1), PeriodBackupDevice.record(day: 2)]
+        try lost.seed(history)
+        #expect(await lost.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        let theOnlyCopy = cloud.sealedRecordIdentities
+        let bare = "com.fernlet.period-v2.waitingForKey.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: bare) }
+        let clock = ManualClock()
+        let replacement = PeriodBackupDevice(cloud: cloud, writer: "replacement", keychainService: bare, clock: { clock.now })
+
+        await replacement.coordinator.settlePeriodBackup()
+        #expect(replacement.host.recordedOutcomes[.periodData] == .deferredKeyNotSynced)
+        #expect(replacement.host.periodExportState == .waitingForKey, "named as waiting for its key")
+        #expect(replacement.host.periodExportState != .sealedWithAnotherKey)
+        #expect(PeriodBackupDevice.escrowKeyCount(bare) == 0, "nothing minted while the key is on its way")
+        #expect(cloud.sealedRecordIdentities == theOnlyCopy, "nothing written over the only copy")
+
+        PeriodBackupDevice.copyEscrowKey(from: cloud, into: bare)
+        replacement.engine.hubSessionEnded()
+        clock.advance(16 * 60)
+        await replacement.coordinator.settlePeriodBackup()
+        #expect(try replacement.records.recordCount() == history.count, "the whole history comes back")
+        #expect(replacement.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(replacement.host.periodExportState == .clear)
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(history.map(\.id)), "and stays in iCloud")
+    }
+
+    /// B1 fix round 2 N-1: the one status-to-state mapping names each unopenable case for what it is —
+    /// a restore waiting for its key as waiting; a set that will not authenticate, or a head sealed
+    /// with another key or damaged, as one this iPhone can't open; an export waiting for its key
+    /// (possibly for another payload's backup) as nothing to choose.
+    @MainActor
+    @Test func theExportStateNamesARestoreWaitingForItsKeyAsWaiting() {
+        func state(_ status: SealedBackupV2Status) -> PeriodBackupExportState {
+            PeriodBackupExportState.derive(status: status, rolledBackStamp: nil, observed: { nil })
+        }
+        #expect(state(.waitingForRestore(.deferredKeyNotSynced)) == .waitingForKey)
+        #expect(state(.waitingForRestore(.notRecognized)) == .sealedWithAnotherKey)
+        #expect(state(.headSealedWithOtherKey) == .sealedWithAnotherKey)
+        #expect(state(.headDamaged) == .sealedWithAnotherKey)
+        #expect(state(.waitingForBackupKey) == .clear)
+        #expect(state(.waitingForRestore(.deferredTransient)) == .clear)
+    }
+
+    /// B1 fix round 2 N-1 (design §10.1): every "Start a new backup" in Privacy & Data sits behind its
+    /// own confirmation — the one that says to wait for the key — and the Replace confirmation, whose
+    /// copy promises "your other iPhone keeps its own entries", only ever replaces a named set that
+    /// opens. The waiting-for-key row offers Start new, never Replace.
+    @Test func everyStartNewSitsBehindItsOwnConfirmation() throws {
+        let source = try String(contentsOf: RepoRoot.url("App/Fernlet/PrivacyDataSettingsView.swift"), encoding: .utf8)
+        let startNew = try #require(Self.functionBody("private func confirmPeriodBackupStartNew()", in: source))
+        let replace = try #require(Self.functionBody("private func confirmPeriodBackupReplace(", in: source))
+        #expect(startNew.contains("appStore.startNewPeriodBackup()"))
+        #expect(startNew.contains("reset iCloud Keychain"), "the confirmation names the only reasons to start over")
+        #expect(!startNew.contains("other iPhone keeps"))
+        #expect(!replace.contains("startNewPeriodBackup"), "Replace never runs Start new")
+        #expect(source.components(separatedBy: "appStore.startNewPeriodBackup()").count == 2, "one Start new call site")
+        let waiting = try #require(Self.functionBody("case .waitingForKey:", in: source, closing: "case .unopenableEntries:"))
+        #expect(waiting.contains("periodStartNewButton"))
+        #expect(!waiting.contains("confirmPeriodBackupReplace"))
+    }
+
+    /// The source from `start` to the next `closing` (by default the next `private func`), or nil.
+    private static func functionBody(_ start: String, in source: String, closing: String = "    private ") -> String? {
+        guard let begin = source.range(of: start) else { return nil }
+        let rest = source[begin.upperBound...]
+        let end = rest.range(of: closing)?.lowerBound ?? rest.endIndex
+        return String(rest[..<end])
     }
 
     // MARK: - Fixtures

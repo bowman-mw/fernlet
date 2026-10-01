@@ -1288,8 +1288,9 @@ struct PrivacyDataSettingsView: View {
     }
 
     /// The period backup's export states (period-data design 2026-09-30, §10.6): another iPhone's set
-    /// in iCloud, or one older than this iPhone has seen, with the two explicit choices; a set no key
-    /// here opens, with the explicit replace; or entries that cannot open here, which pause it.
+    /// in iCloud, or one older than this iPhone has seen, with the two explicit choices; a restore
+    /// waiting for its key from iCloud Keychain, or a set no key here opens, each with the confirmed
+    /// "Start a new backup"; or entries that cannot open here, which pause it.
     @ViewBuilder
     private var periodBackupStateLines: some View {
         switch store?.periodBackupExportState ?? .clear {
@@ -1309,19 +1310,30 @@ struct PrivacyDataSettingsView: View {
             }
         case .sealedWithAnotherKey:
             // Review U5-backup-v2-L-U5-R1: no key this iPhone holds opens it (after an escrow adopt,
-            // a set sealed under the key the adopt replaced), so the only choice here is to replace it
-            // — the engine's explicit "Start a new backup" (design 2026-09-30 §4.6, §5.6). Also shown
-            // while this install's restore waits on a set it cannot open (its key not synced, or the
-            // set damaged), which every export waits on too (review B1-D-B1-R1).
+            // a set sealed under the key the adopt replaced), so the only choice here is the engine's
+            // explicit "Start a new backup" (design 2026-09-30 §4.6, §5.6). Also shown while this
+            // install's restore waits on a set that will not authenticate, which every export waits
+            // on too (review B1-D-B1-R1).
             VStack(alignment: .leading, spacing: 10) {
                 Text("Your cycle backup in iCloud was saved with a backup key this iPhone doesn't have, so it can't be restored here. Backing up this iPhone would replace it.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                     .accessibilityIdentifier("privacy.sealedBackup.periodSealedWithAnotherKey")
-                periodChoiceButton("Replace it with this iPhone's history", identifier: "privacy.sealedBackup.periodReplace") {
-                    confirmPeriodBackupReplace(nil)
-                }
+                periodStartNewButton
+            }
+        case .waitingForKey:
+            // Review B1 fix round 2 N-1 (design §10.1): this install's restore waits for the backup
+            // key iCloud Keychain syncs — a new iPhone, usually, whose backup may be the only copy of
+            // the history. Named as waiting, never as a set this iPhone can't restore or another
+            // iPhone's; "Start a new backup" sits behind its own confirmation, which says to wait.
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Your cycle backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on. New cycle entries aren't backed up until it arrives.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("privacy.sealedBackup.periodWaitingForKey")
+                periodStartNewButton
             }
         case .unopenableEntries:
             Text("Some cycle entries on this iPhone can't be opened, so your cycle backup is paused. Nothing in iCloud was changed.")
@@ -1385,11 +1397,12 @@ struct PrivacyDataSettingsView: View {
     }
 
     /// "Replace it with this iPhone's history", behind its destructive confirmation (§10.6): the other
-    /// iPhone's entries leave the backup, never the other iPhone.
+    /// iPhone's entries leave the backup, never the other iPhone. Only for a set that opens here and
+    /// names its writer — a set this iPhone cannot open is replaced only by "Start a new backup"
+    /// (``confirmPeriodBackupStartNew()``), never behind this "other iPhone" sentence.
     ///
-    /// - Parameter head: The other iPhone's set the export named — or nil for a set no key this iPhone
-    ///   holds opens, which is replaced by "Start a new backup".
-    private func confirmPeriodBackupReplace(_ head: SealedBackupHeadStamp?) {
+    /// - Parameter head: The set the card names (another iPhone's, or one refused as older).
+    private func confirmPeriodBackupReplace(_ head: SealedBackupHeadStamp) {
         pendingDestructiveAction = DestructiveConfirmation(
             title: "Replace the cycle backup?",
             message: "Entries that exist only on your other iPhone won't be in the backup anymore. Your other iPhone keeps its own entries.",
@@ -1397,11 +1410,33 @@ struct PrivacyDataSettingsView: View {
             auditEvent: "privacy.sealedBackup.periodReplaceConfirmed"
         ) {
             runPeriodBackupChoice { appStore in
-                if let head {
-                    await appStore.replacePeriodBackupWithThisIPhone(head)
-                } else {
-                    await appStore.startNewPeriodBackup()
-                }
+                await appStore.replacePeriodBackupWithThisIPhone(head)
+            }
+        }
+    }
+
+    /// "Start a new backup" for a set this iPhone cannot open (waiting for its key, sealed with
+    /// another key, damaged), shown under the line that names why.
+    private var periodStartNewButton: some View {
+        periodChoiceButton("Start a new backup", identifier: "privacy.sealedBackup.periodStartNew") {
+            confirmPeriodBackupStartNew()
+        }
+    }
+
+    /// "Start a new backup", behind its own destructive confirmation (design 2026-09-30 §10.1, review
+    /// B1 fix round 2 N-1): the set it writes over may be the only copy of the cycle history, and on a
+    /// new iPhone its key is usually still on its way — published to iCloud Keychain on the launch
+    /// after it was made (`IdentityService.reconcileBackupEscrowKey`), so it arrives even when the
+    /// iPhone that saved it is gone. The copy says so, and names the only reasons to start over.
+    private func confirmPeriodBackupStartNew() {
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Start a new cycle backup?",
+            message: "This iPhone can't open the cycle backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged.",
+            confirmLabel: "Start new backup",
+            auditEvent: "privacy.sealedBackup.periodStartNewConfirmed"
+        ) {
+            runPeriodBackupChoice { appStore in
+                await appStore.startNewPeriodBackup()
             }
         }
     }
