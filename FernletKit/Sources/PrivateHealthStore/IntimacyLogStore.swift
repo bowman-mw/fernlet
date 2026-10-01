@@ -111,11 +111,9 @@ public final class IntimacyLogStore {
 
     /// Drops every stored log WITHOUT decrypting, so it works while locked and while hidden. Ungated on
     /// purpose: hiding must never block the "delete everything" wipe. The mutation hook runs when rows
-    /// were removed (counted keyless first).
+    /// were removed.
     public func deleteAll() throws {
-        let hadRows = try repository.logCount() > 0
-        try repository.deleteAll()
-        if hadRows { onMutation() }
+        if try repository.deleteAll() { onMutation() }
     }
 
     // MARK: - Sealed-backup seam

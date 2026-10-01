@@ -419,10 +419,13 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     /// Sets the divergence latch iff rows were actually removed — same reasoning as ``delete(id:)``,
     /// and what keeps "delete everything" from being undone by a stale cloud backup that survived a
     /// failed chunk delete.
-    public func deleteAll() throws {
-        if try PrivateRowPlumbing.deleteRows(entityName: "IntimacyLog", in: context) {
-            markLogStored()
-        }
+    ///
+    /// - Returns: Whether any row was removed (failure is always a throw) — what the funnel's mutation
+    ///   hook keys off, like `CycleRecordRepository.deleteAll()`.
+    public func deleteAll() throws -> Bool {
+        let removed = try PrivateRowPlumbing.deleteRows(entityName: "IntimacyLog", in: context)
+        if removed { markLogStored() }
+        return removed
     }
 
     /// Records the HealthKit external UUID on an already-saved row — plaintext metadata only; the

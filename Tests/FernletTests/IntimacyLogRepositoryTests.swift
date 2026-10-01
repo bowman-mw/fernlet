@@ -275,7 +275,7 @@ struct IntimacyLogRepositoryTests {
         #expect(repo.hasEverStoredLog)
 
         try repo.insert(log("and again", at: 2), contentKey: key)
-        try repo.deleteAll()
+        #expect(try repo.deleteAll(), "rows were removed")
         #expect(try repo.logCount() == 0)
         #expect(repo.hasEverStoredLog, "delete-all must leave the latch set — the wipe must stick")
     }
