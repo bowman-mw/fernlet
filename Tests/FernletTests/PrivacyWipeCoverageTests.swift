@@ -73,6 +73,10 @@ struct PrivacyWipeCoverageTests {
         "deleteLegacyDirectCloudKitRecords",
         // Sealed narratives + buffers
         "periodDataDeleteHook",
+        // …and the period leg's one body (period-data design 2026-09-30, §9.11): the sealed cycle
+        // records AND the legacy narratives, both attempted. Pinned through the ContentView half of
+        // the scan, so the hook cannot quietly go back to deleting the narratives alone.
+        "deletePeriodRows",
         "intimacyDataDeleteHook",
         "journalDataDeleteHook",
         "pendingNarrativeBufferPurgeHook",
@@ -856,6 +860,7 @@ struct PrivacyWipeCoverageTests {
             "FernletKit/Sources/PrivateMemoryStore/WorryNarrativeRepository.swift",
             "FernletKit/Sources/PrivateHealthStore/IntimacyLogRepository.swift",
             "FernletKit/Sources/PrivateHealthStore/MenstrualNarrativeRepository.swift",
+            "FernletKit/Sources/PrivateHealthStore/CycleRecordRepository.swift",
             "FernletKit/Sources/PrivateStoreCore/PrivateRowPlumbing.swift"
         ] {
             let repositorySource = try String(contentsOf: root.appendingPathComponent(repository), encoding: .utf8)
@@ -867,7 +872,7 @@ struct PrivacyWipeCoverageTests {
     }
 
     /// `reset()`'s "fully honest — crypto-erased" tier is only true if EVERY key that seals a byte in
-    /// the private store dies with it. Two of the four sealed entities (journal, Worry Box) are
+    /// the private store dies with it. Two of the five sealed entities (journal, Worry Box) are
     /// sealed under device fallback keys in a different keychain service whenever the lock is closed,
     /// so the single lock-service sweep was not enough. Behavioral coverage lives in
     /// `FernletLockServiceTests.resetDestroysEverySealedContentKeyNotJustTheLockService`; this pins

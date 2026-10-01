@@ -1555,6 +1555,22 @@ struct ContentView: View {
         }
     }
 
+    /// The period leg of "delete everything": the sealed cycle records AND the legacy cycle
+    /// narratives, both keyless (period-data design 2026-09-30, §9.11). BOTH are attempted whatever
+    /// the first does — a throw from one must not leave the other's rows on disk — and the leg
+    /// reports cleared only when both cleared, because the dialog promises the cycle history is gone.
+    ///
+    /// - Parameters:
+    ///   - records: The gated cycle-record funnel (its delete is ungated; the app target never
+    ///     constructs a raw record repository).
+    ///   - narratives: The legacy narrative repository.
+    /// - Returns: Whether both deletes succeeded.
+    static func deletePeriodRows(records: CycleRecordStore, narratives: MenstrualNarrativeRepository) -> Bool {
+        let recordsCleared = (try? records.deleteAll()) != nil
+        let narrativesCleared = (try? narratives.deleteAll()) != nil
+        return recordsCleared && narrativesCleared
+    }
+
     /// Wires the "delete everything" seams for the stores `FernletStore` doesn't own — the sealed
     /// repositories, the locked-note buffer, both store rebuilds, HealthKit, the duress purge, the
     /// identity reconcile, the preferences, and (via ``attachCloudDeleteAllHooks()``) CloudKit. The
@@ -1570,7 +1586,7 @@ struct ContentView: View {
     private func attachDeleteAllHooks() {
         // `(try? …) != nil` rather than a bare `try?`: a throw here means the user's sealed rows are
         // still on disk, and the dialog promises they are gone. The failure has to reach the outcome.
-        store.periodDataDeleteHook = { (try? MenstrualNarrativeRepository().deleteAll()) != nil }
+        store.periodDataDeleteHook = { Self.deletePeriodRows(records: CycleRecordStore(), narratives: MenstrualNarrativeRepository()) }
         // Routed through the gated funnel rather than constructing a raw repository — every intimacy
         // touch goes through `IntimacyLogStore` (pinned by the app-target source grep in
         // `SensitiveSurfaceGateTests`). Its `deleteAll` is deliberately UNGATED (drops rows without

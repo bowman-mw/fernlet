@@ -1151,8 +1151,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     public let keychainService: String
     /// The keychain services holding the OTHER keys that seal rows in the same private store —
     /// today the journal and Worry Box device fallback keys under `KeychainItem.journalService`.
-    /// ``reset()`` sweeps each of them, which is what makes its "crypto-erased" claim true for all
-    /// four sealed entities and not just the two that are always sealed under the content key.
+    /// ``reset()`` sweeps each of them, which is what makes its "crypto-erased" claim true for every
+    /// sealed entity and not just the ones that are always sealed under the content key.
     /// Injected (like ``keychainService``) so a test's `reset()` cannot destroy the real device
     /// keys of the simulator or the developer's machine.
     public let sealedContentKeyServices: [String]
@@ -3171,7 +3171,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///     entire purpose is that this material survives.
     ///   - alsoDestroyingDeviceFallbackKeys: Whether to sweep ``sealedContentKeyServices`` AND
     ///     ``mediaKeychainServices``. `true` for the WIPE, where the journal/Worry Box fallback keys
-    ///     open two of the four sealed entities and the media keys open the progress-photo (body
+    ///     open two of the five sealed entities and the media keys open the progress-photo (body
     ///     photo) corpus — leaving either alive would make the sub-second crypto-erase claim false
     ///     until the asynchronous delete funnel caught up, and false forever if the process were
     ///     killed first. `false` for ``DuressMode/recoveryLock``: nothing in the recovery blob can
@@ -3228,7 +3228,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // The third sweep, for the same reason `reset()` documents: journal and Worry Box rows are
         // sealed under DEVICE FALLBACK keys — not the content key — whenever they are written while
         // the lock is closed. Destroying the content key alone would leave exactly those rows
-        // openable, so "crypto-erased" would be false for two of the four sealed entities. The
+        // openable, so "crypto-erased" would be false for two of the five sealed entities. The
         // delete funnel this wipe hands off to deletes the same two keys, but asynchronously; the
         // sub-second claim needs them gone HERE. They regenerate lazily on next use.
         //

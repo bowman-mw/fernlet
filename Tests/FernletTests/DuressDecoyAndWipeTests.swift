@@ -350,7 +350,7 @@ struct DuressSilentWipeTests {
         #expect(replacement != originalBlob)
     }
 
-    /// Two of the four sealed entities are NOT sealed under the content key: journal and Worry Box
+    /// Two of the five sealed entities are NOT sealed under the content key: journal and Worry Box
     /// rows written while the lock was closed use device fallback keys instead. Destroying the
     /// content key alone would leave exactly those rows openable, so "crypto-erased" would be false
     /// for them — the same three-sweep argument `reset()` makes.

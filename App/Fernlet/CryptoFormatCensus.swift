@@ -49,8 +49,9 @@ import ProximityKit
 /// `nonisolated` against the app target's `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`: this is a
 /// plain value read from the detached scan as well as from the view.
 nonisolated enum CryptoFormatCensusSurface: String, Sendable, CaseIterable, Identifiable {
-    /// `FernletCrypto/ColumnCrypto` — the four sealed Core Data corpora (journal, cycle, intimacy,
-    /// worry). The only three-rung ladder (legacy → V2 → V3) and the largest corpus.
+    /// `FernletCrypto/ColumnCrypto` — the sealed Core Data corpora (journal, cycle — narratives and,
+    /// since 2026-09-30, cycle records — intimacy, worry). The only three-rung ladder (legacy → V2 →
+    /// V3) and the largest corpus.
     case sealedColumns
     /// `PrivateStoreCore/PendingNarrativeBuffer` — the single locked-state note file.
     case pendingNarrativeBuffer
@@ -218,7 +219,7 @@ nonisolated enum CryptoFormatCensus {
     /// past the scan.
     struct Inputs: @unchecked Sendable {
         /// The sealed Core Data stack to census. Production is `PrivatePersistenceController.shared`
-        /// — the same instance the four sealed repositories default to (see
+        /// — the same instance the sealed repositories default to (see
         /// `JournalNarrativeRepository.init(controller:defaults:)`), deliberately NOT a second
         /// controller over the same SQLite file.
         let sealedStore: PrivatePersistenceController

@@ -166,6 +166,29 @@ struct PrivateHubOpenCoordinatorTests {
         #expect(rig.fixture.row(.deviceContentKey) != nil)
     }
 
+    /// Sealed cycle RECORDS (period-data design 2026-09-30, §5.2) are hub-key-sealed like the legacy
+    /// narratives: with no hub key anywhere they are unopenable, so they are counted with the cycle
+    /// entries on the card — never minted over — and removed with them on the Remove tap only.
+    @MainActor
+    @Test func cycleRecordsUnderALostKeyAreCountedAndRemovedOnlyOnTheTap() async throws {
+        let rig = CoordinatorRig()
+        defer { rig.fixture.cleanup() }
+        let records = CycleRecordRepository(controller: rig.fixture.persistence)
+        try records.insert(CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .light)), contentKey: CoordinatorRig.lostKey)
+        try records.insert(CycleRecord(event: UserLoggedCycleEvent(date: Date(), note: "gone")), contentKey: CoordinatorRig.lostKey)
+        try rig.cycle.insert(MenstrualNarrative(hkExternalUUID: "old-cycle", dateKey: "2026-09-01", note: "gone"), contentKey: CoordinatorRig.lostKey)
+
+        let shown = FernletUnopenableEntryCounts(cycleEntries: 3)
+        #expect(await rig.coordinator.openPrivateHub() == .unopenableEntries(shown))
+        #expect(try records.recordCount() == 2, "the card deletes nothing")
+        #expect(rig.fixture.row(.deviceContentKey) == nil, "no key is minted over cycle records it would strand")
+
+        #expect(await rig.coordinator.removeUnopenableEntriesAndOpen(named: shown) == .opened)
+        #expect(try records.recordCount() == 0)
+        #expect(try rig.cycle.narrativeCount() == 0)
+        #expect(rig.service.state == .openedWithoutPasscode(scope: .privateHub))
+    }
+
     /// A Remove tap whose card no longer matches what is here deletes nothing and re-shows the card.
     @MainActor
     @Test func aRemoveTapForAStaleCardDeletesNothing() async throws {

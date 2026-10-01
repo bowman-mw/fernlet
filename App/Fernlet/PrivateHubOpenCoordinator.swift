@@ -32,7 +32,8 @@ extension FernletLockService: PrivateHubKeyCustody {}
 /// key (never the hub key, which does not exist yet when this runs).
 @MainActor
 protocol PriorPrivateEntryStore: AnyObject {
-    /// Keyless count of sealed cycle rows. Each was sealed under a hub key.
+    /// Keyless count of sealed cycle rows — cycle records and the legacy narratives they replace.
+    /// Each was sealed under a hub key.
     func cycleEntryCount() throws -> Int
     /// Keyless count of sealed intimacy rows. Each was sealed under a hub key.
     func intimacyEntryCount() throws -> Int
@@ -42,7 +43,7 @@ protocol PriorPrivateEntryStore: AnyObject {
     func worryOpenability() throws -> SealedRowOpenability
     /// Whether any of the three sealed-backup divergence latches is set.
     func hasBackupBookkeeping() -> Bool
-    /// Keyless delete of every sealed cycle row.
+    /// Keyless delete of every sealed cycle row (records and legacy narratives).
     func removeCycleEntries() throws
     /// Keyless delete of every sealed intimacy row.
     func removeIntimacyEntries() throws
@@ -314,12 +315,16 @@ final class PrivateHubOpenCoordinator: FernletPrivateHubOpening {
 
 // MARK: - Production entry store
 
-/// The production ``PriorPrivateEntryStore``: the on-device sealed store's cycle, journal and Worry
-/// Box repositories, the app's gated intimacy funnel (the app target never constructs a raw
-/// `IntimacyLogRepository`), and the journal/worry device keys read WITHOUT minting.
+/// The production ``PriorPrivateEntryStore``: the on-device sealed store's legacy cycle, journal and
+/// Worry Box repositories, the gated cycle-record and intimacy funnels (the app target never
+/// constructs a raw `CycleRecordRepository` or `IntimacyLogRepository` — only their keyless count
+/// and delete are used here), and the journal/worry device keys read WITHOUT minting.
 @MainActor
 final class SealedPriorEntryStore: PriorPrivateEntryStore {
     private let cycleRepository: MenstrualNarrativeRepository
+    /// The sealed cycle records (period-data design 2026-09-30, §5.2): K-sealed like the legacy
+    /// narratives, so with no hub key anywhere every row is unopenable and counts on the card.
+    private let cycleRecords: CycleRecordStore
     private let journalRepository: JournalNarrativeRepository
     private let worryRepository: WorryNarrativeRepository
     private let intimacyStore: IntimacyLogStore
@@ -355,6 +360,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         restoresAfterRemoval: @escaping (_ journalKeepsOpenableRows: Bool) -> Bool
     ) {
         cycleRepository = MenstrualNarrativeRepository(controller: controller, defaults: latchDefaults)
+        cycleRecords = CycleRecordStore(controller: controller)
         journalRepository = JournalNarrativeRepository(controller: controller, defaults: latchDefaults)
         worryRepository = WorryNarrativeRepository(controller: controller)
         self.intimacyStore = intimacyStore
@@ -364,7 +370,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         self.restoresAfterRemoval = restoresAfterRemoval
     }
 
-    func cycleEntryCount() throws -> Int { try cycleRepository.narrativeCount() }
+    func cycleEntryCount() throws -> Int { try cycleRepository.narrativeCount() + cycleRecords.recordCount() }
     func intimacyEntryCount() throws -> Int { try intimacyStore.backupLogCount() }
     func journalOpenability() throws -> SealedRowOpenability {
         try journalRepository.openability(under: deviceKey(.deviceJournalKey))
@@ -376,7 +382,10 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         cycleRepository.hasEverStoredNarrative || journalRepository.hasEverStoredNarrative
             || intimacyStore.hasEverStoredLog
     }
-    func removeCycleEntries() throws { try cycleRepository.deleteAll() }
+    func removeCycleEntries() throws {
+        try cycleRecords.deleteAll()
+        try cycleRepository.deleteAll()
+    }
     func removeIntimacyEntries() throws { try intimacyStore.deleteAll() }
     func removeJournalEntries(ids: [UUID]) throws { try journalRepository.delete(ids: ids) }
     func removeWorryEntries(ids: [UUID]) throws { try worryRepository.delete(ids: ids) }

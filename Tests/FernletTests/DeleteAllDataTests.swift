@@ -1090,10 +1090,33 @@ struct DeleteAllDataTests {
         #expect(try repository.narratives(forDayKey: "2026-08-10", contentKey: key).count == 1)
     }
 
+    /// The period leg on its own (period-data design 2026-09-30, §9.11), with no store rebuild behind
+    /// it to hide a leg that skipped a table: the production helper the ContentView hook calls removes
+    /// the sealed cycle RECORDS and the legacy narratives, keylessly, and reports cleared — and an
+    /// empty store still reports cleared (nothing to delete is not a failure).
+    @Test func thePeriodLegDeletesCycleRecordsAndLegacyNarratives() throws {
+        let controller = PrivatePersistenceController(inMemory: true)
+        let suiteName = "fernlet-tests-period-leg-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let key = SymmetricKey(size: .bits256)
+        let records = CycleRecordRepository(controller: controller)
+        let narratives = MenstrualNarrativeRepository(controller: controller, defaults: defaults)
+        try records.insert(CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .medium)), contentKey: key)
+        try narratives.insert(MenstrualNarrative(hkExternalUUID: "hk-leg", dateKey: "2026-09-30", note: "legacy"), contentKey: key)
+
+        // An unwired (fail-closed, hidden) funnel: the delete must not need visibility or a key.
+        #expect(ContentView.deletePeriodRows(records: CycleRecordStore(controller: controller), narratives: narratives))
+
+        #expect(try records.recordCount() == 0, "the period leg left sealed cycle records behind")
+        #expect(try narratives.narrativeCount() == 0)
+        #expect(ContentView.deletePeriodRows(records: CycleRecordStore(controller: controller), narratives: narratives))
+    }
+
     /// The reversibility trap, asserted end to end: every deletion path must stay reachable while
     /// the app is LOCKED, so nothing in it — row-delete or rebuild — may need the content key.
     ///
-    /// Seals one row in each of the four sealed entities under a real `FernletLockService` content
+    /// Seals one row in each of the five sealed entities under a real `FernletLockService` content
     /// key, engages the lock (scrubbing that key), then drives the real funnel with the real
     /// repositories wired to the hooks. The rows must be gone, the store file rebuilt, and the lock
     /// must still hold no key on the way out — a wipe that had to decrypt to delete would have had
@@ -1129,13 +1152,22 @@ struct DeleteAllDataTests {
                 contentKey: key
             )
         try WorryNarrativeRepository(controller: controller).insert(WorryNarrative(text: "a worry"), contentKey: key)
-        #expect(Self.sealedRowCount(in: controller) == 4, "precondition: the four sealed rows were not seeded")
+        // The sealed cycle record (period-data design 2026-09-30, §9.11): the period leg must take it
+        // AND the legacy narrative, through the production helper the ContentView hook calls.
+        try CycleRecordRepository(controller: controller)
+            .insert(CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .heavy, note: "cycle record")), contentKey: key)
+        #expect(Self.sealedRowCount(in: controller) == 5, "precondition: the five sealed rows were not seeded")
 
         lock.lock(reason: .manual)
         #expect(lock.contentKey(for: .privateHub) == nil, "precondition: the wipe must run with the lock engaged")
 
         let store = makeStore("delete-all-locked")
-        store.periodDataDeleteHook = { (try? MenstrualNarrativeRepository(controller: controller, defaults: defaults).deleteAll()) != nil }
+        store.periodDataDeleteHook = {
+            ContentView.deletePeriodRows(
+                records: CycleRecordStore(controller: controller),
+                narratives: MenstrualNarrativeRepository(controller: controller, defaults: defaults)
+            )
+        }
         store.intimacyDataDeleteHook = { (try? IntimacyLogRepository(controller: controller).deleteAll()) != nil }
         store.journalDataDeleteHook = { (try? JournalNarrativeRepository(controller: controller).deleteAll()) != nil }
         store.worryBoxResetHook = { (try? WorryNarrativeRepository(controller: controller).deleteAll()) != nil }
@@ -1285,11 +1317,12 @@ struct DeleteAllDataTests {
         return "\(inode)@\(created)"
     }
 
-    /// Rows across all four sealed entities.
+    /// Rows across every sealed entity (named here rather than read from `sealedEntityNames`, so a
+    /// shrunken production list cannot make this count agree with it).
     private static func sealedRowCount(in controller: PrivatePersistenceController) -> Int {
         let context = controller.container.viewContext
         return context.performAndWait {
-            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"].reduce(0) { total, entityName in
+            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord"].reduce(0) { total, entityName in
                 let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
                 return total + ((try? context.fetch(request).count) ?? 0)
             }
