@@ -679,10 +679,11 @@ struct SealedBackupV2EngineTests {
         #expect(!off.sealedBackupPeriodReuploadDeferred, "a backup that is off owes nothing")
     }
 
-    /// BV1 (shrinking allowlist): the period payload reaches a chunk upload only through the engine.
-    /// The legacy in-place `reconcileChunked` writer is called for the journal and intimacy payloads
-    /// only (until their own units move them), and the engine's set-scoped `save` only by its commit.
-    @Test func thePeriodPayloadReachesTheUploadOnlyThroughTheEngine() throws {
+    /// BV1 (shrinking allowlist): the period and intimate-log payloads reach a chunk upload only
+    /// through the engine. The legacy in-place `reconcileChunked` writer is called for the journal
+    /// payload only (until B3 moves it; B2 removed the intimacy caller), and the engine's set-scoped
+    /// `save` only by its commit.
+    @Test func theV2PayloadsReachTheUploadOnlyThroughTheEngine() throws {
         let app = RepoRoot.url("App/Fernlet")
         let files = try FileManager.default.contentsOfDirectory(at: app, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "swift" }
@@ -695,9 +696,9 @@ struct SealedBackupV2EngineTests {
             }
             if source.contains(".save(record, setTag:") { setScopedSavers.append(file.lastPathComponent) }
         }
-        #expect(legacyCallers.count == 2, "\(legacyCallers)")
-        #expect(legacyCallers.allSatisfy { $0.contains(".journalNarratives") || $0.contains(".intimacyLogs") },
-                "only the v1 payloads may write in place: \(legacyCallers)")
+        #expect(legacyCallers.count == 1, "\(legacyCallers)")
+        #expect(legacyCallers.allSatisfy { $0.contains(".journalNarratives") },
+                "only the v1 journal payload may write in place: \(legacyCallers)")
         #expect(setScopedSavers == ["SealedBackupV2Engine+Commit.swift"])
     }
 

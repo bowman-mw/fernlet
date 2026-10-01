@@ -55,8 +55,8 @@ struct SealedBackupGenerationStore {
         Int64(defaults.integer(forKey: Self.key(for: payloadType)))
     }
 
-    /// Mints the next generation for a write and persists it immediately — the journal and intimacy
-    /// v1 exports (`SealedBackupService.reconcileChunked`).
+    /// Mints the next generation for a write and persists it immediately — the journal's v1 export
+    /// (`SealedBackupService.reconcileChunked`).
     ///
     /// Persisting *before* the upload is the fail-safe direction FOR AN IN-PLACE WRITE: if the upload
     /// then fails, this device has burned a number and the next write skips it — harmless, since the

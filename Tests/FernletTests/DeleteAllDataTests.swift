@@ -967,17 +967,74 @@ struct DeleteAllDataTests {
         #expect(store.sealedBackupMutationEpoch(.periodData) == 1, "the mutation still moved the epoch")
     }
 
-    /// The intimacy un-hide settle is the same class of live writer as the period one, added with the
-    /// intimacy backup payload: suspended in its CloudKit fetch it would resume after the wipe and
-    /// re-insert intimate logs into the just-emptied store.
-    @Test func deleteAllCancelsTheInFlightIntimacyBackupSettle() async {
-        let store = makeStore("delete-all-intimacy-settle")
-        let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
-        store.intimacyBackupSettleTask = inFlight
+    /// BV15 / R2-F10 for the intimate logs (design 2026-09-30, unit B2): the wipe's leg-3 delete runs
+    /// through the app's ONE intimacy funnel, whose mutation hook fires when rows go — and while the
+    /// wipe runs that moves the epoch but sets no flag, so no upload is owed for a backup the same
+    /// wipe deleted. (The intimacy un-hide settle is no longer a task of its own: it is a pass on the
+    /// Sealed backup v2 engine, which the funnel quiesces before its cloud leg —
+    /// `deleteAllQuiescesTheSealedBackupEngineBeforeItsCloudLeg`.)
+    @Test func deleteAllLeavesNoIntimacyUploadOwedWhenItsRowDeleteFiresTheHook() async throws {
+        let store = makeStore("delete-all-intimacy-hook")
+        wireSucceedingSealedHooks(store)
+        let funnel = IntimacyLogStore(repository: IntimacyLogRepository(
+            controller: PrivatePersistenceController(inMemory: true),
+            defaults: UserDefaults(suiteName: "fernlet.tests.wipeIntimacyFunnel.\(UUID().uuidString)") ?? .standard
+        ))
+        store.attachIntimacyLogStore(funnel)
+        funnel.attachVisibilityGate { true }
+        try funnel.insert(IntimacyLog(eventDate: Date(), note: "logged"), contentKey: SymmetricKey(size: .bits256))
+        let epochBefore = store.sealedBackupMutationEpoch(.intimacyLogs)
+        store.intimacyDataDeleteHook = { (try? funnel.deleteAll()) != nil }
 
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(inFlight.isCancelled, "the wipe left the intimacy-backup settle running")
+        #expect(try funnel.backupLogCount() == 0)
+        #expect(store.sealedBackupMutationEpoch(.intimacyLogs) == epochBefore + 1, "the delete still moved the epoch")
+        #expect(!store.sealedBackupIntimacyReuploadDeferred, "the leg-3 delete re-dirtied the intimacy backup")
+    }
+
+    /// "Delete everything" KEEPS the intimate-log restore marker and accepted head (design 2026-09-30
+    /// §9, R2-F11) — a set that survived a failed cloud delete never merges back, and is this install's
+    /// own to the next export, which overwrites it — and clears the observed foreign head.
+    @Test func deleteAllKeepsTheIntimacyRestoreMarkerAndAcceptedHeadAndClearsTheObservation() async {
+        let store = makeStore("delete-all-intimacy-marker")
+        wireSucceedingSealedHooks(store)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(
+            defaults: UserDefaults(suiteName: "fernlet.tests.intimacyMarkerWipe.\(UUID().uuidString)") ?? .standard,
+            legacyLatch: { _ in false }
+        )
+        store.sealedBackupBookkeeping.markRestoreResolved(.intimacyLogs)
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("phone".utf8)), generation: 4)
+        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), .intimacyLogs, installTag: "me")
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, .intimacyLogs, installTag: "me")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(store.sealedBackupBookkeeping.isRestoreResolved(.intimacyLogs))
+        #expect(store.sealedBackupBookkeeping.acceptedHead(.intimacyLogs, installTag: "me")?.stamp == stamp)
+        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(.intimacyLogs))
+    }
+
+    /// The reset funnel speaks for the intimate-log bookkeeping too (design 2026-09-30 §9): the marker
+    /// is REOPENED (written false, so its one-time seed never runs again) and the accepted and observed
+    /// heads are forgotten, so nothing exports over the pre-reset set until the owner's restore merged it.
+    @Test func theAppLockResetFunnelReopensTheIntimacyRestoreAndForgetsTheAcceptedSet() {
+        let store = makeStore("reset-intimacy-bookkeeping")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.intimacyReset.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        store.sealedBackupBookkeeping.markRestoreResolved(.intimacyLogs)
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("phone".utf8)), generation: 3)
+        store.sealedBackupBookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "ab"), .intimacyLogs, installTag: "me")
+        store.sealedBackupBookkeeping.recordObservedHead(stamp, .intimacyLogs, installTag: "me")
+
+        store.handleAppLockResetCompleted(preferences: StoragePreferences(sealedBackupIntimacyEnabled: true), clearBookkeeping: {})
+
+        #expect(defaults.object(forKey: SealedBackupBookkeeping.intimacyRestoreResolvedKey) as? Bool == false)
+        #expect(!store.sealedBackupBookkeeping.hasAcceptedHeadRecord(.intimacyLogs))
+        #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(.intimacyLogs))
+        #expect(store.sealedBackupRestoreHold.keepsPreResetCopy(of: .intimacyLogs), "held for the owner")
     }
 
     /// EVERY payload's re-upload deferral points at a backup the wipe just deleted (and at local data

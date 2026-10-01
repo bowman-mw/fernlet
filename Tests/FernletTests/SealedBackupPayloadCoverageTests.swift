@@ -59,13 +59,22 @@ final class FakeSealedBackupHost: SealedBackupContext {
     var isPeriodTrackingVisible = true
     var isIntimacyTrackingVisible = true
     /// The Sealed backup v2 bookkeeping (design 2026-09-30 §4.3) on an isolated suite. The period
-    /// marker's one-time seed answers ``periodRestoreSeed`` (false: a fresh install).
+    /// marker's one-time seed answers ``periodRestoreSeed`` and the intimate-log marker's
+    /// ``intimacyRestoreSeed`` (false: a fresh install).
     lazy var sealedBackupBookkeeping = SealedBackupBookkeeping(
         defaults: UserDefaults(suiteName: "fernlet.tests.fakeBookkeeping.\(UUID().uuidString)") ?? .standard,
-        legacyLatch: { [unowned self] payload in payload == .periodData && self.periodRestoreSeed }
+        legacyLatch: { [unowned self] payload in
+            switch payload {
+            case .periodData: return self.periodRestoreSeed
+            case .intimacyLogs: return self.intimacyRestoreSeed
+            case .journalNarratives, .sensitiveNotes: return false
+            }
+        }
     )
     /// What the period restore marker's one-time seed reads (the legacy cycle latch).
     var periodRestoreSeed = false
+    /// What the intimate-log restore marker's one-time seed reads (the legacy intimacy latch).
+    var intimacyRestoreSeed = false
     /// Sealed-store mutations seen through the hook, per payload (the host's mutation epochs).
     private(set) var mutationEpochs: [SealedBackupPayloadType: Int] = [:]
     /// The v2 engine's statuses, as recorded on the host.
@@ -231,7 +240,8 @@ struct SealedBackupPayloadCoverageTests {
     private func makeCloudCoordinator(
         host: FakeSealedBackupHost,
         cloud: FakeSealedBackupCloud,
-        preferences: StoragePreferences? = nil
+        preferences: StoragePreferences? = nil,
+        intimacyStore: IntimacyLogStore? = nil
     ) -> SealedBackupCoordinator {
         let keychainService = cloud.keychainService
         let generationDefaults = cloud.generationDefaults
@@ -251,7 +261,10 @@ struct SealedBackupPayloadCoverageTests {
                     generationStore: SealedBackupGenerationStore(defaults: generationDefaults)
                 )
             },
-            preferencesProvider: preferences.map { chosen in { chosen } }
+            preferencesProvider: preferences.map { chosen in { chosen } },
+            periodRecordStore: PeriodBackupDevice.makeRecordStore(),
+            intimacyLogStore: intimacyStore,
+            writerTagProvider: { PeriodBackupDevice.tag("coverage") }
         )
     }
 
@@ -354,32 +367,6 @@ struct SealedBackupPayloadCoverageTests {
         #expect(coordinator.mayReuploadFromLocalStore(.journalNarratives, journalRepository: openable) == false)
     }
 
-    /// Hidden intimacy must upload NOTHING and must not read as done: the reconcile cannot page the
-    /// gated store, so the obligation is recorded and discharged by the un-hide settle.
-    @Test func intimacyEnableWhileHiddenDefersAndLeavesTheCloudUntouched() async throws {
-        let cloud = try makeCloud()
-        defer { cloud.tearDown() }
-        let host = makeHost()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
-        let store = makeIntimacyStore()
-        try seed(intimacyLog("logged while visible", at: 10), into: store, key: host.sealedBackupContentKey)
-
-        host.isIntimacyTrackingVisible = false
-        #expect(await coordinator.setSealedBackupEnabled(
-            true, payloadType: .intimacyLogs, intimacyStore: store
-        ), "hiding must never make the toggle revert — hiding is not a delete")
-        #expect(cloud.sealedRecords.isEmpty, "a hidden export must not write anything")
-        #expect(host.reuploadDeferrals[.intimacyLogs] == true)
-
-        // Un-hidden, the same enable actually uploads and clears the obligation.
-        host.isIntimacyTrackingVisible = true
-        #expect(await coordinator.setSealedBackupEnabled(
-            true, payloadType: .intimacyLogs, intimacyStore: store
-        ))
-        #expect(cloud.sealedRecords.isEmpty == false)
-        #expect(host.reuploadDeferrals[.intimacyLogs] == false)
-    }
-
     // MARK: - Compensating restore paths (the launch pass is fresh-install-only)
 
     /// The launch arm can only ever answer `.skippedStoreNotEmpty` on a device that is already in use —
@@ -437,26 +424,6 @@ struct SealedBackupPayloadCoverageTests {
         #expect(explicit == .restored(1), "the user's own restore is never held")
     }
 
-    /// The intimacy arm holds the same way (the un-hide settle and the Private tab's settle are both
-    /// ambient), and the very same call restores once the hold is gone.
-    @Test func anIntimacyRestoreHeldForTheOwnerRunsOnceTheHoldIsGone() async throws {
-        let cloud = try makeCloud()
-        defer { cloud.tearDown() }
-        let host = makeHost()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
-        let source = makeIntimacyStore()
-        try seed(intimacyLog("only in the cloud", at: 10), into: source, key: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .intimacyLogs, intimacyStore: source))
-        host.sealedBackupRestoreAwaitsOwner = true
-        let target = makeIntimacyStore()
-
-        #expect(await coordinator.restoreIntimacyBackupTargeted(intimacyStore: target) == .deferredTransient)
-        #expect(try target.backupLogCount() == 0)
-        host.sealedBackupRestoreAwaitsOwner = false
-        #expect(await coordinator.restoreIntimacyBackupTargeted(intimacyStore: target) == .restored(1),
-                "once the hold is gone the same restore runs")
-    }
-
     /// Review C-U2-R1: holding the RESTORES after an app-lock reset is not enough — the Private tab's
     /// settle, the launch follow-through and the Retry pass all re-upload afterwards, and with the hub
     /// key now live on every section that re-upload would REPLACE the owner's pre-reset history in
@@ -470,9 +437,7 @@ struct SealedBackupPayloadCoverageTests {
         let preferences = StoragePreferences(
             iCloudSyncEnabled: true,
             sealedBackupJournalEnabled: true,
-            sealedBackupIntimacyEnabled: true,
-            sealedBackupJournalReuploadDeferred: true,
-            sealedBackupIntimacyReuploadDeferred: true
+            sealedBackupJournalReuploadDeferred: true
         )
         let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
         // The owner's history, backed up before the reset.
@@ -480,10 +445,6 @@ struct SealedBackupPayloadCoverageTests {
         try journalHistory.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
         try journalHistory.insert(journalNarrative("also before", at: 20), contentKey: host.sealedBackupContentKey)
         #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: journalHistory))
-        let intimacyHistory = makeIntimacyStore()
-        try seed(intimacyLog("before the reset", at: 10), into: intimacyHistory, key: host.sealedBackupContentKey)
-        try seed(intimacyLog("also before", at: 20), into: intimacyHistory, key: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .intimacyLogs, intimacyStore: intimacyHistory))
         let preReset = cloud.sealedRecordIdentities
         #expect(!preReset.isEmpty)
 
@@ -492,11 +453,8 @@ struct SealedBackupPayloadCoverageTests {
         host.sealedBackupRestoreAwaitsOwner = true
         let journalSince = makeJournalRepository()
         try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
-        let intimacySince = makeIntimacyStore()
-        try seed(intimacyLog("after the reset", at: 30), into: intimacySince, key: host.sealedBackupContentKey)
 
         await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .intimacyLogs, intimacyStore: intimacySince)
         #expect(cloud.sealedRecordIdentities == preReset, "a held re-upload writes nothing over the pre-reset copy")
 
         host.sealedBackupRestoreAwaitsOwner = false
@@ -523,14 +481,13 @@ struct SealedBackupPayloadCoverageTests {
         host.sealedBackupRestoreAwaitsOwner = true
         let journalSince = makeJournalRepository()
         try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
-        let intimacySince = makeIntimacyStore()
-        try seed(intimacyLog("after the reset", at: 30), into: intimacySince, key: host.sealedBackupContentKey)
 
-        #expect(await coordinator.adoptSyncedEscrowAndReupload(journalRepository: journalSince, intimacyStore: intimacySince),
+        #expect(await coordinator.adoptSyncedEscrowAndReupload(journalRepository: journalSince),
                 "the other device's key is still adopted")
         #expect(cloud.sealedRecordIdentities == preReset, "nothing is re-sealed over the pre-reset copy")
         #expect(host.reuploadDeferrals[.journalNarratives] == true)
-        #expect(host.reuploadDeferrals[.intimacyLogs] == true)
+        #expect(host.reuploadDeferrals[.intimacyLogs] == true,
+                "the intimate-log backup (v2) is marked owed; its export's own hold keeps the copy")
         #expect(host.reuploadDeferrals[.periodData] == nil, "a payload that is off owes nothing")
     }
 
@@ -576,9 +533,10 @@ struct SealedBackupPayloadCoverageTests {
         #expect(host.sealedBackupRestoreAwaitsOwner, "the ambient-restore half of the hold is untouched")
     }
 
-    /// Review N-1: a backup that was OFF at the reset had no pre-reset copy, so turning it on later
-    /// uploads as usual — and the escrow adopt re-seals it — while a payload whose copy is kept stays
-    /// held beside it.
+    /// Review N-1: a backup that was OFF at the reset had no pre-reset copy, so it uploads as usual —
+    /// and after the escrow adopt it is re-sealed under the adopted key at the next Private visit —
+    /// while a payload whose copy is kept stays held beside it. (The intimate logs are on the v2
+    /// engine since unit B2: the hold is its export's X2, the adopt marks the upload owed.)
     @Test func aBackupThatWasOffAtTheResetIsNeverHeld() async throws {
         let cloud = try makeCloud()
         defer { cloud.tearDown() }
@@ -588,24 +546,28 @@ struct SealedBackupPayloadCoverageTests {
             iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true,
             sealedBackupJournalReuploadDeferred: true, sealedBackupIntimacyReuploadDeferred: true
         )
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        let intimacySince = makeIntimacyStore()
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences, intimacyStore: intimacySince)
+        host.sealedBackupBookkeeping.markRestoreResolved(.intimacyLogs)
         let journalSince = makeJournalRepository()
         try journalSince.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
-        let intimacySince = makeIntimacyStore()
-        try seed(intimacyLog("after the reset", at: 30), into: intimacySince, key: host.sealedBackupContentKey)
+        try intimacySince.insert(intimacyLog("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
 
         await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: journalSince)
-        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .intimacyLogs, intimacyStore: intimacySince)
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .intimacyLogs)
         #expect(names(in: cloud, for: .journalNarratives).isEmpty, "the kept journal copy is not replaced")
         #expect(!names(in: cloud, for: .intimacyLogs).isEmpty, "intimacy was off at the reset: it uploads")
 
         let otherDevice = try seedSyncedEscrowKey(into: cloud.keychainService)
         defer { KeychainItem.deleteAll(service: otherDevice) }
         let intimacyBefore = cloud.sealedRecordIdentities
-        #expect(await coordinator.adoptSyncedEscrowAndReupload(journalRepository: journalSince, intimacyStore: intimacySince))
+        #expect(await coordinator.adoptSyncedEscrowAndReupload(journalRepository: journalSince))
         #expect(names(in: cloud, for: .journalNarratives).isEmpty, "the adopt re-seals nothing over the kept copy")
         #expect(host.reuploadDeferrals[.journalNarratives] == true)
-        #expect(cloud.sealedRecordIdentities != intimacyBefore, "the adopt re-seals the unheld payload under the adopted key")
+        #expect(host.reuploadDeferrals[.intimacyLogs] == true, "the adopt marks the unheld v2 payload owed")
+        coordinator.engine.hubSessionEnded()
+        await coordinator.settleV2Backup(.intimacyLogs)
+        #expect(cloud.sealedRecordIdentities != intimacyBefore, "the next Private visit re-seals it under the adopted key")
         #expect(host.reuploadDeferrals[.intimacyLogs] == false)
     }
 
@@ -744,20 +706,19 @@ struct SealedBackupPayloadCoverageTests {
         host.sealedBackupContentKey = SymmetricKey(size: .bits256)
         let written = makeJournalRepository()
         try written.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
-        let emptyIntimacy = makeIntimacyStore()
 
-        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written, intimacyStore: emptyIntimacy).isEmpty,
+        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written).isEmpty,
                 "held: the owner has not asked for the restore yet")
         host.releaseSealedBackupRestoreHold()
-        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written, intimacyStore: emptyIntimacy)
-                == [.journalNarratives], "the journal is named; the empty intimacy store can still restore")
+        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written)
+                == [.journalNarratives], "the journal is named; the intimate logs (a v2 merge) never are")
         await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: written)
         #expect(cloud.sealedRecordIdentities == preReset, "named, still held: nothing replaced it silently")
 
         coordinator.replacePreResetCopyWithThisIPhone(.journalNarratives)
         #expect(!host.sealedBackupKeepsPreResetCopy(of: .journalNarratives))
         #expect(host.reuploadDeferrals[.journalNarratives] == true, "the upload is owed")
-        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written, intimacyStore: emptyIntimacy).isEmpty)
+        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written).isEmpty)
         await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: written)
         #expect(cloud.sealedRecordIdentities != preReset, "after the user's choice this iPhone's journal backs up")
     }
@@ -823,35 +784,6 @@ struct SealedBackupPayloadCoverageTests {
         return otherService
     }
 
-    /// Same for intimacy, plus its gate: hidden defers (retryable — un-hiding IS the retry) and writes
-    /// nothing; the identical call succeeds once the surface is visible.
-    @Test func targetedIntimacyRestoreDefersWhileHiddenAndRecoversAfterUnhiding() async throws {
-        let cloud = try makeCloud()
-        defer { cloud.tearDown() }
-        let host = makeHost()
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
-
-        let source = makeIntimacyStore()
-        try seed(intimacyLog("only in the cloud", at: 10), into: source, key: host.sealedBackupContentKey)
-        #expect(await coordinator.setSealedBackupEnabled(
-            true, payloadType: .intimacyLogs, intimacyStore: source
-        ))
-
-        host.days = ["2026-06-01": FernletDay(date: "2026-06-01", bottleCount: 3)]
-        let target = makeIntimacyStore()
-
-        host.isIntimacyTrackingVisible = false
-        let hidden = await coordinator.restoreIntimacyBackupTargeted(intimacyStore: target)
-        #expect(hidden == .deferredTransient)
-        #expect(hidden.isRetryable)
-        #expect(try target.backupLogCount() == 0)
-
-        host.isIntimacyTrackingVisible = true
-        #expect(await coordinator.restoreIntimacyBackupTargeted(intimacyStore: target) == .restored(1))
-        #expect(try target.backupPage(offset: 0, limit: 10, contentKey: host.sealedBackupContentKey).map(\.note)
-                == ["only in the cloud"])
-    }
-
     /// The targeted paths drop the whole-device freshness gate, so the one-way divergence latch is what
     /// keeps them safe: a user who DELETED their entries must never have them resurrected from the
     /// stale-by-construction cloud copy.
@@ -864,33 +796,28 @@ struct SealedBackupPayloadCoverageTests {
         let source = makeJournalRepository()
         try source.insert(journalNarrative("deleted on the other device", at: 10), contentKey: host.sealedBackupContentKey)
         _ = await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: source)
-        let intimacySource = makeIntimacyStore()
-        try seed(intimacyLog("deleted", at: 10), into: intimacySource, key: host.sealedBackupContentKey)
-        _ = await coordinator.setSealedBackupEnabled(true, payloadType: .intimacyLogs, intimacyStore: intimacySource)
 
         // Written, then deleted: count 0, latch set.
         let divergedJournal = makeJournalRepository()
         let entry = journalNarrative("written then deleted", at: 20)
         try divergedJournal.insert(entry, contentKey: host.sealedBackupContentKey)
         try divergedJournal.delete(id: entry.id)
-        let divergedIntimacy = makeIntimacyStore()
-        try seed(intimacyLog("written then deleted", at: 20), into: divergedIntimacy, key: host.sealedBackupContentKey)
-        try divergedIntimacy.deleteAll()
 
         #expect(await coordinator.restoreJournalBackupTargeted(journalRepository: divergedJournal) == .skippedStoreNotEmpty)
         #expect(try divergedJournal.narrativeCount() == 0)
-        #expect(await coordinator.restoreIntimacyBackupTargeted(intimacyStore: divergedIntimacy) == .skippedStoreNotEmpty)
-        #expect(try divergedIntimacy.backupLogCount() == 0)
+        // (The intimate logs are a v2 merge: an install that already held or deleted logs seeds its
+        // restore marker RESOLVED from the same latch, so no restore ever merges the stale copy back —
+        // SealedBackupIntimacyV2Tests.aDivergedInstallSeedsItsMarkerResolvedAndNeverMergesTheStaleCopy.)
     }
 
     // MARK: - Pass-level freshness (one arm must not sabotage the next)
 
     /// The journal restore WRITES DAY ROWS (`reinstateJournalEntries` rebuilds the skeletons the UI
-    /// renders), and a day carrying journals satisfies `hasLoggedContent`. Re-deriving the whole-device
-    /// freshness verdict per payload therefore lets the journal arm turn every arm after it into a
-    /// silent, terminal `.skippedStoreNotEmpty`. The launch pass pins the verdict once, before any arm
-    /// runs, and threads it through — this proves both the hazard and the fix.
-    @Test func journalDaySkeletonWritebackCannotPoisonALaterArmsFreshnessGate() throws {
+    /// renders), and a day carrying journals satisfies `hasLoggedContent` — the hazard that once turned
+    /// the intimacy arm after it into a silent, terminal `.skippedStoreNotEmpty`. Since unit B2 the
+    /// intimate-log restore is a v2 MERGE with no freshness gate at all, so the journal's writeback can
+    /// no longer touch it: the same restore lands with no pinned verdict.
+    @Test func journalDaySkeletonWritebackNoLongerGatesTheIntimacyMerge() throws {
         let host = makeHost()
         let coordinator = SealedBackupCoordinator(host: host)
         let journal = makeJournalRepository()
@@ -906,23 +833,12 @@ struct SealedBackupPayloadCoverageTests {
         ) == 1)
         #expect(host.days.isEmpty == false, "the journal arm writes day skeletons — that is the hazard")
 
-        // Arm 2 re-deriving the verdict now reads the arm-1 writeback as "device already in use".
-        #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.storeNotEmpty) {
-            try coordinator.applyRestoredPayload(
-                try encode([intimacyLog("restored", at: 100)]),
-                payloadType: .intimacyLogs,
-                intimacyStore: intimacy,
-                scope: .freshInstall
-            )
-        }
-
-        // With the pass-level verdict pinned (as `restoreSealedBackupsIfNeeded` does), it restores.
+        // The intimacy merge has no freshness gate: the arm-1 writeback changes nothing for it.
         #expect(try coordinator.applyRestoredPayload(
             try encode([intimacyLog("restored", at: 100)]),
             payloadType: .intimacyLogs,
             intimacyStore: intimacy,
-            scope: .freshInstall,
-            freshInstallOverride: true
+            scope: .freshInstall
         ) == 1)
         #expect(try intimacy.backupLogCount() == 1)
     }
@@ -1047,7 +963,7 @@ struct SealedBackupPayloadCoverageTests {
     }
 
 
-    // MARK: - Intimacy: restore through the gated funnel
+    // MARK: - Intimacy: the v2 merge through the gated funnel (unit B2)
 
     @Test func intimacyRestoreWritesLogsIntoAnEmptyStore() throws {
         let host = makeHost()
@@ -1062,49 +978,28 @@ struct SealedBackupPayloadCoverageTests {
             scope: .payloadStoreOnly
         )
         #expect(count == 2)
-        let readBack = try store.backupPage(offset: 0, limit: 10, contentKey: host.sealedBackupContentKey)
-        #expect(readBack.map(\.note) == ["first", "second"])
+        let readBack = try store.backupChunk(ids: try store.allIDs(), contentKey: host.sealedBackupContentKey)
+        #expect(readBack.records.map(\.note) == ["first", "second"])
         #expect(host.reinstatedJournalNarratives.isEmpty, "intimacy restore must not touch journal skeletons")
     }
 
-    @Test func intimacyRestoreRefusesAPopulatedStore() throws {
+    /// Design 2026-09-30 §8.2 (was `intimacyRestoreRefusesAPopulatedStore`): the restore is an id-keyed
+    /// MERGE, never empty-store-only — a log already here stays exactly as it is, and the backup's log
+    /// is added beside it.
+    @Test func intimacyRestoreMergesIntoAPopulatedStore() throws {
         let host = makeHost()
         let coordinator = SealedBackupCoordinator(host: host)
         let store = makeIntimacyStore()
         try seed(intimacyLog("logged locally", at: 50), into: store, key: host.sealedBackupContentKey)
 
-        #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.storeNotEmpty) {
-            try coordinator.applyRestoredPayload(
-                try encode([intimacyLog("from the backup", at: 100)]),
-                payloadType: .intimacyLogs,
-                intimacyStore: store,
-                scope: .payloadStoreOnly
-            )
-        }
-        #expect(try store.backupLogCount() == 1)
-    }
-
-    /// The empty-but-DIVERGED store: logged, then deleted, so the count is 0 while the cloud copy is
-    /// stale-by-construction. Restoring there would resurrect deliberately deleted intimate notes.
-    @Test func intimacyRestoreRefusesAnEmptyButDivergedStore() throws {
-        let host = makeHost()
-        let coordinator = SealedBackupCoordinator(host: host)
-        let store = makeIntimacyStore()
-        try seed(intimacyLog("logged, then deleted", at: 50), into: store, key: host.sealedBackupContentKey)
-        // Deleting is ungated (hiding must never block a wipe) and latches divergence.
-        try store.deleteAll()
-        #expect(try store.backupLogCount() == 0)
-        #expect(store.hasEverStoredLog)
-
-        #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.storeNotEmpty) {
-            try coordinator.applyRestoredPayload(
-                try encode([intimacyLog("resurrected?", at: 100)]),
-                payloadType: .intimacyLogs,
-                intimacyStore: store,
-                scope: .payloadStoreOnly
-            )
-        }
-        #expect(try store.backupLogCount() == 0)
+        #expect(try coordinator.applyRestoredPayload(
+            try encode([intimacyLog("from the backup", at: 100)]),
+            payloadType: .intimacyLogs,
+            intimacyStore: store,
+            scope: .payloadStoreOnly
+        ) == 1, "one log added")
+        let notes = try store.backupChunk(ids: try store.allIDs(), contentKey: host.sealedBackupContentKey).records.map(\.note)
+        #expect(notes == ["logged locally", "from the backup"])
     }
 
     @Test func intimacyRestoreDefersWhileLockedThenSelfHealsAfterUnlock() throws {
@@ -1155,18 +1050,16 @@ struct SealedBackupPayloadCoverageTests {
         ) == 1)
     }
 
-    /// The no-clobber GATE, unlike the write, is deliberately NOT visibility-aware: it counts rows
-    /// without decrypting. A hidden store reading as "empty" here would be the hidden-means-empty bug —
-    /// the gate would wave a restore through on top of data it could not see.
-    @Test func intimacyNoClobberGateNeverReadsAHiddenStoreAsEmpty() throws {
+    /// Hidden is refused at the decrypt seam — never answered as "nothing here", and never a merge
+    /// behind the gate: the store's rows stay, still counted (keyless) and still latched.
+    @Test func aHiddenIntimacyStoreIsNeverMergedIntoAndNeverReadsAsEmpty() throws {
         let host = makeHost()
         let coordinator = SealedBackupCoordinator(host: host)
         let store = makeIntimacyStore()
         try seed(intimacyLog("hidden but present", at: 50), into: store, key: host.sealedBackupContentKey)
 
         host.isIntimacyTrackingVisible = false
-        // storeNotEmpty, NOT "hidden" — the gate ran first and saw the rows through the closed gate.
-        #expect(throws: SealedBackupCoordinator.SealedBackupWiringError.storeNotEmpty) {
+        #expect(throws: IntimacyTrackingHiddenError.self) {
             try coordinator.applyRestoredPayload(
                 try encode([intimacyLog("from the backup", at: 100)]),
                 payloadType: .intimacyLogs,
@@ -1174,7 +1067,7 @@ struct SealedBackupPayloadCoverageTests {
                 scope: .payloadStoreOnly
             )
         }
-        #expect(coordinator.intimacyLogCount(store: store) == 1, "a hidden store must not count as empty")
+        #expect(try store.backupLogCount() == 1, "a hidden store must not count as empty")
         #expect(store.hasEverStoredLog, "a hidden store must not read as never-populated")
     }
 
@@ -1194,45 +1087,16 @@ struct SealedBackupPayloadCoverageTests {
         #expect(coordinator.mayReuploadFromLocalStore(.journalNarratives, journalRepository: populated))
     }
 
-    @Test func reuploadIsRefusedFromAnEmptyIntimacyStoreAndAllowedFromAPopulatedOne() throws {
-        let host = makeHost()
-        let coordinator = SealedBackupCoordinator(host: host)
-        let empty = makeIntimacyStore()
-        #expect(coordinator.mayReuploadFromLocalStore(.intimacyLogs, intimacyStore: empty) == false)
-
-        let populated = makeIntimacyStore()
-        try seed(intimacyLog("real history", at: 10), into: populated, key: host.sealedBackupContentKey)
-        #expect(coordinator.mayReuploadFromLocalStore(.intimacyLogs, intimacyStore: populated))
-    }
-
-    /// Hidden intimacy also blocks the re-upload, and for a second reason: while hidden the reconcile
-    /// is a SILENT no-op, so calling it would log a false "reconciled" while the cloud chunk stayed
-    /// sealed to the escrow key that was just replaced.
-    @Test func reuploadIsRefusedWhileIntimacyIsHiddenEvenWithAPopulatedStore() throws {
-        let host = makeHost()
-        let coordinator = SealedBackupCoordinator(host: host)
-        let populated = makeIntimacyStore()
-        try seed(intimacyLog("real history", at: 10), into: populated, key: host.sealedBackupContentKey)
-        #expect(coordinator.mayReuploadFromLocalStore(.intimacyLogs, intimacyStore: populated))
-
-        host.isIntimacyTrackingVisible = false
-        #expect(coordinator.mayReuploadFromLocalStore(.intimacyLogs, intimacyStore: populated) == false)
-    }
-
     /// The counts the guards read work with no content key in play — the guards run while the app may
     /// be locked, and they fail CLOSED at 0 so "unknown" reads as "do not re-upload".
     @Test func countsReadRowsWithoutAKeyAndStartAtZero() throws {
         let host = makeHost()
         let coordinator = SealedBackupCoordinator(host: host)
         let journal = makeJournalRepository()
-        let intimacy = makeIntimacyStore()
         #expect(coordinator.journalNarrativeCount(repository: journal) == 0)
-        #expect(coordinator.intimacyLogCount(store: intimacy) == 0)
 
         try journal.insert(journalNarrative("one", at: 1), contentKey: host.sealedBackupContentKey)
-        try seed(intimacyLog("one", at: 1), into: intimacy, key: host.sealedBackupContentKey)
         #expect(coordinator.journalNarrativeCount(repository: journal) == 1)
-        #expect(coordinator.intimacyLogCount(store: intimacy) == 1)
     }
 
     // MARK: - Chunked round trip (what the CloudKit path hands back)

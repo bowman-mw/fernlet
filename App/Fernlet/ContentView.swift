@@ -343,10 +343,10 @@ struct ContentView: View {
         // DEFER the upload. This is the moment that debt can be paid: the hub just unlocked,
         // so the sealed stores are readable. No-op unless a deferral is actually outstanding.
         //
-        // It is also the only moment a journal/intimacy RESTORE can decrypt what it pulls down,
-        // so the targeted restores run here too — and strictly BEFORE the re-uploads, because a
-        // re-upload from a not-yet-restored store would replace the good cloud backup with an
-        // empty chunk set. The re-uploads re-check `mayReuploadFromLocalStore` regardless.
+        // It is also the only moment a RESTORE can decrypt what it pulls down, so the restores run
+        // here too — strictly BEFORE the re-uploads (the v2 engine's passes restore, then export;
+        // the journal's targeted restore runs before its re-upload, which re-checks
+        // `mayReuploadFromLocalStore` regardless).
         if newState.isUnlocked(for: .privateHub) {
             requestSealedBackupSettlement(for: privateHubSection)
         }
@@ -458,6 +458,11 @@ struct ContentView: View {
         // The Sealed backup gates read sync and the backup switches from the app's in-memory
         // preferences, never a keychain read per check (design 2026-09-30 §4.2 G4).
         store.sealedBackupPreferencesProvider = { [preferencesStore] in preferencesStore.preferences }
+        // The intimate-log Sealed backup works through THIS funnel — the app's one intimacy instance —
+        // so every write any surface makes marks its upload owed; handed over before the bookkeeping
+        // is seeded below, whose intimate-log marker seeds from this funnel's latch (design 2026-09-30,
+        // §4.3, §4.4).
+        store.attachIntimacyLogStore(intimacyStore)
         let priorEntries = SealedPriorEntryStore(
             intimacyStore: intimacyStore,
             periodVisible: { appStore.isPeriodTrackingVisible },
@@ -511,7 +516,9 @@ struct ContentView: View {
     /// - the journal half counts only when the journal store will be empty after the removal — its
     ///   restore is empty-store-only, so no journal row that opens may stay behind (it is folded under
     ///   the new key, which re-sets the latch) and no journal text may be waiting to be sealed;
-    /// - the intimacy half counts only while intimacy tracking is visible (hidden defers its restore).
+    /// - the intimacy half counts while intimacy tracking is visible: the removal reopens this install's
+    ///   intimate-log restore and the next hub settle MERGES the backup in (design 2026-09-30, §8);
+    ///   hidden defers it.
     ///
     /// - Parameters:
     ///   - preferences: The storage preferences (sync and the per-payload switches).
@@ -1524,20 +1531,21 @@ struct ContentView: View {
         refreshPeriodContext()
     }
 
-    /// Queues only the selected section's sealed backups while the hub content key is live.
+    /// Asks for the hub session's Sealed backup v2 settle (period and intimate logs, any section) and
+    /// queues the Journal section's v1 journal settle, while the hub content key is live.
     ///
-    /// Both halves are needed and the ORDER is the invariant. The Privacy & Data toggles are reached
-    /// from Home, where the hub is always re-locked, so turning journal/intimacy backup on can only
-    /// ever DEFER — and the launch restore pass runs while locked, so its journal/intimacy arms defer
-    /// too. This unlock is the only production seam where both debts can actually be paid.
+    /// Both halves of the journal settle are needed and the ORDER is the invariant. The Privacy & Data
+    /// toggles are reached from Home, where the hub is always re-locked, so turning the journal backup
+    /// on can only ever DEFER — and the launch restore pass runs while locked, so its journal arm
+    /// defers too. This unlock is the only production seam where both debts can actually be paid.
     ///
-    /// **Restore before re-upload.** Each targeted restore is `.payloadStoreOnly` (it keeps the
-    /// per-payload store-empty check and the one-way divergence latch, so it can only ADD data back),
-    /// and each re-upload runs afterwards behind `mayReuploadFromLocalStore`, so a store this device
-    /// has not restored into yet can never replace the cloud backup with the single empty head record
+    /// **Restore before re-upload.** The targeted journal restore is `.payloadStoreOnly` (it keeps the
+    /// store-empty check and the one-way divergence latch, so it can only ADD data back), and the
+    /// re-upload runs afterwards behind `mayReuploadFromLocalStore`, so a store this device has not
+    /// restored into yet can never replace the cloud backup with the single empty head record
     /// `reconcileChunked` writes for a count of 0.
     private func requestSealedBackupSettlement(for section: PrivateHubSection) {
-        let legacyDue = section != .worryBox && !attemptedSealedBackupSections.contains(section)
+        let legacyDue = section == .journal && !attemptedSealedBackupSections.contains(section)
         guard legacyDue || !requestedSealedBackupV2Settle else { return }
         if legacyDue { pendingSealedBackupSections.insert(section) }
         guard !isSettlingSealedBackups else { return }
@@ -1558,15 +1566,15 @@ struct ContentView: View {
         }
         guard selectedTab == .personal,
               lockService.isUnlocked(for: .privateHub) else { return }
-        // The Sealed backup v2 payloads (period) settle once per hub session, whatever the section —
-        // the hub key is the same on every one (design 2026-09-30 §4.5). The engine runs it on its
-        // own held worker; this only asks.
+        // The Sealed backup v2 payloads (period, intimate logs) settle once per hub session, whatever
+        // the section — the hub key is the same on every one (design 2026-09-30 §4.5). The engine runs
+        // them on its own held worker; this only asks.
         if !requestedSealedBackupV2Settle {
             requestedSealedBackupV2Settle = true
             store.requestSealedBackupHubSettle()
         }
-        // There are exactly two backup-bearing sections for the v1 payloads. Requests arriving during
-        // an await are picked up by the second bounded iteration; Worry Box owns no v1 payload.
+        // The Journal section is the one backup-bearing section left for a v1 payload. A request
+        // arriving during an await is picked up by the second bounded iteration.
         for _ in 0..<2 {
             guard !Task.isCancelled, let section = pendingSealedBackupSections.first else { break }
             pendingSealedBackupSections.remove(section)
@@ -1586,16 +1594,9 @@ struct ContentView: View {
                 _ = await store.restoreJournalBackupTargeted()
             }
             await store.retryDeferredSealedBackupIfNeeded(payloadType: .journalNarratives)
-        case .cycle:
-            if preferences.iCloudSyncEnabled,
-               preferences.sealedBackupIntimacyEnabled,
-               store.isIntimacyTrackingVisible {
-                _ = await store.restoreIntimacyBackupTargeted()
-            }
-            // The period backup is not here: it settles on the v2 engine at every hub session, on any
-            // section (`requestSealedBackupHubSettle`).
-            await store.retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
-        case .worryBox:
+        case .cycle, .worryBox:
+            // The period and intimate-log backups are not here: they settle on the v2 engine at every
+            // hub session, on any section (`requestSealedBackupHubSettle`).
             break
         }
     }

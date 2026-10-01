@@ -70,6 +70,72 @@ public nonisolated struct IntimacyLog: Identifiable, Codable, Equatable, Sendabl
     }
 }
 
+/// One page of intimacy logs as the Sealed backup reads them by id (journal and intimacy Sealed backup
+/// v2 design 2026-09-30, §4.1, §8): every requested id that still has a row is classified — never
+/// silently skipped, because an export that dropped a row it could not open would write a backup
+/// missing it over one that holds it.
+///
+/// - ``records``: rows that opened under the key, one per id, in the order the ids were asked for.
+/// - ``deadIDs``: ids whose every row fails to authenticate under the key — they can never open here.
+/// - ``needsNewerBuildIDs``: ids whose row opens but lacks a plaintext column this build reads (its
+///   day key or event date) — never dead: a build that can read it would show it.
+/// - ``transientCount``: rows this attempt could not decide (the install-binding keychain read did not
+///   answer); a caller must never call anything dead while it is above zero.
+///
+/// An id with no row at all was deleted since the snapshot and is simply absent. `Sendable`: a plain
+/// value crossing `performAndWait`'s `@Sendable` closure.
+public nonisolated struct IntimacyLogPage: Equatable, Sendable {
+    /// Rows that opened, one per id, in the requested order.
+    public var records: [IntimacyLog]
+    /// Ids whose rows can never open under this key.
+    public var deadIDs: [UUID]
+    /// Ids whose rows open but carry a plaintext column this build cannot read.
+    public var needsNewerBuildIDs: [UUID]
+    /// Rows this attempt could not decide (retryable).
+    public var transientCount: Int
+
+    /// Creates a page.
+    public init(records: [IntimacyLog] = [], deadIDs: [UUID] = [], needsNewerBuildIDs: [UUID] = [], transientCount: Int = 0) {
+        self.records = records
+        self.deadIDs = deadIDs
+        self.needsNewerBuildIDs = needsNewerBuildIDs
+        self.transientCount = transientCount
+    }
+}
+
+/// What one restore merge (``IntimacyLogRepository/upsertMerged(_:contentKey:)``) changed.
+///
+/// `Sendable`: a plain value returned out of `performAndWait`.
+public nonisolated struct IntimacyLogMergeResult: Equatable, Sendable {
+    /// Ids that were absent and are now stored, with the backup's own stamps.
+    public var inserted = 0
+    /// Ids whose stored row opened and had no Health link, and now carries the backup's.
+    public var linked = 0
+    /// Ids whose every stored row was dead, replaced by the backup's copy.
+    public var replaced = 0
+    /// Ids whose stored row opened and was left exactly as it was.
+    public var unchanged = 0
+
+    /// Creates an empty result.
+    public init() {}
+
+    /// How many ids the merge inserted, linked or replaced.
+    public var changedCount: Int { inserted + linked + replaced }
+    /// Whether the save changed anything on disk.
+    public var changedAnything: Bool { changedCount > 0 }
+}
+
+/// An intimacy-log batch call the repository refused, with nothing written.
+///
+/// `Sendable`: thrown out of `performAndWait`.
+public nonisolated enum IntimacyLogRepositoryError: Error, Equatable, Sendable {
+    /// A stored row with an id this write touches could not be decided (the install binding did not
+    /// answer) or carries a column this build cannot read. Nothing was written; retryable.
+    case undecidedRows(count: Int)
+    /// A call named more ids or records than one call accepts.
+    case batchTooLarge(count: Int, limit: Int)
+}
+
 /// Sealed at-rest CRUD for intimacy logs: seals notes into the private Core Data store with
 /// `ColumnCrypto` and decrypts them back on read.
 ///
@@ -93,10 +159,15 @@ public nonisolated struct IntimacyLog: Identifiable, Codable, Equatable, Sendabl
 /// The app's `SealedBackupCoordinator` is the second client (payload type `intimacyLogs`, added
 /// 2026-08-10) — but it too goes through ``IntimacyLogStore``, never here directly: the app target is
 /// grep-walled against constructing this repository so no call site can read or write around the hard
-/// gate. The backup surface it uses is the paged ``logs(offset:limit:contentKey:)`` / ``logCount()``
-/// pair, ``insertAtomically(_:contentKey:)``, and ``hasEverStoredLog`` (so a restore can never
-/// resurrect logs the user deliberately deleted), each exposed through the funnel's sealed-backup
-/// seam with its own gating decision.
+/// gate. Since the Sealed backup v2 (journal and intimacy design 2026-09-30, §8, unit B2) the backup
+/// surface is the v2 engine's: the keyless id snapshot ``allIDs()``, the classified read
+/// ``logs(ids:contentKey:)`` (opened, dead, needs a newer build, undecided — never a silent skip), the
+/// one restore write ``upsertMerged(_:contentKey:)`` (an id-keyed MERGE: insert absent ids with their
+/// own stamps, keep every row that opens and only fill its missing Health link, replace rows that can
+/// never open, never delete), the keyless ``delete(ids:)`` behind "Remove them", and
+/// ``isStoreHealthy``. ``hasEverStoredLog`` no longer gates any restore: it seeds the app's intimacy
+/// restore marker once. Each is exposed through the funnel's sealed-backup seam with its own gating
+/// decision.
 ///
 /// A `nonisolated` final class: all Core Data access is serialized through the view context's
 /// `performAndWait`, so it is callable from any executor — and therefore `Sendable`, which
@@ -115,12 +186,24 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     /// notes for as long as the caller keeps them. Older rows stay reachable through the paged
     /// ``logs(offset:limit:contentKey:)``.
     private static let maxDisplayedLogs = 500
-    /// R3: upper bound on one page of ``logs(offset:limit:contentKey:)``, so an absurd `limit` cannot
-    /// decrypt the whole table at once. Above the 250-row sealed-backup chunk size.
-    private static let maxPageSize = 500
+    /// R3: upper bound on one page of ``logs(offset:limit:contentKey:)`` and on the ids one
+    /// ``logs(ids:contentKey:)`` names, so an absurd `limit` cannot decrypt the whole table at once.
+    /// Above the 250-row sealed-backup chunk size.
+    public static let maxPageSize = 500
+    /// R3: the Sealed backup's record bound — the most records one ``upsertMerged(_:contentKey:)`` or
+    /// ``delete(ids:)`` accepts. ``allIDs()`` answers at most ONE more than this, so a store past the
+    /// bound reads as past it (the export refuses it as too large), never as exactly at it.
+    public static let maxBackupRecords = 100_000
+    /// The longest note this store seals — the cap ``IntimacyLogStore/insert(_:contentKey:)``
+    /// applies to a user's note and ``upsertMerged(_:contentKey:)`` applies to a restored one, so a
+    /// hostile or older backup can never seal an unbounded note.
+    public static let maxNoteLength = 1_000
 
-    /// Device-local marker for "this install has written intimacy logs at some point", used by the
-    /// sealed-backup restore to tell TWO very different empty stores apart:
+    /// Device-local marker for "this install has written intimacy logs at some point". Since the
+    /// Sealed backup v2 (design 2026-09-30, §4.3, unit B2) it gates no restore: the app reads it ONCE,
+    /// as the seed of its intimacy restore marker (`fernlet.intimacyLog.restoreResolved`), the first
+    /// time a build with that marker launches. The distinction it seeds is the one it always drew,
+    /// between TWO very different empty stores:
     ///
     /// - **never populated** (a genuine reinstall / new device) — restoring the sealed backup is the
     ///   whole point, and there is nothing local to lose.
@@ -148,7 +231,7 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     /// upgrading user who then deleted their logs would read as "never populated" — re-opening the
     /// resurrection this latch exists to close. A count error leaves the latch unread and un-backfilled
     /// (return the raw bit): claiming divergence on an error would wrongly block a genuine reinstall's
-    /// restore forever, and the restore path's own no-clobber count check still refuses a populated store.
+    /// restore forever.
     ///
     /// Deliberately NOT gated on intimacy visibility: it counts rows without decrypting anything, and a
     /// hidden store must never read as "never populated" (that would let a restore run behind the gate).
@@ -231,42 +314,8 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
         }
     }
 
-    /// Inserts many logs in a SINGLE transaction: either all commit or none do. Used by the
-    /// sealed-backup RESTORE so a mid-batch failure cannot leave a partially-populated store — a
-    /// partial store would trip the restore no-clobber gate (`logCount() != 0`) on the next launch and
-    /// never retry, silently dropping the un-inserted sealed records.
-    ///
-    /// A plain insert into a store the caller has already proven empty; no upsert, no per-row fetch.
-    ///
-    /// - Important: Throws `FernletLockError.locked` when `contentKey` is `nil`. On any per-record
-    ///   failure the whole batch is rolled back and the error rethrown, leaving the store empty so the
-    ///   next launch re-pulls the full backup.
-    public func insertAtomically(_ logs: [IntimacyLog], contentKey: SymmetricKey?) throws {
-        guard let contentKey else { throw FernletLockError.locked }
-        guard !logs.isEmpty else { return }
-        try context.performAndWait {
-            do {
-                for log in logs {
-                    let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
-                    try apply(log, to: object, contentKey: contentKey)
-                }
-                try context.saveSealed()
-            } catch {
-                context.rollback()
-                throw error
-            }
-            // Prune history after the atomic restore so no per-record transaction lingers in the
-            // persistent-history transaction log (best-effort, and logged when it fails).
-            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "IntimacyLog.insertAtomically")
-            // Latch AFTER the transaction commits. A restore that populates the store also counts as
-            // "this device has intimacy logs", so a later delete-everything cannot re-pull them.
-            markLogStored()
-        }
-    }
-
-    /// Total number of stored logs, counted without decrypting (or even faulting in) any rows. Lets the
-    /// sealed-backup export size its chunks up front, and lets the restore's no-clobber gate run
-    /// without a content key.
+    /// Total number of stored logs, counted without decrypting (or even faulting in) any rows — the
+    /// "entries this iPhone can't open" check's count and the divergence latch's backfill.
     public func logCount() throws -> Int {
         try context.performAndWait {
             try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog"))
@@ -274,8 +323,10 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     }
 
     /// A single page of logs, decrypted, in a stable TOTAL order (`eventDate` ASCENDING, then the
-    /// unique `id` tiebreaker). Backs the chunked sealed-backup export: paging by `offset`/`limit`
-    /// keeps each chunk bounded regardless of how long the history is.
+    /// unique `id` tiebreaker) — the same order as ``allIDs()``. Paging by `offset`/`limit` keeps
+    /// each page bounded regardless of how long the history is. (The Sealed backup no longer pages by
+    /// offset: it snapshots ids and reads them with ``logs(ids:contentKey:)``, which can never shift
+    /// under a concurrent write.)
     ///
     /// Note the direction differs from ``logs(contentKey:)``, which is newest-first for display. Export
     /// order only has to be *total* and *stable*; ascending matches the other sealed repositories, and
@@ -393,7 +444,7 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     }
 
     /// Writes one log onto a managed object, sealing the note column. Shared by ``insert(_:contentKey:)``
-    /// and the atomic restore so both write exactly the same columns.
+    /// and the restore merge so both write exactly the same columns.
     private func apply(_ log: IntimacyLog, to object: NSManagedObject, contentKey: SymmetricKey) throws {
         object.setValue(log.id, forKey: "id")
         object.setValue(log.dayKey, forKey: "dayKey")
@@ -421,4 +472,256 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
         )
     }
 
+}
+
+// MARK: - Sealed backup v2 surface (design 2026-09-30, §4.1, §8)
+
+nonisolated extension IntimacyLogRepository {
+    /// How one stored row answered the key.
+    private enum RowOpening {
+        case opened(IntimacyLog, NSManagedObject)
+        case dead
+        case needsNewerBuild
+        case undecided
+    }
+
+    /// Whether the context's coordinator has a persistent store attached — false when the sealed
+    /// store failed to load (the controller then runs against an empty coordinator, where every read
+    /// answers empty and would read as "no logs") or is between a failed rebuild and its heal. The
+    /// Sealed backup engine requires it before every snapshot and every restore write (R2-F2). Keyless.
+    public var isStoreHealthy: Bool {
+        context.performAndWait {
+            !(context.persistentStoreCoordinator?.persistentStores.isEmpty ?? true)
+        }
+    }
+
+    /// Every stored id, distinct, in the store's total order (`eventDate` ascending, then `id`) —
+    /// KEYLESS, decrypting nothing. The backup export's snapshot: its chunks are read by these ids, so
+    /// a page can never shift under a concurrent write. Bounded at ``maxBackupRecords`` + 1 ids.
+    public func allIDs() throws -> [UUID] {
+        try context.performAndWait {
+            let request = NSFetchRequest<NSDictionary>(entityName: "IntimacyLog")
+            request.resultType = .dictionaryResultType
+            request.propertiesToFetch = ["id", "eventDate"]
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "eventDate", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
+            request.fetchLimit = Self.maxBackupRecords + 1
+            var seen = Set<UUID>()
+            return try context.fetch(request).compactMap { $0["id"] as? UUID }.filter { seen.insert($0).inserted }
+        }
+    }
+
+    /// The logs with these ids, classified (see ``IntimacyLogPage``). An id with no row is absent; an
+    /// id whose rows include one that opens answers that row. Empty without a key.
+    ///
+    /// - Parameter ids: At most ``maxPageSize`` ids.
+    /// - Throws: ``IntimacyLogRepositoryError/batchTooLarge(count:limit:)``; a fetch error.
+    public func logs(ids: [UUID], contentKey: SymmetricKey?) throws -> IntimacyLogPage {
+        guard ids.count <= Self.maxPageSize else {
+            throw IntimacyLogRepositoryError.batchTooLarge(count: ids.count, limit: Self.maxPageSize)
+        }
+        guard let contentKey, !ids.isEmpty else { return IntimacyLogPage() }
+        return try context.performAndWait {
+            let grouped = try fetchRows(ids: ids)
+            var page = IntimacyLogPage()
+            var seen = Set<UUID>()
+            for id in ids where seen.insert(id).inserted {  // R2: bounded by `ids` (≤ maxPageSize).
+                guard let rows = grouped[id] else { continue }
+                switch opening(of: rows, contentKey: contentKey) {
+                case .opened(let log, _): page.records.append(log)
+                case .dead: page.deadIDs.append(id)
+                case .needsNewerBuild: page.needsNewerBuildIDs.append(id)
+                case .undecided: page.transientCount += 1
+                }
+            }
+            if !page.deadIDs.isEmpty || !page.needsNewerBuildIDs.isEmpty || page.transientCount > 0 {
+                FernletAuditLog.log("sealedRow.undecryptable", context: [
+                    "entity": "IntimacyLog",
+                    "dead": "\(page.deadIDs.count)",
+                    "newer": "\(page.needsNewerBuildIDs.count)",
+                    "undecided": "\(page.transientCount)"
+                ])
+            }
+            return page
+        }
+    }
+
+    /// THE restore write (design 2026-09-30, §8.2): an id-keyed MERGE of a restored set, in ONE save
+    /// that is rolled back on any throw. The batch is first reduced by id (the later `updatedAt` wins;
+    /// a tie keeps the first). Then, per id:
+    /// - absent → inserted with the backup's own `createdAt` / `updatedAt`, its note capped at
+    ///   ``maxNoteLength``;
+    /// - present and a row opens → KEPT exactly as it is, except that a missing Health link is taken
+    ///   from the backup (a link is never dropped or changed);
+    /// - present and every row dead → replaced by the backup's copy (a dead row can never be read, so
+    ///   an openable copy of the same id loses nothing);
+    /// - present and undecided, or carrying a column this build cannot read → the WHOLE merge throws
+    ///   ``IntimacyLogRepositoryError/undecidedRows(count:)`` and nothing is saved.
+    ///
+    /// It never deletes a row that opens and never chooses between two notes by their clocks: there
+    /// is no per-log edit in the app, so a different note under one id can only come from corruption
+    /// or a hostile set, and the local copy wins. Idempotent — a second merge of the same set changes
+    /// nothing. History is pruned best-effort and the divergence latch set only when something changed.
+    ///
+    /// - Throws: `FernletLockError.locked` without a key; ``IntimacyLogRepositoryError``; a seal or save
+    ///   error (rolled back).
+    public func upsertMerged(_ incoming: [IntimacyLog], contentKey: SymmetricKey?) throws -> IntimacyLogMergeResult {
+        guard let contentKey else { throw FernletLockError.locked }
+        guard incoming.count <= Self.maxBackupRecords else {
+            throw IntimacyLogRepositoryError.batchTooLarge(count: incoming.count, limit: Self.maxBackupRecords)
+        }
+        let batch = Self.reducedByID(incoming)
+        return try context.performAndWait {
+            let result: IntimacyLogMergeResult
+            do {
+                result = try applyMerge(batch, contentKey: contentKey)
+                if context.hasChanges { try context.saveSealed() }
+            } catch {
+                context.rollback()
+                throw error
+            }
+            if result.changedAnything {
+                PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "IntimacyLog.upsertMerged")
+                markLogStored()
+            }
+            return result
+        }
+    }
+
+    /// Deletes every row with these ids WITHOUT decrypting, in one save, then prunes the history
+    /// (rethrown) — "Remove them" for logs that can never open. A failed save is rolled back.
+    ///
+    /// - Parameter ids: At most ``maxBackupRecords`` ids.
+    /// - Returns: How many rows were removed.
+    public func delete(ids: [UUID]) throws -> Int {
+        guard ids.count <= Self.maxBackupRecords else {
+            throw IntimacyLogRepositoryError.batchTooLarge(count: ids.count, limit: Self.maxBackupRecords)
+        }
+        guard !ids.isEmpty else { return 0 }
+        return try context.performAndWait {
+            let rows = try fetchRows(ids: ids).values.flatMap { $0 }
+            guard !rows.isEmpty else { return 0 }
+            do {
+                rows.forEach(context.delete)
+                try context.saveSealed()
+            } catch {
+                context.rollback()
+                throw error
+            }
+            try PrivatePersistentHistoryPruner.prune(context: context)
+            markLogStored()
+            return rows.count
+        }
+    }
+
+    /// The per-id merge rule into the pending (unsaved) context — see ``upsertMerged(_:contentKey:)``.
+    private func applyMerge(_ batch: [IntimacyLog], contentKey: SymmetricKey) throws -> IntimacyLogMergeResult {
+        let existing = try fetchRows(ids: batch.map(\.id))
+        var result = IntimacyLogMergeResult()
+        for incoming in batch {  // R2: bounded by the batch (≤ maxBackupRecords).
+            guard let rows = existing[incoming.id], let first = rows.first else {
+                let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
+                try apply(Self.capped(incoming), to: object, contentKey: contentKey)
+                result.inserted += 1
+                continue
+            }
+            switch opening(of: rows, contentKey: contentKey) {
+            case .opened(let local, let object):
+                guard local.healthKitExternalUUID == nil, let link = incoming.healthKitExternalUUID else {
+                    result.unchanged += 1
+                    continue
+                }
+                // Core Data KVC on the stored row (the `object` receiver the persisted-surface wall
+                // knows is not a defaults write).
+                object.setValue(link, forKey: "healthKitExternalUUID")
+                result.linked += 1
+            case .dead:
+                try apply(Self.capped(incoming), to: first, contentKey: contentKey)
+                rows.dropFirst().forEach(context.delete)
+                result.replaced += 1
+            case .needsNewerBuild, .undecided:
+                throw IntimacyLogRepositoryError.undecidedRows(count: rows.count)
+            }
+        }
+        return result
+    }
+
+    /// How an id's rows answer the key: the first row that opens wins; else any undecided row makes
+    /// the id undecided; else a row this build cannot read makes it needs-a-newer-build; else dead.
+    private func opening(of rows: [NSManagedObject], contentKey: SymmetricKey) -> RowOpening {
+        var undecided = false
+        var needsNewer = false
+        for row in rows {  // R2: bounded by the id's rows.
+            switch open(row, contentKey: contentKey) {
+            case .opened(let log, let object): return .opened(log, object)
+            case .dead: continue
+            case .needsNewerBuild: needsNewer = true
+            case .undecided: undecided = true
+            }
+        }
+        if undecided { return .undecided }
+        return needsNewer ? .needsNewerBuild : .dead
+    }
+
+    /// Opens one row: the plaintext columns first (a row missing its day key or event date is one this
+    /// build cannot read — never dead), then the note.
+    private func open(_ object: NSManagedObject, contentKey: SymmetricKey) -> RowOpening {
+        guard let id = object.value(forKey: "id") as? UUID else { return .dead }
+        guard let dayKey = object.value(forKey: "dayKey") as? String,
+              let eventDate = object.value(forKey: "eventDate") as? Date else { return .needsNewerBuild }
+        do {
+            let note = try crypto.openString(object.value(forKey: "noteCiphertext") as? Data, contentKey: contentKey) ?? ""
+            let log = IntimacyLog(
+                id: id, dayKey: dayKey, eventDate: eventDate, note: note,
+                healthKitExternalUUID: object.value(forKey: "healthKitExternalUUID") as? String,
+                createdAt: object.value(forKey: "createdAt") as? Date ?? eventDate,
+                updatedAt: object.value(forKey: "updatedAt") as? Date ?? eventDate
+            )
+            return .opened(log, object)
+        } catch is DeviceBindingID.ReadError {
+            return .undecided
+        } catch {
+            return .dead
+        }
+    }
+
+    /// The rows of these ids, grouped by id — fetched `id IN` in slices of ``maxPageSize`` (R2:
+    /// `ids.count / maxPageSize` rounded up fetches).
+    private func fetchRows(ids: [UUID]) throws -> [UUID: [NSManagedObject]] {
+        var grouped: [UUID: [NSManagedObject]] = [:]
+        for start in stride(from: 0, to: ids.count, by: Self.maxPageSize) {
+            let slice = Array(ids[start..<min(start + Self.maxPageSize, ids.count)])
+            let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
+            request.predicate = NSPredicate(format: "id IN %@", slice)
+            for row in try context.fetch(request) {
+                guard let id = row.value(forKey: "id") as? UUID else { continue }
+                grouped[id, default: []].append(row)
+            }
+        }
+        return grouped
+    }
+
+    /// `logs` with one copy per id: the later `updatedAt` wins, a tie keeps the first.
+    static func reducedByID(_ logs: [IntimacyLog]) -> [IntimacyLog] {
+        var order: [UUID] = []
+        var chosen: [UUID: IntimacyLog] = [:]
+        for log in logs {  // R2: bounded by the batch.
+            if let current = chosen[log.id] {
+                if log.updatedAt > current.updatedAt { chosen[log.id] = log }
+            } else {
+                chosen[log.id] = log
+                order.append(log.id)
+            }
+        }
+        return order.compactMap { chosen[$0] }
+    }
+
+    /// `log` with its note capped at ``maxNoteLength`` characters.
+    static func capped(_ log: IntimacyLog) -> IntimacyLog {
+        var bounded = log
+        bounded.note = String(log.note.prefix(Self.maxNoteLength))
+        return bounded
+    }
 }

@@ -2,10 +2,10 @@
 //  IntimacyLogRepositoryTests.swift
 //  FernletTests
 //
-//  The sealed-backup surface added to `IntimacyLogRepository` in security-hardening Phase 3:
-//  a keyless row count, a paged reader in a TOTAL order, an all-or-nothing restore insert, and the
-//  one-way "this device has diverged" latch that stops a stale cloud backup from resurrecting logs
-//  the user deliberately deleted. The pre-existing seal/open behaviour is covered by
+//  The sealed-backup surface of `IntimacyLogRepository`: a keyless row count, a paged reader in a
+//  TOTAL order, the one-way "this device has diverged" latch (which now seeds the intimate-log
+//  restore marker once), and — since the Sealed backup v2 (design 2026-09-30, §8, BV12) — the keyless
+//  id snapshot, the classified read by id, the id-keyed restore MERGE and the keyless delete by id. The pre-existing seal/open behaviour is covered by
 //  `PrivateHistoryPruningTests` and `SensitiveSurfaceGateTests`.
 //
 
@@ -97,43 +97,154 @@ struct IntimacyLogRepositoryTests {
         #expect(try repo.logs(offset: 0, limit: 10, contentKey: nil).isEmpty)
     }
 
-    // MARK: - Atomic restore insert
+    // MARK: - Sealed backup v2 surface (design 2026-09-30, §8, BV12)
 
-    @Test func insertAtomicallyWritesTheWholeBatch() throws {
+    /// The export's snapshot is keyless, distinct and in the store's total order (event date, then
+    /// id) — and decrypts nothing, so it answers with no key at all.
+    @Test func allIDsIsAKeylessSnapshotInTheStoresTotalOrder() throws {
         let repo = makeRepository()
         let key = makeKey()
-        try repo.insertAtomically([log("a", at: 10), log("b", at: 20)], contentKey: key)
-        #expect(try repo.logCount() == 2)
-        #expect(try repo.logs(offset: 0, limit: 10, contentKey: key).map(\.note) == ["a", "b"])
+        let later = log("later", at: 200)
+        let earlier = log("earlier", at: 100)
+        try repo.insert(later, contentKey: key)
+        try repo.insert(earlier, contentKey: key)
+        #expect(try repo.allIDs() == [earlier.id, later.id])
     }
 
-    /// Fail-closed: without a content key the batch is refused before a single row is written, and the
-    /// divergence latch stays UNSET (a failed write is not evidence this device ever held data).
-    @Test func insertAtomicallyWithNilKeyWritesNothingAndThrowsLocked() throws {
+    /// The classified read never skips: a row that opens is a record, a row sealed under another key
+    /// is dead, an id with no row (deleted since the snapshot) is absent, and nothing is answered
+    /// without a key.
+    @Test func logsByIDClassifyEveryRowInsteadOfSkippingIt() throws {
         let repo = makeRepository()
-        #expect(throws: FernletLockError.self) {
-            try repo.insertAtomically([log("never", at: 1)], contentKey: nil)
+        let key = makeKey()
+        let opens = log("opens", at: 1)
+        let dead = log("other key", at: 2)
+        try repo.insert(opens, contentKey: key)
+        try repo.insert(dead, contentKey: makeKey())
+        let page = try repo.logs(ids: [dead.id, UUID(), opens.id], contentKey: key)
+        #expect(page.records.map(\.id) == [opens.id])
+        #expect(page.deadIDs == [dead.id])
+        #expect(page.needsNewerBuildIDs.isEmpty && page.transientCount == 0)
+        #expect(try repo.logs(ids: [opens.id], contentKey: nil) == IntimacyLogPage())
+        #expect(throws: IntimacyLogRepositoryError.self) {
+            try repo.logs(ids: (0...IntimacyLogRepository.maxPageSize).map { _ in UUID() }, contentKey: key)
         }
-        #expect(try repo.logCount() == 0)
-        #expect(repo.hasEverStoredLog == false)
     }
 
-    /// All-or-nothing: a save-time failure part-way through the batch rolls the WHOLE transaction back.
-    /// A partially-populated store would trip the restore's no-clobber gate on the next launch and
-    /// silently drop the un-inserted sealed records forever.
-    @Test func insertAtomicallyRollsBackWhenTheSaveFails() throws {
+    /// BV12: an absent id is inserted with the BACKUP'S own stamps (a restore is not a fresh write) and
+    /// its note capped at 1 000 characters before sealing — and the latch is set.
+    @Test func upsertMergedInsertsAbsentLogsWithTheirStampsAndACappedNote() throws {
+        let repo = makeRepository()
+        let key = makeKey()
+        let stamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let incoming = IntimacyLog(
+            id: UUID(), dayKey: "2026-01-02", eventDate: stamp, note: String(repeating: "n", count: 1_500),
+            healthKitExternalUUID: "hk-1", createdAt: stamp, updatedAt: stamp.addingTimeInterval(60)
+        )
+        let result = try repo.upsertMerged([incoming], contentKey: key)
+        #expect(result.inserted == 1 && result.changedAnything)
+        let stored = try #require(try repo.logs(ids: [incoming.id], contentKey: key).records.first)
+        #expect(stored.note.count == IntimacyLogRepository.maxNoteLength)
+        #expect(stored.createdAt == incoming.createdAt && stored.updatedAt == incoming.updatedAt)
+        #expect(stored.dayKey == "2026-01-02" && stored.healthKitExternalUUID == "hk-1")
+        #expect(repo.hasEverStoredLog)
+    }
+
+    /// BV12: a stored log that opens is KEPT exactly as it is — a different note under the same id
+    /// (corruption or a hostile set; there is no per-log edit) never replaces it — except that a
+    /// missing Health link is taken from the backup. A link is never dropped or changed.
+    @Test func upsertMergedKeepsLocalLogsAndOnlyFillsAMissingHealthLink() throws {
+        let repo = makeRepository()
+        let key = makeKey()
+        let unlinked = log("mine", at: 1)
+        var linked = log("linked", at: 2)
+        linked.healthKitExternalUUID = "local-link"
+        try repo.insert(unlinked, contentKey: key)
+        try repo.insert(linked, contentKey: key)
+        var incomingUnlinked = unlinked
+        incomingUnlinked.note = "theirs"
+        incomingUnlinked.healthKitExternalUUID = "their-link"
+        var incomingLinked = linked
+        incomingLinked.healthKitExternalUUID = nil
+
+        let result = try repo.upsertMerged([incomingUnlinked, incomingLinked], contentKey: key)
+        #expect(result.linked == 1 && result.unchanged == 1 && result.inserted == 0 && result.replaced == 0)
+        let stored = try repo.logs(ids: [unlinked.id, linked.id], contentKey: key).records
+        #expect(stored.map(\.note) == ["mine", "linked"], "the local note always wins")
+        #expect(stored.map(\.healthKitExternalUUID) == ["their-link", "local-link"], "filled, never dropped")
+    }
+
+    /// BV12: a stored row that can never open (another key) is replaced by the backup's copy — an
+    /// openable copy of a dead row loses nothing — and nothing local is ever deleted: a log the backup
+    /// does not carry stays.
+    @Test func upsertMergedReplacesDeadRowsAndNeverDeletes() throws {
+        let repo = makeRepository()
+        let key = makeKey()
+        let dead = log("sealed elsewhere", at: 1)
+        let onlyHere = log("only here", at: 2)
+        try repo.insert(dead, contentKey: makeKey())
+        try repo.insert(onlyHere, contentKey: key)
+        var incoming = dead
+        incoming.note = "from the backup"
+
+        let result = try repo.upsertMerged([incoming], contentKey: key)
+        #expect(result.replaced == 1)
+        let page = try repo.logs(ids: [dead.id, onlyHere.id], contentKey: key)
+        #expect(page.records.map(\.note) == ["from the backup", "only here"])
+        #expect(page.deadIDs.isEmpty)
+        #expect(try repo.logCount() == 2)
+    }
+
+    /// BV12: idempotent (a second merge of the same set changes nothing and reports nothing changed),
+    /// and a duplicate id in a hostile set is reduced first — the later `updatedAt` wins.
+    @Test func upsertMergedIsIdempotentAndReducesDuplicateIDs() throws {
+        let repo = makeRepository()
+        let key = makeKey()
+        let id = UUID()
+        let older = IntimacyLog(id: id, eventDate: Date(timeIntervalSince1970: 10), note: "older",
+                                createdAt: Date(timeIntervalSince1970: 10), updatedAt: Date(timeIntervalSince1970: 10))
+        let newer = IntimacyLog(id: id, eventDate: Date(timeIntervalSince1970: 10), note: "newer",
+                                createdAt: Date(timeIntervalSince1970: 10), updatedAt: Date(timeIntervalSince1970: 20))
+        #expect(try repo.upsertMerged([older, newer], contentKey: key).inserted == 1)
+        #expect(try repo.logs(ids: [id], contentKey: key).records.map(\.note) == ["newer"])
+        let again = try repo.upsertMerged([older, newer], contentKey: key)
+        #expect(!again.changedAnything && again.unchanged == 1)
+        #expect(try repo.logCount() == 1)
+    }
+
+    /// BV12: atomic — a merge that fails part-way (here: no store to save into) leaves nothing pending
+    /// in the shared context; and without a key nothing is written and the latch stays unset.
+    @Test func upsertMergedIsAllOrNothing() throws {
         let controller = PrivatePersistenceController(inMemory: true)
         let context = controller.container.viewContext
         let repo = IntimacyLogRepository(context: context, defaults: isolatedLatchDefaults())
-        try repo.insert(log("pre-existing", at: 1), contentKey: makeKey())
+        #expect(throws: FernletLockError.self) {
+            try repo.upsertMerged([log("never", at: 1)], contentKey: nil)
+        }
+        #expect(try repo.logCount() == 0 && repo.hasEverStoredLog == false)
+        #expect(repo.isStoreHealthy)
 
         for store in controller.container.persistentStoreCoordinator.persistentStores {
             try controller.container.persistentStoreCoordinator.remove(store)
         }
+        #expect(!repo.isStoreHealthy, "a storeless controller reads as unhealthy")
         #expect(throws: (any Error).self) {
-            try repo.insertAtomically([log("batch-1", at: 2), log("batch-2", at: 3)], contentKey: makeKey())
+            try repo.upsertMerged([log("batch-1", at: 2), log("batch-2", at: 3)], contentKey: makeKey())
         }
-        #expect(context.insertedObjects.isEmpty, "a failed atomic insert left objects in the context")
+        #expect(context.insertedObjects.isEmpty, "a failed merge left objects in the context")
+    }
+
+    /// "Remove them": a keyless delete of exactly these ids, latching divergence when rows went.
+    @Test func deleteByIDsRemovesOnlyThoseRows() throws {
+        let repo = makeRepository()
+        let key = makeKey()
+        let gone = log("gone", at: 1)
+        let kept = log("kept", at: 2)
+        try repo.insert(gone, contentKey: key)
+        try repo.insert(kept, contentKey: key)
+        #expect(try repo.delete(ids: [gone.id, UUID()]) == 1)
+        #expect(try repo.allIDs() == [kept.id])
+        #expect(try repo.delete(ids: []) == 0)
     }
 
     // MARK: - One-way divergence latch
@@ -145,9 +256,9 @@ struct IntimacyLogRepositoryTests {
         #expect(repo.hasEverStoredLog)
     }
 
-    @Test func latchIsSetByInsertAtomically() throws {
+    @Test func latchIsSetByARestoreMerge() throws {
         let repo = makeRepository()
-        try repo.insertAtomically([log("restored", at: 1)], contentKey: makeKey())
+        _ = try repo.upsertMerged([log("restored", at: 1)], contentKey: makeKey())
         #expect(repo.hasEverStoredLog, "a restore that populates the store must latch too")
     }
 

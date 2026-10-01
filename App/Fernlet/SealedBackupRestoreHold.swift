@@ -33,8 +33,9 @@ import Foundation
 /// per-payload record stays, so each payload's re-uploads stay held until ITS restore has landed
 /// (`.restored`, or `.nothingToRestore`: pulled back, or nothing there) and ``forgetPreResetCopy(of:)``
 /// is called for it — a pre-reset copy is never replaced before it was pulled back. A payload whose
-/// restore cannot land (the journal or intimacy store already holds entries written since the reset,
-/// so their empty-store-only restore refuses) stays held — and Privacy & Data says so, by name —
+/// restore cannot land (the journal store already holds entries written since the reset, so its
+/// empty-store-only restore refuses; the period and intimate-log restores are merges and always can)
+/// stays held — and Privacy & Data says so, by name —
 /// until the user explicitly chooses to replace it with this iPhone's entries, or turns that backup
 /// off, which deletes the copy: an explicit act, never a silent replace (named in the design's §12;
 /// review U5-backup-v2-C-U5-5 / L-U5-R5). A hold that keeps no enabled backup's copy is released

@@ -625,6 +625,34 @@ struct LocalizationBoundaryTests {
                 "the set-scoped suffix name: <base>.chunk.<i>.<set>")
     }
 
+    /// Unit B2 (design 2026-09-30, §10.2): the intimate-log backup's four defaults keys (a respelling
+    /// would reopen a resolved restore and merge a stale copy back in behind the user's deletes, or
+    /// forget the set this install may replace, the iPhone whose set it keeps, or what it wrote), each
+    /// in its frozen value grammar, and the `IntimacyLog` coding keys every backup chunk carries (a
+    /// renamed key would make every older set unreadable).
+    @MainActor
+    @Test func frozenIntimacyBackupV2Tokens() throws {
+        #expect(SealedBackupBookkeeping.intimacyRestoreResolvedKey == "fernlet.intimacyLog.restoreResolved")
+        #expect(SealedBackupBookkeeping.intimacyAcceptedHeadKey == "fernlet.sealedBackup.intimacyAcceptedHead")
+        #expect(SealedBackupBookkeeping.intimacyObservedHeadKey == "fernlet.sealedBackup.intimacyObservedHead")
+        #expect(SealedBackupBookkeeping.intimacyInFlightKey == "fernlet.sealedBackup.intimacyInFlight")
+        let defaults = try #require(UserDefaults(suiteName: "fernlet.tests.v2IntimacyGrammar.\(UUID().uuidString)"))
+        let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        #expect(bookkeeping.seedRestoreMarkerIfAbsent(.intimacyLogs))
+        #expect(defaults.object(forKey: SealedBackupBookkeeping.intimacyRestoreResolvedKey) as? Bool == true)
+        let stamp = SealedBackupHeadStamp(writer: "w2", generation: 7)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "0a0b"), .intimacyLogs, installTag: "me")
+        bookkeeping.recordObservedHead(stamp, .intimacyLogs, installTag: "me")
+        bookkeeping.recordInFlight(7, .intimacyLogs, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.intimacyAcceptedHeadKey) == "me:w2:7:0a0b")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.intimacyObservedHeadKey) == "me:w2:7")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.intimacyInFlightKey) == "me:7")
+        let log = IntimacyLog(id: UUID(), dayKey: "2026-01-02", eventDate: Date(timeIntervalSince1970: 0), note: "n",
+                              healthKitExternalUUID: "hk", createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(log)) as? [String: Any])
+        #expect(Set(object.keys) == ["id", "dayKey", "eventDate", "note", "healthKitExternalUUID", "createdAt", "updatedAt"])
+    }
+
     /// Sealed journal + trainer-export tokens.
     ///
     /// `FeelingTag` is persisted on every `JournalEntry`, is the memory category for `MemoryNote`, and

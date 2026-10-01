@@ -220,6 +220,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         // The period backup's observed foreign head (Sealed backup v2 design 2026-09-30, §4.3, §9):
         // the set it names is deleted by the same leg.
         "fernlet.sealedBackup.periodObservedHead": .cleared(token: "sealedBackupBookkeeping.clearObservedHeadsForWipe"),
+        // The intimate-log backup's observed foreign head (design 2026-09-30, §4.3, §9, unit B2): the
+        // set it names is deleted by the same leg.
+        "fernlet.sealedBackup.intimacyObservedHead": .cleared(token: "sealedBackupBookkeeping.clearObservedHeadsForWipe"),
         "fernlet.sealedPhoto.generation.*": .cleared(token: "generationStore.reset"),
         "fernlet.sealedPhoto.restoreRepairIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
         "fernlet.sealedPhoto.uploadedIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
@@ -318,6 +321,15 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "fernlet.sealedBackup.periodInFlight": .kept(
             reason: "The period backup's in-flight generation (Sealed backup v2, review B1-C-B1-2): an install tag and the highest generation this install's commits set out to save, no content. Kept because it only states what this install wrote, which the wipe does not make untrue: a set of this install's that survives a failed cloud delete stays its own to overwrite (finishing the wipe) instead of being merged back as a newer set."
+        ),
+        "fernlet.sealedBackup.intimacyAcceptedHead": .kept(
+            reason: "The intimate-log backup's accepted head (Sealed backup v2 design 2026-09-30, §4.3, §9, review R2-F11, unit B2): two install tags, a counter and a salt prefix, no content. Kept so a set that survives a failed cloud delete is this install's own to the next export, which overwrites it and finishes the wipe, instead of being named another iPhone's and offered back."
+        ),
+        "fernlet.sealedBackup.intimacyInFlight": .kept(
+            reason: "The intimate-log backup's in-flight generation (Sealed backup v2, unit B2): an install tag and the highest generation this install's commits set out to save, no content. Kept because it only states what this install wrote, which the wipe does not make untrue: a set of this install's that survives a failed cloud delete stays its own to overwrite (finishing the wipe) instead of being merged back as a newer set."
+        ),
+        "fernlet.intimacyLog.restoreResolved": .kept(
+            reason: "The intimate-log backup's restore marker (Sealed backup v2 design 2026-09-30, §4.3, unit B2): one bit, 'this install has finished pulling the intimate-log backup'. It must outlive the wipe, or an intimacy chunk set that survived a failed cloud delete would merge itself back at the next Private visit — the resurrection the marker exists to stop."
         ),
         "fernlet.cycleRecord.periodRestoreResolved": .kept(
             reason: "The period backup's restore marker (period-data design 2026-09-30, §5.3): one bit, 'this install has finished pulling the period backup'. It must outlive the wipe, or a period chunk set that survived a failed cloud delete would merge itself back at the next Cycle settle — the resurrection the marker exists to stop."
