@@ -55,10 +55,18 @@ seal or buffer failure throws with no Health call. **Edit** (``PeriodTrackerStor
 updates the record IN PLACE under the same id — the delete-then-recreate hazard of the old
 two-store split is gone — then deletes and rewrites Fernlet's mirror with sharing on, or removes
 Fernlet's older copy with sharing off (owner question Q1; ``PeriodLogOutcome/HealthCopy/removedStaleCopy``
-only when a sample was really deleted). An edit that leaves an UNKNOWN block empty leaves it unknown.
+only when a sample was really deleted). An edit that leaves an UNKNOWN block empty leaves it unknown,
+and an edit (or an emptied edit, ``PeriodTrackerStore/deleteRecord(_:)``) of a record whose stored
+clinical block is unknown never deletes from Apple Health: Fernlet never mirrored such a record, so
+every Fernlet sample carrying its id is that block's not-yet-imported source, not a stale copy.
 **Delete** (``PeriodTrackerStore/deleteDay(_:)``) removes Fernlet's rows FIRST, keyless, then its
 Health copies; Health refusing is ``PeriodDeleteOutcome/HealthCopy/stillInHealth(_:)``, never a throw
-that would make a day undeletable in Fernlet. A day holding only Fernlet's Health copies offers "Keep
+that would make a day undeletable in Fernlet. The mirror delete reports the sample kinds Apple Health
+refused (``CycleMirrorDeletion``, ``CycleMirrorSampleKind``) instead of throwing them, because HealthKit
+says "denied" both for access never granted and for access taken away after a copy was written; a
+refusal is reported only for a kind the record's copy could hold, and — unless the record was built
+from Fernlet's own Health samples — only while cycle sharing is on. With sharing on an edit's rewrite
+is always attempted after a refusal, so a partial grant never silently removes the day. A day holding only Fernlet's Health copies offers "Keep
 in Fernlet" (``PeriodTrackerStore/keepHealthOnlyDay(_:contentKey:)``) and "Delete from Apple Health".
 **Load** reads Health only while the cycle capability is on, rechecks visibility and the live key
 after that await, completes a record whose clinical block is unknown from its own Fernlet samples
@@ -184,6 +192,8 @@ types), and the prediction engine is `nonisolated` pure math callable from any e
 - ``PeriodTrackingHiddenError``
 - ``CycleHealthSamples``
 - ``FernletCycleRecordMirror``
+- ``CycleMirrorDeletion``
+- ``CycleMirrorSampleKind``
 
 ### The Legacy Import
 
