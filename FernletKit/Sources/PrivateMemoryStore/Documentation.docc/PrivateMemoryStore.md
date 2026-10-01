@@ -47,7 +47,10 @@ opens each entry under the hub key OR the journal device key (``JournalBackupDev
 app without minting) — so an entry written from Home and not folded yet is backed up as it is — and
 sorts the rest into dead, needs-a-newer-build (an unknown feeling tag is never dead) and undecided;
 and the id-keyed MERGE restore (``JournalNarrativeRepository/upsertMerged(_:hubKey:deviceKey:)`` →
-``JournalNarrativeMergeResult``): absent entries inserted with their own stamps, an entry that opens
+``JournalNarrativeMergeResult``): absent entries inserted with their own stamps — unless an entry
+on their day already IS them (the same words and the same creation stamp: the other iPhone's fork of
+this iPhone's own entry coming back, since a fork keeps the stamps of the entry it copies), so
+"Restore it here" on both iPhones settles at both versions, neither doubled — an entry that opens
 never modified, a backup entry whose words differ added beside the local one as its own entry
 unless an equal one is already on its day, dead rows replaced, never a delete, one atomic save,
 idempotent. It replaced the empty-store-only `insertAtomically`, so entries that survived under the
