@@ -41,7 +41,9 @@ strip/hydrate cycle driven by the app's `JournalSealingCoordinator` (through the
 sealed here, and hydrated back for display. ``JournalNarrativeRepository`` is also the Sealed
 backup's journal payload source (`journalNarratives`), on the app's v2 engine since unit B3 of the
 journal and intimacy Sealed backup v2 design (2026-09-30, §7): a keyless ``JournalNarrativeRepository/allIDs()``
-snapshot in a *total* order (`entryDate` then the unique `id`), a classified chunk read
+snapshot in a *total* order (`entryDate` then the unique `id`) — with the keyless
+``JournalNarrativeRepository/ids(onDays:)`` for the days whose stored day row will not decode, every
+entry on which the snapshot keeps — a classified chunk read
 (``JournalNarrativeRepository/backupRecords(ids:hubKey:deviceKey:)`` → ``JournalBackupPage``) that
 opens each entry under the hub key OR the journal device key (``JournalBackupDeviceKey``, read by the
 app without minting) — so an entry written from Home and not folded yet is backed up as it is — and

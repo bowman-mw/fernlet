@@ -38,12 +38,14 @@ re-sanitizes every legacy day so neither sealed journal text nor any HealthKit-d
 health context, HealthKit's sleep hours, Apple Health workout imports — reaches a synced row;
 since 2026-09-23 HealthKit information is not stored in iCloud at all), and a
 read-only-recovery latch that refuses all saves after a failed fetch/decode so a transient error
-can never be persisted over real data. Its day history has a fail-closed twin: `loadAllDays()`
-serves what it could read (a failed `DayRecord` fetch reads as no days, an undecodable row as a
-missing day), while `loadAllDaysIfComplete()` answers nil under read-only recovery or for a read
-``DayRecordRepository/loadAllReportingCompleteness()`` reports incomplete — and never serves a memo
-installed from such a read — so the journal Sealed backup's snapshot never mistakes a broken day
-store for entries that are gone. It exposes its `persistenceController` so the app's
+can never be persisted over real data. Its day history has a twin that says what it could not
+read: `loadAllDays()` serves what it could read (a failed `DayRecord` fetch reads as no days, an
+undecodable row as a missing day), while `loadAllDaysWithUnreadable()` names the day of every row
+``DayRecordRepository/loadAllWithUnreadable()`` could not decode and does not account for every row
+under read-only recovery, after a failed fetch or with a row that has no date key — and never serves
+a memo installed from such a read — so the journal Sealed backup's snapshot never mistakes a broken
+day store for entries that are gone, and keeps every entry on a day it could not read instead of
+stopping over a row nothing heals. It exposes its `persistenceController` so the app's
 one-time scrub of HealthKit values out of rows written by older builds (and the HealthKit opt-out
 cleaner) operate on the SAME store it reads, never on `PersistenceController.shared` by
 assumption.
