@@ -2815,36 +2815,48 @@ extension HealthKitService: PeriodHealthKitServicing {
         }
     }
 
-    /// Deletes Fernlet's own samples of the five cycle types whose external UUID is the record id —
+    /// Deletes Fernlet's own samples of the five cycle kinds whose external UUID is the record id —
     /// a post-cutover mirror and a pre-cutover sample the import gave that id alike. UNGATED (a delete
     /// puts nothing into Health, and "sharing off" must not strand Fernlet's copies) and own-source
-    /// only (`HKSource.default()`, which HealthKit enforces anyway). A type Fernlet was never granted,
-    /// or with nothing matching, counts 0 (``isExpectedDeleteSkip(_:)``). Any other failure — share
-    /// access the user REVOKED, which may have left copies made before it — is rethrown, but only
-    /// after every other type was attempted, so one refused type never strands the rest (the
-    /// "delete everything" sweep's stance). Audited by count only.
+    /// only (`HKSource.default()`, which HealthKit enforces anyway). Every kind is attempted, so one
+    /// refused kind never strands the rest (the "delete everything" sweep's stance):
+    /// - a kind Fernlet was never granted, or with nothing matching, counts 0
+    ///   (``isExpectedDeleteSkip(_:)``);
+    /// - a kind whose share access the user DENIED is reported in
+    ///   `CycleMirrorDeletion.refusedKinds`, not thrown — HealthKit cannot say whether it was never
+    ///   granted (nothing of Fernlet's there) or taken away after a copy was written, so the store
+    ///   weighs it against the record (review round 1, R2);
+    /// - any other failure is rethrown once every kind was attempted.
     ///
-    /// - Returns: How many samples were deleted; 0 on a device without Health.
-    public func deleteMirror(recordID: UUID) async throws -> Int {
-        guard isHealthDataAvailable() else { return 0 }
+    /// Audited by counts only.
+    ///
+    /// - Returns: How many samples were deleted (0 on a device without Health) and the refused kinds.
+    public func deleteMirror(recordID: UUID) async throws -> CycleMirrorDeletion {
+        guard isHealthDataAvailable() else { return CycleMirrorDeletion() }
         let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             HKQuery.predicateForObjects(from: HKSource.default()),
             HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeyExternalUUID, allowedValues: [recordID.uuidString])
         ])
-        var deleted = 0
+        var deletion = CycleMirrorDeletion()
         var firstFailure: Error?
-        for type in try Self.periodSampleTypes() {  // R2: five types.
+        for kind in CycleMirrorSampleKind.allCases {  // R2: five kinds.
             do {
-                deleted += try await storeController.deleteObjects(of: type, predicate: predicate)
+                deletion.deletedCount += try await storeController.deleteObjects(of: try Self.periodSampleType(for: kind), predicate: predicate)
             } catch let error as HKError where Self.isExpectedDeleteSkip(error) {
                 continue
+            } catch let error as HKError where error.code == .errorAuthorizationDenied {
+                deletion.refusedKinds.insert(kind)
             } catch {
                 firstFailure = firstFailure ?? error
             }
         }
-        FernletAuditLog.log("hk.cycleMirror.deleted", context: ["count": "\(deleted)", "failed": firstFailure == nil ? "false" : "true"])
+        FernletAuditLog.log("hk.cycleMirror.deleted", context: [
+            "count": "\(deletion.deletedCount)",
+            "refused": "\(deletion.refusedKinds.count)",
+            "failed": firstFailure == nil ? "false" : "true"
+        ])
         if let firstFailure { throw firstFailure }
-        return deleted
+        return deletion
     }
 
     /// Deletes Fernlet-authored samples a Health-only Fernlet day shows (an earlier install's or the
@@ -2960,15 +2972,23 @@ extension HealthKitService: PeriodHealthKitServicing {
         return samples
     }
 
-    /// The five cycle-tracking sample types the period seam reads and writes.
+    /// The five cycle-tracking sample types the period seam reads and writes, in
+    /// `CycleMirrorSampleKind` order.
     nonisolated static func periodSampleTypes() throws -> [HKSampleType] {
-        [
-            try categoryType(.menstrualFlow),
-            try quantityType(.basalBodyTemperature),
-            try categoryType(.cervicalMucusQuality),
-            try categoryType(.ovulationTestResult),
-            try categoryType(.intermenstrualBleeding)
-        ]
+        try CycleMirrorSampleKind.allCases.map(periodSampleType(for:))
+    }
+
+    /// The Apple Health sample type one mirror kind is — the one mapping between the store's
+    /// `CycleMirrorSampleKind` and HealthKit, which ``periodSamples(for:)`` writes by
+    /// (`HealthKitWriteGateTests` pins the two against each other).
+    nonisolated public static func periodSampleType(for kind: CycleMirrorSampleKind) throws -> HKSampleType {
+        switch kind {
+        case .menstrualFlow: return try categoryType(.menstrualFlow)
+        case .basalBodyTemperature: return try quantityType(.basalBodyTemperature)
+        case .cervicalMucusQuality: return try categoryType(.cervicalMucusQuality)
+        case .ovulationTestResult: return try categoryType(.ovulationTestResult)
+        case .intermenstrualBleeding: return try categoryType(.intermenstrualBleeding)
+        }
     }
 
     /// One-shot unsorted sample fetch for any sample type (period seam helper). `limit` is HealthKit's

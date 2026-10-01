@@ -493,21 +493,146 @@ struct PeriodTrackerTests {
     }
 
     /// An edit that leaves an UNKNOWN block empty leaves it unknown: a legacy narrative-only record
-    /// edited for its note does not gain a "none" clinical block (so its Health samples can still
-    /// complete it).
-    @Test func anEditKeepsAnUnknownBlockUnknown() async throws {
+    /// edited for its note does not gain a "none" clinical block — and its Fernlet samples in Apple
+    /// Health, the block's not-yet-imported source, are never touched, so they can still complete it
+    /// (review round 1, C-U4-R1 / L-U4-1: the edit used to delete them, sharing on or off, and say
+    /// "removed its older copy"). Health here holds three such samples; neither sharing state may
+    /// reach them.
+    @Test(arguments: [false, true])
+    func anEditKeepsAnUnknownBlockUnknown(sharing: Bool) async throws {
         let harness = CycleStoreHarness()
-        var narrativeOnly = PeriodTestSupport.record(on: Date(), flow: nil, symptoms: [.cramps])
-        narrativeOnly.clinical = nil
+        harness.health.mirrorEnabled = sharing
+        harness.health.deleteMirrorResult = 3
+        let narrativeOnly = Self.narrativeOnlyRecord()
         try harness.records.insert(narrativeOnly, contentKey: harness.key)
 
-        _ = try await harness.store.editRecord(
+        let outcome = try await harness.store.editRecord(
             narrativeOnly.id, with: UserLoggedCycleEvent(note: "edited", symptoms: [.cramps]), unlockedContentKey: harness.key
         )
 
         let stored = try #require(try harness.storedRecords().first)
         #expect(stored.clinical == nil)
         #expect(stored.narrative?.note == "edited")
+        #expect(harness.health.count("deleteMirror") == 0, "the record's pre-cutover samples were deleted")
+        #expect(harness.health.deletedMirrorIDs.isEmpty)
+        #expect(harness.health.calls.isEmpty, "a note-only edit of an unknown block has nothing for Apple Health")
+        #expect(outcome.healthCopy == .notShared)
+    }
+
+    /// An edit that gives an UNKNOWN block fields still never deletes the record's pre-cutover
+    /// samples: with sharing on, the new block is written BESIDE them (the next edit, of a now-known
+    /// block, replaces the lot); with sharing off, Apple Health is not touched at all.
+    @Test func anEditThatFillsAnUnknownBlockWritesBesideItsLegacySamples() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorResult = 3
+        let sharingOff = Self.narrativeOnlyRecord()
+        let sharingOn = Self.narrativeOnlyRecord()
+        try harness.records.insert(sharingOff, contentKey: harness.key)
+        try harness.records.insert(sharingOn, contentKey: harness.key)
+        let event = UserLoggedCycleEvent(date: sharingOff.loggedAt, flowLevel: .medium, note: "with flow", symptoms: [.cramps])
+
+        let off = try await harness.store.editRecord(sharingOff.id, with: event, unlockedContentKey: harness.key)
+        #expect(off.healthCopy == .notShared)
+        #expect(harness.health.calls.isEmpty)
+
+        harness.health.mirrorEnabled = true
+        let on = try await harness.store.editRecord(sharingOn.id, with: event, unlockedContentKey: harness.key)
+        #expect(on.healthCopy == .written)
+        #expect(harness.health.calls == ["writeMirror"], "the legacy samples were deleted before the write")
+        #expect(try harness.storedRecords().allSatisfy { $0.clinical?.flowLevel == .medium })
+    }
+
+    /// An emptied edit of a record whose clinical block is UNKNOWN removes the entry and keeps its
+    /// Fernlet samples in Apple Health (review round 1, C-U4-R1): emptying a note must not silently
+    /// delete flow history the sheet never showed. The same emptied edit of a KNOWN block still
+    /// removes its copy — the control that keeps this from passing vacuously.
+    @Test func anEmptiedEditOfAnUnknownBlockKeepsItsHealthSamples() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorResult = 3
+        let narrativeOnly = Self.narrativeOnlyRecord()
+        let logged = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(narrativeOnly, contentKey: harness.key)
+        try harness.records.insert(logged, contentKey: harness.key)
+
+        let kept = try await harness.store.deleteRecord(narrativeOnly)
+        #expect(kept == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .none))
+        #expect(harness.health.count("deleteMirror") == 0)
+
+        let removed = try await harness.store.deleteRecord(logged)
+        #expect(removed == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .removed))
+        #expect(harness.health.deletedMirrorIDs == [logged.id])
+        #expect(try harness.records.recordCount() == 0)
+    }
+
+    /// Review round 1, R2 (b): with sharing ON and a partial grant — flow allowed, temperature denied —
+    /// editing a flow-only day still REWRITES the mirror. The refused kind is one the entry never
+    /// held, so nothing of Fernlet's was left behind and the write's own share check decides. The edit
+    /// used to stop at the refusal, so every edit silently removed the day from Apple Health.
+    @Test func withSharingOnARefusedKindTheEntryNeverHeldStillRewritesTheMirror() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+        harness.health.deleteMirrorResult = 1
+        harness.health.deleteMirrorRefused = [.basalBodyTemperature]
+        let record = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(record, contentKey: harness.key)
+
+        let outcome = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: harness.key)
+
+        #expect(outcome.healthCopy == .written)
+        #expect(harness.health.calls == ["deleteMirror", "writeMirror"])
+        #expect(harness.health.writtenMirrors.first?.clinical?.flowLevel == .medium)
+    }
+
+    /// Review round 1, R2 (a): a user who declined every cycle type on Apple Health's share sheet and
+    /// has sharing off is never told Apple Health kept a copy Fernlet never wrote — not on an edit,
+    /// not on a delete. HealthKit reports "never granted" exactly as it reports "taken away", and with
+    /// sharing off a logged entry was never copied.
+    @Test func withSharingOffARefusalOfALoggedEntryIsNeverReported() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorRefused = Set(CycleMirrorSampleKind.allCases)
+        let record = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(record, contentKey: harness.key)
+
+        let edit = try await harness.store.editRecord(record.id, with: UserLoggedCycleEvent(flowLevel: .heavy), unlockedContentKey: harness.key)
+        #expect(edit.healthCopy == .notShared)
+
+        let delete = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: record.dayKey, records: [record]))
+        #expect(delete == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .none))
+    }
+
+    /// The other side of R2: a refusal IS reported where a Fernlet copy can really be left behind — a
+    /// refused kind the entry held, with sharing on (it was copied) or on an entry built from
+    /// Fernlet's own Apple Health samples (the copy existed by construction), on an edit and on a
+    /// delete alike. A rewrite that succeeded beside a refused older kind still reports it: Apple
+    /// Health keeps that kind's stale copy.
+    @Test func aRefusalIsReportedWhereAFernletCopyCanRemain() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorRefused = [.menstrualFlow]
+        var imported = PeriodTestSupport.record(on: Date(), flow: .light)
+        imported.origin = .importedLegacy
+        try harness.records.insert(imported, contentKey: harness.key)
+
+        let offEdit = try await harness.store.editRecord(imported.id, with: UserLoggedCycleEvent(flowLevel: .medium), unlockedContentKey: harness.key)
+        #expect(offEdit.healthCopy == .failed(.healthDenied), "an imported entry's Health copy existed")
+
+        harness.health.mirrorEnabled = true
+        let logged = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(logged, contentKey: harness.key)
+        let temperatureOnly = UserLoggedCycleEvent(date: logged.loggedAt, basalBodyTemperature: 97.9)
+        let onEdit = try await harness.store.editRecord(logged.id, with: temperatureOnly, unlockedContentKey: harness.key)
+        #expect(onEdit.healthCopy == .failed(.healthDenied), "the old flow copy stayed beside the new temperature")
+        #expect(harness.health.count("writeMirror") == 1, "the rewrite was still attempted")
+
+        let edited = try #require(try harness.storedRecords().first { $0.id == imported.id })
+        let delete = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: edited.dayKey, records: [edited]))
+        #expect(delete.healthCopy == .stillInHealth(.healthDenied))
+    }
+
+    /// A narrative-only record — the legacy import's (or a v1 drain's) shape: clinical block UNKNOWN.
+    private static func narrativeOnlyRecord() -> CycleRecord {
+        var record = PeriodTestSupport.record(on: Date(), flow: nil, symptoms: [.cramps])
+        record.clinical = nil
+        return record
     }
 
     // MARK: - Delete (§6.3, I32)
@@ -529,18 +654,45 @@ struct PeriodTrackerTests {
         #expect(harness.health.deletedMirrorIDs == [record.id])
     }
 
-    /// I32: Health refusing leaves Fernlet's rows GONE and reports `.stillInHealth` — never a throw
-    /// that would make the day undeletable in Fernlet.
+    /// I32: Health failing leaves Fernlet's rows GONE and reports `.stillInHealth` — never a throw
+    /// that would make the day undeletable in Fernlet. Both shapes: a delete that failed outright, and
+    /// a refused kind the copy held while sharing is on (R2).
     @Test func aHealthFailureLeavesTheRowsGoneAndSaysStillInHealth() async throws {
         let harness = CycleStoreHarness()
         let record = PeriodTestSupport.record(on: Date(), flow: .medium)
         try harness.records.insert(record, contentKey: harness.key)
-        harness.health.deleteMirrorError = HKError(.errorAuthorizationDenied)
+        harness.health.deleteMirrorError = HKError(.errorDatabaseInaccessible)
 
         let outcome = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: record.dayKey, records: [record]))
 
-        #expect(outcome == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .stillInHealth(.healthDenied)))
+        #expect(outcome == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .stillInHealth(.other)))
         #expect(try harness.records.recordCount() == 0)
+
+        harness.health.deleteMirrorError = nil
+        harness.health.deleteMirrorRefused = [.menstrualFlow]
+        harness.health.mirrorEnabled = true
+        let second = PeriodTestSupport.record(on: Date(), flow: .light)
+        try harness.records.insert(second, contentKey: harness.key)
+        let refused = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: second.dayKey, records: [second]))
+        #expect(refused == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .stillInHealth(.healthDenied)))
+    }
+
+    /// R2: a delete refused only for a kind the entry never held reports what really happened —
+    /// `.removed` here — never `.stillInHealth`, and every record of the day is still attempted.
+    @Test func aDeleteRefusedOnlyForAKindTheEntryNeverHeldIsNotStillInHealth() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.mirrorEnabled = true
+        harness.health.deleteMirrorResult = 1
+        harness.health.deleteMirrorRefused = [.basalBodyTemperature, .cervicalMucusQuality]
+        let first = PeriodTestSupport.record(on: Date(), flow: .light)
+        let second = PeriodTestSupport.record(on: Date(), flow: .medium)
+        try harness.records.insert(first, contentKey: harness.key)
+        try harness.records.insert(second, contentKey: harness.key)
+
+        let outcome = try await harness.store.deleteDay(CycleDayEntry(date: Date(), dateKey: first.dayKey, records: [first, second]))
+
+        #expect(outcome == PeriodDeleteOutcome(removedRecordCount: 2, healthCopy: .removed))
+        #expect(Set(harness.health.deletedMirrorIDs) == [first.id, second.id])
     }
 
     /// Nothing in Health is `.none`; a day's orphan Fernlet copies (no record here) go too.

@@ -27,7 +27,11 @@ final class MockCycleHealthService: PeriodHealthKitServicing {
     var legacySamples: [HKSample] = []
     var legacyError: Error?
     var writeMirrorError: Error?
+    /// How many samples each mirror delete reports deleting.
     var deleteMirrorResult = 0
+    /// The kinds each mirror delete reports Apple Health refused (share access denied).
+    var deleteMirrorRefused: Set<CycleMirrorSampleKind> = []
+    /// When set, every mirror delete throws it (an unexpected failure, not a refusal).
     var deleteMirrorError: Error?
     var deleteAuthoredError: Error?
 
@@ -63,12 +67,12 @@ final class MockCycleHealthService: PeriodHealthKitServicing {
         writtenMirrors.append(record)
     }
 
-    func deleteMirror(recordID: UUID) async throws -> Int {
+    func deleteMirror(recordID: UUID) async throws -> CycleMirrorDeletion {
         calls.append("deleteMirror")
         onHealthWrite?("deleteMirror")
         if let deleteMirrorError { throw deleteMirrorError }
         deletedMirrorIDs.append(recordID)
-        return deleteMirrorResult
+        return CycleMirrorDeletion(deletedCount: deleteMirrorResult, refusedKinds: deleteMirrorRefused)
     }
 
     func deleteFernletAuthored(_ samples: [HKSample]) async throws -> Int {

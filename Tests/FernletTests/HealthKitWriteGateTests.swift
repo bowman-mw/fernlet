@@ -229,32 +229,80 @@ struct HealthKitWriteGateTests {
     }
 
     /// The mirror's own delete is ungated and counts what it removed: with every switch off it still
-    /// reaches the store, own source only, once per cycle type, and returns HealthKit's count — the
+    /// reaches the store, own source only, once per cycle kind, and returns HealthKit's count — the
     /// number an edit's "removed Fernlet's older copy" sentence is conditioned on (§6.3, R2-F11). A
-    /// type never granted counts 0 instead of failing the delete.
+    /// kind never granted counts 0 instead of failing the delete.
     @Test func theMirrorDeleteIsUngatedAndCounts() async throws {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let harness = WriteGateHarness(masterEnabled: false, enabledCapabilities: [])
         defer { harness.cleanup() }
         harness.controller.deleteObjectsCount = 1
 
-        #expect(try await harness.service.deleteMirror(recordID: UUID()) == 5, "five cycle types, one sample each")
+        #expect(try await harness.service.deleteMirror(recordID: UUID()) == CycleMirrorDeletion(deletedCount: 5), "five cycle kinds, one sample each")
         #expect(harness.controller.deletedObjectTypes.count == 5)
         #expect(harness.controller.writeCount == 0)
 
         harness.controller.deleteObjectsError = HKError(.errorAuthorizationNotDetermined)
-        #expect(try await harness.service.deleteMirror(recordID: UUID()) == 0, "a never-granted type left nothing behind")
-        harness.controller.deleteObjectsError = HKError(.errorAuthorizationDenied)
-        await #expect(throws: HKError.self, "revoked access may have left copies behind") {
-            _ = try await harness.service.deleteMirror(recordID: UUID())
-        }
+        #expect(try await harness.service.deleteMirror(recordID: UUID()) == CycleMirrorDeletion(), "a never-granted kind left nothing behind")
+    }
 
-        // One refused type never strands the rest: every type is attempted before the throw.
+    /// Review round 1, R2: a kind whose share access Apple Health DENIES is reported, not thrown —
+    /// HealthKit says "denied" both for access never granted (nothing of Fernlet's there) and for
+    /// access taken away after a copy was written, so the store weighs it against the record. Every
+    /// other kind is still deleted and counted (one refused kind never strands the rest), and an
+    /// unexpected failure is still thrown, after every kind was attempted.
+    @Test func theMirrorDeleteReportsRefusedKindsAndThrowsOnlyOtherFailures() async throws {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let harness = WriteGateHarness(masterEnabled: false, enabledCapabilities: [])
+        defer { harness.cleanup() }
+        harness.controller.deleteObjectsCount = 1
+
+        harness.controller.deleteObjectsError = HKError(.errorAuthorizationDenied)
+        #expect(try await harness.service.deleteMirror(recordID: UUID())
+                == CycleMirrorDeletion(deletedCount: 0, refusedKinds: Set(CycleMirrorSampleKind.allCases)),
+                "Don't Allow on every cycle kind: refused, not thrown")
+
         harness.controller.deleteObjectsError = nil
-        harness.controller.deleteObjectsErrorByType = [HKCategoryTypeIdentifier.menstrualFlow.rawValue: HKError(.errorAuthorizationDenied)]
+        harness.controller.deleteObjectsErrorByType = [
+            HKQuantityTypeIdentifier.basalBodyTemperature.rawValue: HKError(.errorAuthorizationDenied)
+        ]
+        let partial = try await harness.service.deleteMirror(recordID: UUID())
+        #expect(partial == CycleMirrorDeletion(deletedCount: 4, refusedKinds: [.basalBodyTemperature]))
+
+        harness.controller.deleteObjectsErrorByType = [
+            HKCategoryTypeIdentifier.menstrualFlow.rawValue: HKError(.errorDatabaseInaccessible)
+        ]
         let attemptedBefore = harness.controller.deletedObjectTypes.count
         await #expect(throws: HKError.self) { _ = try await harness.service.deleteMirror(recordID: UUID()) }
-        #expect(harness.controller.deletedObjectTypes.count - attemptedBefore == 4, "the four other types were still deleted")
+        #expect(harness.controller.deletedObjectTypes.count - attemptedBefore == 4, "the four other kinds were still deleted")
+    }
+
+    /// The store's kind vocabulary and the gateway's sample builder agree, kind by kind: a block that
+    /// sets one field is mirrored as exactly one sample, of exactly the type that kind maps to — so a
+    /// refusal the gateway reports for a kind names the samples the record's copy really holds (R2).
+    @Test func eachMirrorKindIsTheSampleTypeTheBuilderWrites() throws {
+        let now = Date()
+        let oneFieldEach: [(CycleMirrorSampleKind, CycleClinicalFields)] = [
+            (.menstrualFlow, CycleClinicalFields(flowLevel: .light, isCycleStart: true, updatedAt: now)),
+            (.basalBodyTemperature, CycleClinicalFields(basalBodyTemperature: 97.9, updatedAt: now)),
+            (.cervicalMucusQuality, CycleClinicalFields(cervicalMucusQuality: .creamy, updatedAt: now)),
+            (.ovulationTestResult, CycleClinicalFields(ovulationTestResult: .positive, updatedAt: now)),
+            (.intermenstrualBleeding, CycleClinicalFields(hasIntermenstrualBleeding: true, updatedAt: now))
+        ]
+        #expect(Set(oneFieldEach.map(\.0)) == Set(CycleMirrorSampleKind.allCases), "a kind is missing from this pin")
+        for (kind, clinical) in oneFieldEach {
+            var record = CycleRecord(event: UserLoggedCycleEvent(flowLevel: .light), now: now)
+            record.clinical = clinical
+            let samples = try HealthKitService.periodSamples(for: record)
+            let expectedType = try HealthKitService.periodSampleType(for: kind)
+            #expect(samples.count == 1, "\(kind)")
+            #expect(samples.first?.sampleType == expectedType, "\(kind)")
+            #expect(CycleMirrorSampleKind.kinds(writtenFor: clinical) == [kind], "\(kind)")
+        }
+        var unknown = CycleRecord(event: UserLoggedCycleEvent(note: "note only"), now: now)
+        unknown.clinical = nil
+        #expect(CycleMirrorSampleKind.possibleCopyKinds(of: unknown) == Set(CycleMirrorSampleKind.allCases),
+                "an unknown block's pre-cutover samples could be of any kind")
     }
 
     /// Every mirror sample carries the record id twice — `HKMetadataKeyExternalUUID` and the frozen

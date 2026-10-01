@@ -297,9 +297,12 @@ public protocol PeriodHealthKitServicing: AnyObject {
     /// clinical field writes nothing.
     func writeMirror(of record: CycleRecord) async throws
     /// Deletes Fernlet's own Apple Health samples carrying this record id. UNGATED, own source only.
+    /// Every kind is attempted. A kind Apple Health refuses (share access denied) is REPORTED in the
+    /// result, not thrown — it may hold nothing of Fernlet's (review round 1, R2); any other failure
+    /// throws once every kind was attempted.
     ///
-    /// - Returns: How many samples were deleted (0 on a device without Health).
-    func deleteMirror(recordID: UUID) async throws -> Int
+    /// - Returns: How many samples were deleted (0 on a device without Health) and the refused kinds.
+    func deleteMirror(recordID: UUID) async throws -> CycleMirrorDeletion
     /// Deletes these Fernlet-authored samples (the caller passes only Fernlet's own; the conformer
     /// filters again). UNGATED.
     ///
@@ -658,8 +661,11 @@ public final class PeriodTrackerStore {
     /// says so only when a sample was really deleted.
     ///
     /// An edit that leaves an UNKNOWN block empty leaves it unknown (a legacy narrative-only record
-    /// edited for its note does not gain a "none" clinical block). An emptied edit is a delete
-    /// (``deleteRecord(_:)``), never this.
+    /// edited for its note does not gain a "none" clinical block). And an edit of a record whose
+    /// STORED clinical block is unknown never deletes anything from Apple Health: Fernlet never wrote
+    /// a mirror for such a record, so every Fernlet sample carrying its id is a pre-cutover sample —
+    /// the block's not-yet-imported source, not a stale copy (review round 1, C-U4-R1 / L-U4-1). An
+    /// emptied edit is a delete (``deleteRecord(_:)``), never this.
     ///
     /// - Throws: ``PeriodTrackingHiddenError``; `CycleRecordRepositoryError.recordNotFound` /
     ///   `.undecidedRows` / `.recordNotStorable`; a seal error.
@@ -670,7 +676,7 @@ public final class PeriodTrackerStore {
         guard let stored = page.records.first else { throw CycleRecordRepositoryError.recordNotFound(id) }
         let edited = Self.editedRecord(stored, with: event)
         try recordStore.update(edited, contentKey: unlockedContentKey)
-        return PeriodLogOutcome(storage: .sealed, healthCopy: await remirrorEdited(edited))
+        return PeriodLogOutcome(storage: .sealed, healthCopy: await remirrorEdited(edited, replacing: stored))
     }
 
     /// The record an edit writes: `event` under the stored id, origin and creation time, with an
@@ -683,23 +689,55 @@ public final class PeriodTrackerStore {
         return edited
     }
 
-    /// The mirror half of an edit (see ``editRecord(_:with:unlockedContentKey:)``).
-    private func remirrorEdited(_ record: CycleRecord) async -> PeriodLogOutcome.HealthCopy {
+    /// The mirror half of an edit (see ``editRecord(_:with:unlockedContentKey:)``): `record` is what
+    /// was just sealed, `stored` what it replaced.
+    ///
+    /// - A stored block that is UNKNOWN: nothing is deleted (its Fernlet samples are its source, not
+    ///   a copy); with sharing on, a block the edit made known is written beside them.
+    /// - Otherwise the old copy is deleted first. A kind Apple Health refused to delete counts only
+    ///   when ``refusalMayLeaveCopy(of:refused:sharing:)`` says a copy can really be there (R2) —
+    ///   and with sharing on the rewrite is always attempted after it, its own share check deciding.
+    ///   An unexpected delete failure is reported and nothing is rewritten (an old copy beside a new
+    ///   one would be a wrong copy).
+    private func remirrorEdited(_ record: CycleRecord, replacing stored: CycleRecord) async -> PeriodLogOutcome.HealthCopy {
         guard isVisible() else { return .notShared }
         let sharing = healthService.isCycleMirrorEnabled()
-        let removed: Int
+        guard stored.clinical != nil else { return sharing ? await mirrorNewRecord(record) : .notShared }
+        let deletion: CycleMirrorDeletion
         do {
-            removed = try await healthService.deleteMirror(recordID: record.id)
+            deletion = try await healthService.deleteMirror(recordID: record.id)
         } catch {
             return Self.healthCopy(after: error)
         }
-        guard sharing else { return removed > 0 ? .removedStaleCopy : .notShared }
-        guard record.hasClinicalFields else { return .notShared }
-        do {
-            try await healthService.writeMirror(of: record)
-            return .written
-        } catch {
-            return Self.healthCopy(after: error)
+        let copyMayRemain = Self.refusalMayLeaveCopy(of: stored, refused: deletion.refusedKinds, sharing: sharing)
+        guard sharing else {
+            if copyMayRemain { return .failed(.healthDenied) }
+            return deletion.deletedCount > 0 ? .removedStaleCopy : .notShared
+        }
+        let rewrite = await mirrorNewRecord(record)
+        if case .failed = rewrite { return rewrite }
+        return copyMayRemain ? .failed(.healthDenied) : rewrite
+    }
+
+    /// Whether Apple Health refusing to delete `refused` may have left a Fernlet copy of `record`
+    /// there — the only refusal worth telling the user about (review round 1, R2). HealthKit reports
+    /// share access never granted exactly as it reports access taken away after a copy was written,
+    /// so the record decides:
+    ///
+    /// - Only a kind the record's copy could hold counts (``CycleMirrorSampleKind/possibleCopyKinds(of:)``):
+    ///   a refused kind the entry never set left nothing behind.
+    /// - A record whose clinical block was BUILT from Fernlet's Apple Health samples (the legacy
+    ///   import, fill-on-read, "Keep in Fernlet") had a copy there by construction.
+    /// - Any other record — an UNKNOWN block included, whose pre-cutover samples exist only if they
+    ///   were written while sharing was on — had a copy only if it was copied with cycle sharing on;
+    ///   with sharing off now, a refusal most likely means the access was never granted, and saying
+    ///   "Apple Health still has Fernlet's copy" on every edit and delete would be false.
+    static func refusalMayLeaveCopy(of record: CycleRecord, refused: Set<CycleMirrorSampleKind>, sharing: Bool) -> Bool {
+        guard !refused.isDisjoint(with: CycleMirrorSampleKind.possibleCopyKinds(of: record)) else { return false }
+        guard record.clinical != nil else { return sharing }
+        switch record.origin {
+        case .importedLegacy, .adoptedFromHealth: return true
+        case .logged, .restored: return sharing
         }
     }
 
@@ -730,37 +768,61 @@ public final class PeriodTrackerStore {
     ///
     /// Deliberately not visibility-gated — hiding must never block deletion.
     public func deleteDay(_ entry: CycleDayEntry) async throws -> PeriodDeleteOutcome {
-        try await deleteRecords(ids: entry.records.map(\.id), orphanCopies: entry.fernletHealthSamples)
+        try await deleteRecords(entry.records, removingCopiesOf: entry.records, orphanCopies: entry.fernletHealthSamples)
     }
 
-    /// Deletes one record and its Apple Health mirror — the emptied edit (§6.3 Edit). Same order and
-    /// outcome as ``deleteDay(_:)``.
-    public func deleteRecord(_ id: UUID) async throws -> PeriodDeleteOutcome {
-        try await deleteRecords(ids: [id], orphanCopies: [])
+    /// Deletes one record — the emptied edit (§6.3 Edit). Same order and outcome as ``deleteDay(_:)``,
+    /// with one difference: a record whose clinical block is UNKNOWN keeps its Fernlet samples in
+    /// Apple Health. Fernlet never mirrored such a record, so those samples are pre-cutover data the
+    /// user never saw in this sheet — the legacy import or "Keep in Fernlet" brings them in later, and
+    /// the day's confirmed Delete removes them (review round 1, C-U4-R1). Emptying a note must not
+    /// silently delete flow history behind it.
+    public func deleteRecord(_ record: CycleRecord) async throws -> PeriodDeleteOutcome {
+        try await deleteRecords([record], removingCopiesOf: record.clinical == nil ? [] : [record], orphanCopies: [])
     }
 
     /// The shared delete: rows first, then the local state, then Health.
-    private func deleteRecords(ids: [UUID], orphanCopies: [HKSample]) async throws -> PeriodDeleteOutcome {
+    private func deleteRecords(
+        _ records: [CycleRecord],
+        removingCopiesOf mirrored: [CycleRecord],
+        orphanCopies: [HKSample]
+    ) async throws -> PeriodDeleteOutcome {
+        let ids = records.map(\.id)
         let removed = try recordStore.delete(ids: ids)
         dropFromEntries(ids: Set(ids))
-        let healthCopy = await removeHealthCopies(recordIDs: ids, orphanCopies: orphanCopies)
+        let healthCopy = await removeHealthCopies(of: mirrored, orphanCopies: orphanCopies)
         return PeriodDeleteOutcome(removedRecordCount: removed, healthCopy: healthCopy)
     }
 
-    /// Fernlet's Apple Health copies of deleted records, plus `orphanCopies`.
-    private func removeHealthCopies(recordIDs: [UUID], orphanCopies: [HKSample]) async -> PeriodDeleteOutcome.HealthCopy {
+    /// Fernlet's Apple Health copies of deleted records, plus `orphanCopies`. Every record is
+    /// attempted. `.stillInHealth` only when something of Fernlet's can really be left there: a delete
+    /// that failed outright, or a refused kind ``refusalMayLeaveCopy(of:refused:sharing:)`` counts
+    /// (R2) — a refused kind the entry never held left nothing behind.
+    private func removeHealthCopies(of records: [CycleRecord], orphanCopies: [HKSample]) async -> PeriodDeleteOutcome.HealthCopy {
+        let sharing = healthService.isCycleMirrorEnabled()
         var deleted = 0
-        do {
-            for id in recordIDs {  // R2: bounded by the day's records.
-                deleted += try await healthService.deleteMirror(recordID: id)
+        var failure: PeriodLogOutcome.HealthCopyFailure?
+        for record in records {  // R2: bounded by the day's records.
+            do {
+                let deletion = try await healthService.deleteMirror(recordID: record.id)
+                deleted += deletion.deletedCount
+                if Self.refusalMayLeaveCopy(of: record, refused: deletion.refusedKinds, sharing: sharing) {
+                    failure = failure ?? .healthDenied
+                }
+            } catch {
+                FernletAuditLog.log("period.healthCopyDeleteFailed", context: ["error": "\(type(of: error))"])
+                failure = failure ?? Self.healthCopyFailure(for: error) ?? .other
             }
-            if !orphanCopies.isEmpty {
-                deleted += try await healthService.deleteFernletAuthored(orphanCopies)
-            }
-        } catch {
-            FernletAuditLog.log("period.healthCopyDeleteFailed", context: ["error": "\(type(of: error))"])
-            return .stillInHealth(Self.healthCopyFailure(for: error) ?? .other)
         }
+        if !orphanCopies.isEmpty {
+            do {
+                deleted += try await healthService.deleteFernletAuthored(orphanCopies)
+            } catch {
+                FernletAuditLog.log("period.healthCopyDeleteFailed", context: ["error": "\(type(of: error))"])
+                failure = failure ?? Self.healthCopyFailure(for: error) ?? .other
+            }
+        }
+        if let failure { return .stillInHealth(failure) }
         return deleted > 0 ? .removed : .none
     }
 

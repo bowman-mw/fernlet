@@ -629,8 +629,9 @@ struct LogPeriodSheet: View {
     /// Writes the sheet.
     ///
     /// An emptied EDIT is a real outcome, not a no-op: it deletes the record being edited (and its
-    /// Apple Health copy) through `deleteRecord`, so the day's entry goes away and no other entry is
-    /// touched. A fresh log can never take that path: `canSave` requires content when
+    /// Apple Health copy — none for a record whose clinical block is unknown, whose Health samples are
+    /// data this sheet never showed) through `deleteRecord`, so the day's entry goes away and no other
+    /// entry is touched. A fresh log can never take that path: `canSave` requires content when
     /// `editingRecord` is nil, so an empty sheet cannot write an empty entry.
     private func save() async {
         // Single-flight: the save bar is disabled while saving, but the entry point states it too so
@@ -668,7 +669,7 @@ struct LogPeriodSheet: View {
             return
         }
         if isEmptiedEdit {
-            presentDeletion(try await periodStore.deleteRecord(record.id))
+            presentDeletion(try await periodStore.deleteRecord(record))
             return
         }
         guard let contentKey else { throw FernletLockError.locked }
