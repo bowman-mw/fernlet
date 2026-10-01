@@ -458,6 +458,7 @@ struct ContentView: View {
             restoresAfterRemoval: { journalKeepsOpenableRows in
                 Self.sealedBackupRestoresAfterRemoval(
                     preferencesStore.preferences,
+                    periodVisible: appStore.isPeriodTrackingVisible,
                     intimacyVisible: appStore.isIntimacyTrackingVisible,
                     restoreHeldForOwner: appStore.sealedBackupRestoreAwaitsOwner,
                     journalStoreEmptiesOnRemoval: !journalKeepsOpenableRows && !appStore.journalTextAwaitsSealing
@@ -490,32 +491,35 @@ struct ContentView: View {
     }
 
     /// Whether a Sealed backup REALLY comes back once the "can't be opened" card's entries are
-    /// removed — the card promises it only when this is true (review C-U2-R3). The Private tab's
-    /// settle restores the journal and intimacy backups only into an EMPTY store with its divergence
-    /// latch clear, and only while no app-lock reset is waiting for the device owner, so:
-    /// - nothing is restored while the owner hold is set (every ambient restore is held);
-    /// - the journal half counts only when the journal store will be empty after the removal — no
-    ///   journal row that opens stays behind (it is folded under the new key, which re-sets the latch)
-    ///   and no journal text is waiting to be sealed at the first open;
+    /// removed — the card promises it only when this is true (review C-U2-R3). Nothing is restored
+    /// while an app-lock reset is waiting for the device owner (every ambient restore is held);
+    /// otherwise:
+    /// - the period half counts while the period backup is on and cycle tracking is visible: the
+    ///   removal reopens this install's period restore, and the Cycle settle MERGES the backup in
+    ///   (period-data design 2026-09-30, §9.10), whatever else the store holds;
+    /// - the journal half counts only when the journal store will be empty after the removal — its
+    ///   restore is empty-store-only, so no journal row that opens may stay behind (it is folded under
+    ///   the new key, which re-sets the latch) and no journal text may be waiting to be sealed;
     /// - the intimacy half counts only while intimacy tracking is visible (hidden defers its restore).
-    ///
-    /// The period restore joins it in design unit 5, which adds `.periodData` here.
     ///
     /// - Parameters:
     ///   - preferences: The storage preferences (sync and the per-payload switches).
+    ///   - periodVisible: The derived period-tracking visibility.
     ///   - intimacyVisible: The derived intimacy-tracking visibility.
     ///   - restoreHeldForOwner: Whether an app-lock reset is waiting for the device owner.
     ///   - journalStoreEmptiesOnRemoval: Whether the journal store will be empty after the removal.
     static func sealedBackupRestoresAfterRemoval(
         _ preferences: StoragePreferences,
+        periodVisible: Bool,
         intimacyVisible: Bool,
         restoreHeldForOwner: Bool,
         journalStoreEmptiesOnRemoval: Bool
     ) -> Bool {
         guard preferences.iCloudSyncEnabled, !restoreHeldForOwner else { return false }
+        let periodRestores = preferences.sealedBackupPeriodEnabled && periodVisible
         let journalRestores = preferences.sealedBackupJournalEnabled && journalStoreEmptiesOnRemoval
         let intimacyRestores = preferences.sealedBackupIntimacyEnabled && intimacyVisible
-        return journalRestores || intimacyRestores
+        return periodRestores || journalRestores || intimacyRestores
     }
 
     /// The first-workout Health offer ("Asked the first time you log a workout…"), over the app's
@@ -560,6 +564,9 @@ struct ContentView: View {
         // on every cold launch, so wiring this later would let one full decrypt + HealthKit
         // read through before the gate existed.
         periodStore.attachVisibilityGate { [store] in store.isPeriodTrackingVisible }
+        // Every change to a sealed cycle record marks the period backup owed (never its switch), so
+        // the next Cycle settle re-exports it (period-data design 2026-09-30, §9.10, R2-F3).
+        periodStore.recordStore.attachMutationHook { [store] in store.markPeriodBackupDirtyIfEnabled() }
         // The staleness half of the same gate: the cycle load awaits HealthKit, and the hub can lock
         // (or re-key) during that await. Wiring the live key here lets the store abandon a load whose
         // authorization expired mid-flight instead of publishing narratives decrypted with a key the
@@ -1548,7 +1555,10 @@ struct ContentView: View {
                store.isIntimacyTrackingVisible {
                 _ = await store.restoreIntimacyBackupTargeted()
             }
-            await store.retryDeferredSealedPeriodBackupIfNeeded()
+            // The period backup v2 settle: its merge restore while this install's restore is
+            // unresolved, then its export behind restore-first, the compare-and-swap and the pre-pass
+            // (period-data design 2026-09-30, §9.10).
+            await store.settleSealedPeriodBackup()
             await store.retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
         case .worryBox:
             break

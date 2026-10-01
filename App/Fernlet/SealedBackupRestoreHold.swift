@@ -12,8 +12,7 @@ import Foundation
 /// — the launch pass, the Private tab's settle, an un-hide — would pull the whole cloud history back
 /// onto a phone whose passcode was just reset, with nobody proving they are the owner. While the bit
 /// is set, every AMBIENT restore skips every payload; the explicit restores (the user's Retry, and
-/// the owner-checked "Restore Sealed backup" action in Privacy & Data that design unit 5 adds and
-/// that releases the hold) still run.
+/// Privacy & Data's owner-checked "Restore", which releases the hold — see below) still run.
 ///
 /// **It holds the re-uploads that would replace a pre-reset copy** (review C-U2-R1). After the reset
 /// the local stores hold only what was written since; re-sealing them would REPLACE the pre-reset
@@ -29,9 +28,14 @@ import Foundation
 /// payload recorded: the copy may still be up there. The ambient-restore half stays whole: it is
 /// about who may pull history down, not about what is up there.
 ///
-/// **Nothing releases it in this build.** The release is design unit 5's owner-checked restore; until
-/// then no copy may promise a restore after a reset (pinned by `LocalizationBoundaryTests`, which
-/// looks for a releasing member here).
+/// **The device owner releases it** (design unit 5): Privacy & Data's "Restore" — behind the screen's
+/// fresh device-owner check — calls ``release()``, which drops the AMBIENT-restore bit only. The
+/// per-payload record stays, so each payload's re-uploads stay held until ITS restore has landed
+/// (`.restored`, or `.nothingToRestore`: pulled back, or nothing there) and ``forgetPreResetCopy(of:)``
+/// is called for it — a pre-reset copy is never replaced before it was pulled back. A payload whose
+/// restore cannot land (the journal or intimacy store already holds entries written since the reset,
+/// so their empty-store-only restore refuses) stays held until the user turns that backup off, which
+/// deletes the copy — an explicit act, never a silent replace (named in the design's §12).
 ///
 /// Set only by the app-lock reset funnel, never by a duress response (those never fire the reset
 /// hook). **Kept** by "delete everything" (both keys): a phone whose lock was reset and whose data was
@@ -59,6 +63,18 @@ struct SealedBackupRestoreHold {
     /// Whether ambient restores must wait for the device owner.
     var isHeld: Bool { defaults.bool(forKey: Self.defaultsKey) }
 
+    /// The device owner's release (Privacy & Data's owner-checked "Restore"): ambient restores may run
+    /// again. The per-payload record is written out first — every re-uploadable payload when the hold
+    /// had none (fail closed) — so the re-upload half keeps holding each payload until its restore
+    /// lands. A no-op while not held.
+    func release() {
+        guard isHeld else { return }
+        if defaults.stringArray(forKey: Self.preResetCopiesKey) == nil {
+            defaults.set(Self.reuploadablePayloads.map(\.rawValue), forKey: Self.preResetCopiesKey)
+        }
+        defaults.removeObject(forKey: Self.defaultsKey)
+    }
+
     /// The payloads whose pre-reset iCloud copy the hold keeps right now (empty while not held).
     var payloadsKeepingPreResetCopy: Set<SealedBackupPayloadType> {
         Set(Self.reuploadablePayloads.filter(keepsPreResetCopy(of:)))
@@ -75,25 +91,31 @@ struct SealedBackupRestoreHold {
         defaults.set(true, forKey: Self.defaultsKey)
     }
 
-    /// Whether a re-upload of `payload` must wait: the hold is set and that payload's pre-reset copy is
-    /// still kept.
+    /// Whether a re-upload of `payload` must wait: that payload's pre-reset copy is still kept — held
+    /// or released, until its restore lands or its copy is deleted. A hold without its record keeps
+    /// every payload (fail closed); no hold and no record keeps none.
     ///
     /// - Parameter payload: The payload about to be re-sealed.
     func keepsPreResetCopy(of payload: SealedBackupPayloadType) -> Bool {
-        guard isHeld, Self.reuploadablePayloads.contains(payload) else { return false }
-        guard let kept = defaults.stringArray(forKey: Self.preResetCopiesKey) else { return true }
+        guard Self.reuploadablePayloads.contains(payload) else { return false }
+        guard let kept = defaults.stringArray(forKey: Self.preResetCopiesKey) else { return isHeld }
         return kept.contains(payload.rawValue)
     }
 
-    /// Records that `payload`'s iCloud chunk set was deleted, so there is no pre-reset copy of it left
-    /// to keep and its re-uploads may run again. Writes nothing while the hold is not set.
+    /// Records that `payload` has no pre-reset copy left to keep — its iCloud chunk set was deleted, or
+    /// its restore landed — so its re-uploads may run again. The record is removed once it empties
+    /// after a release. Writes nothing while there is neither a hold nor a record.
     ///
-    /// - Parameter payload: The payload whose backup was deleted from iCloud.
+    /// - Parameter payload: The payload whose pre-reset copy is gone or pulled back.
     func forgetPreResetCopy(of payload: SealedBackupPayloadType) {
-        guard isHeld else { return }
-        let kept = defaults.stringArray(forKey: Self.preResetCopiesKey)
-            ?? Self.reuploadablePayloads.map(\.rawValue)
-        defaults.set(kept.filter { $0 != payload.rawValue }, forKey: Self.preResetCopiesKey)
+        let recorded = defaults.stringArray(forKey: Self.preResetCopiesKey)
+        guard isHeld || recorded != nil else { return }
+        let kept = (recorded ?? Self.reuploadablePayloads.map(\.rawValue)).filter { $0 != payload.rawValue }
+        if kept.isEmpty, !isHeld {
+            defaults.removeObject(forKey: Self.preResetCopiesKey)
+        } else {
+            defaults.set(kept, forKey: Self.preResetCopiesKey)
+        }
     }
 
     /// Whether `payload`'s backup switch is on in `preferences`.

@@ -801,6 +801,64 @@ struct DeleteAllDataTests {
         #expect(ledger.isNarrativeHalfDone && ledger.isSampleHalfDone)
     }
 
+    /// The reset funnel speaks for the period backup's own bookkeeping too (design §5.3, §9.21): the
+    /// restore marker is REOPENED (so the owner's restore can pull the history back; an explicit false,
+    /// so its one-time seed never runs again) and the accepted head is forgotten (so nothing exports
+    /// over the pre-reset set until that restore has merged it).
+    @Test func theAppLockResetFunnelReopensThePeriodRestoreAndForgetsTheAcceptedSet() {
+        let store = makeStore("reset-period-ledger")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.periodLedgerReset.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        store.periodBackupLedger = PeriodBackupLedger(defaults: defaults, legacyLatch: { true })
+        store.periodBackupLedger.markRestoreResolved()
+        store.periodBackupLedger.recordAcceptedHead(PeriodBackupHead(writer: "phone", generation: 3))
+
+        store.handleAppLockResetCompleted(preferences: StoragePreferences(), clearBookkeeping: {})
+
+        #expect(!store.periodBackupLedger.isRestoreResolved)
+        #expect(store.periodBackupLedger.acceptedHead == nil)
+    }
+
+    /// "Delete everything" KEEPS the period restore marker (design §5.3, §9.11): a cloud copy that
+    /// survived a failed cloud delete must not come back by an ambient restore at the next settle.
+    @Test func deleteAllKeepsThePeriodRestoreMarker() async {
+        let store = makeStore("delete-all-period-marker")
+        wireSucceedingSealedHooks(store)
+        store.periodBackupLedger = PeriodBackupLedger(
+            defaults: UserDefaults(suiteName: "fernlet.tests.periodMarkerWipe.\(UUID().uuidString)") ?? .standard,
+            legacyLatch: { false }
+        )
+        store.periodBackupLedger.markRestoreResolved()
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(store.periodBackupLedger.isRestoreResolved)
+    }
+
+    /// The cycle-record mutation hook (design §9.10, R2-F3): every mutation is counted, and while the
+    /// period backup is on it records the upload as owed (persisted through the deferral hook) — with
+    /// the backup off it owes nothing. It never touches the backup's switch: there is no hook for it.
+    @Test func everyCycleRecordChangeMarksThePeriodBackupOwedWhileItIsOn() {
+        let store = makeStore("period-dirty")
+        var persisted: [Bool] = []
+        store.sealedBackupDeferralPersistHook = { deferred, payload in
+            if payload == .periodData { persisted.append(deferred) }
+        }
+        store.recordSealedBackupReuploadDeferred(false, payloadType: .periodData)
+        persisted = []
+
+        store.markPeriodBackupDirtyIfEnabled(preferences: StoragePreferences())
+        #expect(store.periodBackupMutationCount == 1)
+        #expect(!store.sealedBackupPeriodReuploadDeferred, "the backup is off: nothing owed")
+
+        store.markPeriodBackupDirtyIfEnabled(preferences: StoragePreferences(sealedBackupPeriodEnabled: true))
+        store.markPeriodBackupDirtyIfEnabled(preferences: StoragePreferences(sealedBackupPeriodEnabled: true))
+        #expect(store.periodBackupMutationCount == 3)
+        #expect(store.sealedBackupPeriodReuploadDeferred)
+        #expect(persisted == [true], "persisted once, not on every mutation")
+    }
+
     /// The intimacy un-hide settle is the same class of live writer as the period one, added with the
     /// intimacy backup payload: suspended in its CloudKit fetch it would resume after the wipe and
     /// re-insert intimate logs into the just-emptied store.

@@ -298,15 +298,27 @@ final class SealedBackupService {
     /// from a previously larger backup are then pruned. Each chunk's GCM AAD binds its index/count, so
     /// a mixed-generation set fails closed on restore. The whole set shares one generation counter and
     /// one per-generation HKDF salt (record format v2), both stamped on every chunk.
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload being written.
+    ///   - chunkCount: How many chunks (at least one is always written).
+    ///   - generationFloor: A generation the new set must exceed — the period backup passes the cloud
+    ///     head's, so a device whose own counter is behind never writes a set another device's restore
+    ///     would reject as a rollback (period-data design 2026-09-30, §9.10). `0`: none.
+    ///   - chunk: The plaintext for a chunk index.
+    /// - Returns: The generation the set was written under. Discardable: only the period backup
+    ///   records it (its compare-and-swap pair); a failure is always a throw.
+    @discardableResult
     func reconcileChunked(
         payloadType: SealedBackupPayloadType,
         chunkCount: Int,
+        generationFloor: Int64 = 0,
         chunk: (Int) throws -> Data
-    ) async throws {
+    ) async throws -> Int64 {
         let count = max(1, chunkCount)
         // ONE generation for the whole set, minted before the first write. Minting per chunk would
         // make every multi-chunk backup look mixed-generation and fail its own restore check.
-        let generation = generationStore.mintNext(for: payloadType)
+        let generation = generationStore.mintNext(for: payloadType, above: generationFloor)
         // ONE salt for the whole set, for the same reason — and stamped on EVERY chunk rather than
         // only the head, because the head is written last as the commit marker, so a head-only salt
         // could not be read while the suffix chunks were being sealed.
@@ -330,6 +342,7 @@ final class SealedBackupService {
             keySalt: keySalt
         )
         try await cloudDataService.deleteSealedBackupChunks(payloadType: payloadType, withIndexAtLeast: count)
+        return generation
     }
 
     /// Seals one chunk and uploads it (shared by both `reconcileChunked` write phases).
@@ -382,6 +395,13 @@ final class SealedBackupService {
     /// (`CloudKitDataService.sealedBackupChunks` validates contiguity), and if any chunk fails to open,
     /// so callers restore all-or-nothing.
     func restoreChunks(payloadType: SealedBackupPayloadType) async throws -> [Data]? {
+        try await restoreChunkSet(payloadType: payloadType)?.chunks
+    }
+
+    /// ``restoreChunks(payloadType:)`` with the set's authenticated generation — what the period
+    /// backup v2 records as the compare-and-swap pair of the set it just merged (period-data design
+    /// 2026-09-30, §9.10). Same checks, same high-water accept, same all-or-nothing throws.
+    func restoreChunkSet(payloadType: SealedBackupPayloadType) async throws -> (chunks: [Data], generation: Int64)? {
         let records = try await cloudDataService.sealedBackupChunks(payloadType: payloadType)
         guard !records.isEmpty else { return nil }
         // R3 (bounded growth): the set size ultimately comes from `head.chunkCount`, an
@@ -416,7 +436,27 @@ final class SealedBackupService {
             throw SealedBackupError.staleGeneration(found: generation, lastSeen: lastSeen)
         }
         generationStore.recordAccepted(generation, for: payloadType)
-        return plaintexts
+        return (plaintexts, generation)
+    }
+
+    /// Fetches and opens ONLY the head (chunk 0) of a payload's set — the period export's
+    /// compare-and-swap read (§9.10 E2) — returning its plaintext and its generation, or nil when no
+    /// set exists. The generation is read off the record only AFTER the AEAD authenticated it (it is
+    /// bound into the AAD), so a forged counter cannot pass. Records nothing: reading the head to
+    /// decide whether to write is not accepting it.
+    ///
+    /// - Throws: Every ``SealedBackupCrypto/open(_:identityService:)`` failure (someone else's set,
+    ///   a corrupt one, no escrow key) and every transport error.
+    func fetchHead(payloadType: SealedBackupPayloadType) async throws -> (plaintext: Data, generation: Int64)? {
+        guard let head = try await cloudDataService.sealedBackup(payloadType: payloadType) else { return nil }
+        let plaintext = try SealedBackupCrypto.open(head, identityService: identityService)
+        return (plaintext, head.generation)
+    }
+
+    /// The highest generation this device has written or accepted for `payloadType` — the period
+    /// export's one-time v1 seed compares a v1 head against it (§9.10 E2).
+    func lastSeenGeneration(for payloadType: SealedBackupPayloadType) -> Int64 {
+        generationStore.lastSeen(for: payloadType)
     }
 }
 

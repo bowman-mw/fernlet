@@ -41,7 +41,9 @@ protocol PriorPrivateEntryStore: AnyObject {
     func journalOpenability() throws -> SealedRowOpenability
     /// Worry Box rows classified under this iPhone's worry device key (absent key ⇒ every row dead).
     func worryOpenability() throws -> SealedRowOpenability
-    /// Whether any of the three sealed-backup divergence latches is set.
+    /// Whether any backup bookkeeping speaks for an earlier key: the three sealed-backup divergence
+    /// latches, the period restore marker set to resolved, or the period compare-and-swap record
+    /// (period-data design 2026-09-30, §4.9 step 1).
     func hasBackupBookkeeping() -> Bool
     /// Keyless delete of every sealed cycle row (records and legacy narratives).
     func removeCycleEntries() throws
@@ -51,7 +53,8 @@ protocol PriorPrivateEntryStore: AnyObject {
     func removeJournalEntries(ids: [UUID]) throws
     /// Keyless delete of these Worry Box rows.
     func removeWorryEntries(ids: [UUID]) throws
-    /// Clears the three divergence latches (they spoke for a key that no longer exists).
+    /// Clears that bookkeeping — the three divergence latches, the period restore marker (reopened)
+    /// and the period compare-and-swap record — because it spoke for a key that no longer exists.
     func clearBackupBookkeeping()
     /// Whether a Sealed backup would really be restored once the unopenable rows are gone — the card
     /// says so only then (review C-U2-R3).
@@ -328,6 +331,9 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     private let journalRepository: JournalNarrativeRepository
     private let worryRepository: WorryNarrativeRepository
     private let intimacyStore: IntimacyLogStore
+    /// The period backup's restore marker and compare-and-swap record, in the latches' suite. Its seed
+    /// is never read here: the check only asks whether the marker is SET, and clears it.
+    private let periodBackupLedger: PeriodBackupLedger
     /// The keychain service holding the journal and worry device keys.
     private let deviceKeyService: String
     /// Whether a Sealed backup will really be restored after a removal (the app's backup switches, the
@@ -343,7 +349,8 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     ///
     /// - Parameters:
     ///   - controller: The sealed store; `nil` is the shared on-device one.
-    ///   - latchDefaults: Suite holding the three divergence latches.
+    ///   - latchDefaults: Suite holding the three divergence latches and the period backup's
+    ///     restore marker and compare-and-swap record.
     ///   - intimacyStore: The app's intimacy funnel on the same store.
     ///   - deviceKeyService: The journal/worry device-key service.
     ///   - periodVisible: The derived period-tracking visibility (default: hidden, fail-closed).
@@ -363,6 +370,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         cycleRecords = CycleRecordStore(controller: controller)
         journalRepository = JournalNarrativeRepository(controller: controller, defaults: latchDefaults)
         worryRepository = WorryNarrativeRepository(controller: controller)
+        periodBackupLedger = PeriodBackupLedger(defaults: latchDefaults, legacyLatch: { false })
         self.intimacyStore = intimacyStore
         self.deviceKeyService = deviceKeyService
         self.periodVisible = periodVisible
@@ -381,6 +389,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     func hasBackupBookkeeping() -> Bool {
         cycleRepository.hasEverStoredNarrative || journalRepository.hasEverStoredNarrative
             || intimacyStore.hasEverStoredLog
+            || periodBackupLedger.restoreResolvedIsSet || periodBackupLedger.acceptedHead != nil
     }
     func removeCycleEntries() throws {
         try cycleRecords.deleteAll()
@@ -393,6 +402,8 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         cycleRepository.clearDivergenceLatch()
         journalRepository.clearDivergenceLatch()
         intimacyStore.clearDivergenceLatch()
+        periodBackupLedger.reopenRestore()
+        periodBackupLedger.clearAcceptedHead()
     }
     func sealedBackupRestoresAfterRemoval(journalKeepsOpenableRows: Bool) -> Bool {
         restoresAfterRemoval(journalKeepsOpenableRows)

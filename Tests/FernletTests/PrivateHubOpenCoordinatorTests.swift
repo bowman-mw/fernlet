@@ -283,6 +283,7 @@ struct PrivateHubOpenCoordinatorTests {
         let decide: (Bool) -> Bool = { journalKeepsOpenableRows in
             ContentView.sealedBackupRestoresAfterRemoval(
                 journalBackupOnly,
+                periodVisible: true,
                 intimacyVisible: true,
                 restoreHeldForOwner: hold.isHeld,
                 journalStoreEmptiesOnRemoval: !journalKeepsOpenableRows
@@ -308,12 +309,44 @@ struct PrivateHubOpenCoordinatorTests {
     @MainActor
     @Test func theBackupPromiseNeedsSyncAndAVisibleIntimacyHalf() {
         let intimacyOnly = StoragePreferences(iCloudSyncEnabled: true, sealedBackupIntimacyEnabled: true)
-        #expect(ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, intimacyVisible: true, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: false))
-        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, intimacyVisible: false, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: true),
+        #expect(ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: false))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: true),
                 "a hidden intimacy backup defers its restore")
-        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, intimacyVisible: true, restoreHeldForOwner: true, journalStoreEmptiesOnRemoval: true))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(intimacyOnly, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: true, journalStoreEmptiesOnRemoval: true))
         let syncOff = StoragePreferences(sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true)
-        #expect(!ContentView.sealedBackupRestoresAfterRemoval(syncOff, intimacyVisible: true, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: true))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(syncOff, periodVisible: true, intimacyVisible: true, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: true))
+    }
+
+    /// The period half (design unit 5): the removal reopens this install's period restore and the
+    /// Cycle settle MERGES the backup in, whatever else the store keeps — so the promise is made while
+    /// the period backup is on and cycle tracking is visible, and never while the owner hold is set.
+    @MainActor
+    @Test func theBackupPromiseCountsThePeriodMergeRestore() {
+        let periodOnly = StoragePreferences(iCloudSyncEnabled: true, sealedBackupPeriodEnabled: true)
+        #expect(ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: false))
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: false, intimacyVisible: false, restoreHeldForOwner: false, journalStoreEmptiesOnRemoval: false),
+                "a hidden period backup defers its restore")
+        #expect(!ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: true, journalStoreEmptiesOnRemoval: false))
+    }
+
+    /// The period backup's bookkeeping travels in a device backup like the latches (design §4.9 step
+    /// 1, §5.3): a resolved restore marker or an accepted head speaks for a key that is gone, so it
+    /// counts as bookkeeping and is cleared before the fresh key is minted — the marker REOPENED (an
+    /// explicit false, so its one-time seed never runs again) and the head forgotten, which is what lets
+    /// the next Cycle settle pull the history back instead of being held against "another iPhone".
+    @MainActor
+    @Test func thePeriodBackupBookkeepingIsClearedWithTheLatches() async throws {
+        let rig = CoordinatorRig()
+        defer { rig.fixture.cleanup() }
+        let ledger = PeriodBackupLedger(defaults: rig.latches, legacyLatch: { true })
+        ledger.markRestoreResolved()
+        ledger.recordAcceptedHead(PeriodBackupHead(writer: "other", generation: 4))
+        #expect(rig.entries.hasBackupBookkeeping())
+
+        #expect(await rig.coordinator.openPrivateHub() == .opened)
+        #expect(!ledger.isRestoreResolved, "reopened, and the seed (which would answer true) never ran")
+        #expect(ledger.acceptedHead == nil)
+        #expect(!rig.entries.hasBackupBookkeeping())
     }
 
     /// The card's backup line for the rig's current rows, or nil when there is no card.

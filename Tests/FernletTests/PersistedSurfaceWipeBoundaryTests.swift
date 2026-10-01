@@ -217,6 +217,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.recentActivityTypes": .cleared(token: "RecentActivityTypeMemory.clearAll"),
         "fernlet.recipeWebImageAttempts.v1": .cleared(token: "RecipeWebImageAttemptMemory.clearAll"),
         "fernlet.sealedBackup.generation.*": .cleared(token: "generationStore.reset"),
+        // The period backup's compare-and-swap record (period-data design 2026-09-30, §9.10 E2): the
+        // set it names is deleted by the same leg, and `reset()` removes it with the marks.
+        "fernlet.sealedBackup.periodAcceptedHead": .cleared(token: "generationStore.reset"),
         "fernlet.sealedPhoto.generation.*": .cleared(token: "generationStore.reset"),
         "fernlet.sealedPhoto.restoreRepairIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
         "fernlet.sealedPhoto.uploadedIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
@@ -309,6 +312,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "fernlet.cycleRecord.legacyImport.samples": .kept(
             reason: "The legacy cycle import's sample-half marker (§8.3). The wipe SETS it to done rather than clearing it: a pending sample half would re-import, at the next Private open, Fernlet's own Apple Health copies the user chose to keep while deleting their Fernlet data. Absent or 'done', no content."
+        ),
+        "fernlet.cycleRecord.periodRestoreResolved": .kept(
+            reason: "The period backup's restore marker (period-data design 2026-09-30, §5.3): one bit, 'this install has finished pulling the period backup'. It must outlive the wipe, or a period chunk set that survived a failed cloud delete would merge itself back at the next Cycle settle — the resurrection the marker exists to stop."
         ),
         "fernlet.sealedBackup.restoreAwaitsOwner": .kept(
             reason: "The sealed-backup restore owner hold (period-data design 2026-09-30, §5.3, Q14): one bit set by the app-lock reset funnel, holding every AMBIENT restore until the device owner asks. It must outlive the wipe, or a phone whose lock was reset and whose data was then wiped would start restoring the cloud history on its own."

@@ -114,4 +114,17 @@ struct PrivateHubCustodyWiringTests {
         #expect(store.sealedBackupPayloadsKeptForOwner == [.intimacyLogs], "the deleted journal copy is no longer kept")
         #expect(store.sealedBackupRestoreAwaitsOwner, "ambient restores still wait for the owner")
     }
+
+    /// The period backup v2 wiring `ContentView` installs (design §9.10, R2-F3): the period store's
+    /// cycle-record funnel marks the backup owed on every mutation — through the store's hook, never
+    /// the backup's switch — and the Cycle section's settle runs the v2 settle (restore, then export),
+    /// not the bare re-upload. Read from source: both live inside private launch steps of the root view.
+    @Test func theCycleFunnelMarksThePeriodBackupOwedAndTheCycleSettleRunsTheV2Settle() throws {
+        let source = try String(contentsOf: RepoRoot.url("App/Fernlet/ContentView.swift"), encoding: .utf8)
+        #expect(source.contains("periodStore.recordStore.attachMutationHook { [store] in store.markPeriodBackupDirtyIfEnabled() }"))
+        #expect(source.contains("await store.settleSealedPeriodBackup()"))
+        #expect(!source.contains("retryDeferredSealedPeriodBackupIfNeeded()"),
+                "the Cycle settle must restore before it exports; the bare re-upload skips the restore")
+        #expect(!source.contains("sealedBackupPeriodEnabled ="), "nothing here may flip the period backup's switch")
+    }
 }

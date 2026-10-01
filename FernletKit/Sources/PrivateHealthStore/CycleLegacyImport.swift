@@ -180,25 +180,10 @@ extension PeriodTrackerStore {
         return plan
     }
 
-    /// The narrative-only record one legacy narrative becomes (§8.2 step 1): its legacy external id
-    /// as the record id, the clinical block UNKNOWN, the day's midnight as the time until a clinical
-    /// block supplies an exact one. Every clock is the narrative's own, so re-running changes nothing.
+    /// The narrative-only record one legacy narrative becomes (§8.2 step 1) — see
+    /// ``CycleRecord/init(legacyNarrative:origin:)``.
     static func legacyRecord(from narrative: MenstrualNarrative) -> CycleRecord {
-        CycleRecord(
-            id: CycleLegacyIdentity.recordID(forLegacyExternalID: narrative.hkExternalUUID),
-            dayKey: narrative.dateKey,
-            loggedAt: FernletDate.date(fromDayKey: narrative.dateKey) ?? narrative.createdAt,
-            clinical: nil,
-            narrative: CycleNarrativeFields(
-                note: narrative.note,
-                symptomFlags: narrative.symptomFlags,
-                customSymptomScales: narrative.customSymptomScales,
-                updatedAt: narrative.updatedAt
-            ),
-            origin: .importedLegacy,
-            createdAt: narrative.createdAt,
-            updatedAt: narrative.updatedAt
-        )
+        CycleRecord(legacyNarrative: narrative, origin: .importedLegacy)
     }
 
     /// After a clean write: the narrative half is done when every row left is a dead one (§8.2 step
@@ -228,5 +213,36 @@ extension PeriodTrackerStore {
         let removed = try narrativeRepository.delete(ids: ids)
         unopenableLegacyNarrativeIDs = []
         return removed
+    }
+}
+
+public nonisolated extension CycleRecord {
+    /// The narrative-only record one legacy ``MenstrualNarrative`` becomes — the legacy import's
+    /// narrative half (§8.2 step 1) and a v1 Sealed backup's restore (§9.10) build it the same way:
+    /// its legacy external id as the record id (``CycleLegacyIdentity/recordID(forLegacyExternalID:)``,
+    /// so an import, a drain and a restore of one entry merge into one record), the clinical block
+    /// UNKNOWN, the day's midnight as the time until a clinical block supplies an exact one. Every
+    /// clock is the narrative's own, so building it twice gives the same record.
+    ///
+    /// - Parameters:
+    ///   - narrative: The legacy sealed narrative (or a v1 backup's element).
+    ///   - origin: ``CycleRecordOrigin/importedLegacy`` for the import, ``CycleRecordOrigin/restored``
+    ///     for a backup.
+    init(legacyNarrative narrative: MenstrualNarrative, origin: CycleRecordOrigin) {
+        self.init(
+            id: CycleLegacyIdentity.recordID(forLegacyExternalID: narrative.hkExternalUUID),
+            dayKey: narrative.dateKey,
+            loggedAt: FernletDate.date(fromDayKey: narrative.dateKey) ?? narrative.createdAt,
+            clinical: nil,
+            narrative: CycleNarrativeFields(
+                note: narrative.note,
+                symptomFlags: narrative.symptomFlags,
+                customSymptomScales: narrative.customSymptomScales,
+                updatedAt: narrative.updatedAt
+            ),
+            origin: origin,
+            createdAt: narrative.createdAt,
+            updatedAt: narrative.updatedAt
+        )
     }
 }

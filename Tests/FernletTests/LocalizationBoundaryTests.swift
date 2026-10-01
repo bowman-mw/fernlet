@@ -581,6 +581,26 @@ struct LocalizationBoundaryTests {
         #expect(CycleLegacyImportLedger.doneValue == "done")
     }
 
+    /// The period Sealed backup v2's at-rest tokens (period-data design 2026-09-30, §9.10, §10.7): the
+    /// chunk envelope's keys and version — a renamed key makes every set in iCloud unreadable to the
+    /// next build — the v1 writer token and the `"<writer>:<generation>"` spelling of the accepted
+    /// head, and the two defaults keys, whose respelling would reopen a resolved restore (resurrecting
+    /// deleted entries) or forget the set this install may replace.
+    @MainActor
+    @Test func frozenPeriodBackupV2Tokens() throws {
+        let head = try PeriodBackupFormat.encodeChunk(index: 0, records: [], writer: "w", total: 0)
+        let headObject = try #require(try JSONSerialization.jsonObject(with: head) as? [String: Any])
+        #expect(Set(headObject.keys) == ["v", "writer", "total", "records"])
+        #expect(headObject["v"] as? Int == 2)
+        let tail = try PeriodBackupFormat.encodeChunk(index: 1, records: [], writer: "w", total: 0)
+        let tailObject = try #require(try JSONSerialization.jsonObject(with: tail) as? [String: Any])
+        #expect(Set(tailObject.keys) == ["v", "records"])
+        #expect(PeriodBackupHead.v1Writer == "v1")
+        #expect(PeriodBackupHead(writer: "abc", generation: 7).token == "abc:7")
+        #expect(PeriodBackupLedger.restoreResolvedKey == "fernlet.cycleRecord.periodRestoreResolved")
+        #expect(PeriodBackupLedger.acceptedHeadKey == "fernlet.sealedBackup.periodAcceptedHead")
+    }
+
     /// Sealed journal + trainer-export tokens.
     ///
     /// `FeelingTag` is persisted on every `JournalEntry`, is the memory category for `MemoryNote`, and

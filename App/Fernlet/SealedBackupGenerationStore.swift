@@ -63,7 +63,22 @@ struct SealedBackupGenerationStore {
     /// crash between the two would let the next write reuse a number that is already in the cloud,
     /// and the rollback check would then accept a substitution of the earlier one.
     mutating func mintNext(for payloadType: SealedBackupPayloadType) -> Int64 {
-        let next = lastSeen(for: payloadType) + 1
+        mintNext(for: payloadType, above: 0)
+    }
+
+    /// Mints the next generation strictly above both this device's mark and `floor`, and persists it
+    /// immediately (the same fail-safe direction as ``mintNext(for:)``).
+    ///
+    /// The period backup v2 passes the cloud head's generation as `floor` (period-data design
+    /// 2026-09-30, §9.10 "Generation floor"): counters are minted per device, so an iPhone whose own
+    /// counter is behind the set it is replacing would otherwise write a LOWER generation — which the
+    /// other iPhone's next restore rejects as a rollback (`.rolledBack`), terminally.
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload being written.
+    ///   - floor: A generation the new one must exceed (`0`: none).
+    mutating func mintNext(for payloadType: SealedBackupPayloadType, above floor: Int64) -> Int64 {
+        let next = max(lastSeen(for: payloadType), floor) + 1
         defaults.set(Int(next), forKey: Self.key(for: payloadType))
         return next
     }
@@ -77,9 +92,11 @@ struct SealedBackupGenerationStore {
         defaults.set(Int(generation), forKey: Self.key(for: payloadType))
     }
 
-    /// Clears every payload type's mark — chunked payloads AND the own-photo corpora. Wired into
-    /// the delete-all path: leaving a stale high-water mark behind would make a legitimate
-    /// post-wipe restore look like a rollback attack.
+    /// Clears every payload type's mark — chunked payloads AND the own-photo corpora — and the period
+    /// backup's compare-and-swap record (``periodAcceptedHeadKey``). Wired into the delete-all path:
+    /// leaving a stale high-water mark behind would make a legitimate post-wipe restore look like a
+    /// rollback attack, and the accepted head names a set the same wipe deletes (period-data design
+    /// 2026-09-30, §9.11).
     ///
     /// Driven off both `allCases` sets so a payload type or a photo corpus added later cannot leave
     /// a mark this wipe forgets.
@@ -87,7 +104,28 @@ struct SealedBackupGenerationStore {
         for payloadType in SealedBackupPayloadType.allCases {
             defaults.removeObject(forKey: Self.key(for: payloadType))
         }
+        defaults.removeObject(forKey: Self.periodAcceptedHeadKey)
         resetPhotoNamespace()
+    }
+
+    /// The period backup's compare-and-swap record (period-data design 2026-09-30, §9.10 E2): the
+    /// `"<writer>:<generation>"` of the last set this install wrote or merged, read and written
+    /// through `PeriodBackupLedger`. In this namespace so ``reset()`` clears it with the marks. FROZEN.
+    static let periodAcceptedHeadKey = "fernlet.sealedBackup.periodAcceptedHead"
+
+    /// The period compare-and-swap record's raw `"<writer>:<generation>"`, or nil when none.
+    var periodAcceptedHeadToken: String? {
+        defaults.string(forKey: Self.periodAcceptedHeadKey)
+    }
+
+    /// Writes the period compare-and-swap record.
+    func recordPeriodAcceptedHeadToken(_ token: String) {
+        defaults.set(token, forKey: Self.periodAcceptedHeadKey)
+    }
+
+    /// Removes the period compare-and-swap record.
+    func clearPeriodAcceptedHead() {
+        defaults.removeObject(forKey: Self.periodAcceptedHeadKey)
     }
 
     /// Clears only the own-photo corpora's marks. Split out so tearing down the photo route (the

@@ -338,6 +338,13 @@ func makeTestStoreWithRepositories(
         // sync initializer's hermetic default); pass one to share it across a simulated relaunch.
         deviceHealthResidueStore: deviceHealthResidueStore
     )
+    // The period backup's restore marker and compare-and-swap record (period-data design §5.3) live in
+    // `.standard` in production, which is process-global under the test runner: a THROWAWAY suite, and
+    // a seed that reads "fresh install" instead of the shared on-device narrative store's latch.
+    store.periodBackupLedger = PeriodBackupLedger(
+        defaults: UserDefaults(suiteName: "fernlet.tests.periodLedger.\(UUID().uuidString)") ?? .standard,
+        legacyLatch: { false }
+    )
     return (store, repository, journalNarrativeRepository)
 }
 

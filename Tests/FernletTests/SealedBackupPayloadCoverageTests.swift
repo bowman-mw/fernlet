@@ -41,12 +41,14 @@ final class FakeSealedBackupHost: SealedBackupContext {
         defaults: UserDefaults(suiteName: "fernlet.tests.fakeHold.\(UUID().uuidString)") ?? .standard
     )
     /// The app-lock-reset hold. Setting it true is a reset with every payload backup on (so every
-    /// pre-reset copy is kept); false drops the bit, which only a test may do.
+    /// pre-reset copy is kept); false drops the whole hold — the bit AND its per-payload record, which
+    /// only a test may do (the owner's release, `releaseSealedBackupRestoreHold()`, keeps the record).
     var sealedBackupRestoreAwaitsOwner: Bool {
         get { restoreHold.isHeld }
         set {
             guard newValue else {
                 restoreHold.defaults.removeObject(forKey: SealedBackupRestoreHold.defaultsKey)
+                restoreHold.defaults.removeObject(forKey: SealedBackupRestoreHold.preResetCopiesKey)
                 return
             }
             restoreHold.hold(keepingCopiesFrom: StoragePreferences(
@@ -56,6 +58,20 @@ final class FakeSealedBackupHost: SealedBackupContext {
     }
     var isPeriodTrackingVisible = true
     var isIntimacyTrackingVisible = true
+    /// The period backup's restore marker and compare-and-swap record (design §5.3, §9.10) on an
+    /// isolated suite. The one-time seed answers ``periodRestoreSeed`` (false: a fresh install).
+    lazy var periodBackupLedger = PeriodBackupLedger(
+        defaults: UserDefaults(suiteName: "fernlet.tests.fakePeriodLedger.\(UUID().uuidString)") ?? .standard,
+        legacyLatch: { [unowned self] in self.periodRestoreSeed }
+    )
+    /// What the period restore marker's one-time seed reads (the legacy cycle latch).
+    var periodRestoreSeed = false
+    /// Whether the period backup switch is on, as the mutation hook reads it.
+    var periodBackupEnabled = true
+    /// Cycle-record mutations seen through the hook.
+    private(set) var periodBackupMutationCount = 0
+    /// The period export's last Privacy & Data state.
+    private(set) var periodExportState: PeriodBackupExportState = .clear
     var previousJournals: [JournalEntry] = []
     var memories: [MemoryNote] = []
     var recentMeals: [Meal] = []
@@ -77,6 +93,21 @@ final class FakeSealedBackupHost: SealedBackupContext {
     }
     func recordSealedBackupCloudCopyDeleted(_ payloadType: SealedBackupPayloadType) {
         restoreHold.forgetPreResetCopy(of: payloadType)
+    }
+    func recordSealedBackupPreResetCopySettled(_ payloadType: SealedBackupPayloadType) {
+        restoreHold.forgetPreResetCopy(of: payloadType)
+    }
+    func releaseSealedBackupRestoreHold() {
+        restoreHold.release()
+    }
+    /// Mirrors `FernletStore.markPeriodBackupDirtyIfEnabled`: counts, and owes the re-upload while on.
+    func markPeriodBackupDirtyIfEnabled() {
+        periodBackupMutationCount += 1
+        guard periodBackupEnabled else { return }
+        reuploadDeferrals[.periodData] = true
+    }
+    func recordPeriodBackupExportState(_ state: PeriodBackupExportState) {
+        periodExportState = state
     }
     func recordSealedBackupReuploadDeferred(_ deferred: Bool, payloadType: SealedBackupPayloadType) {
         reuploadDeferrals[payloadType] = deferred
@@ -600,6 +631,68 @@ struct SealedBackupPayloadCoverageTests {
         #expect(!hold.keepsPreResetCopy(of: .sensitiveNotes), "the retired payload is never re-uploaded")
     }
 
+    /// The owner's release (design unit 5, §5.3, Q14): the AMBIENT-restore bit goes, the per-payload
+    /// record stays — written out in full when the hold had none (fail closed) — and each payload
+    /// leaves it only when its own copy is settled; the record is removed once it empties. A release
+    /// while not held writes nothing.
+    @Test func theOwnersReleaseKeepsEachCopyUntilItsRestoreLands() {
+        let defaults = isolatedDefaults("ownerRelease")
+        let hold = SealedBackupRestoreHold(defaults: defaults)
+        hold.release()
+        #expect(defaults.object(forKey: SealedBackupRestoreHold.preResetCopiesKey) == nil, "no hold, nothing written")
+
+        hold.hold(keepingCopiesFrom: StoragePreferences(sealedBackupPeriodEnabled: true, sealedBackupJournalEnabled: true))
+        hold.release()
+        #expect(!hold.isHeld, "ambient restores may run again")
+        #expect(hold.payloadsKeepingPreResetCopy == [.periodData, .journalNarratives], "each copy is still kept from a re-upload")
+        hold.forgetPreResetCopy(of: .periodData)
+        #expect(hold.payloadsKeepingPreResetCopy == [.journalNarratives])
+        hold.forgetPreResetCopy(of: .journalNarratives)
+        #expect(defaults.object(forKey: SealedBackupRestoreHold.preResetCopiesKey) == nil, "an empty record is removed")
+
+        hold.hold(keepingCopiesFrom: StoragePreferences())
+        defaults.removeObject(forKey: SealedBackupRestoreHold.preResetCopiesKey)
+        hold.release()
+        #expect(hold.payloadsKeepingPreResetCopy == Set(SealedBackupRestoreHold.reuploadablePayloads),
+                "a hold released without its record keeps every copy: fail closed")
+    }
+
+    /// The owner's release end to end for a v1-model payload: the journal re-upload stays held after the
+    /// release, the ambient restore then runs and lands, and only that settles the copy and lets this
+    /// iPhone back up again — so the pre-reset copy is pulled back before anything replaces it. A store
+    /// that already holds post-reset entries refuses the journal's empty-store restore, so its copy
+    /// stays kept (and its upload held) until the user turns that backup off — never a silent replace.
+    @Test func afterTheOwnersReleaseAJournalCopyIsRestoredBeforeItIsReplaced() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        let preferences = StoragePreferences(
+            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupJournalReuploadDeferred: true
+        )
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        let history = makeJournalRepository()
+        try history.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: history))
+        let preReset = cloud.sealedRecordIdentities
+        host.restoreHold.hold(keepingCopiesFrom: preferences)
+        host.sealedBackupContentKey = SymmetricKey(size: .bits256)
+        let written = makeJournalRepository()
+        try written.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+
+        host.releaseSealedBackupRestoreHold()
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: written)
+        #expect(cloud.sealedRecordIdentities == preReset, "released, but nothing replaces the copy before its restore")
+        #expect(await coordinator.restoreJournalBackupTargeted(journalRepository: written) == .skippedStoreNotEmpty)
+        #expect(host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "a refused restore settles nothing")
+
+        let empty = makeJournalRepository()
+        #expect(await coordinator.restoreJournalBackupTargeted(journalRepository: empty) == .restored(1))
+        #expect(!host.sealedBackupKeepsPreResetCopy(of: .journalNarratives), "the restore landed: the copy is settled")
+        try empty.insert(journalNarrative("after the restore", at: 40), contentKey: host.sealedBackupContentKey)
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: empty)
+        #expect(cloud.sealedRecordIdentities != preReset, "and now the restored journal backs up again")
+    }
+
     /// Review N-1: Privacy & Data's "your app lock was reset" line speaks only for a backup that is on
     /// AND whose pre-reset copy the hold keeps; any other backup's own line shows instead.
     @Test func theOwnerHoldLineSpeaksOnlyForAKeptCopy() {
@@ -631,69 +724,6 @@ struct SealedBackupPayloadCoverageTests {
                                   accessibility: kSecAttrAccessibleAfterFirstUnlock,
                                   synchronizable: true) == errSecSuccess)
         return otherService
-    }
-
-    /// Review C-U2-R2: with the backups reading the Private tab's key, the OLD period exporter would
-    /// have run from the Cycle section for the first time — over the one account-wide period slot,
-    /// before design unit 5's guards against the other iPhone's copy exist. Until then it is paused as
-    /// a non-destructive deferral: the switch stays on, the upload is owed, and nothing is written.
-    @Test func thePeriodExportIsPausedAsANonDestructiveDeferral() async throws {
-        let cloud = try makeCloud()
-        defer { cloud.tearDown() }
-        let host = makeHost()
-        #expect(host.sealedBackupContentKey != nil && host.isPeriodTrackingVisible, "the hub is open and cycle visible")
-        let coordinator = makeCloudCoordinator(host: host, cloud: cloud)
-
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .periodData), "the switch stays on")
-        #expect(host.reuploadDeferrals[.periodData] == true, "the upload is owed, not dropped")
-        #expect(cloud.sealedRecords.isEmpty, "nothing reaches the account-wide period slot")
-
-        host.isPeriodTrackingVisible = false
-        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
-        #expect(host.reuploadDeferrals[.periodData] == true, "hidden stays the silent no-op; the owed upload is kept")
-        #expect(await coordinator.setSealedBackupEnabled(false, payloadType: .periodData), "turning it off still deletes")
-    }
-
-    /// Design unit 4's temporary freeze (period-data design 2026-09-30, §13): since the cutover the
-    /// period RESTORE is paused too. A v1 chunk set in iCloud is NOT written into the legacy narrative
-    /// table — which the legacy import may already have finished with, where nothing would read it —
-    /// even on the explicit Retry; the outcome is a retryable deferral and the cloud copy is untouched.
-    /// Unit 5's id-keyed merge restore lifts it.
-    @Test func thePeriodRestoreIsPausedAsANonDestructiveDeferral() async throws {
-        let cloud = try makeCloud()
-        defer { cloud.tearDown() }
-        let host = makeHost()
-        // Seeded straight through the service, the way the coordinator prepares its identity: the
-        // period EXPORT is itself paused, so it cannot put the fixture in iCloud.
-        let seedingIdentity = IdentityService(keychainService: cloud.keychainService)
-        try seedingIdentity.ensureProvisioned()
-        seedingIdentity.provisionBackupEscrowKeyForSealing()
-        let seeding = SealedBackupService(
-            cloudDataService: CloudKitDataService(
-                accountProvider: AlwaysAvailableAccountProvider(),
-                database: cloud.database,
-                zoneID: CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName),
-                isCloudKitSyncEnabled: { false }
-            ),
-            identityService: seedingIdentity,
-            generationStore: SealedBackupGenerationStore(defaults: isolatedDefaults("seedingGeneration"))
-        )
-        let chunk = try encode([MenstrualNarrative(hkExternalUUID: UUID().uuidString, dateKey: "2026-06-01", note: "only in the cloud")])
-        try await seeding.reconcileChunked(payloadType: .periodData, chunkCount: 1) { _ in chunk }
-        let seeded = names(in: cloud, for: .periodData)
-        #expect(!seeded.isEmpty, "the fixture put a period backup in iCloud")
-        let target = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext,
-            defaults: isolatedDefaults("periodLatch")
-        )
-
-        let outcome = await makeCloudCoordinator(host: host, cloud: cloud)
-            .restorePeriodBackupTargeted(narrativeRepository: target, initiatedByUser: true)
-
-        #expect(outcome == .deferredTransient)
-        #expect(outcome.isRetryable)
-        #expect(try target.narrativeCount() == 0, "nothing is written into the legacy table")
-        #expect(names(in: cloud, for: .periodData) == seeded, "the cloud copy is untouched")
     }
 
     /// Same for intimacy, plus its gate: hidden defers (retryable — un-hiding IS the retry) and writes
