@@ -65,7 +65,10 @@ that would make a day undeletable in Fernlet. The mirror delete reports the samp
 refused (``CycleMirrorDeletion``, ``CycleMirrorSampleKind``) instead of throwing them, because HealthKit
 says "denied" both for access never granted and for access taken away after a copy was written; a
 refusal is reported only for a kind the record's copy could hold, and — unless the record was built
-from Fernlet's own Health samples — only while cycle sharing is on. With sharing on an edit's rewrite
+from Fernlet's own Health samples — only while cycle sharing is on. The record's origin is what says
+"built from Fernlet's own Health samples", so it follows the clinical block once that block is known:
+a flow the user adds to a legacy note-only day makes the record `logged`, and a note-only record that
+fill-on-read, the import or "Keep in Fernlet" completes from its samples takes that block's origin. With sharing on an edit's rewrite
 is always attempted after a refusal, so a partial grant never silently removes the day. A day holding only Fernlet's Health copies offers "Keep
 in Fernlet" (``PeriodTrackerStore/keepHealthOnlyDay(_:contentKey:)``) and "Delete from Apple Health".
 **Load** reads Health only while the cycle capability is on, rechecks visibility and the live key
@@ -120,7 +123,9 @@ it. Its Codable is a frozen, tolerant at-rest format (`"v": 2`; enums as raw val
 since 2001) shared by the sealed column, the pending buffer's v2 payload and the backup chunks.
 ``CycleRecord/merged(_:_:)`` is the one merge rule every path uses — each block taken WHOLE by its
 clock, so a flag the user cleared never returns from an older copy and a temperature always travels
-with its unit; commutative, idempotent and associative. ``CycleRecordRepository`` is the sealed CRUD
+with its unit; commutative, idempotent and associative. Its origin is the copy that speaks most
+strongly for the clinical block (`CycleRecord.combinedOrigin(_:_:)`): a block built from Fernlet's
+Health samples first, then any known block over an unknown one, else the stored copy's. ``CycleRecordRepository`` is the sealed CRUD
 under `FernletCryptoPurpose.KeyDerivation.cycleRecordV1`, with ONE write path,
 ``CycleRecordRepository/upsertMerged(_:retiringNarrativeIDs:contentKey:)`` (insert absent ids, merge
 openable ones, replace dead ones, refuse the whole call over an undecided row, retire legacy narratives
