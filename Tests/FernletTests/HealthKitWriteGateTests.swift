@@ -248,6 +248,13 @@ struct HealthKitWriteGateTests {
         await #expect(throws: HKError.self, "revoked access may have left copies behind") {
             _ = try await harness.service.deleteMirror(recordID: UUID())
         }
+
+        // One refused type never strands the rest: every type is attempted before the throw.
+        harness.controller.deleteObjectsError = nil
+        harness.controller.deleteObjectsErrorByType = [HKCategoryTypeIdentifier.menstrualFlow.rawValue: HKError(.errorAuthorizationDenied)]
+        let attemptedBefore = harness.controller.deletedObjectTypes.count
+        await #expect(throws: HKError.self) { _ = try await harness.service.deleteMirror(recordID: UUID()) }
+        #expect(harness.controller.deletedObjectTypes.count - attemptedBefore == 4, "the four other types were still deleted")
     }
 
     /// Every mirror sample carries the record id twice — `HKMetadataKeyExternalUUID` and the frozen
@@ -678,8 +685,12 @@ final class WriteRecordingStoreController: HealthKitStoreControlling {
     /// The type of every bulk delete that reached the store.
     private(set) var deletedObjectTypes: [String] = []
 
+    /// When set for a type, that type's bulk delete throws it.
+    var deleteObjectsErrorByType: [String: Error] = [:]
+
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int {
         if let deleteObjectsError { throw deleteObjectsError }
+        if let typeError = deleteObjectsErrorByType[type.identifier] { throw typeError }
         deletedObjectTypes.append(type.identifier)
         return deleteObjectsCount
     }

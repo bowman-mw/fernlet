@@ -2819,8 +2819,10 @@ extension HealthKitService: PeriodHealthKitServicing {
     /// a post-cutover mirror and a pre-cutover sample the import gave that id alike. UNGATED (a delete
     /// puts nothing into Health, and "sharing off" must not strand Fernlet's copies) and own-source
     /// only (`HKSource.default()`, which HealthKit enforces anyway). A type Fernlet was never granted,
-    /// or with nothing matching, counts 0 (``isExpectedDeleteSkip(_:)``); share access the user
-    /// REVOKED throws, because copies made before the revocation may remain. Audited by count only.
+    /// or with nothing matching, counts 0 (``isExpectedDeleteSkip(_:)``). Any other failure — share
+    /// access the user REVOKED, which may have left copies made before it — is rethrown, but only
+    /// after every other type was attempted, so one refused type never strands the rest (the
+    /// "delete everything" sweep's stance). Audited by count only.
     ///
     /// - Returns: How many samples were deleted; 0 on a device without Health.
     public func deleteMirror(recordID: UUID) async throws -> Int {
@@ -2830,14 +2832,18 @@ extension HealthKitService: PeriodHealthKitServicing {
             HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeyExternalUUID, allowedValues: [recordID.uuidString])
         ])
         var deleted = 0
+        var firstFailure: Error?
         for type in try Self.periodSampleTypes() {  // R2: five types.
             do {
                 deleted += try await storeController.deleteObjects(of: type, predicate: predicate)
             } catch let error as HKError where Self.isExpectedDeleteSkip(error) {
                 continue
+            } catch {
+                firstFailure = firstFailure ?? error
             }
         }
-        FernletAuditLog.log("hk.cycleMirror.deleted", context: ["count": "\(deleted)"])
+        FernletAuditLog.log("hk.cycleMirror.deleted", context: ["count": "\(deleted)", "failed": firstFailure == nil ? "false" : "true"])
+        if let firstFailure { throw firstFailure }
         return deleted
     }
 
