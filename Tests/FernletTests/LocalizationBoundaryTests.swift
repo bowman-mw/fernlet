@@ -2617,6 +2617,14 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "friends.pendingReview.body",
                      source: "the Friends card's photos-waiting sentence (session photos U3, 2026-09-30)"),
+        // Sealed backup v2 (2026-09-30): the Remove confirmation's title counts the entries a backup
+        // pass found it cannot open. A bare `%lld` read "Remove 1 entries" in English.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "Remove %lld entries this iPhone can't open?",
+                     source: "Privacy & Data's journal-backup Remove confirmation title"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "Remove %lld intimate logs this iPhone can't open?",
+                     source: "Privacy & Data's intimate-log-backup Remove confirmation title"),
     ]
 
     /// Every count-bearing key carries real plural variations.

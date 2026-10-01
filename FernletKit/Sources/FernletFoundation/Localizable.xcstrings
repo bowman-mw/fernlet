@@ -97,6 +97,30 @@
         }
       }
     },
+    "lock.error.deviceCustodyInconsistent" : {
+      "comment" : "Shown on the Private tab's Unlock screen when the saved key records disagree with each other. Must never mention resetting: nothing is lost and a retry can succeed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can't open this right now. Try again in a moment."
+          }
+        }
+      }
+    },
+    "lock.error.deviceKeyAbsent" : {
+      "comment" : "Shown if the Private tab is opened before this iPhone has its own key for private entries. Routing state; the app normally handles it before anything is shown.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Private isn't set up on this iPhone yet."
+          }
+        }
+      }
+    },
     "lock.error.internal" : {
       "comment" : "Diagnostic wrapper for an unexpected app-lock failure. The argument is an untranslated internal message.",
       "extractionState" : "extracted_with_value",
@@ -181,6 +205,42 @@
         }
       }
     },
+    "lock.error.ownerVerificationFailed" : {
+      "comment" : "Shown when the Face ID or iPhone passcode check before setting an app passcode over existing entries was cancelled or failed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't confirm it's you, so the passcode wasn't set."
+          }
+        }
+      }
+    },
+    "lock.error.priorSealedDataPending" : {
+      "comment" : "Shown if a passcode is being set while the private store still holds entries that have not been checked yet. The app normally answers this with a review screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet needs to check the private entries on this iPhone before it sets a passcode."
+          }
+        }
+      }
+    },
+    "lock.error.recoveryDeviceHoldsEarlierKey" : {
+      "comment" : "Shown after the correct passcode is entered to turn the app passcode off, when the enrolled recovery device still holds the key to entries written before the current app lock. Removing the recovery device is a separate, deliberate step in App lock settings; this message must not say the entries are already lost.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turning off the passcode would remove your recovery device, and it holds the only key to your entries from before this app lock. To go ahead, remove the recovery device first."
+          }
+        }
+      }
+    },
     "lock.error.resetRequired" : {
       "comment" : "Shown when the failed-attempt budget is exhausted and only a full app-lock reset can proceed. There is no waiting it out.",
       "extractionState" : "extracted_with_value",
@@ -189,6 +249,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Too many failed attempts. Please reset app lock."
+          }
+        }
+      }
+    },
+    "lock.ownerCheck.reason" : {
+      "comment" : "Reason line on the system Face ID or iPhone passcode sheet shown before an app passcode is set over existing private entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Confirm it's you before setting a passcode."
           }
         }
       }

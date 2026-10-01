@@ -253,14 +253,14 @@
         }
       }
     },
-    "lock.disclosure.forgottenPasscode" : {
-      "comment" : "First loss mode in the no-recovery disclosure. 'Permanently unreadable' means the data is destroyed for practical purposes — no support path exists. The second sentence is the one piece of good news and must stay accurate: the clinical samples in Apple Health are untouched, only Fernlet's own notes are lost.",
+    "lock.disclosure.forgottenPasscode.v2" : {
+      "comment" : "First loss mode in the no-recovery disclosure. 'Can't be opened again' is literal: no support path exists. Only what Fernlet copied to Apple Health (if anything) survives there, and the encrypted Sealed backup in iCloud, which the user has to have turned on. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "If you forget your passcode, private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health."
+            "value" : "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on in Privacy & Data, it keeps an encrypted copy you can restore after a reset, before you add new entries."
           }
         }
       }
@@ -397,14 +397,14 @@
         }
       }
     },
-    "lock.hardBinding.message" : {
-      "comment" : "One-time disclosure for users who set their passcode under an older build and have just acquired a larger loss mode. 'Even with the right passcode' is the sentence that must not soften — remembering the passcode does not save the notes on replaced hardware. 'Secure Enclave' is Apple hardware terminology; 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app, so match how they are translated there.",
+    "lock.hardBinding.message.v2" : {
+      "comment" : "One-time disclosure for users who set their passcode under an older build and have just acquired a larger loss mode. 'Even with the right passcode' is the phrase that must not soften: remembering the passcode does not save the entries on replaced hardware. 'Secure Enclave' is Apple hardware terminology; 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app, so match how they are translated there.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Fernlet moved the key for your sealed journal, cycle, and intimacy notes into this iPhone's Secure Enclave, where it can't be copied off the device. Those notes are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware — even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives."
+            "value" : "Fernlet moved the key for your sealed journal, cycle history and intimacy entries into this iPhone's Secure Enclave, where it can't be copied off the device. Those entries are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware, even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives."
           }
         }
       }
@@ -481,14 +481,14 @@
         }
       }
     },
-    "lock.reset.confirm.message" : {
-      "comment" : "Message in the reset confirmation dialog. 'Permanently unreadable' is literal — there is no recovery. The second sentence is the one thing that survives and must stay accurate: the clinical samples in Apple Health are untouched.",
+    "lock.reset.confirm.message.v2" : {
+      "comment" : "Message in the reset confirmation dialog. 'Permanently deleted' is literal: there is no recovery on this iPhone. Only what Fernlet copied to Apple Health (if anything) stays there, and an encrypted Sealed backup in iCloud (if the user turned it on) can be restored from Privacy & Data after the reset. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health."
+            "value" : "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries."
           }
         }
       }
@@ -529,14 +529,14 @@
         }
       }
     },
-    "lock.reset.required.body" : {
-      "comment" : "Body of the final lockout card. The reset is the only way forward AND it destroys the sealed notes for good — both halves have to survive translation.",
+    "lock.reset.required.body.v2" : {
+      "comment" : "Body of the final lockout card. The reset is the only way forward AND it deletes the entries saved in Fernlet for good. Both halves have to survive translation.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "You must reset app lock to continue. Private journal, cycle, and intimacy notes will become permanently unreadable."
+            "value" : "You must reset app lock to continue. Your journal, cycle history and intimacy entries saved in Fernlet will be deleted."
           }
         }
       }
@@ -613,6 +613,30 @@
         }
       }
     },
+    "lock.setup.error.openPrivateFirst" : {
+      "comment" : "Shown on the passcode setup screen when this iPhone holds entries sealed under a key that no longer exists. The Private tab ('Private' is the tab's name) shows them and asks before removing anything. Nothing was set up and nothing was deleted.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some entries on this iPhone can't be opened. Open the Private tab to review them, then set a passcode."
+          }
+        }
+      }
+    },
+    "lock.setup.error.openPrivateOnce" : {
+      "comment" : "Shown on the passcode setup screen when the entries already on this iPhone could not be checked from where the setup was opened. 'Private' is the tab's name. Nothing was set up and nothing was deleted.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open the Private tab once, then set a passcode. Fernlet checks the entries already on this iPhone there."
+          }
+        }
+      }
+    },
     "lock.setup.error.passcodeMismatch" : {
       "comment" : "Inline error when the confirmation passcode differs from the first entry. Nothing was saved; the user simply retypes.",
       "extractionState" : "extracted_with_value",
@@ -621,6 +645,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Passcodes don't match. Try again."
+          }
+        }
+      }
+    },
+    "lock.setup.error.priorEntriesUndecided" : {
+      "comment" : "Shown on the passcode setup screen when checking the entries already on this iPhone failed for a reason that can pass. Nothing was set up and nothing was deleted.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can't check the entries on this iPhone right now, so the passcode wasn't set. Try again in a moment."
           }
         }
       }
@@ -741,6 +777,102 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "App lock is set up."
+          }
+        }
+      }
+    },
+    "lock.tapGate.body" : {
+      "comment" : "Line under the heading on the Private tab's no-passcode unlock screen, naming what the tab holds.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your journal, cycle and worry entries are here."
+          }
+        }
+      }
+    },
+    "lock.tapGate.body.noCycle" : {
+      "comment" : "Line under the heading on the Private tab's no-passcode unlock screen when cycle tracking is hidden, naming what the tab holds. Must not mention cycle or intimacy.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your journal and worry entries are here."
+          }
+        }
+      }
+    },
+    "lock.tapGate.honesty" : {
+      "comment" : "Small print on the Private tab's no-passcode unlock screen. It must stay literally true: the Unlock button needs no passcode, so it does not stop someone holding the unlocked phone. Never translate it into anything that sounds like the page is locked or protected.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No passcode is set, so anyone using your unlocked iPhone can open this page. Your entries stay encrypted on this iPhone. You can add a passcode in Settings."
+          }
+        }
+      }
+    },
+    "lock.tapGate.title" : {
+      "comment" : "Heading of the screen shown over the Private tab when no app passcode is set. 'Private' is the tab's name; translate it the way the tab is translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Private"
+          }
+        }
+      }
+    },
+    "lock.tapGate.tryAgain" : {
+      "comment" : "Shown under the Unlock button on the Private tab when opening failed for a reason that can pass (the iPhone's keychain did not answer). Must never mention resetting or losing entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can't open this right now. Try again in a moment."
+          }
+        }
+      }
+    },
+    "lock.tapGate.unlock" : {
+      "comment" : "The only button on the Private tab's no-passcode unlock screen. One tap opens the tab; no passcode is asked for.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unlock"
+          }
+        }
+      }
+    },
+    "lock.tapGate.unlock.hint" : {
+      "comment" : "VoiceOver hint for the Unlock button on the Private tab's no-passcode unlock screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens your private entries. No passcode is needed."
+          }
+        }
+      }
+    },
+    "lock.tapGate.unrecoverable.body" : {
+      "comment" : "Card on the Private tab (no app passcode) when the key for private entries was lost, for example after this iPhone was erased and restored from a backup. The entries are already unreadable and resetting does not recover them; say both plainly. The encrypted Sealed backup in iCloud, if the user turned it on, can be restored from Privacy & Data after the reset. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This iPhone's key for your private entries is gone, so they can't be opened here. Resetting clears Private so you can use it again. It doesn't bring those entries back, but if Sealed backup is on, you can restore it from Privacy & Data afterwards, before you add new entries."
           }
         }
       }
@@ -885,6 +1017,186 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet Lock"
+          }
+        }
+      }
+    },
+    "lock.unopenable.backupWillRestore" : {
+      "comment" : "Shown on the card only when a Sealed backup (a setting in Privacy & Data) will bring the user's history back after the unopenable entries are removed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your Sealed backup will be restored after you continue."
+          }
+        }
+      }
+    },
+    "lock.unopenable.body" : {
+      "comment" : "Body of the card naming entries no key on this iPhone can open. It is literally true: the key was device-bound and is gone, so neither Fernlet nor anyone else can open them.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This iPhone has entries that were encrypted on another iPhone, or before this iPhone was erased. The key that opened them never leaves the iPhone it was made on, so no one can open them now."
+          }
+        }
+      }
+    },
+    "lock.unopenable.count.cycle" : {
+      "comment" : "One row of counts on the card naming entries that can't be opened. The number is how many cycle entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle entries: %lld"
+          }
+        }
+      }
+    },
+    "lock.unopenable.count.intimacy" : {
+      "comment" : "One row of counts on the card naming entries that can't be opened. The number is how many intimacy entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy entries: %lld"
+          }
+        }
+      }
+    },
+    "lock.unopenable.count.journal" : {
+      "comment" : "One row of counts on the card naming entries that can't be opened. The number is how many journal entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal entries: %lld"
+          }
+        }
+      }
+    },
+    "lock.unopenable.count.other" : {
+      "comment" : "One row of counts on the card naming entries that can't be opened. The number is how many entries of kinds the user has hidden in Settings. Must not name what kind they are.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Other private entries: %lld"
+          }
+        }
+      }
+    },
+    "lock.unopenable.count.worry" : {
+      "comment" : "One row of counts on the card naming entries that can't be opened. The number is how many Worry Box entries. 'Worry Box' is a feature name in this app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Worry Box entries: %lld"
+          }
+        }
+      }
+    },
+    "lock.unopenable.earlierNotes.body" : {
+      "comment" : "Body of the Cycle page card naming earlier cycle notes that cannot be opened. They could not be moved into the cycle history because they will not open; nothing about them is readable.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet moved your earlier cycle notes into your cycle history. These ones can't be opened on this iPhone, so they were left behind. No one can open them now."
+          }
+        }
+      }
+    },
+    "lock.unopenable.earlierNotes.count" : {
+      "comment" : "The count row on the Cycle page card naming earlier cycle notes that can't be opened. The number is how many notes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Earlier cycle notes: %lld"
+          }
+        }
+      }
+    },
+    "lock.unopenable.earlierNotes.remove" : {
+      "comment" : "Destructive button on the Cycle page card. Permanently deletes exactly the earlier cycle notes listed (they can never be opened anyway).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove them"
+          }
+        }
+      }
+    },
+    "lock.unopenable.earlierNotes.title" : {
+      "comment" : "Heading of a card on the Cycle page (inside the Private tab) naming cycle notes saved by an earlier version of the app that can no longer be opened on this iPhone.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some earlier cycle notes can't be opened here"
+          }
+        }
+      }
+    },
+    "lock.unopenable.heldEntries" : {
+      "comment" : "One row on the card naming entries that can't be opened: what Fernlet was holding until Private opened. They are one sealed file, so there is no count. Must not name what kind they are.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Entries saved while Private was closed"
+          }
+        }
+      }
+    },
+    "lock.unopenable.notNow" : {
+      "comment" : "Button on the card that leaves the Private tab closed and deletes nothing.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not now"
+          }
+        }
+      }
+    },
+    "lock.unopenable.remove" : {
+      "comment" : "Destructive button on the card. Permanently deletes exactly the entries listed (they can never be opened anyway), then opens the Private tab.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove them and open Private"
+          }
+        }
+      }
+    },
+    "lock.unopenable.title" : {
+      "comment" : "Heading of the card shown on the Private tab when this iPhone holds entries sealed under a key that no longer exists anywhere.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some entries can't be opened here"
           }
         }
       }

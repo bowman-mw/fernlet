@@ -1032,6 +1032,9 @@
     "AI activity log" : {
 
     },
+    "About this day" : {
+
+    },
     "Accept" : {
 
     },
@@ -1125,6 +1128,18 @@
     "Add task" : {
 
     },
+    "Add the intimate log backup to this iPhone?" : {
+
+    },
+    "Add the journal backup to this iPhone?" : {
+
+    },
+    "Add the older intimate log backup to this iPhone?" : {
+
+    },
+    "Add the older journal backup to this iPhone?" : {
+
+    },
     "Add this workout plan?" : {
 
     },
@@ -1147,6 +1162,18 @@
     },
     "Adds bottles of water to today's Fernlet diary." : {
 
+    },
+    "Adds the backup's entries to this iPhone the next time you open Private." : {
+      "comment" : "Accessibility hint for Restore it here on the journal Sealed backup."
+    },
+    "Adds the backup's logs to this iPhone the next time you open Private." : {
+      "comment" : "Accessibility hint for Restore it here on the intimate-log Sealed backup."
+    },
+    "Adds the older backup's entries to this iPhone." : {
+      "comment" : "Accessibility hint for Restore anyway on the journal Sealed backup."
+    },
+    "Adds the older backup's logs to this iPhone." : {
+      "comment" : "Accessibility hint for Restore anyway on the intimate-log Sealed backup."
     },
     "Adjust" : {
 
@@ -1255,12 +1282,6 @@
     "App lock" : {
 
     },
-    "App lock is not set up. Set a passcode to protect your journal, period, and intimacy history." : {
-
-    },
-    "App lock needed" : {
-
-    },
     "App lock reset" : {
 
     },
@@ -1342,6 +1363,9 @@
     "Backgrounds" : {
 
     },
+    "Backs up this iPhone over the backup in iCloud." : {
+      "comment" : "Accessibility hint for Replace on a Sealed backup (journal or intimate logs)."
+    },
     "Backups" : {
 
     },
@@ -1355,6 +1379,9 @@
 
     },
     "Basal body temperature: %@ °F" : {
+
+    },
+    "Be a recovery device" : {
 
     },
     "Bedtime" : {
@@ -1576,6 +1603,12 @@
     },
     "Checking your workout calendar…" : {
 
+    },
+    "Checks the entries again, then deletes those that still can't be opened." : {
+      "comment" : "Accessibility hint for Remove them on the journal Sealed backup."
+    },
+    "Checks the logs again, then deletes those that still can't be opened." : {
+      "comment" : "Accessibility hint for Remove them on the intimate-log Sealed backup."
     },
     "Choose a different swap" : {
 
@@ -1904,6 +1937,9 @@
     "Create" : {
 
     },
+    "Create a PIN or password for lockable features — you can turn on Face ID with it here too." : {
+
+    },
     "Create custom food" : {
 
     },
@@ -2065,10 +2101,16 @@
     "Delete %lld" : {
 
     },
+    "Delete Fernlet's copy from Apple Health?" : {
+
+    },
     "Delete everything" : {
 
     },
     "Delete everything?" : {
+
+    },
+    "Delete from Apple Health" : {
 
     },
     "Delete iCloud data" : {
@@ -2374,7 +2416,16 @@
         }
       }
     },
+    "Enter your current passcode to turn it off." : {
+      "comment" : "Prompt on the verify sheet shown after confirming Turn off passcode in App lock settings."
+    },
     "Enter your passcode" : {
+
+    },
+    "Entries that are only in the backup won't be in it anymore. If your other iPhone still has them, they stay on that iPhone." : {
+
+    },
+    "Entries that exist only on your other iPhone won't be in the backup anymore. Your other iPhone keeps its own entries." : {
 
     },
     "Entry" : {
@@ -2443,7 +2494,7 @@
     "Exclude from backups" : {
 
     },
-    "Excluding from device backup means your journals, intimate logs, and cycle notes won't be in any iPhone backup. Because they're encrypted with a key that never leaves this device, erasing or losing this device would lose them permanently. Exclude anyway?" : {
+    "Excluding from device backup means your journals, intimate logs and cycle history won't be in any iPhone backup. Because they're encrypted with a key that never leaves this device, erasing or losing this device would lose them permanently. Exclude anyway?" : {
 
     },
     "Exercise %lld of %lld · %lld min left" : {
@@ -2498,6 +2549,9 @@
     "F %lldg" : {
 
     },
+    "Face ID needs a Fernlet passcode first. Nothing is locked until you set one." : {
+
+    },
     "Fat" : {
 
     },
@@ -2514,6 +2568,9 @@
 
     },
     "Fernlet QR code for the other phone to scan" : {
+
+    },
+    "Fernlet adds the entries from the backup in iCloud to this iPhone's cycle history the next time you open the Cycle page in Private. Entries you deleted on this iPhone since that backup was made may come back." : {
 
     },
     "Fernlet asks at first use where practical, so you can start without granting everything now." : {
@@ -2684,6 +2741,9 @@
     "Fernlet will hide intimacy logging and stop reading it. Your notes are kept — turn this back on any time to see them again.\n\nAnything you've saved in Apple Health stays in Apple Health." : {
 
     },
+    "Fernlet will restore your Sealed backup from before the reset the next time you open Private. Until it's back, Fernlet won't back up this iPhone over it." : {
+
+    },
     "Fernlet will send only this barcode's number to Open Food Facts, a free, open food database, and show you what it finds before anything is saved. Allowing this turns on Web nutrition lookup, which also lets a product you search for by name go to DuckDuckGo. No account, cookies or health data are sent. You can turn it off in Settings at any time, and each lookup is noted only on this device, in the AI activity log." : {
 
     },
@@ -2736,14 +2796,11 @@
     "First aid has slow breathing, grounding, and a worry box — only if it sounds nice." : {
 
     },
-    "Flow level" : {
+    "First day of cycle" : {
 
     },
-    "Flow, first day of cycle, intermenstrual bleeding, temperature, cervical mucus and ovulation tests are saved in Apple Health, and Fernlet isn't sharing cycle data with Health right now. Notes and symptoms are saved privately in Fernlet only when app lock is on. You can turn on sharing in Settings › Health and set up app lock in Settings." : {
-      "comment" : "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off and no app lock is set up, so nothing on the sheet can be saved yet. The listed fields are the sheet's own field names; Settings › Health is Fernlet's own Settings page."
-    },
-    "Flow, first day of cycle, intermenstrual bleeding, temperature, cervical mucus and ovulation tests are saved in Apple Health, and Fernlet isn't sharing cycle data with Health right now. Notes and symptoms still save privately in Fernlet. You can turn on sharing in Settings › Health." : {
-      "comment" : "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off and an app lock is set up. The listed fields are the sheet's own field names; Settings › Health is Fernlet's own Settings page."
+    "Flow level" : {
+
     },
     "Flow: %@" : {
 
@@ -2847,6 +2904,12 @@
         }
       }
     },
+    "From Apple Health · %@" : {
+
+    },
+    "From Apple Health · Fernlet" : {
+
+    },
     "From recipe" : {
 
     },
@@ -2937,16 +3000,10 @@
     "Health data is not available on this device." : {
 
     },
-    "Health event saved. Set up app lock to keep notes with future cycles." : {
-
-    },
     "Health is off" : {
 
     },
     "Health is turned off in Fernlet, but anything Fernlet wrote to Apple Health before that is still there, and Fernlet can still delete it — you don't have to turn Health back on. It can only ever delete its own; everything else in Apple Health is yours to delete in the Health app. If you've taken Fernlet's Health access away since, it will say so instead of claiming it's gone." : {
-
-    },
-    "Health samples" : {
 
     },
     "Hearts" : {
@@ -3186,6 +3243,18 @@
     "Item color" : {
 
     },
+    "Its entries are added here. If an entry was changed on both iPhones, you'll see both versions. Entries deleted since that backup was made may come back. After this, this iPhone backs up your journal, and your other iPhone will show that its backup was replaced." : {
+      "comment" : "Privacy & Data: confirmation body for adding another iPhone's journal Sealed backup here."
+    },
+    "Its entries are added here. If an entry was changed on both iPhones, you'll see both versions. Entries deleted since that backup was made may come back. After this, this iPhone backs up your journal." : {
+      "comment" : "Privacy & Data: confirmation body for restoring an older journal Sealed backup anyway."
+    },
+    "Its logs are added here. After this, this iPhone backs up your intimate logs, and your other iPhone will show that its backup was replaced." : {
+      "comment" : "Privacy & Data: confirmation body for adding another iPhone's intimate-log Sealed backup here."
+    },
+    "Its logs are added here. After this, this iPhone backs up your intimate logs." : {
+      "comment" : "Privacy & Data: confirmation body for restoring an older intimate-log Sealed backup anyway."
+    },
     "Its saved state was set aside. Nothing that was already saved was lost." : {
 
     },
@@ -3223,6 +3292,9 @@
 
     },
     "Keep going" : {
+
+    },
+    "Keep in Fernlet" : {
 
     },
     "Keep in backups" : {
@@ -3340,6 +3412,9 @@
     "Locations & equipment" : {
 
     },
+    "Lock now" : {
+
+    },
     "Lock photos" : {
 
     },
@@ -3350,6 +3425,15 @@
 
     },
     "Lock to this device" : {
+
+    },
+    "Locked" : {
+
+    },
+    "Locked (cooldown until %@)" : {
+
+    },
+    "Locked (reset required)" : {
 
     },
     "Log" : {
@@ -3414,6 +3498,9 @@
       }
     },
     "Logged once" : {
+
+    },
+    "Logs that are only in the backup won't be in it anymore. If your other iPhone still has them, they stay on that iPhone." : {
 
     },
     "Longer rest" : {
@@ -3679,9 +3766,6 @@
     "Name your item" : {
 
     },
-    "Narrative" : {
-
-    },
     "Nearby Friends is off" : {
 
     },
@@ -3775,9 +3859,6 @@
     "No cycle events in the last 90 days." : {
 
     },
-    "No cycle samples for this day." : {
-
-    },
     "No duress code" : {
 
     },
@@ -3832,6 +3913,9 @@
     "No one matches \"%@\"." : {
 
     },
+    "No passcode" : {
+
+    },
     "No protection" : {
 
     },
@@ -3848,9 +3932,6 @@
 
     },
     "No rush getting started." : {
-
-    },
-    "No saved note for this day." : {
 
     },
     "No score — nothing was logged" : {
@@ -3937,13 +4018,7 @@
     "Note (optional)" : {
 
     },
-    "Note saved. Unlock to view it on your calendar." : {
-
-    },
     "Notes" : {
-
-    },
-    "Notes are only saved when app lock is on. Set up app lock in Settings to keep them with this cycle." : {
 
     },
     "Nothing after this one" : {
@@ -3965,6 +4040,9 @@
 
     },
     "Nothing pressed onto the shelf just yet. Every bit of care will find a place here, in its own time." : {
+
+    },
+    "Nothing saved in Fernlet for this day." : {
 
     },
     "Nothing was changed. Please try pasting the plan again." : {
@@ -4074,6 +4152,9 @@
     },
     "Open Moments" : {
 
+    },
+    "Open Private to finish." : {
+      "comment" : "Privacy & Data: a Sealed backup choice waits for the next visit to the Private tab."
     },
     "Open Settings" : {
 
@@ -4494,9 +4575,6 @@
     "Privacy Policy" : {
 
     },
-    "Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them." : {
-
-    },
     "Private database sync for daily logs across your Fernlet devices." : {
 
     },
@@ -4506,14 +4584,20 @@
     "Private journal, cycle and intimacy notes can sit behind Fernlet's own passcode." : {
 
     },
-    "Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health." : {
-
-    },
     "Private note" : {
 
     },
     "Private note saved, but Apple Health was not updated: %@" : {
 
+    },
+    "Private opens with a tap while no passcode is set. Add a passcode to be asked for it before Private opens." : {
+      "comment" : "The App lock settings page with no app passcode: what the Private tab does now, and what adding a passcode changes. Must not call the no-passcode state locked, protected or secured."
+    },
+    "Private opens with a tap." : {
+      "comment" : "Subtitle under 'No passcode' on the App lock settings page: with no app passcode, the Private tab opens with one tap on its Unlock button."
+    },
+    "Private will open with a tap instead. Your entries stay encrypted on this iPhone and nothing is deleted. %@ unlock, your duress code and any recovery device are removed." : {
+      "comment" : "Message of the confirmation before the app passcode is turned off. The placeholder is Face ID or Touch ID (an Apple product name). Nothing is deleted: the entries stay encrypted on this iPhone, and the Private tab opens with a tap afterwards."
     },
     "Probably not what you meant" : {
 
@@ -4741,6 +4825,50 @@
     "Remove %@?" : {
 
     },
+    "Remove %lld entries this iPhone can't open?" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remove 1 entry this iPhone can't open?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remove %lld entries this iPhone can't open?"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Remove %lld intimate logs this iPhone can't open?" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remove 1 intimate log this iPhone can't open?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remove %lld intimate logs this iPhone can't open?"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Remove a bottle" : {
 
     },
@@ -4779,6 +4907,9 @@
     },
     "Remove step %lld" : {
 
+    },
+    "Remove them" : {
+      "comment" : "Privacy & Data: remove the Sealed backup entries (journal or intimate logs) this iPhone cannot open."
     },
     "Remove this meal?" : {
 
@@ -4832,8 +4963,29 @@
     "Replace future conflicts" : {
 
     },
+    "Replace it with this iPhone's history" : {
+
+    },
+    "Replace it with this iPhone's intimate logs" : {
+      "comment" : "Privacy & Data: back up this iPhone over the intimate-log Sealed backup in iCloud."
+    },
+    "Replace it with this iPhone's journal" : {
+      "comment" : "Privacy & Data: back up this iPhone over the journal Sealed backup in iCloud."
+    },
     "Replace planned" : {
 
+    },
+    "Replace the cycle backup?" : {
+
+    },
+    "Replace the intimate log backup with this iPhone's logs?" : {
+
+    },
+    "Replace the journal backup with this iPhone's journal?" : {
+
+    },
+    "Replaces a backup this iPhone can't open." : {
+      "comment" : "Accessibility hint for Start a new backup on a Sealed backup (journal or intimate logs)."
     },
     "Report" : {
 
@@ -4909,6 +5061,18 @@
 
     },
     "Resting today." : {
+
+    },
+    "Restore" : {
+
+    },
+    "Restore anyway" : {
+      "comment" : "Privacy & Data: restore an older Sealed backup (journal or intimate logs) anyway."
+    },
+    "Restore it here" : {
+      "comment" : "Privacy & Data: add another iPhone's Sealed backup (journal or intimate logs) to this iPhone."
+    },
+    "Restore the cycle backup here?" : {
 
     },
     "Result" : {
@@ -5017,6 +5181,9 @@
     "Saved macros" : {
 
     },
+    "Saved privately in Fernlet. Fernlet isn't copying cycle entries to Apple Health. You can turn that on in Settings › Health." : {
+      "comment" : "Notice at the top of the period log sheet while Fernlet's cycle sharing with Apple Health is off. Every field of the entry still saves in Fernlet, encrypted on this iPhone; it is just not copied to Apple Health. Settings › Health is Fernlet's own Settings page."
+    },
     "Saved product %@" : {
 
     },
@@ -5109,6 +5276,9 @@
 
     },
     "Sealed backup for your photos" : {
+
+    },
+    "Sealed backups in iCloud are deleted for every iPhone that uses them." : {
 
     },
     "Sealed notes never leave this device. Samples live in Apple Health, under its protections." : {
@@ -5260,6 +5430,9 @@
         }
       }
     },
+    "Set a passcode" : {
+
+    },
     "Set done. Resting now." : {
 
     },
@@ -5272,13 +5445,13 @@
     "Set it down for a while." : {
 
     },
+    "Set up Face ID later" : {
+
+    },
     "Set up a recovery device" : {
 
     },
     "Set up app lock" : {
-
-    },
-    "Set up app lock to access privacy settings" : {
 
     },
     "Set up lock" : {
@@ -5404,6 +5577,9 @@
     "Skip exact duplicate" : {
 
     },
+    "Skip for now" : {
+
+    },
     "Skip rest" : {
 
     },
@@ -5434,8 +5610,23 @@
     "Snap a photo when you log a meal and it'll show up here as a polaroid." : {
 
     },
+    "Some cycle entries on this iPhone can't be opened, so your cycle backup is paused. Nothing in iCloud was changed." : {
+
+    },
     "Some hearts Fernlet left in the iCloud drop-off couldn't be removed yet — it'll keep trying while you're online." : {
 
+    },
+    "Some intimate logs can't be opened on this iPhone, so your intimate log backup is paused." : {
+      "comment" : "Privacy & Data: logs this iPhone cannot open pause the intimate-log Sealed backup."
+    },
+    "Some intimate logs or the intimate log backup need a newer version of Fernlet. Update Fernlet to keep backing up your intimate logs." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup or a log needs a newer Fernlet."
+    },
+    "Some journal entries can't be opened on this iPhone, so your journal backup is paused." : {
+      "comment" : "Privacy & Data: entries this iPhone cannot open pause the journal Sealed backup."
+    },
+    "Some journal entries or the journal backup need a newer version of Fernlet. Update Fernlet to keep backing up your journal." : {
+      "comment" : "Privacy & Data: the journal Sealed backup or an entry needs a newer Fernlet."
     },
     "Some shared items couldn't be kept just now. Fernlet makes room as items finish or expire." : {
 
@@ -5494,6 +5685,18 @@
     "Start Fernlet" : {
 
     },
+    "Start a new backup" : {
+      "comment" : "Privacy & Data: start a new Sealed backup (journal or intimate logs) over one this iPhone cannot open."
+    },
+    "Start a new cycle backup?" : {
+
+    },
+    "Start a new intimate log backup?" : {
+
+    },
+    "Start a new journal backup?" : {
+
+    },
     "Start activity" : {
 
     },
@@ -5510,6 +5713,9 @@
 
     },
     "Start it now, or save it and it'll be waiting on the Move root." : {
+
+    },
+    "Start new backup" : {
 
     },
     "Start now" : {
@@ -5566,6 +5772,15 @@
 
     },
     "Stop" : {
+
+    },
+    "Stop backing up this iPhone's cycle history?" : {
+
+    },
+    "Stop backing up this iPhone's intimate logs?" : {
+
+    },
+    "Stop backing up this iPhone's journal?" : {
 
     },
     "Stop cooking" : {
@@ -5745,6 +5960,27 @@
     "The connection to %@ dropped while sending, so they may not have it. You can try again." : {
       "comment" : "Why a recipe share may not have arrived: the connection dropped partway through sending. %@ is the person's name."
     },
+    "The cycle backup saved from your other iPhone stays in iCloud." : {
+
+    },
+    "The intimate log backup in iCloud is damaged and can't be opened." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup will not authenticate."
+    },
+    "The intimate log backup in iCloud is older than one this iPhone has already seen, so it wasn't added." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup restore refused a set older than one this iPhone has seen."
+    },
+    "The intimate log backup saved from your other iPhone stays in iCloud." : {
+
+    },
+    "The journal backup in iCloud is damaged and can't be opened." : {
+      "comment" : "Privacy & Data: the journal Sealed backup will not authenticate."
+    },
+    "The journal backup in iCloud is older than one this iPhone has already seen, so it wasn't added." : {
+      "comment" : "Privacy & Data: the journal Sealed backup restore refused a set older than one this iPhone has seen."
+    },
+    "The journal backup saved from your other iPhone stays in iCloud." : {
+
+    },
     "The lock guards period, intimacy, and other sensitive areas before they open." : {
 
     },
@@ -5805,6 +6041,12 @@
     "These words weren't matched to a food, so they aren't counted below. Check the matched items or adjust the numbers before logging." : {
 
     },
+    "They'll be checked again first, and only entries that still can't be opened are removed. This can't be undone." : {
+
+    },
+    "They'll be checked again first, and only logs that still can't be opened are removed. This can't be undone." : {
+
+    },
     "They're recovering — scan their next code" : {
 
     },
@@ -5832,9 +6074,6 @@
     "This device couldn't encrypt your note just now, so nothing was saved. Your note is still here, so you can try saving again in a moment." : {
 
     },
-    "This device couldn't encrypt your note just now, so the note wasn't saved. Nothing you typed is lost, but the rest of the entry already saved, so check the day on your calendar before saving again." : {
-
-    },
     "This device holds the key from before your current app lock. It can still recover everything you wrote before then, but not what you have written since. Set it up again to cover both." : {
 
     },
@@ -5842,6 +6081,15 @@
 
     },
     "This entry is sealed." : {
+
+    },
+    "This iPhone can't open the cycle backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged." : {
+
+    },
+    "This iPhone can't open the intimate log backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged." : {
+
+    },
+    "This iPhone can't open the journal backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged." : {
 
     },
     "This is a wellbeing reflection, not a medical measurement, diagnosis, or advice. If you're worried about how you feel, please talk to a health professional you trust." : {
@@ -5865,6 +6113,12 @@
     "This one lives in Apple Health" : {
 
     },
+    "This permanently deletes the intimate log backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your intimate logs can't be recovered." : {
+
+    },
+    "This permanently deletes the journal backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your journal can't be recovered." : {
+
+    },
     "This permanently deletes your encrypted %@ backup from iCloud. If you lose or replace this device, that data can't be recovered. Turn off anyway?" : {
 
     },
@@ -5880,6 +6134,9 @@
     "This recipe is too long for a Messages card. Share it as text, or with someone nearby." : {
 
     },
+    "This removes Fernlet's copy of this day from Apple Health on all your devices." : {
+
+    },
     "This removes Fernlet's records from your iCloud account." : {
 
     },
@@ -5889,7 +6146,7 @@
     "This removes it from your timeline and your device. Fernlet can't undo this." : {
 
     },
-    "This removes the health samples Fernlet wrote for %@ and the sealed note kept with them. It can't be undone." : {
+    "This removes the entries Fernlet saved for %@ and Fernlet's copies of them in Apple Health. Entries from other apps stay in Apple Health. It can't be undone." : {
 
     },
     "This removes your photo of this recipe from your device. Fernlet can't undo this." : {
@@ -6010,6 +6267,12 @@
     "Turn off Health integration?" : {
 
     },
+    "Turn off Sealed backup for intimate logs?" : {
+
+    },
+    "Turn off Sealed backup for journal entries?" : {
+
+    },
     "Turn off encrypted %@ backup?" : {
 
     },
@@ -6022,7 +6285,13 @@
     "Turn off intimacy tracking?" : {
 
     },
+    "Turn off passcode" : {
+
+    },
     "Turn off period tracking?" : {
+
+    },
+    "Turn off the passcode?" : {
 
     },
     "Turn on" : {
@@ -6091,6 +6360,9 @@
     "Unlock to view" : {
 
     },
+    "Unlocked" : {
+
+    },
     "Unusable answer — discarded" : {
 
     },
@@ -6116,6 +6388,9 @@
 
     },
     "Usable datagram frame" : {
+
+    },
+    "Use %@" : {
 
     },
     "Use Import workout plan to review a Fernlet plan file." : {
@@ -6398,10 +6673,13 @@
     "You can set it down for now. It's kept safe in the Worry box on your Private tab, sealed on this device." : {
 
     },
+    "You can skip this. Without a passcode, Private opens with a tap." : {
+
+    },
     "You did “%@” before — it might feel good again." : {
 
     },
-    "You don't need an app lock to delete what Fernlet has stored. This works for the entries Fernlet keeps encrypted too." : {
+    "You don't need to verify to delete what Fernlet has stored. This works for the entries Fernlet keeps encrypted too." : {
 
     },
     "You have a workout in progress" : {
@@ -6480,6 +6758,9 @@
     "Your app lock stays set up." : {
 
     },
+    "Your app lock was reset. Fernlet is keeping your Sealed backup from before the reset in iCloud as it was, and won't restore it or back up this iPhone over it on its own. Restore your Sealed backup?" : {
+
+    },
     "Your closet is empty" : {
 
     },
@@ -6490,6 +6771,24 @@
 
     },
     "Your companion, wardrobe and coins" : {
+
+    },
+    "Your cycle backup in iCloud was saved by an earlier version of Fernlet, which didn't record which iPhone saved it. Backing up this iPhone would replace it." : {
+
+    },
+    "Your cycle backup in iCloud was saved with a backup key this iPhone doesn't have, so it can't be restored here. Backing up this iPhone would replace it." : {
+
+    },
+    "Your cycle backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on. New cycle entries aren't backed up until it arrives." : {
+
+    },
+    "Your cycle backup was saved from another iPhone. Backing up this iPhone would replace it." : {
+
+    },
+    "Your cycle backup will catch up after you turn period tracking back on and open the Cycle page in Private." : {
+
+    },
+    "Your cycle backup will catch up the next time you open the Cycle page in Private." : {
 
     },
     "Your cycle, at a glance." : {
@@ -6516,6 +6815,9 @@
     "Your encrypted photo backup is due a format check on this device. Tap Retry to verify your photos — Fernlet reads each one, so a large library can take a moment." : {
 
     },
+    "Your entry" : {
+
+    },
     "Your friends list" : {
 
     },
@@ -6531,17 +6833,56 @@
     "Your iCloud copy" : {
 
     },
-    "Your intimate log backup hasn't finished uploading yet. It's hidden right now — un-hide intimacy tracking, then this device will finish it." : {
-
+    "Your intimate log backup didn't finish. It will try again when you next open Private." : {
+      "comment" : "Privacy & Data: the last intimate-log Sealed backup export failed."
     },
-    "Your intimate log backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your logs are on it." : {
-
+    "Your intimate log backup in iCloud was saved by an earlier version of Fernlet, which didn't record which iPhone saved it. Backing up this iPhone would replace it." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup was written by an earlier Fernlet that named no iPhone."
+    },
+    "Your intimate log backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup export waits for its key from iCloud Keychain."
+    },
+    "Your intimate log backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on. New logs aren't backed up until it arrives." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup restore waits for its key from iCloud Keychain."
+    },
+    "Your intimate log backup was saved from another iPhone. Backing up this iPhone would replace it." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup belongs to another iPhone."
+    },
+    "Your intimate log backup was saved with a key this iPhone doesn't have yet. It usually arrives through iCloud Keychain." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup is sealed with a key this iPhone lacks."
+    },
+    "Your intimate log backup will be added to this iPhone the next time you open Private. New logs are backed up after that." : {
+      "comment" : "Privacy & Data: this iPhone has not added its intimate-log Sealed backup yet."
+    },
+    "Your intimate logs are too large for Sealed backup." : {
+      "comment" : "Privacy & Data: the intimate-log Sealed backup is over its size bound."
     },
     "Your items" : {
 
     },
-    "Your journal backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your journal entries are on it." : {
-
+    "Your journal backup didn't finish. It will try again when you next open Private." : {
+      "comment" : "Privacy & Data: the last journal Sealed backup export failed."
+    },
+    "Your journal backup in iCloud was saved by an earlier version of Fernlet, which didn't record which iPhone saved it. Backing up this iPhone would replace it." : {
+      "comment" : "Privacy & Data: the journal Sealed backup was written by an earlier Fernlet that named no iPhone."
+    },
+    "Your journal backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on." : {
+      "comment" : "Privacy & Data: the journal Sealed backup export waits for its key from iCloud Keychain."
+    },
+    "Your journal backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on. New entries aren't backed up until it arrives." : {
+      "comment" : "Privacy & Data: the journal Sealed backup restore waits for its key from iCloud Keychain."
+    },
+    "Your journal backup was saved from another iPhone. Backing up this iPhone would replace it." : {
+      "comment" : "Privacy & Data: the journal Sealed backup belongs to another iPhone."
+    },
+    "Your journal backup was saved with a key this iPhone doesn't have yet. It usually arrives through iCloud Keychain." : {
+      "comment" : "Privacy & Data: the journal Sealed backup is sealed with a key this iPhone lacks."
+    },
+    "Your journal backup will be added to this iPhone the next time you open Private. New entries are backed up after that." : {
+      "comment" : "Privacy & Data: this iPhone has not added its journal Sealed backup yet."
+    },
+    "Your journal is too large for Sealed backup." : {
+      "comment" : "Privacy & Data: the journal Sealed backup is over its size bound."
     },
     "Your keepsake shelf" : {
 
@@ -6570,16 +6911,16 @@
     "Your name" : {
 
     },
+    "Your newest intimate logs will be added to Sealed backup the next time you open Private." : {
+      "comment" : "Privacy & Data: intimate-log changes the next Private visit backs up."
+    },
+    "Your newest journal entries will be added to Sealed backup the next time you open Private." : {
+      "comment" : "Privacy & Data: journal changes the next Private visit backs up."
+    },
     "Your notes come back under this new passcode. Biometric unlock is off until you turn it on again." : {
 
     },
     "Your own provider endpoint" : {
-
-    },
-    "Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later." : {
-
-    },
-    "Your period backup still needs re-uploading with your other device's backup key. This device re-uploads it automatically once your cycle history is on it — if it isn't yet, tap Retry restore to pull it down first." : {
 
     },
     "Your photo shelf is nearly full" : {
@@ -6699,6 +7040,42 @@
     "covered" : {
 
     },
+    "cycle.delete.failed" : {
+      "comment" : "Alert message when deleting a cycle day failed and nothing was removed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That day is still here. Try again in a moment."
+          }
+        }
+      }
+    },
+    "cycle.deleteFromHealth.failed" : {
+      "comment" : "Alert message when deleting Fernlet's own copy of a cycle day from Apple Health failed (for example, Fernlet's access was turned off in the Health app).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can't remove its copy from Apple Health right now. You can delete it in the Health app."
+          }
+        }
+      }
+    },
+    "cycle.earlierNotes.removeFailed" : {
+      "comment" : "Alert message when removing earlier cycle notes that cannot be opened failed; nothing was removed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Those notes are still here. Try again in a moment."
+          }
+        }
+      }
+    },
     "cycle.flow.heavy" : {
       "comment" : "Menstrual flow level: heavy",
       "extractionState" : "extracted_with_value",
@@ -6767,6 +7144,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Unspecified"
+          }
+        }
+      }
+    },
+    "cycle.keepInFernlet.failed" : {
+      "comment" : "Alert message when 'Keep in Fernlet' (saving Fernlet's Apple Health copy of a day as a Fernlet entry) failed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't keep this day just now. Nothing was changed. Try again in a moment."
           }
         }
       }
@@ -6963,6 +7352,18 @@
         }
       }
     },
+    "deleteAll.scope.base.v2" : {
+      "comment" : "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'. 'Cycle history' is every period entry saved in Fernlet (flow, temperature and the other fields, plus notes and symptoms), not only the notes. 'Photos from a Friends session you haven't chosen yet' are the in-person session photos still waiting in the keep-or-delete review; photos already kept stay (see the kept paragraph).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This deletes your logged days, meals and their photos, gym progress photos, journal entries, cycle history, intimate logs, Worry Box notes, saved recipes and their photos, photos from a Friends session you haven't chosen yet, custom items and coins."
+          }
+        }
+      }
+    },
     "deleteAll.scope.icloudCopy" : {
       "comment" : "Appended to the delete-everything scope only when a day-record copy exists in iCloud.",
       "extractionState" : "extracted_with_value",
@@ -6995,18 +7396,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Any encrypted iCloud backups go too."
-          }
-        }
-      }
-    },
-    "deleteAll.scope.withUnchosenSessionPhotos" : {
-      "comment" : "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'. 'Photos from a Friends session you haven't chosen yet' are the in-person session photos still waiting in the keep-or-delete review; photos already kept stay (see the kept paragraph).",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "This deletes your logged days, meals and their photos, gym progress photos, journal entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, photos from a Friends session you haven't chosen yet, custom items and coins."
           }
         }
       }
@@ -7239,74 +7628,182 @@
     "letting it go…" : {
 
     },
-    "logPeriod.refusal.healthDenied" : {
-      "comment" : "Shown above Save when Apple Health itself refused Fernlet's cycle write (the user denied Fernlet cycle data in the Health app). Nothing was saved.",
+    "logPeriod.error.bufferFull.v2" : {
+      "comment" : "Shown above Save on the period log sheet when the entries Fernlet holds until Private next opens have reached their limit. Opening the Private tab files them and makes room. 'Private' is the tab's name.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Nothing was saved, because Apple Health isn't allowing Fernlet to save cycle data. Your entry is still here. You can allow it for Fernlet in the Health app."
+            "value" : "Fernlet is holding your recent entries until you next open Private, so this one wasn't saved. Your entry is still here. Open Private once, then save this again."
           }
         }
       }
     },
-    "logPeriod.refusal.healthDenied.edit" : {
-      "comment" : "Shown above Save when Apple Health itself refused an edit of a logged period day (the user denied Fernlet some cycle data in the Health app). Saving again rewrites the whole day from the sheet.",
+    "logPeriod.error.bufferUnopenable.v2" : {
+      "comment" : "Shown above Save on the period log sheet when the entries Fernlet holds until Private next opens were sealed under a key that no longer exists, so a new one cannot join them. Opening the Private tab shows what can't be opened and offers to remove it. 'Private' is the tab's name.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Your changes weren't saved, because Apple Health isn't allowing Fernlet to save some of this day's cycle details. Your changes are still here. Allow it for Fernlet in the Health app, then save again."
+            "value" : "Fernlet can't add to the entries it's holding for Private, so this entry wasn't saved. Your entry is still here. Open Private to sort this out."
           }
         }
       }
     },
-    "logPeriod.refusal.notesNeedLock" : {
-      "comment" : "Shown above Save on the period log sheet when the entry has only notes or symptoms and no app lock is set up. Notes are sealed with the app lock's key, so without one nothing can be kept. Nothing was saved.",
+    "logPeriod.error.hidden" : {
+      "comment" : "Shown above Save on the period log sheet when cycle tracking was hidden in Settings while the sheet was open, so nothing was saved.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Nothing was saved, because notes and symptoms are kept only when app lock is on, and this entry has nothing else to save. Your entry is still here. You can set up app lock in Settings."
+            "value" : "Period tracking was just hidden in Settings, so this entry wasn't saved. Your entry is still here."
           }
         }
       }
     },
-    "logPeriod.refusal.sharingOff" : {
-      "comment" : "Shown above Save when a period log is refused because Fernlet's cycle sharing with Apple Health is off. Nothing was saved, including the note. 'Health details' are the fields the notice at the top of the sheet lists.",
+    "logPeriod.error.notEncrypted" : {
+      "comment" : "Shown above Save on the period log sheet when the entry could not be encrypted this instant. Nothing was saved, and nothing went to Apple Health.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Nothing was saved, because Fernlet isn't sharing cycle data with Apple Health. Your entry is still here. Turn on sharing in Settings › Health, or clear the flow and other Health details to save just your notes and symptoms."
+            "value" : "This iPhone couldn't encrypt your entry just now, so nothing was saved. Your entry is still here. Try again in a moment."
           }
         }
       }
     },
-    "logPeriod.refusal.sharingOff.edit" : {
-      "comment" : "Shown above Save when editing a logged period day is refused because Fernlet's cycle sharing with Apple Health is off. Nothing was deleted or saved.",
+    "logPeriod.error.privateClosed" : {
+      "comment" : "Shown above Save when an edit of a cycle day could not be saved because the Private tab closed while the sheet was open. 'Private' is the tab's name.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Nothing was changed, because Fernlet isn't sharing cycle data with Apple Health, and this day's cycle details are kept there. Your changes are still here. You can turn on sharing in Settings › Health."
+            "value" : "Private closed before this could be saved, so nothing was changed. Open Private, then save again."
           }
         }
       }
     },
-    "logPeriod.refusal.sharingOff.noLock" : {
-      "comment" : "Shown above Save when a period log is refused because Fernlet's cycle sharing with Apple Health is off and no app lock is set up, so the notes and symptoms could not be kept on their own either. Nothing was saved.",
+    "logPeriod.error.storeFull" : {
+      "comment" : "Shown above Save on the period log sheet when the cycle history already holds as many entries as Fernlet keeps (20,000), so nothing was saved.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Nothing was saved, because Fernlet isn't sharing cycle data with Apple Health. Your entry is still here. You can turn on sharing in Settings › Health. Notes and symptoms are kept only when app lock is on."
+            "value" : "Fernlet's cycle history is full on this iPhone, so this entry wasn't saved."
+          }
+        }
+      }
+    },
+    "logPeriod.removed.stillInHealth" : {
+      "comment" : "Shown after a cycle day was deleted in Fernlet but Fernlet's copy in Apple Health could not be removed (for example, Fernlet's access was turned off in the Health app). 'Here later' means from the day on Fernlet's calendar.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Removed from Fernlet. Apple Health still has Fernlet's copy of this day because Fernlet can't change it right now. You can delete it in the Health app, or here later."
+          }
+        }
+      }
+    },
+    "logPeriod.saved.healthCopyFailed" : {
+      "comment" : "Shown after a cycle entry saved in Fernlet but its copy to Apple Health failed. Followed by the reason.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved in Fernlet, but Apple Health didn't get a copy."
+          }
+        }
+      }
+    },
+    "logPeriod.saved.healthCopyNotUpdated" : {
+      "comment" : "Shown after an edit of a cycle day saved in Fernlet but its copy in Apple Health could not be changed. Followed by the reason.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved in Fernlet, but Apple Health's copy of this day couldn't be updated."
+          }
+        }
+      }
+    },
+    "logPeriod.saved.healthReason.denied" : {
+      "comment" : "Reason after 'Apple Health didn't get a copy': the user turned Fernlet's cycle access off in the Health app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The Health app isn't letting Fernlet save cycle data. You can allow it there."
+          }
+        }
+      }
+    },
+    "logPeriod.saved.healthReason.other" : {
+      "comment" : "Reason after 'Apple Health didn't get a copy' for an unexpected error. Saving an edit of the day writes the copy again.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Something went wrong there. Editing this day later will try again."
+          }
+        }
+      }
+    },
+    "logPeriod.saved.healthReason.unavailable" : {
+      "comment" : "Reason after 'Apple Health didn't get a copy': this device has no Apple Health.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple Health isn't available on this iPhone."
+          }
+        }
+      }
+    },
+    "logPeriod.saved.pending.noPasscode" : {
+      "comment" : "Shown on the period log sheet after a save while the Private tab was closed and no app passcode is set: the entry is kept, encrypted, and appears on the cycle calendar the next time the user opens the tab.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved. It will be on your calendar the next time you open Private."
+          }
+        }
+      }
+    },
+    "logPeriod.saved.pending.passcode" : {
+      "comment" : "Shown on the period log sheet after a save while the Private tab was closed and an app passcode is set: the entry is kept, encrypted, and appears on the cycle calendar the next time the user unlocks the tab.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved. It will be on your calendar the next time you unlock Private."
+          }
+        }
+      }
+    },
+    "logPeriod.saved.removedStaleCopy" : {
+      "comment" : "Shown after an edit of a cycle day while Fernlet's cycle sharing with Apple Health is off, when Fernlet deleted the copy it had made of that day earlier.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved. Cycle sharing is off, so Fernlet removed its older copy of this day from Apple Health."
           }
         }
       }
@@ -7984,6 +8481,30 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "private notes"
+          }
+        }
+      }
+    },
+    "sealedBackup.restore.needsNewerFernlet" : {
+      "comment" : "Privacy & Data: a Sealed backup, or entries on this iPhone, were written by a newer version of Fernlet that this version can't read. The placeholder is a mid-sentence backup noun such as 'period'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some %1$@ entries or the %2$@ backup need a newer version of Fernlet. Update Fernlet to keep backing them up."
+          }
+        }
+      }
+    },
+    "settings.appLock.reset.message.v2" : {
+      "comment" : "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries."
           }
         }
       }
