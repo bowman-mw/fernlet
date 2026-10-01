@@ -386,9 +386,14 @@ jobs:
         # Like the corpus, none of it has a compiler half. The thirteen suites as written, read off
         # their own result bundle on the F9b tree after a build-for-testing: 161 tests, 0 failed,
         # 0 skipped, no restart line.
+        # RE-MEASURED 161 → 165 at F9b's fix round 1 (2026-09-30): a pick leading the swap pool for
+        # words its sub-phrases never spell and as a dish, a correction still winning that whole-text
+        # lookup while the resolver's pool keeps the sub-phrases alone, and a swap pick teaching only a
+        # row that says the words (pure and live) — the same thirteen suites, same reading, 165 tests,
+        # 0 failed, 0 skipped, no restart line.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh food-search 161 \
+          Scripts/run-gated-suites.sh food-search 165 \
             IngredientSearchCorpusTests \
             CatalogDefaultUnitSweepTests \
             RecipeImportIngredientLineTests \
