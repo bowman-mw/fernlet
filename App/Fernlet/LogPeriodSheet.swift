@@ -730,6 +730,11 @@ struct LogPeriodSheet: View {
             // Reached only AFTER the Health half landed (Health is written first until the cutover),
             // hence the same "check the day" caveat the binding refusal below carries.
             report(Self.bufferUnopenableSentence, kind: .error)
+        } catch PendingNarrativeBufferError.full {
+            // The buffer holds as many entries as it will (it refuses at the cap instead of dropping
+            // the oldest, period-data design 2026-09-30, §6.5). Opening Private drains it. Same
+            // "check the day" caveat: the Health half landed first until the cutover.
+            report(Self.bufferFullSentence, kind: .error)
         } catch PendingNarrativeBufferError.keyUnreadable {
             // The buffer's key would not answer this instant: exactly the binding refusal's
             // situation — the note could not be encrypted just now, nothing typed is lost.
@@ -816,6 +821,15 @@ struct LogPeriodSheet: View {
         String(localized: "logPeriod.error.bufferUnopenable",
                defaultValue: "Fernlet can't add to the notes it's holding for Private, so the note wasn't saved. Nothing you typed is lost, but the rest of the entry already saved. Open Private to sort this out, then check the day before saving again.",
                comment: "Shown above Save on the period log sheet when the notes Fernlet holds until Private next opens were sealed under a key that no longer exists, so a new note cannot join them. Opening the Private tab shows what can't be opened and offers to remove it. 'Private' is the tab's name.")
+    }
+
+    /// The pending buffer is at its cap, so this note was not added — nothing it holds was dropped
+    /// to make room (period-data design 2026-09-30, §6.5, §10.4). Same caveat as
+    /// ``noteNotEncryptedSentence`` about the Health half.
+    static var bufferFullSentence: String {
+        String(localized: "logPeriod.error.bufferFull",
+               defaultValue: "Fernlet is holding as many notes as it can until you next open Private, so the note wasn't saved. Nothing you typed is lost, but the rest of the entry already saved. Open Private once, then check the day before saving again.",
+               comment: "Shown above Save on the period log sheet when the notes Fernlet holds until Private next opens have reached their limit, so this note could not be added. Opening the Private tab files the held notes and makes room. 'Private' is the tab's name.")
     }
 
     /// Publishes a save outcome: renders the sentence and speaks it once.

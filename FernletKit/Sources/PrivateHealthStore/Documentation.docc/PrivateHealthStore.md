@@ -81,6 +81,25 @@ be undone by a stale cloud copy. `clearDivergenceLatch()` (on both repositories,
 app's "entries this iPhone can't open" check and its app-lock reset funnel (period-data design
 2026-09-30, §4.9, §9.21).
 
+**Sealed cycle records (period-data design 2026-09-30, §5–§6; landed inert).** The cycle history is
+moving from "clinical facts in HealthKit, narrative here" to one self-contained ``CycleRecord`` per
+entry, sealed as ONE blob in the `CycleRecord` entity: the day, a clinical block and a narrative block
+(each `nil` = UNKNOWN, present-but-empty = "none"), no plaintext date, day key or HealthKit id beside
+it. Its Codable is a frozen, tolerant at-rest format (`"v": 2`; enums as raw values; dates as seconds
+since 2001) shared by the sealed column, the pending buffer's v2 payload and the backup chunks.
+``CycleRecord/merged(_:_:)`` is the one merge rule every path uses — each block taken WHOLE by its
+clock, so a flag the user cleared never returns from an older copy and a temperature always travels
+with its unit; commutative, idempotent and associative. ``CycleRecordRepository`` is the sealed CRUD
+under `FernletCryptoPurpose.KeyDerivation.cycleRecordV1`, with ONE write path,
+``CycleRecordRepository/upsertMerged(_:retiringNarrativeIDs:contentKey:)`` (insert absent ids, merge
+openable ones, replace dead ones, refuse the whole call over an undecided row, retire legacy narratives
+in the same save), a post-decrypt id check (the AAD does not bind the row id, so a moved blob is dead),
+classified pages, keyless count/ids/deletes, and a 20 000-record bound. ``CycleRecordStore`` is its
+gated `@MainActor` funnel with the same inert-while-hidden contract as ``IntimacyLogStore`` plus a
+mutation hook and counter for the backup's dirty flag. Nothing reads records yet: the app constructs a
+store only for the keyless count and delete (the "entries this iPhone can't open" check and "Delete
+everything"); the cutover makes records the source of truth.
+
 The intimacy backup still goes through ``IntimacyLogStore``, never the raw repository — the app
 target is grep-walled against constructing ``IntimacyLogRepository`` so no call site can read or
 write around the hard gate. The funnel's sealed-backup seam splits gating per member: the row count
@@ -140,6 +159,20 @@ types), and the prediction engine is `nonisolated` pure math callable from any e
 
 - ``MenstrualNarrative``
 - ``MenstrualNarrativeRepository``
+
+### Sealed Cycle Records
+
+- ``CycleRecord``
+- ``CycleClinicalFields``
+- ``CycleNarrativeFields``
+- ``CycleRecordOrigin``
+- ``CycleRecordDecodingError``
+- ``CycleRecordRepository``
+- ``CycleRecordPage``
+- ``CycleRecordUpsertResult``
+- ``CycleRecordRepositoryError``
+- ``CycleRecordStore``
+- ``CycleRecordBackupPrePass``
 
 ### Intimacy Logs
 

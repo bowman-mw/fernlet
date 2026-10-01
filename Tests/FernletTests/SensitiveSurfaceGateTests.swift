@@ -675,6 +675,28 @@ struct SensitiveSurfaceGateTests {
         #expect(offenders.isEmpty,
                 "raw IntimacyLogRepository constructed outside the gated IntimacyLogStore funnel: \(offenders)")
     }
+
+    /// The same wall for the sealed cycle records (period-data design 2026-09-30, §6.2): every app
+    /// touch goes through the gated `CycleRecordStore` (whose initializers build the repository INSIDE
+    /// `PrivateHealthStore`), so no call site can read or write a record around the visibility gate.
+    @Test func appTargetNeverConstructsARawCycleRecordRepository() throws {
+        let appRoot = RepoRoot.url.appendingPathComponent("App/Fernlet")
+        let enumerator = try #require(
+            FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil),
+            "app-target source root not found — moved?")
+        var scanned = 0
+        var offenders: [String] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            scanned += 1
+            if source.contains("CycleRecordRepository(") {
+                offenders.append(url.lastPathComponent)
+            }
+        }
+        #expect(scanned > 50, "app-target scan collapsed to \(scanned) files — discovery is broken")
+        #expect(offenders.isEmpty,
+                "raw CycleRecordRepository constructed outside the gated CycleRecordStore funnel: \(offenders)")
+    }
 }
 
 /// A repository wrapper that delivers a "remote change" through the REAL sync path — the coordinator

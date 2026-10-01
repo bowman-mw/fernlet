@@ -88,7 +88,7 @@ public nonisolated struct PeriodTrackingHiddenError: Error, Equatable {
 /// ``PredictedFlowLevel`` (forecast-only, includes spotting): this one maps onto the HealthKit
 /// category values via ``hkValue`` on write, and ``CycleDayEntry/flowLevel`` recovers it from
 /// samples on read.
-public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable, Sendable {
     case none, light, medium, heavy, unspecified
     public var id: String { rawValue }
     /// Display label for pickers and the calendar detail.
@@ -110,7 +110,7 @@ public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Cod
 /// Sheet-level input state carried on ``UserLoggedCycleEvent`` so the HealthKit gateway knows how
 /// to interpret the entered value; reads come back normalized through
 /// ``CycleDayEntry/basalBodyTemperatureFahrenheit``.
-public nonisolated enum PeriodTemperatureUnit: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum PeriodTemperatureUnit: String, CaseIterable, Identifiable, Codable, Sendable {
     case fahrenheit, celsius
     public var id: String { rawValue }
     /// Single-letter unit suffix for the input field.
@@ -121,7 +121,7 @@ public nonisolated enum PeriodTemperatureUnit: String, CaseIterable, Identifiabl
 ///
 /// Fertility-signal input on ``UserLoggedCycleEvent``: ``hkValue`` carries it into the HealthKit
 /// sample on write and ``CycleDayEntry/cervicalMucusQuality`` recovers it from samples on read.
-public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable, Codable, Sendable {
     case dry, sticky, creamy, watery, eggWhite
     public var id: String { rawValue }
     /// Display label for pickers and the calendar detail.
@@ -142,7 +142,7 @@ public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable
 ///
 /// Input on ``UserLoggedCycleEvent``; `positive` deliberately maps to `luteinizingHormoneSurge` on
 /// write, and ``CycleDayEntry/ovulationTestResult`` recovers the value from samples on read.
-public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable, Codable, Sendable {
     case negative, positive, indeterminate
     public var id: String { rawValue }
     /// Display label for pickers and the calendar detail.
@@ -392,10 +392,6 @@ public final class PeriodTrackerStore {
     /// R3 cap on the HealthKit samples one load may hold — roughly 20 samples/day over the 240-day
     /// window. A third-party cycle app writing hourly samples would otherwise grow this without bound.
     private static let maxLoadedSamples = 5_000
-    /// R3 cap on the number of user-authored custom symptom entries sealed with one event.
-    private static let maxCustomSymptoms = 40
-    /// R3 cap on the length of one custom symptom's name.
-    private static let maxCustomSymptomNameLength = 40
 
     /// Hard visibility gate. While this returns false the store is INERT: it performs no cycle
     /// decrypt, no cycle HealthKit read, and holds no cycle plaintext. This is deliberately enforced
@@ -591,9 +587,9 @@ public final class PeriodTrackerStore {
         let narrative = MenstrualNarrative(
             hkExternalUUID: externalUUID.uuidString,
             dateKey: FernletDate.dayKey(for: event.date),
-            note: String(event.note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000)),
+            note: String(event.note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(CycleNarrativeFields.maxNoteLength)),
             symptomFlags: event.symptoms.sorted(),
-            customSymptomScales: Self.boundedCustomScales(event.customSymptomScales)
+            customSymptomScales: CycleNarrativeFields.bounded(event.customSymptomScales)
         )
 
         if let unlockedContentKey {
@@ -615,18 +611,6 @@ public final class PeriodTrackerStore {
             customSymptomScalesBytes: try JSONEncoder().encode(narrative.customSymptomScales)
         ))
         return .savedWithBufferedNarrative
-    }
-
-    /// Caps the user-authored custom symptom dictionary at ``maxCustomSymptoms`` entries and each
-    /// key at ``maxCustomSymptomNameLength`` characters, alongside the note's 1000-character cap.
-    /// R3: this dictionary is unbounded user input that is sealed into the store and the pending
-    /// buffer. Truncated keys that collide keep the larger value, so the merge cannot trap.
-    private static func boundedCustomScales(_ scales: [String: Int]) -> [String: Int] {
-        let bounded = scales
-            .sorted { $0.key < $1.key }
-            .prefix(maxCustomSymptoms)
-            .map { (String($0.key.prefix(maxCustomSymptomNameLength)), $0.value) }
-        return Dictionary(bounded, uniquingKeysWith: { lhs, rhs in max(lhs, rhs) })
     }
 
     /// Replaces an existing entry: deletes its Fernlet-owned samples and sealed narrative, then

@@ -18,9 +18,11 @@ import FernletFoundation
 /// A failure the pending-narrative buffer can name for itself, rather than surfacing as a bare
 /// `CryptoKit` throw the drain's audit line cannot explain.
 ///
-/// One case today, and it exists because the crypto standardization round's Phase 3 deleted this
-/// surface's legacy reader: bytes with no `FNB2` marker used to be opened as a bare, unbound
-/// `ChaChaPoly` box, and now they are classified and refused instead.
+/// The first case exists because the crypto standardization round's Phase 3 deleted this surface's
+/// legacy reader: bytes with no `FNB2` marker used to be opened as a bare, unbound `ChaChaPoly` box,
+/// and now they are classified and refused instead. The key cases name the two states the key is
+/// never minted over, and ``full`` the cap the buffer refuses at rather than evicting (period-data
+/// design 2026-09-30, §6.5).
 ///
 /// Concurrency: a plain value type; no state.
 public enum PendingNarrativeBufferError: Error, Equatable {
@@ -45,6 +47,12 @@ public enum PendingNarrativeBufferError: Error, Equatable {
     /// the file, a restore that brought the file without the key). They can never be opened, so the
     /// key is NOT re-minted over them: removing the file is a separate, explicit act.
     case bufferUnopenable
+    /// The buffer already holds ``PendingNarrativeBuffer/capacity`` entries, so this one was NOT
+    /// added (period-data design 2026-09-30, §6.5). It used to evict the oldest entry with only an
+    /// audit line — a silent loss of something the user saved — and now refuses instead: nothing
+    /// held is dropped, the caller reports that this entry was not saved, and the next time the
+    /// Private tab opens the drain empties the buffer.
+    case full
 }
 
 // MARK: - Payload
@@ -61,6 +69,13 @@ public enum PendingNarrativeBufferError: Error, Equatable {
 /// at-rest protection comes from the buffer's whole-file ChaChaPoly seal, not from the fields
 /// themselves.
 ///
+/// Two shapes share the type (period-data design 2026-09-30, §6.5). A **v1** payload is a narrative
+/// only — the three `…Bytes` fields — and every buffer file written before the design carries only
+/// those. A **v2** payload carries a whole cycle record as ``cycleRecordJSON`` (the record's own
+/// frozen Codable, opaque here: this module cannot name the type, which lives a layer above), built
+/// with ``init(cycleRecordID:dayKey:cycleRecordJSON:)``; its narrative fields are nil. The new field
+/// is OPTIONAL, so a v1 file still decodes, and a v1 payload encodes byte-for-byte as it always did.
+///
 /// `Equatable` (synthesized — every stored property already is) so a caller can compare what it
 /// wrote with what it read back.
 public struct PendingNarrativePayload: Codable, Equatable {
@@ -74,8 +89,11 @@ public struct PendingNarrativePayload: Codable, Equatable {
     public let symptomFlagsBytes: Data?
     /// JSON-encoded custom symptom-scale values, or `nil`.
     public let customSymptomScalesBytes: Data?
+    /// A whole cycle record's frozen JSON (the v2 shape), or `nil` for a v1 narrative payload. Opaque
+    /// to this module; `PrivateHealthStore` encodes and decodes it.
+    public let cycleRecordJSON: Data?
 
-    /// Creates a payload from already-encoded narrative fields.
+    /// Creates a v1 payload from already-encoded narrative fields.
     public init(
         hkExternalUUID: String,
         dateKey: String,
@@ -88,6 +106,27 @@ public struct PendingNarrativePayload: Codable, Equatable {
         self.noteBytes = noteBytes
         self.symptomFlagsBytes = symptomFlagsBytes
         self.customSymptomScalesBytes = customSymptomScalesBytes
+        self.cycleRecordJSON = nil
+    }
+
+    /// Creates a v2 payload carrying a whole cycle record.
+    ///
+    /// ``hkExternalUUID`` is set to the record's id — the external UUID every Apple Health copy of
+    /// the record carries (period-data design §5.1) — and ``dateKey`` to its day, so the two
+    /// identity fields every payload has stay truthful; the narrative fields are nil because the
+    /// narrative travels inside the record.
+    ///
+    /// - Parameters:
+    ///   - cycleRecordID: The record's id.
+    ///   - dayKey: The record's `yyyy-MM-dd` day.
+    ///   - cycleRecordJSON: The record's frozen JSON encoding.
+    public init(cycleRecordID: UUID, dayKey: String, cycleRecordJSON: Data) {
+        self.hkExternalUUID = cycleRecordID.uuidString
+        self.dateKey = dayKey
+        self.noteBytes = nil
+        self.symptomFlagsBytes = nil
+        self.customSymptomScalesBytes = nil
+        self.cycleRecordJSON = cycleRecordJSON
     }
 }
 
@@ -118,8 +157,11 @@ public struct PendingNarrativePayload: Codable, Equatable {
 ///   ``PendingNarrativeBufferError/keyUnreadable(status:)`` and a missing key over buffered
 ///   entries throws ``PendingNarrativeBufferError/bufferUnopenable`` — never a fresh key over
 ///   either (`KeyCustodyBoundaryTests.bufferKeyIsNeverMintedOverAnUnreadableRow`).
-/// - The buffer caps at 50 entries; ``append(_:)`` evicts the oldest beyond the cap and records
-///   the eviction via `FernletAuditLog`.
+/// - The buffer holds at most ``capacity`` (200) entries, and ``append(_:)`` at the cap THROWS
+///   ``PendingNarrativeBufferError/full`` — it never evicts (period-data design 2026-09-30, §6.5,
+///   invariant I21). It used to cap at 50 and silently drop the oldest entry with only an audit
+///   line; every entry here is something the user saved, so refusing the newest (which the caller
+///   reports, with the user's input still on screen) is the only honest overflow.
 ///
 /// - Important: ``drainAll()`` never deletes. Callers must durably persist the drained payloads
 ///   first and only then call ``purge()``, so a partial re-seal failure cannot silently drop
@@ -155,7 +197,9 @@ public final class PendingNarrativeBuffer {
 
     private static let bufferKeyAccount = "com.fernlet.buffer.key"           // legacy (no service)
     private static let bufferKeyAccountV2 = "com.fernlet.buffer.key.v2"      // current (with service)
-    private static let maxEntries = 50
+    /// The most entries the buffer holds (R3). Each append re-seals the whole file, so the bound
+    /// also bounds that work. Reaching it throws ``PendingNarrativeBufferError/full``.
+    public static let capacity = 200
 
     /// The sealed buffer file inside `directory` — the ONE spelling of the file's name, so the
     /// production default and a scoped root can never name different files.
@@ -178,21 +222,20 @@ public final class PendingNarrativeBuffer {
 
     // MARK: - Public API
 
-    /// Appends a payload to the sealed buffer, evicting (and audit-logging) the oldest entries
-    /// beyond the 50-entry cap.
+    /// Appends a payload to the sealed buffer — or refuses, when it already holds ``capacity``
+    /// entries, with nothing written and nothing dropped.
     ///
     /// - Important: Each append decrypts, re-encodes, and re-seals the entire buffer file.
+    /// - Throws: ``PendingNarrativeBufferError/full`` at the cap (the file is left exactly as it
+    ///   was); otherwise whatever reading or sealing the file throws.
     public func append(_ payload: PendingNarrativePayload) throws {
         var entries = try loadEntries()
-        entries.append(payload)
-
-        // Evict oldest entries if cap exceeded
-        if entries.count > Self.maxEntries {
-            let excess = entries.count - Self.maxEntries
-            entries.removeFirst(excess)
-            FernletAuditLog.log("buffer.evicted", context: ["count": "\(excess)"])
+        guard entries.count < Self.capacity else {
+            // Never evict: every held entry is something the user saved and has not seen sealed yet.
+            FernletAuditLog.log("buffer.full", context: ["capacity": "\(Self.capacity)"])
+            throw PendingNarrativeBufferError.full
         }
-
+        entries.append(payload)
         try saveEntries(entries)
     }
 

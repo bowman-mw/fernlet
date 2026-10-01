@@ -8,6 +8,10 @@
 // being rewritten under a fresh key. The unreadable-read half lives in `KeyCustodyBoundaryTests`
 // (`bufferKeyIsNeverMintedOverAnUnreadableRow`), beside its device-key sibling.
 //
+// The cap (§6.5, I21's growth half): the buffer holds at most `capacity` entries and REFUSES the
+// next one instead of silently evicting the oldest, and a v2 payload (a whole cycle record's JSON)
+// round-trips beside v1 narratives, whose files still decode.
+//
 // Isolation: every test takes its own `uniqueNarrativeBufferScope()` (throwaway directory AND
 // throwaway keychain service) and removes both.
 
@@ -83,5 +87,52 @@ struct PendingNarrativeBufferTests {
         try buffer.append(payload("three"))
         #expect(KeychainItem.load(account: Self.keyAccount, service: scope.keychainService) == key,
                 "a purge empties the file; it must not rotate the key")
+    }
+
+    /// At the cap the next append THROWS `.full` and changes nothing: every held entry is still
+    /// there, oldest first, and the file is byte-identical. (It used to evict the oldest entry with
+    /// only an audit line — a note the user saved, gone without a word.)
+    @Test func aFullBufferRefusesTheNextEntryAndDropsNothing() throws {
+        let scope = uniqueNarrativeBufferScope()
+        defer { cleanup(scope) }
+        let buffer = PendingNarrativeBuffer(scope: scope)
+        for index in 0..<PendingNarrativeBuffer.capacity {
+            try buffer.append(payload("entry \(index)"))
+        }
+        let fileURL = PendingNarrativeBuffer.fileURL(in: scope.directory)
+        let before = try Data(contentsOf: fileURL)
+
+        #expect(throws: PendingNarrativeBufferError.full) { try buffer.append(payload("one too many")) }
+
+        #expect(try Data(contentsOf: fileURL) == before, "a refused append must leave the file exactly as it was")
+        let held = try buffer.drainAll()
+        #expect(held.count == PendingNarrativeBuffer.capacity)
+        #expect(held.first?.noteBytes == Data("entry 0".utf8), "the oldest entry must never be evicted")
+        #expect(PendingNarrativeBuffer.capacity == 200)
+    }
+
+    /// A v2 payload carries a whole cycle record's JSON beside v1 narratives; a v1 payload encodes
+    /// exactly as it always did (no new key), so a file written before the field existed decodes.
+    @Test func aCycleRecordPayloadRoundTripsBesideVersionOneNarratives() throws {
+        let scope = uniqueNarrativeBufferScope()
+        defer { cleanup(scope) }
+        let buffer = PendingNarrativeBuffer(scope: scope)
+        let recordID = UUID()
+        let json = Data(#"{"v":2}"#.utf8)
+        try buffer.append(payload("a v1 narrative"))
+        try buffer.append(PendingNarrativePayload(cycleRecordID: recordID, dayKey: "2026-09-30", cycleRecordJSON: json))
+
+        let drained = try buffer.drainAll()
+        #expect(drained.count == 2)
+        #expect(drained[0].cycleRecordJSON == nil)
+        #expect(drained[1].cycleRecordJSON == json)
+        #expect(drained[1].hkExternalUUID == recordID.uuidString && drained[1].dateKey == "2026-09-30")
+        #expect(drained[1].noteBytes == nil)
+
+        let v1JSON = try JSONEncoder().encode(payload("old shape"))
+        #expect(!(String(data: v1JSON, encoding: .utf8) ?? "").contains("cycleRecordJSON"), "a v1 payload must encode as it always did")
+        let legacyFile = #"{"hkExternalUUID":"x","dateKey":"2026-09-01"}"#
+        let decoded = try JSONDecoder().decode(PendingNarrativePayload.self, from: Data(legacyFile.utf8))
+        #expect(decoded.cycleRecordJSON == nil && decoded.hkExternalUUID == "x")
     }
 }

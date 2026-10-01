@@ -6,14 +6,14 @@ import Foundation
 /// each repeated inline.
 ///
 /// The sealed layer-3 repositories (`JournalNarrativeRepository`, `WorryNarrativeRepository`,
-/// `IntimacyLogRepository`, `MenstrualNarrativeRepository`) all delete rows WITHOUT decrypting
+/// `IntimacyLogRepository`, `MenstrualNarrativeRepository`, `CycleRecordRepository`) all delete rows WITHOUT decrypting
 /// them, so deletion stays available while the app is locked or the feature is hidden. Each
 /// bulk delete must also clear the persistent-history transaction log (rethrowing, not
 /// best-effort — a delete's promise includes removing the ciphertext from the log), which is
 /// why the prune is part of this sequence rather than left to callers.
 ///
 /// Deliberately NOT used by `PrivatePersistenceController.purgeEncryptedEntities()`: the
-/// destructive lock-reset wipe batches all four entities under a SINGLE save so the wipe is
+/// destructive lock-reset wipe batches every sealed entity under a SINGLE save so the wipe is
 /// atomic across entities — per-entity adoption of this helper would permit a partial wipe.
 ///
 /// Honest limit: a row-delete + history prune removes the rows and the transaction log, but does

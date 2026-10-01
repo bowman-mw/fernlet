@@ -29,8 +29,16 @@ import FernletFoundation
 ///   so a wipe works while the app is locked.
 /// - The model is built programmatically (`makeManagedObjectModel()`): plain `NSManagedObject`
 ///   entities whose text content lives only in `*Ciphertext` binary columns; ids, day keys, and
-///   timestamps are plaintext by accepted risk (NEW-4). The column sealing itself happens in the
-///   layer-3 repositories under the lock's content key — this module never touches that key.
+///   timestamps are plaintext by accepted risk (NEW-4) on the four original entities. The column
+///   sealing itself happens in the layer-3 repositories under the lock's content key — this module
+///   never touches that key.
+/// - The model is VERSIONED (period-data design 2026-09-30, §5.2). `makeManagedObjectModelV1()` is
+///   the four-entity model every shipped build wrote, frozen verbatim and pinned by its
+///   `versionChecksum`; `makeManagedObjectModel()` is V2 = V1 plus `CycleRecord`, whose only columns
+///   are `id`, `schemaVersion` and one `payloadCiphertext` blob — no plaintext date, day key or
+///   HealthKit id. A V1 store on disk is carried to V2 by a staged migration with in-memory model
+///   references (one additive, lightweight stage), attached to the one store description so a
+///   rebuild or reload re-adds under the same migration.
 ///
 /// Concurrency: this module is nonisolated; ``shared`` is `nonisolated(unsafe)` because
 /// `NSPersistentContainer` is not `Sendable` (matching its prior app-target behavior). Failure
@@ -45,8 +53,9 @@ public final class PrivatePersistenceController {
     @MainActor
     public static let preview = PrivatePersistenceController(inMemory: true)
 
-    /// The local-only container hosting the four sealed entities (`MenstrualNarrative`,
-    /// `JournalNarrative`, `IntimacyLog`, `WorryNarrative`).
+    /// The local-only container hosting the sealed entities (`MenstrualNarrative`,
+    /// `JournalNarrative`, `IntimacyLog`, `WorryNarrative`, `CycleRecord` — see
+    /// ``sealedEntityNames``).
     public let container: NSPersistentContainer
     /// `true` when the persistent store failed to load; the error is logged and the controller
     /// left running (against an empty container) rather than crashing.
@@ -83,23 +92,25 @@ public final class PrivatePersistenceController {
     ///     cannot express — chiefly ``rebuildStore()``, whose whole contract is about the sqlite
     ///     file, its `-wal`/`-shm` sidecars, and the `_SUPPORT` blob directory really being
     ///     destroyed and re-created. Production always passes `nil`.
-    public init(inMemory: Bool = false, storeURL: URL? = nil) {
+    ///   - model: An explicit managed-object model, overriding the current (V2) one. The test seam
+    ///     for the model-migration tests: a store written under `makeManagedObjectModelV1()` is what
+    ///     every shipped build left on disk, and the production controller must open it. A supplied
+    ///     model gets NO staged migration (it is a fixture shape, not a migration target).
+    ///     Production always passes `nil`.
+    public init(inMemory: Bool = false, storeURL: URL? = nil, model: NSManagedObjectModel? = nil) {
         self.inMemory = inMemory
-        container = NSPersistentContainer(
-            name: "FernletPrivate",
-            managedObjectModel: Self.makeManagedObjectModel()
-        )
+        let managedObjectModel = model ?? Self.makeManagedObjectModel()
+        container = NSPersistentContainer(name: "FernletPrivate", managedObjectModel: managedObjectModel)
         let storeDesc = container.persistentStoreDescriptions.first ?? NSPersistentStoreDescription()
-        storeDesc.setOption(FileProtectionType.complete as NSString, forKey: NSPersistentStoreFileProtectionKey)
-        storeDesc.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-        storeDesc.shouldMigrateStoreAutomatically = true
-        storeDesc.shouldInferMappingModelAutomatically = true
-        // cloudKitContainerOptions is intentionally never set — this store is always local-only.
-        storeDesc.cloudKitContainerOptions = nil
-        if inMemory {
-            storeDesc.url = URL(fileURLWithPath: "/dev/null")
-        } else if let storeURL {
-            storeDesc.url = storeURL
+        Self.configure(storeDesc, inMemory: inMemory, storeURL: storeURL)
+        if model == nil {
+            // The production model is the migration TARGET: a store any shipped build wrote (V1) is
+            // carried to it by the one staged stage. Riding the description's options is what makes
+            // `rebuildStore()` / `reloadStoreIfNeeded()` re-add under the same migration.
+            storeDesc.setOption(
+                Self.makeStagedMigrationManager(to: managedObjectModel),
+                forKey: NSPersistentStoreStagedMigrationManagerOptionKey
+            )
         }
         container.persistentStoreDescriptions = [storeDesc]
 
@@ -126,6 +137,22 @@ public final class PrivatePersistenceController {
         container.viewContext.automaticallyMergesChangesFromParent = true
     }
 
+    /// Sets the sealed store's fixed posture on its one description: complete file protection,
+    /// history tracking, automatic (inferred) migration, never CloudKit, and the store's location.
+    private static func configure(_ storeDesc: NSPersistentStoreDescription, inMemory: Bool, storeURL: URL?) {
+        storeDesc.setOption(FileProtectionType.complete as NSString, forKey: NSPersistentStoreFileProtectionKey)
+        storeDesc.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+        storeDesc.shouldMigrateStoreAutomatically = true
+        storeDesc.shouldInferMappingModelAutomatically = true
+        // cloudKitContainerOptions is intentionally never set — this store is always local-only.
+        storeDesc.cloudKitContainerOptions = nil
+        if inMemory {
+            storeDesc.url = URL(fileURLWithPath: "/dev/null")
+        } else if let storeURL {
+            storeDesc.url = storeURL
+        }
+    }
+
     /// Re-applies the sealed store's iOS-backup exclusion to the live store at runtime — e.g. when the
     /// user toggles `localBackupExcludedFromiOSBackup`. Without this the sealed store's exclusion would
     /// lag the synced store's until the next launch (the synced store reloads on the toggle; this store
@@ -147,7 +174,8 @@ public final class PrivatePersistenceController {
         BackupExclusion.apply(storeURL: storeURL, excluded: excluded, includeSupportDir: true)
     }
 
-    /// Deletes every row of all four sealed entities, saves, and prunes the persistent history.
+    /// Deletes every row of every sealed entity (``sealedEntityNames``), saves, and prunes the
+    /// persistent history.
     ///
     /// The first destructive step of the lock reset and delete-all-data flows, and deliberately
     /// **keyless** — no `contentKey`, no decrypt — so it works while the app is locked or a
@@ -181,8 +209,10 @@ public final class PrivatePersistenceController {
 
     /// Every entity whose rows carry sealed columns — the one list ``purgeEncryptedEntities()``
     /// deletes and ``sealedRowCount()`` counts, so the two can never disagree about what "sealed"
-    /// covers. A new sealed entity joins here in the same commit that adds it to the model.
-    public static let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"]
+    /// covers. A new sealed entity joins here in the same commit that adds it to the model:
+    /// `CycleRecord` (period-data design 2026-09-30, §5.2) did, so the app-lock reset purges it and a
+    /// passcode setup's prior-data check counts it.
+    public static let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord"]
 
     /// How many rows the sealed entities hold between them — KEYLESS: a `count(for:)` per entity,
     /// never a fetch of a column, so it answers with the app lock closed and decrypts nothing.
@@ -452,11 +482,84 @@ public final class PrivatePersistenceController {
 
     // MARK: - Model
 
-    /// Builds the programmatic managed-object model containing the four sealed entities.
+    /// The version identifier of the current model (V2). Informational only — Core Data matches a
+    /// store to a model by entity version hashes and the checksum, never by this string (the
+    /// identifiers do not enter `versionChecksum`; `PrivateStoreModelMigrationTests` proves it).
+    static let currentModelVersionIdentifier = "FernletPrivate.v2"
+    /// The version identifier of the frozen V1 model. Informational only, like the V2 one.
+    static let versionOneModelVersionIdentifier = "FernletPrivate.v1"
+
+    /// Builds the CURRENT programmatic model: V2 = the frozen V1 entities plus `CycleRecord`
+    /// (period-data design 2026-09-30, §5.2). Every call builds fresh entity descriptions — an
+    /// `NSEntityDescription` belongs to exactly one model.
     static func makeManagedObjectModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
-        model.entities = [makeMenstrualNarrativeEntity(), makeJournalNarrativeEntity(), makeIntimacyLogEntity(), makeWorryNarrativeEntity()]
+        model.entities = makeVersionOneEntities() + [makeCycleRecordEntity()]
+        model.versionIdentifiers = [currentModelVersionIdentifier]
         return model
+    }
+
+    /// The model every shipped build before 2026-09-30 wrote: the four original sealed entities,
+    /// FROZEN. It is the source of the V1 → V2 migration stage, so it must stay byte-for-byte the
+    /// shape those builds left on disk — its `versionChecksum` is pinned by
+    /// `PrivateStoreModelMigrationTests`. Never edit it; a new column or entity is a new version.
+    static func makeManagedObjectModelV1() -> NSManagedObjectModel {
+        let model = NSManagedObjectModel()
+        model.entities = makeVersionOneEntities()
+        model.versionIdentifiers = [versionOneModelVersionIdentifier]
+        return model
+    }
+
+    /// The four entities of V1, freshly built, in the order the shipped model declared them.
+    private static func makeVersionOneEntities() -> [NSEntityDescription] {
+        [makeMenstrualNarrativeEntity(), makeJournalNarrativeEntity(), makeIntimacyLogEntity(), makeWorryNarrativeEntity()]
+    }
+
+    /// The staged migration that carries a V1 store to `target`: one custom stage whose source and
+    /// destination are IN-MEMORY model references (the models are programmatic — no compiled
+    /// `.momd` exists to look them up by name). With no handlers, the stage is a lightweight
+    /// migration; V2 only adds an entity, so it is additive.
+    ///
+    /// - Parameter target: The production (V2) model the container was built with — the same
+    ///   instance, so the stage's destination checksum is the coordinator's.
+    static func makeStagedMigrationManager(to target: NSManagedObjectModel) -> NSStagedMigrationManager {
+        let source = makeManagedObjectModelV1()
+        // A model is frozen once a coordinator holds it, and reading the checksum of one that is
+        // still editable logs a Core Data error (on every launch, here). A store-less coordinator
+        // freezes the source; the container's coordinator already froze the target.
+        _ = NSPersistentStoreCoordinator(managedObjectModel: source)
+        let stage = NSCustomMigrationStage(
+            migratingFrom: NSManagedObjectModelReference(model: source, versionChecksum: source.versionChecksum),
+            to: NSManagedObjectModelReference(model: target, versionChecksum: target.versionChecksum)
+        )
+        return NSStagedMigrationManager([stage])
+    }
+
+    /// The sealed cycle-record entity (V2, period-data design 2026-09-30, §5.2): EXACTLY three
+    /// attributes — `id` (indexed), `schemaVersion` (the payload format, plaintext) and one
+    /// `payloadCiphertext` blob holding the whole record (dates, day key, clinical and narrative
+    /// blocks). Deliberately:
+    /// - **no date, day key, timestamp or HealthKit id column** — the store no longer says which
+    ///   days have entries, even to local forensics (only how many rows exist);
+    /// - **no uniqueness constraint** — the view context's property-object-trump merge policy would
+    ///   resolve a constraint conflict by silently overwriting the stored row with the in-memory one;
+    ///   uniqueness is `CycleRecordRepository`'s fetch-by-id upsert instead;
+    /// - **no external binary storage** — a record is a few KB at most, so it stays in the row.
+    static func makeCycleRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "CycleRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            CoreDataModelBuilding.makeAttribute("id", type: .UUIDAttributeType),
+            CoreDataModelBuilding.makeAttribute("schemaVersion", type: .integer16AttributeType),
+            CoreDataModelBuilding.makeAttribute("payloadCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: false)
+        ]
+        if let idProp = entity.propertiesByName["id"] {
+            entity.indexes = [NSFetchIndexDescription(name: "cycleRecordByID", elements: [
+                NSFetchIndexElementDescription(property: idProp, collationType: .binary)
+            ])]
+        }
+        return entity
     }
 
     /// The sealed period-narrative entity: plaintext id / HealthKit UUID / day key plus

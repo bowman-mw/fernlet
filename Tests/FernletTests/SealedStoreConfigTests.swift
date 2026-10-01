@@ -11,7 +11,9 @@ import CloudKitSync
 /// Addresses SEC-3 from the architecture audit (Fernlet-Review-and-Plan-Updates.md).
 struct SealedStoreConfigTests {
 
-    private let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"]
+    /// Every sealed entity — `CycleRecord` since the period-data design (2026-09-30, §5.2), whose one
+    /// ciphertext column holds a whole cycle entry and so must never reach the mirrored model.
+    private let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord"]
     private let cloudEntityNames = ["FernletDatabaseRecord", "SavedRecipeRecord"]
 
     // MARK: - Cloud model exclusion
@@ -37,6 +39,14 @@ struct SealedStoreConfigTests {
     }
 
     // MARK: - Private store isolation
+
+    /// The test's list IS the production list — a sealed entity added to the model without joining
+    /// `sealedEntityNames` would escape the reset purge and the prior-data count.
+    @Test func theSealedEntityListMatchesTheProductionList() {
+        #expect(sealedEntityNames == PrivatePersistenceController.sealedEntityNames)
+        let privateModel = PrivatePersistenceController(inMemory: true).container.managedObjectModel
+        #expect(Set(privateModel.entitiesByName.keys) == Set(PrivatePersistenceController.sealedEntityNames))
+    }
 
     @Test func sealedEntitiesPresentInPrivateModel() {
         let privateModel = PrivatePersistenceController(inMemory: true).container.managedObjectModel

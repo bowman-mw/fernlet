@@ -524,6 +524,40 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The sealed cycle record's at-rest shape (period-data design 2026-09-30, §5.1, §10.7). One
+    /// `CycleRecord` is ONE ciphertext blob whose plaintext is this JSON — the same bytes the pending
+    /// buffer's v2 payload and the Sealed backup's chunks carry. Every key and every raw value in it is
+    /// a TOKEN: a renamed key reads as a missing field (a block goes UNKNOWN, a record goes dead), a
+    /// renamed raw value decodes as `nil` (the tolerant decoder drops it). Localize `title`, never these.
+    @Test func frozenCycleRecordTokens() throws {
+        #expect(PeriodFlowLevel.allCases.map(\.rawValue) == ["none", "light", "medium", "heavy", "unspecified"])
+        #expect(CervicalMucusQuality.allCases.map(\.rawValue) == ["dry", "sticky", "creamy", "watery", "eggWhite"])
+        #expect(OvulationTestResult.allCases.map(\.rawValue) == ["negative", "positive", "indeterminate"])
+        #expect(PeriodTemperatureUnit.allCases.map(\.rawValue) == ["fahrenheit", "celsius"])
+        #expect(CycleRecordOrigin.allCases.map(\.rawValue) == ["logged", "importedLegacy", "restored", "adoptedFromHealth"])
+
+        let full = CycleRecord(
+            event: UserLoggedCycleEvent(
+                date: Date(timeIntervalSinceReferenceDate: 800_000_000), flowLevel: .light, basalBodyTemperature: 97.7,
+                cervicalMucusQuality: .creamy, ovulationTestResult: .negative, hasIntermenstrualBleeding: true,
+                isCycleStart: true, note: "n", symptoms: [.cramps], customSymptomScales: ["k": 1]
+            ),
+            now: Date(timeIntervalSinceReferenceDate: 800_000_000)
+        )
+        let object = try #require(try JSONSerialization.jsonObject(with: full.frozenJSON()) as? [String: Any])
+        #expect(Set(object.keys) == ["v", "id", "dayKey", "loggedAt", "clinical", "narrative", "origin", "createdAt", "updatedAt"])
+        #expect(object["v"] as? Int == 2)
+        let clinical = try #require(object["clinical"] as? [String: Any])
+        #expect(Set(clinical.keys) == [
+            "flowLevel", "isCycleStart", "hasIntermenstrualBleeding", "basalBodyTemperature", "temperatureUnit",
+            "cervicalMucusQuality", "ovulationTestResult", "updatedAt"
+        ])
+        let narrative = try #require(object["narrative"] as? [String: Any])
+        #expect(Set(narrative.keys) == ["note", "symptomFlags", "customSymptomScales", "updatedAt"])
+        #expect(narrative["symptomFlags"] as? [String] == ["cramps"], "symptoms are stored as their frozen raw values")
+        #expect(clinical["temperatureUnit"] as? String == "fahrenheit")
+    }
+
     /// Sealed journal + trainer-export tokens.
     ///
     /// `FeelingTag` is persisted on every `JournalEntry`, is the memory category for `MemoryNote`, and

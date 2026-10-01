@@ -74,7 +74,8 @@ struct S3BoundaryTests {
         "WorryNarrativeRepository",
         "MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative",
         // Raw cycle/intimacy value types — must travel only as de-identified AIContext payloads.
-        "CyclePhase", "CycleDayEntry", "UserLoggedCycleEvent", "PeriodTrackerStore", "IntimacyLogStore",
+        // `CycleRecord` also matches its repository, its store and every type spelled from it.
+        "CyclePhase", "CycleDayEntry", "UserLoggedCycleEvent", "PeriodTrackerStore", "IntimacyLogStore", "CycleRecord",
         // Sealed media stores + the pending-narrative buffer/payload and its storage scope.
         "PrivateMediaStore", "MealPhotoStore", "ProgressPhotoStore", "PendingNarrativeBuffer", "PendingNarrativePayload",
         "PendingNarrativeStorageScope",

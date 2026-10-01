@@ -376,8 +376,12 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | Function Or Type | What It Does |
 | --- | --- |
 | `PrivatePersistenceController.shared` / `preview` | Provide the local-only sealed-data persistent container. |
-| `init(inMemory:)` | Builds and loads `FernletPrivate` with complete file protection, history tracking, migration, no CloudKit, and merge configuration. |
-| `makeManagedObjectModel()` | Builds the private model for menstrual narratives, journal narratives, and intimacy logs. |
+| `init(inMemory:storeURL:model:)` | Builds and loads `FernletPrivate` with complete file protection, history tracking, migration, no CloudKit, and merge configuration. The production model (V2) carries the V1 → V2 staged migration on the store description, so a rebuild or reload re-adds under it too; `model:` is the migration tests' seam (a supplied model gets no stage). |
+| `makeManagedObjectModel()` | Builds the CURRENT model, V2 = the frozen V1 entities + `CycleRecord` (period-data design 2026-09-30, §5.2), tagged `FernletPrivate.v2`. |
+| `makeManagedObjectModelV1()` | The four-entity model every shipped build wrote (`MenstrualNarrative`, `JournalNarrative`, `IntimacyLog`, `WorryNarrative`), FROZEN; its `versionChecksum` is pinned by `PrivateStoreModelMigrationTests` (proven equal to the pre-split model). Never edit it — a new column or entity is a new version. |
+| `makeStagedMigrationManager(to:)` | One `NSCustomMigrationStage` from V1 to the given V2 over IN-MEMORY `NSManagedObjectModelReference`s (programmatic models have no `.momd`); no handlers, so a lightweight additive stage. Freezes the source model with a store-less coordinator first (reading an editable model's checksum logs a Core Data error). |
+| `makeCycleRecordEntity()` | `CycleRecord`: EXACTLY `id` (indexed), `schemaVersion` (Int16, plaintext format tag) and one `payloadCiphertext` blob (not externalized). No date, day key, timestamp or HealthKit id column; no uniqueness constraint (the property-object-trump merge policy would make a conflict a silent overwrite — uniqueness is the repository's upsert). |
+| `sealedEntityNames` / `sealedRowCount()` | The one list of sealed entities (five, with `CycleRecord`) that `purgeEncryptedEntities()` deletes and `sealedRowCount()` counts keylessly — so the app-lock reset purges cycle records and a passcode setup's prior-data check counts them. |
 | `makeMenstrualNarrativeEntity()` | Defines encrypted menstrual narrative columns and a date-key index. |
 | `makeJournalNarrativeEntity()` | Defines local-only journal metadata plus sealed text/emotion columns and a day-key index. |
 | `makeIntimacyLogEntity()` | Defines local-only intimacy metadata plus sealed note columns and a day-key index. |
@@ -385,6 +389,22 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | `CoreDataModelBuilding.makeAttribute(_:type:defaultValue:allowsExternalBinaryDataStorage:)` | The same shared attribute factory the synced model builder uses (FernletFoundation); it replaced this file's private copy, so the two builders cannot drift. |
 | `purgeEncryptedEntities()` | Destructive lock-reset wipe; deliberately batches all sealed entities under a single save rather than using `PrivateRowPlumbing.deleteRows(...)`, so the wipe stays atomic across entities. |
 | `PrivatePersistentHistoryPruner.prune(context:before:)` | Deletes private-store persistent history before a date. |
+
+### `CycleRecord.swift` / `CycleRecordRepository.swift` / `CycleRecordStore.swift` (PrivateHealthStore)
+
+The sealed cycle record (period-data design 2026-09-30, §5–§6). Landed INERT in unit 3: the app uses only the keyless count and delete (the "entries this iPhone can't open" check and "Delete everything"); the cutover (unit 4) makes records the source of truth.
+
+| Function Or Type | What It Does |
+| --- | --- |
+| `CycleRecord` | One cycle entry sealed as ONE blob: `id`, `dayKey`, `loggedAt`, a `clinical` and a `narrative` block (each `nil` = UNKNOWN, present-but-empty = "none"), `origin`, `createdAt`, `updatedAt`. Frozen Codable (explicit keys, `"v": 2`, enums as raw values, dates as seconds since 2001) — the sealed column's plaintext, the buffer's v2 payload and the backup chunk element alike. Tolerant per token; a newer schema throws `CycleRecordDecodingError.unsupportedSchemaVersion` (retryable, never dead). |
+| `CycleRecord.init(event:id:origin:now:)` | A logged event → both blocks known, the sheet's caps applied (note ≤ 1000, ≤ 40 scales of ≤ 40-character names, non-finite temperature dropped). |
+| `CycleRecord.merged(_:_:)` / `reducedByID(_:)` | The ONE merge rule (§5.1a): each block taken WHOLE by its clock (equal clocks → content tiebreak, so commutative), `loggedAt`/`dayKey` from the clinical-known side, `origin` the first argument's, `createdAt` min, `updatedAt` max; idempotent and associative. Batches are reduced by id before any write. |
+| `CycleNarrativeFields.bounded(_:)` | The custom-scale cap, shared with `PeriodTrackerStore.logEvent` (the tracker's private copy was removed). |
+| `CycleRecordRepository.upsertMerged(_:retiringNarrativeIDs:contentKey:)` | THE write path: per id — absent → insert; openable → merge (re-sealed only when changed; duplicate rows collapse); all rows dead → replace; any row undecided → the whole call throws `undecidedRows`, nothing saved. Deletes the named `MenstrualNarrative` rows in the same save. Checks `maxStoredRecords` (20 000) before any change. |
+| `insert(_:contentKey:)` / `update(_:contentKey:now:)` | Insert requires absence and a storable record. Update is an EDIT — replace in place, no merge; keeps the stored `createdAt`/`origin`, restamps only the changed block. |
+| `records(offset:limit:contentKey:)` / `records(ids:contentKey:)` / `allRecords(contentKey:)` | Keyed reads returning a `CycleRecordPage` (`records` / `deadIDs` / `transientCount`), in store order by id, pages ≤ 500. A decrypted id that differs from the row's id is DEAD (the AAD does not bind the id, R1-F9). `allRecords` walks inside one `performAndWait` and reduces by id. |
+| `recordCount()` / `allIDs()` / `delete(ids:)` / `deleteAll()` | Keyless. `allIDs` is the export's id snapshot; `deleteAll` routes through `PrivateRowPlumbing.deleteRows`. |
+| `CycleRecordStore` | `@MainActor` gated funnel (mirrors `IntimacyLogStore`): hidden ⇒ the display read is empty and every write/upsert/pre-pass/chunk/restore throws `PeriodTrackingHiddenError`; count, ids and deletes ungated. `attachMutationHook` + `mutationCounter` fire only when a call changed something on disk. `backupPrePass(contentKey:)` → `CycleRecordBackupPrePass` (snapshot ids, dead ids, undecided count, counter). The app target never constructs a raw `CycleRecordRepository` (grep-walled). |
 
 ### `PrivateRowPlumbing.swift`
 
@@ -594,8 +614,8 @@ The debounce/queue mechanics this service used to own now live in `PendingWriteB
 
 | Function Or Type | What It Does |
 | --- | --- |
-| `PendingNarrativePayload` | Encodes HealthKit external ID, date key, and encrypted narrative field bytes for deferred sealing. |
-| `append(_:)` | Loads encrypted buffer entries, appends one, evicts oldest entries past the cap, audits eviction, and saves. |
+| `PendingNarrativePayload` | Encodes HealthKit external ID, date key, and encrypted narrative field bytes for deferred sealing (v1), or — through `init(cycleRecordID:dayKey:cycleRecordJSON:)` — a whole cycle record's frozen JSON in the optional `cycleRecordJSON` (v2). The new field is optional, so v1 files decode and a v1 payload encodes byte-for-byte as before. |
+| `append(_:)` | Loads encrypted buffer entries and appends one — or, at `capacity` (200), THROWS `PendingNarrativeBufferError.full` with nothing written and nothing dropped (it used to evict the oldest past a 50-entry cap with only an audit line). Period-data design 2026-09-30 §6.5, I21. |
 | `drainAll()` | Loads all buffered payloads, purges the file, and returns entries for unlocked processing. |
 | `purge()` | Deletes the pending buffer file. |
 | `holdsUnopenableEntries()` | READ-ONLY: whether the file is non-empty while its key is definitively absent (no mint, migration or decrypt; an unreadable key throws). Feeds the "entries this iPhone can't open" card through `FernletLockService.pendingNarrativesAreUnopenable()`. Period-data design 2026-09-30 §4.9. |
