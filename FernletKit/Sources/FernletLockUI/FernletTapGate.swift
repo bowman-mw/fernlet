@@ -188,12 +188,14 @@ extension GateCopy {
         ///
         /// Its last sentence promises the Sealed backup restore, true since design unit 5: after the
         /// reset every ambient restore waits for the device owner (`SealedBackupRestoreHold`), and
-        /// Privacy & Data's owner-checked "Restore" releases it (review C-U2-R4, design §4.7).
+        /// Privacy & Data's owner-checked "Restore" releases it (review C-U2-R4, design §4.7). It says
+        /// to restore before adding new entries: the journal and intimacy restores write only into an
+        /// empty store (review U5-backup-v2-L-U5-R5).
         static var unrecoverableBody: String {
             String(localized: "lock.tapGate.unrecoverable.body",
-                   defaultValue: "This iPhone's key for your private entries is gone, so they can't be opened here. Resetting clears Private so you can use it again. It doesn't bring those entries back, but if Sealed backup is on, you can restore it afterwards from Privacy & Data.",
+                   defaultValue: "This iPhone's key for your private entries is gone, so they can't be opened here. Resetting clears Private so you can use it again. It doesn't bring those entries back, but if Sealed backup is on, you can restore it from Privacy & Data afterwards, before you add new entries.",
                    bundle: .module,
-                   comment: "Card on the Private tab (no app passcode) when the key for private entries was lost, for example after this iPhone was erased and restored from a backup. The entries are already unreadable and resetting does not recover them; say both plainly. The encrypted Sealed backup in iCloud, if the user turned it on, can be restored from Privacy & Data after the reset.")
+                   comment: "Card on the Private tab (no app passcode) when the key for private entries was lost, for example after this iPhone was erased and restored from a backup. The entries are already unreadable and resetting does not recover them; say both plainly. The encrypted Sealed backup in iCloud, if the user turned it on, can be restored from Privacy & Data after the reset. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
         }
     }
 

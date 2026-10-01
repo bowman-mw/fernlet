@@ -693,6 +693,74 @@ struct SealedBackupPayloadCoverageTests {
         #expect(cloud.sealedRecordIdentities != preReset, "and now the restored journal backs up again")
     }
 
+    /// Review U5-backup-v2-C-U5-5 / L-U5-R5: after the owner's release, a journal copy whose restore
+    /// can never land here (this iPhone already holds entries written since the reset, and the journal
+    /// restore writes only into an empty store) is NAMED — instead of "will restore the next time you
+    /// open Private" forever while the journal never backs up — and only the user's explicit replace
+    /// lets this iPhone's entries back up over it. While the hold still waits, nothing is named (the
+    /// restore has not been asked for); a payload whose store is empty is never named (its restore can
+    /// land).
+    @Test func aReleasedCopyThatCannotRestoreIsNamedAndReplacedOnlyByChoice() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        let preferences = StoragePreferences(
+            iCloudSyncEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true,
+            sealedBackupJournalReuploadDeferred: true
+        )
+        let coordinator = makeCloudCoordinator(host: host, cloud: cloud, preferences: preferences)
+        let history = makeJournalRepository()
+        try history.insert(journalNarrative("before the reset", at: 10), contentKey: host.sealedBackupContentKey)
+        #expect(await coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives, journalRepository: history))
+        let preReset = cloud.sealedRecordIdentities
+        host.restoreHold.hold(keepingCopiesFrom: preferences)
+        host.sealedBackupContentKey = SymmetricKey(size: .bits256)
+        let written = makeJournalRepository()
+        try written.insert(journalNarrative("after the reset", at: 30), contentKey: host.sealedBackupContentKey)
+        let emptyIntimacy = makeIntimacyStore()
+
+        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written, intimacyStore: emptyIntimacy).isEmpty,
+                "held: the owner has not asked for the restore yet")
+        host.releaseSealedBackupRestoreHold()
+        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written, intimacyStore: emptyIntimacy)
+                == [.journalNarratives], "the journal is named; the empty intimacy store can still restore")
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: written)
+        #expect(cloud.sealedRecordIdentities == preReset, "named, still held: nothing replaced it silently")
+
+        coordinator.replacePreResetCopyWithThisIPhone(.journalNarratives)
+        #expect(!host.sealedBackupKeepsPreResetCopy(of: .journalNarratives))
+        #expect(host.reuploadDeferrals[.journalNarratives] == true, "the upload is owed")
+        #expect(coordinator.preResetCopiesBlockedByNewerEntries(journalRepository: written, intimacyStore: emptyIntimacy).isEmpty)
+        await coordinator.retryDeferredReuploadIfNeeded(payloadType: .journalNarratives, journalRepository: written)
+        #expect(cloud.sealedRecordIdentities != preReset, "after the user's choice this iPhone's journal backs up")
+    }
+
+    /// Review U5-backup-v2-L-U5-R1, the escrow adopt end to end: the adopt deletes this iPhone's own
+    /// local escrow key, so the period set this iPhone sealed under it opens nowhere any more — and
+    /// the export's compare-and-swap used to fail on it at every settle, forever, with nothing to do.
+    /// The adopt's re-upload now names the set (nothing written over it), and the user's explicit
+    /// replace re-seals the period history under the adopted key.
+    @Test func afterAnEscrowAdoptThePeriodSetSealedToTheReplacedKeyIsReplacedByChoice() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        try phone.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        let beforeAdopt = cloud.sealedRecordIdentities
+        let otherDevice = try seedSyncedEscrowKey(into: cloud.keychainService)
+        defer { KeychainItem.deleteAll(service: otherDevice) }
+
+        #expect(await phone.coordinator.adoptSyncedEscrowAndReupload())
+        let unreadable = PeriodBackupHead(writer: PeriodBackupHead.unreadableWriter, generation: 1)
+        #expect(phone.host.periodExportState == .sealedWithAnotherKey(unreadable), "named, not a silent failure")
+        #expect(cloud.sealedRecordIdentities == beforeAdopt)
+        #expect(phone.host.reuploadDeferrals[.periodData] == true)
+
+        await phone.coordinator.replacePeriodBackupWithThisIPhone(unreadable)
+        #expect(try await PeriodBackupDevice.cloudHead(cloud)?.writer == "phone", "re-sealed under the adopted key")
+        #expect(phone.host.reuploadDeferrals[.periodData] == false)
+    }
+
     /// Review N-1: Privacy & Data's "your app lock was reset" line speaks only for a backup that is on
     /// AND whose pre-reset copy the hold keeps; any other backup's own line shows instead.
     @Test func theOwnerHoldLineSpeaksOnlyForAKeptCopy() {

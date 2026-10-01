@@ -1419,6 +1419,9 @@ struct ContentView: View {
     ) {
         privateActivationTask?.cancel()
         periodLoadTask?.cancel()
+        // The tab closed: an in-flight section settle stops before its next decrypt or upload
+        // (review U5-backup-v2-C-U5-3 / L-U5-R4).
+        if !lockState.isUnlocked(for: .privateHub) { store.privateSectionBackupSettleTask?.cancel() }
         store.deactivateSealedJournals()
         worryBoxService.deactivate()
         scrubPeriodDataIfNeeded()
@@ -1517,7 +1520,9 @@ struct ContentView: View {
         pendingSealedBackupSections.insert(section)
         guard !isSettlingSealedBackups else { return }
         isSettlingSealedBackups = true
-        Task { await drainSealedBackupSettlements() }
+        // Held on the store so "delete everything" and the tab closing can cancel it (review
+        // U5-backup-v2-C-U5-3 / L-U5-R4).
+        store.privateSectionBackupSettleTask = Task { await drainSealedBackupSettlements() }
     }
 
     private func drainSealedBackupSettlements() async {
@@ -1534,10 +1539,13 @@ struct ContentView: View {
         // There are exactly two backup-bearing sections. Requests arriving during an await are
         // picked up by the second bounded iteration; Worry Box owns no backup payload.
         for _ in 0..<2 {
-            guard let section = pendingSealedBackupSections.first else { break }
+            guard !Task.isCancelled, let section = pendingSealedBackupSections.first else { break }
             pendingSealedBackupSections.remove(section)
             guard attemptedSealedBackupSections.insert(section).inserted else { continue }
             await settleSealedBackups(for: section)
+            // Cancelled mid-settle (the tab closed, or "delete everything"): the settle stopped before
+            // its next decrypt or upload, so it is owed again the next time the section opens.
+            if Task.isCancelled { attemptedSealedBackupSections.remove(section) }
         }
     }
 

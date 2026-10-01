@@ -764,6 +764,19 @@ struct DeleteAllDataTests {
         #expect(inFlight.isCancelled, "the wipe left the period-backup settle running")
     }
 
+    /// Review U5-backup-v2-C-U5-3 / L-U5-R4: the Private tab's section settle now runs the period
+    /// export, so it is held on the store and the wipe cancels it with the other writers — suspended in
+    /// a chunk upload it would otherwise resume after the wipe and write a fresh set over the deletes.
+    @Test func deleteAllCancelsTheInFlightPrivateSectionSettle() async {
+        let store = makeStore("delete-all-section-settle")
+        let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
+        store.privateSectionBackupSettleTask = inFlight
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(inFlight.isCancelled, "the wipe left the Private tab's backup settle running")
+    }
+
     /// I14 / §8.4 (R2-F7): the period store's own writers — the held legacy cycle import and a
     /// fill-on-read begun before the wipe — are stopped in the FIRST leg, before any row is deleted,
     /// and both legacy-import halves are set to DONE (a write, never a clear), so the next Private open
@@ -818,6 +831,28 @@ struct DeleteAllDataTests {
 
         #expect(!store.periodBackupLedger.isRestoreResolved)
         #expect(store.periodBackupLedger.acceptedHead == nil)
+    }
+
+    /// Review U5-backup-v2-C-U5-5: an app-lock reset with every Sealed backup off keeps no pre-reset
+    /// copy, so Privacy & Data — once its device-owner check passed — releases the hold instead of
+    /// asking the owner to "Restore" a backup that does not exist (and the held bit would otherwise
+    /// stop the restore of any backup turned on later). A hold that keeps an enabled backup's copy
+    /// stays for the owner's "Restore".
+    @Test func aResetHoldKeepingNoEnabledBackupIsReleasedOnTheOwnersEntry() {
+        let store = makeStore("reset-hold-keeping-nothing")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.holdKeepingNothing.\(UUID().uuidString)") ?? .standard
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        let journalOn = StoragePreferences(sealedBackupJournalEnabled: true)
+
+        store.sealedBackupRestoreHold.hold(keepingCopiesFrom: journalOn)
+        #expect(!store.releaseSealedBackupRestoreHoldKeepingNothing(preferences: journalOn))
+        #expect(store.sealedBackupRestoreAwaitsOwner, "a kept, enabled copy waits for the owner's Restore")
+
+        store.sealedBackupRestoreHold.hold(keepingCopiesFrom: StoragePreferences())
+        #expect(store.releaseSealedBackupRestoreHoldKeepingNothing(preferences: journalOn))
+        #expect(!store.sealedBackupRestoreAwaitsOwner, "nothing kept: released on the owner's entry")
+        #expect(store.sealedBackupPayloadsKeptForOwner.isEmpty)
+        #expect(!store.releaseSealedBackupRestoreHoldKeepingNothing(preferences: journalOn), "nothing left to release")
     }
 
     /// "Delete everything" KEEPS the period restore marker (design §5.3, §9.11): a cloud copy that

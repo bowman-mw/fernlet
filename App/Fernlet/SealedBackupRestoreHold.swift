@@ -34,8 +34,11 @@ import Foundation
 /// (`.restored`, or `.nothingToRestore`: pulled back, or nothing there) and ``forgetPreResetCopy(of:)``
 /// is called for it — a pre-reset copy is never replaced before it was pulled back. A payload whose
 /// restore cannot land (the journal or intimacy store already holds entries written since the reset,
-/// so their empty-store-only restore refuses) stays held until the user turns that backup off, which
-/// deletes the copy — an explicit act, never a silent replace (named in the design's §12).
+/// so their empty-store-only restore refuses) stays held — and Privacy & Data says so, by name —
+/// until the user explicitly chooses to replace it with this iPhone's entries, or turns that backup
+/// off, which deletes the copy: an explicit act, never a silent replace (named in the design's §12;
+/// review U5-backup-v2-C-U5-5 / L-U5-R5). A hold that keeps no enabled backup's copy is released
+/// as soon as the owner enters Privacy & Data (``keepsAnyEnabledCopy(_:preferences:)``).
 ///
 /// Set only by the app-lock reset funnel, never by a duress response (those never fire the reset
 /// hook). **Kept** by "delete everything" (both keys): a phone whose lock was reset and whose data was
@@ -116,6 +119,18 @@ struct SealedBackupRestoreHold {
         } else {
             defaults.set(kept, forKey: Self.preResetCopiesKey)
         }
+    }
+
+    /// Whether any payload in `kept` has its backup switch on in `preferences` — whether the hold keeps
+    /// a pre-reset copy the owner could ask for (Privacy & Data's "Restore" line, review N-1 and
+    /// U5-backup-v2-C-U5-5). A backup turned off since the reset deleted its copy; one that was off
+    /// at the reset never had one.
+    ///
+    /// - Parameters:
+    ///   - kept: The payloads whose pre-reset iCloud copy the hold keeps.
+    ///   - preferences: The storage preferences.
+    static func keepsAnyEnabledCopy(_ kept: Set<SealedBackupPayloadType>, preferences: StoragePreferences) -> Bool {
+        reuploadablePayloads.contains { kept.contains($0) && isBackedUp($0, in: preferences) }
     }
 
     /// Whether `payload`'s backup switch is on in `preferences`.

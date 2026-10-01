@@ -401,7 +401,20 @@ final class SealedBackupService {
     /// ``restoreChunks(payloadType:)`` with the set's authenticated generation — what the period
     /// backup v2 records as the compare-and-swap pair of the set it just merged (period-data design
     /// 2026-09-30, §9.10). Same checks, same high-water accept, same all-or-nothing throws.
-    func restoreChunkSet(payloadType: SealedBackupPayloadType) async throws -> (chunks: [Data], generation: Int64)? {
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload to restore.
+    ///   - acceptingGeneration: A generation the user explicitly chose to restore (Privacy & Data's
+    ///     "Restore it here" of the set it showed them): a set at EXACTLY that authenticated
+    ///     generation opens even below this device's high-water mark. Counters are minted per device
+    ///     and "Delete everything" zeroes the deleting iPhone's, so another iPhone's set can
+    ///     legitimately be numbered below this one's mark (review U5-backup-v2-C-U5-2). The mark is
+    ///     never lowered (``SealedBackupGenerationStore/recordAccepted(_:for:)`` only moves forward),
+    ///     and every other generation below it is still refused as a rollback. `nil`: none.
+    func restoreChunkSet(
+        payloadType: SealedBackupPayloadType,
+        acceptingGeneration: Int64? = nil
+    ) async throws -> (chunks: [Data], generation: Int64)? {
         let records = try await cloudDataService.sealedBackupChunks(payloadType: payloadType)
         guard !records.isEmpty else { return nil }
         // R3 (bounded growth): the set size ultimately comes from `head.chunkCount`, an
@@ -427,7 +440,7 @@ final class SealedBackupService {
         // for the set.
         let generation = records[0].generation
         let lastSeen = generationStore.lastSeen(for: payloadType)
-        guard generation >= lastSeen else {
+        guard generation >= lastSeen || generation == acceptingGeneration else {
             FernletAuditLog.log("sealedBackup.restore.staleGeneration", context: [
                 "payloadType": payloadType.rawValue,
                 "found": String(generation),
@@ -448,9 +461,32 @@ final class SealedBackupService {
     /// - Throws: Every ``SealedBackupCrypto/open(_:identityService:)`` failure (someone else's set,
     ///   a corrupt one, no escrow key) and every transport error.
     func fetchHead(payloadType: SealedBackupPayloadType) async throws -> (plaintext: Data, generation: Int64)? {
+        switch try await readHead(payloadType: payloadType) {
+        case nil:
+            return nil
+        case .opened(let plaintext, let generation)?:
+            return (plaintext, generation)
+        case .sealedToAnotherKey?:
+            throw SealedBackupError.keyAgreementIdentityMismatch
+        }
+    }
+
+    /// ``fetchHead(payloadType:)`` that NAMES a head no escrow key on this device can open instead of
+    /// throwing it — the period export's compare-and-swap read (§9.10 E2, review
+    /// U5-backup-v2-L-U5-R1): such a set is restorable by no one holding only this device's keys (an
+    /// escrow adopt deletes the key it replaces), so the export offers the user an explicit replace
+    /// rather than refusing forever. Every other failure still throws.
+    ///
+    /// - Returns: nil when no set exists; otherwise the opened head, or the head's record generation
+    ///   when it is sealed to another key — an UNAUTHENTICATED CloudKit field, good only to name
+    ///   that exact record, never to mint above.
+    func readHead(payloadType: SealedBackupPayloadType) async throws -> SealedBackupHeadRead? {
         guard let head = try await cloudDataService.sealedBackup(payloadType: payloadType) else { return nil }
-        let plaintext = try SealedBackupCrypto.open(head, identityService: identityService)
-        return (plaintext, head.generation)
+        do {
+            return .opened(plaintext: try SealedBackupCrypto.open(head, identityService: identityService), generation: head.generation)
+        } catch SealedBackupError.keyAgreementIdentityMismatch {
+            return .sealedToAnotherKey(recordGeneration: head.generation)
+        }
     }
 
     /// The highest generation this device has written or accepted for `payloadType` — the period
@@ -458,6 +494,15 @@ final class SealedBackupService {
     func lastSeenGeneration(for payloadType: SealedBackupPayloadType) -> Int64 {
         generationStore.lastSeen(for: payloadType)
     }
+}
+
+/// What ``SealedBackupService/readHead(payloadType:)`` found at the head of a payload's set.
+enum SealedBackupHeadRead: Equatable {
+    /// The head opened: its plaintext and its AEAD-authenticated generation.
+    case opened(plaintext: Data, generation: Int64)
+    /// The head is sealed to an escrow key this device does not hold (no candidate key's identity
+    /// matches its tag). `recordGeneration` is the record's unauthenticated generation field.
+    case sealedToAnotherKey(recordGeneration: Int64)
 }
 
 private extension AES.GCM.Nonce {

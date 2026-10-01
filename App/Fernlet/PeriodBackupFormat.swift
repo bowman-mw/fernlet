@@ -10,13 +10,19 @@ import PrivateHealthStore
 
 /// Who wrote a period backup set and which generation it is — the compare-and-swap pair of §9.10 E2.
 ///
-/// `writer` is a ``PeriodBackupWriterTag`` (32 lowercase hex characters) for a v2 set, or
-/// ``v1Writer`` for a set an earlier build wrote (a bare `[MenstrualNarrative]` array carries no
-/// writer). The ``token`` spelling `"<writer>:<generation>"` is the FROZEN at-rest value of
+/// `writer` is a ``PeriodBackupWriterTag`` (32 lowercase hex characters) for a v2 set, ``v1Writer``
+/// for a set an earlier build wrote (a bare `[MenstrualNarrative]` array carries no writer), or
+/// ``unreadableWriter`` for a set sealed to an escrow key this iPhone does not hold. The ``token``
+/// spelling `"<writer>:<generation>"` is the FROZEN at-rest value of
 /// `fernlet.sealedBackup.periodAcceptedHead` (`LocalizationBoundaryTests`).
 struct PeriodBackupHead: Equatable, Hashable, Sendable {
     /// The writer of every set an earlier build wrote. FROZEN.
     static let v1Writer = "v1"
+    /// Stands in for the writer of a set this iPhone cannot open (sealed to another escrow key — for
+    /// one, the key an escrow adopt replaced), whose writer tag is inside the sealed plaintext. Its
+    /// generation is then the record's unauthenticated field: it names that exact record for the
+    /// user's explicit replace and is never minted above (review U5-backup-v2-L-U5-R1). FROZEN.
+    static let unreadableWriter = "unreadable"
 
     /// The install that wrote the set (or ``v1Writer``).
     var writer: String
@@ -167,9 +173,16 @@ enum PeriodBackupExportState: Equatable {
     /// Nothing to report.
     case clear
     /// The cycle backup in iCloud was written by a set this install has not accepted (another iPhone,
-    /// or this one before an app-lock reset or "Delete everything"). Nothing is written over it until
-    /// the user chooses "Restore it here" or "Replace it with this iPhone's history" (§9.10 E2, Q9).
+    /// this one before "Delete everything", or — a ``PeriodBackupHead/v1Writer`` head — an earlier
+    /// version of Fernlet on either iPhone). Nothing is written over it until the user chooses
+    /// "Restore it here" or "Replace it with this iPhone's history" (§9.10 E2, Q9).
     case heldByAnotherDevice(PeriodBackupHead)
+    /// The cycle backup in iCloud is sealed to a backup key this iPhone does not hold (the head is a
+    /// ``PeriodBackupHead/unreadableWriter`` head), so it can be restored by no one holding only this
+    /// iPhone's keys — after an escrow adopt, a set this iPhone sealed under the key the adopt
+    /// replaced. Nothing is written over it until the user chooses "Replace it with this iPhone's
+    /// history" (review U5-backup-v2-L-U5-R1).
+    case sealedWithAnotherKey(PeriodBackupHead)
     /// The export's pre-pass found this many records that can never open on this iPhone (after the
     /// "entries this iPhone can't open" check, only tampering or corruption), so nothing was written
     /// (§9.10 E3).

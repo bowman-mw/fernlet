@@ -2363,8 +2363,8 @@ struct AppLockSettingsView: View {
                 // "notes" beside a Health copy (period-data design 2026-09-30, §10.5), and the Sealed
                 // backup restores afterwards from Privacy & Data's owner-checked "Restore".
                 Text(String(localized: "settings.appLock.reset.message.v2",
-                            defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, you can restore it afterwards from Privacy & Data.",
-                            comment: "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation."))
+                            defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries.",
+                            comment: "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries."))
             }
             .alert("App lock reset", isPresented: $showResetRebuildFailure) {
                 Button("OK", role: .cancel) { dismiss() }

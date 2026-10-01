@@ -672,6 +672,59 @@ struct SealedBackupRestoreTests {
                 "and the backup now holds the merged history")
     }
 
+    /// Review U5-backup-v2-C-U5-1 / L-U5-R2: "nothing to restore from" is not "nothing up there"
+    /// while an app-lock reset keeps the period backup's pre-reset copy. With iCloud sync off at the
+    /// Cycle settle the restore used to be marked resolved — and then the owner's later "Restore"
+    /// found it resolved and restored nothing, while the hold (waiting for that restore) kept the
+    /// period backup from ever uploading again. The marker now stays open, and the history comes back
+    /// once sync is on and the owner asks.
+    @MainActor
+    @Test func aResetWithICloudSyncOffStillRestoresThePreResetHistoryLater() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let before = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        try before.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await before.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+
+        let after = PeriodBackupDevice(cloud: cloud, writer: "phone")
+        after.host.restoreHold.hold(keepingCopiesFrom: PeriodBackupDevice.backupOn)
+        try after.seed([PeriodBackupDevice.record(day: 9)])
+        after.preferences = StoragePreferences(sealedBackupPeriodEnabled: true, sealedBackupPeriodReuploadDeferred: true)
+        await after.coordinator.settlePeriodBackup()
+        #expect(!after.host.periodBackupLedger.isRestoreResolved, "sync off: the pre-reset copy is out of reach, not gone")
+
+        after.preferences = PeriodBackupDevice.backupOn
+        await after.coordinator.releaseRestoreHoldForOwner()
+        #expect(try after.records.recordCount() == 2, "the pre-reset history is back")
+        #expect(!after.host.sealedBackupKeepsPreResetCopy(of: .periodData), "and the hold has nothing left to keep")
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(try after.records.allIDs()),
+                "so the period backup uploads again, with the merged history")
+    }
+
+    /// Review U5-backup-v2-L-U5-R2, the release half: the owner's "Restore" reopens this install's
+    /// period restore while the hold keeps the period copy, so no marker resolved in the meantime can
+    /// stand between the owner and the pre-reset history. A period copy the hold does not keep leaves
+    /// the marker alone.
+    @MainActor
+    @Test func theOwnersRestoreReopensAResolvedPeriodRestoreOnlyWhileItsCopyIsKept() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let before = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        try before.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await before.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+
+        let after = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        after.host.restoreHold.hold(keepingCopiesFrom: PeriodBackupDevice.backupOn)
+        await after.coordinator.releaseRestoreHoldForOwner()
+        #expect(try after.records.recordCount() == 1, "the kept copy is restored although the marker read resolved")
+
+        let other = PeriodBackupDevice(cloud: cloud, writer: "other", resolved: true)
+        other.host.restoreHold.hold(keepingCopiesFrom: StoragePreferences())
+        await other.coordinator.releaseRestoreHoldForOwner()
+        #expect(other.host.periodBackupLedger.isRestoreResolved, "nothing kept: the resolved restore stays resolved")
+        #expect(try other.records.recordCount() == 0)
+    }
+
     /// The new-iPhone scenario end to end (design §9.10 consequence 2, §4.9): an iPhone set up from a
     /// device backup arrives with the sealed rows of the old iPhone (sealed under a key that never
     /// migrates, so dead here) and the old iPhone's bookkeeping (the marker resolved, its accepted

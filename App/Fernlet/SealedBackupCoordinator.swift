@@ -285,6 +285,12 @@ final class SealedBackupCoordinator {
     /// in-memory cloud; production leaves it nil and reads ``PeriodBackupWriterTag/current()``.
     private let writerTagProvider: (() -> String?)?
 
+    /// The set the user chose to "Restore it here" in Privacy & Data (§10.6), waiting for the next
+    /// Cycle settle — the restore needs the Private tab's key, which Settings never holds. In memory
+    /// on purpose: a relaunch only forgets the request, and the next export names the set again with
+    /// both choices (review U5-backup-v2-C-U5-2).
+    private var periodRestoreHereRequest: PeriodBackupHead?
+
     init(
         host: any SealedBackupContext,
         identityFactory: (() -> IdentityService)? = nil,
@@ -519,8 +525,12 @@ final class SealedBackupCoordinator {
             // The chunk set is gone, so an app-lock reset's owner hold has no pre-reset copy of this
             // payload left to keep, and the uploads it held may run again (review N-1).
             if !enabled { host.recordSealedBackupCloudCopyDeleted(payloadType) }
-            // Nothing is held against another iPhone's set once this payload's set is deleted.
-            if !enabled, payloadType == .periodData { host.recordPeriodBackupExportState(.clear) }
+            // Nothing is held against another iPhone's set once this payload's set is deleted, and
+            // there is no longer a set to "Restore it here".
+            if !enabled, payloadType == .periodData {
+                host.recordPeriodBackupExportState(.clear)
+                periodRestoreHereRequest = nil
+            }
             return true
         } catch let wiring as SealedBackupWiringError where enabled && wiring != .storeNotEmpty {
             // The paged payloads are all sealed under the Private tab's content key, which is only live
@@ -659,11 +669,16 @@ final class SealedBackupCoordinator {
     /// guard holds, in this order:
     /// - **G5** visible. Hidden is a silent no-op (`setSealedBackupEnabled` then leaves the deferral
     ///   flag alone; hiding is never destructive).
-    /// - **E4** the Private tab's key is live at the start of the pass (`.locked` otherwise).
+    /// - **E4** the Private tab's key is live at the start of the pass (`.locked` otherwise) — and
+    ///   STILL live, the same key, with period tracking visible and the task not cancelled, after the
+    ///   head fetch's await and before every chunk is decrypted (``ensurePeriodExportMayContinue(contentKey:)``):
+    ///   the cycle history is decrypted only while the Private tab is open, and an export suspended
+    ///   across "Delete everything" never writes the set the wipe just deleted (review
+    ///   U5-backup-v2-C-U5-3 / L-U5-R4).
     /// - **E1** this install's period restore is resolved (``PeriodBackupLedger/isRestoreResolved``):
     ///   a fresh install never writes over the cloud copy before pulling it.
-    /// - **E2** the set in iCloud, if any, is the one this install last wrote or merged (or, once, a v1
-    ///   set at this device's own generation) — the compare-and-swap (`periodExportFloor`).
+    /// - **E2** the set in iCloud, if any, is the one this install last wrote or merged, or this
+    ///   install's own unrecorded write — the compare-and-swap (`periodExportFloor`).
     /// - **E3** a full pre-pass decrypts every record once BEFORE the first write; any dead record
     ///   refuses (named), any undecided one defers. The chunks are then built from the pre-pass's id
     ///   snapshot, so a page can never shift under a concurrent edit.
@@ -680,6 +695,7 @@ final class SealedBackupCoordinator {
             throw SealedBackupWiringError.periodRestorePending
         }
         let floor = try await periodExportFloor(using: service)
+        try ensurePeriodExportMayContinue(contentKey: key)
         let mutationsBefore = host.periodBackupMutationCount
         let plan = try periodExportPlan(contentKey: key)
         let generation = try await service.reconcileChunked(
@@ -688,6 +704,9 @@ final class SealedBackupCoordinator {
             generationFloor: floor,
             chunk: plan.chunk
         )
+        // A wipe that began while the head was in flight has cleared the accepted head with the
+        // rollback marks; it is never written back.
+        try Task.checkCancellation()
         host.periodBackupLedger.recordAcceptedHead(PeriodBackupHead(writer: plan.writer, generation: generation))
         host.recordPeriodBackupExportState(.clear)
         let clean = host.periodBackupMutationCount == mutationsBefore
@@ -697,33 +716,84 @@ final class SealedBackupCoordinator {
         return clean
     }
 
-    /// E2, the compare-and-swap (§9.10, R2-F4): reads ONLY the cloud head and allows the export when
-    /// there is none, when its `(writer, generation)` is ``PeriodBackupLedger/acceptedHead``, or —
-    /// the one-time seed for this update — when it is a v1 set at exactly this device's own
-    /// high-water generation (this device's own last write). Anything else is another set: refused as
-    /// `.periodHeldByAnotherDevice`, named for Privacy & Data, nothing written. A head that will not
-    /// open refuses with its restore-status classification (today's needs-attention copy).
+    /// Whether the period export may decrypt or write one more step: not cancelled ("Delete
+    /// everything" cancels the settle that runs it), period tracking visible, and the Private tab's
+    /// key still the one the pass started with — the tab closing makes the key provider answer nil
+    /// (review U5-backup-v2-C-U5-3 / L-U5-R4). A cancelled export throws `CancellationError`, which
+    /// records no deferral (the wipe owns those); a closed tab or a hide throws `.locked`, a deferral
+    /// the next Cycle settle discharges.
     ///
-    /// - Returns: The head's generation (the floor the new set is minted above), or 0 with no head.
+    /// - Parameter key: The key the pass captured at its start.
+    private func ensurePeriodExportMayContinue(contentKey key: SymmetricKey) throws {
+        try Task.checkCancellation()
+        guard host.isPeriodTrackingVisible, let live = host.sealedBackupContentKey, live == key else {
+            FernletAuditLog.log("sealedBackup.periodExportAbandonedPrivateClosed")
+            throw SealedBackupWiringError.locked
+        }
+    }
+
+    /// E2, the compare-and-swap (§9.10, R2-F4): reads ONLY the cloud head and allows the export when
+    /// there is none, when its `(writer, generation)` is ``PeriodBackupLedger/acceptedHead``, or when
+    /// it is this install's own write whose acceptance was never recorded
+    /// (``isOwnUnrecordedWrite(_:service:)``). Anything else is another set: refused as
+    /// `.periodHeldByAnotherDevice`, named for Privacy & Data, nothing written — a set this iPhone
+    /// opens as ``PeriodBackupExportState/heldByAnotherDevice(_:)`` (a v1 set included: it carries no
+    /// writer, so it is never assumed to be this iPhone's — review U5-backup-v2-C-U5-4), one sealed to
+    /// another backup key as ``PeriodBackupExportState/sealedWithAnotherKey(_:)`` (review
+    /// U5-backup-v2-L-U5-R1). A head that will not open for any other reason refuses with its
+    /// restore-status classification (today's needs-attention copy).
+    ///
+    /// - Returns: The generation the new set is minted above: an opened head's authenticated one, 0
+    ///   with no head or for a head sealed to another key (its number is unauthenticated).
     private func periodExportFloor(using service: SealedBackupService) async throws -> Int64 {
-        let fetched: (plaintext: Data, generation: Int64)?
         let head: PeriodBackupHead?
         do {
-            fetched = try await service.fetchHead(payloadType: .periodData)
-            head = try fetched.map { try PeriodBackupFormat.head(ofChunk: $0.plaintext, generation: $0.generation) }
+            head = try await service.readHead(payloadType: .periodData).map(Self.periodHead(of:))
         } catch let error where error is SealedBackupError || error is PeriodBackupFormatError || error is DecodingError {
             recordRestoreOutcome(classifyRestoreFailure(error, payloadType: .periodData), payloadType: .periodData)
             throw error
         }
         guard let head else { return 0 }
-        let isOwnV1Write = head.writer == PeriodBackupHead.v1Writer
-            && head.generation == service.lastSeenGeneration(for: .periodData)
-        guard head == host.periodBackupLedger.acceptedHead || isOwnV1Write else {
-            host.recordPeriodBackupExportState(.heldByAnotherDevice(head))
-            FernletAuditLog.log("sealedBackup.periodExportHeldByAnotherDevice")
+        let unreadable = head.writer == PeriodBackupHead.unreadableWriter
+        guard head == host.periodBackupLedger.acceptedHead || isOwnUnrecordedWrite(head, service: service) else {
+            host.recordPeriodBackupExportState(unreadable ? .sealedWithAnotherKey(head) : .heldByAnotherDevice(head))
+            FernletAuditLog.log("sealedBackup.periodExportHeldByAnotherDevice", context: ["unreadable": unreadable ? "true" : "false"])
             throw SealedBackupWiringError.periodHeldByAnotherDevice
         }
-        return head.generation
+        return unreadable ? 0 : head.generation
+    }
+
+    /// The compare-and-swap pair of what ``SealedBackupService/readHead(payloadType:)`` found: an
+    /// opened head's writer and authenticated generation, or ``PeriodBackupHead/unreadableWriter``
+    /// with the record's generation for a head sealed to another key.
+    private static func periodHead(of read: SealedBackupHeadRead) throws -> PeriodBackupHead {
+        switch read {
+        case .opened(let plaintext, let generation):
+            return try PeriodBackupFormat.head(ofChunk: plaintext, generation: generation)
+        case .sealedToAnotherKey(let recordGeneration):
+            return PeriodBackupHead(writer: PeriodBackupHead.unreadableWriter, generation: recordGeneration)
+        }
+    }
+
+    /// Whether `head` is this install's own write whose acceptance was never recorded — the export
+    /// wrote its head, then the stale-chunk prune failed or the app was suspended before the ledger
+    /// write (review U5-backup-v2-L-U5-R3): its writer is this install's tag AND its generation is one
+    /// this device minted or accepted (at or below the high-water mark). A NEWER set under this tag is
+    /// never assumed: an iPhone put back from an older device backup of itself would otherwise write
+    /// its older history over the sets it wrote since.
+    ///
+    /// Safe beside E1 and the owner hold: this install's own PRE-RESET set carries the same tag, but
+    /// after an app-lock reset (or the "can't open" check) the export waits until that set's restore
+    /// has resolved — so it is pulled back before it is replaced.
+    private func isOwnUnrecordedWrite(_ head: PeriodBackupHead, service: SealedBackupService) -> Bool {
+        guard let own = currentWriterTag(), head.writer == own else { return false }
+        return head.generation <= service.lastSeenGeneration(for: .periodData)
+    }
+
+    /// This install's period-backup writer tag (injected in tests), or nil when the install binding
+    /// is unavailable.
+    private func currentWriterTag() -> String? {
+        writerTagProvider?() ?? PeriodBackupWriterTag.current()
     }
 
     /// What one v2 export writes, fixed by the E3 pre-pass before the first chunk is sealed.
@@ -742,8 +812,9 @@ final class SealedBackupCoordinator {
     /// A dead record refuses the export (named in Privacy & Data); an undecided one, or no writer tag,
     /// defers it. Each chunk is then fetched by its slice of the snapshot — a record deleted
     /// mid-export is simply absent from its chunk, one added mid-export waits for the next export
-    /// (its mutation re-marked the backup owed) — and a chunk whose rows stop opening mid-export
-    /// throws before the head is written.
+    /// (its mutation re-marked the backup owed) — and a chunk whose rows stop opening mid-export, or
+    /// whose turn comes after the Private tab closed or a wipe began
+    /// (``ensurePeriodExportMayContinue(contentKey:)``), throws before the head is written.
     private func periodExportPlan(contentKey key: SymmetricKey) throws -> PeriodExportPlan {
         let store = resolvedPeriodRecordStore()
         let prePass = try store.backupPrePass(contentKey: key)
@@ -752,7 +823,7 @@ final class SealedBackupCoordinator {
             FernletAuditLog.log("sealedBackup.periodExportRefusedUnopenable", context: ["dead": String(prePass.deadIDs.count)])
             throw SealedBackupWiringError.periodEntriesUnopenable
         }
-        guard prePass.transientCount == 0, let writer = writerTagProvider?() ?? PeriodBackupWriterTag.current() else {
+        guard prePass.transientCount == 0, let writer = currentWriterTag() else {
             FernletAuditLog.log("sealedBackup.periodExportUndecided")
             throw SealedBackupWiringError.periodExportUndecided
         }
@@ -763,7 +834,10 @@ final class SealedBackupCoordinator {
             writer: writer,
             snapshotCount: total,
             chunkCount: max(1, (total + size - 1) / size),
-            chunk: { index in
+            chunk: { [self] index in
+                // Re-checked before EVERY chunk's decrypt — the head (chunk 0) is sealed last, so a
+                // tab that closed or a wipe that began mid-upload stops the set before its commit.
+                try ensurePeriodExportMayContinue(contentKey: key)
                 let slice = Array(ids[min(index * size, total)..<min((index + 1) * size, total)])
                 let page = try store.backupChunk(ids: slice, contentKey: key)
                 guard page.isFullyOpen else { throw SealedBackupWiringError.periodExportUndecided }
@@ -1169,8 +1243,9 @@ final class SealedBackupCoordinator {
     /// `.notRecognized` and `.rolledBack` stay unresolved with their needs-attention status.
     ///
     /// - Parameter initiatedByUser: The user's own Retry — never held for the device owner (Privacy &
-    ///   Data, where it lives, is behind a fresh device-owner check). It does NOT reopen a resolved
-    ///   restore: that is ``restorePeriodBackupHere()``, behind its confirmation.
+    ///   Data, where it lives, is behind a fresh device-owner check). It does NOT run a resolved
+    ///   restore again: the explicit restore of a named set is ``restorePeriodBackupHere(_:)``,
+    ///   behind its confirmation.
     func restorePeriodBackup(initiatedByUser: Bool = false) async -> SealedBackupRestoreOutcome {
         if heldForOwner(site: "period", initiatedByUser: initiatedByUser) { return .deferredTransient }
         // Fail closed at the decrypt seam: this decrypts cycle history off CloudKit and seals it in.
@@ -1189,33 +1264,72 @@ final class SealedBackupCoordinator {
     }
 
     /// The Cycle section's settle (and the un-hide settle) for the period backup, in its one order:
-    /// restore, then export (§9.10). A no-op without the Private tab's key or while hidden. With
-    /// nothing to restore from on this install (iCloud sync off, or the period backup off) the restore
-    /// is marked resolved instead — there is no cloud copy this install could ever pull ambiently, and
-    /// turning the backup on later meets the compare-and-swap rather than a stale restore.
+    /// restore, then export (§9.10). A no-op without the Private tab's key or while hidden. The
+    /// restore is the user's pending "Restore it here" when there is one
+    /// (``restorePeriodBackupHere(_:)``), else the ambient one. With nothing to restore from on this
+    /// install (iCloud sync off, or the period backup off) the restore is marked resolved instead
+    /// (``resolvePeriodRestoreWithNothingToRestoreFrom()``).
     func settlePeriodBackup() async {
         guard host.sealedBackupContentKey != nil, host.isPeriodTrackingVisible else { return }
         let prefs = currentPreferences()
         guard prefs.iCloudSyncEnabled, prefs.sealedBackupPeriodEnabled else {
-            if !host.periodBackupLedger.isRestoreResolved {
-                host.periodBackupLedger.markRestoreResolved()
-                FernletAuditLog.log("sealedBackup.periodRestoreResolvedNothingToRestoreFrom")
-            }
+            resolvePeriodRestoreWithNothingToRestoreFrom()
             return
         }
-        _ = await restorePeriodBackup()
+        if let chosen = periodRestoreHereRequest {
+            await restoreChosenPeriodSet(chosen)
+        } else {
+            _ = await restorePeriodBackup()
+        }
         await retryDeferredReuploadIfNeeded(payloadType: .periodData)
     }
 
+    /// Marks this install's period restore resolved when the settle finds nothing to restore from
+    /// (iCloud sync off, or the period backup off) — there is no cloud copy this install could pull
+    /// ambiently, and turning the backup on later meets the compare-and-swap rather than a stale
+    /// restore. NEVER while an app-lock reset's owner hold keeps the period backup's pre-reset copy:
+    /// with iCloud sync off that copy is still in iCloud, only out of reach for now, and a resolved
+    /// marker would stop the owner's restore of it for good — and with it, since the hold keeps the
+    /// re-upload until that restore lands, every period upload (review U5-backup-v2-C-U5-1 / L-U5-R2).
+    private func resolvePeriodRestoreWithNothingToRestoreFrom() {
+        guard !host.periodBackupLedger.isRestoreResolved else { return }
+        guard !host.sealedBackupKeepsPreResetCopy(of: .periodData) else {
+            FernletAuditLog.log("sealedBackup.periodRestoreKeptForOwner")
+            return
+        }
+        host.periodBackupLedger.markRestoreResolved()
+        FernletAuditLog.log("sealedBackup.periodRestoreResolvedNothingToRestoreFrom")
+    }
+
     /// Privacy & Data's "Restore it here" (§9.10, §10.6), behind its confirmation that entries deleted
-    /// on this iPhone since that backup may come back: reopens this install's period restore, so the
-    /// next Cycle settle (or this call, when the Private tab is open) merges the cloud set in — after
-    /// which the compare-and-swap accepts that set and this iPhone backs up over it again.
-    func restorePeriodBackupHere() async {
-        host.periodBackupLedger.reopenRestore()
+    /// on this iPhone since that backup may come back: asks the next Cycle settle (or this call, when
+    /// the Private tab is open) to merge exactly `head` — the set the export named — after which the
+    /// compare-and-swap accepts that set and this iPhone backs up over it again.
+    ///
+    /// It does NOT reopen this install's resolved restore: an explicit restore runs whatever the
+    /// marker says, and one that cannot land (a set this iPhone cannot open, or one replaced since by
+    /// an older-numbered set) leaves the export where it was — the set named again, "Replace" still
+    /// offered — instead of stranding every later export behind restore-first (review
+    /// U5-backup-v2-C-U5-2).
+    ///
+    /// - Parameter head: The set named in ``PeriodBackupExportState/heldByAnotherDevice(_:)``.
+    func restorePeriodBackupHere(_ head: PeriodBackupHead) async {
+        periodRestoreHereRequest = head
         host.recordPeriodBackupExportState(.clear)
-        FernletAuditLog.log("sealedBackup.periodRestoreReopenedByUser")
+        FernletAuditLog.log("sealedBackup.periodRestoreHereChosenByUser")
         await settlePeriodBackup()
+    }
+
+    /// Runs the user's "Restore it here" of `chosen` (``restorePeriodBackupHere(_:)``): explicit, so
+    /// never held for the owner and run whether or not the restore is resolved. Its generation is
+    /// accepted even below this device's high-water mark — counters are per device, and "Delete
+    /// everything" zeroes the deleting iPhone's, so the other iPhone's set can be numbered below this
+    /// one's mark — but only as exactly that set. A retryable outcome keeps the request for the next
+    /// settle; any other ends it.
+    private func restoreChosenPeriodSet(_ chosen: PeriodBackupHead) async {
+        let outcome = await performPeriodRestore(chosen: chosen)
+        recordRestoreOutcome(outcome, payloadType: .periodData)
+        if !outcome.isRetryable { periodRestoreHereRequest = nil }
     }
 
     /// Privacy & Data's "Replace it with this iPhone's history" (§9.10, §10.6), behind its
@@ -1223,13 +1337,16 @@ final class SealedBackupCoordinator {
     /// replace, and records the upload as owed — so the next Cycle settle (or this call, when the
     /// Private tab is open) exports over it, still behind E1, E3, E4 and the generation floor. If the
     /// other iPhone has written a NEWER set since, the compare-and-swap refuses again and asks again:
-    /// the user agreed to replace the set they were shown, not one they never saw.
+    /// the user agreed to replace the set they were shown, not one they never saw. The same for a set
+    /// sealed to another backup key (``PeriodBackupExportState/sealedWithAnotherKey(_:)``), named by
+    /// its record's generation.
     ///
-    /// - Parameter head: The set named in ``PeriodBackupExportState/heldByAnotherDevice(_:)``.
+    /// - Parameter head: The set named in the export state.
     func replacePeriodBackupWithThisIPhone(_ head: PeriodBackupHead) async {
         host.periodBackupLedger.recordAcceptedHead(head)
         host.recordPeriodBackupExportState(.clear)
         host.recordSealedBackupReuploadDeferred(true, payloadType: .periodData)
+        periodRestoreHereRequest = nil
         FernletAuditLog.log("sealedBackup.periodReplaceChosenByUser")
         await settlePeriodBackup()
     }
@@ -1239,17 +1356,66 @@ final class SealedBackupCoordinator {
     /// next Private settle (the period one now, when the Private tab is open). Each payload's
     /// re-uploads stay held until its own restore has landed, so a pre-reset copy is never replaced
     /// before it was pulled back (``SealedBackupContext/recordSealedBackupPreResetCopySettled(_:)``).
+    /// While the hold still keeps the period backup's pre-reset copy, this install's period restore is
+    /// reopened too: the owner asked for that copy back, and a marker resolved in the meantime must not
+    /// stand between them (review U5-backup-v2-L-U5-R2).
     func releaseRestoreHoldForOwner() async {
         host.releaseSealedBackupRestoreHold()
+        if host.sealedBackupKeepsPreResetCopy(of: .periodData) {
+            host.periodBackupLedger.reopenRestore()
+        }
         FernletAuditLog.log("sealedBackup.restoreHoldReleasedByOwner")
         await settlePeriodBackup()
+    }
+
+    /// The payloads whose pre-reset iCloud copy the owner released for restore but whose restore can
+    /// never land on this iPhone: the journal and intimacy restores write only into an empty,
+    /// never-diverged store, and this one already holds entries written since the reset (review
+    /// U5-backup-v2-C-U5-5 / L-U5-R5). Their re-uploads stay held — nothing replaces the copy
+    /// silently — until the user chooses ``replacePreResetCopyWithThisIPhone(_:)`` or turns that
+    /// backup off. Never period: its restore is a merge. Empty while the hold still waits for the
+    /// owner (the restore has not been asked for). Keyless counts only; decrypts nothing.
+    ///
+    /// The injected repository and store are for tests only.
+    func preResetCopiesBlockedByNewerEntries(
+        journalRepository: JournalNarrativeRepository? = nil,
+        intimacyStore: IntimacyLogStore? = nil
+    ) -> Set<SealedBackupPayloadType> {
+        guard !host.sealedBackupRestoreAwaitsOwner else { return [] }
+        let journal = journalRepository ?? JournalNarrativeRepository()
+        let intimacy = resolvedIntimacyStore(intimacyStore)
+        let candidates: [SealedBackupPayloadType] = [.journalNarratives, .intimacyLogs]
+        return Set(candidates.filter { payload in
+            host.sealedBackupKeepsPreResetCopy(of: payload)
+                && !isEmptyStoreForRestore(
+                    payloadType: payload, journalRepository: journal, intimacyStore: intimacy, scope: .payloadStoreOnly
+                )
+        })
+    }
+
+    /// Privacy & Data's explicit "Replace it with this iPhone's entries" for a payload in
+    /// ``preResetCopiesBlockedByNewerEntries(journalRepository:intimacyStore:)``, behind its
+    /// destructive confirmation: the owner hold stops keeping that payload's pre-reset copy, and the
+    /// re-upload is recorded as owed, so the next Private settle backs this iPhone's entries up over
+    /// it. Journal and intimacy only — a period restore is a merge and is never blocked this way.
+    ///
+    /// - Parameter payload: The journal or intimacy payload the user chose to replace.
+    func replacePreResetCopyWithThisIPhone(_ payload: SealedBackupPayloadType) {
+        guard payload == .journalNarratives || payload == .intimacyLogs else { return }
+        host.recordSealedBackupPreResetCopySettled(payload)
+        host.recordSealedBackupReuploadDeferred(true, payloadType: payload)
+        FernletAuditLog.log("sealedBackup.preResetCopyReplaceChosenByUser", context: ["payload": payload.rawValue])
     }
 
     /// The network half of the period restore: fetch and open the whole set (all-or-nothing, rollback
     /// checked), merge it in, and on a set that merged — changed or not — record it as the accepted
     /// head and resolve the marker. `.nothingToRestore` with no set resolves too (there is nothing to
     /// pull). Never mints an escrow key (WS-1).
-    private func performPeriodRestore() async -> SealedBackupRestoreOutcome {
+    ///
+    /// - Parameter chosen: The set the user chose to "Restore it here", accepted even below this
+    ///   device's high-water mark but only as exactly that set (``restoreChosenPeriodSet(_:)``);
+    ///   nil for the ambient and Retry restores, which keep the full rollback check.
+    private func performPeriodRestore(chosen: PeriodBackupHead? = nil) async -> SealedBackupRestoreOutcome {
         // Fail closed BEFORE the network decrypt, whoever the caller: hidden or keyless, nothing of the
         // cycle history is fetched or opened (the merge's own gate would only refuse the write).
         guard host.isPeriodTrackingVisible else { return .deferredTransient }
@@ -1258,12 +1424,18 @@ final class SealedBackupCoordinator {
         guard let prepared = makeIdentity(escrowMode: .forOpening) else { return .deferredTransient }
         guard prepared.escrowReady else { return .deferredKeyNotSynced }
         let service = makeSealedBackupService(identity: prepared.identity)
+        let highWater = service.lastSeenGeneration(for: .periodData)
         do {
-            guard let set = try await service.restoreChunkSet(payloadType: .periodData), let first = set.chunks.first else {
+            guard let set = try await service.restoreChunkSet(payloadType: .periodData, acceptingGeneration: chosen?.generation),
+                  let first = set.chunks.first else {
                 host.periodBackupLedger.markRestoreResolved()
                 return .nothingToRestore
             }
             let head = try PeriodBackupFormat.head(ofChunk: first, generation: set.generation)
+            // Below the mark only as the set the user chose: another set at that number is a rollback.
+            guard set.generation >= highWater || head == chosen else {
+                throw SealedBackupError.staleGeneration(found: set.generation, lastSeen: highWater)
+            }
             let changed = try applyRestoredChunks(set.chunks, payloadType: .periodData)
             host.periodBackupLedger.recordAcceptedHead(head)
             host.periodBackupLedger.markRestoreResolved()

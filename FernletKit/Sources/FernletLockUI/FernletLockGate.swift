@@ -63,12 +63,15 @@ enum GateCopy {
     /// Its closing sentence promises the Sealed backup restore, which is true since design unit 5:
     /// after a reset every AMBIENT restore waits for the device owner (the app's restore hold), and
     /// Privacy & Data's "Restore", behind its fresh device-owner check, releases it (review C-U2-R4;
-    /// `LocalizationBoundaryTests` lets the sentence in only while that release exists).
+    /// `LocalizationBoundaryTests` lets the sentence in only while that release exists). It says to
+    /// restore BEFORE adding new entries: the journal and intimacy restores write only into an empty
+    /// store, so a pre-reset copy cannot come back once entries were written since (review
+    /// U5-backup-v2-L-U5-R5; Privacy & Data then names that state and its explicit replace).
     static var resetConfirmMessage: String {
         String(localized: "lock.reset.confirm.message.v2",
-               defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, you can restore it afterwards from Privacy & Data.",
+               defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries.",
                bundle: .module,
-               comment: "Message in the reset confirmation dialog. 'Permanently deleted' is literal: there is no recovery on this iPhone. Only what Fernlet copied to Apple Health (if anything) stays there, and an encrypted Sealed backup in iCloud (if the user turned it on) can be restored from Privacy & Data after the reset.")
+               comment: "Message in the reset confirmation dialog. 'Permanently deleted' is literal: there is no recovery on this iPhone. Only what Fernlet copied to Apple Health (if anything) stays there, and an encrypted Sealed backup in iCloud (if the user turned it on) can be restored from Privacy & Data after the reset. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
     }
 
     /// Title of the nothing-silent alert after a reset that could not finish cleanly.

@@ -292,12 +292,14 @@ enum FernletLockCopy {
         ///
         /// Its backup sentence is true since design unit 5: a forgotten passcode ends in a reset,
         /// after which the Sealed backup restores from Privacy & Data, behind its fresh device-owner
-        /// check (review C-U2-R4). Conditional on purpose: it is a promise only while the backup is on.
+        /// check (review C-U2-R4). Conditional on purpose: it is a promise only while the backup is on,
+        /// and only before new entries are added (the journal and intimacy restores write only into
+        /// an empty store — review U5-backup-v2-L-U5-R5).
         static var forgottenPasscode: String {
             String(localized: "lock.disclosure.forgottenPasscode.v2",
-                   defaultValue: "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on in Privacy & Data, it keeps an encrypted copy you can restore.",
+                   defaultValue: "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on in Privacy & Data, it keeps an encrypted copy you can restore after a reset, before you add new entries.",
                    bundle: .module,
-                   comment: "First loss mode in the no-recovery disclosure. 'Can't be opened again' is literal: no support path exists. Only what Fernlet copied to Apple Health (if anything) survives there, and the encrypted Sealed backup in iCloud, which the user has to have turned on.")
+                   comment: "First loss mode in the no-recovery disclosure. 'Can't be opened again' is literal: no support path exists. Only what Fernlet copied to Apple Health (if anything) survives there, and the encrypted Sealed backup in iCloud, which the user has to have turned on. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
         }
 
         /// Loss mode two, on Secure-Enclave hardware: losing the device's key, passcode or not.

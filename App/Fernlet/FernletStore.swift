@@ -1144,6 +1144,15 @@ final class FernletStore {
     /// task; production writes it solely in `settlePeriodBackupAfterUnhide`.
     @ObservationIgnored var periodBackupSettleTask: Task<Void, Never>?
 
+    /// The Private tab's in-flight section settle (the journal or Cycle section's sealed-backup
+    /// restores and exports, started by `ContentView` once the tab opens), held — not fire-and-forget
+    /// — so "delete everything" can cancel it, and the tab closing too (review U5-backup-v2-C-U5-3 /
+    /// L-U5-R4): the Cycle settle now runs the period export, and one suspended in its CloudKit
+    /// upload would otherwise resume after the wipe and write the set the wipe just deleted. The
+    /// exports' own checks (the period export's `ensurePeriodExportMayContinue`, the restores'
+    /// write-point cancellation check) make the cancellation stop the writes.
+    @ObservationIgnored var privateSectionBackupSettleTask: Task<Void, Never>?
+
     /// Settles the sealed period backup when cycle tracking is un-hidden: the v2 settle — restore
     /// (while this install's restore is unresolved), then export behind its guards (period-data design
     /// 2026-09-30, §9.10). Both halves need the Private tab's key, and an un-hide happens in Settings,
@@ -3620,10 +3629,41 @@ final class FernletStore {
         await sealedBackupCoordinator.settlePeriodBackup()
     }
 
-    /// Privacy & Data's "Restore it here" (§10.6). Delegates to
-    /// ``SealedBackupCoordinator/restorePeriodBackupHere()``.
-    func restorePeriodBackupHere() async {
-        await sealedBackupCoordinator.restorePeriodBackupHere()
+    /// Privacy & Data's "Restore it here" (§10.6) of the set it showed, `head`. Delegates to
+    /// ``SealedBackupCoordinator/restorePeriodBackupHere(_:)``.
+    func restorePeriodBackupHere(_ head: PeriodBackupHead) async {
+        await sealedBackupCoordinator.restorePeriodBackupHere(head)
+    }
+
+    /// The journal and intimacy backups whose pre-reset copy the owner released but whose restore can
+    /// never land here (this iPhone has entries written since the reset). Delegates to
+    /// ``SealedBackupCoordinator/preResetCopiesBlockedByNewerEntries(journalRepository:intimacyStore:)``.
+    var sealedBackupPayloadsBlockedForOwner: Set<SealedBackupPayloadType> {
+        sealedBackupCoordinator.preResetCopiesBlockedByNewerEntries()
+    }
+
+    /// Privacy & Data's "Replace it with this iPhone's entries" for a blocked pre-reset copy. Delegates
+    /// to ``SealedBackupCoordinator/replacePreResetCopyWithThisIPhone(_:)``.
+    func replacePreResetSealedBackupWithThisIPhone(_ payload: SealedBackupPayloadType) {
+        sealedBackupCoordinator.replacePreResetCopyWithThisIPhone(payload)
+    }
+
+    /// Releases an app-lock reset's owner hold that keeps no enabled backup's pre-reset copy, called by
+    /// Privacy & Data once its fresh device-owner check passed (review U5-backup-v2-C-U5-5): there is
+    /// nothing of this install's for the owner to restore, so the "Restore" prompt would only claim a
+    /// backup that does not exist — and an unreleased bit would hold the ambient restore of every
+    /// backup turned on later, period's first among them, for good. A hold that keeps something stays.
+    ///
+    /// - Parameter preferences: The storage preferences (which backups are on).
+    /// - Returns: Whether a hold was released.
+    func releaseSealedBackupRestoreHoldKeepingNothing(preferences: StoragePreferences) -> Bool {
+        guard sealedBackupRestoreHold.isHeld,
+              !SealedBackupRestoreHold.keepsAnyEnabledCopy(
+                  sealedBackupRestoreHold.payloadsKeepingPreResetCopy, preferences: preferences
+              ) else { return false }
+        sealedBackupRestoreHold.release()
+        FernletAuditLog.log("sealedBackup.restoreHoldReleasedKeepingNothing")
+        return true
     }
 
     /// Privacy & Data's "Replace it with this iPhone's history" (§10.6). Delegates to
@@ -5783,6 +5823,10 @@ final class FernletStore {
         // just-emptied store. `applyRestoredChunks` honors the cancellation at its write point, and the
         // diverged-device latch backstops any restore this cancel arrives too late for.
         periodBackupSettleTask?.cancel()
+        // The Private tab's section settle is the same class of writer since the Cycle settle runs the
+        // period export: suspended in a chunk upload, it would resume after the wipe and write a fresh
+        // set — and its accepted head — over the deletes (review U5-backup-v2-C-U5-3 / L-U5-R4).
+        privateSectionBackupSettleTask?.cancel()
         // The period store's own writers: the held legacy cycle import and a fill-on-read begun before
         // the wipe would otherwise write records back into the emptied store (period-data design
         // 2026-09-30, §8.4). The hook cancels the import task and moves the store's writer epoch.

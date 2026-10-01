@@ -509,6 +509,10 @@ struct LocalizationBoundaryTests {
             let names = text.localizedCaseInsensitiveContains("restore")
             #expect(names == (releasable && site.promises),
                     "\(site.key) \(names ? "promises" : "omits") a restore (hold releasable: \(releasable)): \(text)")
+            // Review U5-backup-v2-L-U5-R5: the journal and intimacy restores write only into an empty
+            // store, so a promise of the restore must say to restore before adding new entries.
+            #expect(!names || text.contains("before you add new entries"),
+                    "\(site.key) promises a restore new entries would block: \(text)")
         }
     }
 
@@ -598,6 +602,9 @@ struct LocalizationBoundaryTests {
         let tailObject = try #require(try JSONSerialization.jsonObject(with: tail) as? [String: Any])
         #expect(Set(tailObject.keys) == ["v", "records"])
         #expect(PeriodBackupHead.v1Writer == "v1")
+        // The accepted head of a set sealed to another backup key (review U5-backup-v2-L-U5-R1): a
+        // respelling would make the user's recorded "Replace" name a set that never matches again.
+        #expect(PeriodBackupHead.unreadableWriter == "unreadable")
         #expect(PeriodBackupHead(writer: "abc", generation: 7).token == "abc:7")
         #expect(PeriodBackupLedger.restoreResolvedKey == "fernlet.cycleRecord.periodRestoreResolved")
         #expect(PeriodBackupLedger.acceptedHeadKey == "fernlet.sealedBackup.periodAcceptedHead")
