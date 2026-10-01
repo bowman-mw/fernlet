@@ -402,20 +402,22 @@ shipped; the rest are still open.
    2026-09-30):** every install now has the Private tab's content key K, held in device custody
    (Secure-Enclave-wrapped where an enclave exists) when there is no passcode and opened by a
    deliberate tap, and every backup reads K through one provider — so the journal, period and
-   intimacy backups work in both passcode modes, and journal rows written from Home under the device
-   key are folded under K when Private opens. After an app-lock reset every ambient restore waits
-   for Privacy & Data's device-owner-checked "Restore" (Q14), and the period backup moved to v2 —
-   an id-keyed merge restore gated by a persisted "restore resolved" marker, and an export that
+   intimacy backups work in both passcode modes. After an app-lock reset every restore waits for
+   Privacy & Data's device-owner-checked "Restore" (Q14), and all three backups moved to v2 (period
+   design unit 5; journal and intimacy Sealed backup v2 design 2026-09-30, units B1–B3) — an
+   id-keyed merge restore gated by a persisted "restore resolved" marker, and an export that
    replaces only the set this install last wrote or merged (a compare-and-swap on a writer tag
-   sealed inside the head), after a full decrypt pre-pass (`Docs/FernletSpecificationV3.md` §
-   "Encrypted Sealed Backup"). §6.2 below is a separate decision that stands as it was.
-   A third, narrower gap found in the P3 review and now surfaced rather than silent: a
-   lock-CONFIGURED device can still hold journal rows sealed under the **device journal key** —
-   entries written before the lock existed, outside the window
-   `JournalSealingCoordinator.migrateDeviceKeyEntriesToUserKey` re-keys. The export refuses rather
-   than shipping a chunk set that silently omits them, and audits any residual shortfall
-   (`sealedBackup.journalPartialExport`), but those rows are still uncovered until a full-store
-   re-key pass exists. That pass is what makes them readable at all and is tracked separately.
+   sealed inside the head), with every chunk decrypted and sealed before the first save
+   (`Docs/FernletSpecificationV3.md` § "Encrypted Sealed Backup"). §6.2 below is a separate
+   decision that stands as it was.
+   A third, narrower gap found in the P3 review — **journal rows sealed under the device journal
+   key** (written while Private was closed, or before any key existed) that the export could not
+   open, so it refused rather than ship a partial set — **is CLOSED (unit B3, 2026-10-01):** the
+   journal export reads every entry under the hub key OR the device key (read without minting), so
+   such an entry is backed up as it is at the next Private visit, whether or not the fold has run;
+   and the journal restore is a merge, so device-key entries that survived an erase-and-restore no
+   longer block it. What remains is the Worry Box (by design) and an entry no key on this iPhone
+   opens, which pauses the backup and is named in Privacy & Data with an explicit "Remove them".
 2. **The same hard-binding decision for the no-lock device journal/worry keys.** SE-wrapping them
    removes the erase-and-restore-same-device recovery those users currently have — and no-lock
    users are the least likely to have sealed backup enabled.

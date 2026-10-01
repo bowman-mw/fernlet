@@ -38,15 +38,26 @@ than blanking the whole result, and every mutation prunes the store's persistent
 The two repositories differ in lifecycle, on purpose. Journal narratives are the sealed half of a
 strip/hydrate cycle driven by the app's `JournalSealingCoordinator` (through the
 ``JournalNarrativeStoring`` seam): journal text is stripped out of the synced snapshot blob,
-sealed here, and hydrated back for display. Since the 2026-08-10 backup-coverage work
-``JournalNarrativeRepository`` is also a `SealedBackup` payload source (`journalNarratives`): it
-owns a one-way "ever stored" divergence latch (device-local, non-synced `UserDefaults`, injected
-so tests get isolation) plus a keyless row count, a paged reader in a *total* order (`entryDate`
-then the unique `id`, so successive export chunks never overlap or skip), and an all-or-nothing
-`insertAtomically` used by restore. Every mutation — deletes included — sets the latch, so a
-restore can never resurrect entries the user deliberately deleted. Because the day blob holds only
-the entry SKELETON, journal restore is paired with a host hook that rebuilds those skeletons;
-without it a sync-off device reset would restore rows nothing renders. Worry Box notes never touch
+sealed here, and hydrated back for display. ``JournalNarrativeRepository`` is also the Sealed
+backup's journal payload source (`journalNarratives`), on the app's v2 engine since unit B3 of the
+journal and intimacy Sealed backup v2 design (2026-09-30, §7): a keyless ``JournalNarrativeRepository/allIDs()``
+snapshot in a *total* order (`entryDate` then the unique `id`), a classified chunk read
+(``JournalNarrativeRepository/backupRecords(ids:hubKey:deviceKey:)`` → ``JournalBackupPage``) that
+opens each entry under the hub key OR the journal device key (``JournalBackupDeviceKey``, read by the
+app without minting) — so an entry written from Home and not folded yet is backed up as it is — and
+sorts the rest into dead, needs-a-newer-build (an unknown feeling tag is never dead) and undecided;
+and the id-keyed MERGE restore (``JournalNarrativeRepository/upsertMerged(_:hubKey:deviceKey:)`` →
+``JournalNarrativeMergeResult``): absent entries inserted with their own stamps, an entry that opens
+never modified, a backup entry whose words differ added beside the local one as its own entry
+unless an equal one is already on its day, dead rows replaced, never a delete, one atomic save,
+idempotent. It replaced the empty-store-only `insertAtomically`, so entries that survived under the
+device key no longer block a restore. The one-way "ever stored" divergence latch (device-local,
+non-synced `UserDefaults`, injected so tests get isolation) no longer gates a restore: it seeds the
+app's journal restore MARKER once, which is what now stops a stale cloud copy from resurrecting
+entries the user deleted. Because the day blob holds only the entry SKELETON, the restore is paired
+with a host hook that rebuilds those skeletons from the keyless ``JournalNarrativeRepository/skeletons(ids:)``
+(``JournalNarrativeSkeleton``: id, day, tag, date — never the words); without it a sync-off device
+reset would restore rows nothing renders. Worry Box notes never touch
 the synced blob at all — they are write-once, device-only, excluded from `SealedBackup`, and support a bulk
 device-key → user-key migration (``WorryStoring/reencryptAll(from:to:)``) because
 `WorryBoxService` lets the user write worries before any app lock exists.
@@ -84,6 +95,14 @@ key the rows spoke for is provably gone.
 - ``JournalNarrativeStoring``
 - ``JournalNarrativeRepository``
 - ``SealedRowOpenability``
+
+### Journal Sealed backup
+
+- ``JournalBackupDeviceKey``
+- ``JournalBackupPage``
+- ``JournalNarrativeMergeResult``
+- ``JournalNarrativeSkeleton``
+- ``JournalNarrativeRepositoryError``
 
 ### Worry Box
 
