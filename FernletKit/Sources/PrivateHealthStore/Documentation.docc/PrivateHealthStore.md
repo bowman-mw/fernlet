@@ -141,9 +141,15 @@ restore) never answers empty for want of a key either: visible but keyless, each
 keyless one must not look like it. ``PeriodTrackerStore`` composes one (public as
 ``PeriodTrackerStore/recordStore``, where the app installs the backup's mutation hook); the app also
 constructs one for the keyless count and delete, and its `SealedBackupCoordinator` one for the period
-backup v2 — whose export is the pre-pass plus snapshot-sliced chunks, and whose restore is
-``CycleRecordStore/restoreMerging(_:contentKey:)``, an id-keyed merge that never deletes or regresses
-an openable record (period-data design 2026-09-30, §9.10).
+backup — the Sealed backup v2 engine's period adapter (journal and intimacy Sealed backup v2 design
+2026-09-30, §4.1): its snapshot is ``CycleRecordStore/allIDs()``, its chunks
+``CycleRecordStore/backupChunk(ids:contentKey:)``, its restore
+``CycleRecordStore/restoreMerging(_:contentKey:)`` (an id-keyed merge that never deletes or regresses
+an openable record), and every decrypt of a period BACKUP chunk runs inside
+``CycleRecordStore/withBackupSeam(_:)``, so the gate check and the decrypt are one synchronous step.
+``CycleRecordStore/isStoreHealthy`` (the sealed store is attached) is one of the engine's gates: a
+controller whose store failed to load can never export an empty set over the cloud copy. The engine
+owns the snapshot and the prepare; ``CycleRecordStore/backupPrePass(contentKey:)`` is not on its path.
 
 The intimacy backup still goes through ``IntimacyLogStore``, never the raw repository — the app
 target is grep-walled against constructing ``IntimacyLogRepository`` so no call site can read or

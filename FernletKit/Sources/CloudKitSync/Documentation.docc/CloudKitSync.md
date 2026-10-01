@@ -77,7 +77,17 @@ The third tier is direct CloudKit, bypassing the Core Data mirror. ``CloudKitDat
 what `NSPersistentCloudKitContainer` cannot: counting the data already in an iCloud account (feeding
 ``MultiDeviceSyncWarning``'s pure three-way classification of the "your devices will drift" banner),
 performing the confirmed, audited delete-everything sweep, and reading/writing chunked sealed
-backups. ``HeartDropCloudTransport`` is the app's only *public*-database use — a pseudonymous
+backups. A sealed backup's head keeps the bare name `sealed-backup.<payload>`; a v1 set's suffix
+chunks are `…chunk.<i>`, and a Sealed backup v2 set's are scoped to their set,
+`…chunk.<i>.<set>` (journal and intimacy Sealed backup v2 design 2026-09-30, §5.2), so a set is
+written under names only it ever writes and the head is the one commit point: an interrupted export
+never damages the set the head still points at. ``CloudKitDataService/saveSealedBackup(_:setTag:)``,
+``CloudKitDataService/sealedBackupSuffixChunks(payloadType:chunkCount:setTag:)`` and
+``CloudKitDataService/pruneSealedBackupSets(payloadType:keepingSetTag:belowGeneration:)`` (which keeps
+any other set at or above the committed generation — its head may still be landing on another
+iPhone) are that layout's mechanism, and the record-name matcher behind a disable and
+delete-everything knows both suffix forms, so a v2 set is deleted completely. The module still never
+opens a record. ``HeartDropCloudTransport`` is the app's only *public*-database use — a pseudonymous
 dead-drop ferry for heart drops with per-chunk fetch budgeting so one hostile writer cannot starve
 other friends' tags. Finally, ``CloudKitSchemaDeploy`` is the launch-argument seam for the
 DEBUG-only, developer-run CloudKit schema push.
