@@ -519,12 +519,14 @@ nonisolated extension CycleRecordRepository {
         return deleted
     }
 
-    /// An edit applied over the stored copy: the stored `createdAt` and `origin` kept, `updatedAt`
-    /// stamped, and each block restamped only when its content changed.
+    /// An edit applied over the stored copy: the stored `createdAt` kept, the stored `origin` kept
+    /// unless the edit supplies a clinical block the stored copy did not know (then the edit's — see
+    /// ``CycleRecord/combinedOrigin(_:_:)``, review round 2, N-1), `updatedAt` stamped, and each
+    /// block restamped only when its content changed.
     static func edited(_ record: CycleRecord, over stored: CycleRecord?, now: Date) -> CycleRecord {
         var result = record
         result.createdAt = stored?.createdAt ?? record.createdAt
-        result.origin = stored?.origin ?? record.origin
+        result.origin = stored.map { CycleRecord.combinedOrigin($0, record) } ?? record.origin
         result.updatedAt = now
         result.clinical = restamped(record.clinical, over: stored?.clinical, now: now)
         result.narrative = restamped(record.narrative, over: stored?.narrative, now: now)

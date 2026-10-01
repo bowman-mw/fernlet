@@ -347,6 +347,31 @@ struct CycleRecordRepositoryTests {
         }
     }
 
+    /// Review round 2, N-1: an edit that gives an UNKNOWN clinical block fields brings the edit's
+    /// origin (`logged`) — the block is the user's own entry, not one built from Fernlet's Apple
+    /// Health samples — while an edit that leaves the block unknown keeps the stored origin.
+    @Test func anEditThatFillsAnUnknownClinicalBlockTakesTheEditsOrigin() throws {
+        let repo = CycleRecordRepository(controller: makeController())
+        let key = makeKey()
+        var stored = record()
+        stored.clinical = nil
+        stored.origin = .importedLegacy
+        try repo.insert(stored, contentKey: key)
+
+        var noteOnly = stored
+        noteOnly.origin = .logged
+        noteOnly.narrative?.note = "edited note"
+        try repo.update(noteOnly, contentKey: key, now: Self.late)
+        #expect(try repo.records(ids: [stored.id], contentKey: key).records.first?.origin == .importedLegacy)
+
+        var withFlow = noteOnly
+        withFlow.clinical = CycleClinicalFields(flowLevel: .light, updatedAt: Self.late)
+        try repo.update(withFlow, contentKey: key, now: Self.late)
+        let after = try #require(try repo.records(ids: [stored.id], contentKey: key).records.first)
+        #expect(after.clinical?.flowLevel == .light)
+        #expect(after.origin == .logged)
+    }
+
     // MARK: - The gated funnel (§6.2)
 
     /// Hidden ⇒ inert at the seam: the display read is empty and every write, upsert, pre-pass,

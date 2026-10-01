@@ -32,11 +32,23 @@ struct CycleRecordMergeTests {
                     origin: origin, createdAt: created, updatedAt: created)
     }
 
-    /// Content equality: everything but `origin`, which is `a`'s by rule.
+    /// Content equality: everything but `origin`, which goes to the first argument when both
+    /// copies speak equally for the clinical block (see `expectedOrigin`).
     private func sameContent(_ lhs: CycleRecord, _ rhs: CycleRecord) -> Bool {
         var rhs = rhs
         rhs.origin = lhs.origin
         return lhs == rhs
+    }
+
+    /// The origin rule, spelled as the review stated it (review round 2, N-1): a copy whose clinical
+    /// block was built from Fernlet's Apple Health samples wins; otherwise a copy whose clinical block
+    /// is known wins over one whose block is unknown; otherwise the first argument's.
+    private static func expectedOrigin(_ a: CycleRecord, _ b: CycleRecord) -> CycleRecordOrigin {
+        let healthBuilt: (CycleRecord) -> Bool = { $0.clinical != nil && ($0.origin == .importedLegacy || $0.origin == .adoptedFromHealth) }
+        if healthBuilt(a) { return a.origin }
+        if healthBuilt(b) { return b.origin }
+        if a.clinical == nil, b.clinical != nil { return b.origin }
+        return a.origin
     }
 
     /// A small fixed corpus of copies of one record — known/unknown/empty blocks, early/late clocks,
@@ -63,7 +75,7 @@ struct CycleRecordMergeTests {
                 let ab = CycleRecord.merged(a, b)
                 let ba = CycleRecord.merged(b, a)
                 #expect(sameContent(ab, ba), "merged(a, b) and merged(b, a) disagree on content:\n\(ab)\n\(ba)")
-                #expect(ab.origin == a.origin, "origin is the first argument's")
+                #expect(ab.origin == Self.expectedOrigin(a, b), "origin follows the copy that speaks most for the clinical block")
             }
         }
     }
@@ -78,9 +90,38 @@ struct CycleRecordMergeTests {
                     let left = CycleRecord.merged(CycleRecord.merged(a, b), c)
                     let right = CycleRecord.merged(a, CycleRecord.merged(b, c))
                     #expect(sameContent(left, right), "batch order changed the reduced record")
+                    #expect(left.origin == right.origin, "batch grouping changed the origin")
                 }
             }
         }
+    }
+
+    /// Review round 2, N-1: once a record's clinical block is known, its origin says where THAT block
+    /// came from, in either argument order. A block built from Fernlet's Apple Health samples brings
+    /// `importedLegacy` / `adoptedFromHealth` (a restored note-only record completed from its samples
+    /// counts its Health copy) and is never merged away; a block supplied to an unknown slot by the
+    /// user brings `logged`; equal standing keeps the first argument's.
+    @Test func aClinicalBlockBringsItsOriginToAnUnknownSlot() {
+        let restoredNotes = record(clinical: nil, narrative: narrative("restored", at: Self.early), origin: .restored)
+        let legacyNotes = record(clinical: nil, narrative: narrative("legacy", at: Self.early), origin: .importedLegacy)
+        let fromSamples = record(clinical: clinical(.heavy, at: Self.early), narrative: nil, origin: .importedLegacy)
+        let adopted = record(clinical: clinical(.medium, at: Self.early), narrative: nil, origin: .adoptedFromHealth)
+        let userFlow = record(clinical: clinical(.light, at: Self.late), narrative: nil, origin: .logged)
+        let cases: [(CycleRecord, CycleRecord, CycleRecordOrigin)] = [
+            (restoredNotes, fromSamples, .importedLegacy),
+            (restoredNotes, adopted, .adoptedFromHealth),
+            (legacyNotes, userFlow, .logged),
+            (userFlow, fromSamples, .importedLegacy)
+        ]
+        for (a, b, expected) in cases {
+            #expect(CycleRecord.merged(a, b).origin == expected)
+            #expect(CycleRecord.merged(b, a).origin == expected)
+        }
+        let restoredFlow = record(clinical: clinical(.light, at: Self.early), narrative: nil, origin: .restored)
+        #expect(CycleRecord.merged(userFlow, restoredFlow).origin == .logged)
+        #expect(CycleRecord.merged(restoredFlow, userFlow).origin == .restored)
+        #expect(CycleRecord.merged(legacyNotes, restoredNotes).origin == .importedLegacy, "a narrative proves nothing about Apple Health")
+        #expect(CycleRecord.merged(restoredNotes, legacyNotes).origin == .restored)
     }
 
     /// The later clinical block wins WHOLE: the user cleared "first day" and the flow on the newer

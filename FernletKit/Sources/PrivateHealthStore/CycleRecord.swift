@@ -12,16 +12,21 @@ import Foundation
 // Nothing here seals, reads or writes anything — `CycleRecordRepository` does. This file is values
 // and one pure merge.
 
-/// Where a cycle record came from.
+/// Where a cycle record came from — and, once its clinical block is known, where THAT block came
+/// from: a block supplied later to an unknown slot brings its own origin (``CycleRecord/merged(_:_:)``,
+/// review round 2, N-1), because the origin is what tells whether Fernlet's Apple Health copy of the
+/// block existed by construction.
 ///
 /// FROZEN tokens: the raw values ride the sealed column and the backup chunks. Display, if any ever
 /// appears, goes through a separate property. A token this build does not know decodes as
 /// ``importedLegacy`` (the least specific claim), so a record written by a newer build still opens.
 public nonisolated enum CycleRecordOrigin: String, CaseIterable, Codable, Sendable {
-    /// Logged in the sheet on this install.
+    /// Logged in the sheet on this install — including a legacy note-only record whose unknown
+    /// clinical block the user filled in the sheet.
     case logged
     /// Built from a source that predates records: a sealed `MenstrualNarrative`, a v1 pending-buffer
-    /// entry, or Fernlet's own unmarked Apple Health samples.
+    /// entry, or Fernlet's own unmarked Apple Health samples — including a record whose unknown
+    /// clinical block fill-on-read completed from Fernlet's samples.
     case importedLegacy
     /// Brought back from the Sealed backup.
     case restored
@@ -270,7 +275,7 @@ public nonisolated struct CycleRecord: Identifiable, Codable, Equatable, Sendabl
     public var clinical: CycleClinicalFields?
     /// The narrative block, or `nil` when UNKNOWN.
     public var narrative: CycleNarrativeFields?
-    /// Where the record came from.
+    /// Where the record — once its clinical block is known, that block — came from.
     public var origin: CycleRecordOrigin
     /// When the record was first written.
     public var createdAt: Date
@@ -418,14 +423,17 @@ nonisolated extension CycleRecord {
     /// - **`loggedAt` / `dayKey`:** from the side whose clinical block is known (sample times are
     ///   exact) — the winning block's side when both are, the earlier `loggedAt` when both blocks are
     ///   identical; otherwise the earlier-created side's.
-    /// - **`origin`:** `a`'s (the stored copy's, at every call site). **`createdAt`:** the earlier.
-    ///   **`updatedAt`:** the later.
+    /// - **`origin`:** `combinedOrigin(_:_:)` — `a`'s (the stored copy's, at every call site)
+    ///   unless `b` speaks more strongly for the clinical block: a block built from Fernlet's own
+    ///   Apple Health samples, or a block supplied to an UNKNOWN slot, brings its origin with it.
+    ///   **`createdAt`:** the earlier. **`updatedAt`:** the later.
     ///
     /// Idempotent (`merged(x, x) == x`) and associative, so a batch reduces to the same record in
     /// any order. Two records with different ids are not merged: `a` comes back unchanged.
     public static func merged(_ a: CycleRecord, _ b: CycleRecord) -> CycleRecord {
         guard a.id == b.id else { return a }
         var result = a
+        result.origin = combinedOrigin(a, b)
         result.clinical = mergedBlock(a.clinical, b.clinical)
         result.narrative = mergedBlock(a.narrative, b.narrative)
         let timeSource = timeSource(a, b)
@@ -450,6 +458,46 @@ nonisolated extension CycleRecord {
             }
         }
         return order.compactMap { byID[$0] }
+    }
+
+    /// Whether the clinical block is known AND the origin says it was built from Fernlet's own Apple
+    /// Health samples (``CycleRecordOrigin/importedLegacy``, ``CycleRecordOrigin/adoptedFromHealth``:
+    /// the legacy import, fill-on-read, "Keep in Fernlet") — so a Fernlet copy was in Apple Health
+    /// when the block was built. A narrative-only legacy record is NOT: a narrative proves nothing
+    /// about Apple Health (review round 2, N-1).
+    var clinicalBlockIsFromFernletHealthSamples: Bool {
+        guard clinical != nil else { return false }
+        switch origin {
+        case .importedLegacy, .adoptedFromHealth: return true
+        case .logged, .restored: return false
+        }
+    }
+
+    /// The origin of two copies of one record combined — by a merge (``merged(_:_:)``) or by an edit
+    /// applied over its stored copy (`a` the stored copy, `b` the edit, which is always
+    /// ``CycleRecordOrigin/logged``). Once a record's clinical block is known, its origin is what says
+    /// whether Fernlet's Apple Health copy of that block existed by construction — the question a
+    /// refused Health delete asks (review round 2, N-1) — so it follows the copy that speaks most
+    /// strongly for the block:
+    ///
+    /// 1. A copy whose clinical block was built from Fernlet's own Health samples
+    ///    (``clinicalBlockIsFromFernletHealthSamples``): those samples existed, and a merge never
+    ///    loses that evidence.
+    /// 2. Otherwise a copy whose clinical block is known: a block supplied to an UNKNOWN slot — the
+    ///    user's edit of a legacy note-only day, a restored copy — brings its origin with it, so a
+    ///    flow the user added to such a day is `logged`, not "imported from Apple Health".
+    /// 3. Otherwise `a`'s.
+    ///
+    /// Ties go to `a`. "The first copy of the highest standing" is associative, as the merge is.
+    static func combinedOrigin(_ a: CycleRecord, _ b: CycleRecord) -> CycleRecordOrigin {
+        originStanding(of: b) > originStanding(of: a) ? b.origin : a.origin
+    }
+
+    /// How strongly a copy's origin speaks for its clinical block (see ``combinedOrigin(_:_:)``):
+    /// 2 built from Fernlet's Health samples, 1 otherwise known, 0 unknown.
+    private static func originStanding(of record: CycleRecord) -> Int {
+        if record.clinicalBlockIsFromFernletHealthSamples { return 2 }
+        return record.clinical == nil ? 0 : 1
     }
 
     /// The whole-block rule for one block kind.

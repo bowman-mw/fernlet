@@ -628,10 +628,70 @@ struct PeriodTrackerTests {
         #expect(delete.healthCopy == .stillInHealth(.healthDenied))
     }
 
-    /// A narrative-only record — the legacy import's (or a v1 drain's) shape: clinical block UNKNOWN.
+    /// Review round 2, N-1: a legacy note-only day whose flow the user ADDS in the sheet is not
+    /// "built from Fernlet's Apple Health samples". A user who declined Apple Health's share sheet
+    /// (every cycle kind refused), with sharing off, edits such a day twice and then deletes it, and
+    /// is never told Apple Health kept a copy: Fernlet never wrote one, and the sample half found
+    /// none for that day. The record's origin follows its new clinical block (`logged`), so the
+    /// refusal counts only while sharing is on. The record used to stay `importedLegacy`, and every
+    /// later edit and delete of the day said "Apple Health still has Fernlet's copy".
+    @Test func aFlowAddedToALegacyNotesOnlyDayIsNeverReportedAsLeftInHealth() async throws {
+        let harness = CycleStoreHarness()
+        harness.health.deleteMirrorRefused = Set(CycleMirrorSampleKind.allCases)
+        let legacy = Self.narrativeOnlyRecord()
+        try harness.records.insert(legacy, contentKey: harness.key)
+
+        let fill = UserLoggedCycleEvent(date: legacy.loggedAt, flowLevel: .medium, symptoms: [.cramps])
+        let first = try await harness.store.editRecord(legacy.id, with: fill, unlockedContentKey: harness.key)
+        #expect(first.healthCopy == .notShared)
+        #expect(harness.health.calls.isEmpty, "a stored-unknown block deletes nothing")
+        let filled = try #require(try harness.storedRecords().first)
+        #expect(filled.clinical?.flowLevel == .medium)
+        #expect(filled.origin == .logged, "the clinical block is the user's own entry now")
+
+        let again = UserLoggedCycleEvent(date: legacy.loggedAt, flowLevel: .heavy, symptoms: [.cramps])
+        let second = try await harness.store.editRecord(legacy.id, with: again, unlockedContentKey: harness.key)
+        #expect(second.healthCopy == .notShared, "Fernlet never wrote this day to Apple Health")
+        #expect(harness.health.count("deleteMirror") == 1, "the known block's copy was still looked for")
+
+        let edited = try #require(try harness.storedRecords().first)
+        let delete = try await harness.store.deleteDay(CycleDayEntry(date: edited.loggedAt, dateKey: edited.dayKey, records: [edited]))
+        #expect(delete == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .none))
+    }
+
+    /// Review round 2, N-1, the inverse: a RESTORED note-only record (the v1 backup's shape) that
+    /// fill-on-read completes from its own Fernlet samples has a block built from those samples, so
+    /// its copy is in Apple Health by construction and a refused delete says so even with sharing
+    /// off. Fill-on-read used to keep `restored`, which counted the refusal only while sharing is on.
+    @Test func aRestoredNotesOnlyRecordCompletedFromItsSamplesCountsItsHealthCopy() async throws {
+        let harness = CycleStoreHarness()
+        let samplesSource = PeriodTestSupport.record(on: Date(), flow: .heavy)
+        var restored = samplesSource
+        restored.clinical = nil
+        restored.narrative = CycleNarrativeFields(note: "from the backup", symptomFlags: [], customSymptomScales: [:], updatedAt: Date())
+        restored.origin = .restored
+        try harness.records.insert(restored, contentKey: harness.key)
+        harness.health.loadedSamples = try PeriodTestSupport.legacySamples(for: samplesSource)
+
+        await harness.store.loadEntries(unlockedContentKey: harness.key)
+
+        let completed = try #require(try harness.storedRecords().first)
+        #expect(completed.clinical?.flowLevel == .heavy)
+        #expect(completed.origin == .importedLegacy, "the clinical block came from Fernlet's own Apple Health samples")
+        let today = try #require(Self.today(in: harness.store))
+        #expect(today.records.map(\.origin) == [.importedLegacy], "the published copy says the same")
+
+        harness.health.deleteMirrorRefused = [.menstrualFlow]
+        let delete = try await harness.store.deleteDay(today)
+        #expect(delete == PeriodDeleteOutcome(removedRecordCount: 1, healthCopy: .stillInHealth(.healthDenied)))
+    }
+
+    /// A narrative-only record — the legacy import's (or a v1 drain's) shape: clinical block UNKNOWN,
+    /// origin `importedLegacy`.
     private static func narrativeOnlyRecord() -> CycleRecord {
         var record = PeriodTestSupport.record(on: Date(), flow: nil, symptoms: [.cramps])
         record.clinical = nil
+        record.origin = .importedLegacy
         return record
     }
 

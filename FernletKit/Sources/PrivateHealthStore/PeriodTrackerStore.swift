@@ -544,6 +544,11 @@ public final class PeriodTrackerStore {
     /// under the import's checks. Completes a record; never creates one or resurrects a deleted one
     /// (only ids already stored are touched). A refused write keeps the unfilled records (their
     /// samples then stay on the page).
+    ///
+    /// The completion is `importedLegacy` whatever the record's own origin — the block IS built
+    /// from Fernlet's Health samples — and the merge hands that origin to the completed record
+    /// (``CycleRecord/merged(_:_:)``), so a restored note-only record completed here counts its Health
+    /// copy when a delete is refused (review round 2, N-1).
     private func fillOnRead(_ records: [CycleRecord], ownSamples: [HKSample], contentKey: SymmetricKey, epoch: Int) -> [CycleRecord] {
         let groups = Dictionary(
             CycleHealthSamples.groupedByRecordID(ownSamples).map { ($0.id, $0.samples) },
@@ -551,7 +556,7 @@ public final class PeriodTrackerStore {
         )
         let completions = records.compactMap { record -> CycleRecord? in
             guard record.clinical == nil, let samples = groups[record.id] else { return nil }
-            return CycleHealthSamples.clinicalRecord(id: record.id, samples: samples, origin: record.origin)
+            return CycleHealthSamples.clinicalRecord(id: record.id, samples: samples, origin: .importedLegacy)
         }
         guard !completions.isEmpty, mayWriteAfterAwait(contentKey: contentKey, epoch: epoch) else { return records }
         do {
@@ -679,12 +684,17 @@ public final class PeriodTrackerStore {
         return PeriodLogOutcome(storage: .sealed, healthCopy: await remirrorEdited(edited, replacing: stored))
     }
 
-    /// The record an edit writes: `event` under the stored id, origin and creation time, with an
-    /// unknown block kept unknown when the edit leaves it empty.
+    /// The record an edit writes: `event` under the stored id and creation time, with an unknown
+    /// block kept unknown when the edit leaves it empty. The stored origin is kept — unless the edit
+    /// gives an UNKNOWN clinical block fields: that block is the user's own entry, so the record
+    /// becomes `logged` (``CycleRecord/combinedOrigin(_:_:)``; review round 2, N-1). A legacy
+    /// note-only day the user adds a flow to is not "built from Fernlet's Apple Health samples",
+    /// and a refused Health delete of it must not say a copy was left there.
     static func editedRecord(_ stored: CycleRecord, with event: UserLoggedCycleEvent, now: Date = Date()) -> CycleRecord {
-        var edited = CycleRecord(event: event, id: stored.id, origin: stored.origin, now: now)
+        var edited = CycleRecord(event: event, id: stored.id, origin: .logged, now: now)
         if stored.clinical == nil, edited.clinical?.isEmpty == true { edited.clinical = nil }
         if stored.narrative == nil, edited.narrative?.isEmpty == true { edited.narrative = nil }
+        edited.origin = CycleRecord.combinedOrigin(stored, edited)
         edited.createdAt = stored.createdAt
         return edited
     }
@@ -727,18 +737,18 @@ public final class PeriodTrackerStore {
     /// - Only a kind the record's copy could hold counts (``CycleMirrorSampleKind/possibleCopyKinds(of:)``):
     ///   a refused kind the entry never set left nothing behind.
     /// - A record whose clinical block was BUILT from Fernlet's Apple Health samples (the legacy
-    ///   import, fill-on-read, "Keep in Fernlet") had a copy there by construction.
+    ///   import, fill-on-read, "Keep in Fernlet": `CycleRecord.clinicalBlockIsFromFernletHealthSamples`)
+    ///   had a copy there by construction. The origin can say so because a clinical block supplied
+    ///   to an unknown slot brings its own origin (review round 2, N-1): a flow the user added to a
+    ///   legacy note-only day makes it `logged`, and a restored note-only record completed from its
+    ///   samples becomes `importedLegacy`.
     /// - Any other record — an UNKNOWN block included, whose pre-cutover samples exist only if they
     ///   were written while sharing was on — had a copy only if it was copied with cycle sharing on;
     ///   with sharing off now, a refusal most likely means the access was never granted, and saying
     ///   "Apple Health still has Fernlet's copy" on every edit and delete would be false.
     static func refusalMayLeaveCopy(of record: CycleRecord, refused: Set<CycleMirrorSampleKind>, sharing: Bool) -> Bool {
         guard !refused.isDisjoint(with: CycleMirrorSampleKind.possibleCopyKinds(of: record)) else { return false }
-        guard record.clinical != nil else { return sharing }
-        switch record.origin {
-        case .importedLegacy, .adoptedFromHealth: return true
-        case .logged, .restored: return sharing
-        }
+        return record.clinicalBlockIsFromFernletHealthSamples || sharing
     }
 
     /// The Health-copy outcome a mirror error means: "sharing is off" is no failure.
