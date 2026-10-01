@@ -653,6 +653,39 @@ struct SealedBackupV2EngineTests {
         #expect(phone.host.reuploadDeferrals[.periodData] == false)
     }
 
+    /// BV23 for the restore (§4.5, R2-F5): a failed ambient restore — here a set that does not verify —
+    /// is not fetched again in the same hub session, nor in a later one within 15 minutes, so a stuck
+    /// restore does not download the set again at every unlock; after the backoff it runs again, and
+    /// once the set verifies it lands.
+    @MainActor
+    @Test func aFailedAmbientRestoreBacksOffFifteenMinutesAcrossSessions() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        try await Self.writeTwoChunkSet(cloud, .total)
+        let clock = ManualClock()
+        let counting = CountingCloudKitRecordDatabase(cloud.database)
+        let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", database: counting, clock: { clock.now })
+
+        await phone.coordinator.settlePeriodBackup()
+        #expect(try phone.records.recordCount() == 0, "the set does not verify")
+        let fetches = counting.fetches
+        #expect(fetches > 0, "the first restore fetched the set")
+        await phone.coordinator.settlePeriodBackup()
+        #expect(counting.fetches == fetches, "at most one ambient restore per hub session")
+        phone.engine.hubSessionEnded()
+        clock.advance(10 * 60)
+        await phone.coordinator.settlePeriodBackup()
+        #expect(counting.fetches == fetches, "within 15 minutes of a failed restore nothing is fetched again")
+
+        cloud.database.recordsByType["SealedBackupRecord"] = []
+        try await Self.writeTwoChunkSet(cloud, .none)
+        phone.engine.hubSessionEnded()
+        clock.advance(6 * 60)
+        await phone.coordinator.settlePeriodBackup()
+        #expect(try phone.records.recordCount() == 2, "after the backoff the restore runs again and lands")
+        #expect(phone.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+    }
+
     /// BV23, the probe: on a clean visit E2 reads only the head's METADATA and decrypts nothing when it
     /// is this install's accepted head; at most once per session and 15 minutes apart.
     @MainActor
