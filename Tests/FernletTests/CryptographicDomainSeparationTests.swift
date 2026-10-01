@@ -101,6 +101,7 @@ struct CryptographicDomainSeparationTests {
         Domain("KeyDerivation.worryNarrativeLegacyV1", FernletCryptoPurpose.KeyDerivation.worryNarrativeLegacyV1),
         Domain("KeyDerivation.menstrualNarrativeLegacyV1", FernletCryptoPurpose.KeyDerivation.menstrualNarrativeLegacyV1),
         Domain("KeyDerivation.intimacyLogLegacyV1", FernletCryptoPurpose.KeyDerivation.intimacyLogLegacyV1),
+        Domain("KeyDerivation.cycleRecordV1", FernletCryptoPurpose.KeyDerivation.cycleRecordV1),
         // HMAC
         Domain("HMAC.heartDropDayTagV1", FernletCryptoPurpose.HMAC.heartDropDayTagV1),
         Domain("HMAC.presenceEpochTagV1", FernletCryptoPurpose.HMAC.presenceEpochTagV1),
@@ -135,6 +136,7 @@ struct CryptographicDomainSeparationTests {
         Domain("Hash.meshRecipientReceiptIDV1", FernletCryptoPurpose.Hash.meshRecipientReceiptIDV1),
         Domain("Hash.recoveryContentKeyV1", FernletCryptoPurpose.Hash.recoveryContentKeyV1),
         Domain("Hash.moderationBanReporterTagV1", FernletCryptoPurpose.Hash.moderationBanReporterTagV1),
+        Domain("Hash.sealedBackupWriterTagV1", FernletCryptoPurpose.Hash.sealedBackupWriterTagV1),
     ]
 
     /// Fixed, non-secret material. Deterministic on purpose: a failure here must reproduce.

@@ -132,6 +132,7 @@ on the reasoning.
 | `worryNarrativeLegacyV1` | `worry-box` | `ColumnCrypto`, `WorryNarrativeRepository` |
 | `menstrualNarrativeLegacyV1` | `menstrual-narrative` | `ColumnCrypto`, `MenstrualNarrativeRepository` |
 | `intimacyLogLegacyV1` | `intimacy-log` | `ColumnCrypto`, `IntimacyLogRepository` |
+| `cycleRecordV1` | `fernlet.cycle-record.v1` | `ColumnCrypto`, `CycleRecordRepository` (the sealed cycle record's one blob column — period-data design 2026-09-30, §5.2) |
 
 #### HMAC
 
@@ -177,6 +178,7 @@ on the reasoning.
 | `meshRecipientReceiptIDV1` | `fernlet.mesh.recipient-receipt-id.hash.v1` | `MeshRecipientReceipt` (the derived dedup id — `(itemID, origin, recipient)`, excluding both the hedged signature and `receivedAt`; ONE id per `(recipient, item)`, which is the wire-level statement that a recipient receipt is whole-item and never per chunk) |
 | `recoveryContentKeyV1` | `fernlet.lock.recovery.contentkey.v1` | `FernletLockService` |
 | `moderationBanReporterTagV1` | `fernlet.moderation.ban-evidence.reporter-tag.hash.v1` | `ModerationBanStore` (the salted reporter tag a store ban's evidence records instead of a key — 2026-09-24, tracker §3.5) |
+| `sealedBackupWriterTagV1` | `fernlet.sealed-backup.writer-tag.v1` | Registered 2026-09-30 for the period backup v2 (period-data design §9.10): the writer tag inside a period backup set's escrow-sealed head. No consumer until that round lands |
 
 ### A drift note, 2026-09-03 (P5 item 3)
 
