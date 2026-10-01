@@ -18,7 +18,7 @@ normalized GTIN barcode, by recipe ingredient set) resolve straight from SQLite,
 ``FoodCatalog/candidates(for:limit:ranking:)`` builds the capped candidate pool the deterministic
 and AI meal resolvers draw from.
 
-Search carries two pieces of per-user state. The first, added for research §26 fix 1.10, is the
+Search carries three pieces of per-user state. The first, added for research §26 fix 1.10, is the
 **local correction memory**. `FoodCatalog.setSearchAliases(_:)` publishes a normalized query →
 food-id map — the searches this person corrected once in "Adjust meal" — and
 ``FoodCatalog/results(for:limit:stripsStopwords:context:ranking:)`` puts that food first, ahead of the FTS
@@ -49,6 +49,16 @@ has **no durable copy anywhere**: `DiaryStore` derives it from `recentMeals` (al
 synced snapshot) on every write and at init, so a wipe of the diary is a wipe of the feature.
 When a query has both a correction and a history weight, the **correction wins** — an explicit
 statement outranks an inference.
+
+A third, added for ingredient-search round F9b, is the **recipe picks** (`FoodCatalog.setRecipeSearchPicks(_:)`):
+normalized query → the food a person chose for it from below the top of a recipe ingredient list
+(the recipe editor's typeahead or the swap sheet). A pick is promoted exactly like a correction, but
+only for a search that asks for `.ingredientIdentity` — the recipe surfaces — where it goes first,
+above the identity order, history and a curated alias. A correction for the same query still answers
+first, and quick-log, the meal composer, Adjust meal, the resolver's pool and
+`recentIngredientPersonalization()` never see a pick: the owner scoped learning from recipe picks to
+recipes. The app keeps picks and corrections in the same device-local memory under one cap, so the
+same wipe and "Forget corrected searches" clear both.
 
 A second, much larger branded catalog (~364k products) is delivered as a purgeable
 On-Demand Resource and attached at runtime as an additional ``BundledFoodSource``

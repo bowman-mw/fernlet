@@ -2752,6 +2752,15 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
     /// Read only while the row is bound to a catalog food; never persisted itself (the saved line is
     /// its grams, ``recipeLine(for:)``).
     public var portion: RecipePortionOption?
+    /// The normalized search this row's food was picked for, when that pick should teach search
+    /// (ingredient-search round, F9b): the person typed the words out and chose the food from below
+    /// the top of the list. The app's recipe save remembers it with ``selectedFoodItemId`` as a recipe
+    /// pick, so the next recipe search for the same words puts that food first; a row the person
+    /// cancels out of, unbinds or removes teaches nothing. A frozen token (the memory's key, matched
+    /// against English typed text), never shown and never saved on the recipe; nil for a row bound any
+    /// other way — the list's first row, a barcode, a loaded, pasted or imported recipe, a custom food.
+    /// Not an init parameter: only the editor's pick sets it.
+    public var pickedForSearch: String?
 
     /// The typed grams, whole-gram rounded (``PreciseMacros/rounded``).
     public var macros: Macros {

@@ -38,10 +38,16 @@ public nonisolated enum FoodSearchContext: Sendable, Equatable {
 /// derived from `DiaryStore.recentMeals` rather than persisted anywhere new, and — like the alias
 /// snapshot — is empty on any catalog the app has not hydrated.
 ///
+/// A fifth, added for ingredient-search round F9b, is the **recipe picks**: normalized query → the
+/// food the person chose for it from below the top of a recipe ingredient list
+/// (``setRecipeSearchPicks(_:)``). It is promoted exactly like a correction, but only for a search that
+/// asks for ``FoodSearchRanking/ingredientIdentity`` (the recipe surfaces), and a correction for the
+/// same query answers first; like the others it is empty on any catalog the app has not hydrated.
+///
 /// Thread-safe: the SQLite source serializes its own access, and the user-items snapshot, the
-/// correction-alias snapshot, the history profile and the branded-source slot are guarded by one
-/// lock, so the catalog can be queried from any actor (the AI meal-resolution path runs off the main
-/// actor) — hence the nonisolated `@unchecked Sendable` class.
+/// correction-alias snapshot, the recipe picks, the history profile and the branded-source slot are
+/// guarded by one lock, so the catalog can be queried from any actor (the AI meal-resolution path runs
+/// off the main actor) — hence the nonisolated `@unchecked Sendable` class.
 public nonisolated final class FoodCatalog: @unchecked Sendable {
     private let source: BundledFoodSource
     private let lock = NSLock()
@@ -55,6 +61,11 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// device-local memory in via ``setSearchAliases(_:)``, which is what keeps every catalog built
     /// in a test (or before hydration) on the cold, alias-free path.
     private var _searchAliases: [String: UUID] = [:]
+    /// Ingredient-search round F9b's snapshot: normalized query → the food the person picked for it
+    /// from below the top of a RECIPE ingredient list. Guarded by the SAME `lock`; empty until the app
+    /// publishes its device-local memory via ``setRecipeSearchPicks(_:)``. Read only by a search that
+    /// asks for ``FoodSearchRanking/ingredientIdentity`` — the recipe surfaces.
+    private var _recipeSearchPicks: [String: UUID] = [:]
     /// Research §26 fix 1.9's snapshot: the weighted foods this user has actually logged. Guarded by
     /// the SAME `lock` as `_userItems`; ``FoodSearchHistory/empty`` until `DiaryStore` publishes one,
     /// which is what keeps every catalog built in a test (or before hydration) on the cold path.
@@ -98,6 +109,11 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         return _searchAliases
     }
 
+    private var recipeSearchPicks: [String: UUID] {
+        lock.lock(); defer { lock.unlock() }
+        return _recipeSearchPicks
+    }
+
     private var searchHistory: FoodSearchHistory {
         lock.lock(); defer { lock.unlock() }
         return _searchHistory
@@ -121,6 +137,25 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// bounded by that cap. Nothing here re-caps a map it did not author.
     public func setSearchAliases(_ aliases: [String: UUID]) {
         lock.lock(); _searchAliases = aliases; lock.unlock()
+    }
+
+    /// Publishes the recipe picks (ingredient-search round F9b): normalized query → the food the person
+    /// chose for it from below the top of a recipe ingredient list, in the recipe editor or the swap
+    /// sheet.
+    ///
+    /// A NARROWER signal than ``setSearchAliases(_:)``'s corrections, and kept in its own snapshot for
+    /// that reason: a pick answers only a search that asks for ``FoodSearchRanking/ingredientIdentity``
+    /// (the recipe editor's typeahead, the swap sheet's pool and its AI rebinding), where it goes first,
+    /// above the identity order, history and the curated alias. Quick-log, the meal composer, Adjust meal,
+    /// the meal resolver's pool and ``recentIngredientPersonalization()`` never see it — the owner scoped
+    /// this to recipes, and a pick is not the explicit "this search was wrong" a correction is. A query
+    /// with both answers with the correction; the app's memory keeps one answer per query anyway.
+    ///
+    /// Replaced wholesale like every other snapshot, and bounded by its WRITER (the app's
+    /// `FoodSearchCorrectionMemory`, which holds picks and corrections under one cap); a wipe publishes
+    /// an empty map.
+    public func setRecipeSearchPicks(_ picks: [String: UUID]) {
+        lock.lock(); _recipeSearchPicks = picks; lock.unlock()
     }
 
     /// Publishes this user's meal history as a ranking input (research §26 fix 1.9).
@@ -184,7 +219,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// rather than leading noise. Fix 1.6 applies to the query a PERSON TYPED, which is this one.
     /// A third difference exists as of research §26 fix 1.10: a query the user has already corrected
     /// once returns their own choice first, ahead of — and independently of — the FTS gate. See
-    /// ``promotingCorrection(_:for:limit:)``. `candidates(for:limit:ranking:)` inherits it by construction,
+    /// ``promotingCorrection(_:for:limit:ranking:)``. `candidates(for:limit:ranking:)` inherits it by construction,
     /// because it draws its pool from this method; ``scoredResults(for:limit:stripsStopwords:)``
     /// deliberately does NOT (see its doc).
     ///
@@ -225,7 +260,9 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     ///   order above therefore holds inside the identity group; a personal row that is NOT the
     ///   ingredient sits below every row that is. Independent of `context` — the swap sheet's pool is
     ///   machine-generated and still ranks by identity. The default keeps every other surface
-    ///   (quick-log, the meal composer, Adjust meal, the resolver) on the standard order.
+    ///   (quick-log, the meal composer, Adjust meal, the resolver) on the standard order. It also
+    ///   admits this person's recipe picks (F9b, ``setRecipeSearchPicks(_:)``): a pick goes first,
+    ///   above the identity order, history and a curated alias, and beneath only a correction.
     public func results(
         for query: String,
         limit: Int = 6,
@@ -268,7 +305,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         } else {
             ranked = normal
         }
-        guard typed else { return promotingCorrection(ranked, for: query, limit: limit) }
+        guard typed else { return promotingCorrection(ranked, for: query, limit: limit, ranking: ranking) }
         let ownIDs = Set(userItems.map(\.id))
         let history = searchHistory
         let isPersonal: (FoodItem) -> Bool = { item in
@@ -276,7 +313,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         }
         let shown = TypeaheadDuplicateCollapse.collapsing(ranked, limit: limit, isProtected: isPersonal)
         let aliased = insertingCuratedAlias(into: shown, for: query, limit: limit, isPersonal: isPersonal)
-        return promotingCorrection(aliased, for: query, limit: limit)
+        return promotingCorrection(aliased, for: query, limit: limit, ranking: ranking)
     }
 
     /// Whether a TYPED search has been superseded: the task running it was cancelled because a newer
@@ -296,7 +333,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     ///
     /// The row goes directly beneath the leading run of this person's own rows (their items and the
     /// rows they have logged), so on a cold catalog it is first; a correction is prepended afterwards
-    /// by ``promotingCorrection(_:for:limit:)`` and so still wins. Nothing is filtered out: a copy of
+    /// by ``promotingCorrection(_:for:limit:ranking:)`` and so still wins. Nothing is filtered out: a copy of
     /// the target already in the list moves up, and the list is re-capped at `limit`. Inert when no
     /// phrase matches or the target does not resolve (an in-memory test catalog, a future rebuild).
     private func insertingCuratedAlias(
@@ -367,12 +404,19 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// `minimumQueryLength` (the searcher itself returns nothing there, so a two-letter key must not
     /// become a back door into the catalog), and an alias whose food no longer resolves — a branded
     /// row whose On-Demand Resource has been purged, or a user item since deleted.
-    private func promotingCorrection(_ ranked: [FoodItem], for query: String, limit: Int) -> [FoodItem] {
+    ///
+    /// **A recipe pick (F9b) is promoted the same way, for ``FoodSearchRanking/ingredientIdentity``
+    /// only**, and only when the query has no correction: a correction is the explicit statement and
+    /// answers first on every surface.
+    private func promotingCorrection(
+        _ ranked: [FoodItem], for query: String, limit: Int, ranking: FoodSearchRanking
+    ) -> [FoodItem] {
         let aliases = searchAliases
-        guard !aliases.isEmpty, limit > 0 else { return ranked }
+        let picks = ranking == .ingredientIdentity ? recipeSearchPicks : [:]
+        guard !aliases.isEmpty || !picks.isEmpty, limit > 0 else { return ranked }
         let key = FoodItemSearch.normalized(query)
         guard key.count >= FoodItemSearch.minimumQueryLength,
-              let correctedID = aliases[key],
+              let correctedID = aliases[key] ?? picks[key],
               let corrected = item(id: correctedID) else { return ranked }
         var promoted: [FoodItem] = [corrected]
         promoted.append(contentsOf: ranked.filter { $0.id != corrected.id })

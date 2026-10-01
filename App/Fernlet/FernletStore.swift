@@ -4769,30 +4769,39 @@ final class FernletStore {
         recordSensitiveVisibilityResolution()
     }
 
-    // Each save also remembers the person's own "grams in one" its rows were counted in (F4b,
-    // `RecipePortionGramsMemory`) — at the save, so an editor the person cancels teaches nothing.
+    // Each save also remembers what its rows teach this device (`rememberRecipeSave`) — at the save,
+    // so an editor the person cancels teaches nothing.
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
-        RecipePortionGramsMemory.remember(from: inputIngredients, defaults: recipePortionGramsDefaults)
+        rememberRecipeSave(inputIngredients)
         return diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 
     // `steps` is REQUIRED (no default) — see the note on `DiaryStore.updateRecipe`: the stored steps are
     // overwritten unconditionally, so a defaulted-nil would silently erase them.
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
-        RecipePortionGramsMemory.remember(from: inputIngredients, defaults: recipePortionGramsDefaults)
+        rememberRecipeSave(inputIngredients)
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 
     /// Multipart twins of the two above (a dressing made first, then the salad): see
     /// `DiaryStore.addRecipe(name:servings:notes:parts:)`.
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) -> RecipeDefinition {
-        RecipePortionGramsMemory.remember(from: parts.flatMap(\.ingredients), defaults: recipePortionGramsDefaults)
+        rememberRecipeSave(parts.flatMap(\.ingredients))
         return diary.addRecipe(name: name, servings: servings, notes: notes, parts: parts)
     }
 
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) {
-        RecipePortionGramsMemory.remember(from: parts.flatMap(\.ingredients), defaults: recipePortionGramsDefaults)
+        rememberRecipeSave(parts.flatMap(\.ingredients))
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, parts: parts)
+    }
+
+    /// What a saved recipe's rows teach this device, remembered by every recipe save above: the
+    /// person's own "grams in one" its rows were counted in (F4b, `RecipePortionGramsMemory`), and the
+    /// foods they picked lower in the list for words they typed (F9b, ``RecipeSearchPick``), kept as
+    /// recipe picks in the correction memory so the next recipe search for those words puts them first.
+    private func rememberRecipeSave(_ inputs: [ManualRecipeIngredientInput]) {
+        RecipePortionGramsMemory.remember(from: inputs, defaults: recipePortionGramsDefaults)
+        rememberFoodSearchCorrections(RecipeSearchPick.corrections(from: inputs))
     }
 
     /// The person's own "grams in one" for `foodItemID`, newest first — what the recipe editor offers
@@ -4869,43 +4878,48 @@ final class FernletStore {
     /// pairing the text they searched with the food they chose — and republishes the alias snapshot so
     /// the next search for that text answers with their own choice first.
     ///
-    /// Called from the sheet's Save, never from the pick itself: a correction the user cancels out of
-    /// must not teach the app anything. Device-local and never synced (see
-    /// ``FoodSearchCorrectionMemory``).
+    /// Also the one funnel for recipe picks (F9b, origin `.recipePick`): a saved recipe's rows
+    /// (``rememberRecipeSave(_:)``) and the swap sheet's "Save as new recipe". The memory applies the
+    /// precedence — an ordinary pick never overwrites a correction.
+    ///
+    /// Called from a Save, never from the pick itself: a correction the user cancels out of must not
+    /// teach the app anything. Device-local and never synced (see ``FoodSearchCorrectionMemory``).
     func rememberFoodSearchCorrections(_ corrections: [FoodSearchCorrection]) {
         guard !corrections.isEmpty else { return }
         FoodSearchCorrectionMemory.remember(corrections, defaults: foodSearchCorrectionDefaults)
         publishFoodSearchCorrectionAliases()
     }
 
-    /// Pushes the persisted correction memory into `foodCatalog` — at launch, after every write, and
-    /// after a wipe (where it publishes an EMPTY map, so corrections stop answering searches in the
-    /// live process instead of surviving until relaunch).
+    /// Pushes the persisted memory into `foodCatalog` — corrections as its search aliases, recipe picks
+    /// as its recipe picks (F9b) — at launch, after every write, and after a forget (where it publishes
+    /// EMPTY maps, so nothing forgotten keeps answering searches in the live process until relaunch).
     func publishFoodSearchCorrectionAliases() {
         foodCatalog.setSearchAliases(FoodSearchCorrectionMemory.aliases(defaults: foodSearchCorrectionDefaults))
+        foodCatalog.setRecipeSearchPicks(FoodSearchCorrectionMemory.recipePicks(defaults: foodSearchCorrectionDefaults))
     }
 
-    /// Forgets every remembered search correction — and NOTHING else.
+    /// Forgets every remembered search correction and recipe pick (F9b) — and NOTHING else.
     ///
     /// The user-facing escape hatch for a surface that is otherwise invisible and permanent: a
-    /// correction is learned from one tap, is never listed anywhere, and has no per-entry undo, so
-    /// "delete everything" was the only way to unlearn a mistake. Settings routes here through
-    /// `DestructiveConfirmation` like every other data-destroying control.
+    /// correction or pick is learned from one tap, is never listed anywhere, and has no per-entry
+    /// undo, so "delete everything" was the only way to unlearn a mistake. Settings routes here
+    /// through `DestructiveConfirmation` like every other data-destroying control.
     ///
-    /// - Returns: how many corrections were forgotten, so the caller can say so rather than claiming
-    ///   an outcome it did not check.
+    /// - Returns: how many searches were forgotten, of both origins, so the caller can say so rather
+    ///   than claiming an outcome it did not check.
     @discardableResult func forgetAllFoodSearchCorrections() -> Int {
-        let forgotten = FoodSearchCorrectionMemory.aliases(defaults: foodSearchCorrectionDefaults).count
+        let forgotten = FoodSearchCorrectionMemory.count(defaults: foodSearchCorrectionDefaults)
         FoodSearchCorrectionMemory.clearAll(defaults: foodSearchCorrectionDefaults)
         publishFoodSearchCorrectionAliases()
         FernletAuditLog.log("food.searchCorrections.forgotten", context: ["count": "\(forgotten)"])
         return forgotten
     }
 
-    /// How many searches this device currently remembers a correction for — drives the Settings row's
-    /// count and lets it hide itself when there is nothing to forget.
+    /// How many searches this device currently remembers an answer for — corrections and recipe picks
+    /// (F9b) together — which drives the Settings row's count and lets it hide itself when there is
+    /// nothing to forget.
     var foodSearchCorrectionCount: Int {
-        FoodSearchCorrectionMemory.aliases(defaults: foodSearchCorrectionDefaults).count
+        FoodSearchCorrectionMemory.count(defaults: foodSearchCorrectionDefaults)
     }
 
     @discardableResult func saveWebImportedFoodProduct(_ product: ImportedFoodProduct) -> FoodItem {
@@ -6250,6 +6264,8 @@ final class FernletStore {
         // state this funnel exists to prevent. No failure signal on a plain defaults removal.
         FoodSearchCorrectionMemory.clearAll(defaults: foodSearchCorrectionDefaults)
         foodCatalog.setSearchAliases([:])
+        // The same memory holds the recipe picks (F9b), which the catalog keeps as a second snapshot.
+        foodCatalog.setRecipeSearchPicks([:])
         // The recipe editor's "grams in one" memory (F4b): the sizes this person gave for foods in place
         // of a USDA typical size — food and consumption data, the same class of device-local
         // `UserDefaults` sidecar as the correction memory above. Saved recipe lines carry their own grams,

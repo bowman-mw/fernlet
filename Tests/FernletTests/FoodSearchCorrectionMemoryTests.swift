@@ -23,6 +23,12 @@
 //     what actually stops a promoted correction from BINDING and from auto-committing, pinned at the
 //     three seams that carry it rather than at the one that merely abstains.
 //
+// INGREDIENT-SEARCH ROUND F9b added recipe picks to the same memory, and pins them in the same four
+// suites: the sidecar's precedence, cap and pick rules (`FoodSearchCorrectionMemoryTests`), the
+// recipe-surface bank and the standard surfaces' immunity (`FoodSearchCorrectionCatalogTests`), the
+// recipe saves, wipe, forget and widened writer audit (`FoodSearchCorrectionWipeTests`), and the
+// resolver's isolation (`FoodSearchCorrectionResolverFirewallTests`).
+//
 // VERIFY-BATCH NOTE, in the house pattern of `PrivacyWipeCoverageTests`: this file declares FOUR
 // top-level suites and `-only-testing:` matches suite identifiers EXACTLY, so a run scoped to one of
 // them silently skips the others. Name all four.
@@ -162,6 +168,201 @@ struct FoodSearchCorrectionMemoryTests {
         defer { defaults.removePersistentDomain(forName: name) }
         FoodSearchCorrectionMemory.remember([], defaults: defaults)
         #expect(defaults.object(forKey: FoodSearchCorrectionMemory.defaultsKey) == nil)
+    }
+
+    // MARK: F9b — recipe picks in the same memory
+
+    /// A recipe pick for `text`.
+    private static func pick(_ text: String, _ id: UUID) -> FoodSearchCorrection? {
+        FoodSearchCorrection(searchText: text, foodItemID: id, origin: .recipePick)
+    }
+
+    /// A correction is stored exactly as before F9b (no `origin` key), and a file an earlier build
+    /// wrote reads back as corrections — the memory a person already has is not lost to the new field.
+    @Test func correctionsKeepThePreF9bFormatAndOldFilesReadAsCorrections() throws {
+        let (defaults, name) = Self.makeDefaults()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let id = UUID()
+        let correction = try #require(FoodSearchCorrection(searchText: "brown rice", foodItemID: id))
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(correction)) as? [String: Any])
+        #expect(Set(object.keys) == ["query", "foodItemID"], "a correction gained a key — an older build's file and this one no longer agree")
+
+        let legacy = #"[{"query":"greek yogurt","foodItemID":"\#(id.uuidString)"}]"#
+        defaults.set(Data(legacy.utf8), forKey: FoodSearchCorrectionMemory.defaultsKey)
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults)["greek yogurt"] == id,
+                "an entry written before F9b stopped reading as a correction")
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults).isEmpty)
+
+        // An origin this build does not know is the narrower reach — a recipe pick — never a failed read.
+        let future = #"[{"query":"oat milk","foodItemID":"\#(id.uuidString)","origin":"somethingNew"}]"#
+        defaults.set(Data(future.utf8), forKey: FoodSearchCorrectionMemory.defaultsKey)
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults)["oat milk"] == id)
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults).isEmpty)
+    }
+
+    /// A pick round-trips as a pick: it is published as a recipe pick, never as a correction (which
+    /// would answer quick-log and the resolver too), and it is counted with the corrections.
+    @Test func aRecipePickIsKeptApartFromTheCorrections() {
+        let (defaults, name) = Self.makeDefaults()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let chips = UUID()
+        let rice = UUID()
+        FoodSearchCorrectionMemory.remember([Self.pick("chocolate chips", chips)].compactMap { $0 }, defaults: defaults)
+        FoodSearchCorrectionMemory.remember([FoodSearchCorrection(searchText: "brown rice", foodItemID: rice)].compactMap { $0 }, defaults: defaults)
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults) == ["chocolate chips": chips])
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults) == ["brown rice": rice])
+        #expect(FoodSearchCorrectionMemory.count(defaults: defaults) == 2)
+    }
+
+    /// The precedence the owner's rule asks for: the latest EXPLICIT choice wins. A correction
+    /// replaces a pick, a later pick replaces an earlier pick, and an ordinary pick never replaces a
+    /// correction.
+    @Test func anOrdinaryPickNeverOverwritesACorrection() {
+        let (defaults, name) = Self.makeDefaults()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let (first, second, corrected, later) = (UUID(), UUID(), UUID(), UUID())
+        FoodSearchCorrectionMemory.remember([Self.pick("greek yogurt", first)].compactMap { $0 }, defaults: defaults)
+        FoodSearchCorrectionMemory.remember([Self.pick("greek yogurt", second)].compactMap { $0 }, defaults: defaults)
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults) == ["greek yogurt": second],
+                "a later pick for the same words must replace the earlier one")
+
+        FoodSearchCorrectionMemory.remember([FoodSearchCorrection(searchText: "greek yogurt", foodItemID: corrected)].compactMap { $0 }, defaults: defaults)
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults) == ["greek yogurt": corrected])
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults).isEmpty, "a correction must replace the pick, not sit beside it")
+
+        FoodSearchCorrectionMemory.remember([Self.pick("greek yogurt", later)].compactMap { $0 }, defaults: defaults)
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults) == ["greek yogurt": corrected],
+                "an ordinary recipe pick silently overwrote a correction made in Adjust meal")
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults).isEmpty)
+        #expect(FoodSearchCorrectionMemory.count(defaults: defaults) == 1)
+    }
+
+    /// One recipe save can pick twice for the same words (two "butter" rows); the row saved last wins,
+    /// and the memory still holds one answer per query.
+    @Test func theLastPickForAQueryInOneSaveWins() {
+        let (defaults, name) = Self.makeDefaults()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let (salted, unsalted, flour) = (UUID(), UUID(), UUID())
+        FoodSearchCorrectionMemory.remember(
+            [Self.pick("butter", salted), Self.pick("flour", flour), Self.pick("butter", unsalted)].compactMap { $0 },
+            defaults: defaults
+        )
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults) == ["butter": unsalted, "flour": flour])
+        #expect(FoodSearchCorrectionMemory.count(defaults: defaults) == 2)
+    }
+
+    /// R3 with two origins under one cap: picks are spent before any correction, so a person's many
+    /// recipe picks can never quietly unlearn a correction — and a pick into a memory already full of
+    /// corrections is itself the entry dropped.
+    @Test func theCapSpendsPicksBeforeCorrections() {
+        let (defaults, name) = Self.makeDefaults()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let cap = FoodSearchCorrectionMemory.maxRememberedCorrections
+        let corrections = (0..<(cap / 2)).compactMap { FoodSearchCorrection(searchText: "corrected query \($0)", foodItemID: UUID()) }
+        FoodSearchCorrectionMemory.remember(corrections, defaults: defaults)
+        for index in 0..<(cap / 2) {
+            FoodSearchCorrectionMemory.remember([Self.pick("picked query \(index)", UUID())].compactMap { $0 }, defaults: defaults)
+        }
+        #expect(FoodSearchCorrectionMemory.count(defaults: defaults) == cap)
+        FoodSearchCorrectionMemory.remember([Self.pick("one more pick", UUID())].compactMap { $0 }, defaults: defaults)
+        #expect(FoodSearchCorrectionMemory.count(defaults: defaults) == cap, "the memory grew past its documented cap")
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults).count == cap / 2, "a pick evicted a correction")
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults)["picked query 0"] == nil, "the OLDEST pick is the one spent")
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults)["one more pick"] != nil)
+
+        // A memory full of corrections: a new pick is dropped, a new correction evicts the oldest one.
+        FoodSearchCorrectionMemory.clearAll(defaults: defaults)
+        let full = (0..<cap).compactMap { FoodSearchCorrection(searchText: "full query \($0)", foodItemID: UUID()) }
+        FoodSearchCorrectionMemory.remember(full, defaults: defaults)
+        FoodSearchCorrectionMemory.remember([Self.pick("late pick", UUID())].compactMap { $0 }, defaults: defaults)
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults).count == cap)
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults).isEmpty, "a pick pushed a correction out of a full memory")
+        FoodSearchCorrectionMemory.remember([FoodSearchCorrection(searchText: "late correction", foodItemID: UUID())].compactMap { $0 }, defaults: defaults)
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults)["full query 0"] == nil)
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults)["late correction"] != nil)
+    }
+
+    /// A food row for the pick rules: only its id and name are read.
+    private static func food(_ name: String) -> FoodItem {
+        FoodItem(
+            name: name, servingSize: 100, servingUnit: RecipeUnit.gram.rawValue,
+            macros: Macros(protein: 1, carbs: 1, fat: 1), micronutrients: Micronutrients(),
+            category: "test", source: .usda, dataType: .srLegacy, tags: []
+        )
+    }
+
+    /// F9b's first two rules: a pick teaches only a real search and only from below the first row —
+    /// the first row is what search already says, so remembering it is noise in a capped memory.
+    @Test func aRecipePickTeachesOnlyFromBelowTheFirstRow() {
+        let first = Self.food("Butter, salted")
+        let lower = Self.food("Butter, without salt")
+        let shown = [first, Self.food("Butter, stick, salted"), lower]
+        #expect(RecipeSearchPick.query(typed: "butter", picked: first, shown: shown) == nil, "a pick of the row already first wrote an entry")
+        #expect(RecipeSearchPick.query(typed: "  Butter ", picked: lower, shown: shown) == "butter", "the key is the normalized words the list answered")
+        #expect(RecipeSearchPick.query(typed: "bu", picked: lower, shown: shown) == nil, "two characters are not a search")
+        #expect(RecipeSearchPick.query(typed: "butter", picked: Self.food("Butter, whipped"), shown: shown) == nil,
+                "a row the list did not show cannot be a pick from it")
+    }
+
+    /// Typing passes through prefixes; a key spelled like one would fire on that keystroke only, so a
+    /// last word still being typed teaches nothing — while a finished word, in either number, or a word
+    /// the food's name does not say at all, does.
+    @Test func aWordStillBeingTypedTeachesNothing() {
+        let shown = { (item: FoodItem) in [Self.food("Unrelated first row"), item] }
+        let chips = Self.food("Chocolate Chips, Semi-sweet")
+        #expect(RecipeSearchPick.query(typed: "chocolate ch", picked: chips, shown: shown(chips)) == nil)
+        #expect(RecipeSearchPick.query(typed: "chocolate chi", picked: chips, shown: shown(chips)) == nil)
+        #expect(RecipeSearchPick.query(typed: "chocolate chip", picked: chips, shown: shown(chips)) == "chocolate chip",
+                "'chip' is the name's own word in the singular — a finished word")
+        #expect(RecipeSearchPick.query(typed: "chocolate chips", picked: chips, shown: shown(chips)) == "chocolate chips")
+        let bananas = Self.food("Bananas, ripe and slightly ripe, raw")
+        #expect(RecipeSearchPick.query(typed: "ban", picked: bananas, shown: shown(bananas)) == nil)
+        #expect(RecipeSearchPick.query(typed: "banana", picked: bananas, shown: shown(bananas)) == "banana")
+        let tomatoes = Self.food("Tomatoes, red, ripe, raw")
+        #expect(RecipeSearchPick.query(typed: "tomato", picked: tomatoes, shown: shown(tomatoes)) == "tomato")
+        let olive = Self.food("Oil, olive, extra virgin")
+        #expect(RecipeSearchPick.query(typed: "evoo", picked: olive, shown: shown(olive)) == "evoo",
+                "a word the name does not say is a finished word — the case learning exists for")
+        // The documented cost: an abbreviation that is also a prefix cannot be told from typing.
+        let parmesan = Self.food("Cheese, parmesan, shredded")
+        #expect(RecipeSearchPick.query(typed: "parm", picked: parmesan, shown: shown(parmesan)) == nil)
+
+        // The whole list is read, not only the chosen row: the curated alias puts "Candies, semisweet
+        // chocolate" (which never says "chip") above rows that do, and "chi" is still being typed —
+        // measured on the warm replay, where reading the chosen row alone taught "chocolate chi".
+        let candies = Self.food("Candies, semisweet chocolate")
+        let aliasList = [Self.food("Chocolate Chips, Chocolate"), candies, Self.food("Cookies, chocolate chip, dry mix")]
+        #expect(RecipeSearchPick.query(typed: "chocolate chi", picked: candies, shown: aliasList) == nil)
+        #expect(RecipeSearchPick.query(typed: "chocolate chip", picked: candies, shown: aliasList) == "chocolate chip",
+                "'chip' is a whole word of a shown row — a finished word, even though the chosen row never says it")
+    }
+
+    /// The swap sheet seeds its search with the replaced ingredient's name, and a search for that
+    /// ingredient is a search for something to stand in for it — neither teaches what the words mean.
+    @Test func aSwapSearchForTheReplacedIngredientTeachesNothing() {
+        let seed = "Butter, salted"
+        let coconut = Self.food("Oil, coconut")
+        let unsalted = Self.food("Butter, without salt")
+        let shown = [Self.food("Butter, salted"), coconut, unsalted]
+        #expect(RecipeSearchPick.query(typed: "Butter, salted", picked: unsalted, shown: shown, seededWith: seed) == nil,
+                "a pick on the untouched seed is not a search the person typed")
+        #expect(RecipeSearchPick.query(typed: "butter", picked: unsalted, shown: shown, seededWith: seed) == nil,
+                "'butter' while swapping butter asks for a stand-in, not for what butter means")
+        #expect(RecipeSearchPick.query(typed: "salted butter", picked: unsalted, shown: shown, seededWith: seed) == nil)
+        #expect(RecipeSearchPick.query(typed: "coconut oil", picked: coconut, shown: shown, seededWith: seed) == "coconut oil")
+        #expect(RecipeSearchPick.query(typed: "unsalted butter", picked: unsalted, shown: shown, seededWith: seed) == "unsalted butter")
+    }
+
+    /// A save teaches only the rows still bound to the food they were picked for, as recipe picks.
+    @Test func aSavedRecipeTeachesOnlyItsStillBoundPicks() {
+        let butter = UUID()
+        var picked = ManualRecipeIngredientInput(name: "Butter, without salt", selectedFoodItemId: butter)
+        picked.pickedForSearch = "butter"
+        var unbound = ManualRecipeIngredientInput(name: "my own butter")
+        unbound.pickedForSearch = "stale words"
+        let firstRow = ManualRecipeIngredientInput(name: "Flour", selectedFoodItemId: UUID())
+        let taught = RecipeSearchPick.corrections(from: [picked, unbound, firstRow])
+        #expect(taught == [FoodSearchCorrection(searchText: "butter", foodItemID: butter, origin: .recipePick)].compactMap { $0 })
     }
 }
 
@@ -339,6 +540,93 @@ struct FoodSearchCorrectionCatalogTests {
         let tooShort = try Self.catalog(aliases: ["ab": corrected.id])
         #expect(tooShort.results(for: "ab", limit: 6, context: .userTyped).isEmpty,
                 "a two-character alias resolved to a food, which the search floor forbids")
+    }
+
+    // MARK: F9b — recipe picks
+
+    /// The recipe-pick bank (F9b): a query, the row the recipe editor's list puts first today, and a
+    /// row lower in the same six that a person picks. Each pick is read off the live six by name, so
+    /// the bank measures the list a person actually sees.
+    ///
+    /// "chocolate chips" is first today because of the curated alias (F7) and "parmesan" and "butter"
+    /// because of the identity order (F5), so the bank shows a pick outranking both.
+    static let recipePickBank: [(query: String, coldTop: String, picked: String)] = [
+        ("chocolate chips", "Candies, semisweet chocolate", "Chocolate Chips, Semi-sweet"),
+        ("parmesan", "Cheese, parmesan, grated", "Cheese, parmesan, shredded"),
+        ("butter", "Butter, salted", "Butter, without salt")
+    ]
+
+    /// The recipe editor's own call (`CatalogTypeahead.matches`).
+    private static func recipeSix(_ query: String, in catalog: FoodCatalog) -> [FoodItem] {
+        catalog.results(for: query, context: .userTyped, ranking: .ingredientIdentity)
+    }
+
+    /// One pick from below the top puts that food first on the recipe surfaces — above the curated
+    /// alias and the identity order — without lengthening the list or reordering the rest.
+    @Test func aRecipePickLeadsTheRecipeSurfacesAboveAliasAndIdentity() throws {
+        let cold = try Self.catalog()
+        for bankCase in Self.recipePickBank {
+            let six = Self.recipeSix(bankCase.query, in: cold)
+            #expect(six.first?.name == bankCase.coldTop, "the recipe list for \"\(bankCase.query)\" moved cold — re-measure IngredientSearchCorpusTests first")
+            let picked = try #require(six.dropFirst().first { $0.name == bankCase.picked },
+                                      "\"\(bankCase.picked)\" is no longer below the top of the six for \"\(bankCase.query)\"")
+            let warm = try Self.catalog()
+            warm.setRecipeSearchPicks([bankCase.query: picked.id])
+            let warmSix = Self.recipeSix(bankCase.query, in: warm)
+            #expect(warmSix.first?.id == picked.id, "one recipe pick did not put \"\(bankCase.picked)\" first for \"\(bankCase.query)\"")
+            #expect(warmSix.count == six.count, "the promotion grew the list")
+            #expect(Array(warmSix.dropFirst().map(\.id)) == six.filter { $0.id != picked.id }.map(\.id),
+                    "the pick reordered the rows below it")
+            // The swap sheet's pool (`candidates` with the identity order) leads with it too.
+            #expect(warm.candidates(for: bankCase.query, limit: 12, ranking: .ingredientIdentity).first?.foodItem.id == picked.id)
+        }
+    }
+
+    /// A pick answers the recipe surfaces ONLY: quick-log and the meal composer (the standard typed
+    /// order), the resolver's pool, the bind-confidence surface and the resolver's personalization
+    /// snapshot are exactly what they were cold. The owner scoped learning from recipe picks to recipes.
+    @Test func aRecipePickNeverReachesTheStandardSurfaces() throws {
+        let cold = try Self.catalog()
+        let warm = try Self.catalog()
+        var picks: [String: UUID] = [:]
+        for bankCase in Self.recipePickBank {
+            picks[bankCase.query] = try #require(Self.recipeSix(bankCase.query, in: cold).first { $0.name == bankCase.picked }).id
+        }
+        warm.setRecipeSearchPicks(picks)
+        for bankCase in Self.recipePickBank {
+            let six = Self.recipeSix(bankCase.query, in: cold)
+            #expect(warm.recentIngredientPersonalization().preferredFoodID(forCompletePhrase: bankCase.query, among: six) == nil,
+                    "the resolver's personalization snapshot read a recipe pick as a correction")
+            #expect(warm.results(for: bankCase.query, limit: 10, context: .userTyped).map(\.id)
+                        == cold.results(for: bankCase.query, limit: 10, context: .userTyped).map(\.id),
+                    "a recipe pick changed quick-log's list for \"\(bankCase.query)\"")
+            #expect(warm.candidates(for: bankCase.query, limit: 18).map(\.foodItem.id)
+                        == cold.candidates(for: bankCase.query, limit: 18).map(\.foodItem.id),
+                    "a recipe pick reached the meal resolver's pool for \"\(bankCase.query)\"")
+            #expect(warm.scoredResults(for: bankCase.query, limit: 6).map(\.item.id)
+                        == cold.scoredResults(for: bankCase.query, limit: 6).map(\.item.id))
+        }
+    }
+
+    /// Precedence inside the catalog: a correction for the same words answers first, and the person's
+    /// logged history re-ranks beneath a pick exactly as it does beneath a correction.
+    @Test func aCorrectionOutranksAPickAndAPickOutranksHistory() throws {
+        let cold = try Self.catalog()
+        let six = Self.recipeSix("butter", in: cold)
+        let picked = try #require(six.first { $0.name == "Butter, without salt" })
+        let corrected = try #require(six.first { $0.name == "Butter, stick, unsalted" })
+        let logged = try #require(six.first { $0.name == "Butter, salted" })
+
+        let both = try Self.catalog(aliases: ["butter": corrected.id])
+        both.setRecipeSearchPicks(["butter": picked.id])
+        #expect(Self.recipeSix("butter", in: both).first?.id == corrected.id, "a recipe pick outranked a correction")
+
+        let history = try Self.catalog()
+        history.setSearchHistory(FoodSearchHistory(weights: [logged.id: 5_000]))
+        history.setRecipeSearchPicks(["butter": picked.id])
+        let warmSix = Self.recipeSix("butter", in: history)
+        #expect(warmSix.first?.id == picked.id, "a logged row outranked the person's own recipe pick")
+        #expect(warmSix.dropFirst().first?.id == logged.id, "history no longer leads the rows beneath the pick")
     }
 }
 
@@ -541,6 +829,92 @@ struct FoodSearchCorrectionWipeTests {
                 "\"forget corrected searches\" destroyed something other than the corrections")
     }
 
+    // MARK: F9b — recipe picks share the memory, its wipe and its forget
+
+    /// The recipe editor's typed search for `query` on `store` (`CatalogTypeahead.matches`).
+    private static func recipeSearch(_ query: String, in store: FernletStore) -> [FoodItem] {
+        store.foodCatalog.results(for: query, limit: 3, context: .userTyped, ranking: .ingredientIdentity)
+    }
+
+    /// A recipe row picked for typed words (what `RecipeIngredientEditor`'s tap leaves on the row).
+    private static func pickedRow(_ food: FoodItem, for query: String) -> ManualRecipeIngredientInput {
+        var row = ManualRecipeIngredientInput(name: food.name, selectedFoodItemId: food.id, quantity: 100, unit: "g")
+        row.pickedForSearch = FoodItemSearch.normalized(query)
+        return row
+    }
+
+    /// The editor's half of "a cancelled editor teaches nothing": a pick only marks the row, and every
+    /// recipe save — one-part and multipart, create and edit — remembers it, as a recipe pick that the
+    /// recipe search answers and quick-log does not.
+    @Test func everyRecipeSaveRemembersItsPicksAndAnUnsavedPickNothing() {
+        let food = Self.plantedFood()
+        let suiteName = "fernlet.tests.foodCorrections.recipePick.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = makeTestStore(bundledFoodItems: [food], foodSearchCorrectionDefaults: defaults)
+        let queries = ["quaffle brunch nonsense", "second picked words", "third picked words", "fourth picked words"]
+
+        let rows = queries.map { Self.pickedRow(food, for: $0) }
+        #expect(defaults.object(forKey: FoodSearchCorrectionMemory.defaultsKey) == nil,
+                "marking a row wrote to storage — a CANCELLED editor would now teach the app")
+        #expect(Self.recipeSearch(queries[0], in: store).isEmpty, "precondition: the words must be unanswerable cold")
+
+        let recipe = store.addRecipe(name: "Loaf", servings: 1, ingredients: [rows[0]])
+        store.updateRecipe(recipe, name: "Loaf", servings: 1, ingredients: [rows[1]], steps: nil)
+        let parted = store.addRecipe(name: "Loaf two", servings: 1, parts: [RecipeComponentInput(name: "Dough", ingredients: [rows[2]], steps: [])])
+        store.updateRecipe(parted, name: "Loaf two", servings: 1, parts: [RecipeComponentInput(name: "Dough", ingredients: [rows[3]], steps: [])])
+
+        for query in queries {
+            #expect(Self.recipeSearch(query, in: store).first?.id == food.id, "a recipe save did not remember the pick for \"\(query)\"")
+            #expect(store.foodCatalog.results(for: query, limit: 3, context: .userTyped).isEmpty,
+                    "a recipe pick answered quick-log's search for \"\(query)\" — picks are for the recipe surfaces only")
+        }
+        #expect(FoodSearchCorrectionMemory.recipePicks(defaults: defaults).count == queries.count)
+        #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults).isEmpty, "a recipe pick was stored as a correction")
+        #expect(store.foodSearchCorrectionCount == queries.count, "Settings' count does not include the recipe picks it forgets")
+    }
+
+    /// "Delete everything" removes the recipe picks from the defaults sidecar AND from the catalog's
+    /// second live snapshot, and a relaunch over the same suite learns nothing back.
+    @Test func deleteAllClearsTheRecipePicks() async {
+        let food = Self.plantedFood()
+        let suiteName = "fernlet.tests.foodCorrections.recipePickWipe.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = makeTestStore(bundledFoodItems: [food], foodSearchCorrectionDefaults: defaults)
+        let query = "quaffle brunch nonsense"
+        store.addRecipe(name: "Loaf", servings: 1, ingredients: [Self.pickedRow(food, for: query)])
+        #expect(Self.recipeSearch(query, in: store).first?.id == food.id, "precondition: the pick was not learned")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(defaults.object(forKey: FoodSearchCorrectionMemory.defaultsKey) == nil,
+                "delete everything left the recipe picks on disk")
+        #expect(Self.recipeSearch(query, in: store).isEmpty,
+                "the wipe cleared the sidecar but left the catalog's recipe-pick snapshot answering until relaunch")
+        let relaunched = makeTestStore(bundledFoodItems: [food], foodSearchCorrectionDefaults: defaults)
+        #expect(Self.recipeSearch(query, in: relaunched).isEmpty, "a relaunched store re-learned a pick the wipe deleted")
+    }
+
+    /// Settings' "Forget corrected searches" counts and forgets the recipe picks with the corrections,
+    /// and nothing else.
+    @Test func forgettingCorrectedSearchesForgetsTheRecipePicksToo() {
+        let food = Self.plantedFood()
+        let suiteName = "fernlet.tests.foodCorrections.recipePickForget.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = makeTestStore(bundledFoodItems: [food], foodSearchCorrectionDefaults: defaults)
+        store.rememberFoodSearchCorrections([FoodSearchCorrection(searchText: "corrected nonsense words", foodItemID: food.id)].compactMap { $0 })
+        let recipe = store.addRecipe(name: "Loaf", servings: 1, ingredients: [Self.pickedRow(food, for: "quaffle brunch nonsense")])
+        #expect(store.foodSearchCorrectionCount == 2)
+
+        #expect(store.forgetAllFoodSearchCorrections() == 2, "the row reports what it forgot, picks included")
+        #expect(store.foodSearchCorrectionCount == 0)
+        #expect(Self.recipeSearch("quaffle brunch nonsense", in: store).isEmpty, "forgetting left the catalog answering a recipe pick")
+        #expect(Self.recipeSearch("corrected nonsense words", in: store).isEmpty)
+        #expect(store.recipes.contains { $0.id == recipe.id }, "forgetting searches removed the recipe the pick was made in")
+    }
+
     /// The resurrection audit, structural half — the repo has four documented cases of a writer that
     /// re-created wiped data, and the cheapest guard is knowing exactly who can write this surface.
     ///
@@ -550,7 +924,12 @@ struct FoodSearchCorrectionWipeTests {
     /// stayed green. This one extracts the Save closure's BODY by brace counting and asks whether the
     /// write is inside it, and it sweeps ALL of `App/` rather than the two files it expected to find
     /// writers in.
-    @Test func theOnlyWriterIsTheCorrectionSheetSave() throws {
+    ///
+    /// **Widened for F9b (recipe picks), and still a closed list.** Three more writers exist, each a
+    /// SAVE: the store's recipe saves (the four `addRecipe`/`updateRecipe` overloads, through its one
+    /// `rememberRecipeSave`) and the swap sheet's "Save as new recipe". The recipe editor itself writes
+    /// nothing — its tap only marks the row — so `FoodView.swift` still holds exactly one call.
+    @Test func theOnlyWritersAreTheSavesThatTeach() throws {
         let root = RepoRoot.url
         let foodView = try String(contentsOf: root.appendingPathComponent("App/Fernlet/FoodView.swift"), encoding: .utf8)
 
@@ -589,9 +968,9 @@ struct FoodSearchCorrectionWipeTests {
                 "the correction memory gained another UI writer; check it cannot fire from a CANCELLED sheet")
 
         // 3. Whole-`App/` sweep (review finding M3): any OTHER file calling either writer is a
-        // surface no wipe leg and no review has looked at. The two known files are allowlisted by
-        // name and pinned by count above.
-        let allowedWriters: Set<String> = ["FoodView.swift", "FernletStore.swift"]
+        // surface no wipe leg and no review has looked at. The known files are allowlisted by name
+        // and pinned by count (FoodView above, the swap sheet and the store below).
+        let allowedWriters: Set<String> = ["FoodView.swift", "FernletStore.swift", "IngredientSubstitutionSheet.swift"]
         let appFiles = try Self.swiftFiles(under: root.appendingPathComponent("App"))
         #expect(appFiles.count > 50, "the App scan found \(appFiles.count) files — it would pass by looking at almost nothing")
         let strayWriters = appFiles.filter { url in
@@ -604,10 +983,34 @@ struct FoodSearchCorrectionWipeTests {
         }
         #expect(strayWriters.isEmpty, "a new writer of the correction memory: \(strayWriters.map(\.lastPathComponent))")
 
-        // 4. Inside `FernletStore` there is exactly one call into the memory's writer.
-        let store = try String(contentsOf: root.appendingPathComponent("App/Fernlet/FernletStore.swift"), encoding: .utf8)
+        // 4. Inside `FernletStore` there is exactly one call into the memory's writer, and the one
+        // funnel into it is called only by its own recipe-save helper (F9b), which only the four
+        // recipe saves call.
+        let store = Self.strippingLineComments(
+            try String(contentsOf: root.appendingPathComponent("App/Fernlet/FernletStore.swift"), encoding: .utf8)
+        )
         #expect(store.components(separatedBy: "FoodSearchCorrectionMemory.remember(").count - 1 == 1,
                 "a second call site can write corrections — every writer must be audited against the wipe")
+        #expect(store.components(separatedBy: "rememberFoodSearchCorrections(").count - 1 == 2,
+                "the store gained a caller of its correction funnel beyond the recipe-save helper")
+        #expect(store.components(separatedBy: "rememberRecipeSave(").count - 1 == 5,
+                "the recipe-save helper must be defined once and called by exactly the four recipe saves")
+        #expect(store.components(separatedBy: "RecipeSearchPick.corrections(").count - 1 == 1,
+                "recipe picks are read off the rows somewhere other than the recipe-save helper")
+
+        // 4a. The swap sheet writes only inside its "Save as new recipe" action — after the fork is
+        // handed off, before the dismiss — never at the pick, which a cancelled swap would keep.
+        let swap = Self.strippingLineComments(
+            try String(contentsOf: root.appendingPathComponent("App/Fernlet/IngredientSubstitutionSheet.swift"), encoding: .utf8)
+        )
+        #expect(swap.components(separatedBy: "rememberFoodSearchCorrections(").count - 1 == 1,
+                "the swap sheet gained a second writer; check it cannot fire from a cancelled swap")
+        let saveAction = try Self.buttonAction(from: "didSave = true", in: swap)
+        #expect(saveAction.contains("onSaveFork(pending.fork)") && saveAction.contains("dismiss()"),
+                "the extracted text is not the Save-as-new-recipe action, so the next check measures the wrong text")
+        #expect(saveAction.contains("store.rememberFoodSearchCorrections("),
+                "the swap sheet's write is no longer inside its Save action — a cancelled swap would now teach the app")
+        #expect(saveAction.count < 800, "the extracted Save action is \(saveAction.count) characters — it is not bounded to the action")
 
         // 5. Nothing below the app layer may CALL it: the memory is app-target bookkeeping, and a
         // FernletKit writer would be one no wipe leg knows about. Member access (`…Memory.`) rather
@@ -620,6 +1023,17 @@ struct FoodSearchCorrectionWipeTests {
             return text.contains("FoodSearchCorrectionMemory.")
         }
         #expect(offenders.isEmpty, "FernletKit calls into the correction memory: \(offenders.map(\.lastPathComponent))")
+    }
+
+    /// The text of a `Button { … } label:` action from `marker` (inside it) to the action's close — the
+    /// first `} label:` after the marker. Throws when either end is missing, so a reshaped button is a
+    /// loud stop, never a quiet pass.
+    private static func buttonAction(from marker: String, in source: String) throws -> String {
+        guard source.components(separatedBy: marker).count - 1 == 1, let start = source.range(of: marker),
+              let end = source.range(of: "} label:", range: start.upperBound..<source.endIndex) else {
+            throw CorrectionScanError.ambiguousMarker(marker, source.components(separatedBy: marker).count - 1)
+        }
+        return String(source[start.upperBound..<end.lowerBound])
     }
 
     /// `source` with `//` line comments removed, preserving the line count.
@@ -797,6 +1211,31 @@ struct FoodSearchCorrectionResolverFirewallTests {
         #expect(MealResolutionService.bindConfidence(for: plan, candidates: pool) != .high
                     || !boundIDs.contains(promoted.id),
                 "a promoted correction bound AND claimed high confidence")
+    }
+
+    /// A recipe pick (F9b) has a firewall of a different kind: it never enters the resolver at all.
+    /// The same absurd pick that leads the swap sheet's identity-ordered pool is absent from the meal
+    /// resolver's pool, which is exactly the cold one, so no tier can bind it and no confidence gate is
+    /// asked about it. (That the resolver's personalization never offers a pick is pinned in
+    /// `FoodSearchCorrectionCatalogTests.aRecipePickNeverReachesTheStandardSurfaces`, over picks whose
+    /// names carry their words — this absurd one would be filtered for incompatibility regardless.)
+    @Test func aRecipePickNeverReachesTheResolver() throws {
+        let cold = try Self.shippedCatalog()
+        let picked = try #require(cold.exactNameMatch(forNormalized: FoodItemSearch.normalized(Self.absurdCorrection)))
+        let warm = try Self.shippedCatalog()
+        warm.setRecipeSearchPicks([Self.absurdQuery: picked.id])
+
+        #expect(warm.candidates(for: Self.absurdQuery, limit: 12, ranking: .ingredientIdentity).first?.foodItem.id == picked.id,
+                "precondition: the pick does not lead the recipe (swap sheet) pool, so this suite proves nothing")
+        let pool = warm.candidates(for: Self.absurdQuery, limit: 18)
+        #expect(pool.map(\.foodItem.id) == cold.candidates(for: Self.absurdQuery, limit: 18).map(\.foodItem.id),
+                "a recipe pick changed the meal resolver's pool")
+        #expect(!pool.contains { $0.foodItem.id == picked.id })
+        let plan = try #require(FoundationFoodSelectionModel.deterministicPlan(
+            description: Self.absurdQuery, candidates: pool, fallbackType: nil
+        ))
+        let boundIDs = plan.ingredients.compactMap { ingredient in pool.first { $0.id == ingredient.candidateId }?.foodItem.id }
+        #expect(!boundIDs.contains(picked.id))
     }
 
     /// The AI-selection tier's gate, exercised directly because the model itself is unavailable in

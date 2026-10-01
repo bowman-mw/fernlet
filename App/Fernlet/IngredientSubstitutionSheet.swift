@@ -32,6 +32,9 @@ struct IngredientSubstitutionSheet: View {
     @State private var aiSuggestions: [IngredientSubstitutionSuggestion] = []
     @State private var isLoadingAI = true
     @State private var searchResults: [FoodSelectionCandidate] = []
+    /// The words `searchResults` answer — the seed, or the search text once its results settled. A pick
+    /// teaches search against these (F9b), never against a newer keystroke the list does not show yet.
+    @State private var searchedText = ""
     /// Non-nil once the cook has chosen a substitute — switches the sheet from picker to preview.
     @State private var pending: PendingFork?
     /// Guards the save button against a double-tap firing `onSaveFork` twice before the sheet tears down.
@@ -68,11 +71,13 @@ struct IngredientSubstitutionSheet: View {
             guard let originalFoodItem else {
                 searchText = ""
                 searchResults = []
+                searchedText = ""
                 isLoadingAI = false
                 return
             }
             searchText = originalFoodItem.name
             searchResults = store.substitutionCandidates(forIngredientNamed: originalFoodItem.name)
+            searchedText = originalFoodItem.name
             let ai = await store.aiSubstitutionSuggestions(
                 recipeName: recipe.name,
                 ingredientName: originalFoodItem.name
@@ -87,7 +92,11 @@ struct IngredientSubstitutionSheet: View {
             // bursts and the query off the render thread (mirrors the debounced food typeahead).
             guard didSeed else { return }
             let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { searchResults = []; return }
+            guard !trimmed.isEmpty else {
+                searchResults = []
+                searchedText = ""
+                return
+            }
             do {
                 try await Task.sleep(for: .milliseconds(200))
             } catch {
@@ -102,6 +111,7 @@ struct IngredientSubstitutionSheet: View {
             }.value
             guard !Task.isCancelled else { return }
             searchResults = results
+            searchedText = trimmed
         }
     }
 
@@ -131,7 +141,7 @@ struct IngredientSubstitutionSheet: View {
                             SectionLabel("Suggestions")
                             ForEach(Array(aiSuggestions.enumerated()), id: \.element.id) { index, suggestion in
                                 if index > 0 { FernletRowDivider() }
-                                substituteRow(suggestion.foodItem, reason: suggestion.reason)
+                                substituteRow(suggestion.foodItem, reason: suggestion.reason, searchList: nil)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,9 +159,10 @@ struct IngredientSubstitutionSheet: View {
                                 .font(.fernlet(.bodySmall))
                                 .foregroundStyle(Color.slate)
                         } else {
-                            ForEach(Array(visibleSearchResults.enumerated()), id: \.element.id) { index, foodItem in
+                            let shown = visibleSearchResults
+                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, foodItem in
                                 if index > 0 { FernletRowDivider() }
-                                substituteRow(foodItem, reason: nil)
+                                substituteRow(foodItem, reason: nil, searchList: shown)
                             }
                         }
                     }
@@ -178,9 +189,12 @@ struct IngredientSubstitutionSheet: View {
     /// One replacement candidate, rendered the way the recipe editor's typeahead renders the SAME
     /// catalog: name, provenance badge, and the reference serving with its macros. A name alone left
     /// the cook no way to tell two similar hits apart — or to spot an unrelated one.
-    private func substituteRow(_ foodItem: FoodItem, reason: String?) -> some View {
+    ///
+    /// `searchList` is the manual search list the row sits in (its rows, in order), or nil for an AI
+    /// suggestion — which answers no words the person typed, so its pick teaches nothing (F9b).
+    private func substituteRow(_ foodItem: FoodItem, reason: String?, searchList: [FoodItem]?) -> some View {
         Button {
-            selectSubstitute(foodItem)
+            selectSubstitute(foodItem, searchList: searchList)
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -240,6 +254,9 @@ struct IngredientSubstitutionSheet: View {
                     guard !didSave else { return }
                     didSave = true
                     onSaveFork(pending.fork)
+                    // F9b: a replacement picked lower in the search list for words the person typed is
+                    // remembered for the recipe searches — at this save, so a cancelled swap teaches nothing.
+                    store.rememberFoodSearchCorrections(pending.searchPick.map { [$0] } ?? [])
                     dismiss()
                 } label: {
                     Label("Save as new recipe", systemImage: "plus.circle")
@@ -291,7 +308,7 @@ struct IngredientSubstitutionSheet: View {
 
     // MARK: - Selection
 
-    private func selectSubstitute(_ substitute: FoodItem) {
+    private func selectSubstitute(_ substitute: FoodItem, searchList: [FoodItem]?) {
         // Quantity is gram-matched in code (never from the model); the fork is a pure value transform.
         let newIngredient = RecipeSubstitution.substitutedIngredient(
             replacing: original,
@@ -311,8 +328,20 @@ struct IngredientSubstitutionSheet: View {
             newIngredient: newIngredient,
             fork: fork,
             beforeTotals: store.macroTotals(for: recipe),
-            afterTotals: store.macroTotals(for: fork)
+            afterTotals: store.macroTotals(for: fork),
+            searchPick: searchPick(of: substitute, in: searchList)
         )
+    }
+
+    /// What choosing `substitute` from the manual search list would teach the recipe searches (F9b,
+    /// ``RecipeSearchPick``): nil for an AI suggestion, the list's first row, the seeded search or a
+    /// search for the ingredient being replaced, or a word still being typed.
+    private func searchPick(of substitute: FoodItem, in searchList: [FoodItem]?) -> FoodSearchCorrection? {
+        guard let searchList,
+              let query = RecipeSearchPick.query(
+                  typed: searchedText, picked: substitute, shown: searchList, seededWith: originalFoodItem?.name
+              ) else { return nil }
+        return FoodSearchCorrection(searchText: query, foodItemID: substitute.id, origin: .recipePick)
     }
 
     /// Everything the preview screen needs for one chosen swap: the substitute food, the
@@ -327,6 +356,8 @@ struct IngredientSubstitutionSheet: View {
         let fork: RecipeDefinition
         let beforeTotals: MacroTotals
         let afterTotals: MacroTotals
+        /// The recipe pick this swap teaches when saved (F9b), or nil.
+        let searchPick: FoodSearchCorrection?
     }
 }
 

@@ -2313,7 +2313,7 @@ struct RecipeIngredientEditor: View {
                 ForEach(visibleMatches) { foodItem in
                     CatalogSuggestionRow(foodItem: foodItem) {
                         guard let current = typeaheadResults.selectable(foodItem, for: ingredient.name) else { return }
-                        select(current)
+                        pick(current, among: visibleMatches)
                     }
                 }
             }
@@ -2457,10 +2457,22 @@ struct RecipeIngredientEditor: View {
         return ingredient.protein > 0 || ingredient.carbs > 0 || ingredient.fat > 0
     }
 
+    /// A tap on a suggestion: binds the food and, when the pick should teach search (F9b,
+    /// ``RecipeSearchPick`` — typed words, a row below the first), keeps those words on the row for the
+    /// recipe's save to remember. Nothing is written here: an editor the person cancels teaches nothing.
+    private func pick(_ foodItem: FoodItem, among shown: [FoodItem]) {
+        let taught = RecipeSearchPick.query(typed: ingredient.name, picked: foodItem, shown: shown)
+        select(foodItem)
+        ingredient.pickedForSearch = taught
+    }
+
+    /// Binds `foodItem` — a suggestion tap (through ``pick(_:among:)``) or a just-saved custom food —
+    /// and forgets any earlier pick's words, so only the tap that bound THIS food can teach.
     private func select(_ foodItem: FoodItem) {
         let unit = foodItem.preferredRecipeUnit
         ingredient.name = foodItem.name
         ingredient.selectedFoodItemId = foodItem.id
+        ingredient.pickedForSearch = nil
         ingredient.quantity = foodItem.defaultRecipeQuantity(for: unit)
         ingredient.unit = unit.rawValue
         ingredient.portion = nil
@@ -2480,6 +2492,7 @@ struct RecipeIngredientEditor: View {
         let shown = ingredient.resolvedPreciseMacros(foodItems: [foodItem])
         ingredient = ingredient.droppingPortion()
         ingredient.selectedFoodItemId = nil
+        ingredient.pickedForSearch = nil
         askingGramsFor = nil
         seedManualGrams(shown ?? foodItem.exactMacros)
     }
@@ -2502,6 +2515,7 @@ struct RecipeIngredientEditor: View {
             // A named portion's count becomes its grams, never "2 g" (F4b fix round 1).
             ingredient = ingredient.droppingPortion()
             ingredient.selectedFoodItemId = nil
+            ingredient.pickedForSearch = nil
             askingGramsFor = nil
         }
         isCreatingCustomIngredient = false

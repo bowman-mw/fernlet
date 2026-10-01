@@ -787,6 +787,22 @@ struct LocalizationBoundaryTests {
         ])
     }
 
+    /// The correction memory's origins (ingredient-search round, F9b). A raw value is stored beside each
+    /// remembered recipe pick in `fernlet.foodSearchCorrections.v1`, and the memory's keys are the typed
+    /// English words — tokens, never display text.
+    @Test func frozenFoodSearchCorrectionOriginTokens() throws {
+        #expect(FoodSearchCorrection.Origin.allCases.map(\.rawValue) == ["correction", "recipePick"], """
+            The correction memory's origin tokens changed. "recipePick" is persisted on every remembered \
+            recipe pick; renamed, those picks read as an unknown origin. Fork a display property; never \
+            the rawValue.
+            """)
+        let pick = try #require(FoodSearchCorrection(searchText: "Butter", foodItemID: UUID(), origin: .recipePick))
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(pick)) as? [String: Any])
+        #expect(Set(object.keys) == ["query", "foodItemID", "origin"], "the stored keys are frozen")
+        #expect(object["origin"] as? String == "recipePick")
+        #expect(object["query"] as? String == "butter", "the key is the normalized English words, never localized")
+    }
+
     /// The dish heuristic's carrier-use phrases (ingredient-search round, F3): matched against USDA's
     /// English names ("Oil, olive, salad or cooking"), never display text.
     @Test func frozenCarrierUsePhrases() {

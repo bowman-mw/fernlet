@@ -160,8 +160,9 @@ struct PrivacyDataSettingsView: View {
     @State private var cloudCountsUnavailable = false
     @State private var exportPayload: DataExportPayload?
     @State private var isBuildingExport = false
-    /// How many corrected searches this device remembers (research §26 fix 1.10), read on appear and
-    /// after a forget so the row can state the count and hide itself when there is nothing to forget.
+    /// How many corrected searches this device remembers (research §26 fix 1.10, and F9b's recipe
+    /// picks), read on appear and after a forget so the row can state the count and hide itself when
+    /// there is nothing to forget.
     /// A snapshot rather than a live read: `body` must not touch `UserDefaults` on every render.
     @State private var rememberedSearchCorrections = 0
     /// Presents the typed-gate ``DeleteEverythingSheet`` for this screen's delete buttons.
@@ -593,10 +594,13 @@ struct PrivacyDataSettingsView: View {
     /// The one-line escape hatch for the local correction memory (research §26 fix 1.10, review
     /// finding M7).
     ///
-    /// A correction is learned from a single tap in "Adjust meal", is listed nowhere, and has no
-    /// per-entry undo — so without this row the only way to unlearn a mistaken one was to delete
-    /// everything. Deliberately NOT terracotta: the two reds on this page are still the two deletes
-    /// (5f), and this forgets a ranking preference, not content. It still routes through
+    /// A correction is learned from a single tap in "Adjust meal" — and, since ingredient-search round
+    /// F9b, a recipe pick from a single tap lower in a recipe's ingredient list — is listed nowhere, and
+    /// has no per-entry undo, so without this row the only way to unlearn a mistaken one was to delete
+    /// everything. It counts and forgets both; the text names both, because a person who has never
+    /// opened Adjust meal would otherwise see a count of "corrected searches" they never made.
+    /// Deliberately NOT terracotta: the two reds on this page are still the two deletes (5f), and this
+    /// forgets a ranking preference, not content. It still routes through
     /// ``DestructiveConfirmation`` like every other data-destroying control, and hides itself entirely
     /// when there is nothing remembered.
     @ViewBuilder private var forgetSearchCorrectionsRow: some View {
@@ -605,7 +609,7 @@ struct PrivacyDataSettingsView: View {
                 // Phrased so the count never has to agree with a noun: "1 corrected food searches"
                 // is the plural bug an interpolated count invites, and the fix that avoids adding an
                 // inflected string-catalog key while the catalog sync is deliberately deferred.
-                Text("Fernlet remembers the food searches you've corrected on this device (\(rememberedSearchCorrections)), so a search you fixed once stays fixed.")
+                Text("Fernlet remembers the food searches you've corrected on this device (\(rememberedSearchCorrections)): a food you replaced in Adjust meal, or an ingredient you picked from lower in a recipe's list. It comes up first the next time you search the same words.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()

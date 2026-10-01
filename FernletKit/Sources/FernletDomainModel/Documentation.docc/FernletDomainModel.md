@@ -394,6 +394,12 @@ person's own size under the frozen label ``RecipePortionPicker/gramsForOneLabel`
 estimate status is worked out again where it is shown (``RecipeIngredient/isTypicalSizeEstimate(using:)``),
 so the recipe page and cooking mode keep the editor's "USDA typical size, estimate" with no wire change.
 
+A recipe pick teaches search (2026-09-30, F9b, the owner's call): when a person types an ingredient
+out and chooses a food from below the top of the editor's list, the row carries the normalized words
+in ``ManualRecipeIngredientInput/pickedForSearch`` until the recipe is saved, and the app's save
+remembers them, so the next recipe search for the same words puts that food first. The field is
+in-memory form state only — never on a ``RecipeIngredient``, the synced blob or the wire.
+
 - ``RecipeDefinition``
 - ``RecipeIngredient``
 - ``RecipeStep``

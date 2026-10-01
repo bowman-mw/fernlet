@@ -169,6 +169,9 @@ struct PrivacyWipeCoverageTests {
         // the bounded scan can see it (an internal helper's body is not scanned).
         "FoodSearchCorrectionMemory.clearAll",
         "foodCatalog.setSearchAliases",
+        // Ingredient-search round F9b: the same memory's recipe picks, which the catalog holds as a
+        // second in-memory snapshot — spelled inline for the same reason.
+        "foodCatalog.setRecipeSearchPicks",
         // The recipe editor's "grams in one" memory (ingredient-search round F4b): the sizes this
         // person gave for foods in place of a USDA typical size. Saved recipe lines carry their own
         // grams, so clearing it changes no recipe.
