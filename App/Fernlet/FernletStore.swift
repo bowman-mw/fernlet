@@ -7532,24 +7532,27 @@ extension FernletStore: SealedBackupContext {
         sealedBackupDeferralPersistHook?(deferred, payloadType)
     }
 
-    /// The ids of the journal entries some day still references (`SealedBackupContext`): every persisted
-    /// day's journals, plus the in-memory today and `previousJournals` (a write not saved yet). The
-    /// journal backup exports only the sealed rows among them, so an orphan row is never exported
-    /// (design 2026-09-30, §7.1). Keyless.
+    /// What the days reference for the journal backup (`SealedBackupContext`): the ids every persisted
+    /// day that decodes holds, plus the in-memory today and `previousJournals` (a write not saved yet),
+    /// and the days whose stored row would not decode. The journal backup exports the sealed rows among
+    /// those ids and every sealed row on those days, so an orphan row on a readable day is never
+    /// exported (design 2026-09-30, §7.1). Keyless.
     ///
-    /// NIL — never a partial set — when the day store cannot say its read is complete
-    /// (`FernletRepository.loadAllDaysIfComplete()`: read-only recovery, a failed day-row fetch, a day
-    /// that would not decode). A partial set would make every entry on an unread day an orphan, and the
+    /// NIL — never a partial set — when the day store's read cannot account for every row
+    /// (`FernletRepository.loadAllDaysWithUnreadable()`: read-only recovery, a failed day-row fetch, a
+    /// row with no date key). A partial set would make every entry on an unread day an orphan, and the
     /// export would publish that truncated set over the full backup exactly when the day store is
-    /// broken (review B3 fix round 1).
-    var sealedBackupJournalReferencedIDs: Set<UUID>? {
+    /// broken (review B3 fix round 1). A day row that merely will not decode names its day instead
+    /// (fix round 2): nothing heals it, so failing over it would stop the journal backup for good.
+    var sealedBackupJournalReferences: SealedBackupJournalReferences? {
+        let stored = repository.loadAllDaysWithUnreadable()
         // The adapter audits the refused snapshot (`sealedBackup.v2.journalDaysUnreadable`).
-        guard let storedDays = repository.loadAllDaysIfComplete() else { return nil }
+        guard stored.accountsForEveryRow else { return nil }
         var ids = Set(day.journals.map(\.id)).union(previousJournals.map(\.id))
-        for stored in storedDays.values {  // R2: bounded by the stored days.
-            ids.formUnion(stored.journals.map(\.id))
+        for storedDay in stored.days.values {  // R2: bounded by the stored days.
+            ids.formUnion(storedDay.journals.map(\.id))
         }
-        return ids
+        return SealedBackupJournalReferences(ids: ids, unreadableDayKeys: stored.unreadableDayKeys)
     }
 
     /// The journal ids the days already hold — the in-memory today and every stored day — read to

@@ -113,18 +113,22 @@ protocol SealedBackupContext: AnyObject {
     /// (``SealedBackupCoordinator/attachIntimacyLogStore(_:)``) — the funnel defaults fail-CLOSED and is
     /// a leaf with no access to settings, so somebody has to supply the gate.
     var isIntimacyTrackingVisible: Bool { get }
-    /// The ids of the journal entries some day still references — every persisted day's journals, the
-    /// in-memory today's and `previousJournals` (design 2026-09-30, §7.1). The journal backup's
-    /// snapshot is the sealed ids among these, so an ORPHAN sealed row (no skeleton anywhere: a delete
+    /// What the days reference for the journal backup (design 2026-09-30, §7.1; see
+    /// ``SealedBackupJournalReferences``): the ids of the journal entries every persisted day that
+    /// decodes, the in-memory today and `previousJournals` hold, and the days whose stored row would
+    /// not decode. The journal backup's snapshot is the sealed ids among these plus every sealed entry
+    /// ON an unreadable day, so an ORPHAN sealed row on a readable day (no skeleton anywhere: a delete
     /// whose row delete failed, an entry another iPhone deleted with sync on) is never exported and can
     /// never come back through a restore. Keyless; decrypts nothing.
     ///
-    /// NIL when the day store's read cannot be trusted to be complete (read-only recovery, a failed
-    /// fetch, a day that would not decode — `FernletRepository.loadAllDaysIfComplete()`): every sealed
-    /// entry on an unread day would read as an orphan, and the export would publish a truncated set
-    /// over the full one exactly when the day store is broken. The snapshot then fails (nothing
-    /// written, the upload still owed) — fail closed, review B3 fix round 1.
-    var sealedBackupJournalReferencedIDs: Set<UUID>? { get }
+    /// NIL only when the day store's read cannot account for every row (read-only recovery, a failed
+    /// fetch, a row with no date key — `FernletRepository.loadAllDaysWithUnreadable()`): which days
+    /// were not read is then unknown, every sealed entry on them would read as an orphan, and the
+    /// export would publish a truncated set over the full one. The snapshot then fails (nothing
+    /// written, the upload still owed) — fail closed, review B3 fix round 1. A day row that would not
+    /// decode does NOT make it nil (review B3 fix round 2): nothing heals such a row, so failing over
+    /// it would stop the journal backup for good.
+    var sealedBackupJournalReferences: SealedBackupJournalReferences? { get }
     /// Records whether a sealed backup of `payloadType` still owes an upload — the dirty flag every
     /// sealed-store change sets (``markSealedBackupDirty(_:)``), set too when the backup is turned on
     /// or the escrow key adopted, and cleared only by a verified commit (design 2026-09-30, §4.4).
@@ -402,7 +406,7 @@ final class SealedBackupCoordinator {
         return JournalBackupAdapter(
             repository: repository,
             isOpen: { [weak self] in self.map { !$0.host.duressSessionActive } ?? false },
-            referencedIDs: { [weak self] in self?.host.sealedBackupJournalReferencedIDs },
+            references: { [weak self] in self?.host.sealedBackupJournalReferences },
             deviceKey: { SealedDeviceKeyRead.read(.deviceJournalKey, service: service) },
             reinstate: { [weak self] skeletons in self?.host.reinstateJournalEntries(from: skeletons) ?? false }
         )

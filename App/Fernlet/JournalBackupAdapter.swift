@@ -46,24 +46,45 @@ enum SealedDeviceKeyRead {
 /// ``JournalBackupAdapter`` — never an empty answer.
 struct JournalBackupSeamClosedError: Error, Equatable {}
 
-/// The journal export's snapshot could not be taken: the day store's read was not complete (read-only
-/// recovery, a failed fetch, a day that would not decode), so which sealed entries some day still
-/// references is unknown. Thrown by ``JournalBackupAdapter/snapshotIDs()`` in place of a snapshot
-/// that would drop every entry on an unread day as an orphan — the export then ends `.failed` with
-/// nothing written and the upload still owed (review B3 fix round 1).
-struct JournalBackupDaysUnreadableError: Error, Equatable {}
+/// The journal export's snapshot could not be taken: the day store's read could not account for every
+/// row (read-only recovery, a failed fetch, a row with no date key), so which days went unread — and
+/// which sealed entries they still reference — is unknown. Thrown by
+/// ``JournalBackupAdapter/snapshotIDs()`` in place of a snapshot that would drop every entry on an
+/// unread day as an orphan — the export then ends `.failed` with nothing written and the upload still
+/// owed (review B3 fix round 1). A day row that would not decode is not this: its day is named, and
+/// every entry on it is kept (fix round 2).
+struct JournalBackupDayStoreUnreadableError: Error, Equatable {}
+
+/// What the days reference, for the journal Sealed backup's snapshot (journal and intimacy Sealed
+/// backup v2 design 2026-09-30, §7.1; review B3 fix rounds 1 and 2) — read keylessly by
+/// `FernletStore.sealedBackupJournalReferences` from `FernletRepository.loadAllDaysWithUnreadable()`.
+///
+/// The snapshot is the sealed entries among ``ids`` plus every sealed entry whose plaintext day is in
+/// ``unreadableDayKeys``. A day row that would not decode (a corrupt row; with iCloud sync on, another
+/// iPhone's newer build) says nothing about which entries it references, so all of that day's are
+/// kept: keeping one the day had dropped only keeps it in the backup, while dropping one it still
+/// holds would lose it — and since nothing heals such a row, refusing to export over it would stop
+/// the journal backup for good.
+struct SealedBackupJournalReferences: Equatable {
+    /// The ids some readable day, the in-memory today or `previousJournals` holds.
+    var ids: Set<UUID>
+    /// The days whose stored row would not decode.
+    var unreadableDayKeys: Set<String> = []
+}
 
 /// The journal Sealed backup's adapter for the v2 engine (journal and intimacy Sealed backup v2 design
 /// 2026-09-30, §4.1, §7): the sealed ``JournalNarrativeRepository`` mapped onto
 /// ``SealedBackupV2Adapter``.
 ///
 /// - **What a backup holds (§7.1).** The snapshot is the sealed ids that some day's journals still
-///   reference (``referencedIDs``: every persisted day, the in-memory today and `previousJournals`),
+///   reference (``references``: every persisted day, the in-memory today and `previousJournals`),
 ///   intersected with the store's keyless `allIDs()`. An ORPHAN row — no skeleton anywhere: a delete
 ///   whose row delete failed, an entry the other iPhone deleted with sync on, a past-day append whose
-///   day write failed — is never exported, so it can never come back through a restore. A day store
-///   whose read is not complete answers no referenced ids at all, and the snapshot throws
-///   ``JournalBackupDaysUnreadableError`` rather than call every entry on an unread day an orphan.
+///   day write failed — is never exported, so it can never come back through a restore. Every entry ON
+///   a day whose stored row would not decode is kept (``SealedBackupJournalReferences``): what that day
+///   references is unknown, and nothing heals such a row. A day store whose read cannot account for
+///   every row answers no references at all, and the snapshot throws
+///   ``JournalBackupDayStoreUnreadableError`` rather than call every entry on an unread day an orphan.
 /// - **Both keys (§7.2).** Each chunk is read under the hub key, then under the journal DEVICE key
 ///   read without minting (``deviceKey``), so an entry written from Home and not yet folded is backed
 ///   up as it is; the fold is no backup precondition, and an edit from Home mid-export never aborts
@@ -90,9 +111,10 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     private var resolvedRepository: JournalNarrativeRepository?
     /// Whether the journal's decrypt seam is open (`!duress`).
     let isOpen: @MainActor () -> Bool
-    /// The ids some day's journals reference right now (persisted days, today, `previousJournals`);
-    /// nil when the day store's read was not complete.
-    let referencedIDs: @MainActor () -> Set<UUID>?
+    /// What the days reference right now (the ids persisted days, today and `previousJournals` hold,
+    /// and the days that would not decode); nil when the day store's read could not account for every
+    /// row.
+    let references: @MainActor () -> SealedBackupJournalReferences?
     /// The journal device key, read without minting.
     let deviceKey: @MainActor () -> SealedDeviceKeyRead
     /// Rebuilds the day skeletons of restored entries; false when a day write failed.
@@ -103,20 +125,20 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     /// - Parameters:
     ///   - repository: Answers the sealed journal store (resolved on first use).
     ///   - isOpen: Whether the seam is open (`!duress`).
-    ///   - referencedIDs: The ids some day's journals reference; nil when the day store's read was not
-    ///     complete.
+    ///   - references: What the days reference; nil when the day store's read could not account for
+    ///     every row.
     ///   - deviceKey: The journal device key, read without minting.
     ///   - reinstate: Rebuilds day skeletons; false when a write failed.
     init(
         repository: @escaping @MainActor () -> JournalNarrativeRepository,
         isOpen: @escaping @MainActor () -> Bool,
-        referencedIDs: @escaping @MainActor () -> Set<UUID>?,
+        references: @escaping @MainActor () -> SealedBackupJournalReferences?,
         deviceKey: @escaping @MainActor () -> SealedDeviceKeyRead,
         reinstate: @escaping @MainActor ([JournalNarrativeSkeleton]) -> Bool
     ) {
         self.repositoryProvider = repository
         self.isOpen = isOpen
-        self.referencedIDs = referencedIDs
+        self.references = references
         self.deviceKey = deviceKey
         self.reinstate = reinstate
     }
@@ -138,15 +160,23 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
         return try body()
     }
 
-    /// The sealed ids some day still references — or ``JournalBackupDaysUnreadableError`` when the day
-    /// store's read was not complete (fail closed: never a snapshot that calls an unread day's entries
-    /// orphans).
+    /// The sealed ids some day still references, plus every sealed entry on a day whose stored row
+    /// would not decode (keyless, by its plaintext day) — or ``JournalBackupDayStoreUnreadableError``
+    /// when the day store's read could not account for every row (fail closed: never a snapshot that
+    /// calls an unread day's entries orphans).
     func snapshotIDs() throws -> [UUID] {
-        guard let referenced = referencedIDs() else {
+        guard let references = references() else {
             FernletAuditLog.log("sealedBackup.v2.journalDaysUnreadable")
-            throw JournalBackupDaysUnreadableError()
+            throw JournalBackupDayStoreUnreadableError()
         }
-        return try repository.allIDs().filter(referenced.contains)
+        var kept = references.ids
+        if !references.unreadableDayKeys.isEmpty {
+            kept.formUnion(try repository.ids(onDays: references.unreadableDayKeys))
+            FernletAuditLog.log("sealedBackup.v2.journalUnreadableDaysKept", context: [
+                "days": "\(references.unreadableDayKeys.count)"
+            ])
+        }
+        return try repository.allIDs().filter(kept.contains)
     }
 
     func classifiedChunk(_ ids: [UUID], hubKey: SymmetricKey) throws -> SealedBackupChunkPage<JournalNarrative> {

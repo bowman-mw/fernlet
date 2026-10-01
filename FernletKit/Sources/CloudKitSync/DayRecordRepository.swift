@@ -53,13 +53,14 @@ public struct DayRecordRepository: DayRecordRepositoring {
 
     /// Loads the whole (uncapped) day history, duplicate-collapsed to one day per `dateKey`.
     public func loadAll() -> [String: FernletDay] {
-        loadAllReportingCompleteness().days
+        loadAllWithUnreadable().days
     }
 
-    /// The whole day history like ``loadAll()``, with whether it is COMPLETE: false when the fetch
-    /// failed (the history then reads empty) or a row would not decode (that day reads absent) — the
-    /// fail-closed read the journal Sealed backup's snapshot needs (review B3 fix round 1).
-    public func loadAllReportingCompleteness() -> (days: [String: FernletDay], isComplete: Bool) {
+    /// The whole day history like ``loadAll()``, naming what it could not read: the date key of every
+    /// row whose payload would not decode (that day reads absent from `days`), and whether every row was
+    /// accounted for — false when the fetch failed (the history then reads empty) or a row has no date
+    /// key. The read the journal Sealed backup's snapshot takes (review B3 fix rounds 1 and 2).
+    public func loadAllWithUnreadable() -> DayHistoryRead {
         StartupTiming.timed("DayRecordRepository.loadAll") {
             let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
             return dedupedRead(fetching: request)
@@ -204,9 +205,10 @@ public struct DayRecordRepository: DayRecordRepositoring {
         dedupedRead(fetching: request).days
     }
 
-    /// ``dedupedDays(fetching:)`` with whether the read was complete: a failed fetch (empty days) or
-    /// any undecodable row makes it incomplete.
-    private func dedupedRead(fetching request: NSFetchRequest<NSManagedObject>) -> (days: [String: FernletDay], isComplete: Bool) {
+    /// ``dedupedDays(fetching:)`` naming what it could not read: the date key of every row whose
+    /// payload would not decode, and — not accounted for — a failed fetch (empty days) or a row with no
+    /// date key, whose day is unknown.
+    private func dedupedRead(fetching request: NSFetchRequest<NSManagedObject>) -> DayHistoryRead {
         let context = controller.container.viewContext
         let records: [NSManagedObject]
         do {
@@ -216,7 +218,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
             // the empty dictionary this function already documents as its failure result — and say
             // it is not the history.
             PersistenceFailureAudit.record("dayRecord.fetch.failed", error: error)
-            return ([:], false)
+            return DayHistoryRead(days: [:], accountsForEveryRow: false)
         }
         // Group every decodable row by `dateKey` (a stable per-row tiebreak accompanies each).
         /// One decodable fetched row: its managed object, decoded day, `updatedAt` stamp, and tiebreak.
@@ -225,15 +227,23 @@ public struct DayRecordRepository: DayRecordRepositoring {
         /// deterministic across reads when several rows tie at the top `updatedAt`.
         struct Row { let record: NSManagedObject; let day: FernletDay; let updatedAt: Date; let tiebreak: String }
         var rowsByKey: [String: [Row]] = [:]
+        var unreadableKeys = Set<String>()
         var skipped = 0
+        var undated = 0
         let decoder = RowPayloadCoders.makeDecoder()
         for record in records {
-            guard let key = record.value(forKey: "dateKey") as? String,
-                  let payload = record.value(forKey: "payloadData") as? Data,
+            guard let key = record.value(forKey: "dateKey") as? String else {
+                // No writer leaves a row without its day, so which day this one holds is unknown.
+                undated += 1
+                skipped += 1
+                continue
+            }
+            guard let payload = record.value(forKey: "payloadData") as? Data,
                   let day = try? decoder.decode(FernletDay.self, from: payload) else {
-                // A day row is written by THIS build, so an undecodable payload is corruption, not
-                // forward compat — count it and report once per fetch rather than losing a whole day
-                // of the user's history silently.
+                // Corruption, or (iCloud sync on) another iPhone's newer build — count it and report
+                // once per fetch rather than losing a whole day of the user's history silently, and
+                // NAME the day, so a caller that must not drop it can keep what it may hold.
+                unreadableKeys.insert(key)
                 skipped += 1
                 continue
             }
@@ -274,12 +284,18 @@ public struct DayRecordRepository: DayRecordRepositoring {
                 }
             }
         }
-        if skipped > 0 {
-            FernletAuditLog.log("dayRecord.undecodableRows", context: [
-                "count": "\(skipped)",
-                "fetched": "\(records.count)"
-            ])
-        }
-        return (result, skipped == 0)
+        auditSkippedRows(skipped, undated: undated, fetched: records.count)
+        return DayHistoryRead(days: result, unreadableDayKeys: unreadableKeys, accountsForEveryRow: undated == 0)
+    }
+
+    /// Reports once per fetch the rows a read skipped — counts only, never a date key (a day key is
+    /// user-derived).
+    private func auditSkippedRows(_ skipped: Int, undated: Int, fetched: Int) {
+        guard skipped > 0 else { return }
+        FernletAuditLog.log("dayRecord.undecodableRows", context: [
+            "count": "\(skipped)",
+            "undated": "\(undated)",
+            "fetched": "\(fetched)"
+        ])
     }
 }

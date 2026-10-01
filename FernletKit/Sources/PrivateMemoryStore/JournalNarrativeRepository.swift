@@ -815,6 +815,29 @@ extension JournalNarrativeRepository {
         }
     }
 
+    /// The ids of every stored entry on these days — KEYLESS, decrypting nothing (the plaintext
+    /// `dayKey` column). The journal backup's snapshot keeps them for a day whose stored row would not
+    /// decode (review B3 fix round 2): which entries that day still references is unknown, so every
+    /// entry on it is kept rather than dropped as an orphan. One `dayKey IN` fetch per 500 days, bounded
+    /// at ``maxBackupRecords`` + 1 ids.
+    public func ids(onDays dayKeys: Set<String>) throws -> Set<UUID> {
+        guard !dayKeys.isEmpty else { return [] }
+        return try context.performAndWait {
+            let keys = Array(dayKeys)
+            var ids = Set<UUID>()
+            for start in stride(from: 0, to: keys.count, by: Self.maxPageSize) {  // R2: bounded by the days asked for.
+                guard ids.count <= Self.maxBackupRecords else { break }
+                let request = NSFetchRequest<NSDictionary>(entityName: "JournalNarrative")
+                request.resultType = .dictionaryResultType
+                request.propertiesToFetch = ["id"]
+                request.predicate = NSPredicate(format: "dayKey IN %@", Array(keys[start..<min(start + Self.maxPageSize, keys.count)]))
+                request.fetchLimit = Self.maxBackupRecords + 1
+                ids.formUnion(try context.fetch(request).compactMap { $0["id"] as? UUID })
+            }
+            return ids
+        }
+    }
+
     /// The entries with these ids for a Sealed backup chunk, classified (see ``JournalBackupPage``):
     /// each id's rows are tried under the hub key, then under the device key (read by the caller
     /// WITHOUT minting), so an entry written from Home and not folded yet is backed up as it is.

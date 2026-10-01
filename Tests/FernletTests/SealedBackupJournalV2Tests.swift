@@ -578,47 +578,101 @@ struct SealedBackupJournalV2Tests {
         #expect(Set(try await JournalBackupDevice.cloudEntries(cloud).map(\.text)) == ["first", "second", "third"])
     }
 
-    /// R1 / D-B3-1, in the store over its REAL day repository: a day row this build cannot decode (here
-    /// planted; in life another iPhone's newer build with sync on, or a corrupt row) makes the
-    /// referenced journal ids unknown — never the ids of the days that did decode, which would drop
-    /// every entry on the unread day from the backup — while the plain read the screens use still
-    /// serves the days it can. Once the row reads again, so do the ids.
+    /// N-1 (fix round 2), at the engine: a day row that will not decode NAMES its day, and every sealed
+    /// entry on that day stays in the export — never a stop (nothing heals such a row, so a stop would
+    /// be permanent behind a row promising a retry), and never a set with that day's entries dropped.
     @MainActor
-    @Test func theStoresReferencedJournalIDsFailClosedOnADayRowThatWillNotDecode() throws {
-        let (store, repository, _) = makeTestStoreWithRepositories()
-        let readable = Self.skeleton(dayKey: "2026-03-01")
-        let unreadable = Self.skeleton(dayKey: "2026-03-02")
-        #expect(store.reinstateJournalEntries(from: [readable, unreadable]))
-        #expect(store.sealedBackupJournalReferencedIDs?.isSuperset(of: [readable.id, unreadable.id]) == true)
+    @Test func aDayRowThatWillNotDecodeKeepsItsDaysEntriesInTheExport() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        let onUnreadableDay = JournalBackupDevice.entry("on the day that will not decode", day: 2)
+        try phone.write(JournalBackupDevice.entry("first", day: 1))
+        try phone.write(onUnreadableDay)
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
 
-        let context = repository.persistenceController.container.viewContext
-        let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
-        request.predicate = NSPredicate(format: "dateKey == %@", unreadable.dayKey)
-        let row = try #require(try context.fetch(request).first)
-        let payload = row.value(forKey: "payloadData") as? Data
-        row.setValue(Data("{\"a newer shape\":true}".utf8), forKey: "payloadData")
-        try context.save()
-        repository.invalidateCache()
-        #expect(store.sealedBackupJournalReferencedIDs == nil, "unknown, never the ids of the days that decoded")
-        #expect(store.loadAllDaysFromRepository()[readable.dayKey] != nil, "the screens' read still serves what decodes")
-
-        row.setValue(payload, forKey: "payloadData")
-        try context.save()
-        #expect(store.sealedBackupJournalReferencedIDs?.isSuperset(of: [readable.id, unreadable.id]) == true,
-                "the incomplete memo is read again, not served")
+        phone.host.days[onUnreadableDay.dayKey] = nil
+        phone.host.unreadableDayKeys = [onUnreadableDay.dayKey]
+        try phone.write(JournalBackupDevice.entry("written since", day: 3))
+        phone.engine.hubSessionEnded()
+        await phone.coordinator.settleV2Backup(.journalNarratives)
+        #expect(phone.host.v2Status[.journalNarratives] != .failed)
+        #expect(phone.host.reuploadDeferrals[.journalNarratives] == false, "the export committed")
+        #expect(Set(try await JournalBackupDevice.cloudEntries(cloud).map(\.text))
+                == ["first", "on the day that will not decode", "written since"])
     }
 
-    /// R1 / D-B3-1: read-only recovery (the blob's fetch failed) is not a complete history in the Core
-    /// Data repository, nor is an unreadable file in the local one — both answer nil from
-    /// `loadAllDaysIfComplete()` where `loadAllDays()` answers an empty or legacy history.
+    /// N-1 (fix round 2), in the store over its REAL day repository and sealed store: a day row this
+    /// build cannot decode (here planted; in life a corrupt row, or another iPhone's newer build with
+    /// sync on) names its day — the references are still known, and the snapshot keeps every sealed
+    /// entry on that day by its plaintext day while an orphan on a readable day stays out. The plain
+    /// read the screens use still serves the days that decode; once the row reads again, nothing is
+    /// named.
+    @MainActor
+    @Test func aDayRowThatWillNotDecodeKeepsEveryEntryOnItsDayInTheSnapshot() throws {
+        let (store, repository, narratives) = makeTestStoreWithRepositories()
+        let key = SymmetricKey(size: .bits256)
+        let readable = JournalBackupDevice.entry("on a readable day", day: 1)
+        let onUnreadableDay = JournalBackupDevice.entry("on the day that will not decode", day: 2)
+        let orphan = JournalBackupDevice.entry("deleted, its row left behind", day: 1)
+        for entry in [readable, onUnreadableDay, orphan] { try narratives.insert(entry, contentKey: key) }
+        #expect(store.reinstateJournalEntries(from: try narratives.skeletons(ids: [readable.id, onUnreadableDay.id])))
+        let adapter = Self.snapshotAdapter(store, narratives)
+        #expect(Set(try adapter.snapshotIDs()) == [readable.id, onUnreadableDay.id], "the orphan is never exported")
+
+        let payload = try Self.replacePayload(on: onUnreadableDay.dayKey, in: repository, with: Data("{\"a newer shape\":true}".utf8))
+        repository.invalidateCache()
+        let references = try #require(store.sealedBackupJournalReferences, "a row that will not decode is no reason to stop")
+        #expect(references.unreadableDayKeys == [onUnreadableDay.dayKey])
+        #expect(!references.ids.contains(onUnreadableDay.id), "that day's skeletons were not read")
+        #expect(Set(try adapter.snapshotIDs()) == [readable.id, onUnreadableDay.id],
+                "every entry on the unread day is kept, and the orphan on a readable day still is not")
+        #expect(store.loadAllDaysFromRepository()[readable.dayKey] != nil, "the screens' read still serves what decodes")
+
+        _ = try Self.replacePayload(on: onUnreadableDay.dayKey, in: repository, with: payload)
+        repository.invalidateCache()
+        #expect(store.sealedBackupJournalReferences?.unreadableDayKeys.isEmpty == true)
+        #expect(store.sealedBackupJournalReferences?.ids.isSuperset(of: [readable.id, onUnreadableDay.id]) == true)
+    }
+
+    /// R1 / D-B3-1, kept by fix round 2 for the read that truly cannot account for its rows: a day row
+    /// with NO date key (no writer leaves one, so which day it holds is unknown) leaves the references
+    /// unknown and the snapshot refused — never the ids of the days that did decode. The memo installed
+    /// from that read is never served as whole: once the row is gone, the next ask reads again.
+    @MainActor
+    @Test func aDayRowWithNoDateKeyLeavesTheReferencesUnknownUntilItIsGone() throws {
+        let (store, repository, narratives) = makeTestStoreWithRepositories()
+        let entry = JournalBackupDevice.entry("on its day", day: 1)
+        try narratives.insert(entry, contentKey: SymmetricKey(size: .bits256))
+        #expect(store.reinstateJournalEntries(from: try narratives.skeletons(ids: [entry.id])))
+
+        let context = repository.persistenceController.container.viewContext
+        let undated = NSEntityDescription.insertNewObject(forEntityName: "DayRecord", into: context)
+        undated.setValue(Data("{}".utf8), forKey: "payloadData")
+        undated.setValue(Date(), forKey: "updatedAt")
+        try context.save()
+        repository.invalidateCache()
+        #expect(store.sealedBackupJournalReferences == nil, "unknown, never the ids of the days that decoded")
+        #expect(throws: JournalBackupDayStoreUnreadableError.self) { try Self.snapshotAdapter(store, narratives).snapshotIDs() }
+
+        context.delete(undated)
+        try context.save()
+        #expect(store.sealedBackupJournalReferences?.ids.contains(entry.id) == true,
+                "the memo of a read that did not account for every row is read again, not served")
+    }
+
+    /// R1 / D-B3-1: read-only recovery (the blob's fetch failed) does not account for every row in the
+    /// Core Data repository, nor does an unreadable file in the local one — `loadAllDaysWithUnreadable()`
+    /// says so where `loadAllDays()` answers an empty or legacy history.
     @MainActor
     @Test func readOnlyRecoveryIsNeverACompleteDayHistory() throws {
         let (store, repository, _) = makeTestStoreWithRepositories()
         #expect(store.reinstateJournalEntries(from: [Self.skeleton(dayKey: "2026-03-01")]))
-        #expect(repository.loadAllDaysIfComplete()?.isEmpty == false)
+        #expect(repository.loadAllDaysWithUnreadable().accountsForEveryRow)
+        #expect(repository.loadAllDaysWithUnreadable().days.isEmpty == false)
         repository.invalidateCache()
         repository.forceNextFetchFailureForTesting()
-        #expect(repository.loadAllDaysIfComplete() == nil)
+        #expect(!repository.loadAllDaysWithUnreadable().accountsForEveryRow)
         #expect(repository.isInReadOnlyRecovery)
 
         let fileURL = FileManager.default.temporaryDirectory
@@ -629,7 +683,7 @@ struct SealedBackupJournalV2Tests {
             fileURL: fileURL, backupExclusionPreference: { false },
             legacyDefaults: UserDefaults(suiteName: "fernlet.tests.unreadableDaysLegacy.\(UUID().uuidString)") ?? .standard
         )
-        #expect(local.loadAllDaysIfComplete() == nil, "a file that will not decode is not an empty history")
+        #expect(!local.loadAllDaysWithUnreadable().accountsForEveryRow, "a file that will not decode is not an empty history")
     }
 
     /// R2 / D-B3-3: the merge names every entry carrying a backup entry's content — unchanged ones too —
@@ -763,6 +817,31 @@ struct SealedBackupJournalV2Tests {
     /// A past-day skeleton on `dayKey` with a fresh id.
     static func skeleton(dayKey: String) -> JournalNarrativeSkeleton {
         JournalNarrativeSkeleton(id: UUID(), dayKey: dayKey, tag: .good, entryDate: Date(timeIntervalSince1970: 1_772_000_000))
+    }
+
+    /// A journal adapter over the store's real references and sealed repository, for its snapshot.
+    @MainActor
+    static func snapshotAdapter(_ store: FernletStore, _ narratives: JournalNarrativeRepository) -> JournalBackupAdapter {
+        JournalBackupAdapter(
+            repository: { narratives }, isOpen: { true },
+            references: { store.sealedBackupJournalReferences },
+            deviceKey: { .absent }, reinstate: { _ in true }
+        )
+    }
+
+    /// Replaces the payload of `dayKey`'s day row with `data` (straight into the view context, no
+    /// repository write) and returns the payload it held.
+    @MainActor
+    @discardableResult
+    static func replacePayload(on dayKey: String, in repository: CoreDataFernletRepository, with data: Data) throws -> Data {
+        let context = repository.persistenceController.container.viewContext
+        let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
+        request.predicate = NSPredicate(format: "dateKey == %@", dayKey)
+        let row = try #require(try context.fetch(request).first)
+        let previous = try #require(row.value(forKey: "payloadData") as? Data)
+        row.setValue(data, forKey: "payloadData")
+        try context.save()
+        return previous
     }
 
     /// Every PAST day row's `updatedAt`, by its day — what a rewrite re-stamps (today's row is the

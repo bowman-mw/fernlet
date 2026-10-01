@@ -344,13 +344,14 @@ public struct LocalFernletRepository: FernletRepository {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).days
     }
 
-    /// Every persisted day like ``loadAllDays()``, or nil while the file could not be read or decoded
-    /// — read-only recovery, where ``loadAllDays()`` answers the legacy migration's days (usually none)
-    /// in place of the history the file holds (review B3 fix round 1: the journal Sealed backup's
-    /// snapshot must not read that as "no entries").
-    public func loadAllDaysIfComplete() -> [String: FernletDay]? {
+    /// Every persisted day like ``loadAllDays()`` — the file decodes whole or not at all, so no single
+    /// day is ever unreadable — not accounting for every row while the file could not be read or
+    /// decoded: read-only recovery, where ``loadAllDays()`` answers the legacy migration's days
+    /// (usually none) in place of the history the file holds (review B3 fix round 1: the journal Sealed
+    /// backup's snapshot must not read that as "no entries").
+    public func loadAllDaysWithUnreadable() -> DayHistoryRead {
         let days = loadAllDays()
-        return state.persistenceBlockedByDecodeFailure ? nil : days
+        return DayHistoryRead(days: days, accountsForEveryRow: !state.persistenceBlockedByDecodeFailure)
     }
 
     /// The persisted Tier-2 behavioral memories that seed the inference base — read from the

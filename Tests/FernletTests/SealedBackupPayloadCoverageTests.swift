@@ -107,16 +107,18 @@ final class FakeSealedBackupHost: SealedBackupContext {
     var failsSkeletonWrites = false
     /// Journal entry ids referenced beyond the days and `previousJournals` (an in-memory today).
     var extraReferencedJournalIDs: Set<UUID> = []
-    /// Whether the day store's read is NOT complete (read-only recovery, a failed fetch, a day that
-    /// would not decode) — the referenced ids are then unknown.
+    /// Whether the day store's read cannot account for every row (read-only recovery, a failed fetch,
+    /// a row with no date key) — the references are then unknown.
     var dayStoreReadIncomplete = false
-    /// Mirrors `FernletStore.sealedBackupJournalReferencedIDs`: every day's journals, `previousJournals`
-    /// and the extra ids — nil while ``dayStoreReadIncomplete``.
-    var sealedBackupJournalReferencedIDs: Set<UUID>? {
+    /// The days whose stored row would not decode (their days are absent from ``days``).
+    var unreadableDayKeys: Set<String> = []
+    /// Mirrors `FernletStore.sealedBackupJournalReferences`: every day's journals, `previousJournals`
+    /// and the extra ids, with ``unreadableDayKeys`` — nil while ``dayStoreReadIncomplete``.
+    var sealedBackupJournalReferences: SealedBackupJournalReferences? {
         guard !dayStoreReadIncomplete else { return nil }
         var ids = extraReferencedJournalIDs.union(previousJournals.map(\.id))
         for day in days.values { ids.formUnion(day.journals.map(\.id)) }
-        return ids
+        return SealedBackupJournalReferences(ids: ids, unreadableDayKeys: unreadableDayKeys)
     }
     private(set) var recordedOutcomes: [SealedBackupPayloadType: SealedBackupRestoreOutcome] = [:]
     /// Per-payload re-upload deferrals, as the coordinator recorded them.
