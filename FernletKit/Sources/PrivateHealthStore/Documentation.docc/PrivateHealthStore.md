@@ -96,7 +96,10 @@ openable ones, replace dead ones, refuse the whole call over an undecided row, r
 in the same save), a post-decrypt id check (the AAD does not bind the row id, so a moved blob is dead),
 classified pages, keyless count/ids/deletes, and a 20 000-record bound. ``CycleRecordStore`` is its
 gated `@MainActor` funnel with the same inert-while-hidden contract as ``IntimacyLogStore`` plus a
-mutation hook and counter for the backup's dirty flag. Nothing reads records yet: the app constructs a
+mutation hook and counter for the backup's dirty flag. Its sealed-backup seam (pre-pass, chunk,
+restore) never answers empty for want of a key either: visible but keyless, each throws
+`FernletLockError.locked`, because an empty chunk is a legitimate "deleted mid-export" answer and a
+keyless one must not look like it. Nothing reads records yet: the app constructs a
 store only for the keyless count and delete (the "entries this iPhone can't open" check and "Delete
 everything"); the cutover makes records the source of truth.
 

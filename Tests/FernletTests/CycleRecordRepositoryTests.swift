@@ -372,6 +372,24 @@ struct CycleRecordRepositoryTests {
         #expect(store.mutationCounter == 1, "only the delete that removed a row moved the counter")
     }
 
+    /// Visible but keyless ⇒ the whole backup seam THROWS `.locked`, never an empty answer. An empty
+    /// chunk is a legitimate result (every id in it was deleted mid-export), so a keyless chunk that
+    /// answered empty would be indistinguishable from it, and an export whose key went (the hub closed
+    /// between the pre-pass and a chunk) would write a short set over the cloud copy (I16, I29).
+    @MainActor
+    @Test func aVisibleFunnelWithoutAKeyRefusesTheWholeBackupSeam() throws {
+        let repo = CycleRecordRepository(controller: makeController())
+        let stored = record()
+        try repo.insert(stored, contentKey: makeKey())
+        let store = CycleRecordStore(repository: repo)
+        store.attachVisibilityGate { true }
+        #expect(throws: FernletLockError.locked) { try store.backupPrePass(contentKey: nil) }
+        #expect(throws: FernletLockError.locked) { try store.backupChunk(ids: [stored.id], contentKey: nil) }
+        #expect(throws: FernletLockError.locked) { try store.backupChunk(ids: [], contentKey: nil) }
+        #expect(throws: FernletLockError.locked) { try store.restoreMerging([record()], contentKey: nil) }
+        #expect(try store.recordCount() == 1 && store.mutationCounter == 0, "a refused call wrote nothing")
+    }
+
     /// The mutation hook fires after every call that changed something, and only then.
     @MainActor
     @Test func theMutationHookFiresOnlyWhenSomethingChanged() throws {

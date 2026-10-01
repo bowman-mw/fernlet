@@ -40,7 +40,9 @@ public nonisolated struct CycleRecordBackupPrePass: Equatable, Sendable {
 /// While ``isVisible`` answers false the store is INERT at the seam: the display read returns an
 /// empty page and decrypts nothing; every write, upsert, backup pre-pass, backup chunk and restore
 /// throws ``PeriodTrackingHiddenError`` (a throw, not an empty answer, wherever an empty answer
-/// could be mistaken for "nothing here" by an export or a restore). Deliberately UNGATED, because they
+/// could be mistaken for "nothing here" by an export or a restore). For the same reason the whole
+/// sealed-backup seam — pre-pass, chunk and restore — throws `FernletLockError.locked` when it is
+/// visible but handed no key, never an empty answer. Deliberately UNGATED, because they
 /// decrypt nothing and hiding must never block deletion: ``recordCount()``, ``allIDs()``,
 /// ``delete(ids:)``, ``deleteAll()``.
 ///
@@ -152,11 +154,16 @@ public final class CycleRecordStore {
         )
     }
 
-    /// One export chunk: the records with these snapshot ids. Throws while hidden.
+    /// One export chunk: the records with these snapshot ids. Throws while hidden, and throws
+    /// `FernletLockError.locked` without a key — never an empty page. An empty chunk is a legitimate
+    /// answer (every id in it was deleted mid-export, §9.10 E3), so a keyless chunk that answered
+    /// empty would be indistinguishable from it, and an export whose key went between the pre-pass
+    /// and a chunk would write a short set over the cloud copy (review C-U3-R1 / L-U3-R1).
     ///
     /// - Parameter ids: At most `CycleRecordRepository.maxPageSize` ids.
     public func backupChunk(ids: [UUID], contentKey: SymmetricKey?) throws -> CycleRecordPage {
         guard isVisible() else { throw PeriodTrackingHiddenError() }
+        guard contentKey != nil else { throw FernletLockError.locked }
         return try repository.records(ids: ids, contentKey: contentKey)
     }
 
