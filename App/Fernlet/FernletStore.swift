@@ -3544,8 +3544,8 @@ final class FernletStore {
     /// would replace a pre-reset copy are held too — for the payload backups that are on right now,
     /// the only ones that can have a copy in iCloud (review N-1).
     ///
-    /// Later design units add their own clears here (the period restore marker, the period
-    /// compare-and-swap record, the import halves). Never called by a duress response.
+    /// Both legacy cycle-import halves are set to done here (design unit 4). Unit 5 adds the period
+    /// restore marker and the period compare-and-swap record. Never called by a duress response.
     ///
     /// - Parameters:
     ///   - preferences: The storage preferences at the reset; nil (production) reads the live ones.
@@ -3554,6 +3554,9 @@ final class FernletStore {
     func handleAppLockResetCompleted(preferences: StoragePreferences? = nil, clearBookkeeping: () -> Void) {
         sealedBackupRestoreHold.hold(keepingCopiesFrom: preferences ?? StoragePreferencesStore.currentPreferences())
         clearBookkeeping()
+        // The reset purged every sealed row; a pending legacy-import half would re-import Fernlet's
+        // own Apple Health copies at the next Private open (§8.4, §9.21).
+        cycleLegacyImportLedger.markBothHalvesDone()
         FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "appLockReset"])
     }
 
@@ -5432,6 +5435,16 @@ final class FernletStore {
     /// sensitive rows in the app and the confirm dialog promises they are gone — a hook that swallowed
     /// its own failure would let a wipe that left the journal behind report success.
     @ObservationIgnored var periodDataDeleteHook: (() -> Bool)?
+    /// Stops the period store's background writers (the held legacy cycle import and a fill-on-read
+    /// that began before the wipe) in the funnel's first leg — `PeriodTrackerStore.cancelBackgroundWriters()`,
+    /// wired in `ContentView` (period-data design 2026-09-30, §8.4). Nil in an unwired test store,
+    /// where there is no period store to stop.
+    @ObservationIgnored var periodWritersStopHook: (() -> Void)?
+    /// The two legacy cycle-import markers (period-data design 2026-09-30, §8.2–§8.4). "Delete
+    /// everything" and the app-lock reset funnel set BOTH to done: a pending sample half would
+    /// otherwise re-import, at the next Private open, the Apple Health copies the user chose to keep.
+    /// Internal-settable ONLY so tests can point it at an isolated defaults suite.
+    @ObservationIgnored var cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: .standard)
     @ObservationIgnored var intimacyDataDeleteHook: (() -> Bool)?
     @ObservationIgnored var journalDataDeleteHook: (() -> Bool)?
     /// Returns whether the HealthKit delete cleared — and HOW it fell short when it didn't, for the same
@@ -5739,6 +5752,10 @@ final class FernletStore {
         // just-emptied store. `applyRestoredChunks` honors the cancellation at its write point, and the
         // diverged-device latch backstops any restore this cancel arrives too late for.
         periodBackupSettleTask?.cancel()
+        // The period store's own writers: the held legacy cycle import and a fill-on-read begun before
+        // the wipe would otherwise write records back into the emptied store (period-data design
+        // 2026-09-30, §8.4). The hook cancels the import task and moves the store's writer epoch.
+        periodWritersStopHook?()
         // The intimacy un-hide settle is the same class of writer, added with the intimacy payload.
         intimacyBackupSettleTask?.cancel()
         // The journal → Core Memory summary upgrade. It only ever updates an existing memory by id,
@@ -5842,6 +5859,10 @@ final class FernletStore {
         // `!= true` (not `== false`): a NIL hook — an unwired run — must count as a failure, not a skip.
         // `== false` treated nil as success, so an unwired funnel would silently miss the app's most
         // sensitive rows and still report a complete wipe. Only an explicit `true` clears the store.
+        // Both legacy-import halves are set to DONE before the cycle rows go (§8.4): a pending sample
+        // half would re-import, at the next Private open, the Apple Health copies the user chose to
+        // keep while deleting their Fernlet data. A write of two markers, never a clear.
+        cycleLegacyImportLedger.markBothHalvesDone()
         if periodDataDeleteHook?() != true { outcome.incompleteStores.append("your cycle notes") }
         if intimacyDataDeleteHook?() != true { outcome.incompleteStores.append("your intimate logs") }
         if journalDataDeleteHook?() != true { outcome.incompleteStores.append("your journal entries") }

@@ -268,6 +268,37 @@ extension GateCopy {
                    comment: "Button on the card that leaves the Private tab closed and deletes nothing.")
         }
     }
+
+    /// The same card on the Cycle page, for cycle notes from before the cycle history moved into
+    /// Fernlet's own records that this iPhone cannot open (period-data design 2026-09-30, §8.2, §10.2).
+    enum EarlierCycleNotes {
+        /// The card's heading.
+        static var title: String {
+            String(localized: "lock.unopenable.earlierNotes.title", defaultValue: "Some earlier cycle notes can't be opened here", bundle: .module,
+                   comment: "Heading of a card on the Cycle page (inside the Private tab) naming cycle notes saved by an earlier version of the app that can no longer be opened on this iPhone.")
+        }
+
+        /// Why, in plain words.
+        static var body: String {
+            String(localized: "lock.unopenable.earlierNotes.body",
+                   defaultValue: "Fernlet moved your earlier cycle notes into your cycle history. These ones can't be opened on this iPhone, so they were left behind. No one can open them now.",
+                   bundle: .module,
+                   comment: "Body of the Cycle page card naming earlier cycle notes that cannot be opened. They could not be moved into the cycle history because they will not open; nothing about them is readable.")
+        }
+
+        /// The count row.
+        static func count(_ count: Int) -> String {
+            String(localized: "lock.unopenable.earlierNotes.count", defaultValue: "Earlier cycle notes: \(count)", bundle: .module,
+                   comment: "The count row on the Cycle page card naming earlier cycle notes that can't be opened. The number is how many notes.")
+        }
+
+        /// The destructive button: deletes exactly the notes named above. The Private tab is already
+        /// open here, so it does not say "and open Private".
+        static var remove: String {
+            String(localized: "lock.unopenable.earlierNotes.remove", defaultValue: "Remove them", bundle: .module,
+                   comment: "Destructive button on the Cycle page card. Permanently deletes exactly the earlier cycle notes listed (they can never be opened anyway).")
+        }
+    }
 }
 
 // MARK: - The tap gate overlay
@@ -455,13 +486,26 @@ struct FernletTapGateOverlay: View {
 ///
 /// Nothing is deleted without the Remove tap, and Remove deletes exactly what the counts name — the
 /// app's coordinator re-checks both before it deletes. Public so the Cycle page can show the same
-/// component for its earlier-notes variant (design §8.2).
+/// component for its earlier-notes variant (design §8.2): ``Wording/earlierCycleNotes`` swaps the
+/// heading, the body, the count line and the Remove label (the tab is already open there) and the
+/// two identifiers, and keeps everything else.
 public struct FernletUnopenableEntriesCard: View {
+    /// Which of the card's two uses this is.
+    public enum Wording: Sendable {
+        /// The Private tab's gate: entries a fresh key would be minted over (§4.9, §10.2).
+        case privateTab
+        /// The Cycle page: earlier cycle notes the legacy import could not open (§8.2); counted in
+        /// ``FernletUnopenableEntryCounts/cycleEntries``.
+        case earlierCycleNotes
+    }
+
     /// What to name.
     let counts: FernletUnopenableEntryCounts
     /// Disables both buttons while a call is in flight.
     let isWorking: Bool
-    /// "Remove them and open Private".
+    /// Which use this is.
+    let wording: Wording
+    /// The destructive button.
     let onRemove: () -> Void
     /// "Not now".
     let onNotNow: () -> Void
@@ -471,23 +515,31 @@ public struct FernletUnopenableEntriesCard: View {
     /// - Parameters:
     ///   - counts: The entries to name.
     ///   - isWorking: Whether a removal is already running.
+    ///   - wording: Which use this is; the Private tab's by default.
     ///   - onRemove: Called by the destructive button.
     ///   - onNotNow: Called by "Not now".
-    public init(counts: FernletUnopenableEntryCounts, isWorking: Bool, onRemove: @escaping () -> Void, onNotNow: @escaping () -> Void) {
+    public init(
+        counts: FernletUnopenableEntryCounts,
+        isWorking: Bool,
+        wording: Wording = .privateTab,
+        onRemove: @escaping () -> Void,
+        onNotNow: @escaping () -> Void
+    ) {
         self.counts = counts
         self.isWorking = isWorking
+        self.wording = wording
         self.onRemove = onRemove
         self.onNotNow = onNotNow
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(GateCopy.Unopenable.title)
+            Text(wording == .earlierCycleNotes ? GateCopy.EarlierCycleNotes.title : GateCopy.Unopenable.title)
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
                 .accessibilityAddTraits(.isHeader)
                 .fernletWrappingText()
-            Text(GateCopy.Unopenable.body)
+            Text(wording == .earlierCycleNotes ? GateCopy.EarlierCycleNotes.body : GateCopy.Unopenable.body)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -515,25 +567,28 @@ public struct FernletUnopenableEntriesCard: View {
     /// The two buttons, the destructive one first.
     private var buttons: some View {
         VStack(spacing: 8) {
-            Button(GateCopy.Unopenable.remove, role: .destructive, action: onRemove)
+            Button(wording == .earlierCycleNotes ? GateCopy.EarlierCycleNotes.remove : GateCopy.Unopenable.remove, role: .destructive, action: onRemove)
                 .font(.fernlet(.label))
                 .frame(maxWidth: .infinity)
                 .fernletTapTarget()
                 .disabled(isWorking)
-                .accessibilityIdentifier("lock.unopenable.remove")
+                .accessibilityIdentifier(wording == .earlierCycleNotes ? "cycle.unopenableNotes.remove" : "lock.unopenable.remove")
             Button(GateCopy.Unopenable.notNow, action: onNotNow)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
                 .frame(maxWidth: .infinity)
                 .fernletTapTarget()
                 .disabled(isWorking)
-                .accessibilityIdentifier("lock.unopenable.notNow")
+                .accessibilityIdentifier(wording == .earlierCycleNotes ? "cycle.unopenableNotes.notNow" : "lock.unopenable.notNow")
         }
         .padding(.top, 4)
     }
 
     /// One line per kind that has something to name, in a fixed order.
     private var countLines: [String] {
+        guard wording == .privateTab else {
+            return counts.cycleEntries > 0 ? [GateCopy.EarlierCycleNotes.count(counts.cycleEntries)] : []
+        }
         var lines: [String] = []
         if counts.cycleEntries > 0 { lines.append(GateCopy.Unopenable.cycleCount(counts.cycleEntries)) }
         if counts.hasUnopenableHeldEntries { lines.append(GateCopy.Unopenable.heldEntries) }

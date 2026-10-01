@@ -304,6 +304,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.intent.pendingSheet": .kept(
             reason: "A self-clearing Siri/Shortcuts hand-off token naming a SCREEN, never content. `consume()` removes it on read whether or not it is honored, and anything older than 120 seconds is discarded."
         ),
+        "fernlet.cycleRecord.legacyImport.narratives": .kept(
+            reason: "The legacy cycle import's narrative-half marker (period-data design 2026-09-30, §8.2). The wipe SETS it to done rather than clearing it: a pending half would only run again over a store the wipe emptied. Absent or 'done', no content."
+        ),
+        "fernlet.cycleRecord.legacyImport.samples": .kept(
+            reason: "The legacy cycle import's sample-half marker (§8.3). The wipe SETS it to done rather than clearing it: a pending sample half would re-import, at the next Private open, Fernlet's own Apple Health copies the user chose to keep while deleting their Fernlet data. Absent or 'done', no content."
+        ),
         "fernlet.sealedBackup.restoreAwaitsOwner": .kept(
             reason: "The sealed-backup restore owner hold (period-data design 2026-09-30, §5.3, Q14): one bit set by the app-lock reset funnel, holding every AMBIENT restore until the device owner asks. It must outlive the wipe, or a phone whose lock was reset and whose data was then wiped would start restoring the cloud history on its own."
         ),

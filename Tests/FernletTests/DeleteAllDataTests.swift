@@ -764,6 +764,43 @@ struct DeleteAllDataTests {
         #expect(inFlight.isCancelled, "the wipe left the period-backup settle running")
     }
 
+    /// I14 / §8.4 (R2-F7): the period store's own writers — the held legacy cycle import and a
+    /// fill-on-read begun before the wipe — are stopped in the FIRST leg, before any row is deleted,
+    /// and both legacy-import halves are set to DONE (a write, never a clear), so the next Private open
+    /// cannot re-import the Apple Health copies the user kept. The marker write lands before the period
+    /// rows go, and the funnel calls the stop hook exactly once.
+    @Test func deleteAllStopsTheCycleWritersAndFinishesBothImportHalves() async {
+        let store = makeStore("delete-all-cycle-writers")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.cycleImportWipe.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        var events: [String] = []
+        store.periodWritersStopHook = { events.append("stopWriters") }
+        store.periodDataDeleteHook = {
+            events.append(CycleLegacyImportLedger(defaults: defaults).isSampleHalfDone ? "rows(markersDone)" : "rows(markersPending)")
+            return true
+        }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(events == ["stopWriters", "rows(markersDone)"])
+        let ledger = CycleLegacyImportLedger(defaults: defaults)
+        #expect(ledger.isNarrativeHalfDone && ledger.isSampleHalfDone)
+    }
+
+    /// The app-lock reset funnel finishes both import halves too (§9.21): the reset purged every
+    /// sealed row, so a pending half would only re-import Fernlet's own Apple Health copies.
+    @Test func theAppLockResetFunnelFinishesBothImportHalves() {
+        let store = makeStore("reset-import-halves")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.cycleImportReset.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+
+        store.handleAppLockResetCompleted(preferences: StoragePreferences(), clearBookkeeping: {})
+
+        let ledger = CycleLegacyImportLedger(defaults: defaults)
+        #expect(ledger.isNarrativeHalfDone && ledger.isSampleHalfDone)
+    }
+
     /// The intimacy un-hide settle is the same class of live writer as the period one, added with the
     /// intimacy backup payload: suspended in its CloudKit fetch it would resume after the wipe and
     /// re-insert intimate logs into the just-emptied store.

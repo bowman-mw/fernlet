@@ -442,15 +442,22 @@ struct LocalizationBoundaryTests {
     /// catalog sync that follows this round — it is asserted there rather than here because this
     /// round does not edit `.xcstrings` files.
     @Test func theRetiredLossCopyKeysAreGoneFromSourceAndTheirV2KeysArePresent() throws {
+        // The period sheet's refusals retired with the cutover (design §10.4): a log is never refused
+        // for sharing any more, and the buffer sentences stopped saying "the rest already saved"
+        // (the record is kept FIRST now), so those two moved to `.v2` keys.
         let retired = [
             "\"lock.disclosure.forgottenPasscode\"", "\"lock.reset.required.body\"",
             "\"lock.reset.confirm.message\"", "\"lock.hardBinding.message\"",
-            "\"logPeriod.refusal.sharingOff.noLock\"", "\"logPeriod.refusal.notesNeedLock\""
+            "\"logPeriod.refusal.sharingOff.noLock\"", "\"logPeriod.refusal.notesNeedLock\"",
+            "\"logPeriod.refusal.sharingOff\"", "\"logPeriod.refusal.sharingOff.edit\"",
+            "\"logPeriod.refusal.healthDenied\"", "\"logPeriod.refusal.healthDenied.edit\"",
+            "\"logPeriod.error.bufferUnopenable\"", "\"logPeriod.error.bufferFull\""
         ]
         let required = [
             "\"lock.disclosure.forgottenPasscode.v2\"", "\"lock.reset.required.body.v2\"",
             "\"lock.reset.confirm.message.v2\"", "\"lock.hardBinding.message.v2\"",
-            "\"settings.appLock.reset.message.v2\""
+            "\"settings.appLock.reset.message.v2\"",
+            "\"logPeriod.error.bufferUnopenable.v2\"", "\"logPeriod.error.bufferFull.v2\""
         ]
         var sources = ""
         var fileCount = 0
@@ -556,6 +563,18 @@ struct LocalizationBoundaryTests {
         #expect(Set(narrative.keys) == ["note", "symptomFlags", "customSymptomScales", "updatedAt"])
         #expect(narrative["symptomFlags"] as? [String] == ["cramps"], "symptoms are stored as their frozen raw values")
         #expect(clinical["temperatureUnit"] as? String == "fahrenheit")
+    }
+
+    /// The cutover's at-rest tokens outside the sealed blob (period-data design 2026-09-30, §10.7): the
+    /// Apple Health metadata key every mirror sample carries — a renamed key would make the legacy
+    /// import re-adopt every post-cutover mirror as an "unmarked" pre-cutover sample — and the two
+    /// legacy-import markers and their value, whose respelling would re-run a finished import (or
+    /// re-import the Health copies a user kept through "Delete everything").
+    @Test func frozenCycleCutoverTokens() {
+        #expect(FernletCycleRecordMirror.recordIDKey == "FernletCycleRecordID")
+        #expect(CycleLegacyImportLedger.narrativesKey == "fernlet.cycleRecord.legacyImport.narratives")
+        #expect(CycleLegacyImportLedger.samplesKey == "fernlet.cycleRecord.legacyImport.samples")
+        #expect(CycleLegacyImportLedger.doneValue == "done")
     }
 
     /// Sealed journal + trainer-export tokens.

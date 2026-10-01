@@ -52,9 +52,10 @@ public nonisolated struct CycleRecordBackupPrePass: Equatable, Sendable {
 /// period backup dirty (never to its enabled switch); the counter lets the backup export tell whether
 /// a mutation landed while it ran.
 ///
-/// Unit 3 of the design lands this store INERT: the app constructs one only for the keyless count
-/// and deletes (the "entries this iPhone can't open" check and "Delete everything"). The app target
-/// never constructs a raw `CycleRecordRepository` (grep-walled in `SensitiveSurfaceGateTests`).
+/// Since the cutover (design unit 4) ``PeriodTrackerStore`` composes one as the cycle history's source
+/// of truth (its visibility gate is the period store's); the app also constructs one for the keyless
+/// count and deletes (the "entries this iPhone can't open" check and "Delete everything"). The app
+/// target never constructs a raw `CycleRecordRepository` (grep-walled in `SensitiveSurfaceGateTests`).
 @MainActor
 public final class CycleRecordStore {
     /// The sealed persistence layer this funnel gates.
@@ -101,6 +102,15 @@ public final class CycleRecordStore {
     public func allRecords(contentKey: SymmetricKey?) throws -> CycleRecordPage {
         guard isVisible() else { return CycleRecordPage() }
         return try repository.allRecords(contentKey: contentKey)
+    }
+
+    /// The records with these ids, classified — or an empty page while hidden (nothing decrypted).
+    /// What an edit reads its stored copy from.
+    ///
+    /// - Parameter ids: At most `CycleRecordRepository.maxPageSize` ids.
+    public func records(ids: [UUID], contentKey: SymmetricKey?) throws -> CycleRecordPage {
+        guard isVisible() else { return CycleRecordPage() }
+        return try repository.records(ids: ids, contentKey: contentKey)
     }
 
     /// Stores one new record. Throws while hidden.

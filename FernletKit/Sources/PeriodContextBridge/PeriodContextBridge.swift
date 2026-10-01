@@ -11,7 +11,7 @@ import PrivateHealthStore
 // These are the ONLY types that may cross out of the period module to scoring / companion / food / move.
 // Per spec §4 and the period-intimacy plan §5.2, the bridge must never export dates, counts, raw HealthKit
 // samples, symptom details, predicted dates, or inference confidence — only these coarse enums. The raw
-// types (CycleDayEntry, MenstrualNarrative, CyclePrediction) are visible *to* the bridge; the bridge never
+// types (CycleDayEntry, CycleRecord, CyclePrediction) are visible *to* the bridge; the bridge never
 // re-exposes them.
 
 // `PeriodSignalStrength`, `PeriodPhaseSignal`, and `PeriodScoringAdjustment` now live in `FernletScoring`
@@ -408,7 +408,8 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
 
     /// Joins each logged cycle day with its wellbeing scores and sealed symptom load into the trend
     /// engine's per-day observations, dropping unknown-phase days and days carrying no signal at all.
-    /// Symptom load is the fraction of `PeriodSymptom` cases flagged in the day's (decrypted) narrative.
+    /// Symptom load is the fraction of `PeriodSymptom` cases flagged across the day's records'
+    /// (decrypted) narrative blocks — and `nil` for a day with no narrative at all.
     private func buildObservations(
         entries: [CycleDayEntry],
         prediction: CyclePrediction,
@@ -422,7 +423,10 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
             )
             guard phase != .unknown else { return nil }
             let wellbeing = wellbeingByDay[entry.dateKey]
-            let symptomLoad = entry.narrative.map { Double($0.symptomFlags.count) / Double(PeriodSymptom.allCases.count) }
+            // Keyed on `hasNarrative`, not on whether the day has records (period-data design
+            // 2026-09-30, §6.4, R2-F9): a Fernlet flow-only day never had a narrative and must stay a
+            // nil observation, not become a 0.0 one.
+            let symptomLoad = entry.hasNarrative ? Double(entry.symptomFlags.count) / Double(PeriodSymptom.allCases.count) : nil
             guard wellbeing != nil || symptomLoad != nil else { return nil }
             return PeriodPhaseTrendEngine.DayObservation(
                 phase: phase,

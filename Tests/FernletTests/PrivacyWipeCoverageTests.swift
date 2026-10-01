@@ -50,6 +50,10 @@ struct PrivacyWipeCoverageTests {
     static let wipeManifest: [String] = [
         // Pending work & cloud
         "snapshotSaveCoordinator.cancelPending",
+        // The period store's in-flight writers — the held legacy cycle import and a fill-on-read
+        // begun before the wipe (period-data design 2026-09-30, §8.4). Stopped in leg 1, or they
+        // would write records back into the store the wipe empties.
+        "periodWritersStopHook",
         "setSealedBackupEnabled",
         // The sealed-backup rollback high-water mark. The call site is two lines (`var
         // generationStore = SealedBackupGenerationStore()`, then `generationStore.reset()`), so the

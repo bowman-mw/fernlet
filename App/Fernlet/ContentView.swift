@@ -1204,8 +1204,8 @@ struct ContentView: View {
     @ViewBuilder
     private func privateSheet(for sheet: FernletSheet) -> some View {
         switch sheet {
-        case .logPeriod(let targetDate, let editingEntry):
-            LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingEntry: editingEntry)
+        case .logPeriod(let targetDate, let editingRecord):
+            LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingRecord: editingRecord)
                 .fernletSheetChrome(anchor: "sheet.logPeriod", detents: [.large])
                 .environment(lockService)
                 .environment(storagePreferencesStore)
@@ -1587,6 +1587,10 @@ struct ContentView: View {
         // `(try? …) != nil` rather than a bare `try?`: a throw here means the user's sealed rows are
         // still on disk, and the dialog promises they are gone. The failure has to reach the outcome.
         store.periodDataDeleteHook = { Self.deletePeriodRows(records: CycleRecordStore(), narratives: MenstrualNarrativeRepository()) }
+        // The period store's background writers — the held legacy cycle import and any fill-on-read
+        // that began before the wipe — stopped in the funnel's FIRST leg, so neither can write records
+        // back into the store this wipe empties (period-data design 2026-09-30, §8.4, R2-F7).
+        store.periodWritersStopHook = { [periodStore] in periodStore.cancelBackgroundWriters() }
         // Routed through the gated funnel rather than constructing a raw repository — every intimacy
         // touch goes through `IntimacyLogStore` (pinned by the app-target source grep in
         // `SensitiveSurfaceGateTests`). Its `deleteAll` is deliberately UNGATED (drops rows without

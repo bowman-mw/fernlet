@@ -219,7 +219,7 @@ struct MindfulSessionSaveTests {
         func saveWorkout(configuration: HKWorkoutConfiguration, start: Date, end: Date, samples: [HKSample], metadata: [String: Any]) async throws -> UUID { UUID() }
         func authorizationRequestStatus(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async -> HKAuthorizationRequestStatus { .unknown }
         func delete(_ samples: [HKSample]) async throws {}
-        func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {}
+        func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int { 0 }
         func disableBackgroundDelivery(for type: HKObjectType) async throws {}
     }
 

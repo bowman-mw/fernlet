@@ -37,17 +37,7 @@ struct PeriodPredictionUITests {
         let month = try testDate(2026, 6, 1, calendar: calendar)
         let prediction = try syntheticPrediction(in: calendar, month: 6)
         let loggedDate = try testDate(2026, 6, 15, calendar: calendar)
-        let loggedSamples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(date: loggedDate, flowLevel: .medium),
-            externalUUID: UUID()
-        )
-        let loggedEntry = CycleDayEntry(
-            date: loggedDate,
-            dateKey: FernletDate.dayKey(for: loggedDate),
-            samples: loggedSamples,
-            narrative: nil,
-            phase: .menstrual
-        )
+        let loggedEntry = PeriodTestSupport.entry(on: loggedDate, flow: .medium)
 
         let model = CycleMonthModel(
             date: month,
@@ -109,8 +99,8 @@ struct PeriodPredictionUITests {
 
         store.settings.periodTrackingVisible = false
         let hidden = view.entry(for: date)
-        #expect(hidden.samples.isEmpty)
-        #expect(hidden.narrative == nil)
+        #expect(hidden.records.isEmpty)
+        #expect(hidden.healthSamples.isEmpty)
         #expect(hidden.phase == .unknown)
 
         store.settings.periodTrackingVisible = true
@@ -163,20 +153,9 @@ struct PeriodPredictionUITests {
         )
     }
 
-    /// A real logged medium-flow entry for the given day, built the same way production does
-    /// (HealthKit samples from a user-logged event).
+    /// A logged medium-flow entry for the given day: one sealed record, as the store publishes it.
     private func loggedEntry(on date: Date) throws -> CycleDayEntry {
-        let samples = try HealthKitService.periodSamples(
-            for: UserLoggedCycleEvent(date: date, flowLevel: .medium),
-            externalUUID: UUID()
-        )
-        return CycleDayEntry(
-            date: date,
-            dateKey: FernletDate.dayKey(for: date),
-            samples: samples,
-            narrative: nil,
-            phase: .menstrual
-        )
+        PeriodTestSupport.entry(on: date, flow: .medium)
     }
 
     @Test func predictionPathDoesNotReferenceAICode() throws {

@@ -150,6 +150,32 @@ struct PeriodContextBridgeTests {
         #expect(bridge.scoringAdjustment(forDayKey: queryKey).phase == .menstrual)
     }
 
+    /// I31 (period-data design 2026-09-30, §6.4, R2-F9): a day's symptom load is `nil` unless the day
+    /// carries a NARRATIVE — a Fernlet flow-only day (a record with no narrative block) contributes no
+    /// symptom observation, exactly as before the cutover, instead of a 0.0 one. Keying on "the day
+    /// has records" would turn every flow-only day into a 0.0 and invent a symptom trend from nothing.
+    @Test func aFlowOnlyDayContributesNoSymptomObservation() {
+        let prediction = PeriodTestSupport.prediction(cycleLength: 28, cyclesObserved: 4)
+        let flowOnly = multiCycleHistory().entries
+        #expect(flowOnly.contains { !$0.records.isEmpty }, "the history has flow-only records")
+        // The bridge holds its source WEAKLY: each source is kept alive for the bridge's whole use.
+        let flowOnlySource = makeSource(entries: flowOnly, prediction: prediction)
+        let bridge = PeriodContextBridge(source: flowOnlySource, calendar: calendar)
+        bridge.refresh(unlocked: true, wellbeingByDay: [:])
+        #expect(!bridge.currentTrends.contains { $0.metric == .symptomLoad }, "no narrative, no symptom observation")
+
+        // Control: the same flow days WITH a symptom do carry a symptom observation — which also proves
+        // the assertion above is not vacuous (a bridge with no source emits no trends at all).
+        let withSymptoms = flowOnly.map { entry in
+            entry.records.isEmpty ? entry : PeriodTestSupport.entry(on: entry.date, flow: .medium, symptoms: [.cramps])
+        }
+        let symptomSource = makeSource(entries: withSymptoms, prediction: prediction)
+        let control = PeriodContextBridge(source: symptomSource, calendar: calendar)
+        control.refresh(unlocked: true, wellbeingByDay: [:])
+        #expect(control.currentTrends.contains { $0.metric == .symptomLoad })
+        withExtendedLifetime((flowOnlySource, symptomSource)) {}
+    }
+
     /// Four period starts (= 3 completed cycles, the gate), flow on the first 4 days of each, with low sleep
     /// on every luteal day and high sleep elsewhere, so the trend engine reliably flags luteal sleep as
     /// historically worse.
