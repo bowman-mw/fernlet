@@ -71,6 +71,9 @@ struct ContentView: View {
     /// compact/expand animation, so that animation cannot relayout every tab's scroll content on
     /// each frame. The camera session overrides the published value to zero while hiding the bar.
     @State private var tabBarReservedHeight: CGFloat = 0
+    /// How far the keyboard reaches above the interface's bottom edge, zero while it is down. The
+    /// bar stays behind the keyboard; the meal-logged toast reads this to rest on the keyboard.
+    @State private var keyboardOverlap: CGFloat = 0
     /// Per-tab re-select tokens: bumped each time the ALREADY-selected tab is tapped again. Each tab
     /// page decides what that means from its own navigation state (`tabReselect`): pop to its main
     /// page when something is pushed, otherwise scroll to the top.
@@ -817,11 +820,6 @@ struct ContentView: View {
                 \.fernletTabBarClearance,
                 isDisposableCameraSessionActive ? 0 : tabBarReservedHeight + 8
             )
-            // FLOW-15 (artboard 4b): the meal-logged toast sits at the BOTTOM, inside the tab-bar
-            // `safeAreaInset` boundary below, so the bar's inset pushes it up — the toast and the
-            // bar never cover each other. Attached after the scrim overlay so the toast draws over it.
-            .overlay(alignment: .bottom) { mealLogToastOverlay }
-            .animation(.spring(response: 0.34, dampingFraction: 0.86), value: mealLogNotification?.id)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !isDisposableCameraSessionActive {
                     customTabBar
@@ -831,12 +829,6 @@ struct ContentView: View {
                         // a drag, which made otherwise smooth scrolling visibly jump. A minimum (not
                         // fixed) height still permits Dynamic Type to establish a larger reservation.
                         .frame(minHeight: tabBarReservedHeight, alignment: .bottom)
-                        // Keep the floating tab bar pinned to the physical bottom (behind the
-                        // keyboard) instead of riding up above it. Scoping the keyboard-safe-area
-                        // ignore to the bar ONLY changes how safeAreaInset anchors the bar — the
-                        // main tab content still receives the keyboard region in its safe area, so
-                        // scroll views and focused fields inside the pages keep avoiding the keyboard.
-                        .ignoresSafeArea(.keyboard, edges: .bottom)
                         // Reserve the largest bar height for the pages' bottom clearance. This
                         // safeAreaInset positions the bar but does NOT reach the pages' scroll
                         // views through the UIKit-backed TabView; retaining the expanded height
@@ -849,8 +841,33 @@ struct ContentView: View {
                         }
                 }
             }
+            // Keep the floating tab bar pinned to the physical bottom, behind the keyboard, instead
+            // of riding up on top of it. The ignore belongs HERE, on the view carrying the inset, and
+            // not inside the inset's closure: SwiftUI lays an inset's content out with no bottom safe
+            // area of its own, so an ignore in there reaches nothing. Until 2026-10-01 the closure
+            // carried it, and the bar rode the keyboard on every tab, root and pushed alike (iOS 26.5:
+            // the bar's own bottom inset read 0 while this view ended at the keyboard's top). The
+            // pages are unaffected: each tab page sits in its own UIKit-hosted view that avoids the
+            // keyboard itself — a page ended at the keyboard's top before this line existed and still
+            // does — so the fields and scroll views inside them keep clearing the keyboard.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            // FLOW-15 (artboard 4b): the meal-logged toast sits at the BOTTOM, lifted over the bar so
+            // the two never cover each other. Outside the keyboard ignore above, so with the keyboard
+            // up it rests on the keyboard instead of hiding behind it with the bar.
+            .overlay(alignment: .bottom) { mealLogToastOverlay }
+            .animation(.spring(response: 0.34, dampingFraction: 0.86), value: mealLogNotification?.id)
+            .fernletKeyboardOverlap($keyboardOverlap)
             .tint(Color.moss)
             .background(sceneBackground.ignoresSafeArea())
+    }
+
+    /// How far the meal-logged toast rises off the interface's bottom edge: the bar's whole inset
+    /// while the keyboard is down, and nothing once the keyboard reaches over the bar.
+    private var mealLogToastLift: CGFloat {
+        FernletTabBarClearance.reservation(
+            clearance: isDisposableCameraSessionActive ? 0 : tabBarReservedHeight,
+            keyboardOverlap: keyboardOverlap
+        )
     }
 
     /// Retains the expanded floating-bar height for this view lifetime. A smaller measurement is
@@ -1867,9 +1884,11 @@ struct ContentView: View {
         }
     }
 
-    /// The bottom toast slot (artboard 4b). Lives INSIDE the tab-bar `safeAreaInset` boundary in
-    /// ``mainInterface``, so the bar's inset pushes it up and neither covers the other. The card
-    /// occupies only its own frame, so VoiceOver (and touch) still reach the tab bar beneath it.
+    /// The bottom toast slot (artboard 4b). Overlays ``mainInterface`` outside its tab-bar inset and
+    /// keyboard ignore, lifted by ``mealLogToastLift``: 8pt above the bar while the keyboard is down
+    /// (where the bar's inset used to push it), 8pt above the keyboard while it is up (the bar is
+    /// behind the keyboard then). The card occupies only its own frame, so VoiceOver (and touch)
+    /// still reach the tab bar beneath it.
     @ViewBuilder
     private var mealLogToastOverlay: some View {
         if let notification = mealLogNotification {
@@ -1879,7 +1898,7 @@ struct ContentView: View {
                 onAdjust: { adjustLoggedMeal(notification) }
             )
             .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.bottom, 8 + mealLogToastLift)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }

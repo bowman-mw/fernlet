@@ -1445,13 +1445,25 @@ public extension View {
     /// its scroll content — ``fernletTabBarBottomClearance()`` only ends a scroll range, and a bar
     /// pinned below the scroll view still rests at the physical bottom, under the tab bar, where a
     /// tap on Save selects the tab instead (the recipe editor, 2026-10-01). This adds the bar's
-    /// reservation to the page's bottom safe area, anchored the way the tab container anchors the
-    /// bar itself. Measured on iOS 26.5 in a page pushed inside Food: the save bar rests 22pt above
-    /// the tab bar, and with the keyboard up the bar rides on top of the keyboard with the
-    /// reservation — and the save bar — above it. Zero, and so a no-op, wherever no tab bar is
+    /// reservation to the page's bottom safe area. The bar stays pinned to the physical bottom,
+    /// behind the keyboard, so the reservation shrinks by however far the keyboard reaches above
+    /// that edge: with the keyboard up the save bar rests right on the keyboard, not a tab bar's
+    /// height above it. Measured on iOS 26.5 in a page pushed inside Food: the save bar rests 22pt
+    /// above the tab bar with the keyboard down. Zero, and so a no-op, wherever no tab bar is
     /// showing: a page pushed inside a root-presented sheet, and the camera session.
     func fernletTabBarSafeAreaClearance() -> some View {
         modifier(FernletTabBarSafeAreaClearanceModifier())
+    }
+
+    /// Reports into `overlap` how far the keyboard reaches above this view's bottom edge — the
+    /// keyboard's share of the view's bottom safe area, zero while it is down — without changing
+    /// the view's layout.
+    ///
+    /// The view must be laid out against the keyboard (its bottom on the safe area's bottom edge);
+    /// one that is not has no keyboard region to measure, and reads zero. The floating tab bar's
+    /// clearances use it to stand down once the keyboard covers the bar.
+    func fernletKeyboardOverlap(_ overlap: Binding<CGFloat>) -> some View {
+        modifier(FernletKeyboardOverlapReader(overlap: overlap))
     }
 }
 
@@ -1463,6 +1475,10 @@ public extension View {
 /// largest one; retaining that maximum keeps the last card clear in both modes without feeding the
 /// animation back into the scroll views. The caller independently publishes zero while the camera
 /// hides the bar, so a temporary zero must not erase the cached reservation.
+///
+/// Also the rule for a view kept clear of the bar while the keyboard may be up
+/// (``reservation(clearance:keyboardOverlap:)``): the bar stays behind the keyboard, so the larger
+/// of the two wins rather than their sum.
 public enum FernletTabBarClearance {
     /// Returns the largest valid bar height observed in this view lifetime.
     ///
@@ -1472,6 +1488,17 @@ public enum FernletTabBarClearance {
         guard measured.isFinite, measured >= 0 else { return validHeight(current) }
         guard current.isFinite, current >= 0 else { return measured }
         return max(current, measured)
+    }
+
+    /// The bottom reservation that keeps a view clear of the floating tab bar: the bar's
+    /// `clearance` less however far the keyboard already reaches above the bottom edge the bar is
+    /// pinned to, never negative.
+    ///
+    /// The bar stays behind the keyboard, so once the keyboard reaches higher than the bar the
+    /// view rests on the keyboard — adding the two would float it a tab bar's height above the
+    /// keyboard over empty space. Invalid inputs count as zero.
+    public static func reservation(clearance: CGFloat, keyboardOverlap: CGFloat) -> CGFloat {
+        max(0, validHeight(clearance) - validHeight(keyboardOverlap))
     }
 
     private static func validHeight(_ height: CGFloat) -> CGFloat {
@@ -1509,22 +1536,76 @@ public struct FernletTabBarBottomClearanceModifier: ViewModifier {
 
 /// Implements ``SwiftUI/View/fernletTabBarSafeAreaClearance()`` — see there.
 ///
-/// The reservation is an empty bottom `safeAreaInset` that ignores the keyboard, mirroring how the
-/// tab container anchors the bar itself. One keyboard case has been measured: on a pushed Food page
-/// the bar rode on top of the keyboard (its own comment says it stays behind it) and the reservation
-/// rode with it.
+/// The reservation is an empty bottom `safeAreaInset` sized by
+/// ``FernletTabBarClearance/reservation(clearance:keyboardOverlap:)``, with the keyboard's overlap
+/// read off the page itself by ``SwiftUI/View/fernletKeyboardOverlap(_:)``. It cannot simply ignore
+/// the keyboard: an inset's content is laid out with no bottom safe area of its own, so an ignore
+/// there reaches nothing, and the reservation stacked on top of the keyboard — the save bar floated
+/// a tab bar's height above it (measured 2026-10-01, iOS 26.5).
 public struct FernletTabBarSafeAreaClearanceModifier: ViewModifier {
     @Environment(\.fernletTabBarClearance) private var clearance
+    /// How far the keyboard reaches above the page's bottom edge; zero while it is down.
+    @State private var keyboardOverlap: CGFloat = 0
 
     public init() {}
 
     public func body(content: Content) -> some View {
-        content.safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.clear
-                .frame(height: clearance)
-                .ignoresSafeArea(.keyboard, edges: .bottom)
-                .accessibilityHidden(true)
-        }
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear
+                    .frame(height: FernletTabBarClearance.reservation(
+                        clearance: clearance,
+                        keyboardOverlap: keyboardOverlap
+                    ))
+                    .accessibilityHidden(true)
+            }
+            // Outside the inset, so it measures the page and not the page plus its own reservation.
+            .fernletKeyboardOverlap($keyboardOverlap)
+    }
+}
+
+/// Implements ``SwiftUI/View/fernletKeyboardOverlap(_:)`` — see there.
+///
+/// Two heights: the view's own, laid out above the keyboard, and a background probe's, which
+/// ignores the keyboard's safe area and so reaches down to the bottom edge the view would have with
+/// the keyboard down. The probe's read sits INSIDE its `ignoresSafeArea`: a geometry read attached
+/// after an ignore sees the unexpanded frame.
+public struct FernletKeyboardOverlapReader: ViewModifier {
+    @Binding private var overlap: CGFloat
+    @State private var height: CGFloat = 0
+    @State private var heightBehindKeyboard: CGFloat = 0
+
+    public init(overlap: Binding<CGFloat>) {
+        _overlap = overlap
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .background {
+                Color.clear
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.height
+                    } action: { measured in
+                        heightBehindKeyboard = measured
+                        publish(height: height, heightBehindKeyboard: measured)
+                    }
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
+                    .accessibilityHidden(true)
+            }
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { measured in
+                height = measured
+                publish(height: measured, heightBehindKeyboard: heightBehindKeyboard)
+            }
+    }
+
+    /// Writes the overlap only when it changes, so a keyboard edge costs the owner one update.
+    private func publish(height: CGFloat, heightBehindKeyboard: CGFloat) {
+        let measured = heightBehindKeyboard - height
+        let value = measured.isFinite ? max(0, measured) : 0
+        guard value != overlap else { return }
+        overlap = value
     }
 }
 

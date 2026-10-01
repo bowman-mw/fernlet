@@ -52,8 +52,8 @@ final class RecipeEditorLayoutUITests: XCTestCase {
         assertClearOfTabBar(app.buttons["Save recipe"], named: "Save recipe", in: app)
         assertClearOfTabBar(app.buttons["Log & save"], named: "Log & save", in: app)
 
-        // While the name is typed: the keyboard moves the tab bar (it rides on top of the keyboard
-        // here), and Save must still sit above wherever the bar went.
+        // While the name is typed: the tab bar stays behind the keyboard (TabBarKeyboardUITests
+        // pins that, and that Save then rests on the keyboard), and Save must still sit clear of it.
         let name = nameField(in: app)
         XCTAssertTrue(name.waitForExistence(timeout: 6), "the manual editor has no recipe name field")
         name.tapAndType("Layout soup")

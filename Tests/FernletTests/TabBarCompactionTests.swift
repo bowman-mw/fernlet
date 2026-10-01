@@ -116,4 +116,23 @@ import FernletUI
         #expect(FernletTabBarClearance.stableHeight(current: reservation, measured: .infinity) == reservation)
         #expect(FernletTabBarClearance.stableHeight(current: reservation, measured: -1) == reservation)
     }
+
+    /// The bar stays behind the keyboard, so a view kept clear of it rests on whichever reaches
+    /// higher — never on the two stacked (the pushed recipe editor's Save floated a tab bar's
+    /// height above the keyboard, 2026-10-01).
+    @Test func reservationYieldsToAKeyboardThatCoversTheBar() {
+        let clearance: CGFloat = 92.67
+
+        #expect(FernletTabBarClearance.reservation(clearance: clearance, keyboardOverlap: 0) == clearance)
+        #expect(FernletTabBarClearance.reservation(clearance: clearance, keyboardOverlap: 301) == 0)
+        // A keyboard shorter than the bar (an accessory bar alone) covers only part of it.
+        #expect(FernletTabBarClearance.reservation(clearance: clearance, keyboardOverlap: 40) == clearance - 40)
+    }
+
+    @Test func reservationTreatsInvalidInputsAsZero() {
+        #expect(FernletTabBarClearance.reservation(clearance: 94, keyboardOverlap: .nan) == 94)
+        #expect(FernletTabBarClearance.reservation(clearance: 94, keyboardOverlap: -20) == 94)
+        #expect(FernletTabBarClearance.reservation(clearance: .infinity, keyboardOverlap: 0) == 0)
+        #expect(FernletTabBarClearance.reservation(clearance: 0, keyboardOverlap: 301) == 0)
+    }
 }
