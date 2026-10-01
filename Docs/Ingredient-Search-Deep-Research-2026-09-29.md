@@ -1010,3 +1010,28 @@ on `main` with this report. Measured on the base catalog with the replay probe, 
 - F3 shipped only the "salad or cooking" oil exemption; the sweets carrier words were measured and dropped.
 - Still open, and waiting on the owner: F5 (identity ranking, which owns all 10 remaining FAILs), F4b (the full
   portion picker and typical-size table), F8 (the FNDDS layer), F9b (learning from recipe picks).
+
+## Update 2026-09-30 (later): the owner-approved fixes landed
+
+The owner approved F5 for the recipe surfaces ("for the recipe it's more important to rank the plain
+ingredients first"), F4b and F9b. All three landed on `main` with their own adversarial reviews.
+
+| Measure (replay probe, base catalog, 160 queries) | After the first landing | Now |
+|---|---|---|
+| Plain row at #1 | 113 | 140 |
+| Plain row in the visible six | 145 | 152 |
+| FAIL | 10 | 3 (flour, milk, potato) |
+| Count nouns offering a count option | 18 of 26 | 29 of 29 (7 only through a typical size) |
+| Volume queries offering cup/tbsp/tsp | 57 of 91 | 89 of 94 (26 only through a typical size) |
+
+- F5 ranks by ingredient identity only on the recipe editor and the swap sheet. Quick-log, the meal
+  composer and the resolver keep the old order, and `QuickLogSweepProbeTests` shows them unchanged. A food
+  the person made, scanned or logged still leads.
+- F4b's unit menu lists the row's named USDA portions with their grams. A curated typical-size table
+  (76 entries, each cited to a USDA row, shown as "USDA typical size, estimate") answers only rows in
+  listed catalog aisles, so sweets, sauces, snacks, canned goods and drinks get no estimate. "How many
+  grams is one?" stores a per-food answer locally, with its wipe row.
+- F9b: a pick from below the top of a recipe list, for words the person typed out, is remembered in the
+  correction memory, with an origin token beside it. It answers only the recipe searches and never
+  overwrites a correction.
+- Still open: F8 (the FNDDS layer) and a branded-category gate for flavor-last names such as lemon and lime.
