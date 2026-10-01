@@ -188,23 +188,22 @@ final class StoragePrivacyUITests: XCTestCase {
         )
     }
 
-    /// When the lock has never been configured, accessing Privacy & Data routes to the
-    /// lock setup interstitial instead of the primary settings.
+    /// With no Fernlet passcode, Privacy & Data is entered through the same fresh Face ID / iPhone
+    /// passcode check (period-data design 2026-09-30, Q5) — never a "set up app lock" wall — with the
+    /// delete card beneath it.
     @MainActor
-    func testLockGate_notConfigured_showsSetupInterstitial() throws {
+    func testLockGate_notConfigured_entersThroughTheFreshCheck() throws {
         let app = launchPrivacyApp(lockConfigured: false, freshAuth: false)
         openPrivacyData(app)
 
-        // The setup CTA overlay text (from FernletLockGateModifier.setupCTAOverlay)
         XCTAssertTrue(
-            app.staticTexts.containing(
-                NSPredicate(format: "label CONTAINS[c] 'Set up app lock'")
-            ).firstMatch.waitForExistence(timeout: 4),
-            "Lock setup CTA should appear when lock has not been configured"
+            element("privacy.lock.gate", in: app).waitForExistence(timeout: 4),
+            "The fresh device-owner check should stand in front of the controls without a passcode too"
         )
+        XCTAssertTrue(element("privacy.lock.noLockDeleteCard", in: app).exists, "Deletion stays offered beneath it")
         XCTAssertFalse(
             element("privacy.icloud.toggle", in: app).exists,
-            "iCloud toggle should not be accessible via the not-configured interstitial"
+            "iCloud toggle should not be accessible before the check"
         )
     }
 

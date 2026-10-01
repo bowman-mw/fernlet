@@ -15,14 +15,32 @@ final class PrivacyDataSettingsUITests: XCTestCase {
         XCTAssertFalse(element("privacy.icloud.toggle", app: app).exists)
     }
 
+    /// Q5 (period-data design 2026-09-30): with no Fernlet passcode the screen asks for the same fresh
+    /// Face ID / iPhone passcode check as with one — no "set up app lock" wall — and keeps the delete
+    /// card offered beneath it.
     @MainActor
-    func testLockSetupInterstitialShowsWhenLockNotConfigured() throws {
+    func testNoPasscodeEntersThroughTheFreshVerification() throws {
         let app = launchPrivacyApp(lockConfigured: false, freshAuth: false)
         openPrivacyData(app)
 
-        XCTAssertTrue(app.staticTexts["Set up app lock to access privacy settings"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Set up app lock"].exists)
+        XCTAssertTrue(element("privacy.lock.gate", app: app).waitForExistence(timeout: 3))
+        // By label: the gate card's identifier stamps its children (the container-id gotcha).
+        XCTAssertTrue(app.buttons["Verify to continue"].exists)
+        XCTAssertTrue(element("privacy.lock.noLockDeleteCard", app: app).exists)
+        XCTAssertFalse(app.buttons["Set up app lock"].exists, "the old setup wall is gone")
         XCTAssertFalse(element("privacy.icloud.toggle", app: app).exists)
+    }
+
+    /// Q5, the other half: once the (mocked) fresh check passes, a no-passcode user reaches every
+    /// control — the backups included — exactly as a passcode user does.
+    @MainActor
+    func testNoPasscodeWithAFreshCheckReachesTheControls() throws {
+        let app = launchPrivacyApp(lockConfigured: false, freshAuth: true)
+        openPrivacyData(app)
+
+        XCTAssertTrue(element("privacy.controls", app: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("privacy.icloud.toggle", app: app).exists)
+        XCTAssertFalse(element("privacy.lock.gate", app: app).exists)
     }
 
     @MainActor

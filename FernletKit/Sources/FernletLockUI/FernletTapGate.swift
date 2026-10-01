@@ -186,14 +186,14 @@ extension GateCopy {
 
         /// The body of the card shown when this iPhone's key for Private can never be opened again.
         ///
-        /// It promises no Sealed backup restore: after a reset every restore waits for the device owner
-        /// (`SealedBackupRestoreHold`), and the owner's restore action arrives with design unit 5,
-        /// which adds the sentence back (review C-U2-R4).
+        /// Its last sentence promises the Sealed backup restore, true since design unit 5: after the
+        /// reset every ambient restore waits for the device owner (`SealedBackupRestoreHold`), and
+        /// Privacy & Data's owner-checked "Restore" releases it (review C-U2-R4, design §4.7).
         static var unrecoverableBody: String {
             String(localized: "lock.tapGate.unrecoverable.body",
-                   defaultValue: "This iPhone's key for your private entries is gone, so they can't be opened here. Resetting clears Private so you can use it again. It doesn't bring those entries back.",
+                   defaultValue: "This iPhone's key for your private entries is gone, so they can't be opened here. Resetting clears Private so you can use it again. It doesn't bring those entries back, but if Sealed backup is on, you can restore it afterwards from Privacy & Data.",
                    bundle: .module,
-                   comment: "Card on the Private tab (no app passcode) when the key for private entries was lost, for example after this iPhone was erased and restored from a backup. The entries are already unreadable and resetting does not recover them; say both plainly.")
+                   comment: "Card on the Private tab (no app passcode) when the key for private entries was lost, for example after this iPhone was erased and restored from a backup. The entries are already unreadable and resetting does not recover them; say both plainly. The encrypted Sealed backup in iCloud, if the user turned it on, can be restored from Privacy & Data after the reset.")
         }
     }
 

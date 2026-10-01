@@ -290,14 +290,14 @@ enum FernletLockCopy {
         /// longer holds. Unconditional wording on purpose — this module cannot see the Health
         /// switches, and "anything Fernlet copied stays there" is true either way.
         ///
-        /// No restore promise yet: a forgotten passcode ends in a reset, after which every Sealed
-        /// backup restore waits for the device owner, and the owner's restore action arrives with
-        /// design unit 5 (review C-U2-R4), which adds the design's backup sentence back.
+        /// Its backup sentence is true since design unit 5: a forgotten passcode ends in a reset,
+        /// after which the Sealed backup restores from Privacy & Data, behind its fresh device-owner
+        /// check (review C-U2-R4). Conditional on purpose: it is a promise only while the backup is on.
         static var forgottenPasscode: String {
             String(localized: "lock.disclosure.forgottenPasscode.v2",
-                   defaultValue: "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there.",
+                   defaultValue: "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on in Privacy & Data, it keeps an encrypted copy you can restore.",
                    bundle: .module,
-                   comment: "First loss mode in the no-recovery disclosure. 'Can't be opened again' is literal: no support path exists. Only what Fernlet copied to Apple Health (if anything) survives there.")
+                   comment: "First loss mode in the no-recovery disclosure. 'Can't be opened again' is literal: no support path exists. Only what Fernlet copied to Apple Health (if anything) survives there, and the encrypted Sealed backup in iCloud, which the user has to have turned on.")
         }
 
         /// Loss mode two, on Secure-Enclave hardware: losing the device's key, passcode or not.
