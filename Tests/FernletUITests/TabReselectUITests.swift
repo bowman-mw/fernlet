@@ -217,7 +217,9 @@ final class TabReselectUITests: XCTestCase {
         XCTAssertTrue(today.waitForExistence(timeout: 6), "the Cycle calendar has no cell for today")
         XCTAssertTrue(scrollClearOfTabBar(today, in: app), "today's calendar cell not reachable on Cycle")
         today.tap()
-        let dayDetail = app.staticTexts["Health samples"].firstMatch
+        // "Your entry" heads the day detail's period half on every day (period-data design 2026-09-30,
+        // §9.2), logged or not.
+        let dayDetail = app.staticTexts["Your entry"].firstMatch
         XCTAssertTrue(dayDetail.waitForExistence(timeout: 6), "today's cycle day detail did not open")
 
         tabItem("Private", in: app).tap()
