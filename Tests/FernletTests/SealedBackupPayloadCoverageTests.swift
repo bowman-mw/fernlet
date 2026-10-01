@@ -654,6 +654,48 @@ struct SealedBackupPayloadCoverageTests {
         #expect(await coordinator.setSealedBackupEnabled(false, payloadType: .periodData), "turning it off still deletes")
     }
 
+    /// Design unit 4's temporary freeze (period-data design 2026-09-30, §13): since the cutover the
+    /// period RESTORE is paused too. A v1 chunk set in iCloud is NOT written into the legacy narrative
+    /// table — which the legacy import may already have finished with, where nothing would read it —
+    /// even on the explicit Retry; the outcome is a retryable deferral and the cloud copy is untouched.
+    /// Unit 5's id-keyed merge restore lifts it.
+    @Test func thePeriodRestoreIsPausedAsANonDestructiveDeferral() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        let host = makeHost()
+        // Seeded straight through the service, the way the coordinator prepares its identity: the
+        // period EXPORT is itself paused, so it cannot put the fixture in iCloud.
+        let seedingIdentity = IdentityService(keychainService: cloud.keychainService)
+        try seedingIdentity.ensureProvisioned()
+        seedingIdentity.provisionBackupEscrowKeyForSealing()
+        let seeding = SealedBackupService(
+            cloudDataService: CloudKitDataService(
+                accountProvider: AlwaysAvailableAccountProvider(),
+                database: cloud.database,
+                zoneID: CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName),
+                isCloudKitSyncEnabled: { false }
+            ),
+            identityService: seedingIdentity,
+            generationStore: SealedBackupGenerationStore(defaults: isolatedDefaults("seedingGeneration"))
+        )
+        let chunk = try encode([MenstrualNarrative(hkExternalUUID: UUID().uuidString, dateKey: "2026-06-01", note: "only in the cloud")])
+        try await seeding.reconcileChunked(payloadType: .periodData, chunkCount: 1) { _ in chunk }
+        let seeded = names(in: cloud, for: .periodData)
+        #expect(!seeded.isEmpty, "the fixture put a period backup in iCloud")
+        let target = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults("periodLatch")
+        )
+
+        let outcome = await makeCloudCoordinator(host: host, cloud: cloud)
+            .restorePeriodBackupTargeted(narrativeRepository: target, initiatedByUser: true)
+
+        #expect(outcome == .deferredTransient)
+        #expect(outcome.isRetryable)
+        #expect(try target.narrativeCount() == 0, "nothing is written into the legacy table")
+        #expect(names(in: cloud, for: .periodData) == seeded, "the cloud copy is untouched")
+    }
+
     /// Same for intimacy, plus its gate: hidden defers (retryable — un-hiding IS the retry) and writes
     /// nothing; the identical call succeeds once the surface is visible.
     @Test func targetedIntimacyRestoreDefersWhileHiddenAndRecoversAfterUnhiding() async throws {

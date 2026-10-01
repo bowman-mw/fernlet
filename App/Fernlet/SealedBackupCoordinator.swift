@@ -1224,6 +1224,17 @@ final class SealedBackupCoordinator {
             FernletAuditLog.log("sealedBackup.restoreSkippedNonEmpty", context: ["payload": payloadType.rawValue])
             return .skippedStoreNotEmpty
         }
+        // The period restore is PAUSED until backup v2 (period-data design 2026-09-30, unit 4's
+        // temporary freeze). Since the cutover the cycle history is sealed records and the legacy
+        // narrative table only drains: this arm would write v1 narratives into a table the import may
+        // already have finished with, where nothing reads them. A non-destructive, retryable deferral
+        // before any network work — the cloud copy and the switch are untouched — answered only where
+        // a restore would really have run (the no-clobber verdicts above are unchanged). Unit 5's
+        // id-keyed merge restore replaces it.
+        guard payloadType != .periodData else {
+            FernletAuditLog.log("sealedBackup.periodRestorePaused")
+            return .deferredTransient
+        }
         guard let prepared = makeIdentity(escrowMode: .forOpening) else {
             FernletAuditLog.log("sealedBackup.restoreNotProvisioned", context: ["payload": payloadType.rawValue])
             return .deferredTransient
