@@ -777,6 +777,23 @@ struct DeleteAllDataTests {
         #expect(inFlight.isCancelled, "the wipe left the Private tab's backup settle running")
     }
 
+    /// Review U5-backup-v2 N-1: a period export's sealed set no longer stops for the task's
+    /// cancellation (the Private tab closing cancels the same settle, and a set stopped part-way is
+    /// one no restore opens), so the wipe says "wipe" through the store's wipe count — moved in the
+    /// first leg, before the cycle writers stop and before any backup or row is deleted — which the
+    /// export checks before every upload and before recording its accepted head.
+    @Test func deleteAllMovesTheSealedBackupWipeCountInItsFirstLeg() async {
+        let store = makeStore("delete-all-wipe-count")
+        let before = store.sealedBackupWipeCount
+        var seenWhenTheCycleWritersStop: Int?
+        store.periodWritersStopHook = { [weak store] in seenWhenTheCycleWritersStop = store?.sealedBackupWipeCount }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(seenWhenTheCycleWritersStop == before + 1, "moved ahead of the other first-leg stops")
+        #expect(store.sealedBackupWipeCount == before + 1)
+    }
+
     /// I14 / §8.4 (R2-F7): the period store's own writers — the held legacy cycle import and a
     /// fill-on-read begun before the wipe — are stopped in the FIRST leg, before any row is deleted,
     /// and both legacy-import halves are set to DONE (a write, never a clear), so the next Private open

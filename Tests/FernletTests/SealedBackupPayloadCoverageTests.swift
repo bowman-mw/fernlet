@@ -72,6 +72,8 @@ final class FakeSealedBackupHost: SealedBackupContext {
     private(set) var periodBackupMutationCount = 0
     /// The period export's last Privacy & Data state.
     private(set) var periodExportState: PeriodBackupExportState = .clear
+    /// "Delete everything" runs begun — a test moves it to play the wipe's first leg.
+    var sealedBackupWipeCount = 0
     var previousJournals: [JournalEntry] = []
     var memories: [MemoryNote] = []
     var recentMeals: [Meal] = []

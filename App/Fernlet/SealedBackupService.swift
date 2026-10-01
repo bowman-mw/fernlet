@@ -240,7 +240,9 @@ private func bigEndianBytes(_ value: UInt64) -> Data {
 /// Composes ``SealedBackupCrypto`` with `CloudKitDataService`: ``reconcile(_:payloadType:enabled:)``
 /// handles single-record payloads (enable = seal + upload, disable = delete),
 /// ``reconcileChunked(payloadType:chunkCount:chunk:)`` pages large payloads through bounded chunks
-/// with the head record written last as the commit marker, and ``restoreChunks(payloadType:)``
+/// with the head record written last as the commit marker (the period backup's
+/// ``reconcileChunkedSealedUpFront(payloadType:chunkCount:generationFloor:chunk:beforeEachUpload:)``
+/// seals its whole set before the first upload), and ``restoreChunks(payloadType:)``
 /// fetches and opens a complete set all-or-nothing. ``SealedBackupCoordinator`` owns the policy
 /// (visibility gates, no-clobber checks, escrow reconciliation) and is the only production caller;
 /// this class stays mechanism-only. Main-actor isolated, matching its `IdentityService` dependency.
@@ -299,26 +301,27 @@ final class SealedBackupService {
     /// a mixed-generation set fails closed on restore. The whole set shares one generation counter and
     /// one per-generation HKDF salt (record format v2), both stamped on every chunk.
     ///
+    /// The journal and intimacy exports write through here, sealing each chunk as it uploads it. The
+    /// period backup writes through ``reconcileChunkedSealedUpFront(payloadType:chunkCount:generationFloor:chunk:beforeEachUpload:)``
+    /// instead, which seals the whole set before its first upload and mints it above the cloud head.
+    ///
     /// - Parameters:
     ///   - payloadType: The payload being written.
     ///   - chunkCount: How many chunks (at least one is always written).
-    ///   - generationFloor: A generation the new set must exceed — the period backup passes the cloud
-    ///     head's, so a device whose own counter is behind never writes a set another device's restore
-    ///     would reject as a rollback (period-data design 2026-09-30, §9.10). `0`: none.
     ///   - chunk: The plaintext for a chunk index.
-    /// - Returns: The generation the set was written under. Discardable: only the period backup
-    ///   records it (its compare-and-swap pair); a failure is always a throw.
+    /// - Returns: The generation the set was written under. Discardable: no caller records it (the
+    ///   period backup's compare-and-swap pair comes from the sealed-up-front write); a failure is
+    ///   always a throw.
     @discardableResult
     func reconcileChunked(
         payloadType: SealedBackupPayloadType,
         chunkCount: Int,
-        generationFloor: Int64 = 0,
         chunk: (Int) throws -> Data
     ) async throws -> Int64 {
         let count = max(1, chunkCount)
         // ONE generation for the whole set, minted before the first write. Minting per chunk would
         // make every multi-chunk backup look mixed-generation and fail its own restore check.
-        let generation = generationStore.mintNext(for: payloadType, above: generationFloor)
+        let generation = generationStore.mintNext(for: payloadType)
         // ONE salt for the whole set, for the same reason — and stamped on EVERY chunk rather than
         // only the head, because the head is written last as the commit marker, so a head-only salt
         // could not be read while the suffix chunks were being sealed.
@@ -341,6 +344,66 @@ final class SealedBackupService {
             generation: generation,
             keySalt: keySalt
         )
+        try await cloudDataService.deleteSealedBackupChunks(payloadType: payloadType, withIndexAtLeast: count)
+        return generation
+    }
+
+    /// ``reconcileChunked(payloadType:chunkCount:chunk:)`` with EVERY chunk sealed
+    /// before the first upload — the period backup's export (review U5-backup-v2 N-1). Its plaintext
+    /// is decrypted from the sealed cycle store, which may happen only while the Private tab is open.
+    /// Sealed up front, the whole set is ciphertext before the first network call, so the tab closing
+    /// mid-upload has nothing left to stop and the set still lands whole. Stopping it part-way instead
+    /// would leave a MIXED-generation set in iCloud — the old head over new suffix chunks, at the same
+    /// fixed, account-wide record names — which no restore opens until this iPhone exports again.
+    ///
+    /// Holds the whole set's ciphertext while it uploads (one chunk's plaintext at a time while
+    /// sealing): bounded by the caller's chunk count — the period export's is at most
+    /// `CycleRecordRepository.maxStoredRecords / 250`, 80 chunks — and the same footprint as a restore
+    /// of the set, which opens every chunk at once. Suffix chunks are still written first and the head
+    /// last, as the commit marker. The generation is persisted once the set is sealed and before its
+    /// first upload, so a chunk that fails to seal writes nothing and burns no number.
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload being written.
+    ///   - chunkCount: How many chunks (at least one is always written).
+    ///   - generationFloor: A generation the new set must exceed — the cloud head's, so a device whose
+    ///     own counter is behind never writes a set another device's restore would reject as a
+    ///     rollback (period-data design 2026-09-30, §9.10). `0`: none.
+    ///   - chunk: The plaintext for a chunk index. Every index is asked for, synchronously, before
+    ///     the first upload.
+    ///   - beforeEachUpload: Runs before every save, the head's last; a throw stops the set there. The
+    ///     period export stops only for "Delete everything", whose leg 2 deletes what a stopped set
+    ///     leaves behind.
+    /// - Returns: The generation the set was written under.
+    @discardableResult
+    func reconcileChunkedSealedUpFront(
+        payloadType: SealedBackupPayloadType,
+        chunkCount: Int,
+        generationFloor: Int64,
+        chunk: (Int) throws -> Data,
+        beforeEachUpload: () throws -> Void
+    ) async throws -> Int64 {
+        let count = max(1, chunkCount)
+        let generation = generationStore.nextGeneration(for: payloadType, above: generationFloor)
+        let keySalt = Self.mintKeySalt()
+        // Every chunk sealed here, with no suspension point before the first save below.
+        let sealed = try (0..<count).map { index in
+            try SealedBackupCrypto.seal(
+                chunk(index),
+                payloadType: payloadType,
+                identityService: identityService,
+                chunkIndex: index,
+                chunkCount: count,
+                generation: generation,
+                keySalt: keySalt
+            )
+        }
+        generationStore.recordMinted(generation, for: payloadType)
+        // Index order reversed: suffix chunks `n-1…1` first, the head (`0`) last as the commit marker.
+        for record in sealed.reversed() {
+            try beforeEachUpload()
+            try await cloudDataService.saveSealedBackup(record)
+        }
         try await cloudDataService.deleteSealedBackupChunks(payloadType: payloadType, withIndexAtLeast: count)
         return generation
     }
@@ -490,7 +553,8 @@ final class SealedBackupService {
     }
 
     /// The highest generation this device has written or accepted for `payloadType` — the period
-    /// export's one-time v1 seed compares a v1 head against it (§9.10 E2).
+    /// export's compare-and-swap takes a head under this install's own writer tag at or below it for
+    /// this install's own write whose acceptance was never recorded (§9.10 E2).
     func lastSeenGeneration(for payloadType: SealedBackupPayloadType) -> Int64 {
         generationStore.lastSeen(for: payloadType)
     }

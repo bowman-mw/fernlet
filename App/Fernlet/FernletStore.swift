@@ -1147,11 +1147,19 @@ final class FernletStore {
     /// The Private tab's in-flight section settle (the journal or Cycle section's sealed-backup
     /// restores and exports, started by `ContentView` once the tab opens), held — not fire-and-forget
     /// — so "delete everything" can cancel it, and the tab closing too (review U5-backup-v2-C-U5-3 /
-    /// L-U5-R4): the Cycle settle now runs the period export, and one suspended in its CloudKit
-    /// upload would otherwise resume after the wipe and write the set the wipe just deleted. The
-    /// exports' own checks (the period export's `ensurePeriodExportMayContinue`, the restores'
-    /// write-point cancellation check) make the cancellation stop the writes.
+    /// L-U5-R4). The cancellation stops what has yet to decrypt: the restores at their write-point
+    /// check, the period export before it seals its set. A period set already sealed finishes its
+    /// upload whatever the tab does (review U5-backup-v2 N-1: stopped part-way it would leave a mixed
+    /// set no restore opens); only the wipe stops that, through ``sealedBackupWipeCount``.
     @ObservationIgnored var privateSectionBackupSettleTask: Task<Void, Never>?
+
+    /// How many "Delete everything" runs this process has begun, moved first thing in the wipe's first
+    /// leg (`stopWritersForWipe`). The period export reads it when it starts and checks it before every
+    /// upload of its sealed set and before recording the set's accepted head, so a set begun before a
+    /// wipe never writes its head, or the accepted head, after the wipe began (review U5-backup-v2
+    /// N-1). The task's cancellation cannot carry this: the Private tab closing cancels the same
+    /// settle. Memory-only.
+    @ObservationIgnored private(set) var sealedBackupWipeCount = 0
 
     /// Settles the sealed period backup when cycle tracking is un-hidden: the v2 settle — restore
     /// (while this install's restore is unresolved), then export behind its guards (period-data design
@@ -5816,6 +5824,9 @@ final class FernletStore {
     /// `stopHealthKitWorkoutObservation` matters most when the user chose to KEEP their Health
     /// samples — that is precisely when the observer still has data to re-import.
     private func stopWritersForWipe() {
+        // First, before any writer below is cancelled or any backup deleted: a period export already
+        // uploading its sealed set stops at its next upload (review U5-backup-v2 N-1).
+        sealedBackupWipeCount &+= 1
         snapshotSaveCoordinator.cancelPending()
         stopHealthKitWorkoutObservation()
         // The un-hide settle is a third writer: suspended in its CloudKit fetch it would resume AFTER
@@ -5824,8 +5835,10 @@ final class FernletStore {
         // diverged-device latch backstops any restore this cancel arrives too late for.
         periodBackupSettleTask?.cancel()
         // The Private tab's section settle is the same class of writer since the Cycle settle runs the
-        // period export: suspended in a chunk upload, it would resume after the wipe and write a fresh
-        // set — and its accepted head — over the deletes (review U5-backup-v2-C-U5-3 / L-U5-R4).
+        // period export and the targeted restores: cancelled, a restore stops at its write point and an
+        // export before it seals; a period set already uploading stops on the wipe count moved above,
+        // never writing its head or accepted head over the deletes (review U5-backup-v2-C-U5-3 /
+        // L-U5-R4, N-1).
         privateSectionBackupSettleTask?.cancel()
         // The period store's own writers: the held legacy cycle import and a fill-on-read begun before
         // the wipe would otherwise write records back into the emptied store (period-data design

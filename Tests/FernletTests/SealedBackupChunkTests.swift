@@ -508,45 +508,147 @@ struct SealedBackupChunkTests {
         }
     }
 
-    /// Review U5-backup-v2-C-U5-3 / L-U5-R4: the export decrypts each chunk as it uploads it, and the
-    /// Private tab can close mid-upload. The key is re-checked before every chunk, so the set stops
-    /// before its head (chunk 0, sealed last) — no cycle record is decrypted after the tab closed —
-    /// the accepted head is not recorded, and the upload stays owed.
+    /// Review U5-backup-v2 N-1: the Private tab closing mid-upload — its key gone, its section settle
+    /// cancelled — must not stop a set part-way. Chunks live at fixed, account-wide record names, so a
+    /// set stopped after its suffix chunks left the OLD head over NEW suffix chunks: a mixed-generation
+    /// set every restore refused until this iPhone exported again (lost with the phone; stranded
+    /// behind an app-lock reset's hold). The export now decrypts and seals every chunk before its first
+    /// upload, so the closed tab has nothing left to decrypt or stop: the new set lands whole over the
+    /// old two-chunk one, and a new iPhone restores it.
     @MainActor
-    @Test func anExportStopsBeforeItsHeadWhenPrivateClosesMidUpload() async throws {
+    @Test func anExportFinishesItsSealedSetWhenPrivateClosesMidUpload() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
         let interrupting = InterruptingCloudKitRecordDatabase(cloud.database)
         let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: interrupting)
         try phone.seed((0..<300).map { PeriodBackupDevice.record(day: $0) })
-        interrupting.onFirstSave = { phone.host.sealedBackupContentKey = nil }
-
         #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
-        #expect(try await PeriodBackupDevice.cloudHead(cloud) == nil, "the head was never sealed")
-        #expect(cloud.sealedRecords.count == 1, "only the suffix chunk already in flight")
-        #expect(phone.host.periodBackupLedger.acceptedHead == nil)
-        #expect(phone.host.reuploadDeferrals[.periodData] == true, "still owed: the next Cycle settle exports")
+        #expect(try await PeriodBackupDevice.cloudHead(cloud) == PeriodBackupHead(writer: "phone", generation: 1))
+        #expect(cloud.sealedRecords.count == 2, "the prior set has two chunks")
+
+        try phone.seed((300..<320).map { PeriodBackupDevice.record(day: $0) })
+        let export = PeriodExportTaskBox()
+        interrupting.onFirstSave = {
+            phone.host.sealedBackupContentKey = nil   // the tab closed: the key provider answers nil
+            export.task?.cancel()                     // and ContentView cancels the section settle
+        }
+        export.task = Task { await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData) }
+        #expect(await export.task?.value == true)
+
+        let head = PeriodBackupHead(writer: "phone", generation: 2)
+        #expect(try await PeriodBackupDevice.cloudHead(cloud) == head, "the new set's head landed")
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud).count == 320, "one whole set, every chunk at generation 2")
+        #expect(phone.host.periodBackupLedger.acceptedHead == head)
+        #expect(phone.host.reuploadDeferrals[.periodData] == false, "nothing owed: the set is complete")
+        let newPhone = PeriodBackupDevice(cloud: cloud, writer: "new")
+        #expect(await newPhone.coordinator.restorePeriodBackup() == .restored(320), "and it restores")
     }
 
-    /// Review U5-backup-v2-C-U5-3 / L-U5-R4: "Delete everything" cancels the settle running the
-    /// export. A cancelled export seals no further chunk — so not the head — writes no accepted head
-    /// (the wipe clears it with the rollback marks) and records no deferral (the wipe owns those).
+    /// Review U5-backup-v2-C-U5-3 / L-U5-R4, kept through N-1: "Delete everything" moves the store's
+    /// wipe count in its first leg. An export already uploading its sealed set stops at its next save
+    /// — so never the head, which goes last — writes no accepted head (the wipe clears it with the
+    /// rollback marks) and records no deferral (the wipe owns those). The wipe count alone stops it:
+    /// the task's cancellation no longer can, since the tab closing cancels the same settle.
     @MainActor
-    @Test func aCancelledExportWritesNoHeadAndRecordsNothing() async throws {
+    @Test func aWipeThatBeginsMidUploadStopsTheSetBeforeItsHead() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
         let interrupting = InterruptingCloudKitRecordDatabase(cloud.database)
         let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: interrupting)
         try phone.seed((0..<300).map { PeriodBackupDevice.record(day: $0) })
-        let export = PeriodExportTaskBox()
-        interrupting.onFirstSave = { export.task?.cancel() }
+        interrupting.onFirstSave = { phone.host.sealedBackupWipeCount += 1 }
 
-        export.task = Task { await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData) }
-        let succeeded = await export.task?.value
-        #expect(succeeded == false)
+        #expect(await !phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(try await PeriodBackupDevice.cloudHead(cloud) == nil, "the wipe's set delete is never raced by a fresh head")
+        #expect(cloud.sealedRecords.count == 1, "only the suffix chunk already in flight")
         #expect(phone.host.periodBackupLedger.acceptedHead == nil)
         #expect(phone.host.reuploadDeferrals[.periodData] == nil, "no deferral written behind the wipe")
+    }
+
+    /// The other half: a wipe that begins while the head itself is uploading cannot stop that save,
+    /// but the accepted head the wipe cleared is never written back after it.
+    @MainActor
+    @Test func aWipeThatBeginsWhileTheHeadUploadsRecordsNoAcceptedHead() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let interrupting = InterruptingCloudKitRecordDatabase(cloud.database)
+        let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: interrupting)
+        try phone.seed([PeriodBackupDevice.record(day: 1)])
+        interrupting.onFirstSave = { phone.host.sealedBackupWipeCount += 1 }
+
+        #expect(await !phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        #expect(try await PeriodBackupDevice.cloudHead(cloud) != nil, "the one save in flight landed")
+        #expect(phone.host.periodBackupLedger.acceptedHead == nil, "but nothing recorded it")
+        #expect(phone.host.reuploadDeferrals[.periodData] == nil)
+    }
+
+    /// Review U5-backup-v2 N-1: a sealed set now outlives the tab closing, so reopening it (or an
+    /// un-hide settle) can ask for a second export while the first is uploading. Two at once could
+    /// interleave their chunk writes — the older head landing last over the newer set — so the second
+    /// defers, minting nothing, and the first's set carries everything.
+    @MainActor
+    @Test func onlyOnePeriodExportUploadsAtATime() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let holding = HoldingCloudKitRecordDatabase(cloud.database)
+        let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: holding)
+        try phone.seed([PeriodBackupDevice.record(day: 1)])
+
+        let first = Task { await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData) }
+        for _ in 0..<1_000 where !holding.isHoldingSave { await Task.yield() }
+        #expect(holding.isHoldingSave, "the first export is uploading")
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData), "the second defers")
+        #expect(phone.host.reuploadDeferrals[.periodData] == true)
+        #expect(SealedBackupGenerationStore(defaults: phone.generationDefaults).lastSeen(for: .periodData) == 1,
+                "the second minted nothing")
+
+        holding.releaseHeldSave()
+        #expect(await first.value)
+        #expect(try await PeriodBackupDevice.cloudHead(cloud) == PeriodBackupHead(writer: "phone", generation: 1))
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(try phone.records.allIDs()))
+        #expect(phone.host.reuploadDeferrals[.periodData] == false, "the first export's set carries everything")
+    }
+
+    /// Review U5-backup-v2 N-1, the mechanism: the period write seals every chunk before its first
+    /// upload, still writes the head last, mints above the floor — and a chunk that fails to seal
+    /// writes nothing and burns no generation.
+    @MainActor
+    @Test func theSealedUpFrontWriteSealsTheWholeSetBeforeItsFirstUpload() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let defaults = isolatedDefaults()
+        let service = try PeriodBackupDevice.service(cloud, generationDefaults: defaults)
+        var events: [String] = []
+
+        let generation = try await service.reconcileChunkedSealedUpFront(
+            payloadType: .periodData,
+            chunkCount: 3,
+            generationFloor: 4,
+            chunk: { index in
+                events.append("seal \(index)")
+                return Data("chunk \(index)".utf8)
+            },
+            beforeEachUpload: { events.append("upload") }
+        )
+        #expect(generation == 5)
+        #expect(events == ["seal 0", "seal 1", "seal 2", "upload", "upload", "upload"])
+        #expect(cloud.sealedRecords.compactMap { $0["chunkIndex"] as? Int } == [2, 1, 0], "head last")
+        let written = cloud.sealedRecordIdentities
+
+        await #expect(throws: SealFailure.self) {
+            try await service.reconcileChunkedSealedUpFront(
+                payloadType: .periodData,
+                chunkCount: 2,
+                generationFloor: 0,
+                chunk: { index in
+                    guard index == 0 else { throw SealFailure() }
+                    return Data()
+                },
+                beforeEachUpload: {}
+            )
+        }
+        #expect(cloud.sealedRecordIdentities == written, "nothing uploaded")
+        #expect(SealedBackupGenerationStore(defaults: defaults).lastSeen(for: .periodData) == 5, "no generation burned")
     }
 
     /// Review U5-backup-v2-L-U5-R1: a set sealed to an escrow key this iPhone does not hold — after
@@ -754,6 +856,18 @@ final class PeriodBackupDevice {
         return Set(try chunks.flatMap { try PeriodBackupFormat.records(fromChunk: $0) }.map(\.id))
     }
 
+    /// A sealing service over `cloud` (its escrow key) with the rollback mark in `generationDefaults`.
+    static func service(_ cloud: FakeSealedBackupCloud, generationDefaults: UserDefaults) throws -> SealedBackupService {
+        let identity = IdentityService(keychainService: cloud.keychainService)
+        try identity.ensureProvisioned()
+        identity.provisionBackupEscrowKeyForSealing()
+        return SealedBackupService(
+            cloudDataService: cloudDataService(cloud.database),
+            identityService: identity,
+            generationStore: SealedBackupGenerationStore(defaults: generationDefaults)
+        )
+    }
+
     /// A read-only service over `cloud` with its own fresh rollback mark.
     private static func reader(_ cloud: FakeSealedBackupCloud) throws -> SealedBackupService {
         let identity = IdentityService(keychainService: cloud.keychainService)
@@ -778,7 +892,10 @@ final class PeriodBackupDevice {
     }
 }
 
-/// Holds an export task so the transport's hook can cancel it mid-upload ("Delete everything").
+/// A chunk that fails to seal.
+struct SealFailure: Error {}
+
+/// Holds an export task so the transport's hook can cancel it mid-upload (the Private tab closing).
 @MainActor
 final class PeriodExportTaskBox {
     /// The export.
@@ -822,6 +939,37 @@ final class PruneFailingCloudKitRecordDatabase: CloudKitRecordDatabase {
         }
     }
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
+}
+
+/// A transport that holds its first save until the test releases it — an upload still in flight.
+final class HoldingCloudKitRecordDatabase: CloudKitRecordDatabase {
+    private let base: InMemoryCloudKitRecordDatabase
+    private var holdsNextSave = true
+    private var heldSave: CheckedContinuation<Void, Never>?
+    /// Whether a save is waiting for ``releaseHeldSave()``.
+    var isHoldingSave: Bool { heldSave != nil }
+
+    init(_ base: InMemoryCloudKitRecordDatabase) { self.base = base }
+
+    func recordZoneIDs() async throws -> [CKRecordZone.ID] { try await base.recordZoneIDs() }
+    func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID] {
+        try await base.recordIDs(matching: recordType, in: zoneID)
+    }
+    func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] { try await base.records(for: recordIDs) }
+    func saveRecords(_ records: [CKRecord]) async throws {
+        if holdsNextSave {
+            holdsNextSave = false
+            await withCheckedContinuation { heldSave = $0 }
+        }
+        try await base.saveRecords(records)
+    }
+    func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
+
+    /// Lets the held save land.
+    func releaseHeldSave() {
+        heldSave?.resume()
+        heldSave = nil
+    }
 }
 
 /// A transport that runs `onFirstSave` (on the main actor) before its first save lands — a record

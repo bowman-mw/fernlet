@@ -1419,8 +1419,9 @@ struct ContentView: View {
     ) {
         privateActivationTask?.cancel()
         periodLoadTask?.cancel()
-        // The tab closed: an in-flight section settle stops before its next decrypt or upload
-        // (review U5-backup-v2-C-U5-3 / L-U5-R4).
+        // The tab closed: an in-flight section settle stops before its next decrypt (review
+        // U5-backup-v2-C-U5-3 / L-U5-R4). A period set it already sealed still finishes uploading —
+        // stopped part-way, it would leave a mixed set no restore opens (review U5-backup-v2 N-1).
         if !lockState.isUnlocked(for: .privateHub) { store.privateSectionBackupSettleTask?.cancel() }
         store.deactivateSealedJournals()
         worryBoxService.deactivate()
@@ -1544,7 +1545,7 @@ struct ContentView: View {
             guard attemptedSealedBackupSections.insert(section).inserted else { continue }
             await settleSealedBackups(for: section)
             // Cancelled mid-settle (the tab closed, or "delete everything"): the settle stopped before
-            // its next decrypt or upload, so it is owed again the next time the section opens.
+            // its next decrypt, so it is owed again the next time the section opens.
             if Task.isCancelled { attemptedSealedBackupSections.remove(section) }
         }
     }

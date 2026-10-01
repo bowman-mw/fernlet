@@ -86,6 +86,11 @@ protocol SealedBackupContext: AnyObject {
     func markPeriodBackupDirtyIfEnabled()
     /// Records what the period export has to tell Privacy & Data (§10.6).
     func recordPeriodBackupExportState(_ state: PeriodBackupExportState)
+    /// How many "Delete everything" runs this process has begun — moved by the wipe's first leg. The
+    /// period export reads it when it starts and stops a sealed set at its next upload once it moved
+    /// (review U5-backup-v2 N-1): the task's cancellation cannot say "wipe", because the Private tab
+    /// closing cancels the same settle and must not stop a set whose chunks are already sealed.
+    var sealedBackupWipeCount: Int { get }
     /// Whether cycle tracking is visible. The backup paths must consult this: both reconcile and
     /// restore decrypt cycle records on ambient, launch-time paths that no view drives.
     var isPeriodTrackingVisible: Bool { get }
@@ -247,13 +252,22 @@ final class SealedBackupCoordinator {
         /// The PERIOD export could not decide a record (the install binding did not answer) or this
         /// install's writer tag. Retried at the next Cycle settle; nothing is written.
         case periodExportUndecided
+        /// The PERIOD export found this install's previous one still uploading (review U5-backup-v2
+        /// N-1): a sealed set finishes its upload after the Private tab closes, so reopening it — or an
+        /// un-hide settle — can ask for a second export meanwhile, and two at once could interleave
+        /// their chunk writes into a mixed set. A deferral: the running export's set carries what it
+        /// sealed, and the next Cycle settle exports whatever changed since.
+        case periodExportInFlight
     }
 
     /// Records per sealed chunk on every paged export (period, journal, intimacy). Bounds the
-    /// plaintext/ciphertext held in memory while sealing to ~this many records regardless of how long
-    /// the history is. One size for all three payloads deliberately: journal text is longer per record,
-    /// but the number only has to keep a chunk comfortably inside a `CKAsset`, and a single constant is
-    /// one thing to reason about instead of three.
+    /// plaintext held in memory while sealing to ~this many records regardless of how long the history
+    /// is — and, for journal and intimacy, the ciphertext too. The period export holds its whole set's
+    /// ciphertext until the upload ends (it seals every chunk before the first upload, review
+    /// U5-backup-v2 N-1), at most `CycleRecordRepository.maxStoredRecords` records, the footprint a
+    /// restore of the set has anyway. One size for all three payloads deliberately: journal text is
+    /// longer per record, but the number only has to keep a chunk comfortably inside a `CKAsset`, and a
+    /// single constant is one thing to reason about instead of three.
     static let periodBackupChunkSize = 250
 
     private unowned let host: any SealedBackupContext
@@ -290,6 +304,11 @@ final class SealedBackupCoordinator {
     /// on purpose: a relaunch only forgets the request, and the next export names the set again with
     /// both choices (review U5-backup-v2-C-U5-2).
     private var periodRestoreHereRequest: PeriodBackupHead?
+
+    /// Whether a period export of this install's is between its first check and its last upload —
+    /// at most one runs at a time (``SealedBackupWiringError/periodExportInFlight``). In memory: a
+    /// relaunch ends every upload with it.
+    private var isPeriodExportInFlight = false
 
     init(
         host: any SealedBackupContext,
@@ -671,9 +690,8 @@ final class SealedBackupCoordinator {
     ///   flag alone; hiding is never destructive).
     /// - **E4** the Private tab's key is live at the start of the pass (`.locked` otherwise) — and
     ///   STILL live, the same key, with period tracking visible and the task not cancelled, after the
-    ///   head fetch's await and before every chunk is decrypted (``ensurePeriodExportMayContinue(contentKey:)``):
-    ///   the cycle history is decrypted only while the Private tab is open, and an export suspended
-    ///   across "Delete everything" never writes the set the wipe just deleted (review
+    ///   head fetch's await and as every chunk is decrypted (``ensurePeriodExportMayContinue(contentKey:wipes:)``):
+    ///   the cycle history is decrypted only while the Private tab is open (review
     ///   U5-backup-v2-C-U5-3 / L-U5-R4).
     /// - **E1** this install's period restore is resolved (``PeriodBackupLedger/isRestoreResolved``):
     ///   a fresh install never writes over the cloud copy before pulling it.
@@ -682,8 +700,19 @@ final class SealedBackupCoordinator {
     /// - **E3** a full pre-pass decrypts every record once BEFORE the first write; any dead record
     ///   refuses (named), any undecided one defers. The chunks are then built from the pre-pass's id
     ///   snapshot, so a page can never shift under a concurrent edit.
-    /// The set is minted above the cloud head's generation, its head carries this install's writer
-    /// tag, and the pair is recorded as accepted after the write.
+    /// - **One at a time**: an export of this install's still uploading defers this one
+    ///   (``isPeriodExportInFlight``).
+    ///
+    /// Every chunk is decrypted and sealed in one synchronous step right after the last check —
+    /// BEFORE the first upload (``SealedBackupService/reconcileChunkedSealedUpFront(payloadType:chunkCount:generationFloor:chunk:beforeEachUpload:)``,
+    /// review U5-backup-v2 N-1). The uploads that follow need no key, so the Private tab closing
+    /// mid-upload (which also cancels the settle running this) stops nothing: chunks live at fixed,
+    /// account-wide record names, and a set stopped after its suffix chunks would leave the old head
+    /// over new chunks, a mixed set no restore opens. Only "Delete everything" stops a started set —
+    /// at its next upload, through the store's wipe count (``ensureNoWipeBegan(since:)``), so the
+    /// head (written last) and the accepted head are never written after the wipe began; what the
+    /// stopped set left, the wipe deletes. The set is minted above the cloud head's generation, its
+    /// head carries this install's writer tag, and the pair is recorded as accepted after the write.
     ///
     /// - Returns: Whether the export was CLEAN — no cycle record changed while it ran. False keeps the
     ///   re-upload owed (I29). Also false for the hidden no-op.
@@ -694,19 +723,27 @@ final class SealedBackupCoordinator {
             FernletAuditLog.log("sealedBackup.periodExportWaitsForRestore")
             throw SealedBackupWiringError.periodRestorePending
         }
+        guard !isPeriodExportInFlight else {
+            FernletAuditLog.log("sealedBackup.periodExportAlreadyUploading")
+            throw SealedBackupWiringError.periodExportInFlight
+        }
+        isPeriodExportInFlight = true
+        defer { isPeriodExportInFlight = false }
+        let wipes = host.sealedBackupWipeCount
         let floor = try await periodExportFloor(using: service)
-        try ensurePeriodExportMayContinue(contentKey: key)
+        try ensurePeriodExportMayContinue(contentKey: key, wipes: wipes)
         let mutationsBefore = host.periodBackupMutationCount
-        let plan = try periodExportPlan(contentKey: key)
-        let generation = try await service.reconcileChunked(
+        let plan = try periodExportPlan(contentKey: key, wipes: wipes)
+        let generation = try await service.reconcileChunkedSealedUpFront(
             payloadType: .periodData,
             chunkCount: plan.chunkCount,
             generationFloor: floor,
-            chunk: plan.chunk
+            chunk: plan.chunk,
+            beforeEachUpload: { [self] in try ensureNoWipeBegan(since: wipes) }
         )
         // A wipe that began while the head was in flight has cleared the accepted head with the
         // rollback marks; it is never written back.
-        try Task.checkCancellation()
+        try ensureNoWipeBegan(since: wipes)
         host.periodBackupLedger.recordAcceptedHead(PeriodBackupHead(writer: plan.writer, generation: generation))
         host.recordPeriodBackupExportState(.clear)
         let clean = host.periodBackupMutationCount == mutationsBefore
@@ -716,19 +753,38 @@ final class SealedBackupCoordinator {
         return clean
     }
 
-    /// Whether the period export may decrypt or write one more step: not cancelled ("Delete
-    /// everything" cancels the settle that runs it), period tracking visible, and the Private tab's
-    /// key still the one the pass started with — the tab closing makes the key provider answer nil
-    /// (review U5-backup-v2-C-U5-3 / L-U5-R4). A cancelled export throws `CancellationError`, which
-    /// records no deferral (the wipe owns those); a closed tab or a hide throws `.locked`, a deferral
-    /// the next Cycle settle discharges.
+    /// Whether the period export may decrypt one more chunk: not cancelled (the Private tab closing,
+    /// or "Delete everything", cancels the settle that runs it), no wipe begun since the pass started,
+    /// period tracking visible, and the Private tab's key still the one the pass started with — the
+    /// tab closing makes the key provider answer nil (review U5-backup-v2-C-U5-3 / L-U5-R4). Checked
+    /// after the head fetch and as each chunk is sealed, all before the first upload, so a refusal
+    /// here never leaves a partial set. A cancelled export throws `CancellationError`, which records
+    /// no deferral; a closed tab or a hide throws `.locked`, a deferral the next Cycle settle
+    /// discharges.
     ///
-    /// - Parameter key: The key the pass captured at its start.
-    private func ensurePeriodExportMayContinue(contentKey key: SymmetricKey) throws {
+    /// - Parameters:
+    ///   - key: The key the pass captured at its start.
+    ///   - wipes: The store's wipe count when the pass started.
+    private func ensurePeriodExportMayContinue(contentKey key: SymmetricKey, wipes: Int) throws {
         try Task.checkCancellation()
+        try ensureNoWipeBegan(since: wipes)
         guard host.isPeriodTrackingVisible, let live = host.sealedBackupContentKey, live == key else {
             FernletAuditLog.log("sealedBackup.periodExportAbandonedPrivateClosed")
             throw SealedBackupWiringError.locked
+        }
+    }
+
+    /// Throws `CancellationError` when "Delete everything" has begun since the period export read the
+    /// store's wipe count — checked before every upload of a sealed set and before its accepted head
+    /// is recorded (review U5-backup-v2 N-1). Not the task's cancellation: the Private tab closing
+    /// cancels the same settle, and a closed tab must not stop a set whose chunks are already sealed.
+    /// `CancellationError` records no deferral (the wipe clears every one).
+    ///
+    /// - Parameter wipes: The store's wipe count when the pass started.
+    private func ensureNoWipeBegan(since wipes: Int) throws {
+        guard host.sealedBackupWipeCount == wipes else {
+            FernletAuditLog.log("sealedBackup.periodExportStoppedForWipe")
+            throw CancellationError()
         }
     }
 
@@ -804,18 +860,24 @@ final class SealedBackupCoordinator {
         let snapshotCount: Int
         /// How many chunks the set has (at least one: an empty store still writes its head).
         let chunkCount: Int
-        /// Seals chunk `index`'s plaintext (called by `reconcileChunked`, suffix chunks first).
+        /// Decrypts and encodes chunk `index`'s plaintext — asked for every index, in one synchronous
+        /// step, by the sealed-up-front write before its first upload.
         let chunk: (Int) throws -> Data
     }
 
     /// E3 (§9.10, R2-F12): the keyless id snapshot and ONE decrypt of every record before any write.
     /// A dead record refuses the export (named in Privacy & Data); an undecided one, or no writer tag,
-    /// defers it. Each chunk is then fetched by its slice of the snapshot — a record deleted
-    /// mid-export is simply absent from its chunk, one added mid-export waits for the next export
-    /// (its mutation re-marked the backup owed) — and a chunk whose rows stop opening mid-export, or
-    /// whose turn comes after the Private tab closed or a wipe began
-    /// (``ensurePeriodExportMayContinue(contentKey:)``), throws before the head is written.
-    private func periodExportPlan(contentKey key: SymmetricKey) throws -> PeriodExportPlan {
+    /// defers it. Each chunk is then fetched by its slice of the snapshot — a record deleted since
+    /// the snapshot is simply absent from its chunk, one added since waits for the next export (its
+    /// mutation re-marked the backup owed) — and a chunk whose rows stop opening, or whose turn comes
+    /// after the Private tab closed or a wipe began (``ensurePeriodExportMayContinue(contentKey:wipes:)``),
+    /// throws. The chunks are all asked for before the first upload (review U5-backup-v2 N-1), so
+    /// such a throw writes nothing.
+    ///
+    /// - Parameters:
+    ///   - key: The Private tab's key the pass captured.
+    ///   - wipes: The store's wipe count when the pass started.
+    private func periodExportPlan(contentKey key: SymmetricKey, wipes: Int) throws -> PeriodExportPlan {
         let store = resolvedPeriodRecordStore()
         let prePass = try store.backupPrePass(contentKey: key)
         guard prePass.deadIDs.isEmpty else {
@@ -835,9 +897,9 @@ final class SealedBackupCoordinator {
             snapshotCount: total,
             chunkCount: max(1, (total + size - 1) / size),
             chunk: { [self] index in
-                // Re-checked before EVERY chunk's decrypt — the head (chunk 0) is sealed last, so a
-                // tab that closed or a wipe that began mid-upload stops the set before its commit.
-                try ensurePeriodExportMayContinue(contentKey: key)
+                // Re-checked before EVERY chunk's decrypt. The service asks for every chunk in one
+                // synchronous step before its first upload, so a refusal here leaves no partial set.
+                try ensurePeriodExportMayContinue(contentKey: key, wipes: wipes)
                 let slice = Array(ids[min(index * size, total)..<min((index + 1) * size, total)])
                 let page = try store.backupChunk(ids: slice, contentKey: key)
                 guard page.isFullyOpen else { throw SealedBackupWiringError.periodExportUndecided }

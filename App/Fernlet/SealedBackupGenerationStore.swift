@@ -78,9 +78,29 @@ struct SealedBackupGenerationStore {
     ///   - payloadType: The payload being written.
     ///   - floor: A generation the new one must exceed (`0`: none).
     mutating func mintNext(for payloadType: SealedBackupPayloadType, above floor: Int64) -> Int64 {
-        let next = max(lastSeen(for: payloadType), floor) + 1
+        let next = nextGeneration(for: payloadType, above: floor)
         defaults.set(Int(next), forKey: Self.key(for: payloadType))
         return next
+    }
+
+    /// The generation ``mintNext(for:above:)`` would mint next, WITHOUT persisting it — for a writer
+    /// that seals its whole set before it commits to writing it: the period backup, which seals every
+    /// chunk while the Private tab's key is live and only then uploads (review U5-backup-v2 N-1). That
+    /// writer persists the number through ``recordMinted(_:for:)`` once the set is sealed and before
+    /// its first upload, so a chunk that fails to seal burns no number, and an upload still never
+    /// reuses one (the fail-safe direction of ``mintNext(for:)``).
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload being written.
+    ///   - floor: A generation the new one must exceed (`0`: none).
+    func nextGeneration(for payloadType: SealedBackupPayloadType, above floor: Int64) -> Int64 {
+        max(lastSeen(for: payloadType), floor) + 1
+    }
+
+    /// Persists a generation taken from ``nextGeneration(for:above:)`` as minted, before its set's
+    /// first upload. Only ever moves forward, like ``recordAccepted(_:for:)``.
+    mutating func recordMinted(_ generation: Int64, for payloadType: SealedBackupPayloadType) {
+        recordAccepted(generation, for: payloadType)
     }
 
     /// Raises the high-water mark after a restore has authenticated a generation.
