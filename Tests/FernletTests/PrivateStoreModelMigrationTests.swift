@@ -130,4 +130,48 @@ struct PrivateStoreModelMigrationTests {
         #expect(try again.sealedRowCount() == 5)
         try Self.close(again)
     }
+
+    /// The DOWNGRADE, characterised (review L-U3-R2): an earlier build — V1 model, no version
+    /// identifier, automatic inferred migration and no staged manager, exactly what every shipped build
+    /// opens its store with — reading a store a V2 build wrote. Core Data finds V2 in the store's own
+    /// model cache, infers "drop entity `CycleRecord`" and migrates the file DOWN: the earlier build
+    /// loads (so its sealed journal, intimacy and worry reads keep working) with every V1 row intact,
+    /// and every cycle record is gone — a later upgrade finds an empty table. Downgrading a phone below
+    /// V2 is therefore unsupported once cycle records exist; this pins the behaviour the residual risk
+    /// and `makeManagedObjectModel()`'s doc state, so a change in it is noticed.
+    @Test func anEarlierBuildOpeningAVersionTwoStoreLoadsButDropsEveryCycleRecord() throws {
+        let directory = try Self.makeScratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("FernletPrivate.sqlite")
+        let key = SymmetricKey(size: .bits256)
+        let latches = UserDefaults(suiteName: "fernlet.tests.modelMigration.\(UUID().uuidString)") ?? .standard
+        let narrative = MenstrualNarrative(hkExternalUUID: UUID().uuidString, dateKey: "2026-09-01", note: "kept note")
+
+        let current = PrivatePersistenceController(storeURL: storeURL)
+        #expect(!current.didFailToLoad)
+        try MenstrualNarrativeRepository(controller: current, defaults: latches).insert(narrative, contentKey: key)
+        try CycleRecordRepository(controller: current).insert(
+            CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .light), now: Date()), contentKey: key
+        )
+        #expect(try current.sealedRowCount() == 2)
+        try Self.close(current)
+
+        let shipped = PrivatePersistenceController.makeManagedObjectModelV1()
+        shipped.versionIdentifiers = []
+        let earlier = PrivatePersistenceController(storeURL: storeURL, model: shipped)
+        #expect(!earlier.didFailToLoad, "an earlier build can no longer load a V2 store — the residual risk changed")
+        #expect(try MenstrualNarrativeRepository(controller: earlier, defaults: latches)
+            .narrative(forHKUUID: narrative.hkExternalUUID, contentKey: key)?.note == "kept note")
+        let downgraded = try NSPersistentStoreCoordinator.metadataForPersistentStore(type: .sqlite, at: storeURL)
+        #expect(shipped.isConfiguration(withName: nil, compatibleWithStoreMetadata: downgraded),
+                "the earlier build did not migrate the file down to V1")
+        try Self.close(earlier)
+
+        let upgradedAgain = PrivatePersistenceController(storeURL: storeURL)
+        #expect(!upgradedAgain.didFailToLoad)
+        #expect(try CycleRecordRepository(controller: upgradedAgain).recordCount() == 0,
+                "the cycle records survived a downgrade — the residual risk changed")
+        #expect(try upgradedAgain.sealedRowCount() == 1)
+        try Self.close(upgradedAgain)
+    }
 }

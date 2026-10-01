@@ -39,6 +39,11 @@ import FernletFoundation
 ///   HealthKit id. A V1 store on disk is carried to V2 by a staged migration with in-memory model
 ///   references (one additive, lightweight stage), attached to the one store description so a
 ///   rebuild or reload re-adds under the same migration.
+/// - **There is no way back down.** An earlier build (V1 model, automatic inferred migration)
+///   opening a V2 store finds V2 in the store's own model cache, infers "drop `CycleRecord`" and
+///   migrates the file down: it loads, every V1 row survives, and every cycle record is deleted
+///   (`PrivateStoreModelMigrationTests` pins it). Installing a pre-V2 build on a phone that has
+///   stored cycle records is therefore unsupported (review L-U3-R2).
 ///
 /// Concurrency: this module is nonisolated; ``shared`` is `nonisolated(unsafe)` because
 /// `NSPersistentContainer` is not `Sendable` (matching its prior app-target behavior). Failure
@@ -492,6 +497,11 @@ public final class PrivatePersistenceController {
     /// Builds the CURRENT programmatic model: V2 = the frozen V1 entities plus `CycleRecord`
     /// (period-data design 2026-09-30, §5.2). Every call builds fresh entity descriptions — an
     /// `NSEntityDescription` belongs to exactly one model.
+    ///
+    /// - Important: A version bump is one-way. A build that predates this version and opens a store
+    ///   written under it migrates the file DOWN by inference from the store's model cache — it loads,
+    ///   and silently drops every entity it does not know (today: every `CycleRecord` row). Pinned by
+    ///   `PrivateStoreModelMigrationTests.anEarlierBuildOpeningAVersionTwoStoreLoadsButDropsEveryCycleRecord`.
     static func makeManagedObjectModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
         model.entities = makeVersionOneEntities() + [makeCycleRecordEntity()]
