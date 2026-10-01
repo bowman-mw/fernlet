@@ -78,7 +78,8 @@ once first", where the check runs. The loss copy moved to `.v2` keys because its
 cycle history now lives in Fernlet whether or not it was copied to Apple Health — worded
 unconditionally, since this module cannot see the Health switches. The reset confirmation, the
 forgotten-passcode disclosure and the tap screen's lost-key card also say the Sealed backup can be
-restored afterwards from Privacy & Data: after a reset every ambient restore waits for the device
+restored afterwards from Privacy & Data, before new entries are added (the journal and intimacy
+restores write only into an empty store): after a reset every ambient restore waits for the device
 owner, and Privacy & Data's "Restore", behind its fresh device-owner check, releases that hold (design
 unit 5). `LocalizationBoundaryTests` pins the sentence to the release: present exactly while the hold
 can be released.
