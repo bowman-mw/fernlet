@@ -133,13 +133,9 @@ struct SealedBackupRestoreHold {
         reuploadablePayloads.contains { kept.contains($0) && isBackedUp($0, in: preferences) }
     }
 
-    /// Whether `payload`'s backup switch is on in `preferences`.
+    /// Whether `payload`'s backup switch is on in `preferences` (the one shared helper, design
+    /// 2026-09-30 §4.4).
     private static func isBackedUp(_ payload: SealedBackupPayloadType, in preferences: StoragePreferences) -> Bool {
-        switch payload {
-        case .periodData: return preferences.sealedBackupPeriodEnabled
-        case .journalNarratives: return preferences.sealedBackupJournalEnabled
-        case .intimacyLogs: return preferences.sealedBackupIntimacyEnabled
-        case .sensitiveNotes: return false
-        }
+        preferences.isSealedBackupEnabled(for: payload)
     }
 }

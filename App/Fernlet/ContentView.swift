@@ -115,6 +115,10 @@ struct ContentView: View {
     /// A failed targeted repair remains user-retryable, but tab churn must not automatically repeat
     /// the same decrypt/CloudKit pass within one app session.
     @State private var attemptedSealedBackupSections: Set<PrivateHubSection> = []
+    /// Whether this hub session has asked the Sealed backup v2 engine for its settle yet — once per
+    /// hub session, on whichever Private section opens first (Worry Box included; design 2026-09-30
+    /// §4.5). Cleared when the hub locks.
+    @State private var requestedSealedBackupV2Settle = false
     @Environment(\.scenePhase) private var scenePhase
     /// Read by ``customTabBar`` (at accessibility text sizes the five labels break mid-word —
     /// "Hom/e", "Frien/ds" — and the bar swallows a fifth of the screen, so they stop being drawn)
@@ -451,6 +455,9 @@ struct ContentView: View {
     private func wirePrivateHubCustody() {
         let preferencesStore = storagePreferencesStore
         let appStore = store
+        // The Sealed backup gates read sync and the backup switches from the app's in-memory
+        // preferences, never a keychain read per check (design 2026-09-30 §4.2 G4).
+        store.sealedBackupPreferencesProvider = { [preferencesStore] in preferencesStore.preferences }
         let priorEntries = SealedPriorEntryStore(
             intimacyStore: intimacyStore,
             periodVisible: { appStore.isPeriodTrackingVisible },
@@ -485,6 +492,9 @@ struct ContentView: View {
         priorEntries: any PriorPrivateEntryStore
     ) {
         store.hubContentKeyProvider = { [weak lockService] in lockService?.contentKey(for: .privateHub) }
+        // The v2 markers seed once (and owe one complete export per enabled backup) before any
+        // settle can read them (design 2026-09-30 §4.3, R1-BR-11).
+        store.seedSealedBackupBookkeepingOnce()
         lockService.onResetCompleted = { [weak store] in
             store?.handleAppLockResetCompleted(clearBookkeeping: { priorEntries.clearBackupBookkeeping() })
         }
@@ -564,9 +574,10 @@ struct ContentView: View {
         // on every cold launch, so wiring this later would let one full decrypt + HealthKit
         // read through before the gate existed.
         periodStore.attachVisibilityGate { [store] in store.isPeriodTrackingVisible }
-        // Every change to a sealed cycle record marks the period backup owed (never its switch), so
-        // the next Cycle settle re-exports it (period-data design 2026-09-30, §9.10, R2-F3).
-        periodStore.recordStore.attachMutationHook { [store] in store.markPeriodBackupDirtyIfEnabled() }
+        // Every change to a sealed cycle record moves the period backup's mutation epoch and marks its
+        // upload owed (never its switch), so the next hub settle re-exports it (design 2026-09-30
+        // §4.4, R2-F3, R2-F8).
+        periodStore.recordStore.attachMutationHook { [store] in store.markSealedBackupDirty(.periodData) }
         // The staleness half of the same gate: the cycle load awaits HealthKit, and the hub can lock
         // (or re-key) during that await. Wiring the live key here lets the store abandon a load whose
         // authorization expired mid-flight instead of publishing narratives decrypted with a key the
@@ -1422,7 +1433,16 @@ struct ContentView: View {
         // The tab closed: an in-flight section settle stops before its next decrypt (review
         // U5-backup-v2-C-U5-3 / L-U5-R4). A period set it already sealed still finishes uploading —
         // stopped part-way, it would leave a mixed set no restore opens (review U5-backup-v2 N-1).
-        if !lockState.isUnlocked(for: .privateHub) { store.privateSectionBackupSettleTask?.cancel() }
+        if !lockState.isUnlocked(for: .privateHub) {
+            store.privateSectionBackupSettleTask?.cancel()
+            // The hub session ended: the v2 engine's once-per-session spacing resets. Its worker is not
+            // stopped — a commit decrypts nothing and finishes; a restore or prepare fails its next
+            // gate (the hub key is gone).
+            if requestedSealedBackupV2Settle {
+                requestedSealedBackupV2Settle = false
+                store.sealedBackupHubSessionEnded()
+            }
+        }
         store.deactivateSealedJournals()
         worryBoxService.deactivate()
         scrubPeriodDataIfNeeded()
@@ -1516,9 +1536,9 @@ struct ContentView: View {
     /// has not restored into yet can never replace the cloud backup with the single empty head record
     /// `reconcileChunked` writes for a count of 0.
     private func requestSealedBackupSettlement(for section: PrivateHubSection) {
-        guard section != .worryBox,
-              !attemptedSealedBackupSections.contains(section) else { return }
-        pendingSealedBackupSections.insert(section)
+        let legacyDue = section != .worryBox && !attemptedSealedBackupSections.contains(section)
+        guard legacyDue || !requestedSealedBackupV2Settle else { return }
+        if legacyDue { pendingSealedBackupSections.insert(section) }
         guard !isSettlingSealedBackups else { return }
         isSettlingSealedBackups = true
         // Held on the store so "delete everything" and the tab closing can cancel it (review
@@ -1537,8 +1557,15 @@ struct ContentView: View {
         }
         guard selectedTab == .personal,
               lockService.isUnlocked(for: .privateHub) else { return }
-        // There are exactly two backup-bearing sections. Requests arriving during an await are
-        // picked up by the second bounded iteration; Worry Box owns no backup payload.
+        // The Sealed backup v2 payloads (period) settle once per hub session, whatever the section —
+        // the hub key is the same on every one (design 2026-09-30 §4.5). The engine runs it on its
+        // own held worker; this only asks.
+        if !requestedSealedBackupV2Settle {
+            requestedSealedBackupV2Settle = true
+            store.requestSealedBackupHubSettle()
+        }
+        // There are exactly two backup-bearing sections for the v1 payloads. Requests arriving during
+        // an await are picked up by the second bounded iteration; Worry Box owns no v1 payload.
         for _ in 0..<2 {
             guard !Task.isCancelled, let section = pendingSealedBackupSections.first else { break }
             pendingSealedBackupSections.remove(section)
@@ -1564,10 +1591,8 @@ struct ContentView: View {
                store.isIntimacyTrackingVisible {
                 _ = await store.restoreIntimacyBackupTargeted()
             }
-            // The period backup v2 settle: its merge restore while this install's restore is
-            // unresolved, then its export behind restore-first, the compare-and-swap and the pre-pass
-            // (period-data design 2026-09-30, §9.10).
-            await store.settleSealedPeriodBackup()
+            // The period backup is not here: it settles on the v2 engine at every hub session, on any
+            // section (`requestSealedBackupHubSettle`).
             await store.retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
         case .worryBox:
             break
@@ -1678,6 +1703,12 @@ struct ContentView: View {
         // single-writer and keep-what-a-retry-needs invariants).
         store.sealedBackupDeferralPersistHook = { [storagePreferencesStore] deferred, payloadType in
             Self.persistSealedBackupDeferral(deferred, payloadType: payloadType, in: storagePreferencesStore)
+        }
+        // Attaching the hook re-persists every in-memory owed-upload flag that differs, so a writer
+        // that ran before this wiring (the launch seed, a launch-time scrub insert) is not lost
+        // (design 2026-09-30 §4.4, R2-F14). The hook writes only on a change.
+        for payload in SealedBackupBookkeeping.v2Payloads {
+            Self.persistSealedBackupDeferral(store.isSealedBackupReuploadOwed(payload), payloadType: payload, in: storagePreferencesStore)
         }
         store.retiredSealedBackupClearedHook = { [storagePreferencesStore] payloadType in
             Self.clearRetiredSealedBackupMarker(payloadType, in: storagePreferencesStore)

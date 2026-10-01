@@ -55,52 +55,23 @@ struct SealedBackupGenerationStore {
         Int64(defaults.integer(forKey: Self.key(for: payloadType)))
     }
 
-    /// Mints the next generation for a write and persists it immediately.
+    /// Mints the next generation for a write and persists it immediately — the journal and intimacy
+    /// v1 exports (`SealedBackupService.reconcileChunked`).
     ///
-    /// Persisting *before* the upload is the fail-safe direction: if the upload then fails, this
-    /// device has burned a number and the next write skips it — harmless, since the counter only
-    /// has to be monotonic, not gapless. Persisting after a successful upload would be worse: a
-    /// crash between the two would let the next write reuse a number that is already in the cloud,
-    /// and the rollback check would then accept a substitution of the earlier one.
+    /// Persisting *before* the upload is the fail-safe direction FOR AN IN-PLACE WRITE: if the upload
+    /// then fails, this device has burned a number and the next write skips it — harmless, since the
+    /// counter only has to be monotonic, not gapless. Persisting after a successful upload would be
+    /// worse there: a crash between the two would let the next write reuse a number that is already
+    /// in the cloud, and the rollback check would then accept a substitution of the earlier one.
+    ///
+    /// The Sealed backup v2 sets (design 2026-09-30, §5.4) do NOT mint here: their generation is
+    /// computed above the cloud head the export just read (so a landed head is always exceeded) and
+    /// recorded through ``recordAccepted(_:for:)`` only once the commit verified — a burned mint would
+    /// raise the rollback floor above the other iPhone's set (review R1-BR-4).
     mutating func mintNext(for payloadType: SealedBackupPayloadType) -> Int64 {
-        mintNext(for: payloadType, above: 0)
-    }
-
-    /// Mints the next generation strictly above both this device's mark and `floor`, and persists it
-    /// immediately (the same fail-safe direction as ``mintNext(for:)``).
-    ///
-    /// The period backup v2 passes the cloud head's generation as `floor` (period-data design
-    /// 2026-09-30, §9.10 "Generation floor"): counters are minted per device, so an iPhone whose own
-    /// counter is behind the set it is replacing would otherwise write a LOWER generation — which the
-    /// other iPhone's next restore rejects as a rollback (`.rolledBack`), terminally.
-    ///
-    /// - Parameters:
-    ///   - payloadType: The payload being written.
-    ///   - floor: A generation the new one must exceed (`0`: none).
-    mutating func mintNext(for payloadType: SealedBackupPayloadType, above floor: Int64) -> Int64 {
-        let next = nextGeneration(for: payloadType, above: floor)
+        let next = lastSeen(for: payloadType) + 1
         defaults.set(Int(next), forKey: Self.key(for: payloadType))
         return next
-    }
-
-    /// The generation ``mintNext(for:above:)`` would mint next, WITHOUT persisting it — for a writer
-    /// that seals its whole set before it commits to writing it: the period backup, which seals every
-    /// chunk while the Private tab's key is live and only then uploads (review U5-backup-v2 N-1). That
-    /// writer persists the number through ``recordMinted(_:for:)`` once the set is sealed and before
-    /// its first upload, so a chunk that fails to seal burns no number, and an upload still never
-    /// reuses one (the fail-safe direction of ``mintNext(for:)``).
-    ///
-    /// - Parameters:
-    ///   - payloadType: The payload being written.
-    ///   - floor: A generation the new one must exceed (`0`: none).
-    func nextGeneration(for payloadType: SealedBackupPayloadType, above floor: Int64) -> Int64 {
-        max(lastSeen(for: payloadType), floor) + 1
-    }
-
-    /// Persists a generation taken from ``nextGeneration(for:above:)`` as minted, before its set's
-    /// first upload. Only ever moves forward, like ``recordAccepted(_:for:)``.
-    mutating func recordMinted(_ generation: Int64, for payloadType: SealedBackupPayloadType) {
-        recordAccepted(generation, for: payloadType)
     }
 
     /// Raises the high-water mark after a restore has authenticated a generation.
@@ -112,11 +83,14 @@ struct SealedBackupGenerationStore {
         defaults.set(Int(generation), forKey: Self.key(for: payloadType))
     }
 
-    /// Clears every payload type's mark — chunked payloads AND the own-photo corpora — and the period
-    /// backup's compare-and-swap record (``periodAcceptedHeadKey``). Wired into the delete-all path:
-    /// leaving a stale high-water mark behind would make a legitimate post-wipe restore look like a
-    /// rollback attack, and the accepted head names a set the same wipe deletes (period-data design
-    /// 2026-09-30, §9.11).
+    /// Clears every payload type's mark — chunked payloads AND the own-photo corpora. Wired into the
+    /// delete-all path: leaving a stale high-water mark behind would make a legitimate post-wipe
+    /// restore look like a rollback attack.
+    ///
+    /// It does NOT clear the Sealed backup v2 accepted heads (`SealedBackupBookkeeping`, design
+    /// 2026-09-30 §9, review R2-F11): a set that survives a failed delete must then be overwritten by
+    /// the next export, which finishes the wipe, rather than be named "another iPhone's" and offered
+    /// back.
     ///
     /// Driven off both `allCases` sets so a payload type or a photo corpus added later cannot leave
     /// a mark this wipe forgets.
@@ -124,28 +98,7 @@ struct SealedBackupGenerationStore {
         for payloadType in SealedBackupPayloadType.allCases {
             defaults.removeObject(forKey: Self.key(for: payloadType))
         }
-        defaults.removeObject(forKey: Self.periodAcceptedHeadKey)
         resetPhotoNamespace()
-    }
-
-    /// The period backup's compare-and-swap record (period-data design 2026-09-30, §9.10 E2): the
-    /// `"<writer>:<generation>"` of the last set this install wrote or merged, read and written
-    /// through `PeriodBackupLedger`. In this namespace so ``reset()`` clears it with the marks. FROZEN.
-    static let periodAcceptedHeadKey = "fernlet.sealedBackup.periodAcceptedHead"
-
-    /// The period compare-and-swap record's raw `"<writer>:<generation>"`, or nil when none.
-    var periodAcceptedHeadToken: String? {
-        defaults.string(forKey: Self.periodAcceptedHeadKey)
-    }
-
-    /// Writes the period compare-and-swap record.
-    func recordPeriodAcceptedHeadToken(_ token: String) {
-        defaults.set(token, forKey: Self.periodAcceptedHeadKey)
-    }
-
-    /// Removes the period compare-and-swap record.
-    func clearPeriodAcceptedHead() {
-        defaults.removeObject(forKey: Self.periodAcceptedHeadKey)
     }
 
     /// Clears only the own-photo corpora's marks. Split out so tearing down the photo route (the

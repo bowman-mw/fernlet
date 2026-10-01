@@ -60,6 +60,9 @@ struct PrivacyWipeCoverageTests {
         // token is the variable's spelling — the TYPE name never appears on the calling line and
         // could never work as a substring token (security-hardening P1b).
         "generationStore.reset",
+        // The Sealed backup v2 observed foreign heads (design 2026-09-30, §4.3, §9): they name sets
+        // the same leg deletes. The markers and accepted heads are KEPT (deliberate exceptions).
+        "sealedBackupBookkeeping.clearObservedHeadsForWipe",
         // The own-photo escrow route (Phase 5, step 5b). Its own token because it is NOT a
         // `SealedBackupPayloadType`: the `allCases` loop above cannot reach it, and a route the
         // manifest does not name is a backup "delete everything" would leave in iCloud.

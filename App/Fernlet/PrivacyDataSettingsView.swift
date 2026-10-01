@@ -177,7 +177,7 @@ struct PrivacyDataSettingsView: View {
     @State private var isConfirmingPeriodRestoreHere = false
     /// The set "Restore it here" was tapped for — exactly the one the line named (review
     /// U5-backup-v2-C-U5-2), handed to the restore when the confirmation is accepted.
-    @State private var periodRestoreHereHead: PeriodBackupHead?
+    @State private var periodRestoreHereHead: SealedBackupHeadStamp?
     /// The journal / intimacy backups whose pre-reset copy the owner released but whose restore can't
     /// land here, because this iPhone already has entries from after the reset (review
     /// U5-backup-v2-C-U5-5) — a snapshot, read with ``backupPayloadsKeptForOwner``.
@@ -1061,7 +1061,7 @@ struct PrivacyDataSettingsView: View {
     private var sealedBackupAttentionItems: [SealedBackupAttention] {
         guard let store else { return [] }
         return SealedBackupPayloadType.allCases.compactMap { payload in
-            guard let outcome = store.sealedBackupRestoreStatus[payload], outcome.needsAttention else { return nil }
+            guard let outcome = store.sealedBackupAttentionOutcome(payload), outcome.needsAttention else { return nil }
             return SealedBackupAttention(payload: payload, outcome: outcome)
         }
     }
@@ -1087,7 +1087,7 @@ struct PrivacyDataSettingsView: View {
     /// — would never see the banner, the line, or the Retry button the line points at.
     private var showsSealedBackupStatusBanner: Bool {
         guard let store else { return false }
-        return store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
+        return store.sealedBackupEscrowConflict || showsPeriodCatchUpLine
             || store.periodBackupExportState != .clear || !backupPayloadsBlockedForOwner.isEmpty
             || Self.showsOwnerHoldLine(kept: backupPayloadsKeptForOwner, preferences: storagePreferencesStore.preferences)
             || store.sealedBackupJournalReuploadDeferred || store.sealedBackupIntimacyReuploadDeferred
@@ -1305,9 +1305,10 @@ struct PrivacyDataSettingsView: View {
                     confirmPeriodBackupReplace(head)
                 }
             }
-        case .sealedWithAnotherKey(let head):
+        case .sealedWithAnotherKey:
             // Review U5-backup-v2-L-U5-R1: no key this iPhone holds opens it (after an escrow adopt,
-            // a set sealed under the key the adopt replaced), so the only choice here is the replace.
+            // a set sealed under the key the adopt replaced), so the only choice here is to replace it
+            // — the engine's explicit "Start a new backup" (design 2026-09-30 §4.6, §5.6).
             VStack(alignment: .leading, spacing: 10) {
                 Text("Your cycle backup in iCloud was saved with a backup key this iPhone doesn't have, so it can't be restored here. Backing up this iPhone would replace it.")
                     .font(.fernlet(.bodySmall))
@@ -1315,7 +1316,7 @@ struct PrivacyDataSettingsView: View {
                     .fernletWrappingText()
                     .accessibilityIdentifier("privacy.sealedBackup.periodSealedWithAnotherKey")
                 periodChoiceButton("Replace it with this iPhone's history", identifier: "privacy.sealedBackup.periodReplace") {
-                    confirmPeriodBackupReplace(head)
+                    confirmPeriodBackupReplace(nil)
                 }
             }
         case .unopenableEntries:
@@ -1331,9 +1332,9 @@ struct PrivacyDataSettingsView: View {
     /// iPhone, so its line says so instead of guessing (review U5-backup-v2-C-U5-4): it may well be
     /// this iPhone's own backup from before the update.
     @ViewBuilder
-    private func periodHeldLine(_ head: PeriodBackupHead) -> some View {
+    private func periodHeldLine(_ head: SealedBackupHeadStamp) -> some View {
         Group {
-            if head.writer == PeriodBackupHead.v1Writer {
+            if head.writer == SealedBackupHeadStamp.v1Writer {
                 Text("Your cycle backup in iCloud was saved by an earlier version of Fernlet, which didn't record which iPhone saved it. Backing up this iPhone would replace it.")
             } else {
                 Text("Your cycle backup was saved from another iPhone. Backing up this iPhone would replace it.")
@@ -1368,14 +1369,23 @@ struct PrivacyDataSettingsView: View {
 
     /// "Replace it with this iPhone's history", behind its destructive confirmation (§10.6): the other
     /// iPhone's entries leave the backup, never the other iPhone.
-    private func confirmPeriodBackupReplace(_ head: PeriodBackupHead) {
+    ///
+    /// - Parameter head: The other iPhone's set the export named — or nil for a set no key this iPhone
+    ///   holds opens, which is replaced by "Start a new backup".
+    private func confirmPeriodBackupReplace(_ head: SealedBackupHeadStamp?) {
         pendingDestructiveAction = DestructiveConfirmation(
             title: "Replace the cycle backup?",
             message: "Entries that exist only on your other iPhone won't be in the backup anymore. Your other iPhone keeps its own entries.",
             confirmLabel: "Replace",
             auditEvent: "privacy.sealedBackup.periodReplaceConfirmed"
         ) {
-            runPeriodBackupChoice { await $0.replacePeriodBackupWithThisIPhone(head) }
+            runPeriodBackupChoice { appStore in
+                if let head {
+                    await appStore.replacePeriodBackupWithThisIPhone(head)
+                } else {
+                    await appStore.startNewPeriodBackup()
+                }
+            }
         }
     }
 
@@ -1390,12 +1400,22 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// Whether the period "will catch up" line is TRUE right now (design 2026-09-30 §10.1, R2-F13c/d):
+    /// an upload is owed, iCloud sync and the period backup are on (otherwise the switches speak for
+    /// themselves), the owner hold does not keep the period copy, and no other period state is shown.
+    private var showsPeriodCatchUpLine: Bool {
+        guard let store, store.sealedBackupPeriodReuploadDeferred else { return false }
+        let preferences = storagePreferencesStore.preferences
+        return preferences.iCloudSyncEnabled && preferences.sealedBackupPeriodEnabled
+            && !backupPayloadsKeptForOwner.contains(.periodData)
+            && store.periodBackupExportState == .clear
+    }
+
     /// The per-payload re-upload deferral lines — each withheld while the owner hold keeps that
     /// payload's pre-reset copy, since the upload it promises is held (``ownerHoldLine`` says so).
     @ViewBuilder
     private var reuploadDeferredPayloadLines: some View {
-        if let store, store.sealedBackupPeriodReuploadDeferred, !backupPayloadsKeptForOwner.contains(.periodData),
-           store.periodBackupExportState == .clear {
+        if let store, showsPeriodCatchUpLine {
             // The flag means "the cloud copy is behind this iPhone" (period-data design 2026-09-30,
             // §9.10): every cycle change marks it, as do an escrow adopt and a switch turned on with
             // Private closed. The export needs the Private tab's key and runs at the Cycle page's
@@ -1978,6 +1998,18 @@ struct PrivacyDataSettingsView: View {
         if enabled {
             // Require explicit, informed confirmation before any data leaves the device.
             pendingSealedBackupEnable = payload
+        } else if payload == .periodData, store?.periodBackupSlotIsAnotherIPhones == true {
+            // The period slot holds another iPhone's backup (design 2026-09-30 §9, R2-F3): turning
+            // this iPhone's switch off keeps it, so the confirmation says so instead of promising a
+            // delete that will not run.
+            pendingDestructiveAction = DestructiveConfirmation(
+                title: "Stop backing up this iPhone's cycle history?",
+                message: "The cycle backup saved from your other iPhone stays in iCloud.",
+                confirmLabel: "Stop",
+                auditEvent: "privacy.sealedBackup.disableKeepingOtherIPhonesConfirmed.\(payload.rawValue)"
+            ) {
+                applySealedBackup(payload, enabled: false)
+            }
         } else {
             // Turning a sealed backup OFF permanently deletes that encrypted backup from iCloud — a
             // destructive, irreversible action that must be confirmed first (WS-5).
@@ -2003,7 +2035,9 @@ struct PrivacyDataSettingsView: View {
             return
         }
         Task {
-            let ok = await store.setSealedBackupEnabled(enabled, payloadType: payload)
+            // The user's own switch keeps a slot this iPhone observed as another iPhone's (R2-F3);
+            // "Delete everything" deletes whoever wrote it.
+            let ok = await store.setSealedBackupEnabled(enabled, payloadType: payload, deletingAnySlot: false)
             await MainActor.run {
                 // A delete that landed ends the owner hold's claim on that payload (review N-1).
                 refreshOwnerHoldSnapshots()
@@ -2229,6 +2263,9 @@ struct PrivacyDataSettingsView: View {
                 try await reloadPersistence(with: updated)
                 storagePreferencesStore.update { $0 = updated }
                 FernletAuditLog.log("privacy.icloud.syncDisabled")
+                // Sync is off in memory now, so every Sealed backup pass fails its gate; wait until
+                // none is still uploading, so no set can land after the delete below.
+                await store?.stopSealedBackupsBeforeCloudDelete()
 
                 // The service validates the FROZEN English token (a wire/service contract, mirrored
                 // by ContentView's programmatic pass) — never the user's localized typed text. The

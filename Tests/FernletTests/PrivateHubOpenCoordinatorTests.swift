@@ -10,6 +10,7 @@
 // (`DeviceCustodyFixture`), and a real in-memory sealed store, so every answer the coordinator
 // acts on — the device row, the mint-safety proof, the sealed rows — is the production code's own.
 
+import CloudKitSync
 import CoreData
 import CryptoKit
 import Foundation
@@ -329,24 +330,40 @@ struct PrivateHubOpenCoordinatorTests {
         #expect(!ContentView.sealedBackupRestoresAfterRemoval(periodOnly, periodVisible: true, intimacyVisible: false, restoreHeldForOwner: true, journalStoreEmptiesOnRemoval: false))
     }
 
-    /// The period backup's bookkeeping travels in a device backup like the latches (design §4.9 step
-    /// 1, §5.3): a resolved restore marker or an accepted head speaks for a key that is gone, so it
-    /// counts as bookkeeping and is cleared before the fresh key is minted — the marker REOPENED (an
-    /// explicit false, so its one-time seed never runs again) and the head forgotten, which is what lets
-    /// the next Cycle settle pull the history back instead of being held against "another iPhone".
+    /// The Sealed backup v2 bookkeeping travels in a device backup like the latches (design §4.9 step
+    /// 1; 2026-09-30 §4.3, §9): a resolved restore marker, an accepted head or an observed foreign head
+    /// speaks for a key or an install that is gone, so each counts as bookkeeping and is cleared before
+    /// the fresh key is minted — the marker REOPENED (an explicit false, so its one-time seed never runs
+    /// again) and both heads forgotten, which is what lets the next hub settle pull the history back
+    /// instead of being held against "another iPhone".
     @MainActor
     @Test func thePeriodBackupBookkeepingIsClearedWithTheLatches() async throws {
         let rig = CoordinatorRig()
         defer { rig.fixture.cleanup() }
-        let ledger = PeriodBackupLedger(defaults: rig.latches, legacyLatch: { true })
-        ledger.markRestoreResolved()
-        ledger.recordAcceptedHead(PeriodBackupHead(writer: "other", generation: 4))
+        let bookkeeping = SealedBackupBookkeeping(defaults: rig.latches, legacyLatch: { _ in true })
+        bookkeeping.markRestoreResolved(.periodData)
+        let install = SealedBackupWriterTag.tag(forBinding: Data("this".utf8))
+        let other = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("other".utf8)), generation: 4)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: other, saltPrefix: ""), .periodData, installTag: install)
+        bookkeeping.recordObservedHead(other, .periodData, installTag: install)
         #expect(rig.entries.hasBackupBookkeeping())
 
         #expect(await rig.coordinator.openPrivateHub() == .opened)
-        #expect(!ledger.isRestoreResolved, "reopened, and the seed (which would answer true) never ran")
-        #expect(ledger.acceptedHead == nil)
+        #expect(!bookkeeping.isRestoreResolved(.periodData), "reopened, and the seed (which would answer true) never ran")
+        #expect(!bookkeeping.hasAcceptedHeadRecord(.periodData))
+        #expect(!bookkeeping.hasObservedHeadRecord(.periodData))
         #expect(!rig.entries.hasBackupBookkeeping())
+    }
+
+    /// An observed foreign head alone counts as bookkeeping too (R2-F13b's persisted observation).
+    @MainActor
+    @Test func anObservedForeignHeadAloneCountsAsBackupBookkeeping() {
+        let rig = CoordinatorRig()
+        defer { rig.fixture.cleanup() }
+        let bookkeeping = SealedBackupBookkeeping(defaults: rig.latches, legacyLatch: { _ in false })
+        bookkeeping.recordObservedHead(SealedBackupHeadStamp(writer: SealedBackupHeadStamp.v1Writer, generation: 1),
+                                       .periodData, installTag: SealedBackupWriterTag.tag(forBinding: Data("this".utf8)))
+        #expect(rig.entries.hasBackupBookkeeping())
     }
 
     /// The card's backup line for the rig's current rows, or nil when there is no card.

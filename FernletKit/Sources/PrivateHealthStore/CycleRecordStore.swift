@@ -183,6 +183,23 @@ public final class CycleRecordStore {
         try upsertMerged(records, retiringNarrativeIDs: [], contentKey: contentKey)
     }
 
+    /// Runs `body` only while the seam is open — throws ``PeriodTrackingHiddenError`` while hidden —
+    /// so the Sealed backup engine's decrypt of a period backup chunk (its head probe, its restore)
+    /// happens behind this funnel's own gate in the same synchronous step as the check (Sealed backup
+    /// v2 design 2026-09-30, §4.1, R1-BR-12). Nothing is read from the store here: `body` is the
+    /// caller's decrypt of cloud ciphertext.
+    public func withBackupSeam<T>(_ body: () throws -> T) throws -> T {
+        guard isVisible() else { throw PeriodTrackingHiddenError() }
+        return try body()
+    }
+
+    /// Whether the sealed store is attached and loaded — false for a controller whose store failed to
+    /// load (it keeps running against an empty coordinator) or is mid-rebuild. The Sealed backup
+    /// engine requires it before every snapshot and restore write, so a storeless controller can
+    /// never export an empty set over the cloud copy (design 2026-09-30 §4.1, R2-F2). Keyless and
+    /// ungated.
+    public var isStoreHealthy: Bool { repository.isStoreHealthy }
+
     // MARK: - Ungated (keyless)
 
     /// How many records are stored. Keyless and ungated: a hidden store must never read as empty.

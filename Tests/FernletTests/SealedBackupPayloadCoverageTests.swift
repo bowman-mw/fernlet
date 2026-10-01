@@ -58,22 +58,29 @@ final class FakeSealedBackupHost: SealedBackupContext {
     }
     var isPeriodTrackingVisible = true
     var isIntimacyTrackingVisible = true
-    /// The period backup's restore marker and compare-and-swap record (design §5.3, §9.10) on an
-    /// isolated suite. The one-time seed answers ``periodRestoreSeed`` (false: a fresh install).
-    lazy var periodBackupLedger = PeriodBackupLedger(
-        defaults: UserDefaults(suiteName: "fernlet.tests.fakePeriodLedger.\(UUID().uuidString)") ?? .standard,
-        legacyLatch: { [unowned self] in self.periodRestoreSeed }
+    /// The Sealed backup v2 bookkeeping (design 2026-09-30 §4.3) on an isolated suite. The period
+    /// marker's one-time seed answers ``periodRestoreSeed`` (false: a fresh install).
+    lazy var sealedBackupBookkeeping = SealedBackupBookkeeping(
+        defaults: UserDefaults(suiteName: "fernlet.tests.fakeBookkeeping.\(UUID().uuidString)") ?? .standard,
+        legacyLatch: { [unowned self] payload in payload == .periodData && self.periodRestoreSeed }
     )
     /// What the period restore marker's one-time seed reads (the legacy cycle latch).
     var periodRestoreSeed = false
-    /// Whether the period backup switch is on, as the mutation hook reads it.
-    var periodBackupEnabled = true
-    /// Cycle-record mutations seen through the hook.
-    private(set) var periodBackupMutationCount = 0
-    /// The period export's last Privacy & Data state.
-    private(set) var periodExportState: PeriodBackupExportState = .clear
-    /// "Delete everything" runs begun — a test moves it to play the wipe's first leg.
-    var sealedBackupWipeCount = 0
+    /// Sealed-store mutations seen through the hook, per payload (the host's mutation epochs).
+    private(set) var mutationEpochs: [SealedBackupPayloadType: Int] = [:]
+    /// The v2 engine's statuses, as recorded on the host.
+    private(set) var v2Status: [SealedBackupPayloadType: SealedBackupV2Status] = [:]
+    /// The Sealed backup work epoch — a test moves it to play "Delete everything"'s first leg or the
+    /// app-lock reset funnel.
+    var sealedBackupWorkEpoch = 0
+    /// Whether "Delete everything" is running.
+    var deleteAllInProgress = false
+    /// Whether a duress session is active.
+    var duressSessionActive = false
+    /// Whether an escrow-key conflict awaits the user.
+    var sealedBackupEscrowConflict = false
+    /// The in-memory storage preferences (a coordinator built with its own provider ignores them).
+    var sealedBackupPreferences = StoragePreferences()
     var previousJournals: [JournalEntry] = []
     var memories: [MemoryNote] = []
     var recentMeals: [Meal] = []
@@ -102,14 +109,31 @@ final class FakeSealedBackupHost: SealedBackupContext {
     func releaseSealedBackupRestoreHold() {
         restoreHold.release()
     }
-    /// Mirrors `FernletStore.markPeriodBackupDirtyIfEnabled`: counts, and owes the re-upload while on.
-    func markPeriodBackupDirtyIfEnabled() {
-        periodBackupMutationCount += 1
-        guard periodBackupEnabled else { return }
-        reuploadDeferrals[.periodData] = true
+    /// Mirrors `FernletStore.markSealedBackupDirty`: moves the epoch and, unless a wipe is running,
+    /// owes the upload — whether or not the backup is on.
+    func markSealedBackupDirty(_ payload: SealedBackupPayloadType) {
+        mutationEpochs[payload, default: 0] += 1
+        guard !deleteAllInProgress else { return }
+        reuploadDeferrals[payload] = true
     }
-    func recordPeriodBackupExportState(_ state: PeriodBackupExportState) {
-        periodExportState = state
+    func sealedBackupMutationEpoch(_ payload: SealedBackupPayloadType) -> Int {
+        mutationEpochs[payload, default: 0]
+    }
+    func isSealedBackupReuploadOwed(_ payload: SealedBackupPayloadType) -> Bool {
+        reuploadDeferrals[payload] == true
+    }
+    func recordSealedBackupV2Status(_ status: SealedBackupV2Status?, payloadType: SealedBackupPayloadType) {
+        v2Status[payloadType] = status
+    }
+    /// The period backup's Privacy & Data state, derived as `FernletStore.periodBackupExportState`
+    /// derives it.
+    var periodExportState: PeriodBackupExportState {
+        switch v2Status[.periodData] {
+        case .heldByAnotherDevice(let stamp)?: return .heldByAnotherDevice(stamp)
+        case .headSealedWithOtherKey?, .headDamaged?: return .sealedWithAnotherKey
+        case .paused(let ids)?: return .unopenableEntries(ids.count)
+        default: return .clear
+        }
     }
     func recordSealedBackupReuploadDeferred(_ deferred: Bool, payloadType: SealedBackupPayloadType) {
         reuploadDeferrals[payloadType] = deferred
@@ -737,29 +761,31 @@ struct SealedBackupPayloadCoverageTests {
         #expect(cloud.sealedRecordIdentities != preReset, "after the user's choice this iPhone's journal backs up")
     }
 
-    /// Review U5-backup-v2-L-U5-R1, the escrow adopt end to end: the adopt deletes this iPhone's own
-    /// local escrow key, so the period set this iPhone sealed under it opens nowhere any more — and
-    /// the export's compare-and-swap used to fail on it at every settle, forever, with nothing to do.
-    /// The adopt's re-upload now names the set (nothing written over it), and the user's explicit
-    /// replace re-seals the period history under the adopted key.
-    @Test func afterAnEscrowAdoptThePeriodSetSealedToTheReplacedKeyIsReplacedByChoice() async throws {
+    /// Design 2026-09-30 §4.5 / §5.5 (R2-F1), replacing review U5-backup-v2-L-U5-R1's explicit replace:
+    /// the escrow adopt marks every enabled v2 payload's upload owed and writes nothing itself. The next
+    /// settle meets the period set this iPhone sealed under the key the adopt replaced; whether or not
+    /// it still opens here, it carries THIS install's signing key, so E2 calls it this iPhone's own and
+    /// the export re-seals the history under the adopted key — no question asked, nothing stranded.
+    @Test func afterAnEscrowAdoptThePeriodSetIsReSealedUnderTheAdoptedKeyAsThisIPhonesOwn() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
         let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
         try phone.seed([PeriodBackupDevice.record(day: 1)])
         #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         let beforeAdopt = cloud.sealedRecordIdentities
-        let otherDevice = try seedSyncedEscrowKey(into: cloud.keychainService)
+        let otherDevice = try seedSyncedEscrowKey(into: phone.keychainService)
         defer { KeychainItem.deleteAll(service: otherDevice) }
 
         #expect(await phone.coordinator.adoptSyncedEscrowAndReupload())
-        let unreadable = PeriodBackupHead(writer: PeriodBackupHead.unreadableWriter, generation: 1)
-        #expect(phone.host.periodExportState == .sealedWithAnotherKey(unreadable), "named, not a silent failure")
-        #expect(cloud.sealedRecordIdentities == beforeAdopt)
-        #expect(phone.host.reuploadDeferrals[.periodData] == true)
+        #expect(cloud.sealedRecordIdentities == beforeAdopt, "the adopt itself writes nothing")
+        #expect(phone.host.reuploadDeferrals[.periodData] == true, "it marks the upload owed")
 
-        await phone.coordinator.replacePeriodBackupWithThisIPhone(unreadable)
-        #expect(try await PeriodBackupDevice.cloudHead(cloud)?.writer == "phone", "re-sealed under the adopted key")
+        phone.engine.hubSessionEnded()   // the adopt is in Settings: the next Private visit settles
+        await phone.coordinator.settlePeriodBackup()
+        #expect(phone.host.periodExportState == .clear, "its own set, never named as another key's")
+        #expect(cloud.sealedRecordIdentities != beforeAdopt, "re-sealed")
+        #expect(try await PeriodBackupDevice.cloudHead(cloud, keychainService: otherDevice)?.writer == phone.writer,
+                "under the adopted key: the other device's key opens it")
         #expect(phone.host.reuploadDeferrals[.periodData] == false)
     }
 
@@ -1254,6 +1280,9 @@ final class FakeSealedBackupCloud {
     let keychainService: String
     let generationDefaults: UserDefaults
     let database = InMemoryCloudKitRecordDatabase()
+    /// Per-iPhone keychains a test created over this cloud (each holds a copy of the escrow key, as
+    /// iCloud Keychain would sync it, and its own device-only signing key); torn down with it.
+    var phoneKeychainServices: [String] = []
 
     init(keychainService: String, generationDefaults: UserDefaults) {
         self.keychainService = keychainService
@@ -1267,7 +1296,10 @@ final class FakeSealedBackupCloud {
     /// how a test asserts that a refused export wrote nothing rather than rewriting identical bytes.
     var sealedRecordIdentities: [ObjectIdentifier] { sealedRecords.map(ObjectIdentifier.init) }
 
-    func tearDown() { KeychainItem.deleteAll(service: keychainService) }
+    func tearDown() {
+        KeychainItem.deleteAll(service: keychainService)
+        for service in phoneKeychainServices { KeychainItem.deleteAll(service: service) }
+    }
 }
 
 /// Minimal `CloudKitRecordDatabase` over a dictionary. Copies the sealed blob asset out of the

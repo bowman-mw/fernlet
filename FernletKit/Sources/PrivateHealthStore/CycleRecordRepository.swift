@@ -146,6 +146,15 @@ public nonisolated final class CycleRecordRepository: Sendable {
         self.context = context
     }
 
+    /// Whether the context's coordinator has a persistent store attached. False when the sealed store
+    /// failed to load (the controller then runs against an empty coordinator) or is between a failed
+    /// rebuild and its heal — every write throws then, and an empty read would be a lie. Keyless.
+    public var isStoreHealthy: Bool {
+        context.performAndWait {
+            !(context.persistentStoreCoordinator?.persistentStores.isEmpty ?? true)
+        }
+    }
+
     // MARK: - Writes
 
     /// THE write path — see the type's documentation for the per-id rules.

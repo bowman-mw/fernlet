@@ -1,0 +1,253 @@
+import CloudKitSync
+import Foundation
+
+/// The set this install last committed or merged for one payload, as the E2 compare-and-swap
+/// remembers it (design 2026-09-30, §4.3): its stamp and the first 8 bytes of its key salt.
+///
+/// The salt prefix lets E2 recognise its own unchanged head from the record METADATA alone (the
+/// generation and salt are plaintext CloudKit fields), so a clean visit decrypts nothing (§4.2 X5).
+struct SealedBackupAcceptedHead: Equatable, Sendable {
+    /// The accepted set's writer and generation.
+    var stamp: SealedBackupHeadStamp
+    /// The first 8 bytes of the set's key salt, lowercase hex ("" for a v1 set, which has no salt).
+    var saltPrefix: String
+
+    /// Creates an accepted head.
+    init(stamp: SealedBackupHeadStamp, saltPrefix: String) {
+        self.stamp = stamp
+        self.saltPrefix = saltPrefix
+    }
+
+    /// The hex prefix ``saltPrefix`` holds for a record's key salt.
+    static func saltPrefix(of keySalt: Data) -> String {
+        keySalt.prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Whether `record`'s metadata (generation and salt prefix) is this accepted head's — the
+    /// "unchanged" row of §5.5, decided without opening anything.
+    func matchesMetadata(of record: SealedBackupRecord) -> Bool {
+        record.generation == stamp.generation && Self.saltPrefix(of: record.keySalt) == saltPrefix
+    }
+}
+
+/// The Sealed backup v2 per-payload, per-install bookkeeping (design 2026-09-30, §4.3): the restore
+/// marker, the accepted head and the observed foreign head, for every payload on v2. One type for all
+/// of them; standard defaults, injected so tests get an isolated suite.
+///
+/// | Payload | Resolved marker (`Bool`) | Accepted head (`String`) | Observed head (`String`) |
+/// | --- | --- | --- | --- |
+/// | periodData | `fernlet.cycleRecord.periodRestoreResolved` | `fernlet.sealedBackup.periodAcceptedHead` | `fernlet.sealedBackup.periodObservedHead` |
+///
+/// Journal and intimacy join in their own units (B3, B2), with their own keys and wipe rows; until
+/// then their arms answer "nothing recorded" and write nothing, and their backups keep the v1 model.
+///
+/// - **Marker.** Unresolved means "this install has not pulled this payload's backup". It resolves
+///   only on a restore outcome of `.restored` or `.nothingToRestore`, or when a confirmed "Replace" or
+///   "Start a new backup" commits — **never** because sync or the backup is off (R1-BR-2, R2-F4). An
+///   absent key is seeded ONCE from the payload's legacy divergence latch (the period's is
+///   `fernlet.menstrualNarrative.everStored`) and written, so a later write can never seed it again.
+///   Clearing writes `false`, never removes the key.
+/// - **Accepted head** `"<acceptor>:<writer>:<generation>:<salt8>"`. `acceptor` is this install's
+///   writer tag when it was recorded; the value reads as ABSENT when the acceptor is not this
+///   install's current tag (or the value does not parse), so one that travelled inside a device backup
+///   can never make another iPhone's head look accepted (R1-BR-2). Kept by "Delete everything"
+///   (R2-F11).
+/// - **Observed head** `"<acceptor>:<writer>:<generation>"`: the foreign head E2 or the restore last
+///   found, so Privacy & Data can name it after a relaunch (R2-F13b) and turning the backup off can
+///   keep another iPhone's slot (R2-F3). Install-bound like the accepted head; cleared when the head
+///   becomes own or accepted, and by "Delete everything".
+///
+/// Every accessor is an exhaustive `switch` whose arms write their own key constant — never a key
+/// returned and written elsewhere — so the persisted-surface wall resolves every key (R2-F16e). No
+/// content: install tags, a counter and a salt prefix. Like the divergence latches it travels inside an
+/// iCloud or Finder device backup, which is why the reset funnel and the "can't open" check clear it.
+@MainActor
+struct SealedBackupBookkeeping {
+    /// The period restore marker's FROZEN key.
+    static let periodRestoreResolvedKey = "fernlet.cycleRecord.periodRestoreResolved"
+    /// The period accepted head's FROZEN key.
+    static let periodAcceptedHeadKey = "fernlet.sealedBackup.periodAcceptedHead"
+    /// The period observed head's FROZEN key.
+    static let periodObservedHeadKey = "fernlet.sealedBackup.periodObservedHead"
+
+    /// The payloads whose backup runs on the v2 engine in this build.
+    static let v2Payloads: [SealedBackupPayloadType] = [.periodData]
+
+    /// Where the bookkeeping lives.
+    let defaults: UserDefaults
+    /// The legacy divergence latch per payload, read only while that payload's marker is absent — the
+    /// one-time seed (period: `MenstrualNarrativeRepository.hasEverStoredNarrative`).
+    let legacyLatch: @MainActor (SealedBackupPayloadType) -> Bool
+
+    /// Creates the bookkeeping.
+    ///
+    /// - Parameters:
+    ///   - defaults: Where the keys live.
+    ///   - legacyLatch: The one-time marker seed's source, per payload.
+    init(defaults: UserDefaults, legacyLatch: @escaping @MainActor (SealedBackupPayloadType) -> Bool) {
+        self.defaults = defaults
+        self.legacyLatch = legacyLatch
+    }
+
+    // MARK: - Restore marker
+
+    /// Whether `payload`'s restore is resolved, seeding an absent marker once from the legacy latch.
+    func isRestoreResolved(_ payload: SealedBackupPayloadType) -> Bool {
+        switch payload {
+        case .periodData:
+            if let decided = defaults.object(forKey: Self.periodRestoreResolvedKey) as? Bool { return decided }
+            let seeded = legacyLatch(payload)
+            defaults.set(seeded, forKey: Self.periodRestoreResolvedKey)
+            return seeded
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes:
+            return false
+        }
+    }
+
+    /// Seeds `payload`'s marker from its legacy latch when the key is absent; returns whether it
+    /// seeded (the first launch of this build, or the first after an uninstall). A present key is
+    /// never touched.
+    func seedRestoreMarkerIfAbsent(_ payload: SealedBackupPayloadType) -> Bool {
+        switch payload {
+        case .periodData:
+            guard defaults.object(forKey: Self.periodRestoreResolvedKey) == nil else { return false }
+            defaults.set(legacyLatch(payload), forKey: Self.periodRestoreResolvedKey)
+            return true
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes:
+            return false
+        }
+    }
+
+    /// Whether the marker reads `true` right now — the "can't open" check's bookkeeping read. Never
+    /// seeds.
+    func restoreResolvedIsSet(_ payload: SealedBackupPayloadType) -> Bool {
+        switch payload {
+        case .periodData: return defaults.object(forKey: Self.periodRestoreResolvedKey) as? Bool == true
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return false
+        }
+    }
+
+    /// Marks `payload`'s restore resolved.
+    func markRestoreResolved(_ payload: SealedBackupPayloadType) {
+        switch payload {
+        case .periodData: defaults.set(true, forKey: Self.periodRestoreResolvedKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return
+        }
+    }
+
+    /// Re-opens `payload`'s restore (writes `false`, so the one-time seed never runs again).
+    func reopenRestore(_ payload: SealedBackupPayloadType) {
+        switch payload {
+        case .periodData: defaults.set(false, forKey: Self.periodRestoreResolvedKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return
+        }
+    }
+
+    // MARK: - Accepted head
+
+    /// The set this install last committed or merged, or nil — also nil when the record was written
+    /// by another install (`acceptor` ≠ `installTag`), when it does not parse, or when `installTag`
+    /// is nil (the install binding did not answer).
+    func acceptedHead(_ payload: SealedBackupPayloadType, installTag: String?) -> SealedBackupAcceptedHead? {
+        guard let installTag, let raw = acceptedHeadToken(payload) else { return nil }
+        let parts = raw.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 4, parts[0] == installTag, !parts[1].isEmpty, let generation = Int64(parts[2]) else { return nil }
+        return SealedBackupAcceptedHead(stamp: SealedBackupHeadStamp(writer: parts[1], generation: generation), saltPrefix: parts[3])
+    }
+
+    /// Whether any accepted-head value is stored for `payload`, whoever recorded it — the "can't
+    /// open" check's bookkeeping read.
+    func hasAcceptedHeadRecord(_ payload: SealedBackupPayloadType) -> Bool {
+        acceptedHeadToken(payload) != nil
+    }
+
+    /// Records `head` as the set this install last committed or merged.
+    func recordAcceptedHead(_ head: SealedBackupAcceptedHead, _ payload: SealedBackupPayloadType, installTag: String) {
+        let token = "\(installTag):\(head.stamp.writer):\(head.stamp.generation):\(head.saltPrefix)"
+        switch payload {
+        case .periodData: defaults.set(token, forKey: Self.periodAcceptedHeadKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return
+        }
+    }
+
+    /// Forgets `payload`'s accepted head.
+    func clearAcceptedHead(_ payload: SealedBackupPayloadType) {
+        switch payload {
+        case .periodData: defaults.removeObject(forKey: Self.periodAcceptedHeadKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return
+        }
+    }
+
+    /// The raw accepted-head value for `payload`.
+    private func acceptedHeadToken(_ payload: SealedBackupPayloadType) -> String? {
+        switch payload {
+        case .periodData: return defaults.string(forKey: Self.periodAcceptedHeadKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return nil
+        }
+    }
+
+    // MARK: - Observed foreign head
+
+    /// The foreign head this install last observed for `payload`, or nil (also nil when another
+    /// install recorded it, or it does not parse).
+    func observedHead(_ payload: SealedBackupPayloadType, installTag: String?) -> SealedBackupHeadStamp? {
+        guard let installTag, let raw = observedHeadToken(payload) else { return nil }
+        let parts = raw.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 3, parts[0] == installTag, !parts[1].isEmpty, let generation = Int64(parts[2]) else { return nil }
+        return SealedBackupHeadStamp(writer: parts[1], generation: generation)
+    }
+
+    /// Whether any observed-head value is stored for `payload`, whoever recorded it.
+    func hasObservedHeadRecord(_ payload: SealedBackupPayloadType) -> Bool {
+        observedHeadToken(payload) != nil
+    }
+
+    /// Records `stamp` as the foreign head this install found for `payload`.
+    func recordObservedHead(_ stamp: SealedBackupHeadStamp, _ payload: SealedBackupPayloadType, installTag: String) {
+        let token = "\(installTag):\(stamp.writer):\(stamp.generation)"
+        switch payload {
+        case .periodData: defaults.set(token, forKey: Self.periodObservedHeadKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return
+        }
+    }
+
+    /// Forgets `payload`'s observed head.
+    func clearObservedHead(_ payload: SealedBackupPayloadType) {
+        switch payload {
+        case .periodData: defaults.removeObject(forKey: Self.periodObservedHeadKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return
+        }
+    }
+
+    /// "Delete everything"'s leg: every v2 payload's observed head goes (the foreign set it named is
+    /// deleted by the same leg). The markers and accepted heads are KEPT (§9, R2-F11).
+    func clearObservedHeadsForWipe() {
+        for payload in Self.v2Payloads { clearObservedHead(payload) }
+    }
+
+    /// The raw observed-head value for `payload`.
+    private func observedHeadToken(_ payload: SealedBackupPayloadType) -> String? {
+        switch payload {
+        case .periodData: return defaults.string(forKey: Self.periodObservedHeadKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return nil
+        }
+    }
+
+    // MARK: - Exits
+
+    /// The app-lock reset funnel and the "can't open" check (§9): the marker reopens, the accepted and
+    /// observed heads go — they spoke for a key or an install state that no longer exists.
+    func clearForKeyLoss() {
+        for payload in Self.v2Payloads {
+            reopenRestore(payload)
+            clearAcceptedHead(payload)
+            clearObservedHead(payload)
+        }
+    }
+
+    /// Whether any v2 bookkeeping is recorded (a `true` marker, an accepted head or an observation) —
+    /// what the "can't open" check counts as bookkeeping to clear.
+    var hasAnyRecord: Bool {
+        Self.v2Payloads.contains { restoreResolvedIsSet($0) || hasAcceptedHeadRecord($0) || hasObservedHeadRecord($0) }
+    }
+}

@@ -488,6 +488,23 @@ public final class CloudKitDataService {
     /// deterministic record name for its payload type and chunk index. Overwrites any prior
     /// record of the same name (all-keys save).
     public func saveSealedBackup(_ record: SealedBackupRecord) async throws {
+        try await saveSealedBackup(record, setTag: nil)
+    }
+
+    /// Uploads one sealed-backup chunk under the record name for its payload, chunk index and — for a
+    /// v2 suffix chunk — its SET (Sealed backup v2, design 2026-09-30 §5.2): the head keeps
+    /// `sealed-backup.<payload>`; a v2 suffix chunk is `sealed-backup.<payload>.chunk.<i>.<set>`, a
+    /// name only its own set ever writes, so an interrupted export can never overwrite the chunks of
+    /// the set the head still points at, and two iPhones exporting at once can never interleave
+    /// chunks. Overwrites any prior record of the same name (all-keys save).
+    ///
+    /// - Parameters:
+    ///   - record: The sealed chunk.
+    ///   - setTag: The v2 set tag (32 lowercase hex) for a suffix chunk; nil for the head and for a v1
+    ///     set's unscoped suffix chunk. Ignored for the head (chunk 0).
+    /// - Throws: `SealedBackupError.malformedRecord` for a set tag that is not 32 lowercase hex.
+    public func saveSealedBackup(_ record: SealedBackupRecord, setTag: String?) async throws {
+        if let setTag { guard Self.isValidSealedBackupSetTag(setTag) else { throw SealedBackupError.malformedRecord } }
         try await ensureSignedIn()
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -505,7 +522,7 @@ public final class CloudKitDataService {
 
         let cloudRecord = CKRecord(
             recordType: "SealedBackupRecord",
-            recordID: sealedBackupRecordID(payloadType: record.payloadType, chunkIndex: record.chunkIndex)
+            recordID: sealedBackupRecordID(payloadType: record.payloadType, chunkIndex: record.chunkIndex, setTag: setTag)
         )
         cloudRecord["payloadType"] = record.payloadType.rawValue as CKRecordValue
         cloudRecord["signingPublicKey"] = record.signingPublicKey as CKRecordValue
@@ -578,11 +595,7 @@ public final class CloudKitDataService {
             throw SealedBackupError.malformedRecord
         }
 
-        let remainingIDs = (1..<head.chunkCount).map {
-            sealedBackupRecordID(payloadType: payloadType, chunkIndex: $0)
-        }
-        let fetched = try await database.records(for: remainingIDs)
-        let records = ([head] + (try fetched.map { try decodeSealedBackup($0) }))
+        let records = ([head] + (try await suffixRecords(payloadType: payloadType, chunkCount: head.chunkCount, setTag: nil)))
             .sorted { $0.chunkIndex < $1.chunkIndex }
 
         let isContiguous = records.count == head.chunkCount
@@ -608,6 +621,124 @@ public final class CloudKitDataService {
             throw SealedBackupError.malformedRecord
         }
         return records
+    }
+
+    /// Fetches the suffix chunks `1…chunkCount-1` of ONE set, by name — a v2 set's scoped chunks
+    /// (`…chunk.<i>.<set>`) when `setTag` is given, a v1 set's unscoped ones otherwise — decoded and in
+    /// chunk order (Sealed backup v2, design 2026-09-30 §5.2). The head is the caller's: it was
+    /// fetched (and, for a v2 set, opened to learn its set tag) before this.
+    ///
+    /// Throws `SealedBackupError.malformedRecord` when the set is incomplete or inconsistent: a missing
+    /// chunk, a chunk whose own `chunkCount` disagrees, or a generation that differs between chunks.
+    /// The caller checks the suffix against its head (generation, salt, envelope); this checks the
+    /// suffix against itself. R3: `chunkCount` (the head's unauthenticated field) is bounded at
+    /// ``SealedBackupRecord/maxFetchedChunkCount`` before any record ID is built.
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload.
+    ///   - chunkCount: The head's chunk count (≥ 1; `1` answers an empty suffix with no fetch).
+    ///   - setTag: The v2 set tag (32 lowercase hex), or nil for a v1 set.
+    public func sealedBackupSuffixChunks(
+        payloadType: SealedBackupPayloadType,
+        chunkCount: Int,
+        setTag: String?
+    ) async throws -> [SealedBackupRecord] {
+        guard chunkCount >= 1, chunkCount <= SealedBackupRecord.maxFetchedChunkCount else {
+            throw SealedBackupError.malformedRecord
+        }
+        if let setTag { guard Self.isValidSealedBackupSetTag(setTag) else { throw SealedBackupError.malformedRecord } }
+        guard chunkCount > 1 else { return [] }
+        try await ensureSignedIn()
+        let suffix = try await suffixRecords(payloadType: payloadType, chunkCount: chunkCount, setTag: setTag)
+            .sorted { $0.chunkIndex < $1.chunkIndex }
+        let contiguous = suffix.count == chunkCount - 1
+            && suffix.enumerated().allSatisfy { $0.offset + 1 == $0.element.chunkIndex }
+        let consistent = suffix.allSatisfy { $0.chunkCount == chunkCount && $0.generation == suffix.first?.generation }
+        guard contiguous, consistent else { throw SealedBackupError.malformedRecord }
+        return suffix
+    }
+
+    /// The decoded suffix records `1…chunkCount-1` of one set, fetched by name (unordered; a missing
+    /// name is simply absent — the callers check contiguity).
+    private func suffixRecords(
+        payloadType: SealedBackupPayloadType,
+        chunkCount: Int,
+        setTag: String?
+    ) async throws -> [SealedBackupRecord] {
+        guard chunkCount > 1 else { return [] }
+        let ids = (1..<chunkCount).map { sealedBackupRecordID(payloadType: payloadType, chunkIndex: $0, setTag: setTag) }
+        return try await database.records(for: ids).map { try decodeSealedBackup($0) }
+    }
+
+    /// The most other sets one prune inspects (R3): each costs one record fetch. A commit normally
+    /// leaves one older set behind; anything past this waits for the next commit's prune.
+    public static let maxPrunedSealedBackupSets = 32
+
+    /// Deletes the suffix chunks a committed v2 set left stale (design 2026-09-30 §5.2): every
+    /// UNSCOPED (v1) suffix chunk of the payload, and every scoped chunk of another set whose
+    /// generation is BELOW `belowGeneration`. A set at the same or a higher generation is kept — it may
+    /// belong to a head another iPhone is still landing, and its chunks must survive this round. The
+    /// committed set's own chunks (`keepingSetTag`) and the head are never touched. Best-effort for
+    /// the caller: a failure leaves orphans that the next commit's prune removes; nothing a head
+    /// points at is ever deleted.
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload.
+    ///   - keepingSetTag: The committed set's tag (32 lowercase hex).
+    ///   - belowGeneration: The committed set's generation.
+    /// - Returns: How many records were deleted.
+    public func pruneSealedBackupSets(
+        payloadType: SealedBackupPayloadType,
+        keepingSetTag: String,
+        belowGeneration: Int64
+    ) async throws -> Int {
+        guard Self.isValidSealedBackupSetTag(keepingSetTag) else { throw SealedBackupError.malformedRecord }
+        try await ensureSignedIn()
+        let base = sealedBackupRecordBaseName(payloadType: payloadType)
+        let all = try await recordIDsForExistingType("SealedBackupRecord", in: try await appZoneIDs())
+        var unscoped: [CKRecord.ID] = []
+        var bySet: [String: [CKRecord.ID]] = [:]
+        for id in all {
+            guard let parsed = Self.parseSealedBackupSuffixName(id.recordName, base: base) else { continue }
+            if let set = parsed.setTag {
+                if set != keepingSetTag { bySet[set, default: []].append(id) }
+            } else {
+                unscoped.append(id)
+            }
+        }
+        var doomed = unscoped
+        for (_, ids) in bySet.sorted(by: { $0.key < $1.key }).prefix(Self.maxPrunedSealedBackupSets) {
+            guard let probe = ids.first, let record = try await database.records(for: [probe]).first,
+                  let generation = record["generation"] as? Int64, generation < belowGeneration else { continue }
+            doomed.append(contentsOf: ids)
+        }
+        guard !doomed.isEmpty else { return 0 }
+        try await database.deleteRecords(with: doomed)
+        return doomed.count
+    }
+
+    /// Whether `tag` is a v2 set tag: exactly 32 lowercase hexadecimal characters (16 random bytes).
+    public nonisolated static func isValidSealedBackupSetTag(_ tag: String) -> Bool {
+        tag.utf8.count == 32 && tag.utf8.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
+    }
+
+    /// Parses a suffix record name of `base` — `<base>.chunk.<i>` (v1) or `<base>.chunk.<i>.<set>`
+    /// (v2) — into its index and set tag; nil for the head, another payload's name, or anything
+    /// malformed.
+    public nonisolated static func parseSealedBackupSuffixName(_ name: String, base: String) -> (index: Int, setTag: String?)? {
+        let prefix = "\(base).chunk."
+        guard name.hasPrefix(prefix) else { return nil }
+        let parts = name.dropFirst(prefix.count).split(separator: ".", omittingEmptySubsequences: false)
+        guard let first = parts.first, let index = Int(first), index >= 1 else { return nil }
+        switch parts.count {
+        case 1:
+            return (index, nil)
+        case 2:
+            let tag = String(parts[1])
+            return isValidSealedBackupSetTag(tag) ? (index, tag) : nil
+        default:
+            return nil
+        }
     }
 
     /// Deletes a payload's entire backup — head plus every chunk — found by record-name prefix, so a
@@ -638,17 +769,18 @@ public final class CloudKitDataService {
     /// Record IDs belonging to a payload's backup, filtered by chunk index. `minChunkIndex <= 0`
     /// includes the head; `>= 1` returns only suffixed chunks at or above that index. Found by
     /// enumerating `SealedBackupRecord` IDs and matching the deterministic name scheme, since the
-    /// chunk count isn't known up front when tearing a backup down.
+    /// chunk count isn't known up front when tearing a backup down. Both suffix forms match — the
+    /// v1 `chunk.<i>` and the v2 set-scoped `chunk.<i>.<set>` (design 2026-09-30 §5.2) — or a disable
+    /// and "delete everything" would leave every v2 set's suffix chunks in iCloud.
     private func sealedBackupRecordIDs(payloadType: SealedBackupPayloadType, minChunkIndex: Int) async throws -> [CKRecord.ID] {
         let base = sealedBackupRecordBaseName(payloadType: payloadType)
-        let chunkPrefix = "\(base).chunk."
         let zoneIDs = try await appZoneIDs()
         let all = try await recordIDsForExistingType("SealedBackupRecord", in: zoneIDs)
         return all.filter { id in
             let name = id.recordName
             if name == base { return minChunkIndex <= 0 }
-            guard name.hasPrefix(chunkPrefix), let index = Int(name.dropFirst(chunkPrefix.count)) else { return false }
-            return index >= minChunkIndex
+            guard let parsed = Self.parseSealedBackupSuffixName(name, base: base) else { return false }
+            return parsed.index >= minChunkIndex
         }
     }
 
@@ -846,10 +978,16 @@ public final class CloudKitDataService {
     }
 
     /// Deterministic record name for a chunk: the bare base for the head (`chunkIndex == 0`) so
-    /// single-record payloads keep their original name, and a `.chunk.<index>` suffix otherwise.
-    private func sealedBackupRecordID(payloadType: SealedBackupPayloadType, chunkIndex: Int = 0) -> CKRecord.ID {
+    /// single-record payloads keep their original name, a `.chunk.<index>` suffix for a v1 set's
+    /// suffix chunk, and `.chunk.<index>.<set>` for a v2 set's (design 2026-09-30 §5.2; FROZEN).
+    private func sealedBackupRecordID(payloadType: SealedBackupPayloadType, chunkIndex: Int = 0, setTag: String? = nil) -> CKRecord.ID {
         let base = sealedBackupRecordBaseName(payloadType: payloadType)
-        let name = chunkIndex == 0 ? base : "\(base).chunk.\(chunkIndex)"
+        let name: String
+        switch (chunkIndex, setTag) {
+        case (0, _): name = base
+        case (_, nil): name = "\(base).chunk.\(chunkIndex)"
+        case (_, let set?): name = "\(base).chunk.\(chunkIndex).\(set)"
+        }
         return CKRecord.ID(recordName: name, zoneID: zoneIDOverride ?? Self.appZoneID)
     }
 

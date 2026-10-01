@@ -79,7 +79,7 @@ struct SealedBackupRestoreTests {
         let local = PeriodBackupDevice.record(day: 1, note: "Logged locally.")
         try records.insert(local, contentKey: key)
         let backedUp = PeriodBackupDevice.record(day: 2, note: "From backup.")
-        let data = try PeriodBackupFormat.encodeChunk(index: 0, records: [backedUp], writer: "w", total: 1)
+        let data = try PeriodBackupDevice.v2Chunk([backedUp], total: 1)
 
         #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 1)
 
@@ -148,9 +148,7 @@ struct SealedBackupRestoreTests {
         let key = SymmetricKey(size: .bits256)
         store.openHubForTesting(contentKey: key)
         let records = PeriodBackupDevice.makeRecordStore()
-        let data = try PeriodBackupFormat.encodeChunk(
-            index: 0, records: [PeriodBackupDevice.record(day: 1), PeriodBackupDevice.record(day: 2)], writer: "w", total: 2
-        )
+        let data = try PeriodBackupDevice.v2Chunk([PeriodBackupDevice.record(day: 1), PeriodBackupDevice.record(day: 2)], total: 2)
 
         #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 2)
         #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 0,
@@ -174,7 +172,7 @@ struct SealedBackupRestoreTests {
         local.narrative?.note = "After the edit."
         local.narrative?.updatedAt = backedUp.createdAt.addingTimeInterval(3_600)
         try records.insert(local, contentKey: key)
-        let data = try PeriodBackupFormat.encodeChunk(index: 0, records: [backedUp], writer: "w", total: 1)
+        let data = try PeriodBackupDevice.v2Chunk([backedUp], total: 1)
 
         #expect(try store.applyRestoredPayload(data, payloadType: .periodData, cycleRecordStore: records) == 1)
 
@@ -259,6 +257,7 @@ struct SealedBackupRestoreTests {
     @Test func theAmbientPeriodRestoreRunsOnADeviceThatIsNoLongerAFreshInstall() async {
         let store = makePopulatedTestStore()
         store.settings.periodTrackingVisible = true
+        store.sealedBackupPreferencesProvider = { PeriodBackupDevice.backupOn }
         store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
         #expect(await store.restorePeriodBackup() != .skippedStoreNotEmpty)
     }
@@ -286,8 +285,9 @@ struct SealedBackupRestoreTests {
     @Test func aResolvedInstallNeverRestoresAmbientlyAgain() async {
         let store = makeTestStore()
         store.settings.periodTrackingVisible = true
+        store.sealedBackupPreferencesProvider = { PeriodBackupDevice.backupOn }
         store.openHubForTesting(contentKey: SymmetricKey(size: .bits256))
-        store.periodBackupLedger.markRestoreResolved()
+        store.sealedBackupBookkeeping.markRestoreResolved(.periodData)
 
         let outcome = await store.restorePeriodBackup()
         #expect(outcome == .skippedStoreNotEmpty)
@@ -302,18 +302,19 @@ struct SealedBackupRestoreTests {
     @Test func theRestoreMarkerSeedsOnceFromTheLegacyLatch() {
         let defaults = isolatedDefaults()
         let latchReads = ReadCounter()
-        let inUse = PeriodBackupLedger(defaults: defaults, legacyLatch: { latchReads.value += 1; return true })
-        #expect(inUse.isRestoreResolved, "an install that held cycle data stays resolved")
-        #expect(inUse.isRestoreResolved)
+        let inUse = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in latchReads.value += 1; return true })
+        #expect(inUse.isRestoreResolved(.periodData), "an install that held cycle data stays resolved")
+        #expect(inUse.isRestoreResolved(.periodData))
         #expect(latchReads.value == 1, "the latch is read once, then never again for period")
 
-        let fresh = PeriodBackupLedger(defaults: isolatedDefaults(), legacyLatch: { false })
-        #expect(!fresh.isRestoreResolved)
-        fresh.markRestoreResolved()
-        #expect(fresh.isRestoreResolved)
-        fresh.reopenRestore()
-        #expect(!fresh.isRestoreResolved, "reopened is an explicit false: the seed never runs again")
-        #expect(!fresh.restoreResolvedIsSet)
+        let fresh = SealedBackupBookkeeping(defaults: isolatedDefaults(), legacyLatch: { _ in false })
+        #expect(!fresh.isRestoreResolved(.periodData))
+        fresh.markRestoreResolved(.periodData)
+        #expect(fresh.isRestoreResolved(.periodData))
+        fresh.reopenRestore(.periodData)
+        #expect(!fresh.isRestoreResolved(.periodData), "reopened is an explicit false: the seed never runs again")
+        #expect(!fresh.restoreResolvedIsSet(.periodData))
+        #expect(!fresh.seedRestoreMarkerIfAbsent(.periodData), "a present marker is never re-seeded")
     }
 
     /// The write point honors a cancelled surrounding Task: a settle suspended in its CloudKit fetch
@@ -326,7 +327,7 @@ struct SealedBackupRestoreTests {
         let key = SymmetricKey(size: .bits256)
         store.openHubForTesting(contentKey: key)
         let records = PeriodBackupDevice.makeRecordStore()
-        let data = try PeriodBackupFormat.encodeChunk(index: 0, records: [PeriodBackupDevice.record(day: 1)], writer: "w", total: 1)
+        let data = try PeriodBackupDevice.v2Chunk([PeriodBackupDevice.record(day: 1)], total: 1)
 
         let restore = Task { () -> Result<Int, Error> in
             // Deterministically wait out the cancel below — models the settle suspended in its fetch
@@ -505,12 +506,12 @@ struct SealedBackupRestoreTests {
         #expect(await second.coordinator.restorePeriodBackup() == .deferredTransient)
         #expect(try second.records.recordCount() == 0)
         #expect(second.host.recordedOutcomes[.periodData] == nil)
-        #expect(!second.host.periodBackupLedger.isRestoreResolved)
+        #expect(!second.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
 
         second.host.sealedBackupRestoreAwaitsOwner = false
         #expect(await second.coordinator.restorePeriodBackup() == .restored(1))
-        #expect(second.host.periodBackupLedger.isRestoreResolved)
-        #expect(second.host.periodBackupLedger.acceptedHead == head, "the merged set is the accepted one")
+        #expect(second.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(second.acceptedStamp == head, "the merged set is the accepted one")
 
         try second.records.deleteAll()
         #expect(await second.coordinator.restorePeriodBackup() == .skippedStoreNotEmpty)
@@ -553,7 +554,7 @@ struct SealedBackupRestoreTests {
         defer { KeychainItem.deleteAll(service: noEscrow) }
         let notSynced = PeriodBackupDevice(cloud: cloud, writer: "notSynced", keychainService: noEscrow)
         #expect(await notSynced.coordinator.restorePeriodBackup() == .deferredKeyNotSynced)
-        #expect(!notSynced.host.periodBackupLedger.isRestoreResolved)
+        #expect(!notSynced.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
 
         let otherAccount = "com.fernlet.period-v2.otheraccount.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: otherAccount) }
@@ -561,34 +562,51 @@ struct SealedBackupRestoreTests {
         try identity.ensureProvisioned()
         identity.provisionBackupEscrowKeyForSealing()
         let stranger = PeriodBackupDevice(cloud: cloud, writer: "stranger", keychainService: otherAccount)
-        #expect(await stranger.coordinator.restorePeriodBackup() == .notRecognized)
-        #expect(!stranger.host.periodBackupLedger.isRestoreResolved)
-        #expect(stranger.host.recordedOutcomes[.periodData] == .notRecognized)
+        // Design 2026-09-30 §4.8 item 6 / §5.6: a key MISMATCH is a retryable wait for the synced
+        // key, never the terminal `.notRecognized` — a locally minted key beside a synced key that
+        // has not arrived yet reads exactly like a mismatch. `.notRecognized` is for a set tagged
+        // with this iPhone's key that will not authenticate.
+        #expect(await stranger.coordinator.restorePeriodBackup() == .deferredKeyNotSynced)
+        #expect(!stranger.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(stranger.host.recordedOutcomes[.periodData] == .deferredKeyNotSynced)
 
         let emptyCloud = try PeriodBackupDevice.makeCloud()
         defer { emptyCloud.tearDown() }
         let alone = PeriodBackupDevice(cloud: emptyCloud, writer: "alone")
         #expect(await alone.coordinator.restorePeriodBackup() == .nothingToRestore)
-        #expect(alone.host.periodBackupLedger.isRestoreResolved)
+        #expect(alone.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
     }
 
-    /// I15: at a Cycle settle with nothing to restore from on this install — the period backup off, or
-    /// iCloud sync off — the restore is marked resolved without any network work.
+    /// Design 2026-09-30 §4.8 item 13 / BV13 (R1-BR-2, R2-F4), replacing period I15's "nothing to
+    /// restore from" rule: the marker NEVER resolves because iCloud sync or the backup is off. A new
+    /// iPhone whose first Private visit happens before either switch is on would otherwise close its
+    /// restore for good, and the backup turned on later would be written over without ever being
+    /// pulled. Turned on, the same install restores first (a merge) and only then exports.
     @MainActor
-    @Test func theSettleResolvesTheRestoreWhenThereIsNothingToRestoreFrom() async throws {
+    @Test func theRestoreMarkerNeverResolvesBecauseSyncOrTheBackupIsOff() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
+        let first = PeriodBackupDevice(cloud: cloud, writer: "first", resolved: true)
+        try first.seed([PeriodBackupDevice.record(day: 1)])
+        #expect(await first.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        let firstSet = cloud.sealedRecordIdentities
+
         let backupOff = PeriodBackupDevice(cloud: cloud, writer: "a", preferences: StoragePreferences(iCloudSyncEnabled: true))
         await backupOff.coordinator.settlePeriodBackup()
-        #expect(backupOff.host.periodBackupLedger.isRestoreResolved)
+        #expect(!backupOff.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "the backup off decides nothing")
 
         let syncOff = PeriodBackupDevice(cloud: cloud, writer: "b", preferences: StoragePreferences(sealedBackupPeriodEnabled: true))
-        syncOff.host.sealedBackupContentKey = nil
+        try syncOff.seed([PeriodBackupDevice.record(day: 7)])
         await syncOff.coordinator.settlePeriodBackup()
-        #expect(!syncOff.host.periodBackupLedger.isRestoreResolved, "only a hub settle (the key live) decides")
-        syncOff.host.sealedBackupContentKey = SymmetricKey(size: .bits256)
+        #expect(!syncOff.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "sync off decides nothing")
+        #expect(cloud.sealedRecordIdentities == firstSet)
+
+        syncOff.preferences = PeriodBackupDevice.backupOn
         await syncOff.coordinator.settlePeriodBackup()
-        #expect(syncOff.host.periodBackupLedger.isRestoreResolved)
+        #expect(syncOff.host.recordedOutcomes[.periodData] == .restored(1), "turned on, it restores first")
+        #expect(syncOff.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(try syncOff.records.allIDs()),
+                "and then publishes the union over the set it pulled")
     }
 
     /// I16, restore half: a restore is a merge that never deletes or regresses an openable local record
@@ -641,7 +659,7 @@ struct SealedBackupRestoreTests {
         let merged = try #require(try phone.records.allRecords(contentKey: phone.key).records.first)
         #expect(merged.id == legacyID)
         #expect(merged.clinical == imported.clinical && merged.narrative?.note == "From the old backup.")
-        #expect(phone.host.periodBackupLedger.acceptedHead == PeriodBackupHead(writer: PeriodBackupHead.v1Writer, generation: 1))
+        #expect(phone.acceptedStamp == SealedBackupHeadStamp(writer: SealedBackupHeadStamp.v1Writer, generation: 1))
     }
 
     /// After an app-lock reset (design §5.3, Q14): nothing restores and nothing exports until the
@@ -691,7 +709,7 @@ struct SealedBackupRestoreTests {
         try after.seed([PeriodBackupDevice.record(day: 9)])
         after.preferences = StoragePreferences(sealedBackupPeriodEnabled: true, sealedBackupPeriodReuploadDeferred: true)
         await after.coordinator.settlePeriodBackup()
-        #expect(!after.host.periodBackupLedger.isRestoreResolved, "sync off: the pre-reset copy is out of reach, not gone")
+        #expect(!after.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "sync off: the pre-reset copy is out of reach, not gone")
 
         after.preferences = PeriodBackupDevice.backupOn
         await after.coordinator.releaseRestoreHoldForOwner()
@@ -721,7 +739,7 @@ struct SealedBackupRestoreTests {
         let other = PeriodBackupDevice(cloud: cloud, writer: "other", resolved: true)
         other.host.restoreHold.hold(keepingCopiesFrom: StoragePreferences())
         await other.coordinator.releaseRestoreHoldForOwner()
-        #expect(other.host.periodBackupLedger.isRestoreResolved, "nothing kept: the resolved restore stays resolved")
+        #expect(other.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "nothing kept: the resolved restore stays resolved")
         #expect(try other.records.recordCount() == 0)
     }
 
@@ -741,12 +759,17 @@ struct SealedBackupRestoreTests {
 
         let new = PeriodBackupDevice(cloud: cloud, writer: "new")
         try new.seed(history, key: old.key)
-        new.host.periodBackupLedger.markRestoreResolved()
-        new.host.periodBackupLedger.recordAcceptedHead(try #require(old.host.periodBackupLedger.acceptedHead))
+        // The old iPhone's bookkeeping, as it travels in a device backup: the marker, and an accepted
+        // head bound to the OLD install's tag — which reads as absent here (R1-BR-2).
+        let bookkeeping = new.host.sealedBackupBookkeeping
+        bookkeeping.markRestoreResolved(.periodData)
+        let travelled = try #require(old.host.sealedBackupBookkeeping.acceptedHead(.periodData, installTag: old.writer))
+        bookkeeping.recordAcceptedHead(travelled, .periodData, installTag: old.writer)
+        #expect(new.acceptedStamp == nil, "a travelled accepted head never reads as this install's")
         let entries = SealedPriorEntryStore(
             controller: new.controller,
-            latchDefaults: new.host.periodBackupLedger.defaults,
-            intimacyStore: IntimacyLogStore(repository: IntimacyLogRepository(controller: new.controller, defaults: new.host.periodBackupLedger.defaults)),
+            latchDefaults: bookkeeping.defaults,
+            intimacyStore: IntimacyLogStore(repository: IntimacyLogRepository(controller: new.controller, defaults: bookkeeping.defaults)),
             restoresAfterRemoval: { _ in true }
         )
         #expect(try entries.cycleEntryCount() == 2)
@@ -755,14 +778,14 @@ struct SealedBackupRestoreTests {
         // The card's Remove: exactly the dead rows go, then the bookkeeping that spoke for the old key.
         try entries.removeCycleEntries()
         entries.clearBackupBookkeeping()
-        #expect(!new.host.periodBackupLedger.isRestoreResolved)
-        #expect(new.host.periodBackupLedger.acceptedHead == nil)
+        #expect(!new.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(!bookkeeping.hasAcceptedHeadRecord(.periodData))
 
         await new.coordinator.settlePeriodBackup()
         let restored = try new.records.allRecords(contentKey: new.key)
         #expect(restored.isFullyOpen && restored.records.count == 2, "the history is back, under this iPhone's key")
-        #expect(new.host.periodBackupLedger.isRestoreResolved)
-        #expect(try await PeriodBackupDevice.cloudHead(cloud)?.writer == "new", "and this iPhone backs it up again")
+        #expect(new.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        #expect(try await PeriodBackupDevice.cloudHead(cloud)?.writer == new.writer, "and this iPhone backs it up again")
     }
 }
 

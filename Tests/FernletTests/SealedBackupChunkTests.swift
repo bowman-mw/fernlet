@@ -142,7 +142,7 @@ struct SealedBackupChunkTests {
             MenstrualNarrative(hkExternalUUID: legacyID.uuidString, dateKey: "2026-06-01", note: "a1")
         ])
         let logged = PeriodBackupDevice.record(day: 2)
-        let v2Chunk = try PeriodBackupFormat.encodeChunk(index: 1, records: [logged], writer: "w", total: 2)
+        let v2Chunk = try PeriodBackupDevice.v2Chunk([logged])
 
         let count = try store.applyRestoredChunks([v1Chunk, v2Chunk], payloadType: .periodData, cycleRecordStore: records)
 
@@ -159,7 +159,7 @@ struct SealedBackupChunkTests {
     @Test func applyRestoredChunksThrowsWhenPeriodKeyLocked() throws {
         let store = makeTestStore() // no hub key wired → no content key
         let records = PeriodBackupDevice.makeRecordStore()
-        let chunk = try PeriodBackupFormat.encodeChunk(index: 0, records: [PeriodBackupDevice.record(day: 1)], writer: "w", total: 1)
+        let chunk = try PeriodBackupDevice.v2Chunk([PeriodBackupDevice.record(day: 1)], total: 1)
         #expect(throws: FernletStore.SealedBackupWiringError.locked) {
             try store.applyRestoredChunks([chunk], payloadType: .periodData, cycleRecordStore: records)
         }
@@ -184,7 +184,8 @@ struct SealedBackupChunkTests {
         #expect(store.tierTwoMemories.isEmpty)
     }
 
-    // MARK: - Period backup v2: the export guards (period-data design 2026-09-30, §9.10; I16, I29, I30)
+
+    // MARK: - Period backup on the v2 engine: the export (design 2026-09-30 §4.2 X; period I16, I29, I30)
 
     /// E1: a fresh install whose restore has not resolved never exports — it would write over the
     /// cloud copy before pulling it. The switch stays on, the upload stays owed, nothing is written.
@@ -198,14 +199,16 @@ struct SealedBackupChunkTests {
         #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData), "a deferral keeps the switch on")
         #expect(cloud.sealedRecords.isEmpty, "nothing is written before the restore resolved")
         #expect(phone.host.reuploadDeferrals[.periodData] == true)
+        #expect(phone.host.v2Status[.periodData] == .waitingForRestore(nil))
 
-        phone.host.periodBackupLedger.markRestoreResolved()
+        phone.host.sealedBackupBookkeeping.markRestoreResolved(.periodData)
         #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(!cloud.sealedRecords.isEmpty, "control: once resolved, the same call exports")
         #expect(phone.host.reuploadDeferrals[.periodData] == false, "and the owed upload is discharged")
+        #expect(phone.host.v2Status[.periodData] == .upToDate)
     }
 
-    /// E4: no Private tab key, no export (and no network): a deferral, nothing written.
+    /// G: no Private tab key, no export (and no network): a deferral, nothing written.
     @MainActor
     @Test func theV2ExportNeedsThePrivateTabsKey() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -219,8 +222,8 @@ struct SealedBackupChunkTests {
         #expect(phone.host.reuploadDeferrals[.periodData] == true)
     }
 
-    /// E3 (R2-F12): the pre-pass decrypts EVERY record before the first write. One record this key
-    /// cannot open refuses the whole export — named for Privacy & Data — and nothing reaches iCloud,
+    /// E3 (R2-F12, BV5): the prepare decrypts EVERY record before the first write. One record this key
+    /// cannot open pauses the whole export — named for Privacy & Data — and nothing reaches iCloud,
     /// not even a suffix chunk.
     @MainActor
     @Test func theV2ExportRefusesBeforeTheFirstWriteWhenARecordCannotOpen() async throws {
@@ -235,10 +238,12 @@ struct SealedBackupChunkTests {
         #expect(cloud.sealedRecords.isEmpty, "a 2-chunk set would write its suffix chunk first; nothing is written")
         #expect(phone.host.periodExportState == .unopenableEntries(1))
         #expect(phone.host.reuploadDeferrals[.periodData] == true)
+        #expect(SealedBackupGenerationStore(defaults: phone.generationDefaults).lastSeen(for: .periodData) == 0,
+                "no generation is burned by an export that never committed (BV8)")
     }
 
-    /// E3, the undecided half: a record whose install-binding read did not answer defers the export
-    /// (retryable) and writes nothing; it is never called unopenable.
+    /// E3, the undecided half: a record whose install-binding read did not answer fails the export
+    /// (retried, backed off) and writes nothing; it is never called unopenable, and the switch stays on.
     @MainActor
     @Test func theV2ExportDefersOnARecordItCouldNotDecide() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -253,11 +258,13 @@ struct SealedBackupChunkTests {
         #expect(enabled)
         #expect(cloud.sealedRecords.isEmpty)
         #expect(phone.host.periodExportState == .clear, "undecided is never named as unopenable")
+        #expect(phone.host.v2Status[.periodData] == .failed)
         #expect(phone.host.reuploadDeferrals[.periodData] == true)
     }
 
-    /// The chunks are built from the pre-pass's id snapshot: a 600-record history goes up as three
-    /// chunks whose head carries this install's writer, and another iPhone restores every record.
+    /// The chunks are built from the snapshot: a 600-record history goes up as three chunks — the
+    /// head under the bare name, the two suffix chunks under names scoped to their set (§5.2) — whose
+    /// head carries this install's writer, and another iPhone restores every record.
     @MainActor
     @Test func theV2ExportWritesTheWholeSnapshotAndAnotherIPhoneRestoresIt() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -268,9 +275,15 @@ struct SealedBackupChunkTests {
 
         #expect(await first.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(cloud.sealedRecords.count == 3)
+        let names = Set(cloud.sealedRecords.map(\.recordID.recordName))
+        #expect(names.contains("sealed-backup.periodData"))
+        #expect(names.filter { $0.hasPrefix("sealed-backup.periodData.chunk.") }.allSatisfy { $0.split(separator: ".").count == 5 },
+                "every suffix chunk is scoped to its set: chunk.<i>.<set>")
         let head = try #require(try await PeriodBackupDevice.cloudHead(cloud))
-        #expect(head.writer == "first")
-        #expect(first.host.periodBackupLedger.acceptedHead == head, "the set it wrote is the set it accepts")
+        #expect(head.writer == first.writer)
+        #expect(first.acceptedStamp == head, "the set it wrote is the set it accepts")
+        #expect(first.backgroundTasks.begun == 1 && first.backgroundTasks.open.isEmpty,
+                "the commit ran inside one background-task assertion, ended on return (R2-F6)")
 
         let second = PeriodBackupDevice(cloud: cloud, writer: "second")
         #expect(await second.coordinator.restorePeriodBackup() == .restored(600))
@@ -278,9 +291,9 @@ struct SealedBackupChunkTests {
         #expect(restored.sorted { $0.id.uuidString < $1.id.uuidString } == history.sorted { $0.id.uuidString < $1.id.uuidString })
     }
 
-    /// I29: the re-upload flag clears only when no cycle record changed while the export ran. A record
-    /// logged mid-upload is not in the set, so the upload stays owed — and the next export carries it,
-    /// after which the cloud holds exactly what the store holds.
+    /// Period I29 / BV9: the owed upload clears only when no cycle record changed while the export
+    /// ran. A record logged mid-upload is not in the set, so the upload stays owed — and the next
+    /// export carries it, after which the cloud holds exactly what the store holds.
     @MainActor
     @Test func aRecordLoggedDuringTheExportKeepsTheUploadOwedUntilTheNextOne() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -307,8 +320,8 @@ struct SealedBackupChunkTests {
                 "after a mutation and a clean export the cloud holds exactly the local records")
     }
 
-    /// The mutation hook (R2-F3): every change made through the coordinator's own funnel — here the
-    /// restore's merge — marks the upload owed, so the next settle re-exports the merged history.
+    /// The mutation hook (R2-F3) and R10: a restore marks the upload owed — through the merge's own
+    /// write and the restore's bookkeeping — so the next pass publishes the merged history.
     @MainActor
     @Test func aRestoreThatChangedRecordsMarksTheUploadOwed() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -319,14 +332,14 @@ struct SealedBackupChunkTests {
 
         let second = PeriodBackupDevice(cloud: cloud, writer: "second")
         #expect(await second.coordinator.restorePeriodBackup() == .restored(1))
-        #expect(second.host.periodBackupMutationCount == 1)
+        #expect(second.host.sealedBackupMutationEpoch(.periodData) >= 1)
         #expect(second.host.reuploadDeferrals[.periodData] == true)
     }
 
-    /// I30: an export never replaces a set this install has not accepted. The second iPhone's export
-    /// is refused and named — nothing written — until the user chooses "Replace it with this iPhone's
-    /// history"; that set is then minted ABOVE the first iPhone's, so the first iPhone's own restore of
-    /// it is not mistaken for a rollback. The first iPhone is then refused in turn.
+    /// Period I30 / BV4: an export never replaces a set this install does not own or accept. The second
+    /// iPhone's export is held and named — nothing written — until the user chooses "Replace it with
+    /// this iPhone's history"; that set is minted ABOVE the first iPhone's, so the first iPhone's own
+    /// restore of it is not mistaken for a rollback. The first iPhone is then held in turn.
     @MainActor
     @Test func anExportNeverReplacesAnotherIPhonesSetExceptThroughTheExplicitReplace() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -344,13 +357,16 @@ struct SealedBackupChunkTests {
         #expect(await second.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(cloud.sealedRecordIdentities == firstSet, "the other iPhone's set is left exactly as it was")
         #expect(second.host.periodExportState == .heldByAnotherDevice(firstHead))
+        #expect(second.host.sealedBackupBookkeeping.observedHead(.periodData, installTag: second.writer) == firstHead,
+                "the foreign head is persisted, so Privacy & Data names it after a relaunch (R2-F13b)")
         #expect(second.host.reuploadDeferrals[.periodData] == true)
 
         await second.coordinator.replacePeriodBackupWithThisIPhone(firstHead)
         let secondHead = try #require(try await PeriodBackupDevice.cloudHead(cloud))
-        #expect(secondHead.writer == "second")
+        #expect(secondHead.writer == second.writer)
         #expect(secondHead.generation > firstHead.generation, "minted above the set it replaced")
         #expect(second.host.periodExportState == .clear)
+        #expect(second.host.sealedBackupBookkeeping.observedHead(.periodData, installTag: second.writer) == nil)
 
         #expect(await first.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(first.host.periodExportState == .heldByAnotherDevice(secondHead), "the compare-and-swap cuts both ways")
@@ -360,7 +376,7 @@ struct SealedBackupChunkTests {
     }
 
     /// The replace accepts exactly the set the user was shown: if the other iPhone wrote a newer set
-    /// since, the export is refused again rather than replacing a set nobody saw.
+    /// since, the export is held again rather than replacing a set nobody saw.
     @MainActor
     @Test func theExplicitReplaceIsForTheSetTheUserSawOnly() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -384,14 +400,13 @@ struct SealedBackupChunkTests {
         #expect(head.generation > shown.generation)
     }
 
-    /// A v1 set names no writer, so it is never assumed to be this iPhone's (review
-    /// U5-backup-v2-C-U5-4): the design's one-time seed took a v1 set at this device's own high-water
-    /// generation for its own last write, but counters are per device and small, so two iPhones that
-    /// each backed up once both wrote generation 1 — and the second iPhone silently replaced the
-    /// first one's backup. Every v1 set is now held until the user chooses; "Restore it here" then
-    /// merges it and the export follows over it.
+    /// Design §4.8 item 7 / §5.5 (R1-BR-9), replacing period §9.10's seed rule: a v1 set names no
+    /// writer, so its authorship comes from its AAD-BOUND signing key — device-only, never in a device
+    /// backup — never from a generation coincidence. Two iPhones that each backed up once both wrote
+    /// generation 1; the one whose key did not seal the set is held, and the one whose key did writes
+    /// over its own set with no question asked.
     @MainActor
-    @Test func aV1SetIsNeverAssumedToBeThisIPhones() async throws {
+    @Test func aV1SetIsOwnedOnlyByTheIPhoneWhoseSigningKeySealedIt() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
         let phoneA = PeriodBackupDevice(cloud: cloud, writer: "a", resolved: true)
@@ -399,7 +414,7 @@ struct SealedBackupChunkTests {
         try await phoneB.writeV1Set([MenstrualNarrative(hkExternalUUID: UUID().uuidString, dateKey: "2026-05-01", note: "B's")])
         let aNote = MenstrualNarrative(hkExternalUUID: UUID().uuidString, dateKey: "2026-05-02", note: "A's")
         try await phoneA.writeV1Set([aNote])
-        let v1Head = PeriodBackupHead(writer: PeriodBackupHead.v1Writer, generation: 1)
+        let v1Head = SealedBackupHeadStamp(writer: SealedBackupHeadStamp.v1Writer, generation: 1)
         #expect(try await PeriodBackupDevice.cloudHead(cloud) == v1Head, "both iPhones wrote generation 1; A wrote last")
         let aSet = cloud.sealedRecordIdentities
 
@@ -410,18 +425,17 @@ struct SealedBackupChunkTests {
 
         try phoneA.seed([PeriodBackupDevice.record(day: 2)])
         #expect(await phoneA.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
-        #expect(phoneA.host.periodExportState == .heldByAnotherDevice(v1Head), "nor A over its own: it cannot know")
+        #expect(phoneA.host.periodExportState == .clear, "A's own signing key sealed it: A's own set")
+        #expect(try await PeriodBackupDevice.cloudHead(cloud)?.writer == phoneA.writer)
 
-        await phoneA.coordinator.restorePeriodBackupHere(v1Head)
-        #expect(phoneA.host.recordedOutcomes[.periodData] == .restored(1))
-        #expect(try await PeriodBackupDevice.cloudHead(cloud)?.writer == "a", "the export follows the explicit restore")
-        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud).contains(CycleLegacyIdentity.recordID(forLegacyExternalID: aNote.hkExternalUUID)), "with the v1 entries merged in")
+        await phoneB.coordinator.restorePeriodBackupHere(try #require(try await PeriodBackupDevice.cloudHead(cloud)))
+        #expect(phoneB.host.recordedOutcomes[.periodData] == .restored(1), "B merges A's set on its explicit choice")
+        #expect(try await PeriodBackupDevice.cloudHead(cloud)?.writer == phoneB.writer, "the export follows the explicit restore")
     }
 
-    /// Review U5-backup-v2-C-U5-2: generation counters are per device and "Delete everything" zeroes
-    /// the deleting iPhone's, so the other iPhone's set can be numbered BELOW this iPhone's
-    /// high-water mark. "Restore it here" of exactly the set it was shown still merges it — it was a
-    /// terminal `.rolledBack` that also stranded every later export behind restore-first — and the
+    /// Review U5-backup-v2-C-U5-2, kept: generation counters are per device and "Delete everything"
+    /// zeroes the deleting iPhone's, so the other iPhone's set can be numbered BELOW this iPhone's
+    /// rollback floor. "Restore it here" of exactly the set it was shown still merges it, and the
     /// export then writes above both.
     @MainActor
     @Test func restoreItHereMergesASetNumberedBelowThisIPhonesMark() async throws {
@@ -437,7 +451,7 @@ struct SealedBackupChunkTests {
         let phoneB = PeriodBackupDevice(cloud: cloud, writer: "b", resolved: true)
         try phoneB.seed([PeriodBackupDevice.record(day: 5)])
         #expect(await phoneB.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
-        let bHead = PeriodBackupHead(writer: "b", generation: 1)
+        let bHead = PeriodBackupDevice.stamp("b", 1)
         #expect(try await PeriodBackupDevice.cloudHead(cloud) == bHead)
 
         #expect(await phoneA.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
@@ -446,14 +460,13 @@ struct SealedBackupChunkTests {
         #expect(phoneA.host.recordedOutcomes[.periodData] == .restored(1), "not .rolledBack: the user chose this set")
         #expect(try phoneA.records.recordCount() == 2)
         let after = try #require(try await PeriodBackupDevice.cloudHead(cloud))
-        #expect(after.writer == "a" && after.generation == 4, "the export follows, above both iPhones' numbers")
+        #expect(after.writer == phoneA.writer && after.generation == 4, "the export follows, above both iPhones' numbers")
         #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(try phoneA.records.allIDs()))
     }
 
-    /// Review U5-backup-v2-C-U5-2, the other half: an explicit restore that cannot land never strands
-    /// the export. The below-the-mark exception is for exactly the set the user chose — another set
-    /// at that number is still a rollback — and since "Restore it here" no longer reopens this
-    /// install's resolved restore, the next export names the set again with both choices.
+    /// R6 / R1-BR-4: a "Restore it here" whose set was replaced since merges nothing and returns to the
+    /// held state, naming the NEW set with both choices; this install's resolved restore is never
+    /// reopened.
     @MainActor
     @Test func anExplicitRestoreThatCannotLandLeavesTheReplaceReachable() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -465,56 +478,45 @@ struct SealedBackupChunkTests {
         let phoneB = PeriodBackupDevice(cloud: cloud, writer: "b", resolved: true)
         try phoneB.seed([PeriodBackupDevice.record(day: 5)])
         #expect(await phoneB.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
-        let bHead = PeriodBackupHead(writer: "b", generation: 1)
+        let bHead = PeriodBackupDevice.stamp("b", 1)
 
-        await phoneA.coordinator.restorePeriodBackupHere(PeriodBackupHead(writer: "someone-else", generation: 1))
-        #expect(phoneA.host.recordedOutcomes[.periodData] == .rolledBack, "a different set at the chosen number is refused")
+        await phoneA.coordinator.restorePeriodBackupHere(PeriodBackupDevice.stamp("someone-else", 1))
+        #expect(phoneA.host.recordedOutcomes[.periodData] == nil, "a set the user never saw is not restored, nor failed")
+        #expect(phoneA.host.periodExportState == .heldByAnotherDevice(bHead), "the set in iCloud is named instead")
         #expect(try phoneA.records.recordCount() == 1, "and nothing merged")
-        #expect(phoneA.host.periodBackupLedger.isRestoreResolved, "the resolved restore was never reopened")
+        #expect(phoneA.host.sealedBackupBookkeeping.isRestoreResolved(.periodData), "the resolved restore was never reopened")
 
         #expect(await phoneA.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(phoneA.host.periodExportState == .heldByAnotherDevice(bHead), "the set is named again, Replace still offered")
     }
 
-    /// Review U5-backup-v2-L-U5-R3: the export writes the head, then prunes stale chunks — a network
-    /// enumeration. When the prune fails (or the app is suspended) after the head landed, the accepted
-    /// head was never recorded, and the next export used to name this iPhone's own set "saved from
-    /// another iPhone". A set under this install's writer tag at a generation this device minted is
-    /// its own; one ABOVE its high-water mark (an iPhone put back from an older device backup of
-    /// itself) is still held.
+    /// Design §5.5 (R1-BR-13): E2 is writer-first. A head this install wrote whose save landed while
+    /// the client saw a failure (so no bookkeeping recorded it) is its own — never "saved from another
+    /// iPhone" — and the next export writes above it. The rollback floor was never raised by the
+    /// uncommitted write (§5.4).
     @MainActor
-    @Test func anExportWhosePruneFailedStillOwnsItsSet() async throws {
+    @Test func aHeadThisInstallWroteIsItsOwnEvenWhenItsCommitWasNeverRecorded() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
-        let flaky = PruneFailingCloudKitRecordDatabase(cloud.database)
+        let flaky = LandedButFailedCloudKitRecordDatabase(cloud.database)
         let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: flaky)
         try phone.seed([PeriodBackupDevice.record(day: 1)])
 
-        #expect(await !phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData), "the prune failed")
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData), "a failed commit keeps the switch on")
         let written = try #require(try await PeriodBackupDevice.cloudHead(cloud))
-        #expect(written.writer == "phone" && phone.host.periodBackupLedger.acceptedHead == nil, "head up, never recorded")
+        #expect(written.writer == phone.writer && phone.acceptedStamp == nil, "head up, never recorded")
+        #expect(phone.host.v2Status[.periodData] == .failed)
+        #expect(SealedBackupGenerationStore(defaults: phone.generationDefaults).lastSeen(for: .periodData) == 0)
 
-        flaky.failsPrunes = false
         #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(phone.host.periodExportState == .clear, "its own set is not another iPhone's")
         #expect(try await PeriodBackupDevice.cloudHead(cloud)?.generation == written.generation + 1)
-
-        let restoredFromAnOlderBackup = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
-        try restoredFromAnOlderBackup.seed([PeriodBackupDevice.record(day: 1)])
-        #expect(await restoredFromAnOlderBackup.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
-        guard case .heldByAnotherDevice = restoredFromAnOlderBackup.host.periodExportState else {
-            Issue.record("a newer set under this tag was written over")
-            return
-        }
+        #expect(phone.acceptedStamp?.generation == written.generation + 1)
     }
 
-    /// Review U5-backup-v2 N-1: the Private tab closing mid-upload — its key gone, its section settle
-    /// cancelled — must not stop a set part-way. Chunks live at fixed, account-wide record names, so a
-    /// set stopped after its suffix chunks left the OLD head over NEW suffix chunks: a mixed-generation
-    /// set every restore refused until this iPhone exported again (lost with the phone; stranded
-    /// behind an app-lock reset's hold). The export now decrypts and seals every chunk before its first
-    /// upload, so the closed tab has nothing left to decrypt or stop: the new set lands whole over the
-    /// old two-chunk one, and a new iPhone restores it.
+    /// Design §5.2 (R2-F6, BV6): the Private tab closing mid-upload stops nothing — the set was sealed
+    /// before its first save and the commit decrypts nothing, so it lands whole over the previous
+    /// two-chunk set (whose chunks the prune then removes), and a new iPhone restores it.
     @MainActor
     @Test func anExportFinishesItsSealedSetWhenPrivateClosesMidUpload() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -523,32 +525,28 @@ struct SealedBackupChunkTests {
         let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: interrupting)
         try phone.seed((0..<300).map { PeriodBackupDevice.record(day: $0) })
         #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
-        #expect(try await PeriodBackupDevice.cloudHead(cloud) == PeriodBackupHead(writer: "phone", generation: 1))
+        #expect(try await PeriodBackupDevice.cloudHead(cloud) == PeriodBackupDevice.stamp("phone", 1))
         #expect(cloud.sealedRecords.count == 2, "the prior set has two chunks")
 
         try phone.seed((300..<320).map { PeriodBackupDevice.record(day: $0) })
-        let export = PeriodExportTaskBox()
         interrupting.onFirstSave = {
             phone.host.sealedBackupContentKey = nil   // the tab closed: the key provider answers nil
-            export.task?.cancel()                     // and ContentView cancels the section settle
         }
-        export.task = Task { await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData) }
-        #expect(await export.task?.value == true)
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
 
-        let head = PeriodBackupHead(writer: "phone", generation: 2)
+        let head = PeriodBackupDevice.stamp("phone", 2)
         #expect(try await PeriodBackupDevice.cloudHead(cloud) == head, "the new set's head landed")
         #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud).count == 320, "one whole set, every chunk at generation 2")
-        #expect(phone.host.periodBackupLedger.acceptedHead == head)
+        #expect(cloud.sealedRecords.count == 2, "the prune removed the older set's suffix chunk")
+        #expect(phone.acceptedStamp == head)
         #expect(phone.host.reuploadDeferrals[.periodData] == false, "nothing owed: the set is complete")
         let newPhone = PeriodBackupDevice(cloud: cloud, writer: "new")
         #expect(await newPhone.coordinator.restorePeriodBackup() == .restored(320), "and it restores")
     }
 
-    /// Review U5-backup-v2-C-U5-3 / L-U5-R4, kept through N-1: "Delete everything" moves the store's
-    /// wipe count in its first leg. An export already uploading its sealed set stops at its next save
-    /// — so never the head, which goes last — writes no accepted head (the wipe clears it with the
-    /// rollback marks) and records no deferral (the wipe owns those). The wipe count alone stops it:
-    /// the task's cancellation no longer can, since the tab closing cancels the same settle.
+    /// BV15 / §4.7: "Delete everything" moves the work epoch in its first leg. An export already
+    /// uploading stops before its next save — so never the head, which goes last, and the previous
+    /// head (none here) is untouched — and records no bookkeeping. The upload is never claimed done.
     @MainActor
     @Test func aWipeThatBeginsMidUploadStopsTheSetBeforeItsHead() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -556,17 +554,17 @@ struct SealedBackupChunkTests {
         let interrupting = InterruptingCloudKitRecordDatabase(cloud.database)
         let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: interrupting)
         try phone.seed((0..<300).map { PeriodBackupDevice.record(day: $0) })
-        interrupting.onFirstSave = { phone.host.sealedBackupWipeCount += 1 }
+        interrupting.onFirstSave = { phone.host.sealedBackupWorkEpoch += 1 }
 
         #expect(await !phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(try await PeriodBackupDevice.cloudHead(cloud) == nil, "the wipe's set delete is never raced by a fresh head")
-        #expect(cloud.sealedRecords.count == 1, "only the suffix chunk already in flight")
-        #expect(phone.host.periodBackupLedger.acceptedHead == nil)
-        #expect(phone.host.reuploadDeferrals[.periodData] == nil, "no deferral written behind the wipe")
+        #expect(cloud.sealedRecords.count == 1, "only the suffix chunk already in flight — an orphan, under its own set's name")
+        #expect(phone.acceptedStamp == nil)
+        #expect(phone.host.reuploadDeferrals[.periodData] != false, "a stopped pass never claims the upload done")
     }
 
     /// The other half: a wipe that begins while the head itself is uploading cannot stop that save,
-    /// but the accepted head the wipe cleared is never written back after it.
+    /// but no bookkeeping — the accepted head, the rollback floor — is written after it.
     @MainActor
     @Test func aWipeThatBeginsWhileTheHeadUploadsRecordsNoAcceptedHead() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
@@ -574,20 +572,20 @@ struct SealedBackupChunkTests {
         let interrupting = InterruptingCloudKitRecordDatabase(cloud.database)
         let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: interrupting)
         try phone.seed([PeriodBackupDevice.record(day: 1)])
-        interrupting.onFirstSave = { phone.host.sealedBackupWipeCount += 1 }
+        interrupting.onFirstSave = { phone.host.sealedBackupWorkEpoch += 1 }
 
         #expect(await !phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
         #expect(try await PeriodBackupDevice.cloudHead(cloud) != nil, "the one save in flight landed")
-        #expect(phone.host.periodBackupLedger.acceptedHead == nil, "but nothing recorded it")
-        #expect(phone.host.reuploadDeferrals[.periodData] == nil)
+        #expect(phone.acceptedStamp == nil, "but nothing recorded it")
+        #expect(SealedBackupGenerationStore(defaults: phone.generationDefaults).lastSeen(for: .periodData) == 0)
+        #expect(phone.host.reuploadDeferrals[.periodData] != false)
     }
 
-    /// Review U5-backup-v2 N-1: a sealed set now outlives the tab closing, so reopening it (or an
-    /// un-hide settle) can ask for a second export while the first is uploading. Two at once could
-    /// interleave their chunk writes — the older head landing last over the newer set — so the second
-    /// defers, minting nothing, and the first's set carries everything.
+    /// BV6 / R2-F15: ONE serial worker. A second export asked for while the first is uploading waits —
+    /// it starts nothing (no fetch, no prepare, no save) until the first has finished — and then runs
+    /// its own pass; the cloud ends with one whole set.
     @MainActor
-    @Test func onlyOnePeriodExportUploadsAtATime() async throws {
+    @Test func onlyOnePeriodPassRunsAtATime() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
         let holding = HoldingCloudKitRecordDatabase(cloud.database)
@@ -595,66 +593,48 @@ struct SealedBackupChunkTests {
         try phone.seed([PeriodBackupDevice.record(day: 1)])
 
         let first = Task { await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData) }
-        for _ in 0..<1_000 where !holding.isHoldingSave { await Task.yield() }
-        #expect(holding.isHoldingSave, "the first export is uploading")
-        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData), "the second defers")
-        #expect(phone.host.reuploadDeferrals[.periodData] == true)
-        #expect(SealedBackupGenerationStore(defaults: phone.generationDefaults).lastSeen(for: .periodData) == 1,
-                "the second minted nothing")
+        #expect(await yieldUntil { holding.isHoldingSave }, "the first export is uploading")
+        try phone.seed([PeriodBackupDevice.record(day: 2)])
+        let second = Task { await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData) }
+        for _ in 0..<200 { await Task.yield() }
+        #expect(holding.savedCount == 0, "nothing else ran while the first pass held its save")
+        #expect(phone.backgroundTasks.begun == 1, "the second pass has not reached a commit")
 
         holding.releaseHeldSave()
         #expect(await first.value)
-        #expect(try await PeriodBackupDevice.cloudHead(cloud) == PeriodBackupHead(writer: "phone", generation: 1))
+        #expect(await second.value)
+        #expect(try await PeriodBackupDevice.cloudHead(cloud) == PeriodBackupDevice.stamp("phone", 2))
         #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(try phone.records.allIDs()))
-        #expect(phone.host.reuploadDeferrals[.periodData] == false, "the first export's set carries everything")
+        #expect(phone.host.reuploadDeferrals[.periodData] == false)
     }
 
-    /// Review U5-backup-v2 N-1, the mechanism: the period write seals every chunk before its first
-    /// upload, still writes the head last, mints above the floor — and a chunk that fails to seal
-    /// writes nothing and burns no generation.
+    /// X7 (BV5): every chunk is decrypted and sealed BEFORE the first save. A record deleted while the
+    /// commit uploads is still in the set it sealed (the set is ciphertext by then), and the deletion
+    /// keeps the upload owed for the next export.
     @MainActor
-    @Test func theSealedUpFrontWriteSealsTheWholeSetBeforeItsFirstUpload() async throws {
+    @Test func everyChunkIsSealedBeforeTheFirstSave() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
-        let defaults = isolatedDefaults()
-        let service = try PeriodBackupDevice.service(cloud, generationDefaults: defaults)
-        var events: [String] = []
-
-        let generation = try await service.reconcileChunkedSealedUpFront(
-            payloadType: .periodData,
-            chunkCount: 3,
-            generationFloor: 4,
-            chunk: { index in
-                events.append("seal \(index)")
-                return Data("chunk \(index)".utf8)
-            },
-            beforeEachUpload: { events.append("upload") }
-        )
-        #expect(generation == 5)
-        #expect(events == ["seal 0", "seal 1", "seal 2", "upload", "upload", "upload"])
-        #expect(cloud.sealedRecords.compactMap { $0["chunkIndex"] as? Int } == [2, 1, 0], "head last")
-        let written = cloud.sealedRecordIdentities
-
-        await #expect(throws: SealFailure.self) {
-            try await service.reconcileChunkedSealedUpFront(
-                payloadType: .periodData,
-                chunkCount: 2,
-                generationFloor: 0,
-                chunk: { index in
-                    guard index == 0 else { throw SealFailure() }
-                    return Data()
-                },
-                beforeEachUpload: {}
-            )
+        let interrupting = InterruptingCloudKitRecordDatabase(cloud.database)
+        let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: interrupting)
+        let history = (0..<600).map { PeriodBackupDevice.record(day: $0) }
+        try phone.seed(history)
+        let doomed = try #require(history.first?.id)
+        interrupting.onFirstSave = {
+            do {
+                #expect(try phone.records.delete(ids: [doomed]) == 1)
+            } catch {
+                Issue.record("the mid-upload delete failed: \(error)")
+            }
         }
-        #expect(cloud.sealedRecordIdentities == written, "nothing uploaded")
-        #expect(SealedBackupGenerationStore(defaults: defaults).lastSeen(for: .periodData) == 5, "no generation burned")
+
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        #expect(try await PeriodBackupDevice.cloudRecordIDs(cloud) == Set(history.map(\.id)), "the set sealed before the delete")
+        #expect(phone.host.reuploadDeferrals[.periodData] == true, "the delete is owed to the next export")
     }
 
-    /// Review U5-backup-v2-L-U5-R1: a set sealed to an escrow key this iPhone does not hold — after
-    /// an escrow adopt, the set this iPhone sealed under the key the adopt deleted — could never pass
-    /// the compare-and-swap (it does not open), so the period backup was never re-sealed and nothing
-    /// said why. It is now named, nothing is written over it, and the user's explicit "Replace"
+    /// Design §5.6 (R2-F1): a head no escrow key on this iPhone opens is named — "Start a new backup"
+    /// is the only way over it — and nothing is written before the user chooses. The explicit start
     /// re-seals the history under this iPhone's key.
     @MainActor
     @Test func aSetSealedToAnotherKeyIsNamedAndReplacedOnlyByChoice() async throws {
@@ -673,325 +653,55 @@ struct SealedBackupChunkTests {
         let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true)
         try phone.seed([PeriodBackupDevice.record(day: 2)])
         #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
-        let unreadable = PeriodBackupHead(writer: PeriodBackupHead.unreadableWriter, generation: 1)
-        #expect(phone.host.periodExportState == .sealedWithAnotherKey(unreadable))
+        #expect(phone.host.periodExportState == .sealedWithAnotherKey)
+        #expect(phone.host.v2Status[.periodData] == .headSealedWithOtherKey)
         #expect(cloud.sealedRecordIdentities == sealedSet, "nothing is written over it before the user chooses")
         #expect(phone.host.recordedOutcomes[.periodData] == nil, "named by its own line, not as a failed restore")
 
-        await phone.coordinator.replacePeriodBackupWithThisIPhone(unreadable)
+        await phone.coordinator.startNewPeriodBackup()
         let head = try #require(try await PeriodBackupDevice.cloudHead(cloud), "this iPhone's key opens the new set")
-        #expect(head.writer == "phone")
+        #expect(head.writer == phone.writer)
         #expect(phone.host.periodExportState == .clear)
     }
+
     /// The writer tag: deterministic per install binding, distinct across installs, 32 hex
-    /// characters, and absent (the export defers) when the binding is unavailable.
+    /// characters, and absent (the export fails transiently) when the binding is unavailable.
     @MainActor
     @Test func theWriterTagNamesTheInstall() {
         let installA = Data(repeating: 0xA1, count: 16)
         let installB = Data(repeating: 0xB2, count: 16)
-        #expect(PeriodBackupWriterTag.tag(forBinding: installA) == PeriodBackupWriterTag.tag(forBinding: installA))
-        #expect(PeriodBackupWriterTag.tag(forBinding: installA) != PeriodBackupWriterTag.tag(forBinding: installB))
-        #expect(PeriodBackupWriterTag.tag(forBinding: installA).count == 32)
-        #expect(PeriodBackupWriterTag.tag(forBinding: installA).allSatisfy { $0.isHexDigit && !$0.isUppercase })
+        #expect(SealedBackupWriterTag.tag(forBinding: installA) == SealedBackupWriterTag.tag(forBinding: installA))
+        #expect(SealedBackupWriterTag.tag(forBinding: installA) != SealedBackupWriterTag.tag(forBinding: installB))
+        #expect(SealedBackupSetTag.isValid(SealedBackupWriterTag.tag(forBinding: installA)))
         DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
-            #expect(PeriodBackupWriterTag.current() == PeriodBackupWriterTag.tag(forBinding: installA))
+            #expect(SealedBackupWriterTag.current() == SealedBackupWriterTag.tag(forBinding: installA))
         }
         DeviceBindingID.$testOverride.withValue(.unavailable) {
-            #expect(PeriodBackupWriterTag.current() == nil)
+            #expect(SealedBackupWriterTag.current() == nil)
         }
+        let minted = SealedBackupSetTag.mint()
+        #expect(SealedBackupSetTag.isValid(minted) && minted != SealedBackupSetTag.mint(), "a fresh random set tag per pass")
     }
 
-    /// The generation floor itself: a write is minted strictly above both this device's mark and the
-    /// floor, and persisted.
+    /// Design §9 (R2-F11): "Delete everything"'s generation reset clears the rollback marks but KEEPS
+    /// the v2 accepted head — a set surviving a failed delete is then this install's own to the next
+    /// export, which overwrites it and finishes the wipe, instead of being offered back as another
+    /// iPhone's.
     @MainActor
-    @Test func theGenerationFloorMintsAboveTheCloudHead() {
-        var store = SealedBackupGenerationStore(defaults: isolatedDefaults())
-        #expect(store.mintNext(for: .periodData, above: 7) == 8)
-        #expect(store.lastSeen(for: .periodData) == 8)
-        #expect(store.mintNext(for: .periodData, above: 3) == 9, "never below this device's own mark")
+    @Test func theWipesGenerationResetKeepsTheAcceptedHead() {
         let defaults = isolatedDefaults()
-        defaults.set("w:3", forKey: SealedBackupGenerationStore.periodAcceptedHeadKey)
-        var wiped = SealedBackupGenerationStore(defaults: defaults)
-        wiped.reset()
-        #expect(defaults.object(forKey: SealedBackupGenerationStore.periodAcceptedHeadKey) == nil,
-                "delete-all's reset clears the compare-and-swap record with the marks")
-    }
-}
+        var store = SealedBackupGenerationStore(defaults: defaults)
+        #expect(store.mintNext(for: .periodData) == 1)
+        let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in false })
+        let accepted = SealedBackupAcceptedHead(stamp: PeriodBackupDevice.stamp("phone", 3), saltPrefix: "00112233")
+        bookkeeping.recordAcceptedHead(accepted, .periodData, installTag: PeriodBackupDevice.tag("phone"))
 
-// MARK: - Period backup v2 rig
+        store.reset()
 
-/// One iPhone for the period backup v2 tests (period-data design 2026-09-30, §9.10): its own sealed
-/// cycle records, host bookkeeping, rollback generation store and writer tag — over a cloud database
-/// and an escrow keychain (iCloud Keychain) it shares with the other iPhones of a test.
-@MainActor
-final class PeriodBackupDevice {
-    let host: FakeSealedBackupHost
-    /// This iPhone's sealed store.
-    let controller: PrivatePersistenceController
-    let records: CycleRecordStore
-    let generationDefaults: UserDefaults
-    let coordinator: SealedBackupCoordinator
-    private let cloud: FakeSealedBackupCloud
-    private let preferencesBox: PeriodBackupPreferencesBox
-
-    /// The storage preferences the coordinator reads — settable mid-test (iCloud sync turned back on).
-    var preferences: StoragePreferences {
-        get { preferencesBox.value }
-        set { preferencesBox.value = newValue }
-    }
-
-    /// The Private tab's key on this iPhone.
-    var key: SymmetricKey { host.sealedBackupContentKey ?? SymmetricKey(size: .bits256) }
-
-    /// Creates an iPhone with the period backup on, iCloud sync on and the upload owed.
-    ///
-    /// - Parameters:
-    ///   - cloud: The shared cloud.
-    ///   - writer: This install's writer tag.
-    ///   - resolved: Whether this install's period restore has already resolved.
-    ///   - database: A transport to interpose; the cloud's own by default.
-    ///   - keychainService: The identity's keychain (its escrow key); the cloud's by default — an
-    ///     account whose iCloud Keychain synced the escrow key.
-    ///   - preferences: The storage preferences the coordinator reads.
-    init(
-        cloud: FakeSealedBackupCloud,
-        writer: String,
-        resolved: Bool = false,
-        database: (any CloudKitRecordDatabase)? = nil,
-        keychainService: String? = nil,
-        preferences: StoragePreferences = PeriodBackupDevice.backupOn
-    ) {
-        self.cloud = cloud
-        let host = FakeSealedBackupHost()
-        host.sealedBackupContentKey = SymmetricKey(size: .bits256)
-        self.host = host
-        let controller = PrivatePersistenceController(inMemory: true)
-        self.controller = controller
-        let records = CycleRecordStore(controller: controller)
-        self.records = records
-        let generationDefaults = UserDefaults(suiteName: "fernlet.tests.periodGeneration.\(UUID().uuidString)") ?? .standard
-        self.generationDefaults = generationDefaults
-        let keychainService = keychainService ?? cloud.keychainService
-        let transport = database ?? cloud.database
-        let preferencesBox = PeriodBackupPreferencesBox(preferences)
-        self.preferencesBox = preferencesBox
-        coordinator = SealedBackupCoordinator(
-            host: host,
-            identityFactory: { IdentityService(keychainService: keychainService) },
-            serviceFactory: { identity in
-                SealedBackupService(
-                    cloudDataService: Self.cloudDataService(transport),
-                    identityService: identity,
-                    generationStore: SealedBackupGenerationStore(defaults: generationDefaults)
-                )
-            },
-            preferencesProvider: { preferencesBox.value },
-            periodRecordStore: records,
-            writerTagProvider: { writer }
-        )
-        if resolved { host.periodBackupLedger.markRestoreResolved() }
-    }
-
-    /// Seals `records` straight into this iPhone's store (under `key`, this iPhone's by default).
-    func seed(_ seeded: [CycleRecord], key: SymmetricKey? = nil) throws {
-        records.attachVisibilityGate { true }
-        _ = try records.upsertMerged(seeded, retiringNarrativeIDs: [], contentKey: key ?? self.key)
-    }
-
-    /// Writes a v1 period set (bare `[MenstrualNarrative]`) the way an earlier build did, with this
-    /// iPhone's generation store.
-    func writeV1Set(_ narratives: [MenstrualNarrative]) async throws {
-        let identity = IdentityService(keychainService: cloud.keychainService)
-        try identity.ensureProvisioned()
-        identity.provisionBackupEscrowKeyForSealing()
-        let service = SealedBackupService(
-            cloudDataService: Self.cloudDataService(cloud.database),
-            identityService: identity,
-            generationStore: SealedBackupGenerationStore(defaults: generationDefaults)
-        )
-        let chunk = try JSONEncoder().encode(narratives)
-        try await service.reconcileChunked(payloadType: .periodData, chunkCount: 1) { _ in chunk }
-    }
-
-    /// iCloud sync on, the period backup on, its upload owed.
-    nonisolated static let backupOn = StoragePreferences(
-        iCloudSyncEnabled: true, sealedBackupPeriodEnabled: true, sealedBackupPeriodReuploadDeferred: true
-    )
-
-    /// A fresh in-memory cycle-record funnel.
-    static func makeRecordStore() -> CycleRecordStore {
-        CycleRecordStore(controller: PrivatePersistenceController(inMemory: true))
-    }
-
-    /// A logged record on day `day` of a fixed calendar.
-    static func record(day: Int, note: String = "n") -> CycleRecord {
-        let base = Date(timeIntervalSinceReferenceDate: 790_000_000)
-        return CycleRecord(
-            event: UserLoggedCycleEvent(date: base.addingTimeInterval(Double(day) * 86_400), flowLevel: .light, note: note),
-            now: base
-        )
-    }
-
-    /// A cloud with the escrow key provisioned, as on an account whose iCloud Keychain synced it.
-    static func makeCloud() throws -> FakeSealedBackupCloud {
-        let cloud = FakeSealedBackupCloud(
-            keychainService: "com.fernlet.period-v2.\(UUID().uuidString)",
-            generationDefaults: UserDefaults(suiteName: "fernlet.tests.periodCloud.\(UUID().uuidString)") ?? .standard
-        )
-        let identity = IdentityService(keychainService: cloud.keychainService)
-        try identity.ensureProvisioned()
-        identity.provisionBackupEscrowKeyForSealing()
-        return cloud
-    }
-
-    /// The head of the period set in `cloud`, read the way the export's compare-and-swap reads it.
-    static func cloudHead(_ cloud: FakeSealedBackupCloud) async throws -> PeriodBackupHead? {
-        guard let head = try await reader(cloud).fetchHead(payloadType: .periodData) else { return nil }
-        return try PeriodBackupFormat.head(ofChunk: head.plaintext, generation: head.generation)
-    }
-
-    /// Every record id in the period set in `cloud`.
-    static func cloudRecordIDs(_ cloud: FakeSealedBackupCloud) async throws -> Set<UUID> {
-        let chunks = try await reader(cloud).restoreChunks(payloadType: .periodData) ?? []
-        return Set(try chunks.flatMap { try PeriodBackupFormat.records(fromChunk: $0) }.map(\.id))
-    }
-
-    /// A sealing service over `cloud` (its escrow key) with the rollback mark in `generationDefaults`.
-    static func service(_ cloud: FakeSealedBackupCloud, generationDefaults: UserDefaults) throws -> SealedBackupService {
-        let identity = IdentityService(keychainService: cloud.keychainService)
-        try identity.ensureProvisioned()
-        identity.provisionBackupEscrowKeyForSealing()
-        return SealedBackupService(
-            cloudDataService: cloudDataService(cloud.database),
-            identityService: identity,
-            generationStore: SealedBackupGenerationStore(defaults: generationDefaults)
-        )
-    }
-
-    /// A read-only service over `cloud` with its own fresh rollback mark.
-    private static func reader(_ cloud: FakeSealedBackupCloud) throws -> SealedBackupService {
-        let identity = IdentityService(keychainService: cloud.keychainService)
-        try identity.ensureProvisioned()
-        _ = identity.loadBackupEscrowKeyForOpen()
-        return SealedBackupService(
-            cloudDataService: cloudDataService(cloud.database),
-            identityService: identity,
-            generationStore: SealedBackupGenerationStore(
-                defaults: UserDefaults(suiteName: "fernlet.tests.periodReader.\(UUID().uuidString)") ?? .standard
-            )
-        )
-    }
-
-    private static func cloudDataService(_ database: any CloudKitRecordDatabase) -> CloudKitDataService {
-        CloudKitDataService(
-            accountProvider: AlwaysAvailableAccountProvider(),
-            database: database,
-            zoneID: CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName),
-            isCloudKitSyncEnabled: { false }
-        )
+        #expect(store.lastSeen(for: .periodData) == 0)
+        #expect(bookkeeping.acceptedHead(.periodData, installTag: PeriodBackupDevice.tag("phone")) == accepted)
     }
 }
 
 /// A chunk that fails to seal.
 struct SealFailure: Error {}
-
-/// Holds an export task so the transport's hook can cancel it mid-upload (the Private tab closing).
-@MainActor
-final class PeriodExportTaskBox {
-    /// The export.
-    var task: Task<Bool, Never>?
-}
-
-/// The storage preferences one ``PeriodBackupDevice``'s coordinator reads, boxed so a test can change
-/// them between calls.
-final class PeriodBackupPreferencesBox {
-    /// The preferences.
-    var value: StoragePreferences
-
-    /// Boxes `value`.
-    init(_ value: StoragePreferences) { self.value = value }
-}
-
-/// A transport whose stale-chunk prune fails once — its first record enumeration after a set's head
-/// was saved throws, as CloudKit does when the network drops between the head upload and the prune.
-final class PruneFailingCloudKitRecordDatabase: CloudKitRecordDatabase {
-    private let base: InMemoryCloudKitRecordDatabase
-    /// Whether the next prune fails; armed by every head save while ``failsPrunes`` is on.
-    private var failsNextEnumeration = false
-    /// Whether a head save arms the failure.
-    var failsPrunes = true
-
-    init(_ base: InMemoryCloudKitRecordDatabase) { self.base = base }
-
-    func recordZoneIDs() async throws -> [CKRecordZone.ID] { try await base.recordZoneIDs() }
-    func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID] {
-        if failsNextEnumeration {
-            failsNextEnumeration = false
-            throw CKError(.networkUnavailable)
-        }
-        return try await base.recordIDs(matching: recordType, in: zoneID)
-    }
-    func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] { try await base.records(for: recordIDs) }
-    func saveRecords(_ records: [CKRecord]) async throws {
-        try await base.saveRecords(records)
-        if failsPrunes, records.contains(where: { !$0.recordID.recordName.contains(".chunk.") }) {
-            failsNextEnumeration = true
-        }
-    }
-    func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
-}
-
-/// A transport that holds its first save until the test releases it — an upload still in flight.
-final class HoldingCloudKitRecordDatabase: CloudKitRecordDatabase {
-    private let base: InMemoryCloudKitRecordDatabase
-    private var holdsNextSave = true
-    private var heldSave: CheckedContinuation<Void, Never>?
-    /// Whether a save is waiting for ``releaseHeldSave()``.
-    var isHoldingSave: Bool { heldSave != nil }
-
-    init(_ base: InMemoryCloudKitRecordDatabase) { self.base = base }
-
-    func recordZoneIDs() async throws -> [CKRecordZone.ID] { try await base.recordZoneIDs() }
-    func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID] {
-        try await base.recordIDs(matching: recordType, in: zoneID)
-    }
-    func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] { try await base.records(for: recordIDs) }
-    func saveRecords(_ records: [CKRecord]) async throws {
-        if holdsNextSave {
-            holdsNextSave = false
-            await withCheckedContinuation { heldSave = $0 }
-        }
-        try await base.saveRecords(records)
-    }
-    func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
-
-    /// Lets the held save land.
-    func releaseHeldSave() {
-        heldSave?.resume()
-        heldSave = nil
-    }
-}
-
-/// A transport that runs `onFirstSave` (on the main actor) before its first save lands — a record
-/// logged while the export is uploading.
-final class InterruptingCloudKitRecordDatabase: CloudKitRecordDatabase {
-    private let base: InMemoryCloudKitRecordDatabase
-    /// Runs once, before the first save.
-    var onFirstSave: (@MainActor () -> Void)?
-
-    init(_ base: InMemoryCloudKitRecordDatabase) { self.base = base }
-
-    func recordZoneIDs() async throws -> [CKRecordZone.ID] { try await base.recordZoneIDs() }
-    func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID] {
-        try await base.recordIDs(matching: recordType, in: zoneID)
-    }
-    func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] { try await base.records(for: recordIDs) }
-    func saveRecords(_ records: [CKRecord]) async throws {
-        if let hook = onFirstSave {
-            onFirstSave = nil
-            hook()
-        }
-        try await base.saveRecords(records)
-    }
-    func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
-}

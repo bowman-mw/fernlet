@@ -141,6 +141,7 @@
 
 import Foundation
 import Testing
+import CloudKitSync
 @testable import FernletDomainModel
 import FernletFoundation
 import LocalPersistence
@@ -587,27 +588,36 @@ struct LocalizationBoundaryTests {
         #expect(CycleLegacyImportLedger.doneValue == "done")
     }
 
-    /// The period Sealed backup v2's at-rest tokens (period-data design 2026-09-30, §9.10, §10.7): the
-    /// chunk envelope's keys and version — a renamed key makes every set in iCloud unreadable to the
-    /// next build — the v1 writer token and the `"<writer>:<generation>"` spelling of the accepted
-    /// head, and the two defaults keys, whose respelling would reopen a resolved restore (resurrecting
-    /// deleted entries) or forget the set this install may replace.
+    /// The Sealed backup v2 at-rest tokens (design 2026-09-30, §5.1, §5.2, §10.2): the chunk
+    /// envelope's keys and version — a renamed key makes every set in iCloud unreadable to the next
+    /// build — the v1 writer token, the grammars of the accepted head
+    /// (`"<acceptor>:<writer>:<generation>:<salt8>"`) and the observed head
+    /// (`"<acceptor>:<writer>:<generation>"`), the period's three defaults keys (a respelling would
+    /// reopen a resolved restore, resurrecting deleted entries, or forget the set this install may
+    /// replace) and the set-scoped suffix record name.
     @MainActor
-    @Test func frozenPeriodBackupV2Tokens() throws {
-        let head = try PeriodBackupFormat.encodeChunk(index: 0, records: [], writer: "w", total: 0)
+    @Test func frozenSealedBackupV2Tokens() throws {
+        let tag = SealedBackupWriterTag.tag(forBinding: Data("w".utf8))
+        let head = try SealedBackupV2Format.encode(SealedBackupV2Envelope<CycleRecord>(writer: tag, set: tag, total: 0, records: []))
         let headObject = try #require(try JSONSerialization.jsonObject(with: head) as? [String: Any])
-        #expect(Set(headObject.keys) == ["v", "writer", "total", "records"])
+        #expect(Set(headObject.keys) == ["v", "writer", "set", "total", "records"])
         #expect(headObject["v"] as? Int == 2)
-        let tail = try PeriodBackupFormat.encodeChunk(index: 1, records: [], writer: "w", total: 0)
+        let tail = try SealedBackupV2Format.encode(SealedBackupV2Envelope<CycleRecord>(writer: tag, set: tag, total: nil, records: []))
         let tailObject = try #require(try JSONSerialization.jsonObject(with: tail) as? [String: Any])
-        #expect(Set(tailObject.keys) == ["v", "records"])
-        #expect(PeriodBackupHead.v1Writer == "v1")
-        // The accepted head of a set sealed to another backup key (review U5-backup-v2-L-U5-R1): a
-        // respelling would make the user's recorded "Replace" name a set that never matches again.
-        #expect(PeriodBackupHead.unreadableWriter == "unreadable")
-        #expect(PeriodBackupHead(writer: "abc", generation: 7).token == "abc:7")
-        #expect(PeriodBackupLedger.restoreResolvedKey == "fernlet.cycleRecord.periodRestoreResolved")
-        #expect(PeriodBackupLedger.acceptedHeadKey == "fernlet.sealedBackup.periodAcceptedHead")
+        #expect(Set(tailObject.keys) == ["v", "writer", "set", "records"])
+        #expect(SealedBackupHeadStamp.v1Writer == "v1")
+        #expect(SealedBackupBookkeeping.periodRestoreResolvedKey == "fernlet.cycleRecord.periodRestoreResolved")
+        #expect(SealedBackupBookkeeping.periodAcceptedHeadKey == "fernlet.sealedBackup.periodAcceptedHead")
+        #expect(SealedBackupBookkeeping.periodObservedHeadKey == "fernlet.sealedBackup.periodObservedHead")
+        let defaults = try #require(UserDefaults(suiteName: "fernlet.tests.v2Grammar.\(UUID().uuidString)"))
+        let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in false })
+        let stamp = SealedBackupHeadStamp(writer: "w2", generation: 7)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "0a0b"), .periodData, installTag: "me")
+        bookkeeping.recordObservedHead(stamp, .periodData, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.periodAcceptedHeadKey) == "me:w2:7:0a0b")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.periodObservedHeadKey) == "me:w2:7")
+        #expect(CloudKitDataService.parseSealedBackupSuffixName("sealed-backup.periodData.chunk.3.\(tag)", base: "sealed-backup.periodData")?.setTag == tag,
+                "the set-scoped suffix name: <base>.chunk.<i>.<set>")
     }
 
     /// Sealed journal + trainer-export tokens.

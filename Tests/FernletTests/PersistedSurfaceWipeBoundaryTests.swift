@@ -217,9 +217,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.recentActivityTypes": .cleared(token: "RecentActivityTypeMemory.clearAll"),
         "fernlet.recipeWebImageAttempts.v1": .cleared(token: "RecipeWebImageAttemptMemory.clearAll"),
         "fernlet.sealedBackup.generation.*": .cleared(token: "generationStore.reset"),
-        // The period backup's compare-and-swap record (period-data design 2026-09-30, §9.10 E2): the
-        // set it names is deleted by the same leg, and `reset()` removes it with the marks.
-        "fernlet.sealedBackup.periodAcceptedHead": .cleared(token: "generationStore.reset"),
+        // The period backup's observed foreign head (Sealed backup v2 design 2026-09-30, §4.3, §9):
+        // the set it names is deleted by the same leg.
+        "fernlet.sealedBackup.periodObservedHead": .cleared(token: "sealedBackupBookkeeping.clearObservedHeadsForWipe"),
         "fernlet.sealedPhoto.generation.*": .cleared(token: "generationStore.reset"),
         "fernlet.sealedPhoto.restoreRepairIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
         "fernlet.sealedPhoto.uploadedIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
@@ -312,6 +312,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "fernlet.cycleRecord.legacyImport.samples": .kept(
             reason: "The legacy cycle import's sample-half marker (§8.3). The wipe SETS it to done rather than clearing it: a pending sample half would re-import, at the next Private open, Fernlet's own Apple Health copies the user chose to keep while deleting their Fernlet data. Absent or 'done', no content."
+        ),
+        "fernlet.sealedBackup.periodAcceptedHead": .kept(
+            reason: "The period backup's accepted head (Sealed backup v2 design 2026-09-30, §4.3, §9, review R2-F11): two install tags, a counter and a salt prefix, no content. Kept so a set that survives a failed cloud delete is this install's own to the next export, which overwrites it and finishes the wipe, instead of being named another iPhone's and offered back."
         ),
         "fernlet.cycleRecord.periodRestoreResolved": .kept(
             reason: "The period backup's restore marker (period-data design 2026-09-30, §5.3): one bit, 'this install has finished pulling the period backup'. It must outlive the wipe, or a period chunk set that survived a failed cloud delete would merge itself back at the next Cycle settle — the resurrection the marker exists to stop."
@@ -472,6 +475,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "hasSealedBackup",
         // Records the deferred-reupload flag for one sealed payload type.
         "recordSealedBackupReuploadDeferred",
+        // Drops the in-memory Sealed backup v2 statuses (an observable dictionary; no persisted
+        // surface) — what they named is deleted by the same leg (design 2026-09-30 §9).
+        "recordSealedBackupV2StatusesCleared",
         // P7 item 3: re-runs the proximity run policy from the last scene facts — radios and the
         // routed access gate only; reads the lock state and duress flag, writes no persisted surface.
         // The wipe funnel calls it at leg 0 (the raise) and after the lower, so every radio stands

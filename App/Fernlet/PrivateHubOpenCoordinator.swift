@@ -331,9 +331,10 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     private let journalRepository: JournalNarrativeRepository
     private let worryRepository: WorryNarrativeRepository
     private let intimacyStore: IntimacyLogStore
-    /// The period backup's restore marker and compare-and-swap record, in the latches' suite. Its seed
-    /// is never read here: the check only asks whether the marker is SET, and clears it.
-    private let periodBackupLedger: PeriodBackupLedger
+    /// The Sealed backup v2 bookkeeping (restore markers, accepted heads, observed heads), in the
+    /// latches' suite. Its seed is never read here: the check only asks whether anything is RECORDED,
+    /// and clears it.
+    private let backupBookkeeping: SealedBackupBookkeeping
     /// The keychain service holding the journal and worry device keys.
     private let deviceKeyService: String
     /// Whether a Sealed backup will really be restored after a removal (the app's backup switches, the
@@ -349,8 +350,8 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     ///
     /// - Parameters:
     ///   - controller: The sealed store; `nil` is the shared on-device one.
-    ///   - latchDefaults: Suite holding the three divergence latches and the period backup's
-    ///     restore marker and compare-and-swap record.
+    ///   - latchDefaults: Suite holding the three divergence latches and the Sealed backup v2
+    ///     bookkeeping.
     ///   - intimacyStore: The app's intimacy funnel on the same store.
     ///   - deviceKeyService: The journal/worry device-key service.
     ///   - periodVisible: The derived period-tracking visibility (default: hidden, fail-closed).
@@ -370,7 +371,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         cycleRecords = CycleRecordStore(controller: controller)
         journalRepository = JournalNarrativeRepository(controller: controller, defaults: latchDefaults)
         worryRepository = WorryNarrativeRepository(controller: controller)
-        periodBackupLedger = PeriodBackupLedger(defaults: latchDefaults, legacyLatch: { false })
+        backupBookkeeping = SealedBackupBookkeeping(defaults: latchDefaults, legacyLatch: { _ in false })
         self.intimacyStore = intimacyStore
         self.deviceKeyService = deviceKeyService
         self.periodVisible = periodVisible
@@ -389,7 +390,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     func hasBackupBookkeeping() -> Bool {
         cycleRepository.hasEverStoredNarrative || journalRepository.hasEverStoredNarrative
             || intimacyStore.hasEverStoredLog
-            || periodBackupLedger.restoreResolvedIsSet || periodBackupLedger.acceptedHead != nil
+            || backupBookkeeping.hasAnyRecord
     }
     func removeCycleEntries() throws {
         try cycleRecords.deleteAll()
@@ -402,8 +403,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         cycleRepository.clearDivergenceLatch()
         journalRepository.clearDivergenceLatch()
         intimacyStore.clearDivergenceLatch()
-        periodBackupLedger.reopenRestore()
-        periodBackupLedger.clearAcceptedHead()
+        backupBookkeeping.clearForKeyLoss()
     }
     func sealedBackupRestoresAfterRemoval(journalKeepsOpenableRows: Bool) -> Bool {
         restoresAfterRemoval(journalKeepsOpenableRows)
