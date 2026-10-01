@@ -376,9 +376,19 @@ jobs:
         # a mass unit, "How many grams is one?", a dropped portion's grams and a saved estimate (four),
         # and the importer's typical-size line count (one) — the same nine suites, same reading, 119
         # tests, 0 failed, 0 skipped, no restart line.
+        # RE-MEASURED 119 → 161 at F9b (2026-09-30), which adds the four correction-memory suites
+        # (`FoodSearchCorrectionMemoryTests`, `FoodSearchCorrectionCatalogTests`,
+        # `FoodSearchCorrectionWipeTests`, `FoodSearchCorrectionResolverFirewallTests` — one file, all
+        # four named, as its VERIFY-BATCH note asks): a recipe pick's precedence under a correction, the
+        # cap that spends picks first and the rules for when a pick teaches; a pick leading the recipe
+        # surfaces and reaching no standard one; every recipe save remembering, the wipe and the forget
+        # clearing both live copies, and the closed list of writers; the resolver never seeing a pick.
+        # Like the corpus, none of it has a compiler half. The thirteen suites as written, read off
+        # their own result bundle on the F9b tree after a build-for-testing: 161 tests, 0 failed,
+        # 0 skipped, no restart line.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh food-search 119 \
+          Scripts/run-gated-suites.sh food-search 161 \
             IngredientSearchCorpusTests \
             CatalogDefaultUnitSweepTests \
             RecipeImportIngredientLineTests \
@@ -387,7 +397,11 @@ jobs:
             DishTemplateBindAuditTests \
             FoodIngredientIdentityTests \
             TypicalPortionTableTests \
-            RecipePortionPickerTests
+            RecipePortionPickerTests \
+            FoodSearchCorrectionMemoryTests \
+            FoodSearchCorrectionCatalogTests \
+            FoodSearchCorrectionWipeTests \
+            FoodSearchCorrectionResolverFirewallTests
 
       # The two exchange-wire lines below are the 2026-09-24 round's (the version-2 Messages card, and
       # recipes made in parts). Each pins a WIRE — bytes that an older build, or a card already sitting

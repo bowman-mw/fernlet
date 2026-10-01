@@ -166,6 +166,14 @@ import Testing
     /// `TypicalPortionTableTests` (every typical size at its cited SR Legacy row) and
     /// `RecipePortionPickerTests` (the recipe editor's per-food unit menu). Both pinned by name in
     /// ``wallLines`` too.
+    ///
+    /// RE-MEASURED at the ingredient-search round's F9b (2026-09-30): `food-search` 9 → 13, for the
+    /// four correction-memory suites one file declares (`FoodSearchCorrectionMemoryTests`,
+    /// `FoodSearchCorrectionCatalogTests`, `FoodSearchCorrectionWipeTests`,
+    /// `FoodSearchCorrectionResolverFirewallTests`) — where recipe picks are pinned: their precedence
+    /// under a correction, their reach (the recipe surfaces only), the wipe and the closed list of
+    /// writers. All four pinned by name in ``wallLines`` too, since `-only-testing:` would skip a
+    /// dropped one silently.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 8,
         "no-tracking": 1,
@@ -180,7 +188,7 @@ import Testing
         "codeowners": 1,
         "messages-envelope": 5,
         "recipe-wire": 1,
-        "food-search": 9,
+        "food-search": 13,
         "mesh-batteries": 154
     ]
 
@@ -211,7 +219,9 @@ import Testing
                               "MessagesRecipeCardParityTests"],
         "recipe-wire": ["RecipeMultipartWireTests"],
         "food-search": ["IngredientSearchCorpusTests", "CatalogDefaultUnitSweepTests", "FoodIngredientIdentityTests",
-                        "TypicalPortionTableTests", "RecipePortionPickerTests"]
+                        "TypicalPortionTableTests", "RecipePortionPickerTests", "FoodSearchCorrectionMemoryTests",
+                        "FoodSearchCorrectionCatalogTests", "FoodSearchCorrectionWipeTests",
+                        "FoodSearchCorrectionResolverFirewallTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and

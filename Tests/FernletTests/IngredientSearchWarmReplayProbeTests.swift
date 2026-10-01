@@ -7,8 +7,9 @@
 //
 // THE SIMULATED PERSON, all deterministic:
 //   1. HISTORY. They have logged, once, three days ago, the row quick-log's typed search (the standard
-//      order) puts first for every third corpus query — 54 foods, about what the 50-meal history
-//      window holds. Published through `FoodCatalog.setSearchHistory`, as `DiaryStore` does.
+//      order) puts first for every third corpus query — 54 queries, 49 distinct foods on the shipped
+//      catalog, about what the 50-meal history window holds. Published through
+//      `FoodCatalog.setSearchHistory`, as `DiaryStore` does.
 //   2. BEFORE. Each of the 160 corpus queries is replayed through the recipe editor's exact call
 //      (`results(for:context: .userTyped, ranking: .ingredientIdentity)`, six rows), history on.
 //   3. PICK. For each query the person taps the first row of those six that the committed ingredient
