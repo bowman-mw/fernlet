@@ -700,6 +700,37 @@ struct SealedBackupV2EngineTests {
         #expect(setScopedSavers == ["SealedBackupV2Engine+Commit.swift"])
     }
 
+    /// BV24 (§4.2 X7): the prepare's two size bounds. A snapshot over 100 000 records is refused as
+    /// `.tooLarge` before a single chunk is read or decrypted, and a set whose sealed chunks pass
+    /// 64 MB is refused as soon as they do — nothing saved to iCloud, the rollback mark unmoved.
+    @MainActor
+    @Test func anOversizeSetIsRefusedAsTooLargeBeforeAnythingIsSaved() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let phone = PeriodBackupDevice(cloud: cloud, writer: "oversize", resolved: true)
+        let service = try PeriodBackupDevice.reader(cloud)
+        let mark = service.lastSeenGeneration(for: .periodData)
+
+        let tooMany = OversizeBackupAdapter(idCount: SealedBackupV2Engine.maxRecords + 1, recordCharacters: 1)
+        let counted = try await phone.engine.prepare(tooMany, service: service, floor: 0, epoch: phone.engine.currentEpoch())
+        guard case .refused(.tooLarge) = counted else {
+            Issue.record("a snapshot over 100 000 records must be refused as too large, got \(counted)")
+            return
+        }
+        #expect(tooMany.chunkReads == 0, "refused on the snapshot's size, before any chunk is read")
+
+        let tooBig = OversizeBackupAdapter(idCount: 1, recordCharacters: SealedBackupV2Engine.maxPreparedBytes + 1)
+        let sized = try await phone.engine.prepare(tooBig, service: service, floor: 0, epoch: phone.engine.currentEpoch())
+        guard case .refused(.tooLarge) = sized else {
+            Issue.record("a set over 64 MB sealed must be refused as too large, got \(sized)")
+            return
+        }
+        #expect(tooBig.chunkReads == 1)
+
+        #expect(try await PeriodBackupDevice.cloudHead(cloud) == nil, "nothing was saved")
+        #expect(service.lastSeenGeneration(for: .periodData) == mark, "the rollback mark is unmoved")
+    }
+
     // MARK: - Fix round 1 (review of B1)
 
     /// B1-C-B1-1 / B1-D-B1-R1: a first install with no escrow key anywhere, whose cycle backup is the
@@ -1328,4 +1359,39 @@ final class SaveFailingCloudKitRecordDatabase: CloudKitRecordDatabase {
         try await base.saveRecords(records)
     }
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
+}
+
+/// BV24's stand-in payload store: a snapshot of `idCount` ids whose every chunk opens to ONE record of
+/// `recordCharacters` characters, so the prepare's two size bounds can be crossed without seeding a
+/// real store. Every seam is open and healthy; nothing is ever merged or removed.
+@MainActor
+final class OversizeBackupAdapter: SealedBackupV2Adapter {
+    let payload: SealedBackupPayloadType = .periodData
+    /// How many ids the snapshot names.
+    let idCount: Int
+    /// The size of the one record each chunk opens to.
+    let recordCharacters: Int
+    /// How many chunks the prepare read.
+    private(set) var chunkReads = 0
+
+    init(idCount: Int, recordCharacters: Int) {
+        self.idCount = idCount
+        self.recordCharacters = recordCharacters
+    }
+
+    var isSurfaceOpen: Bool { true }
+    var isStoreHealthy: Bool { true }
+    func withOpenSeam<T>(_ body: () throws -> T) throws -> T { try body() }
+    func snapshotIDs() throws -> [UUID] { (0..<idCount).map { _ in UUID() } }
+    func classifiedChunk(_ ids: [UUID], hubKey: SymmetricKey) throws -> SealedBackupChunkPage<String> {
+        chunkReads += 1
+        return SealedBackupChunkPage(records: [String(repeating: "a", count: recordCharacters)])
+    }
+    func recordID(_ record: String) -> UUID { UUID() }
+    func decodeV1Chunk(_ data: Data) throws -> [String] { [] }
+    func restoreMerging(_ records: [String], hubKey: SymmetricKey) throws -> SealedBackupMergeResult {
+        SealedBackupMergeResult()
+    }
+    func didRestore(_ result: SealedBackupMergeResult) -> Bool { true }
+    func removeStillDead(_ ids: [UUID], hubKey: SymmetricKey) throws -> Int { 0 }
 }

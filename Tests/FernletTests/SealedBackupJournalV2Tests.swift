@@ -790,6 +790,36 @@ struct SealedBackupJournalV2Tests {
         #expect(store.sealedBackupJournalReuploadDeferred)
     }
 
+    /// BV9 at the store, the two bulk writers (§4.4): the legacy migration of today's plaintext entries
+    /// and the one-time past-day scrub each mark the upload owed when they seal something, so an entry
+    /// either one sealed is in the next export; an activation that seals nothing marks nothing.
+    @MainActor
+    @Test func theLegacyMigrationAndThePastDayScrubMarkTheUploadOwedOnlyWhenTheySeal() throws {
+        let today = Date()
+        let (store, repository, _) = makeTestStoreWithRepositories(date: today)
+        let suiteName = "fernlet.tests.journalBulkMarks.\(UUID().uuidString)"
+        let scrubDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { scrubDefaults.removePersistentDomain(forName: suiteName) }
+        store.pastDayJournalScrubDefaults = scrubDefaults
+        let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-120 * 86_400))
+        var leakedDay = FernletDay(date: pastKey)
+        leakedDay.journals = [JournalEntry(text: "leaked before the past-day strip", tag: .good)]
+        #expect(repository.updateDay(leakedDay, for: pastKey, todayKey: store.todayKey))
+        store.day.journals = [JournalEntry(text: "plaintext an earlier build kept", tag: .quiet)]
+        store.recordSealedBackupReuploadDeferred(false, payloadType: .journalNarratives)
+        let before = store.sealedBackupMutationEpoch(.journalNarratives)
+
+        store.activateSealedJournals(contentKey: .journalTestKey)
+        #expect(store.sealedBackupMutationEpoch(.journalNarratives) == before + 2, "the migration and the scrub each mark")
+        #expect(store.sealedBackupJournalReuploadDeferred)
+        #expect(store.loadDayWithDecryptedJournals(for: pastKey).journals.first?.text == "leaked before the past-day strip")
+
+        store.recordSealedBackupReuploadDeferred(false, payloadType: .journalNarratives)
+        store.activateSealedJournals(contentKey: .journalTestKey)
+        #expect(store.sealedBackupMutationEpoch(.journalNarratives) == before + 2, "nothing sealed, nothing marked")
+        #expect(!store.sealedBackupJournalReuploadDeferred)
+    }
+
     /// §7.6 / BV18: during a duress session Privacy & Data shows no journal backup row of any kind —
     /// held, paused, waiting or catch-up — and the journal's seam is shut for the engine.
     @MainActor
