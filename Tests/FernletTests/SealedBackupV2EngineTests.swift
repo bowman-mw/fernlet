@@ -360,6 +360,32 @@ struct SealedBackupV2EngineTests {
         clone.host.sealedBackupBookkeeping.reopenRestore(.periodData)
         await clone.coordinator.restorePeriodBackupHere(originalHead)
         #expect(try clone.records.recordCount() == 2, "an explicit restore merges the original's set in")
+        #expect(!clone.host.sealedBackupBookkeeping.isRestoreResolved(.periodData),
+                "\"Restore it here\" leaves the restore marker alone (R1-BR-4)")
+        #expect(cloud.sealedRecordIdentities == originalSet, "and E1 still holds the export until the restore resolves")
+    }
+
+    /// §4.2 X8 (R1-BR-3): after the head save the commit re-fetches the head and requires this set's
+    /// generation and salt. A head that never landed (the transport answered success, the server kept
+    /// the old one) fails the verify: no bookkeeping, the upload stays owed, and the next pass decides.
+    @MainActor
+    @Test func aCommitWhoseHeadDidNotLandFailsItsVerify() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let dropping = HeadDroppingCloudKitRecordDatabase(cloud.database)
+        let phone = PeriodBackupDevice(cloud: cloud, writer: "phone", resolved: true, database: dropping)
+        try phone.seed([PeriodBackupDevice.record(day: 1)])
+
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        #expect(phone.host.v2Status[.periodData] == .failed, "the verify found no head of this set")
+        #expect(phone.acceptedStamp == nil)
+        #expect(SealedBackupGenerationStore(defaults: phone.generationDefaults).lastSeen(for: .periodData) == 0)
+        #expect(phone.host.reuploadDeferrals[.periodData] == true)
+
+        dropping.dropsHeads = false
+        #expect(await phone.coordinator.setSealedBackupEnabled(true, payloadType: .periodData))
+        #expect(phone.host.v2Status[.periodData] == .upToDate)
+        #expect(phone.acceptedStamp == PeriodBackupDevice.stamp("phone", 1), "a verified commit, recorded")
     }
 
     /// Design §9, R2-F3 / BV27: turning this iPhone's switch off while the slot is observed as another
@@ -775,6 +801,27 @@ final class CountingCloudKitRecordDatabase: CloudKitRecordDatabase {
         calls += 1
         try await base.deleteRecords(with: recordIDs)
     }
+}
+
+/// A transport that silently drops every HEAD save while ``dropsHeads`` is on — the save "succeeds"
+/// but the server keeps whatever head it had.
+final class HeadDroppingCloudKitRecordDatabase: CloudKitRecordDatabase {
+    private let base: InMemoryCloudKitRecordDatabase
+    /// Whether head saves are dropped.
+    var dropsHeads = true
+
+    init(_ base: InMemoryCloudKitRecordDatabase) { self.base = base }
+
+    func recordZoneIDs() async throws -> [CKRecordZone.ID] { try await base.recordZoneIDs() }
+    func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID] {
+        try await base.recordIDs(matching: recordType, in: zoneID)
+    }
+    func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] { try await base.records(for: recordIDs) }
+    func saveRecords(_ records: [CKRecord]) async throws {
+        let kept = dropsHeads ? records.filter { $0.recordID.recordName.contains(".chunk.") } : records
+        try await base.saveRecords(kept)
+    }
+    func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
 }
 
 /// A transport whose saves fail while ``failsSaves`` is on (CloudKit offline).
