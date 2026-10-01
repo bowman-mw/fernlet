@@ -540,6 +540,56 @@ struct SealedBackupV2EngineTests {
         #expect(try restorer.records.recordCount() == 0, "nothing from a set that does not verify")
     }
 
+    /// BV7 (§5.3), arm by arm: a two-chunk set whose suffix chunk disagrees with its head in exactly ONE
+    /// property — its envelope's writer, its envelope's set (it was fetched under the head's set name),
+    /// its salt, or its shape (a v1 bare array behind a v2 head) — or whose head names a total its
+    /// records do not reach fails closed and merges nothing; the same set untampered restores whole.
+    @MainActor
+    @Test(arguments: SetTamper.allCases)
+    func everySetCheckFailsClosedOnItsOwn(_ tamper: SetTamper) async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        try await Self.writeTwoChunkSet(cloud, tamper)
+        let restorer = PeriodBackupDevice(cloud: cloud, writer: "restorer")
+        let outcome = await restorer.coordinator.restorePeriodBackup()
+        if tamper == .none {
+            #expect(outcome == .restored(2), "the untampered set restores whole")
+            #expect(try restorer.records.recordCount() == 2)
+        } else {
+            #expect(outcome == .deferredTransient, "\(tamper): a set that does not verify fails closed")
+            #expect(try restorer.records.recordCount() == 0, "\(tamper): nothing from a set that does not verify")
+            #expect(!restorer.host.sealedBackupBookkeeping.isRestoreResolved(.periodData))
+        }
+    }
+
+    /// The one property ``everySetCheckFailsClosedOnItsOwn(_:)`` breaks.
+    enum SetTamper: CaseIterable, Sendable {
+        case none, writer, set, salt, v1Suffix, total
+    }
+
+    /// Writes a two-chunk v2 period set into `cloud` as another install — head and suffix under the
+    /// head's set name, at generation 5 — with `tamper` applied.
+    @MainActor
+    static func writeTwoChunkSet(_ cloud: FakeSealedBackupCloud, _ tamper: SetTamper) async throws {
+        let sealer = try PeriodBackupDevice.reader(cloud)
+        let writer = PeriodBackupDevice.tag("crafted")
+        let set = SealedBackupSetTag.mint()
+        let salt = SealedBackupService.mintKeySalt()
+        let head = SealedBackupV2Envelope(writer: writer, set: set, total: tamper == .total ? 3 : 2,
+                                          records: [PeriodBackupDevice.record(day: 1)])
+        let suffixPlaintext = tamper == .v1Suffix ? Data("[]".utf8) : try SealedBackupV2Format.encode(SealedBackupV2Envelope(
+            writer: tamper == .writer ? PeriodBackupDevice.tag("another") : writer,
+            set: tamper == .set ? SealedBackupSetTag.mint() : set,
+            total: nil, records: [PeriodBackupDevice.record(day: 2)]
+        ))
+        let suffix = try sealer.sealChunk(suffixPlaintext, payloadType: .periodData, chunkIndex: 1, chunkCount: 2, generation: 5,
+                                          keySalt: tamper == .salt ? SealedBackupService.mintKeySalt() : salt)
+        let headRecord = try sealer.sealChunk(try SealedBackupV2Format.encode(head), payloadType: .periodData, chunkIndex: 0,
+                                              chunkCount: 2, generation: 5, keySalt: salt)
+        try await sealer.save(suffix, setTag: set)
+        try await sealer.save(headRecord, setTag: set)
+    }
+
     /// §5.2's prune: after a commit, every unscoped (v1) suffix chunk and every chunk of another set
     /// BELOW the committed generation goes; a set at the SAME generation stays (its head may be landing
     /// on another iPhone), and so does the committed set.
