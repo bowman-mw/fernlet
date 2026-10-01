@@ -488,6 +488,12 @@ final class SealedBackupService {
         try await cloudDataService.saveSealedBackup(record, setTag: setTag)
     }
 
+    /// Whether every suffix chunk of the v2 set `setTag` is in iCloud — checked by record name, with no
+    /// record body or asset downloaded and nothing decrypted: the commit's verify (review B1-C-B1-4).
+    func isSuffixPresent(payloadType: SealedBackupPayloadType, chunkCount: Int, setTag: String) async throws -> Bool {
+        try await cloudDataService.sealedBackupSuffixIsPresent(payloadType: payloadType, chunkCount: chunkCount, setTag: setTag)
+    }
+
     /// Deletes the stale sets a committed set left behind (best-effort for the caller).
     ///
     /// - Returns: How many records were deleted.

@@ -3536,15 +3536,11 @@ final class FernletStore {
         guard !duressSessionActive, isPeriodTrackingVisible else { return .clear }
         // The user's choice is waiting for the next Private visit (§4.6): nothing to offer again.
         guard sealedBackupEngine.intents[.periodData] == nil else { return .clear }
-        switch sealedBackupV2Status[.periodData] {
-        case .heldByAnotherDevice(let stamp)?: return .heldByAnotherDevice(stamp)
-        case .headSealedWithOtherKey?, .headDamaged?: return .sealedWithAnotherKey
-        case .paused(let ids)?: return .unopenableEntries(ids.count)
-        case .some: return .clear
-        case nil:
-            let observed = sealedBackupBookkeeping.observedHead(.periodData, installTag: SealedBackupWriterTag.current())
-            return observed.map(PeriodBackupExportState.heldByAnotherDevice) ?? .clear
-        }
+        return PeriodBackupExportState.derive(
+            status: sealedBackupV2Status[.periodData],
+            rolledBackStamp: sealedBackupEngine.rolledBackStamps[.periodData],
+            observed: { sealedBackupBookkeeping.observedHead(.periodData, installTag: SealedBackupWriterTag.current()) }
+        )
     }
 
     /// Whether the period slot in iCloud was last observed as another iPhone's (the persisted
@@ -3629,7 +3625,8 @@ final class FernletStore {
     /// uploading the pre-reset ciphertext it sealed, with no bookkeeping — design 2026-09-30 §4.7);
     /// then the backup bookkeeping that spoke for the destroyed key is cleared (`clearBookkeeping` —
     /// the three divergence latches — and every v2 marker reopened, accepted head and observation
-    /// forgotten), and ambient restores are held for the device owner (Q14), so the cleared latches
+    /// forgotten, with every pending explicit choice, review B1-C-B1-3), and ambient restores are held
+    /// for the device owner (Q14), so the cleared latches
     /// cannot turn the next hub settle into an automatic restore. The re-uploads that would replace a
     /// pre-reset copy are held too — for the payload backups that are on right now, the only ones that
     /// can have a copy in iCloud (review N-1).
@@ -3646,11 +3643,21 @@ final class FernletStore {
         sealedBackupRestoreHold.hold(keepingCopiesFrom: preferences ?? sealedBackupPreferences)
         clearBookkeeping()
         sealedBackupBookkeeping.clearForKeyLoss()
+        sealedBackupKeyLossForgotPendingChoices()
         recordSealedBackupV2StatusesCleared()
         // The reset purged every sealed row; a pending legacy-import half would re-import Fernlet's
         // own Apple Health copies at the next Private open (§8.4, §9.21).
         cycleLegacyImportLedger.markBothHalvesDone()
         FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "appLockReset"])
+    }
+
+    /// The v2 bookkeeping was cleared because the key it spoke for is gone — the reset funnel, and the
+    /// "entries this iPhone can't open" check (`SealedPriorEntryStore.clearBackupBookkeeping`): every
+    /// pending explicit choice ("Restore it here", "Replace", "Start a new backup", "Remove them") is
+    /// dropped with it (review B1-C-B1-3). A "Replace" left pending across a reset would take the
+    /// owner's release's place, skip the restore it waits for, and stay stuck behind the hold.
+    func sealedBackupKeyLossForgotPendingChoices() {
+        sealedBackupCoordinator.engine.dropPendingChoices()
     }
 
     /// Drops every v2 status (the reset and the wipe: what they named is gone).

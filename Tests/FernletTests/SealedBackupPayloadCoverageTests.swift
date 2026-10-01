@@ -125,15 +125,16 @@ final class FakeSealedBackupHost: SealedBackupContext {
     func recordSealedBackupV2Status(_ status: SealedBackupV2Status?, payloadType: SealedBackupPayloadType) {
         v2Status[payloadType] = status
     }
-    /// The period backup's Privacy & Data state, derived as `FernletStore.periodBackupExportState`
-    /// derives it.
+    /// The engine whose period state this host reflects (the refused set a rolled-back restore names).
+    weak var periodEngine: SealedBackupV2Engine?
+    /// The period backup's Privacy & Data state, derived by the same mapping
+    /// `FernletStore.periodBackupExportState` uses.
     var periodExportState: PeriodBackupExportState {
-        switch v2Status[.periodData] {
-        case .heldByAnotherDevice(let stamp)?: return .heldByAnotherDevice(stamp)
-        case .headSealedWithOtherKey?, .headDamaged?: return .sealedWithAnotherKey
-        case .paused(let ids)?: return .unopenableEntries(ids.count)
-        default: return .clear
-        }
+        PeriodBackupExportState.derive(
+            status: v2Status[.periodData],
+            rolledBackStamp: periodEngine?.rolledBackStamps[.periodData],
+            observed: { nil }
+        )
     }
     func recordSealedBackupReuploadDeferred(_ deferred: Bool, payloadType: SealedBackupPayloadType) {
         reuploadDeferrals[payloadType] = deferred

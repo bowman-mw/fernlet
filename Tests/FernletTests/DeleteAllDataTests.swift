@@ -860,6 +860,24 @@ struct DeleteAllDataTests {
         #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(.periodData))
     }
 
+    /// Review B1-C-B1-3: the reset funnel drops every pending Sealed backup choice with the bookkeeping
+    /// it was made over. A "Replace" left pending would take the owner's release's place, skip the
+    /// restore the hold keeps, and sit behind that hold for the rest of the process.
+    @Test func theAppLockResetFunnelDropsEveryPendingBackupChoice() {
+        let store = makeStore("reset-pending-choices")
+        let defaults = UserDefaults(suiteName: "fernlet.tests.resetPendingChoices.\(UUID().uuidString)") ?? .standard
+        store.cycleLegacyImportLedger = CycleLegacyImportLedger(defaults: defaults)
+        store.sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: defaults)
+        store.sealedBackupBookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in true })
+        let stamp = SealedBackupHeadStamp(writer: SealedBackupWriterTag.tag(forBinding: Data("other".utf8)), generation: 3)
+        store.sealedBackupEngine.recordIntent(.replace(stamp), for: .periodData)
+        #expect(store.sealedBackupEngine.intents[.periodData] == .replace(stamp))
+
+        store.handleAppLockResetCompleted(preferences: StoragePreferences(), clearBookkeeping: {})
+
+        #expect(store.sealedBackupEngine.intents.isEmpty, "no choice made over the destroyed key survives the reset")
+    }
+
     /// Review U5-backup-v2-C-U5-5: an app-lock reset with every Sealed backup off keeps no pre-reset
     /// copy, so Privacy & Data — once its device-owner check passed — releases the hold instead of
     /// asking the owner to "Restore" a backup that does not exist (and the held bit would otherwise

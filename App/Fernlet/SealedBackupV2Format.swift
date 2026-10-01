@@ -212,4 +212,35 @@ enum PeriodBackupExportState: Equatable {
     /// This many cycle records can never open on this iPhone, so the backup is paused (nothing
     /// written).
     case unopenableEntries(Int)
+    /// The cycle backup in iCloud is numbered below one this iPhone has already seen, so the restore
+    /// refused it and every export waits (E1). "Restore it here" merges exactly that set anyway;
+    /// "Replace it with this iPhone's history" writes over it (design §4.6, review B1-D-B1-R1).
+    case olderThanSeen(SealedBackupHeadStamp)
+
+    /// The state for the engine's period `status` — the one mapping `FernletStore` and the tests
+    /// share. A restore waiting on a set this iPhone cannot open (`.deferredKeyNotSynced`,
+    /// `.notRecognized`) offers what a head sealed with another key offers — "Start a new backup"
+    /// behind its confirmation — so an install whose restore can never land is never left with no way
+    /// out (review B1-D-B1-R1); one refused as older names that set with both choices. With no status
+    /// this process (after a relaunch) the persisted observation of another iPhone's set is read.
+    ///
+    /// - Parameters:
+    ///   - status: The engine's period status, nil when none this process.
+    ///   - rolledBackStamp: The set the last restore refused as older than this iPhone's floor.
+    ///   - observed: The persisted observation of a foreign head (read only with no status).
+    static func derive(
+        status: SealedBackupV2Status?,
+        rolledBackStamp: SealedBackupHeadStamp?,
+        observed: () -> SealedBackupHeadStamp?
+    ) -> PeriodBackupExportState {
+        switch status {
+        case .heldByAnotherDevice(let stamp)?: return .heldByAnotherDevice(stamp)
+        case .headSealedWithOtherKey?, .headDamaged?: return .sealedWithAnotherKey
+        case .waitingForRestore(.deferredKeyNotSynced)?, .waitingForRestore(.notRecognized)?: return .sealedWithAnotherKey
+        case .waitingForRestore(.rolledBack)?: return rolledBackStamp.map(PeriodBackupExportState.olderThanSeen) ?? .clear
+        case .paused(let ids)?: return .unopenableEntries(ids.count)
+        case .some: return .clear
+        case nil: return observed().map(PeriodBackupExportState.heldByAnotherDevice) ?? .clear
+        }
+    }
 }

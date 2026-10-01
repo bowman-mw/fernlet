@@ -17,6 +17,11 @@ enum SealedBackupTrigger: Equatable {
     case ownerRelease
     /// The backup was just turned on with the Private tab open: an export of what is owed.
     case enable
+    /// E2 found a set under this install's own writer tag numbered above everything this install
+    /// recorded — an iPhone put back from an older device backup of itself — and reopened the
+    /// restore, which runs now so that set is merged before anything is exported over it (review
+    /// B1-C-B1-2).
+    case restoreReopened
     /// "Restore it here" of exactly `stamp` (`ignoringRollback`: "Restore anyway").
     case restoreHere(SealedBackupHeadStamp, ignoringRollback: Bool)
     /// "Replace it with this iPhone's …" of exactly `stamp`.
@@ -30,15 +35,16 @@ enum SealedBackupTrigger: Equatable {
     var isExplicit: Bool {
         switch self {
         case .restoreHere, .replace, .startNew, .remove: return true
-        case .hubSettle, .unhide, .retry, .ownerRelease, .enable: return false
+        case .hubSettle, .unhide, .retry, .ownerRelease, .enable, .restoreReopened: return false
         }
     }
 
     /// Whether this trigger skips the once-per-session and 15-minute spacing (§4.5): explicit intents,
-    /// the owner's release and turning the backup on are a person's act just now, not an unlock.
+    /// the owner's release and turning the backup on are a person's act just now, not an unlock; a
+    /// restore E2 just reopened must not wait for the next session (its export waits on it).
     var skipsSpacing: Bool {
         switch self {
-        case .ownerRelease, .enable: return true
+        case .ownerRelease, .enable, .restoreReopened: return true
         case .hubSettle, .unhide, .retry: return false
         case .restoreHere, .replace, .startNew, .remove: return true
         }
@@ -194,6 +200,10 @@ final class SealedBackupV2Engine {
     var lastRestoreOutcome: [SealedBackupPayloadType: SealedBackupRestoreOutcome] = [:]
     /// The ids the last pause named, per payload — "Remove them" removes only ids in here (R2-F12).
     var lastPausedIDs: [SealedBackupPayloadType: Set<UUID>] = [:]
+    /// The set the last restore refused as older than this iPhone's rollback floor, per payload — what
+    /// Privacy & Data's "Restore it here" and "Replace" name for `.waitingForRestore(.rolledBack)`
+    /// (design §4.6, review B1-D-B1-R1). Cleared when a restore lands.
+    var rolledBackStamps: [SealedBackupPayloadType: SealedBackupHeadStamp] = [:]
     /// Spacing: what ran (with network) this hub session, and when the last failure or probe was.
     var restoredThisSession: Set<SealedBackupPayloadType> = []
     var exportedThisSession: Set<SealedBackupPayloadType> = []
@@ -285,6 +295,17 @@ final class SealedBackupV2Engine {
         intents[payload] = nil
     }
 
+    /// The app-lock reset and the "can't open" check (review B1-C-B1-3): every pending explicit
+    /// choice, the ids a pause named and the set a restore refused are forgotten — they were made
+    /// over bookkeeping, a key and a hold that no longer exist. A "Replace" or "Start a new backup"
+    /// left pending would otherwise take the owner's release's place, skip the restore it is waiting
+    /// for and write the post-reset store over the pre-reset copy.
+    func dropPendingChoices() {
+        intents.removeAll()
+        lastPausedIDs.removeAll()
+        rolledBackStamps.removeAll()
+    }
+
     private func enqueue(
         _ payload: SealedBackupPayloadType,
         trigger: SealedBackupTrigger,
@@ -292,7 +313,12 @@ final class SealedBackupV2Engine {
         waiter: CheckedContinuation<SealedBackupV2PassReport, Never>?
     ) {
         if let index = queue.firstIndex(where: { $0.payload == payload }) {
-            if trigger.isExplicit || !queue[index].trigger.isExplicit { queue[index].trigger = trigger }
+            // A later explicit intent replaces an ambient request; an ambient request never takes the
+            // place of one that skips spacing (the owner's release, an enable, a reopened restore).
+            let queued = queue[index].trigger
+            if trigger.isExplicit || (!queued.isExplicit && (trigger.skipsSpacing || !queued.skipsSpacing)) {
+                queue[index].trigger = trigger
+            }
             queue[index].phases.formUnion(phases)
             if let waiter { queue[index].waiters.append(waiter) }
         } else {
@@ -478,6 +504,13 @@ final class SealedBackupV2Engine {
             report.stopped = restore.stopped
             guard restore.continueToExport else { return report }
             followThrough = restore.accepted
+            // The restore awaited: G again before the export's first network call (review B1-C-B1-5).
+            if phases.contains(.export), let failure = gateFailure(adapter, epoch: epoch) {
+                noteGateFailure(failure, adapter.payload)
+                report.gateFailure = failure
+                report.stopped = failure == .wiping || failure == .workStopped
+                return report
+            }
         } else if phases.contains(.restore), !phases.contains(.export) {
             report.restoreOutcome = .skippedStoreNotEmpty
         }
@@ -489,13 +522,16 @@ final class SealedBackupV2Engine {
         return report
     }
 
-    /// Whether the restore phase runs: this install's restore is unresolved, or "Restore it here".
+    /// Whether the restore phase runs: "Restore it here"; never for "Replace" or "Start a new backup"
+    /// (confirmed writes over the cloud copy, which waive E1); otherwise — "Remove them" included,
+    /// which does not waive E1 (review B1-C-B1-3) — while this install's restore is unresolved.
     private func restoreIsDue(_ payload: SealedBackupPayloadType, trigger: SealedBackupTrigger) -> Bool {
-        if case .restoreHere = trigger { return true }
-        if case .replace = trigger { return false }
-        if case .startNew = trigger { return false }
-        if case .remove = trigger { return false }
-        return !host.sealedBackupBookkeeping.isRestoreResolved(payload)
+        switch trigger {
+        case .restoreHere: return true
+        case .replace, .startNew: return false
+        case .remove, .hubSettle, .unhide, .retry, .ownerRelease, .enable, .restoreReopened:
+            return !host.sealedBackupBookkeeping.isRestoreResolved(payload)
+        }
     }
 
     // MARK: - Shared steps

@@ -470,7 +470,8 @@ struct ContentView: View {
                     restoreHeldForOwner: appStore.sealedBackupRestoreAwaitsOwner,
                     journalStoreEmptiesOnRemoval: !journalKeepsOpenableRows && !appStore.journalTextAwaitsSealing
                 )
-            }
+            },
+            bookkeepingCleared: { appStore.sealedBackupKeyLossForgotPendingChoices() }
         )
         Self.wirePrivateHubCustody(store: store, lockService: lockService, priorEntries: priorEntries)
         privateHubOpener = PrivateHubOpenCoordinator(custody: lockService, entries: priorEntries)

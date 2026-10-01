@@ -40,7 +40,8 @@ extension SealedBackupV2Engine {
         guard base < Int64.max / 2 else { return .refused(.failed) }
         var set = SealedBackupV2PreparedSet(
             chunks: [:], setTag: SealedBackupSetTag.mint(), keySalt: SealedBackupService.mintKeySalt(),
-            generation: base + 1, writer: writer, mutationsBefore: host.sealedBackupMutationEpoch(payload)
+            generation: base + 1, writer: writer, mutationsBefore: host.sealedBackupMutationEpoch(payload),
+            headFloor: floor
         )
         var tally = PrepareTally()
         let count = max(1, (ids.count + Self.chunkSize - 1) / Self.chunkSize)
@@ -65,11 +66,15 @@ extension SealedBackupV2Engine {
         return tally.verdict(payload, engine: self) ?? .ready(set)
     }
 
-    /// X8, the commit (§4.2, §5.2) inside a background-task assertion: the suffix chunks under their
-    /// set-scoped names, then the head — the one commit point — with the commit gate (no wipe, no
-    /// reset, the backup and iCloud sync still on, not turned off, not cancelled) checked before EVERY
-    /// save; then the verify (the head re-fetched must carry this set's generation and salt) and a
-    /// best-effort prune. Nothing is decrypted here, so a closed hub or a hide does not stop it.
+    /// X8, the commit (§4.2, §5.2) inside a background-task assertion: the in-flight generation
+    /// recorded (so a head that lands while the client sees a failure stays this install's own, review
+    /// B1-C-B1-2), the suffix chunks under their set-scoped names, then the head — the one commit point
+    /// — with the commit gate (no wipe, no reset, the backup and iCloud sync still on, not turned off,
+    /// not cancelled) checked before EVERY save; then the verify — the head re-fetched must carry this
+    /// set's generation and salt AND every suffix chunk of this set must still be in iCloud (by name,
+    /// nothing downloaded; another iPhone's prune can have taken them, review B1-C-B1-4) — and a
+    /// best-effort prune of the sets at or below the head E2 read. Nothing is decrypted here, so a
+    /// closed hub or a hide does not stop it.
     func commit<A: SealedBackupV2Adapter>(
         _ set: SealedBackupV2PreparedSet,
         adapter: A,
@@ -88,6 +93,8 @@ extension SealedBackupV2Engine {
             if let value = token.value { tasks.end(value) }
             token.value = nil
         }
+        if let stop = workStop(payload, epoch: epoch) { throw SealedBackupV2Stop.gate(stop) }
+        host.sealedBackupBookkeeping.recordInFlight(set.generation, payload, installTag: set.writer)
         for index in set.chunks.keys.sorted(by: >) {  // R2: the prepared chunks; the head (0) last.
             if let stop = workStop(payload, epoch: epoch) { throw SealedBackupV2Stop.gate(stop) }
             guard let record = set.chunks[index] else { continue }
@@ -98,8 +105,14 @@ extension SealedBackupV2Engine {
             FernletAuditLog.log("sealedBackup.v2.commitVerifyFailed", context: ["payload": payload.rawValue])
             return finish(.failed, payload)
         }
+        guard try await service.isSuffixPresent(payloadType: payload, chunkCount: set.chunks.count, setTag: set.setTag) else {
+            FernletAuditLog.log("sealedBackup.v2.commitSuffixMissing", context: ["payload": payload.rawValue])
+            return finish(.failed, payload)
+        }
         do {
-            let pruned = try await service.pruneSets(payloadType: payload, keepingSetTag: set.setTag, belowGeneration: set.generation)
+            // Only sets at or below the head E2 read: a concurrent export that read the same head is
+            // numbered above it, so its suffix chunks survive until its head lands (B1-D-B1-R5).
+            let pruned = try await service.pruneSets(payloadType: payload, keepingSetTag: set.setTag, belowGeneration: set.headFloor + 1)
             FernletAuditLog.log("sealedBackup.v2.pruned", context: ["payload": payload.rawValue, "records": String(pruned)])
         } catch {
             // Best-effort: orphans of older sets stay until the next commit's prune; nothing a head

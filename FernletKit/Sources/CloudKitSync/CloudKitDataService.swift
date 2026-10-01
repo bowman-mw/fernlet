@@ -171,6 +171,17 @@ public protocol CloudKitRecordDatabase {
     func saveRecords(_ records: [CKRecord]) async throws
     /// Deletes the given records (batched to respect CloudKit's per-operation limits).
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws
+    /// The IDs among `recordIDs` that exist — an existence check that downloads no field or asset —
+    /// silently omitting those that do not. The default reads the records whole.
+    func existingRecordIDs(_ recordIDs: [CKRecord.ID]) async throws -> [CKRecord.ID]
+}
+
+extension CloudKitRecordDatabase {
+    /// The default existence check: the records fetched whole (a test double's). The production
+    /// conformer fetches no keys at all.
+    public func existingRecordIDs(_ recordIDs: [CKRecord.ID]) async throws -> [CKRecord.ID] {
+        try await records(for: recordIDs).map(\.recordID)
+    }
 }
 
 /// Direct-CloudKit service for the operations `NSPersistentCloudKitContainer` can't do: detecting
@@ -674,18 +685,44 @@ public final class CloudKitDataService {
     /// leaves one older set behind; anything past this waits for the next commit's prune.
     public static let maxPrunedSealedBackupSets = 32
 
+    /// Whether every suffix record of the v2 set `setTag` — `chunk.1.<set>` … `chunk.<n-1>.<set>` — is
+    /// in iCloud, read by record ID with no field or asset downloaded (a fetch by ID, not a query, so a
+    /// chunk saved a moment ago is never missed by a lagging index). The engine's post-commit verify
+    /// (design 2026-09-30 §4.2 X8, review B1-C-B1-4): a head that landed over chunks another iPhone's
+    /// prune deleted fails it instead of being recorded as committed.
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload.
+    ///   - chunkCount: The set's chunk count (≥ 1; `1` has no suffix and answers true with no fetch).
+    ///   - setTag: The set's tag (32 lowercase hex).
+    public func sealedBackupSuffixIsPresent(
+        payloadType: SealedBackupPayloadType,
+        chunkCount: Int,
+        setTag: String
+    ) async throws -> Bool {
+        guard chunkCount >= 1, chunkCount <= SealedBackupRecord.maxFetchedChunkCount,
+              Self.isValidSealedBackupSetTag(setTag) else { throw SealedBackupError.malformedRecord }
+        guard chunkCount > 1 else { return true }
+        try await ensureSignedIn()
+        let ids = (1..<chunkCount).map { sealedBackupRecordID(payloadType: payloadType, chunkIndex: $0, setTag: setTag) }
+        let present = Set(try await database.existingRecordIDs(ids).map(\.recordName))
+        return ids.allSatisfy { present.contains($0.recordName) }
+    }
+
     /// Deletes the suffix chunks a committed v2 set left stale (design 2026-09-30 §5.2): every
     /// UNSCOPED (v1) suffix chunk of the payload, and every scoped chunk of another set whose
-    /// generation is BELOW `belowGeneration`. A set at the same or a higher generation is kept — it may
-    /// belong to a head another iPhone is still landing, and its chunks must survive this round. The
-    /// committed set's own chunks (`keepingSetTag`) and the head are never touched. Best-effort for
-    /// the caller: a failure leaves orphans that the next commit's prune removes; nothing a head
-    /// points at is ever deleted.
+    /// generation is BELOW `belowGeneration`. A set at or above that bound is kept — it may belong to a
+    /// head another iPhone is still landing, and its chunks must survive this round — and so is the set
+    /// the head in iCloud names right now (its generation and key salt, read off the head's metadata
+    /// before anything is deleted; review B1-C-B1-4), whatever its number. The committed set's own
+    /// chunks (`keepingSetTag`) and the head are never touched. Best-effort for the caller: a failure
+    /// leaves orphans that a later commit's prune removes.
     ///
     /// - Parameters:
     ///   - payloadType: The payload.
     ///   - keepingSetTag: The committed set's tag (32 lowercase hex).
-    ///   - belowGeneration: The committed set's generation.
+    ///   - belowGeneration: The exclusive bound: the engine passes one above the generation of the head
+    ///     its E2 read, so only sets that head (or an older one) replaced are deleted (B1-D-B1-R5).
     /// - Returns: How many records were deleted.
     public func pruneSealedBackupSets(
         payloadType: SealedBackupPayloadType,
@@ -706,15 +743,29 @@ public final class CloudKitDataService {
                 unscoped.append(id)
             }
         }
+        let current = bySet.isEmpty ? nil : try await currentSealedBackupHead(payloadType: payloadType)
         var doomed = unscoped
         for (_, ids) in bySet.sorted(by: { $0.key < $1.key }).prefix(Self.maxPrunedSealedBackupSets) {
             guard let probe = ids.first, let record = try await database.records(for: [probe]).first,
                   let generation = record["generation"] as? Int64, generation < belowGeneration else { continue }
+            let isCurrentHeadsSet = current.map {
+                $0["generation"] as? Int64 == generation && $0["keySalt"] as? Data == record["keySalt"] as? Data
+            } ?? false
+            guard !isCurrentHeadsSet else { continue }
             doomed.append(contentsOf: ids)
         }
         guard !doomed.isEmpty else { return 0 }
         try await database.deleteRecords(with: doomed)
         return doomed.count
+    }
+
+    /// The payload's head record as CloudKit holds it right now (undecoded), or nil when there is none.
+    private func currentSealedBackupHead(payloadType: SealedBackupPayloadType) async throws -> CKRecord? {
+        do {
+            return try await database.records(for: [sealedBackupRecordID(payloadType: payloadType)]).first
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil
+        }
     }
 
     /// Whether `tag` is a v2 set tag: exactly 32 lowercase hexadecimal characters (16 random bytes).
@@ -1243,9 +1294,20 @@ private final class SystemCloudKitRecordDatabase: CloudKitRecordDatabase {
     }
 
     func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] {
+        try await fetchRecords(recordIDs, desiredKeys: nil)
+    }
+
+    func existingRecordIDs(_ recordIDs: [CKRecord.ID]) async throws -> [CKRecord.ID] {
+        // No keys: CloudKit answers each record's metadata only — no field, no asset download.
+        try await fetchRecords(recordIDs, desiredKeys: []).map(\.recordID)
+    }
+
+    /// One fetch-records operation; `desiredKeys` nil fetches every field.
+    private func fetchRecords(_ recordIDs: [CKRecord.ID], desiredKeys: [CKRecord.FieldKey]?) async throws -> [CKRecord] {
         guard !recordIDs.isEmpty else { return [] }
         return try await withCheckedThrowingContinuation { continuation in
             let operation = CKFetchRecordsOperation(recordIDs: recordIDs)
+            operation.desiredKeys = desiredKeys
             var records: [CKRecord] = []
             operation.perRecordResultBlock = { _, result in
                 if case .success(let record) = result {

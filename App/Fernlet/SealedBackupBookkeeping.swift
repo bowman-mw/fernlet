@@ -24,19 +24,21 @@ struct SealedBackupAcceptedHead: Equatable, Sendable {
     }
 
     /// Whether `record`'s metadata (generation and salt prefix) is this accepted head's — the
-    /// "unchanged" row of §5.5, decided without opening anything.
+    /// "unchanged" row of §5.5, decided without opening anything. A set with no salt (a format-v1
+    /// record from before per-set salts) never matches: its generation alone cannot tell two sets
+    /// apart, so another iPhone's set at the same number would read as accepted (review B1-D-B1-R4).
     func matchesMetadata(of record: SealedBackupRecord) -> Bool {
-        record.generation == stamp.generation && Self.saltPrefix(of: record.keySalt) == saltPrefix
+        !saltPrefix.isEmpty && record.generation == stamp.generation && Self.saltPrefix(of: record.keySalt) == saltPrefix
     }
 }
 
 /// The Sealed backup v2 per-payload, per-install bookkeeping (design 2026-09-30, §4.3): the restore
-/// marker, the accepted head and the observed foreign head, for every payload on v2. One type for all
-/// of them; standard defaults, injected so tests get an isolated suite.
+/// marker, the accepted head, the observed foreign head and the in-flight generation, for every payload
+/// on v2. One type for all of them; standard defaults, injected so tests get an isolated suite.
 ///
-/// | Payload | Resolved marker (`Bool`) | Accepted head (`String`) | Observed head (`String`) |
-/// | --- | --- | --- | --- |
-/// | periodData | `fernlet.cycleRecord.periodRestoreResolved` | `fernlet.sealedBackup.periodAcceptedHead` | `fernlet.sealedBackup.periodObservedHead` |
+/// | Payload | Resolved marker (`Bool`) | Accepted head (`String`) | Observed head (`String`) | In-flight generation (`String`) |
+/// | --- | --- | --- | --- | --- |
+/// | periodData | `fernlet.cycleRecord.periodRestoreResolved` | `fernlet.sealedBackup.periodAcceptedHead` | `fernlet.sealedBackup.periodObservedHead` | `fernlet.sealedBackup.periodInFlight` |
 ///
 /// Journal and intimacy join in their own units (B3, B2), with their own keys and wipe rows; until
 /// then their arms answer "nothing recorded" and write nothing, and their backups keep the v1 model.
@@ -56,6 +58,18 @@ struct SealedBackupAcceptedHead: Equatable, Sendable {
 ///   found, so Privacy & Data can name it after a relaunch (R2-F13b) and turning the backup off can
 ///   keep another iPhone's slot (R2-F3). Install-bound like the accepted head; cleared when the head
 ///   becomes own or accepted, and by "Delete everything".
+/// - **In-flight generation** `"<acceptor>:<generation>"`: the highest generation this install's
+///   commits ever set out to save, recorded BEFORE each commit's first save (review B1-C-B1-2 /
+///   B1-D-B1-R2). E2 counts a head under this install's own writer tag (or a v1 head under its own
+///   signing key) as its own only up to the highest of the rollback floor, the accepted head and this
+///   value: a head numbered above all three was written by this install AFTER the state it now holds
+///   — an iPhone put back from an older device backup of itself (the writer tag and the signing key
+///   are ThisDeviceOnly, so they come back with it) — and is merged before anything is exported over
+///   it. It is not the rollback floor: a commit that never landed raises nothing a restore checks
+///   (R1-BR-4). Install-bound and only ever raised. Nothing clears it but an uninstall: it states
+///   only what this install wrote, which no wipe, reset or turn-off makes untrue — and a set that
+///   survives a "Delete everything" or turn-off delete must stay this install's own to overwrite,
+///   never be merged back (R2-F11).
 ///
 /// Every accessor is an exhaustive `switch` whose arms write their own key constant — never a key
 /// returned and written elsewhere — so the persisted-surface wall resolves every key (R2-F16e). No
@@ -69,6 +83,8 @@ struct SealedBackupBookkeeping {
     static let periodAcceptedHeadKey = "fernlet.sealedBackup.periodAcceptedHead"
     /// The period observed head's FROZEN key.
     static let periodObservedHeadKey = "fernlet.sealedBackup.periodObservedHead"
+    /// The period in-flight generation's FROZEN key.
+    static let periodInFlightKey = "fernlet.sealedBackup.periodInFlight"
 
     /// The payloads whose backup runs on the v2 engine in this build.
     static let v2Payloads: [SealedBackupPayloadType] = [.periodData]
@@ -233,10 +249,41 @@ struct SealedBackupBookkeeping {
         }
     }
 
+    // MARK: - In-flight generation
+
+    /// The generation this install's last commit was about to save for `payload`, or nil — also nil
+    /// when another install recorded it, when it does not parse, or when `installTag` is nil.
+    func inFlightGeneration(_ payload: SealedBackupPayloadType, installTag: String?) -> Int64? {
+        guard let installTag, let raw = inFlightToken(payload) else { return nil }
+        let parts = raw.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2, parts[0] == installTag, let generation = Int64(parts[1]) else { return nil }
+        return generation
+    }
+
+    /// Records that this install's commit is about to save a set numbered `generation` (before its
+    /// first save) — never lowering what this install already recorded.
+    func recordInFlight(_ generation: Int64, _ payload: SealedBackupPayloadType, installTag: String) {
+        let highest = max(generation, inFlightGeneration(payload, installTag: installTag) ?? 0)
+        let token = "\(installTag):\(highest)"
+        switch payload {
+        case .periodData: defaults.set(token, forKey: Self.periodInFlightKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return
+        }
+    }
+
+    /// The raw in-flight value for `payload`.
+    private func inFlightToken(_ payload: SealedBackupPayloadType) -> String? {
+        switch payload {
+        case .periodData: return defaults.string(forKey: Self.periodInFlightKey)
+        case .journalNarratives, .intimacyLogs, .sensitiveNotes: return nil
+        }
+    }
+
     // MARK: - Exits
 
     /// The app-lock reset funnel and the "can't open" check (§9): the marker reopens, the accepted and
-    /// observed heads go — they spoke for a key or an install state that no longer exists.
+    /// observed heads go — they spoke for a key or an install state that no longer exists. The
+    /// in-flight generation stays: what this install wrote is still true.
     func clearForKeyLoss() {
         for payload in Self.v2Payloads {
             reopenRestore(payload)

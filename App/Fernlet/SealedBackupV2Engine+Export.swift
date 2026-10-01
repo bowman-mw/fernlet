@@ -22,6 +22,11 @@ enum SealedBackupV2HeadVerdict {
     case upToDate
     /// The export must not write; this is why.
     case stop(SealedBackupV2Status)
+    /// The head is this install's own (its writer tag, or a v1 set under its signing key) but numbered
+    /// above everything this install recorded — the rollback floor, the accepted head, the in-flight
+    /// generation: written after the state this iPhone now holds (put back from an older device backup
+    /// of itself). Never written over; the restore reopens and merges it first (review B1-C-B1-2).
+    case ownButNewer
 }
 
 /// One prepared set, every chunk sealed in memory before the first save (§4.2 X7).
@@ -38,6 +43,11 @@ struct SealedBackupV2PreparedSet {
     let writer: String
     /// The host's mutation epoch for the payload when the prepare began.
     let mutationsBefore: Int
+    /// The generation of the head E2 read (0 with none) — the prune's bound: only sets at or below it
+    /// are deleted, never everything below this set's generation, so the suffix chunks of a concurrent
+    /// export that read the same head (and is numbered above it) survive until its head lands
+    /// (review B1-C-B1-4 / B1-D-B1-R5).
+    let headFloor: Int64
 }
 
 extension SealedBackupV2Engine {
@@ -71,6 +81,12 @@ extension SealedBackupV2Engine {
             noteGateFailure(failure, payload)
             return SealedBackupV2ExportResult(gateFailure: failure, stopped: failure == .wiping || failure == .workStopped)
         } catch {
+            // A CloudKit call a quiesce cancelled, or a failure once a wipe, a reset, a turn-off or
+            // sync off stopped the work, is a stop: no `.failed`, no backoff (review B1-C-B1-5).
+            if let stop = workStop(payload, epoch: epoch) {
+                noteGateFailure(stop, payload)
+                return SealedBackupV2ExportResult(gateFailure: stop, stopped: stop == .wiping || stop == .workStopped)
+            }
             FernletAuditLog.log("sealedBackup.v2.exportFailed", context: ["payload": payload.rawValue])
             lastExportFailure[payload] = now()
             return finish(.failed, payload)
@@ -96,6 +112,7 @@ extension SealedBackupV2Engine {
         switch verdict {
         case .upToDate: return finish(.upToDate, payload)
         case .stop(let reason): return finish(reason, payload)
+        case .ownButNewer: return reopenRestoreForNewerOwnSet(payload)
         case .pass(let headFloor, let headExists):
             guard isDirty(payload) || explicit || headExists else { return finish(.upToDate, payload) }
             floor = headFloor
@@ -114,6 +131,21 @@ extension SealedBackupV2Engine {
             return finish(.failed, payload)
         }
         return try await commit(set, adapter: adapter, service: opening.service, trigger: trigger, epoch: epoch)
+    }
+
+    /// E2 found this install's own set numbered above everything it recorded (an iPhone put back from
+    /// an older device backup of itself, review B1-C-B1-2): writing over it would replace the entries
+    /// made since that backup with the older history. The restore is reopened — so E1 holds every
+    /// export — and runs at once (``SealedBackupTrigger/restoreReopened``), merging that set; its
+    /// follow-through export then publishes the union. A pending "Start a new backup" or "Remove them"
+    /// is consumed: it would otherwise take the reopened restore's place (neither runs a restore) and
+    /// meet this set again, pass after pass.
+    private func reopenRestoreForNewerOwnSet(_ payload: SealedBackupPayloadType) -> SealedBackupV2ExportResult {
+        consumeIntent(payload)
+        host.sealedBackupBookkeeping.reopenRestore(payload)
+        FernletAuditLog.log("sealedBackup.v2.ownSetNewerRestoreReopened", context: ["payload": payload.rawValue])
+        request([payload], trigger: .restoreReopened)
+        return finish(.waitingForRestore(nil), payload)
     }
 
     /// Whether an explicit intent that ended in `status` is done with: carried out, or answered by a
@@ -193,31 +225,53 @@ extension SealedBackupV2Engine {
             host.sealedBackupBookkeeping.clearObservedHead(payload)
             return isDirty(payload) || explicit ? .pass(floor: head.generation, headExists: true) : .upToDate
         }
-        return classifyHead(head, adapter: adapter, service: service, trigger: trigger, installTag: installTag, accepted: accepted)
+        let ownFloor = max(
+            service.lastSeenGeneration(for: payload), accepted?.stamp.generation ?? 0,
+            host.sealedBackupBookkeeping.inFlightGeneration(payload, installTag: installTag) ?? 0
+        )
+        let context = HeadContext(installTag: installTag, accepted: accepted, ownFloor: ownFloor, trigger: trigger)
+        return classifyHead(head, adapter: adapter, service: service, context: context)
     }
 
-    /// The §5.5 table for a head whose metadata is not this install's accepted one: opened inside
-    /// the adapter's seam; unopenable heads classified by why.
+    /// What E2 classifies a head against: this install's tag, its accepted head, the highest
+    /// generation it recorded as its own (the rollback floor, the accepted head, the in-flight
+    /// generation) and the pass's trigger.
+    private struct HeadContext {
+        let installTag: String
+        let accepted: SealedBackupAcceptedHead?
+        let ownFloor: Int64
+        let trigger: SealedBackupTrigger
+    }
+
+    /// The §5.5 table for a head whose metadata is not this install's accepted one (or any head under
+    /// "Replace" / "Start a new backup"): opened inside the adapter's seam; unopenable heads classified
+    /// by why. It passes for: exactly the set the user chose to replace; this install's accepted set
+    /// (generation AND salt prefix — a writer and number alone never prove it is the same set, review
+    /// B1-D-B1-R4); and this install's own set (its writer tag, or a v1 set under its signing key) no
+    /// newer than anything it recorded. An own set numbered above that is ``SealedBackupV2HeadVerdict/ownButNewer``
+    /// (B1-C-B1-2). Anything else is held — "Start a new backup" included, which writes only over a
+    /// set this iPhone cannot open (§5.5, review B1-D-B1-R3).
     private func classifyHead<A: SealedBackupV2Adapter>(
         _ head: SealedBackupRecord,
         adapter: A,
         service: SealedBackupService,
-        trigger: SealedBackupTrigger,
-        installTag: String,
-        accepted: SealedBackupAcceptedHead?
+        context: HeadContext
     ) -> SealedBackupV2HeadVerdict {
         let payload = adapter.payload
         let opened: SealedBackupV2OpenedHead
         do {
             opened = try adapter.withOpenSeam { try openHead(head, service: service) }
         } catch {
-            return unopenableVerdict(error, head: head, service: service, trigger: trigger)
+            return unopenableVerdict(error, head: head, service: service, context: context)
         }
-        let own = (opened.header != nil && opened.stamp.writer == installTag)
-            || (opened.header == nil && !head.signingPublicKey.isEmpty && head.signingPublicKey == service.localSigningPublicKey)
-        let explicitlyReplaced = trigger == .startNew || trigger == .replace(opened.stamp)
-        guard own || accepted?.stamp == opened.stamp || explicitlyReplaced else {
-            host.sealedBackupBookkeeping.recordObservedHead(opened.stamp, payload, installTag: installTag)
+        let own = (opened.header != nil && opened.stamp.writer == context.installTag)
+            || (opened.header == nil && Self.isOwnSigning(head, service: service))
+        let passes = context.trigger == .replace(opened.stamp)
+            || context.accepted?.matchesMetadata(of: head) == true
+            || (own && head.generation <= context.ownFloor)
+        guard passes else {
+            if own { return .ownButNewer }
+            host.sealedBackupBookkeeping.recordObservedHead(opened.stamp, payload, installTag: context.installTag)
             FernletAuditLog.log("sealedBackup.v2.heldByAnotherDevice", context: ["payload": payload.rawValue])
             return .stop(.heldByAnotherDevice(opened.stamp))
         }
@@ -225,14 +279,21 @@ extension SealedBackupV2Engine {
         return .pass(floor: head.generation, headExists: true)
     }
 
+    /// Whether `head`'s AAD-bound signing key is this install's (device-only, never in a device backup).
+    private static func isOwnSigning(_ head: SealedBackupRecord, service: SealedBackupService) -> Bool {
+        !head.signingPublicKey.isEmpty && head.signingPublicKey == service.localSigningPublicKey
+    }
+
     /// The §5.5 rows for a head that does not open (or whose envelope this build cannot read).
     private func unopenableVerdict(
         _ error: Error,
         head: SealedBackupRecord,
         service: SealedBackupService,
-        trigger: SealedBackupTrigger
+        context: HeadContext
     ) -> SealedBackupV2HeadVerdict {
-        let ownSigning = !head.signingPublicKey.isEmpty && head.signingPublicKey == service.localSigningPublicKey
+        // Its own set, sealed under an escrow key since replaced — only up to what this install
+        // recorded; a newer one cannot be merged here, so it is named like any other (B1-C-B1-2).
+        let ownSigning = Self.isOwnSigning(head, service: service) && head.generation <= context.ownFloor
         let reason: SealedBackupV2Status
         switch error {
         case SealedBackupV2FormatError.unsupportedVersion, SealedBackupV2FormatError.malformedEnvelope, is DecodingError:
@@ -251,7 +312,7 @@ extension SealedBackupV2Engine {
             reason = .failed
         }
         // "Start a new backup" writes over every unopenable head (never over a newer-format one).
-        if trigger == .startNew, reason != .needsNewerFernlet, reason != .failed {
+        if context.trigger == .startNew, reason != .needsNewerFernlet, reason != .failed {
             return .pass(floor: head.generation, headExists: true)
         }
         return .stop(reason)

@@ -592,9 +592,10 @@ struct LocalizationBoundaryTests {
     /// envelope's keys and version — a renamed key makes every set in iCloud unreadable to the next
     /// build — the v1 writer token, the grammars of the accepted head
     /// (`"<acceptor>:<writer>:<generation>:<salt8>"`) and the observed head
-    /// (`"<acceptor>:<writer>:<generation>"`), the period's three defaults keys (a respelling would
-    /// reopen a resolved restore, resurrecting deleted entries, or forget the set this install may
-    /// replace) and the set-scoped suffix record name.
+    /// (`"<acceptor>:<writer>:<generation>"`) and the in-flight generation (`"<acceptor>:<generation>"`),
+    /// the period's four defaults keys (a respelling would reopen a resolved restore, resurrecting
+    /// deleted entries, forget the set this install may replace, or forget what this install wrote)
+    /// and the set-scoped suffix record name.
     @MainActor
     @Test func frozenSealedBackupV2Tokens() throws {
         let tag = SealedBackupWriterTag.tag(forBinding: Data("w".utf8))
@@ -609,6 +610,7 @@ struct LocalizationBoundaryTests {
         #expect(SealedBackupBookkeeping.periodRestoreResolvedKey == "fernlet.cycleRecord.periodRestoreResolved")
         #expect(SealedBackupBookkeeping.periodAcceptedHeadKey == "fernlet.sealedBackup.periodAcceptedHead")
         #expect(SealedBackupBookkeeping.periodObservedHeadKey == "fernlet.sealedBackup.periodObservedHead")
+        #expect(SealedBackupBookkeeping.periodInFlightKey == "fernlet.sealedBackup.periodInFlight")
         let defaults = try #require(UserDefaults(suiteName: "fernlet.tests.v2Grammar.\(UUID().uuidString)"))
         let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in false })
         let stamp = SealedBackupHeadStamp(writer: "w2", generation: 7)
@@ -616,6 +618,9 @@ struct LocalizationBoundaryTests {
         bookkeeping.recordObservedHead(stamp, .periodData, installTag: "me")
         #expect(defaults.string(forKey: SealedBackupBookkeeping.periodAcceptedHeadKey) == "me:w2:7:0a0b")
         #expect(defaults.string(forKey: SealedBackupBookkeeping.periodObservedHeadKey) == "me:w2:7")
+        bookkeeping.recordInFlight(7, .periodData, installTag: "me")
+        bookkeeping.recordInFlight(5, .periodData, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.periodInFlightKey) == "me:7", "<acceptor>:<generation>, only ever raised")
         #expect(CloudKitDataService.parseSealedBackupSuffixName("sealed-backup.periodData.chunk.3.\(tag)", base: "sealed-backup.periodData")?.setTag == tag,
                 "the set-scoped suffix name: <base>.chunk.<i>.<set>")
     }

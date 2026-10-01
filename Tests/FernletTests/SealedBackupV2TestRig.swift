@@ -111,6 +111,7 @@ final class PeriodBackupDevice {
             backgroundTasks: tasks
         )
         if resolved { host.sealedBackupBookkeeping.markRestoreResolved(.periodData) }
+        host.periodEngine = coordinator.engine
     }
 
     /// Seals `records` straight into this iPhone's store (under `key`, this iPhone's by default),
@@ -189,12 +190,22 @@ final class PeriodBackupDevice {
     static func phoneKeychain(sharing cloud: FakeSealedBackupCloud) -> String {
         let service = "\(cloud.keychainService).phone.\(UUID().uuidString)"
         cloud.phoneKeychainServices.append(service)
+        copyEscrowKey(from: cloud, into: service)
+        return service
+    }
+
+    /// Copies the cloud's escrow key into `service` — iCloud Keychain delivering it to an iPhone.
+    static func copyEscrowKey(from cloud: FakeSealedBackupCloud, into service: String) {
         for item in KeychainItem.loadAll(service: cloud.keychainService) where item.account.hasPrefix("backupEscrowPrivateKey") {
             let status = KeychainItem.store(item.data, account: item.account, service: service,
                                             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
             #expect(status == errSecSuccess, "the escrow key could not be copied to the iPhone's keychain")
         }
-        return service
+    }
+
+    /// How many backup-escrow keys `service` holds.
+    static func escrowKeyCount(_ service: String) -> Int {
+        KeychainItem.loadAll(service: service).filter { $0.account.hasPrefix("backupEscrowPrivateKey") }.count
     }
 
     /// The head of the period set in `cloud`, read the way E2 reads it.
@@ -380,6 +391,10 @@ final class SuspendingFetchCloudKitRecordDatabase: CloudKitRecordDatabase {
     var isHoldingFetch: Bool { heldFetch != nil }
     /// Saves that landed after the hold was set.
     private(set) var savedNames: [String] = []
+    /// Whether a fetch made by a cancelled task throws, as CloudKit's own calls do — off by default.
+    var throwsWhenCancelled = false
+    /// Record fetches made, the held one included.
+    private(set) var fetchCount = 0
 
     init(_ base: InMemoryCloudKitRecordDatabase) { self.base = base }
 
@@ -388,10 +403,12 @@ final class SuspendingFetchCloudKitRecordDatabase: CloudKitRecordDatabase {
         try await base.recordIDs(matching: recordType, in: zoneID)
     }
     func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] {
+        fetchCount += 1
         if holdsNextFetch {
             holdsNextFetch = false
             await withCheckedContinuation { heldFetch = $0 }
         }
+        if throwsWhenCancelled { try Task.checkCancellation() }
         return try await base.records(for: recordIDs)
     }
     func saveRecords(_ records: [CKRecord]) async throws {
@@ -405,6 +422,60 @@ final class SuspendingFetchCloudKitRecordDatabase: CloudKitRecordDatabase {
         heldFetch?.resume()
         heldFetch = nil
     }
+}
+
+/// A transport that holds the next HEAD save (a record not named `.chunk.`) while ``holdsNextHeadSave``
+/// is on — an export whose suffix chunks are up and whose head is still landing.
+final class HeadHoldingCloudKitRecordDatabase: CloudKitRecordDatabase {
+    private let base: InMemoryCloudKitRecordDatabase
+    private var heldSave: CheckedContinuation<Void, Never>?
+    /// Whether the next head save is held.
+    var holdsNextHeadSave = false
+    /// Whether a head save is waiting for ``releaseHeldHeadSave()``.
+    var isHoldingHeadSave: Bool { heldSave != nil }
+
+    init(_ base: InMemoryCloudKitRecordDatabase) { self.base = base }
+
+    func recordZoneIDs() async throws -> [CKRecordZone.ID] { try await base.recordZoneIDs() }
+    func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID] {
+        try await base.recordIDs(matching: recordType, in: zoneID)
+    }
+    func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] { try await base.records(for: recordIDs) }
+    func saveRecords(_ records: [CKRecord]) async throws {
+        if holdsNextHeadSave, records.contains(where: { !$0.recordID.recordName.contains(".chunk.") }) {
+            holdsNextHeadSave = false
+            await withCheckedContinuation { heldSave = $0 }
+        }
+        try await base.saveRecords(records)
+    }
+    func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
+
+    /// Lets the held head save land.
+    func releaseHeldHeadSave() {
+        heldSave?.resume()
+        heldSave = nil
+    }
+}
+
+/// A transport that silently drops every SUFFIX chunk save while ``dropsSuffixes`` is on — the save
+/// "succeeds" but the chunk is not there when the commit verifies (another iPhone's prune took it).
+final class SuffixDroppingCloudKitRecordDatabase: CloudKitRecordDatabase {
+    private let base: InMemoryCloudKitRecordDatabase
+    /// Whether suffix saves are dropped.
+    var dropsSuffixes = true
+
+    init(_ base: InMemoryCloudKitRecordDatabase) { self.base = base }
+
+    func recordZoneIDs() async throws -> [CKRecordZone.ID] { try await base.recordZoneIDs() }
+    func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID] {
+        try await base.recordIDs(matching: recordType, in: zoneID)
+    }
+    func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] { try await base.records(for: recordIDs) }
+    func saveRecords(_ records: [CKRecord]) async throws {
+        let kept = dropsSuffixes ? records.filter { !$0.recordID.recordName.contains(".chunk.") } : records
+        try await base.saveRecords(kept)
+    }
+    func deleteRecords(with recordIDs: [CKRecord.ID]) async throws { try await base.deleteRecords(with: recordIDs) }
 }
 
 /// Waits (bounded) until `condition` holds, yielding to let other tasks run.

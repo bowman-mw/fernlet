@@ -54,7 +54,8 @@ protocol PriorPrivateEntryStore: AnyObject {
     /// Keyless delete of these Worry Box rows.
     func removeWorryEntries(ids: [UUID]) throws
     /// Clears that bookkeeping — the three divergence latches, the period restore marker (reopened)
-    /// and the period compare-and-swap record — because it spoke for a key that no longer exists.
+    /// and the period compare-and-swap record — because it spoke for a key that no longer exists; the
+    /// app then drops every pending Sealed backup choice made over it (review B1-C-B1-3).
     func clearBackupBookkeeping()
     /// Whether a Sealed backup would really be restored once the unopenable rows are gone — the card
     /// says so only then (review C-U2-R3).
@@ -345,6 +346,9 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     private let periodVisible: () -> Bool
     /// The derived intimacy-tracking visibility; fail-closed (hidden) unless the app wires it.
     private let intimacyVisible: () -> Bool
+    /// Told when the backup bookkeeping was cleared, so the app drops every pending Sealed backup
+    /// choice made over it (review B1-C-B1-3); a no-op unless the app wires it.
+    private let bookkeepingCleared: @MainActor () -> Void
 
     /// Creates the store.
     ///
@@ -358,6 +362,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
     ///   - intimacyVisible: The derived intimacy-tracking visibility (default: hidden, fail-closed).
     ///   - restoresAfterRemoval: Whether a Sealed backup comes back after a removal, given whether
     ///     openable journal rows stay behind.
+    ///   - bookkeepingCleared: Told after ``clearBackupBookkeeping()`` (default: nothing).
     init(
         controller: PrivatePersistenceController? = nil,
         latchDefaults: UserDefaults = .standard,
@@ -365,7 +370,8 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         deviceKeyService: String = KeychainItem.journalService,
         periodVisible: @escaping () -> Bool = { false },
         intimacyVisible: @escaping () -> Bool = { false },
-        restoresAfterRemoval: @escaping (_ journalKeepsOpenableRows: Bool) -> Bool
+        restoresAfterRemoval: @escaping (_ journalKeepsOpenableRows: Bool) -> Bool,
+        bookkeepingCleared: (@MainActor () -> Void)? = nil
     ) {
         cycleRepository = MenstrualNarrativeRepository(controller: controller, defaults: latchDefaults)
         cycleRecords = CycleRecordStore(controller: controller)
@@ -377,6 +383,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         self.periodVisible = periodVisible
         self.intimacyVisible = intimacyVisible
         self.restoresAfterRemoval = restoresAfterRemoval
+        self.bookkeepingCleared = bookkeepingCleared ?? {}
     }
 
     func cycleEntryCount() throws -> Int { try cycleRepository.narrativeCount() + cycleRecords.recordCount() }
@@ -404,6 +411,7 @@ final class SealedPriorEntryStore: PriorPrivateEntryStore {
         journalRepository.clearDivergenceLatch()
         intimacyStore.clearDivergenceLatch()
         backupBookkeeping.clearForKeyLoss()
+        bookkeepingCleared()
     }
     func sealedBackupRestoresAfterRemoval(journalKeepsOpenableRows: Bool) -> Bool {
         restoresAfterRemoval(journalKeepsOpenableRows)

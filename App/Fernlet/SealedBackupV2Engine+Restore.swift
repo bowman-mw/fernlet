@@ -50,24 +50,33 @@ extension SealedBackupV2Engine {
         guard trigger.skipsSpacing || !restoreIsSpaced(payload) else {
             return SealedBackupV2RestoreResult(outcome: lastRestoreOutcome[payload])
         }
-        // R3: the escrow key, never minted.
+        // R3: the escrow key, never minted. Its absence is decided AFTER the head fetch (review
+        // B1-C-B1-1): with no head there is nothing to wait for — the restore resolves and the export's
+        // mint rule (§5.6) may mint the first key; only a head that exists waits for the synced key.
         guard let opening = openingService() else { return recordRestore(.deferredTransient, payload, trigger: trigger) }
-        guard opening.escrowReady else { return recordRestore(.deferredKeyNotSynced, payload, trigger: trigger) }
         restoredThisSession.insert(payload)
         FernletAuditLog.log("sealedBackup.restoreAttempt", context: ["payload": payload.rawValue])
         do {
-            return try await fetchAndMerge(adapter, service: opening.service, trigger: trigger, epoch: epoch)
+            return try await fetchAndMerge(
+                adapter, service: opening.service, escrowReady: opening.escrowReady, trigger: trigger, epoch: epoch
+            )
         } catch let stop as SealedBackupV2Stop {
             return stopResult(stop, payload)
         } catch {
+            // A CloudKit call a quiesce cancelled (CancellationError / CKError.operationCancelled), or
+            // any failure once G no longer holds, is a stop: nothing recorded, no backoff (B1-C-B1-5).
+            if let failure = gateFailure(adapter, epoch: epoch) { return stopResult(.gate(failure), payload) }
             return recordRestore(Self.classifyRestoreFailure(error, payload: payload), payload, trigger: trigger)
         }
     }
 
-    /// R4–R10: fetch, open, verify and merge; throws ``SealedBackupV2Stop`` at a gate.
+    /// R4–R10: fetch, open, verify and merge; throws ``SealedBackupV2Stop`` at a gate. Without an
+    /// escrow key only the head's existence is read (no decrypt): none resolves the restore (R5); one
+    /// waits for the synced key (`.deferredKeyNotSynced`).
     private func fetchAndMerge<A: SealedBackupV2Adapter>(
         _ adapter: A,
         service: SealedBackupService,
+        escrowReady: Bool,
         trigger: SealedBackupTrigger,
         epoch: PassEpoch
     ) async throws -> SealedBackupV2RestoreResult {
@@ -76,11 +85,12 @@ extension SealedBackupV2Engine {
         try ensureGate(adapter, epoch: epoch)
         guard !host.sealedBackupRestoreAwaitsOwner else { throw SealedBackupV2Stop.gate(.heldForOwner) }
         guard let headRecord = fetched else { return noHead(payload, trigger: trigger) }
+        guard escrowReady else { return recordRestore(.deferredKeyNotSynced, payload, trigger: trigger) }
         let head = try adapter.withOpenSeam { try openHead(headRecord, service: service) }
         if case .restoreHere(let chosen, _) = trigger, chosen != head.stamp {
             return heldAgain(payload, stamp: head.stamp)
         }
-        try checkRollback(head.stamp, payload: payload, service: service, trigger: trigger)
+        try checkRollback(head, payload: payload, service: service, trigger: trigger)
         let suffix = try await service.fetchSuffixRecords(
             payloadType: payload, chunkCount: headRecord.chunkCount, setTag: head.header?.set
         )
@@ -118,17 +128,23 @@ extension SealedBackupV2Engine {
     }
 
     /// R8's rollback check (§5.4): a set below this install's floor is refused as `.rolledBack`,
-    /// except exactly the stamp of a "Restore it here" / "Restore anyway" that ignores it.
+    /// except exactly the stamp of a "Restore it here" / "Restore anyway" that ignores it, and the set
+    /// this install has ACCEPTED (its stamp and salt prefix — once "Restore anyway" merged a set below
+    /// the floor, the ambient restore that resolves the marker merges it again rather than refusing it
+    /// forever; review B1-D-B1-R1). A refused set is remembered so Privacy & Data can offer both choices.
     private func checkRollback(
-        _ stamp: SealedBackupHeadStamp,
+        _ head: SealedBackupV2OpenedHead,
         payload: SealedBackupPayloadType,
         service: SealedBackupService,
         trigger: SealedBackupTrigger
     ) throws {
         let floor = service.lastSeenGeneration(for: payload)
-        guard stamp.generation < floor else { return }
-        if case .restoreHere(let chosen, true) = trigger, chosen == stamp { return }
-        throw SealedBackupError.staleGeneration(found: stamp.generation, lastSeen: floor)
+        guard head.stamp.generation < floor else { return }
+        if case .restoreHere(let chosen, true) = trigger, chosen == head.stamp { return }
+        let accepted = host.sealedBackupBookkeeping.acceptedHead(payload, installTag: writerTag())
+        if accepted?.matchesMetadata(of: head.record) == true { return }
+        rolledBackStamps[payload] = head.stamp
+        throw SealedBackupError.staleGeneration(found: head.stamp.generation, lastSeen: floor)
     }
 
     /// R10: bookkeeping, only while the epoch is unchanged — the accepted head, the rollback floor,
@@ -177,6 +193,7 @@ extension SealedBackupV2Engine {
         if landed {
             host.recordSealedBackupPreResetCopySettled(payload)
             lastRestoreFailure[payload] = nil
+            rolledBackStamps[payload] = nil
         } else {
             lastRestoreFailure[payload] = now()
         }

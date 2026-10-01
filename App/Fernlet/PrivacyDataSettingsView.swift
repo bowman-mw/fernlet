@@ -1288,7 +1288,8 @@ struct PrivacyDataSettingsView: View {
     }
 
     /// The period backup's export states (period-data design 2026-09-30, §10.6): another iPhone's set
-    /// in iCloud, with the two explicit choices; or entries that cannot open here, which pause it.
+    /// in iCloud, or one older than this iPhone has seen, with the two explicit choices; a set no key
+    /// here opens, with the explicit replace; or entries that cannot open here, which pause it.
     @ViewBuilder
     private var periodBackupStateLines: some View {
         switch store?.periodBackupExportState ?? .clear {
@@ -1297,18 +1298,21 @@ struct PrivacyDataSettingsView: View {
         case .heldByAnotherDevice(let head):
             VStack(alignment: .leading, spacing: 10) {
                 periodHeldLine(head)
-                periodChoiceButton("Restore it here", identifier: "privacy.sealedBackup.periodRestoreHere") {
-                    periodRestoreHereHead = head
-                    isConfirmingPeriodRestoreHere = true
-                }
-                periodChoiceButton("Replace it with this iPhone's history", identifier: "privacy.sealedBackup.periodReplace") {
-                    confirmPeriodBackupReplace(head)
-                }
+                periodRestoreOrReplaceButtons(head)
+            }
+        case .olderThanSeen(let head):
+            // Review B1-D-B1-R1 (design §4.6): the restore refused the set as older than one this
+            // iPhone has seen — the restore-status line above says so — and every export waits on it.
+            // "Restore it here" merges exactly that set anyway; "Replace" writes over it.
+            VStack(alignment: .leading, spacing: 10) {
+                periodRestoreOrReplaceButtons(head)
             }
         case .sealedWithAnotherKey:
             // Review U5-backup-v2-L-U5-R1: no key this iPhone holds opens it (after an escrow adopt,
             // a set sealed under the key the adopt replaced), so the only choice here is to replace it
-            // — the engine's explicit "Start a new backup" (design 2026-09-30 §4.6, §5.6).
+            // — the engine's explicit "Start a new backup" (design 2026-09-30 §4.6, §5.6). Also shown
+            // while this install's restore waits on a set it cannot open (its key not synced, or the
+            // set damaged), which every export waits on too (review B1-D-B1-R1).
             VStack(alignment: .leading, spacing: 10) {
                 Text("Your cycle backup in iCloud was saved with a backup key this iPhone doesn't have, so it can't be restored here. Backing up this iPhone would replace it.")
                     .font(.fernlet(.bodySmall))
@@ -1325,6 +1329,19 @@ struct PrivacyDataSettingsView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
                 .accessibilityIdentifier("privacy.sealedBackup.periodUnopenable")
+        }
+    }
+
+    /// "Restore it here" (behind its confirmation) and "Replace it with this iPhone's history" (behind
+    /// its destructive confirmation) for exactly the set `head` the card names.
+    @ViewBuilder
+    private func periodRestoreOrReplaceButtons(_ head: SealedBackupHeadStamp) -> some View {
+        periodChoiceButton("Restore it here", identifier: "privacy.sealedBackup.periodRestoreHere") {
+            periodRestoreHereHead = head
+            isConfirmingPeriodRestoreHere = true
+        }
+        periodChoiceButton("Replace it with this iPhone's history", identifier: "privacy.sealedBackup.periodReplace") {
+            confirmPeriodBackupReplace(head)
         }
     }
 
