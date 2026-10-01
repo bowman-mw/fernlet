@@ -1437,6 +1437,22 @@ public extension View {
     func fernletTabBarBottomClearance() -> some View {
         modifier(FernletTabBarBottomClearanceModifier())
     }
+
+    /// Lifts a page PUSHED inside a tab's stack clear of the floating tab bar, pinned bottom bar
+    /// and all.
+    ///
+    /// Apply to the whole page (an editor whose `SheetSaveBar` sits under its `ScrollView`), not to
+    /// its scroll content — ``fernletTabBarBottomClearance()`` only ends a scroll range, and a bar
+    /// pinned below the scroll view still rests at the physical bottom, under the tab bar, where a
+    /// tap on Save selects the tab instead (the recipe editor, 2026-10-01). This adds the bar's
+    /// reservation to the page's bottom safe area, anchored the way the tab container anchors the
+    /// bar itself. Measured on iOS 26.5 in a page pushed inside Food: the save bar rests 22pt above
+    /// the tab bar, and with the keyboard up the bar rides on top of the keyboard with the
+    /// reservation — and the save bar — above it. Zero, and so a no-op, wherever no tab bar is
+    /// showing: a page pushed inside a root-presented sheet, and the camera session.
+    func fernletTabBarSafeAreaClearance() -> some View {
+        modifier(FernletTabBarSafeAreaClearanceModifier())
+    }
 }
 
 /// Keeps the scroll-content reservation for the floating tab bar stable while the bar animates.
@@ -1471,7 +1487,8 @@ private struct FernletTabBarClearanceKey: EnvironmentKey {
 
 public extension EnvironmentValues {
     /// The floating tab bar's stable height plus breathing room, set by the tab container and
-    /// consumed by ``SwiftUI/View/fernletTabBarBottomClearance()`` on each page's scroll content.
+    /// consumed by ``SwiftUI/View/fernletTabBarBottomClearance()`` on each page's scroll content
+    /// and by ``SwiftUI/View/fernletTabBarSafeAreaClearance()`` on a pushed page with a pinned bar.
     var fernletTabBarClearance: CGFloat {
         get { self[FernletTabBarClearanceKey.self] }
         set { self[FernletTabBarClearanceKey.self] = newValue }
@@ -1487,6 +1504,27 @@ public struct FernletTabBarBottomClearanceModifier: ViewModifier {
 
     public func body(content: Content) -> some View {
         content.padding(.bottom, clearance)
+    }
+}
+
+/// Implements ``SwiftUI/View/fernletTabBarSafeAreaClearance()`` — see there.
+///
+/// The reservation is an empty bottom `safeAreaInset` that ignores the keyboard, mirroring how the
+/// tab container anchors the bar itself. One keyboard case has been measured: on a pushed Food page
+/// the bar rode on top of the keyboard (its own comment says it stays behind it) and the reservation
+/// rode with it.
+public struct FernletTabBarSafeAreaClearanceModifier: ViewModifier {
+    @Environment(\.fernletTabBarClearance) private var clearance
+
+    public init() {}
+
+    public func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: clearance)
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+                .accessibilityHidden(true)
+        }
     }
 }
 

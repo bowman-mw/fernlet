@@ -811,7 +811,8 @@ struct ContentView: View {
         mainTabContent
             // The bar's stable reserved height + 8pt breathing room, zeroed while the camera session
             // hides the bar. Consumed by fernletTabBarBottomClearance() on each page's scroll
-            // content — the fix for the last card resting behind the floating bar at max scroll.
+            // content — the fix for the last card resting behind the floating bar at max scroll —
+            // and by fernletTabBarSafeAreaClearance() on a pushed editor with a pinned save bar.
             .environment(
                 \.fernletTabBarClearance,
                 isDisposableCameraSessionActive ? 0 : tabBarReservedHeight + 8

@@ -793,6 +793,9 @@ private struct RecipeImportSheet: View {
             // Pushed inside the book's create branch: a re-tap of the Food tab asks before it pops
             // pasted text away.
             .tabReselectDraft(isDirty: !importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            // Inside the Food tab the floating tab bar covers the bottom: Import rested under it,
+            // like the manual editor's save bar (2026-10-01). A no-op in the recipe book's sheet.
+            .fernletTabBarSafeAreaClearance()
     }
 
     private var importContent: some View {
@@ -1467,17 +1470,28 @@ struct RecipeSheet: View {
     var body: some View {
         if isEmbeddedInNavigationStack {
             // Pushed: no draft guard of its own, so a re-tap of the tab that would pop it asks
-            // first (the tab button sits right under the save bar).
+            // first (the tab button sits right under the save bar). Pushed inside the Food tab, the
+            // floating tab bar covers the page's bottom, so the save bar is lifted above it — it
+            // rested under the bar, and a tap on Save selected the tab (2026-10-01). A no-op inside
+            // a sheet, which covers the bar.
             recipeContent
                 .tabReselectDraft(isDirty: isDirty)
+                .fernletTabBarSafeAreaClearance()
         } else {
             NavigationStack {
                 recipeContent
+                    // Presented as a sheet: a swipe-down used to discard a typed recipe with no
+                    // warning. The guard also renders the pinned ``SheetHeader`` (Cancel + title) —
+                    // the sheet's title lives there, not in the scroll content (2026-08-21
+                    // template). On the editor page, not around the stack: the header's top inset
+                    // never reached this page's scroll view through the stack, so the first rows
+                    // (the name field) drew under the header and could not be tapped (2026-10-01).
+                    // A pushed scanner page keeps its own back chevron, as in `MealSheet`.
+                    .fernletDraftGuard(isDirty: isDirty, title: editorTitle) { dismiss() }
             }
-            // Presented as a sheet: a swipe-down used to discard a typed recipe with no warning.
-            // The guard also renders the pinned ``SheetHeader`` (Cancel + title) — the sheet's
-            // title lives there, not in the scroll content (2026-08-21 template).
-            .fernletDraftGuard(isDirty: isDirty, title: editorTitle) { dismiss() }
+            // At the sheet root too: the guard's swipe-dismiss block is a preference of the editor
+            // page, and it stops applying once a pushed scanner page covers that page.
+            .interactiveDismissDisabled(isDirty)
         }
     }
 
