@@ -13,6 +13,7 @@
 import ProximityKit
 import CloudKit
 import CloudKitSync
+import CoreData
 import CryptoKit
 import FernletFoundation
 import Foundation
@@ -30,6 +31,8 @@ final class IntimacyBackupDevice {
     let host: FakeSealedBackupHost
     /// This iPhone's one intimacy funnel.
     let logs: IntimacyLogStore
+    /// The funnel's sealed store (its controller, so a test can detach the store under it).
+    let controller: PrivatePersistenceController
     let generationDefaults: UserDefaults
     let coordinator: SealedBackupCoordinator
     /// This install's writer tag.
@@ -84,8 +87,10 @@ final class IntimacyBackupDevice {
         let host = FakeSealedBackupHost()
         host.sealedBackupContentKey = SymmetricKey(size: .bits256)
         self.host = host
+        let controller = PrivatePersistenceController(inMemory: true)
+        self.controller = controller
         logs = IntimacyLogStore(repository: IntimacyLogRepository(
-            controller: PrivatePersistenceController(inMemory: true),
+            controller: controller,
             defaults: UserDefaults(suiteName: "fernlet.tests.intimacyV2Latch.\(UUID().uuidString)") ?? .standard
         ))
         let generationDefaults = UserDefaults(suiteName: "fernlet.tests.intimacyGeneration.\(UUID().uuidString)") ?? .standard
@@ -389,6 +394,27 @@ struct SealedBackupIntimacyV2Tests {
         try funnel.insert(IntimacyBackupDevice.log("saved from the sheet", day: 2), contentKey: SymmetricKey(size: .bits256))
         #expect(store.sealedBackupMutationEpoch(.intimacyLogs) == epoch + 1)
         #expect(store.sealedBackupIntimacyReuploadDeferred, "the sheet's write owes the upload")
+    }
+
+    // MARK: - A store that is not attached (BV21)
+
+    /// BV21 for the intimacy adapter (R2-F2): an intimacy store that is not attached — a load that
+    /// failed leaves the controller on an empty coordinator, where every read answers empty — never
+    /// exports: the gate stops the pass before any network work, so an empty set never replaces the
+    /// backup.
+    @MainActor
+    @Test func aStorelessIntimacyControllerWritesNothingToICloud() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let phone = IntimacyBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        try phone.seed([IntimacyLog(eventDate: Date(timeIntervalSinceReferenceDate: 790_000_000), note: "kept")])
+        let coordinator = phone.controller.container.persistentStoreCoordinator
+        for store in coordinator.persistentStores { try coordinator.remove(store) }
+        #expect(!phone.logs.isStoreHealthy)
+
+        let report = await phone.engine.perform(.intimacyLogs, trigger: .enable, phases: .export)
+        #expect(report.gateFailure == .storeUnhealthy)
+        #expect(cloud.sealedRecords.isEmpty)
     }
 
     // MARK: - Hidden, under 16, duress (BV3, BV17, BV18)

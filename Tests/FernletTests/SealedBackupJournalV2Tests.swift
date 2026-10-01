@@ -293,6 +293,24 @@ struct SealedBackupJournalV2Tests {
         #expect(phone.storedIDs == [kept.id, orphan.id], "the orphan stays on the device, encrypted")
     }
 
+    /// BV21 for the journal adapter (R2-F2): a journal store that is not attached — a load that failed
+    /// leaves the controller on an empty coordinator, where every read answers empty — never exports:
+    /// the gate stops the pass before any network work, so an empty set never replaces the backup.
+    @MainActor
+    @Test func aStorelessJournalControllerWritesNothingToICloud() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone", resolved: true)
+        try phone.write(JournalBackupDevice.entry("on its day", day: 1))
+        let coordinator = phone.controller.container.persistentStoreCoordinator
+        for store in coordinator.persistentStores { try coordinator.remove(store) }
+        #expect(!phone.journal.isStoreHealthy)
+
+        let report = await phone.engine.perform(.journalNarratives, trigger: .enable, phases: .export)
+        #expect(report.gateFailure == .storeUnhealthy)
+        #expect(cloud.sealedRecords.isEmpty)
+    }
+
     // MARK: - Pause, Remove, needs a newer build (BV5, BV22, R2-F12)
 
     /// BV22 / R2-F12: entries no key opens pause the backup with nothing written. "Remove them"
