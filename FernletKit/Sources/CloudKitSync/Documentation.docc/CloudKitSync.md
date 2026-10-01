@@ -84,10 +84,15 @@ written under names only it ever writes and the head is the one commit point: an
 never damages the set the head still points at. ``CloudKitDataService/saveSealedBackup(_:setTag:)``,
 ``CloudKitDataService/sealedBackupSuffixChunks(payloadType:chunkCount:setTag:)`` and
 ``CloudKitDataService/pruneSealedBackupSets(payloadType:keepingSetTag:belowGeneration:)`` (which keeps
-any other set at or above the committed generation — its head may still be landing on another
-iPhone) are that layout's mechanism, and the record-name matcher behind a disable and
-delete-everything knows both suffix forms, so a v2 set is deleted completely. The module still never
-opens a record. ``HeartDropCloudTransport`` is the app's only *public*-database use — a pseudonymous
+any other set at or above the bound — the engine passes one above the head its compare-and-swap
+read, so a concurrent export numbered above that head keeps its chunks while its head is still
+landing on another iPhone — and never deletes the set the head in iCloud names right now) and
+``CloudKitDataService/sealedBackupSuffixIsPresent(payloadType:chunkCount:setTag:)`` (the commit's
+verify that every suffix chunk of its set is still there, fetched by record ID through
+``CloudKitRecordDatabase/existingRecordIDs(_:)`` — no field or asset downloaded, and never a query, so a
+chunk saved a moment ago is not missed by a lagging index) are that layout's mechanism, and the
+record-name matcher behind a disable and delete-everything knows both suffix forms, so a v2 set is
+deleted completely. The module still never opens a record. ``HeartDropCloudTransport`` is the app's only *public*-database use — a pseudonymous
 dead-drop ferry for heart drops with per-chunk fetch budgeting so one hostile writer cannot starve
 other friends' tags. Finally, ``CloudKitSchemaDeploy`` is the launch-argument seam for the
 DEBUG-only, developer-run CloudKit schema push.
