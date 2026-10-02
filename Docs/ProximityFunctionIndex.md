@@ -1415,6 +1415,53 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 | `NoopProximityForegroundAnchor.stop()` | Marks foreground anchoring inactive. |
 | `ProximityLiveActivityReaper.endOrphans()` | Ends every proximity Live Activity a killed previous process stranded. Called once per launch from `FernletStoreLoader.startIfNeeded()`; the only remaining reader of the proximity attributes type. |
 
+## Protocol Namespace
+
+ProximityKit plan step A0.2.1 (2026-10-02): the host-supplied protocol identity, under
+`ProximityKit/Namespace/`. The types exist and nothing reads them yet; A0.2's later commits route
+ProximityKit's label, radio, keychain and storage reads through a `ProximityNamespace` the host hands
+in. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests` covers
+every rule below.
+
+### `Namespace/ProximityCryptographicPurpose.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `init(_:role:)` (internal) | Mints a purpose from a `StaticString` with the role its namespace field fixes; only the group initializers call it, so every label is a source literal. |
+| `data` | `Data(rawValue.utf8)`, no terminator, no normalization. |
+| `prefixBytes` | What the consumer writes first: `data` (raw prefix, and every role taking the label whole), the 8-byte big-endian count then `data` (length-prefixed), or nothing (`.absent`). |
+| `signingBytes(_:)` | The transcript unchanged when the role is a signature role and the transcript begins with `prefixBytes`, else nil: FernletCrypto's positional rule, refusing every non-signature role. |
+
+### `Namespace/ProximityNamespace.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `init(family:installation:)` | Total: stores both halves and records `soundness`, computed once. |
+| `validated(family:installation:)` | The namespace, or `throws(ProximityNamespaceError)` with every violation, for a host that prefers to fail at launch. |
+| `labelRows` | Every label with its field path (`family.purposes.<group>.<field>`), in declaration order; the legacy pair only when accepted. |
+
+### `Namespace/ProximityNamespace+Family.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `Signature.init(...)`, `KeyDerivation.init(...)`, `AEAD.init(...)`, `Hash.init(...)` | Take the host's `StaticString` labels and mint each with the role its field fixes (17 canonical `.signature(.lengthPrefixed)`, 2 QR `.signature(.rawPrefix)`; 3 salts, 1 exporter label, 2 column seals; 5 AADs; 6 `.hashDomain(.lengthPrefixed)` + the epoch id `.hashDomain(.rawPrefix)`). |
+| `LegacyV1.refused` / `LegacyV1.accepted(identityEnvelopeV1:meshAdmissionTokenV1:)` | The verify-only legacy pair: absent, or both labels as `.signature(.absent)`. |
+| `Purposes.labelRows(under:)` and the per-group builders (internal) | The rows behind `ProximityNamespace.labelRows`. |
+
+### `Namespace/ProximityNamespace+Installation.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `Storage.defaultDirectory` | `URL.applicationSupportDirectory/<directoryName>`, built as `ProximitySupportLayout.defaultDirectory` builds today's root. |
+
+### `Namespace/ProximityNamespace+Soundness.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `judge(family:installation:)` (internal) | Runs every rule once, in order: labels, radios and heartbeat, QR scheme, keychain, storage, log subsystem. |
+| `familyCollisions(with:)` | Labels equal or byte-prefix related, and equal service types (across radios), ALPNs, heartbeat or scheme (ignoring case); this namespace's field first. |
+| `installationCollisions(with:)` | Equal keychain services, an equal directory name ignoring case, or an equal log subsystem. |
+
 ## Identity, Wire, Trust, And Audit
 
 ### `IdentityService.swift`

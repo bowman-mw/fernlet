@@ -1,0 +1,887 @@
+// ProximityNamespaceSoundnessTests.swift
+//
+// ProximityKit plan step A0.2.1: the soundness rules, the byte rules and the collision checks of
+// ProximityKit's protocol namespace, over namespaces built entirely from literals that belong to no
+// shipping app. The file names no app's values on purpose: it moves with ProximityKit when the package
+// leaves for its own repository, and the values an app ships are pinned by that app's own goldens.
+
+import Foundation
+import ProximityKit
+import Testing
+
+/// Every soundness rule refused by name, the byte rules of each framing, and the two collision checks.
+///
+/// One cell per ``ProximityNamespace/Violation`` case: each changes one literal of a sound namespace
+/// and expects exactly the one violation that change causes, both recorded by the initializer and
+/// thrown by `validated`, then shows the rule's accepting edge.
+@Suite struct ProximityNamespaceSoundnessTests {
+
+    // MARK: - A sound namespace
+
+    /// A namespace built entirely from literals that belong to no shipping app passes every rule, and
+    /// `validated` hands it back rather than throwing.
+    @Test func aForeignNamespaceBuiltFromLiteralsIsSound() throws {
+        let namespace = AlphaApp.namespace()
+        #expect(namespace.soundness == .sound)
+        #expect(throws: Never.self) {
+            try ProximityNamespace.validated(family: AlphaApp.family(), installation: AlphaApp.installation())
+        }
+        let validated = try ProximityNamespace.validated(family: AlphaApp.family(), installation: AlphaApp.installation())
+        #expect(validated == namespace, "the same value the initializer builds")
+        #expect(BravoApp.namespace().soundness == .sound, "and so is the second app the collision cells use")
+        let renamed = ProximityNamespace(family: AlphaApp.family(urlScheme: "alpha2"), installation: AlphaApp.installation())
+        #expect(renamed != namespace, "one changed value is a different namespace")
+    }
+
+    // MARK: - Roles and rows
+
+    /// Every label row, in declaration order, carries the role its field fixes: the host wrote only the
+    /// bytes.
+    @Test func everyFieldMintsTheRoleProximityKitFixesForIt() {
+        let canonical = ProximityCryptographicPurpose.Role.signature(.lengthPrefixed)
+        let fixedWidth = ProximityCryptographicPurpose.Role.signature(.rawPrefix)
+        let verifyOnly = ProximityCryptographicPurpose.Role.signature(.absent)
+        let framedHash = ProximityCryptographicPurpose.Role.hashDomain(.lengthPrefixed)
+        let signature = "family.purposes.signature."
+        let keyDerivation = "family.purposes.keyDerivation."
+        let aead = "family.purposes.aead."
+        let hash = "family.purposes.hash."
+        let expected: [(String, ProximityCryptographicPurpose.Role)] = [
+            (signature + "identityEnvelopeV2", canonical),
+            (signature + "meshAdmissionTokenV2", canonical),
+            (signature + "meshChannelIntroductionV1", canonical),
+            (signature + "meshMemberDepartureV1", canonical),
+            (signature + "meshMemberRemovalV1", canonical),
+            (signature + "meshTerminatedV1", canonical),
+            (signature + "meshInventoryDigestV1", canonical),
+            (signature + "meshEpochHeadsV1", canonical),
+            (signature + "meshRemovalProposalV1", canonical),
+            (signature + "meshRemovalVoteV1", canonical),
+            (signature + "meshKeyAgreementV1", canonical),
+            (signature + "meshRoutedManifestV1", canonical),
+            (signature + "meshRoutedChunkV1", canonical),
+            (signature + "meshCustodyReceiptV1", canonical),
+            (signature + "meshRecipientReceiptV1", canonical),
+            (signature + "meshRoutedInventoryDigestV1", canonical),
+            (signature + "meshRoutedDrainAnswerV1", canonical),
+            (signature + "proximityQRIdentityV1", fixedWidth),
+            (signature + "proximityQRResponseV1", fixedWidth),
+            (signature + "legacyV1.identityEnvelopeV1", verifyOnly),
+            (signature + "legacyV1.meshAdmissionTokenV1", verifyOnly),
+            (keyDerivation + "proximityTransportV1", .keyDerivationSalt),
+            (keyDerivation + "meshGroupKeyWrapV1", .keyDerivationSalt),
+            (keyDerivation + "meshTLSExporterV1", .tlsExporterLabel),
+            (keyDerivation + "meshRoutedContentKeyWrapV1", .keyDerivationSalt),
+            (keyDerivation + "meshSessionContextV1", .columnSeal),
+            (keyDerivation + "meshRoutedStoreV1", .columnSeal),
+            (aead + "proximityTransportV2", .aeadAssociatedData),
+            (aead + "meshGroupKeyWrapV2", .aeadAssociatedData),
+            (aead + "meshEncryptedMetadataV2", .aeadAssociatedData),
+            (aead + "meshRoutedContentKeyWrapV1", .aeadAssociatedData),
+            (aead + "meshRoutedItemV1", .aeadAssociatedData),
+            (hash + "meshInventoryDigestV1", framedHash),
+            (hash + "meshRoutedContentV1", framedHash),
+            (hash + "meshRoutedChunkV1", framedHash),
+            (hash + "meshRoutedChunkIDV1", framedHash),
+            (hash + "meshCustodyReceiptIDV1", framedHash),
+            (hash + "meshRecipientReceiptIDV1", framedHash),
+            (hash + "meshEpochIDV1", .hashDomain(.rawPrefix))
+        ]
+        let rows = AlphaApp.namespace().labelRows
+        #expect(rows.count == 39, "17 canonical + 2 QR + the legacy pair + 6 + 5 + 7")
+        #expect(rows.map { $0.field } == expected.map { $0.0 })
+        #expect(rows.map { $0.purpose.role } == expected.map { $0.1 })
+    }
+
+    /// `labelRows` lists every label the four groups store, in declaration order, under its field's
+    /// path. Read by reflection, so a label added to a group without a row cannot pass.
+    @Test func labelRowsListEveryStoredLabelInDeclarationOrder() {
+        let namespace = AlphaApp.namespace()
+        var reflected: [(field: String, purpose: ProximityCryptographicPurpose)] = []
+        var pending: [(path: String, value: Any)] = [(path: "family.purposes", value: namespace.family.purposes)]
+        var visits = 0
+        // Bounded: the purposes, four groups, the legacy holder and its two labels, and 37 more labels.
+        while let node = pending.popLast(), visits < 64 {
+            visits += 1
+            if let purpose = node.value as? ProximityCryptographicPurpose {
+                reflected.append((field: node.path, purpose: purpose))
+                continue
+            }
+            let children = Mirror(reflecting: node.value).children.compactMap { child in
+                child.label.map { (path: node.path + "." + $0, value: child.value) }
+            }
+            pending.append(contentsOf: children.reversed())
+        }
+        #expect(pending.isEmpty, "the walk finished inside its bound")
+        #expect(reflected.count == 39)
+        #expect(reflected.map { $0.field } == namespace.labelRows.map { $0.field })
+        #expect(reflected.map { $0.purpose } == namespace.labelRows.map { $0.purpose })
+    }
+
+    /// A refused legacy pair adds no rows. An accepted one adds two, straight after the QR labels, both
+    /// verify-only.
+    @Test func theLegacyPairJoinsTheRowsOnlyWhenAccepted() throws {
+        #expect(ProximityNamespace.LegacyV1.refused.identityEnvelopeV1 == nil)
+        #expect(ProximityNamespace.LegacyV1.refused.meshAdmissionTokenV1 == nil)
+        let refused = ProximityNamespace(
+            family: AlphaApp.family(signature: AlphaApp.signature(legacyV1: .refused)),
+            installation: AlphaApp.installation()
+        )
+        #expect(refused.soundness == .sound)
+        #expect(refused.labelRows.count == 37)
+        #expect(!refused.labelRows.contains { $0.field.contains(".legacyV1.") })
+
+        let accepted = AlphaApp.namespace().labelRows
+        try #require(accepted.count == 39)
+        #expect(accepted[18].field == "family.purposes.signature.proximityQRResponseV1")
+        #expect(accepted[19].field == "family.purposes.signature.legacyV1.identityEnvelopeV1")
+        #expect(accepted[20].field == "family.purposes.signature.legacyV1.meshAdmissionTokenV1")
+        #expect(accepted[21].field == "family.purposes.keyDerivation.proximityTransportV1")
+    }
+
+    // MARK: - Byte rules
+
+    /// `rawValue` is the literal and `data` its UTF-8 bytes, with no terminator and no normalization.
+    @Test func dataIsTheLiteralsBytesWithNoTerminator() {
+        let purpose = AlphaApp.namespace().family.purposes.signature.proximityQRIdentityV1
+        #expect(purpose.rawValue == "alpha.verify.qr.v1")
+        #expect(purpose.data == Data("alpha.verify.qr.v1".utf8))
+        #expect(purpose.data.count == 18)
+        #expect(purpose.data.last == UInt8(ascii: "1"), "no trailing NUL")
+    }
+
+    /// A canonical transcript's label sits behind its 8-byte big-endian count, and `signingBytes`
+    /// accepts only a transcript that begins with exactly that, in that position.
+    @Test func aLengthPrefixedSignatureLabelSitsBehindItsEightByteCount() {
+        let purpose = AlphaApp.namespace().family.purposes.signature.identityEnvelopeV2
+        #expect(purpose.role == .signature(.lengthPrefixed))
+        // 36 bytes, so the count is 0x24, then the label's ASCII.
+        #expect(hex(purpose.prefixBytes)
+                == "0000000000000024616c7068612e63616e6f6e6963616c2e6964656e746974792d656e76656c6f70652e7632")
+        let body = Data([0xB0, 0xD1])
+        let framed = purpose.prefixBytes + body
+        #expect(purpose.signingBytes(framed) == framed, "accepted, and returned unmodified")
+        #expect(purpose.signingBytes(purpose.data + body) == nil, "its own raw spelling is refused")
+        #expect(purpose.signingBytes(Data([0x00]) + framed) == nil, "a transcript shifted by one byte is refused")
+        #expect(purpose.signingBytes(Data([0, 0, 0, 0, 0, 0, 0, 0x25]) + purpose.data + body) == nil,
+                "a wrong count is refused")
+        #expect(purpose.signingBytes(purpose.prefixBytes.dropLast()) == nil, "a truncated label is refused")
+        #expect(purpose.signingBytes(body) == nil)
+        #expect(purpose.signingBytes(Data()) == nil)
+    }
+
+    /// A fixed-width transcript's label is its own bytes at the very front.
+    @Test func aRawPrefixSignatureLabelIsItsOwnBytes() {
+        let purpose = AlphaApp.namespace().family.purposes.signature.proximityQRIdentityV1
+        #expect(purpose.role == .signature(.rawPrefix))
+        #expect(hex(purpose.prefixBytes) == "616c7068612e7665726966792e71722e7631")
+        let body = Data([0x01, 0x02])
+        #expect(purpose.signingBytes(purpose.data + body) == purpose.data + body)
+        #expect(purpose.signingBytes(Data([0, 0, 0, 0, 0, 0, 0, 0x12]) + purpose.data + body) == nil,
+                "the length-prefixed shape is refused")
+        #expect(purpose.signingBytes(Data([0x20]) + purpose.data + body) == nil, "shifted by one byte")
+        #expect(purpose.signingBytes(purpose.data.dropLast() + body) == nil, "a truncated label")
+        #expect(purpose.signingBytes(body) == nil)
+    }
+
+    /// A legacy label writes nothing, so every transcript qualifies: verify-only by construction.
+    @Test func anAbsentSignatureLabelAcceptsEveryTranscript() throws {
+        let purpose = try #require(AlphaApp.namespace().family.purposes.signature.legacyV1.identityEnvelopeV1)
+        #expect(purpose.role == .signature(.absent))
+        #expect(purpose.prefixBytes.isEmpty)
+        #expect(purpose.data == Data("alpha.canonical.identity-envelope.v1".utf8), "its bytes exist, only to be compared")
+        let json = Data(#"{"schemaVersion":1}"#.utf8)
+        #expect(purpose.signingBytes(json) == json)
+        #expect(purpose.signingBytes(Data()) == Data())
+        #expect(purpose.signingBytes(purpose.data + json) == purpose.data + json)
+    }
+
+    /// Hash domains are framed like transcripts, but no hash label ever authorizes a signature.
+    @Test func hashDomainsAreFramedButNeverAuthorizeASignature() {
+        let hash = AlphaApp.namespace().family.purposes.hash
+        #expect(hash.meshRoutedChunkV1.role == .hashDomain(.lengthPrefixed))
+        // 31 bytes, so the count is 0x1f.
+        #expect(hex(hash.meshRoutedChunkV1.prefixBytes)
+                == "000000000000001f616c7068612e6d6573682e726f757465642d6368756e6b2e686173682e7631")
+        #expect(hash.meshRoutedChunkV1.signingBytes(hash.meshRoutedChunkV1.prefixBytes + Data([0x01])) == nil)
+        #expect(hash.meshEpochIDV1.role == .hashDomain(.rawPrefix))
+        #expect(hex(hash.meshEpochIDV1.prefixBytes) == "616c7068612e6d6573682e65706f63682e7631")
+        #expect(hash.meshEpochIDV1.signingBytes(hash.meshEpochIDV1.data + Data([0x01])) == nil)
+    }
+
+    /// A salt, a column seal, an AAD and an exporter label are taken whole: their prefix is their bytes,
+    /// and none of them ever authorizes a signature.
+    @Test func labelsTakenWholeAreTheirBytesAndNeverAuthorizeASignature() {
+        let purposes = AlphaApp.namespace().family.purposes
+        let whole: [(ProximityCryptographicPurpose, ProximityCryptographicPurpose.Role)] = [
+            (purposes.keyDerivation.proximityTransportV1, .keyDerivationSalt),
+            (purposes.keyDerivation.meshTLSExporterV1, .tlsExporterLabel),
+            (purposes.keyDerivation.meshSessionContextV1, .columnSeal),
+            (purposes.aead.proximityTransportV2, .aeadAssociatedData)
+        ]
+        for (purpose, role) in whole {
+            #expect(purpose.role == role)
+            #expect(purpose.prefixBytes == purpose.data)
+            #expect(purpose.signingBytes(purpose.data) == nil)
+            #expect(purpose.signingBytes(purpose.data + Data([0x01])) == nil)
+        }
+        #expect(hex(purposes.keyDerivation.meshTLSExporterV1.prefixBytes)
+                == "616c7068612e6d6573682e746c732d6578706f727465722e7631")
+    }
+
+    // MARK: - One cell per violation
+
+    /// Labels: empty, over 255 bytes, or a byte outside 0x21–0x7E.
+    @Test func aMalformedLabelIsRefusedByName() {
+        let field = "family.purposes.signature.identityEnvelopeV2"
+        func family(_ label: StaticString) -> ProximityNamespace.Family {
+            AlphaApp.family(signature: AlphaApp.signature(identityEnvelopeV2: label))
+        }
+        expectOnly([.malformedLabel(field: field)], family: family("alpha.canonical identity-envelope.v2"), note: "a space")
+        expectOnly([.malformedLabel(field: field)], family: family("alpha.canonical.identity-envelope.v2\u{7F}"), note: "DEL")
+        expectOnly([.malformedLabel(field: field)], family: family("alpha.canonical.identity-envelope.v2\u{9}"), note: "a tab")
+        expectOnly([.malformedLabel(field: field)], family: family("alpha.canonical.idéntity-envelope.v2"), note: "not ASCII")
+        expectOnly([.malformedLabel(field: field)], family: family("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"), note: "256 bytes")
+        expectSound(family: family("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"))
+        expectSound(family: family("!alpha.canonical.identity-envelope.v2~"))
+
+        // Empty is malformed, and also a prefix of every other label: both rules see it.
+        let empty = ProximityNamespace(family: family(""), installation: AlphaApp.installation())
+        guard case .unsound(let violations) = empty.soundness else {
+            Issue.record("an empty label passed")
+            return
+        }
+        #expect(violations.first == .malformedLabel(field: field))
+        let prefixes = violations.dropFirst().filter { violation in
+            if case .labelIsPrefix(shorter: field, longer: _) = violation { return true }
+            return false
+        }
+        #expect(violations.count == 39 && prefixes.count == 38, "malformed, then a prefix of each of the other 38")
+    }
+
+    /// Two labels with the same bytes, wherever they sit: across groups, and in the verify-only pair.
+    @Test func aDuplicateLabelIsRefusedByName() {
+        expectOnly(
+            [.duplicateLabel(field: "family.purposes.signature.meshRoutedChunkV1",
+                             otherField: "family.purposes.keyDerivation.meshRoutedStoreV1")],
+            family: AlphaApp.family(keyDerivation: AlphaApp.keyDerivation(meshRoutedStoreV1: "alpha.mesh.routed-chunk.v1"))
+        )
+        let sameLegacy = ProximityNamespace.LegacyV1.accepted(
+            identityEnvelopeV1: "alpha.legacy.v1",
+            meshAdmissionTokenV1: "alpha.legacy.v1"
+        )
+        expectOnly(
+            [.duplicateLabel(field: "family.purposes.signature.legacyV1.identityEnvelopeV1",
+                             otherField: "family.purposes.signature.legacyV1.meshAdmissionTokenV1")],
+            family: AlphaApp.family(signature: AlphaApp.signature(legacyV1: sameLegacy))
+        )
+    }
+
+    /// One label's bytes beginning another's, whichever is declared first.
+    @Test func aLabelThatBeginsAnotherIsRefusedByName() {
+        expectOnly(
+            [.labelIsPrefix(shorter: "family.purposes.hash.meshEpochIDV1",
+                            longer: "family.purposes.signature.meshEpochHeadsV1")],
+            family: AlphaApp.family(hash: AlphaApp.hash(meshEpochIDV1: "alpha.mesh.epoch")),
+            note: "the shorter declared later"
+        )
+        expectOnly(
+            [.labelIsPrefix(shorter: "family.purposes.signature.identityEnvelopeV2",
+                            longer: "family.purposes.aead.meshGroupKeyWrapV2")],
+            family: AlphaApp.family(signature: AlphaApp.signature(identityEnvelopeV2: "alpha.mesh.groupkey.wrap")),
+            note: "the shorter declared first"
+        )
+    }
+
+    /// Service types: `_name._udp`, the name 1–15 of `[a-z0-9-]` with a letter and no stray hyphen.
+    @Test func aMalformedServiceTypeIsRefusedByName() {
+        func family(_ serviceType: String) -> ProximityNamespace.Family {
+            AlphaApp.family(radios: AlphaApp.radios(mesh: .init(serviceType: serviceType, alpn: "alpha-mesh-v1")))
+        }
+        let refused = [
+            "_alpha-mesh._tcp", "alpha-mesh._udp", "_alpha-mesh.udp", "_alpha-mesh._udp.",
+            "_Alpha-mesh._udp", "_alpha_mesh._udp", "_._udp", "_abcdefghijklmnop._udp",
+            "_2026._udp", "_-alpha._udp", "_alpha-._udp", "_alpha--mesh._udp"
+        ]
+        for serviceType in refused {
+            expectOnly([.malformedServiceType(field: "family.radios.mesh.serviceType")],
+                       family: family(serviceType), note: serviceType)
+        }
+        for serviceType in ["_abcdefghijklmno._udp", "_a._udp", "_a1-b2._udp"] {
+            expectSound(family: family(serviceType), note: serviceType)
+        }
+    }
+
+    /// ALPNs: 1–255 bytes of printable ASCII.
+    @Test func aMalformedALPNIsRefusedByName() {
+        func family(_ alpn: String) -> ProximityNamespace.Family {
+            AlphaApp.family(radios: AlphaApp.radios(presence: .init(serviceType: "_alpha-near._udp", alpn: alpn)))
+        }
+        let refused = ["", String(repeating: "n", count: 256), "alpha-near-v1\u{1F}", "alpha-near-v1\u{7F}", "alpha-néar-v1"]
+        for alpn in refused {
+            expectOnly([.malformedALPN(field: "family.radios.presence.alpn")], family: family(alpn), note: alpn)
+        }
+        for alpn in [String(repeating: "n", count: 255), "alpha near v1", "~"] {
+            expectSound(family: family(alpn), note: alpn)
+        }
+    }
+
+    /// Two radios sharing a service type, or two sharing an ALPN. A service type that spells another
+    /// radio's ALPN breaks no rule: the two never meet.
+    @Test func aDuplicateRadioValueIsRefusedByName() {
+        expectOnly(
+            [.duplicateRadioValue(field: "family.radios.mesh.serviceType",
+                                  otherField: "family.radios.recipeShare.serviceType")],
+            family: AlphaApp.family(radios: AlphaApp.radios(
+                recipeShare: .init(serviceType: "_alpha-mesh._udp", alpn: "alpha-recipe-v1")))
+        )
+        expectOnly(
+            [.duplicateRadioValue(field: "family.radios.presence.alpn", otherField: "family.radios.recipeShare.alpn")],
+            family: AlphaApp.family(radios: AlphaApp.radios(
+                recipeShare: .init(serviceType: "_alpha-recipe._udp", alpn: "alpha-near-v1")))
+        )
+        expectSound(family: AlphaApp.family(radios: AlphaApp.radios(
+            mesh: .init(serviceType: "_alpha-mesh._udp", alpn: "_alpha-near._udp"))))
+    }
+
+    /// The heartbeat: 1–64 bytes, never beginning with `{`, the first byte of every app frame.
+    @Test func aMalformedHeartbeatIsRefusedByName() {
+        for heartbeat in [Data(), Data(repeating: 0x68, count: 65), Data(#"{"beat":1}"#.utf8)] {
+            expectOnly([.malformedHeartbeat], family: AlphaApp.family(radios: AlphaApp.radios(meshHeartbeat: heartbeat)),
+                       note: hex(heartbeat))
+        }
+        for heartbeat in [Data(repeating: 0x68, count: 64), Data("h{".utf8), Data([0x00])] {
+            expectSound(family: AlphaApp.family(radios: AlphaApp.radios(meshHeartbeat: heartbeat)), note: hex(heartbeat))
+        }
+    }
+
+    /// The QR scheme: a lowercase RFC 3986 scheme.
+    @Test func aMalformedURLSchemeIsRefusedByName() {
+        for scheme in ["", "Alpha", "1alpha", "-alpha", "al pha", "al_pha", "alphä", "alpha:"] {
+            expectOnly([.malformedURLScheme], family: AlphaApp.family(urlScheme: scheme), note: scheme)
+        }
+        for scheme in ["a", "alpha+v1.x-2"] {
+            expectSound(family: AlphaApp.family(urlScheme: scheme), note: scheme)
+        }
+    }
+
+    /// Keychain names: none empty, whether service or account.
+    @Test func aMalformedKeychainNameIsRefusedByName() {
+        let identity = ProximityNamespace.Keychain.IdentityRows(
+            service: "org.example.alpha.identity", signingPrivateKey: "signing.private",
+            keyAgreementPrivateKey: "agreement.private", signingPublicKeyCache: "",
+            keyAgreementPublicKeyCache: "agreement.public"
+        )
+        expectOnly([.malformedKeychainName(field: "installation.keychain.identity.signingPublicKeyCache")],
+                   installation: AlphaApp.installation(keychain: AlphaApp.keychain(identity: identity)))
+        expectOnly([.malformedKeychainName(field: "installation.keychain.meshSessionSealKey.service")],
+                   installation: AlphaApp.installation(keychain: AlphaApp.keychain(
+                       meshSessionSealKey: .init(service: "", account: "session.seal"))))
+        expectOnly([.malformedKeychainName(field: "installation.keychain.meshRoutedSealKey.account")],
+                   installation: AlphaApp.installation(keychain: AlphaApp.keychain(
+                       meshRoutedSealKey: .init(service: "org.example.alpha.mesh-routed", account: ""))))
+    }
+
+    /// Two keychain services equal, or two identity accounts. The two seal keys may share an account
+    /// name, because each lives under its own service.
+    @Test func aDuplicateKeychainNameIsRefusedByName() {
+        expectOnly(
+            [.duplicateKeychainName(field: "installation.keychain.identity.service",
+                                    otherField: "installation.keychain.meshRoutedSealKey.service")],
+            installation: AlphaApp.installation(keychain: AlphaApp.keychain(
+                meshRoutedSealKey: .init(service: "org.example.alpha.identity", account: "routed.seal")))
+        )
+        let identity = ProximityNamespace.Keychain.IdentityRows(
+            service: "org.example.alpha.identity", signingPrivateKey: "signing.private",
+            keyAgreementPrivateKey: "agreement.private", signingPublicKeyCache: "signing.public",
+            keyAgreementPublicKeyCache: "signing.private"
+        )
+        expectOnly(
+            [.duplicateKeychainName(field: "installation.keychain.identity.signingPrivateKey",
+                                    otherField: "installation.keychain.identity.keyAgreementPublicKeyCache")],
+            installation: AlphaApp.installation(keychain: AlphaApp.keychain(identity: identity))
+        )
+        expectSound(installation: AlphaApp.installation(keychain: AlphaApp.keychain(
+            meshSessionSealKey: .init(service: "org.example.alpha.mesh-session", account: "seal"),
+            meshRoutedSealKey: .init(service: "org.example.alpha.mesh-routed", account: "seal"))))
+    }
+
+    /// Storage names: one path component each — not empty, `.` or `..`, and no `/`, `:` or NUL.
+    @Test func aMalformedPathComponentIsRefusedByName() {
+        for name in ["", ".", "..", "Alpha/Sub", "Alpha:Sub", "Alpha\u{0}Sub"] {
+            expectOnly([.malformedPathComponent(field: "installation.storage.directoryName")],
+                       installation: AlphaApp.installation(storage: AlphaApp.storage(directoryName: name)),
+                       note: name)
+        }
+        expectOnly([.malformedPathComponent(field: "installation.storage.meshRoutedChunkDirectoryName")],
+                   installation: AlphaApp.installation(storage: AlphaApp.storage(
+                       meshRoutedChunkDirectoryName: "Routed/Chunks")))
+        for name in ["...", ".alpha", "Alpha Support"] {
+            expectSound(installation: AlphaApp.installation(storage: AlphaApp.storage(directoryName: name)), note: name)
+        }
+    }
+
+    /// Two names inside the storage directory equal, ignoring case. The directory itself may share a
+    /// name with an entry inside it.
+    @Test func aDuplicateFileNameIsRefusedByName() {
+        expectOnly(
+            [.duplicateFileName(field: "installation.storage.meshSessionContextFileName",
+                                otherField: "installation.storage.meshRoutedIndexFileName")],
+            installation: AlphaApp.installation(storage: AlphaApp.storage(meshRoutedIndexFileName: "Session.sealed"))
+        )
+        expectOnly(
+            [.duplicateFileName(field: "installation.storage.meshSessionContextFileName",
+                                otherField: "installation.storage.meshRoutedChunkDirectoryName")],
+            installation: AlphaApp.installation(storage: AlphaApp.storage(meshRoutedChunkDirectoryName: "session.SEALED")),
+            note: "ignoring case"
+        )
+        expectSound(installation: AlphaApp.installation(storage: AlphaApp.storage(directoryName: "RoutedChunks")))
+    }
+
+    /// The log subsystem: not empty.
+    @Test func anEmptyLogSubsystemIsRefusedByName() {
+        expectOnly([.emptyLogSubsystem], installation: AlphaApp.installation(logSubsystem: ""))
+    }
+
+    /// Several broken rules are all recorded, in rule order, and thrown in that order.
+    @Test func everyViolationIsRecordedInRuleOrder() {
+        let family = AlphaApp.family(
+            signature: AlphaApp.signature(identityEnvelopeV2: "alpha.canonical identity-envelope.v2"),
+            radios: AlphaApp.radios(meshHeartbeat: Data()),
+            urlScheme: "Alpha"
+        )
+        let installation = AlphaApp.installation(
+            keychain: AlphaApp.keychain(
+                meshRoutedSealKey: .init(service: "org.example.alpha.identity", account: "routed.seal")),
+            storage: AlphaApp.storage(directoryName: ".."),
+            logSubsystem: ""
+        )
+        expectOnly([
+            .malformedLabel(field: "family.purposes.signature.identityEnvelopeV2"),
+            .malformedHeartbeat,
+            .malformedURLScheme,
+            .duplicateKeychainName(field: "installation.keychain.identity.service",
+                                   otherField: "installation.keychain.meshRoutedSealKey.service"),
+            .malformedPathComponent(field: "installation.storage.directoryName"),
+            .emptyLogSubsystem
+        ], family: family, installation: installation)
+    }
+
+    // MARK: - Collisions
+
+    /// An equal label, a label that begins another in each direction, a service type another radio
+    /// advertises, an ALPN, the heartbeat and the scheme (ignoring case): each reported once, in order,
+    /// with the asking namespace's field first.
+    @Test func familyCollisionsReportEqualAndPrefixLabelsAndEqualRadioValues() {
+        let alpha = AlphaApp.namespace()
+        let bravo = ProximityNamespace(
+            family: BravoApp.family(
+                signature: BravoApp.signature(meshRoutedChunkV1: "alpha.mesh.routed-chunk.v1"),
+                aead: BravoApp.aead(meshRoutedItemV1: "alpha.mesh.routed.item"),
+                hash: BravoApp.hash(meshEpochIDV1: "alpha.mesh.epoch.v1.extended"),
+                radios: BravoApp.radios(
+                    mesh: .init(serviceType: "_alpha-near._udp", alpn: "bravo-mesh-v1"),
+                    recipeShare: .init(serviceType: "_bravo-recipe._udp", alpn: "alpha-recipe-v1"),
+                    meshHeartbeat: Data("alpha-heartbeat".utf8)
+                ),
+                urlScheme: "ALPHA"
+            ),
+            installation: BravoApp.installation()
+        )
+        let expected = [
+            Overlap("family.purposes.signature.meshRoutedChunkV1", "family.purposes.signature.meshRoutedChunkV1", .equal),
+            Overlap("family.purposes.aead.meshRoutedItemV1", "family.purposes.aead.meshRoutedItemV1", .prefix),
+            Overlap("family.purposes.hash.meshEpochIDV1", "family.purposes.hash.meshEpochIDV1", .prefix),
+            Overlap("family.radios.presence.serviceType", "family.radios.mesh.serviceType", .equal),
+            Overlap("family.radios.recipeShare.alpn", "family.radios.recipeShare.alpn", .equal),
+            Overlap("family.radios.meshHeartbeat", "family.radios.meshHeartbeat", .equal),
+            Overlap("family.verifyQR.urlScheme", "family.verifyQR.urlScheme", .equal)
+        ]
+        #expect(alpha.familyCollisions(with: bravo).map { Overlap($0) } == expected)
+        #expect(bravo.familyCollisions(with: alpha).map { Overlap($0) } == expected.map { $0.swapped },
+                "seen from the other side, the same overlaps")
+        #expect(alpha.installationCollisions(with: bravo).isEmpty, "and the installations stay apart")
+    }
+
+    /// An equal keychain service across rows, the same directory name in another case, and the same log
+    /// subsystem.
+    @Test func installationCollisionsReportEqualServicesDirectoryAndSubsystem() {
+        let alpha = AlphaApp.namespace()
+        let bravo = ProximityNamespace(
+            family: BravoApp.family(),
+            installation: BravoApp.installation(
+                keychain: BravoApp.keychain(
+                    meshSessionSealKey: .init(service: "org.example.alpha.identity", account: "session.seal")),
+                storage: BravoApp.storage(directoryName: "ALPHA"),
+                logSubsystem: "org.example.alpha"
+            )
+        )
+        #expect(alpha.installationCollisions(with: bravo).map { Overlap($0) } == [
+            Overlap("installation.keychain.identity.service", "installation.keychain.meshSessionSealKey.service", .equal),
+            Overlap("installation.storage.directoryName", "installation.storage.directoryName", .equal),
+            Overlap("installation.logSubsystem", "installation.logSubsystem", .equal)
+        ])
+        #expect(alpha.familyCollisions(with: bravo).isEmpty, "and the families stay apart")
+    }
+
+    /// Two apps of one family, such as an app and its companion, collide on every family value by design
+    /// and on nothing of their installations: the case `installationCollisions` exists for.
+    @Test func aSharedFamilyCollidesOnlyAsAFamily() {
+        let alpha = AlphaApp.namespace()
+        let companion = ProximityNamespace(family: AlphaApp.family(), installation: BravoApp.installation())
+        #expect(companion.soundness == .sound)
+        #expect(companion.installationCollisions(with: alpha).isEmpty)
+        let shared = companion.familyCollisions(with: alpha)
+        #expect(shared.count == 39 + 3 + 3 + 1 + 1, "every label, service type and ALPN, the heartbeat and the scheme")
+        #expect(shared.allSatisfy { $0.kind == .equal && $0.field == $0.otherField })
+    }
+
+    /// Two unrelated apps overlap nowhere, from either side.
+    @Test func twoUnrelatedAppsDoNotCollide() {
+        let alpha = AlphaApp.namespace()
+        let bravo = BravoApp.namespace()
+        #expect(alpha.familyCollisions(with: bravo).isEmpty)
+        #expect(alpha.installationCollisions(with: bravo).isEmpty)
+        #expect(bravo.familyCollisions(with: alpha).isEmpty)
+        #expect(bravo.installationCollisions(with: alpha).isEmpty)
+    }
+
+    // MARK: - Storage
+
+    /// The root a host gets when it passes none: its named folder in Application Support.
+    @Test func theDefaultDirectoryIsTheNamedFolderInApplicationSupport() {
+        let directory = AlphaApp.installation().storage.defaultDirectory
+        #expect(directory.lastPathComponent == "Alpha")
+        #expect(directory.hasDirectoryPath)
+        #expect(directory.deletingLastPathComponent().standardizedFileURL
+                == URL.applicationSupportDirectory.standardizedFileURL)
+    }
+
+    // MARK: - Helpers
+
+    /// Expects exactly `expected`, in order, both as the initializer records them and as `validated`
+    /// throws them.
+    private func expectOnly(
+        _ expected: [ProximityNamespace.Violation],
+        family: ProximityNamespace.Family = AlphaApp.family(),
+        installation: ProximityNamespace.Installation = AlphaApp.installation(),
+        note: String = "",
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let namespace = ProximityNamespace(family: family, installation: installation)
+        #expect(namespace.soundness == .unsound(expected), Comment(rawValue: note), sourceLocation: sourceLocation)
+        let thrown = #expect(throws: ProximityNamespaceError.self, Comment(rawValue: note), sourceLocation: sourceLocation) {
+            try ProximityNamespace.validated(family: family, installation: installation)
+        }
+        #expect(thrown?.violations == expected, Comment(rawValue: note), sourceLocation: sourceLocation)
+    }
+
+    /// Expects a sound namespace: a rule's accepting edge.
+    private func expectSound(
+        family: ProximityNamespace.Family = AlphaApp.family(),
+        installation: ProximityNamespace.Installation = AlphaApp.installation(),
+        note: String = "",
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let soundness = ProximityNamespace(family: family, installation: installation).soundness
+        #expect(soundness == .sound, Comment(rawValue: note), sourceLocation: sourceLocation)
+    }
+
+    /// Lowercase hex, two digits a byte.
+    private func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+// MARK: - Fixtures
+
+/// A collision as plain values, so a cell can spell the ones it expects (the type's initializer is
+/// ProximityKit's own).
+private struct Overlap: Equatable, CustomStringConvertible {
+    let field: String
+    let otherField: String
+    let kind: ProximityNamespace.Collision.Kind
+
+    init(_ field: String, _ otherField: String, _ kind: ProximityNamespace.Collision.Kind) {
+        self.field = field
+        self.otherField = otherField
+        self.kind = kind
+    }
+
+    init(_ collision: ProximityNamespace.Collision) {
+        self.init(collision.field, collision.otherField, collision.kind)
+    }
+
+    /// The same overlap, seen from the other namespace.
+    var swapped: Overlap { Overlap(otherField, field, kind) }
+
+    var description: String { "\(field) ~ \(otherField) (\(kind))" }
+}
+
+/// An app that does not exist, "alpha", its namespace built entirely from literals.
+///
+/// Every label is printable ASCII, distinct and prefix-free, and every radio, keychain and storage value
+/// is well-formed and distinct, so the namespace is sound. A cell changes one literal through a parameter.
+private enum AlphaApp {
+
+    static let legacy = ProximityNamespace.LegacyV1.accepted(
+        identityEnvelopeV1: "alpha.canonical.identity-envelope.v1",
+        meshAdmissionTokenV1: "alpha.canonical.mesh-admission-token.v1"
+    )
+
+    static let identityRows = ProximityNamespace.Keychain.IdentityRows(
+        service: "org.example.alpha.identity", signingPrivateKey: "signing.private",
+        keyAgreementPrivateKey: "agreement.private", signingPublicKeyCache: "signing.public",
+        keyAgreementPublicKeyCache: "agreement.public"
+    )
+
+    static func namespace() -> ProximityNamespace {
+        ProximityNamespace(family: family(), installation: installation())
+    }
+
+    static func family(
+        signature: ProximityNamespace.Signature = AlphaApp.signature(),
+        keyDerivation: ProximityNamespace.KeyDerivation = AlphaApp.keyDerivation(),
+        aead: ProximityNamespace.AEAD = AlphaApp.aead(),
+        hash: ProximityNamespace.Hash = AlphaApp.hash(),
+        radios: ProximityNamespace.Radios = AlphaApp.radios(),
+        urlScheme: String = "alpha"
+    ) -> ProximityNamespace.Family {
+        ProximityNamespace.Family(
+            purposes: ProximityNamespace.Purposes(signature: signature, keyDerivation: keyDerivation, aead: aead, hash: hash),
+            radios: radios,
+            verifyQR: ProximityNamespace.VerifyQR(urlScheme: urlScheme)
+        )
+    }
+
+    static func signature(
+        identityEnvelopeV2: StaticString = "alpha.canonical.identity-envelope.v2",
+        legacyV1: ProximityNamespace.LegacyV1 = AlphaApp.legacy
+    ) -> ProximityNamespace.Signature {
+        ProximityNamespace.Signature(
+            identityEnvelopeV2: identityEnvelopeV2,
+            meshAdmissionTokenV2: "alpha.canonical.mesh-admission-token.v2",
+            meshChannelIntroductionV1: "alpha.mesh.channel-introduction.v1",
+            meshMemberDepartureV1: "alpha.mesh.member-departure.v1",
+            meshMemberRemovalV1: "alpha.mesh.member-removal.v1",
+            meshTerminatedV1: "alpha.mesh.terminated.v1",
+            meshInventoryDigestV1: "alpha.mesh.inventory-digest.v1",
+            meshEpochHeadsV1: "alpha.mesh.epoch-heads.v1",
+            meshRemovalProposalV1: "alpha.mesh.removal-proposal.v1",
+            meshRemovalVoteV1: "alpha.mesh.removal-vote.v1",
+            meshKeyAgreementV1: "alpha.mesh.key-agreement.v1",
+            meshRoutedManifestV1: "alpha.mesh.routed-manifest.v1",
+            meshRoutedChunkV1: "alpha.mesh.routed-chunk.v1",
+            meshCustodyReceiptV1: "alpha.mesh.custody-receipt.v1",
+            meshRecipientReceiptV1: "alpha.mesh.recipient-receipt.v1",
+            meshRoutedInventoryDigestV1: "alpha.mesh.routed-inventory-digest.v1",
+            meshRoutedDrainAnswerV1: "alpha.mesh.routed-drain-answer.v1",
+            proximityQRIdentityV1: "alpha.verify.qr.v1",
+            proximityQRResponseV1: "alpha.verify.response.v1",
+            legacyV1: legacyV1
+        )
+    }
+
+    static func keyDerivation(
+        meshRoutedStoreV1: StaticString = "alpha.mesh.routed-store.v1"
+    ) -> ProximityNamespace.KeyDerivation {
+        ProximityNamespace.KeyDerivation(
+            proximityTransportV1: "alpha.proximity.v1",
+            meshGroupKeyWrapV1: "alpha.mesh.groupkey.v1",
+            meshTLSExporterV1: "alpha.mesh.tls-exporter.v1",
+            meshRoutedContentKeyWrapV1: "alpha.mesh.routed.content-key.v1",
+            meshSessionContextV1: "alpha.mesh.session-context.v1",
+            meshRoutedStoreV1: meshRoutedStoreV1
+        )
+    }
+
+    static func aead() -> ProximityNamespace.AEAD {
+        ProximityNamespace.AEAD(
+            proximityTransportV2: "alpha.proximity.transport.aead.v2",
+            meshGroupKeyWrapV2: "alpha.mesh.groupkey.wrap.aead.v2",
+            meshEncryptedMetadataV2: "alpha.mesh.encrypted-metadata.aead.v2",
+            meshRoutedContentKeyWrapV1: "alpha.mesh.routed.content-key.wrap.aead.v1",
+            meshRoutedItemV1: "alpha.mesh.routed.item.aead.v1"
+        )
+    }
+
+    static func hash(meshEpochIDV1: StaticString = "alpha.mesh.epoch.v1") -> ProximityNamespace.Hash {
+        ProximityNamespace.Hash(
+            meshInventoryDigestV1: "alpha.mesh.inventory-digest.hash.v1",
+            meshRoutedContentV1: "alpha.mesh.routed-content.hash.v1",
+            meshRoutedChunkV1: "alpha.mesh.routed-chunk.hash.v1",
+            meshRoutedChunkIDV1: "alpha.mesh.routed-chunk-id.hash.v1",
+            meshCustodyReceiptIDV1: "alpha.mesh.custody-receipt-id.hash.v1",
+            meshRecipientReceiptIDV1: "alpha.mesh.recipient-receipt-id.hash.v1",
+            meshEpochIDV1: meshEpochIDV1
+        )
+    }
+
+    static func radios(
+        mesh: ProximityNamespace.Radio = .init(serviceType: "_alpha-mesh._udp", alpn: "alpha-mesh-v1"),
+        presence: ProximityNamespace.Radio = .init(serviceType: "_alpha-near._udp", alpn: "alpha-near-v1"),
+        recipeShare: ProximityNamespace.Radio = .init(serviceType: "_alpha-recipe._udp", alpn: "alpha-recipe-v1"),
+        meshHeartbeat: Data = Data("alpha-heartbeat".utf8)
+    ) -> ProximityNamespace.Radios {
+        ProximityNamespace.Radios(mesh: mesh, presence: presence, recipeShare: recipeShare, meshHeartbeat: meshHeartbeat)
+    }
+
+    static func installation(
+        keychain: ProximityNamespace.Keychain = AlphaApp.keychain(),
+        storage: ProximityNamespace.Storage = AlphaApp.storage(),
+        logSubsystem: String = "org.example.alpha"
+    ) -> ProximityNamespace.Installation {
+        ProximityNamespace.Installation(keychain: keychain, storage: storage, logSubsystem: logSubsystem)
+    }
+
+    static func keychain(
+        identity: ProximityNamespace.Keychain.IdentityRows = AlphaApp.identityRows,
+        meshSessionSealKey: ProximityNamespace.Keychain.Row = .init(service: "org.example.alpha.mesh-session", account: "session.seal"),
+        meshRoutedSealKey: ProximityNamespace.Keychain.Row = .init(service: "org.example.alpha.mesh-routed", account: "routed.seal")
+    ) -> ProximityNamespace.Keychain {
+        ProximityNamespace.Keychain(identity: identity, meshSessionSealKey: meshSessionSealKey, meshRoutedSealKey: meshRoutedSealKey)
+    }
+
+    static func storage(
+        directoryName: String = "Alpha",
+        meshSessionContextFileName: String = "Session.sealed",
+        meshRoutedIndexFileName: String = "Routed.sealed",
+        meshRoutedChunkDirectoryName: String = "RoutedChunks"
+    ) -> ProximityNamespace.Storage {
+        ProximityNamespace.Storage(
+            directoryName: directoryName,
+            meshSessionContextFileName: meshSessionContextFileName,
+            meshRoutedIndexFileName: meshRoutedIndexFileName,
+            meshRoutedChunkDirectoryName: meshRoutedChunkDirectoryName
+        )
+    }
+}
+
+/// A second app that does not exist, "bravo": disjoint from ``AlphaApp`` everywhere until a cell makes
+/// the two collide.
+private enum BravoApp {
+
+    static let legacy = ProximityNamespace.LegacyV1.accepted(
+        identityEnvelopeV1: "bravo.canonical.identity-envelope.v1",
+        meshAdmissionTokenV1: "bravo.canonical.mesh-admission-token.v1"
+    )
+
+    static func namespace() -> ProximityNamespace {
+        ProximityNamespace(family: family(), installation: installation())
+    }
+
+    static func family(
+        signature: ProximityNamespace.Signature = BravoApp.signature(),
+        aead: ProximityNamespace.AEAD = BravoApp.aead(),
+        hash: ProximityNamespace.Hash = BravoApp.hash(),
+        radios: ProximityNamespace.Radios = BravoApp.radios(),
+        urlScheme: String = "bravo"
+    ) -> ProximityNamespace.Family {
+        let keyDerivation = ProximityNamespace.KeyDerivation(
+            proximityTransportV1: "bravo.proximity.v1",
+            meshGroupKeyWrapV1: "bravo.mesh.groupkey.v1",
+            meshTLSExporterV1: "bravo.mesh.tls-exporter.v1",
+            meshRoutedContentKeyWrapV1: "bravo.mesh.routed.content-key.v1",
+            meshSessionContextV1: "bravo.mesh.session-context.v1",
+            meshRoutedStoreV1: "bravo.mesh.routed-store.v1"
+        )
+        return ProximityNamespace.Family(
+            purposes: ProximityNamespace.Purposes(signature: signature, keyDerivation: keyDerivation, aead: aead, hash: hash),
+            radios: radios,
+            verifyQR: ProximityNamespace.VerifyQR(urlScheme: urlScheme)
+        )
+    }
+
+    static func signature(
+        meshRoutedChunkV1: StaticString = "bravo.mesh.routed-chunk.v1"
+    ) -> ProximityNamespace.Signature {
+        ProximityNamespace.Signature(
+            identityEnvelopeV2: "bravo.canonical.identity-envelope.v2",
+            meshAdmissionTokenV2: "bravo.canonical.mesh-admission-token.v2",
+            meshChannelIntroductionV1: "bravo.mesh.channel-introduction.v1",
+            meshMemberDepartureV1: "bravo.mesh.member-departure.v1",
+            meshMemberRemovalV1: "bravo.mesh.member-removal.v1",
+            meshTerminatedV1: "bravo.mesh.terminated.v1",
+            meshInventoryDigestV1: "bravo.mesh.inventory-digest.v1",
+            meshEpochHeadsV1: "bravo.mesh.epoch-heads.v1",
+            meshRemovalProposalV1: "bravo.mesh.removal-proposal.v1",
+            meshRemovalVoteV1: "bravo.mesh.removal-vote.v1",
+            meshKeyAgreementV1: "bravo.mesh.key-agreement.v1",
+            meshRoutedManifestV1: "bravo.mesh.routed-manifest.v1",
+            meshRoutedChunkV1: meshRoutedChunkV1,
+            meshCustodyReceiptV1: "bravo.mesh.custody-receipt.v1",
+            meshRecipientReceiptV1: "bravo.mesh.recipient-receipt.v1",
+            meshRoutedInventoryDigestV1: "bravo.mesh.routed-inventory-digest.v1",
+            meshRoutedDrainAnswerV1: "bravo.mesh.routed-drain-answer.v1",
+            proximityQRIdentityV1: "bravo.verify.qr.v1",
+            proximityQRResponseV1: "bravo.verify.response.v1",
+            legacyV1: BravoApp.legacy
+        )
+    }
+
+    static func aead(meshRoutedItemV1: StaticString = "bravo.mesh.routed.item.aead.v1") -> ProximityNamespace.AEAD {
+        ProximityNamespace.AEAD(
+            proximityTransportV2: "bravo.proximity.transport.aead.v2",
+            meshGroupKeyWrapV2: "bravo.mesh.groupkey.wrap.aead.v2",
+            meshEncryptedMetadataV2: "bravo.mesh.encrypted-metadata.aead.v2",
+            meshRoutedContentKeyWrapV1: "bravo.mesh.routed.content-key.wrap.aead.v1",
+            meshRoutedItemV1: meshRoutedItemV1
+        )
+    }
+
+    static func hash(meshEpochIDV1: StaticString = "bravo.mesh.epoch.v1") -> ProximityNamespace.Hash {
+        ProximityNamespace.Hash(
+            meshInventoryDigestV1: "bravo.mesh.inventory-digest.hash.v1",
+            meshRoutedContentV1: "bravo.mesh.routed-content.hash.v1",
+            meshRoutedChunkV1: "bravo.mesh.routed-chunk.hash.v1",
+            meshRoutedChunkIDV1: "bravo.mesh.routed-chunk-id.hash.v1",
+            meshCustodyReceiptIDV1: "bravo.mesh.custody-receipt-id.hash.v1",
+            meshRecipientReceiptIDV1: "bravo.mesh.recipient-receipt-id.hash.v1",
+            meshEpochIDV1: meshEpochIDV1
+        )
+    }
+
+    static func radios(
+        mesh: ProximityNamespace.Radio = .init(serviceType: "_bravo-mesh._udp", alpn: "bravo-mesh-v1"),
+        recipeShare: ProximityNamespace.Radio = .init(serviceType: "_bravo-recipe._udp", alpn: "bravo-recipe-v1"),
+        meshHeartbeat: Data = Data("bravo-heartbeat".utf8)
+    ) -> ProximityNamespace.Radios {
+        ProximityNamespace.Radios(
+            mesh: mesh,
+            presence: .init(serviceType: "_bravo-near._udp", alpn: "bravo-near-v1"),
+            recipeShare: recipeShare,
+            meshHeartbeat: meshHeartbeat
+        )
+    }
+
+    static func installation(
+        keychain: ProximityNamespace.Keychain = BravoApp.keychain(),
+        storage: ProximityNamespace.Storage = BravoApp.storage(),
+        logSubsystem: String = "org.example.bravo"
+    ) -> ProximityNamespace.Installation {
+        ProximityNamespace.Installation(keychain: keychain, storage: storage, logSubsystem: logSubsystem)
+    }
+
+    static func keychain(
+        meshSessionSealKey: ProximityNamespace.Keychain.Row = .init(service: "org.example.bravo.mesh-session", account: "session.seal")
+    ) -> ProximityNamespace.Keychain {
+        ProximityNamespace.Keychain(
+            identity: .init(
+                service: "org.example.bravo.identity", signingPrivateKey: "signing.private",
+                keyAgreementPrivateKey: "agreement.private", signingPublicKeyCache: "signing.public",
+                keyAgreementPublicKeyCache: "agreement.public"
+            ),
+            meshSessionSealKey: meshSessionSealKey,
+            meshRoutedSealKey: .init(service: "org.example.bravo.mesh-routed", account: "routed.seal")
+        )
+    }
+
+    static func storage(directoryName: String = "Bravo") -> ProximityNamespace.Storage {
+        ProximityNamespace.Storage(
+            directoryName: directoryName,
+            meshSessionContextFileName: "Session.sealed",
+            meshRoutedIndexFileName: "Routed.sealed",
+            meshRoutedChunkDirectoryName: "RoutedChunks"
+        )
+    }
+}

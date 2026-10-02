@@ -180,13 +180,19 @@ import Testing
     /// pinned by literal before any A0.2 commit moves one. Its name ends `GoldenTests`, so
     /// ``everyWireGoldenSuiteIsGated()`` demands it on SOME line; this entry and its ``wallLines``
     /// pin are what hold it on this one. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.2.1 (2026-10-02): `crypto-goldens` 4 → 5, for
+    /// `ProximityNamespaceSoundnessTests` — the soundness rules, byte rules and collision checks of
+    /// ProximityKit's protocol namespace, the label registry every later A0.2 commit routes reads
+    /// through. A rule loosened there compiles clean and changes no other test's outcome. Pinned by
+    /// name in ``wallLines`` too. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 8,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
-        "crypto-goldens": 4,
+        "crypto-goldens": 5,
         "privacy-wipe": 4,
         "accessibility": 1,
         "memory-lifecycle": 1,
@@ -213,7 +219,8 @@ import Testing
         "key-custody": ["KeyCustodyBoundaryTests", "ColumnCryptoDeviceBindingTests",
                         "SealedBackupFormatPinTests", "IdentityProvisioningReadTests"],
         "crypto-goldens": ["CryptographicPurposeBoundaryTests", "CryptographicDomainSeparationTests",
-                           "MeshMembershipEventGoldenTests", "ProximityNamespaceGoldenTests"],
+                           "MeshMembershipEventGoldenTests", "ProximityNamespaceGoldenTests",
+                           "ProximityNamespaceSoundnessTests"],
         "privacy-wipe": ["PrivacyWipeCoverageTests", "PrivacyWipeMediaKeySurvivalTests",
                          "PrivacyWipeAttemptMemoryRemovalTests", "PersistedSurfaceWipeBoundaryTests"],
         "accessibility": ["AccessibilityBoundaryTests"],

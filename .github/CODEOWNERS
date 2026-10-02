@@ -66,3 +66,6 @@
 # Key custody and at-rest formats (what the tripwire/format tests protect)
 /FernletKit/Sources/FernletCrypto/            @bowman-mw
 /FernletKit/Sources/FernletLock/              @bowman-mw
+
+# ProximityKit's protocol-namespace label registry: changing a label breaks every app's wire format
+/FernletKit/Sources/ProximityKit/Namespace/   @bowman-mw
