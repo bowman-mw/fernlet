@@ -9,9 +9,10 @@
 // `ProximityHost.proximityNamespace` and builds every `IdentityService` from it, and the identity's
 // keychain service was the first value read off it; since A0.2.4 the envelope, admission-token,
 // membership, quorum and key-agreement labels, the legacy pair and the inventory digest's hash domain
-// are read off it too, and since A0.2.5 the channel-introduction, routed and verify-QR labels and the
-// QR scheme. A0.2's later commits hand the rest to ProximityKit's readers one consumer family at a
-// time.
+// are read off it too, since A0.2.5 the channel-introduction, routed and verify-QR labels and the
+// QR scheme, and since A0.2.6 the routed hash and id domains, the five AEAD labels, the three HKDF
+// salts and the epoch id's domain. A0.2's later commits hand the rest to ProximityKit's readers one
+// consumer family at a time.
 //
 // Every literal below is pinned by `ProximityNamespaceGoldenTests`' frozen column, so a change here
 // is a wire, keychain or on-disk format change for every device already in the field: it fails that
@@ -119,7 +120,8 @@ nonisolated extension ProximityNamespace.AEAD {
 nonisolated extension ProximityNamespace.Hash {
 
     /// The six mesh hash domains and the epoch id's domain, the one label FernletCrypto's registry
-    /// does not hold (today `MeshEpochBounds.derivationDomain`).
+    /// does not hold (ProximityKit's `MeshEpochBounds.derivationDomain` until plan step A0.2.6,
+    /// which deleted it: every epoch id is derived under this value since).
     public nonisolated static let fernlet = ProximityNamespace.Hash(
         meshInventoryDigestV1: "fernlet.mesh.inventory-digest.hash.v1",
         meshRoutedContentV1: "fernlet.mesh.routed-content.hash.v1",

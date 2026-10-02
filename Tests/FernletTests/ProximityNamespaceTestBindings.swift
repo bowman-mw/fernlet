@@ -20,6 +20,7 @@
 // `ProximityNamespace.Purposes.fernlet`, the very value `ProximityNamespace.fernlet.family.purposes`
 // holds (ProximityNamespaceGoldenTests pins the two equal).
 
+import CryptoKit
 import FernletConnections
 import Foundation
 @testable import ProximityKit
@@ -310,5 +311,184 @@ extension ProximityVerifySignature {
     static func message(scannerKeyAgreementPublicKey: Data, challengeNonce: Data, qrNonce: Data) -> Data {
         message(scannerKeyAgreementPublicKey: scannerKeyAgreementPublicKey, challengeNonce: challengeNonce,
                 qrNonce: qrNonce, in: .fernlet)
+    }
+}
+
+// MARK: - Hashes, AEAD, salts, epoch: the routed digests and ids (A0.2.6)
+//
+// Step A0.2.6 moved the routed family's hash and id domains onto the namespace. The three
+// `MeshRoutedContentDigest` statics, the streaming hasher's initializer and the assembly's two verbs
+// come back here in their old shapes, and the three ids that used to be computed properties come
+// back as properties — `chunk.chunkID`, `receipt.receiptID` — each over its `in:` form with
+// Fernlet's labels.
+
+/// The routed digests in the shapes the suites were written against (plan step A0.2.6).
+extension MeshRoutedContentDigest {
+
+    /// `contentHash(of: blob, in: .fernlet)`.
+    static func contentHash(of blob: Data) -> Data {
+        contentHash(of: blob, in: .fernlet)
+    }
+
+    /// `chunkHash(of: payload, in: .fernlet)`.
+    static func chunkHash(of payload: Data) -> Data {
+        chunkHash(of: payload, in: .fernlet)
+    }
+
+    /// `chunkID(itemID:chunkIndex:in: .fernlet)`.
+    static func chunkID(itemID: UUID, chunkIndex: UInt32) -> UUID {
+        chunkID(itemID: itemID, chunkIndex: chunkIndex, in: .fernlet)
+    }
+}
+
+/// A chunk's replay-window id as the property the suites were written against (plan step A0.2.6).
+extension MeshChunk {
+
+    /// `chunkID(in: .fernlet)`.
+    var chunkID: UUID { chunkID(in: .fernlet) }
+}
+
+/// A custody receipt's dedup id as the property the suites were written against (plan step A0.2.6).
+extension MeshCustodyReceipt {
+
+    /// `receiptID(in: .fernlet)`.
+    var receiptID: UUID { receiptID(in: .fernlet) }
+}
+
+/// A recipient receipt's dedup id as the property the suites were written against (plan step A0.2.6).
+extension MeshRecipientReceipt {
+
+    /// `receiptID(in: .fernlet)`.
+    var receiptID: UUID { receiptID(in: .fernlet) }
+}
+
+/// The streaming content hasher's initializer the suites were written against (plan step A0.2.6).
+extension MeshRoutedContentHasher {
+
+    /// `MeshRoutedContentHasher(purposes: .fernlet)`.
+    init() {
+        self.init(purposes: .fernlet)
+    }
+}
+
+/// The in-memory reassembler's two verbs in the shapes the suites were written against (plan step
+/// A0.2.6).
+extension MeshChunkAssembly {
+
+    /// `admit(chunk, in: .fernlet)`.
+    mutating func admit(_ chunk: MeshChunk) -> MeshChunkAdmission {
+        admit(chunk, in: .fernlet)
+    }
+
+    /// `completion(against: manifest, in: .fernlet)`.
+    func completion(against manifest: MeshRoutedManifest) -> MeshChunkCompletion {
+        completion(against: manifest, in: .fernlet)
+    }
+}
+
+/// The routed store's two hashing verbs the suites call, in the shapes they were written against
+/// (plan step A0.2.6). The third, `assembledBlob(item:expecting:in:)`, has no test caller.
+extension MeshRoutedStore {
+
+    /// `stagingChunk(chunk, now: now, in: .fernlet)`.
+    func stagingChunk(_ chunk: MeshChunk, now: Date) -> MeshRoutedOutcome<MeshChunkAdmission> {
+        stagingChunk(chunk, now: now, in: .fernlet)
+    }
+
+    /// `committingCustody(item:custodian:now:in: .fernlet)`.
+    func committingCustody(
+        item: MeshRoutedItemKey, custodian: String, now: Date
+    ) -> MeshRoutedOutcome<MeshRoutedCustodyOutcome> {
+        committingCustody(item: item, custodian: custodian, now: now, in: .fernlet)
+    }
+}
+
+// MARK: - Hashes, AEAD, salts, epoch: the routed seals (A0.2.6)
+//
+// The item seal and the per-recipient content-key wrap read their AEAD labels — and the wrap its
+// HKDF salt — off the namespace since step A0.2.6; each door comes back here with Fernlet's labels.
+
+/// The routed item seal's three doors in the shapes the suites were written against (plan step
+/// A0.2.6).
+extension MeshRoutedItemSealer {
+
+    /// `seal(_:contentKey:binding:typeToken:in: .fernlet)`.
+    static func seal(
+        _ plaintext: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String
+    ) throws -> Data {
+        try seal(plaintext, contentKey: contentKey, binding: binding, typeToken: typeToken, in: .fernlet)
+    }
+
+    /// `open(_:contentKey:binding:typeToken:in: .fernlet)`.
+    static func open(
+        _ blob: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String
+    ) throws -> Data {
+        try open(blob, contentKey: contentKey, binding: binding, typeToken: typeToken, in: .fernlet)
+    }
+
+    /// `additionalData(binding:typeToken:in: .fernlet)`.
+    static func additionalData(binding: MeshRoutedWrapBinding, typeToken: String) -> Data {
+        additionalData(binding: binding, typeToken: typeToken, in: .fernlet)
+    }
+}
+
+/// The content-key wrap's three doors in the shapes the suites were written against (plan step
+/// A0.2.6).
+extension MeshRoutedContentKeyWrapper {
+
+    /// `wrap(contentKey:recipientFingerprint:recipientKeyAgreementPublicKey:binding:in: .fernlet)`.
+    static func wrap(
+        contentKey: Data, recipientFingerprint: String, recipientKeyAgreementPublicKey: Data,
+        binding: MeshRoutedWrapBinding
+    ) throws -> MeshRecipientKeyWrap {
+        try wrap(contentKey: contentKey, recipientFingerprint: recipientFingerprint,
+                 recipientKeyAgreementPublicKey: recipientKeyAgreementPublicKey, binding: binding, in: .fernlet)
+    }
+
+    /// `unwrap(_:binding:localFingerprint:localKeyAgreementPublicKey:staticAgreement:in: .fernlet)`.
+    static func unwrap(
+        _ wrap: MeshRecipientKeyWrap, binding: MeshRoutedWrapBinding, localFingerprint: String,
+        localKeyAgreementPublicKey: Data, staticAgreement: (Data) throws -> SharedSecret
+    ) throws -> Data {
+        try unwrap(wrap, binding: binding, localFingerprint: localFingerprint,
+                   localKeyAgreementPublicKey: localKeyAgreementPublicKey, staticAgreement: staticAgreement,
+                   in: .fernlet)
+    }
+
+    /// `additionalData(binding:recipientFingerprint:in: .fernlet)`.
+    static func additionalData(binding: MeshRoutedWrapBinding, recipientFingerprint: String) -> Data {
+        additionalData(binding: binding, recipientFingerprint: recipientFingerprint, in: .fernlet)
+    }
+}
+
+// MARK: - Hashes, AEAD, salts, epoch: the epoch (A0.2.6)
+//
+// Step A0.2.6 deleted `MeshEpochBounds.derivationDomain`: every epoch id is derived under the
+// namespace's `hash.meshEpochIDV1`. The two minting doors and the rotation plan come back here with
+// Fernlet's labels.
+
+/// The epoch's two minting doors in the shapes the suites were written against (plan step A0.2.6).
+extension MeshEpochRef {
+
+    /// `minted(counter:coordinatorFingerprint:meshID:in: .fernlet)`.
+    static func minted(counter: UInt32, coordinatorFingerprint: String, meshID: UUID) -> MeshEpochRef? {
+        minted(counter: counter, coordinatorFingerprint: coordinatorFingerprint, meshID: meshID, in: .fernlet)
+    }
+
+    /// `successor(coordinatorFingerprint:meshID:in: .fernlet)`.
+    func successor(coordinatorFingerprint: String, meshID: UUID) -> MeshEpochRef? {
+        successor(coordinatorFingerprint: coordinatorFingerprint, meshID: meshID, in: .fernlet)
+    }
+}
+
+/// The rotation plan in the shape the suites were written against (plan step A0.2.6).
+extension MeshRotationPolicy {
+
+    /// `plan(head:coordinatorFingerprint:meshID:presentedRoster:in: .fernlet)`.
+    static func plan(
+        head: MeshEpochRef?, coordinatorFingerprint: String, meshID: UUID, presentedRoster: [String]
+    ) -> MeshRotationPlan {
+        plan(head: head, coordinatorFingerprint: coordinatorFingerprint, meshID: meshID,
+             presentedRoster: presentedRoster, in: .fernlet)
     }
 }

@@ -52,9 +52,16 @@ That settles who owns `fernlet.verify.response.v1`: the app's duress-recovery ce
 checks ProximityKit's response transcript under its identity's `purposes`, so the label is
 ProximityKit's, supplied here, and only the two duress labels stay the app's own. The ceremony's
 view parses a scanned code with `ProximityVerifyQR.parse(url, in: .fernlet)`, and the bindings file
-restores the routed and QR call shapes with `.fernlet`. A0.2's later commits hand the rest to
-ProximityKit's readers (the hashes and seals, the radios, the at-rest names), each move
-byte-identical, so Fernlet's behaviour does not change.
+restores the routed and QR call shapes with `.fernlet`. Since step A0.2.6 ProximityKit reads fourteen
+more: the five routed hash and id domains, the five AEAD labels, the three HKDF salts and the epoch
+id's domain, `fernlet.mesh.epoch.v1`, which ProximityKit used to spell for itself
+(`MeshEpochBounds.derivationDomain`, now deleted) and now takes from `Hash.fernlet` like any other
+label. Every sealed payload, group-key wrap, encrypted-metadata wrapper, routed item seal, content-key
+wrap, content hash, chunk and receipt id and epoch id is therefore derived from `.fernlet`'s bytes,
+which are today's, so none of them moves; the bindings file restores those call shapes with `.fernlet`
+too. A0.2's later commits hand the rest to ProximityKit's readers (the radios and the exporter label,
+the at-rest names and the two column seals), each move byte-identical, so Fernlet's behaviour does not
+change.
 
 **What joins it later.** A0.2's later steps add the audit bridge and the device-binding adapter
 that ProximityKit's copies of the audit log and of `ColumnCrypto` call back into. A0.3 adds the

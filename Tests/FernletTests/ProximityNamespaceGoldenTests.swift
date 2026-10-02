@@ -77,6 +77,21 @@
 //     its transcript and checks the peer's under its own copy; and the manager hands its transport
 //     the namespace whose label it signs the introduction under.
 //
+// One more group since step A0.2.6, when the routed hash and id domains, the five AEAD labels, the
+// three HKDF salts and the epoch id's domain began to read the namespace (and the ProximityKit-local
+// `MeshEpochBounds.derivationDomain` was deleted). Those fourteen rows' accessors are re-pointed at
+// `.fernlet`'s fields; no literal moves. Group 6 gains a cell for each of the two authenticated-data
+// builders that step moved:
+//
+// 11. **The hashes, seals, salts and the epoch read the namespace they are handed.** The routed
+//     digests and ids are SHA-256 over the field prefix of the namespace they are handed; the chunk
+//     verifier, the reassembler, the chunker and the routed store measure a chunk or an item only
+//     under the labels they hold or are handed; the item seal and the content-key wrap open only
+//     under the namespace they were sealed in, the salt and the authenticated data each on its own;
+//     an identity's transport seal and group-key wrap open only for an identity of its namespace;
+//     the manager opens encrypted metadata under its host's namespace; and every epoch id is
+//     derived under the namespace's raw epoch domain.
+//
 // Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
 // Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
 // suite that pins values names the namespace it pins them under. Since step A0.2.4 the same holds for
@@ -242,53 +257,56 @@ struct ProximityNamespaceGoldenTests {
     /// The 18 other labels: six key-derivation labels, five AEAD labels, seven hash domains — the
     /// last of them the ProximityKit-local epoch domain, which no registry or domain test covers.
     /// Since step A0.2.4 the membership inventory digest's hash domain is read off `.fernlet`
-    /// (`fernletHash` below), as production reads it off the host's namespace.
+    /// (`fernletHash` below), as production reads it off the host's namespace; since step A0.2.6 the
+    /// three HKDF salts, the five AEAD labels and the other six hash domains are too, the epoch
+    /// domain among them (its `MeshEpochBounds.derivationDomain` is gone). Only the TLS exporter label
+    /// (A0.2.7) and the two column seals (A0.2.9) still read FernletCrypto's registry here.
     private static var otherLabelRows: [NamespaceGoldenRow] {
         typealias KeyDerivation = FernletCryptoPurpose.KeyDerivation
-        typealias AEAD = FernletCryptoPurpose.AEAD
-        typealias Hash = FernletCryptoPurpose.Hash
+        let fernletDerivation = ProximityNamespace.fernlet.family.purposes.keyDerivation
+        let fernletAEAD = ProximityNamespace.fernlet.family.purposes.aead
         let fernletHash = ProximityNamespace.fernlet.family.purposes.hash
         let derivation = "family.purposes.keyDerivation."
         let aead = "family.purposes.aead."
         let hash = "family.purposes.hash."
         return [
             NamespaceGoldenRow(.label, derivation + "proximityTransportV1", frozen: "fernlet.proximity.v1",
-                               today: .text(KeyDerivation.proximityTransportV1.rawValue)),
+                               today: .text(fernletDerivation.proximityTransportV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshGroupKeyWrapV1", frozen: "fernlet.mesh.groupkey.v1",
-                               today: .text(KeyDerivation.meshGroupKeyWrapV1.rawValue)),
+                               today: .text(fernletDerivation.meshGroupKeyWrapV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshTLSExporterV1", frozen: "fernlet.mesh.tls-exporter.v1",
                                today: .text(KeyDerivation.meshTLSExporterV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshRoutedContentKeyWrapV1", frozen: "fernlet.mesh.routed.content-key.v1",
-                               today: .text(KeyDerivation.meshRoutedContentKeyWrapV1.rawValue)),
+                               today: .text(fernletDerivation.meshRoutedContentKeyWrapV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshSessionContextV1", frozen: "fernlet.mesh.session-context.v1",
                                today: .text(KeyDerivation.meshSessionContextV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshRoutedStoreV1", frozen: "fernlet.mesh.routed-store.v1",
                                today: .text(KeyDerivation.meshRoutedStoreV1.rawValue)),
             NamespaceGoldenRow(.label, aead + "proximityTransportV2", frozen: "fernlet.proximity.transport.aead.v2",
-                               today: .text(AEAD.proximityTransportV2.rawValue)),
+                               today: .text(fernletAEAD.proximityTransportV2.rawValue)),
             NamespaceGoldenRow(.label, aead + "meshGroupKeyWrapV2", frozen: "fernlet.mesh.groupkey.wrap.aead.v2",
-                               today: .text(AEAD.meshGroupKeyWrapV2.rawValue)),
+                               today: .text(fernletAEAD.meshGroupKeyWrapV2.rawValue)),
             NamespaceGoldenRow(.label, aead + "meshEncryptedMetadataV2", frozen: "fernlet.mesh.encrypted-metadata.aead.v2",
-                               today: .text(AEAD.meshEncryptedMetadataV2.rawValue)),
+                               today: .text(fernletAEAD.meshEncryptedMetadataV2.rawValue)),
             NamespaceGoldenRow(.label, aead + "meshRoutedContentKeyWrapV1",
                                frozen: "fernlet.mesh.routed.content-key.wrap.aead.v1",
-                               today: .text(AEAD.meshRoutedContentKeyWrapV1.rawValue)),
+                               today: .text(fernletAEAD.meshRoutedContentKeyWrapV1.rawValue)),
             NamespaceGoldenRow(.label, aead + "meshRoutedItemV1", frozen: "fernlet.mesh.routed.item.aead.v1",
-                               today: .text(AEAD.meshRoutedItemV1.rawValue)),
+                               today: .text(fernletAEAD.meshRoutedItemV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshInventoryDigestV1", frozen: "fernlet.mesh.inventory-digest.hash.v1",
                                today: .text(fernletHash.meshInventoryDigestV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshRoutedContentV1", frozen: "fernlet.mesh.routed-content.hash.v1",
-                               today: .text(Hash.meshRoutedContentV1.rawValue)),
+                               today: .text(fernletHash.meshRoutedContentV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshRoutedChunkV1", frozen: "fernlet.mesh.routed-chunk.hash.v1",
-                               today: .text(Hash.meshRoutedChunkV1.rawValue)),
+                               today: .text(fernletHash.meshRoutedChunkV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshRoutedChunkIDV1", frozen: "fernlet.mesh.routed-chunk-id.hash.v1",
-                               today: .text(Hash.meshRoutedChunkIDV1.rawValue)),
+                               today: .text(fernletHash.meshRoutedChunkIDV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshCustodyReceiptIDV1", frozen: "fernlet.mesh.custody-receipt-id.hash.v1",
-                               today: .text(Hash.meshCustodyReceiptIDV1.rawValue)),
+                               today: .text(fernletHash.meshCustodyReceiptIDV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshRecipientReceiptIDV1", frozen: "fernlet.mesh.recipient-receipt-id.hash.v1",
-                               today: .text(Hash.meshRecipientReceiptIDV1.rawValue)),
+                               today: .text(fernletHash.meshRecipientReceiptIDV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshEpochIDV1", frozen: "fernlet.mesh.epoch.v1",
-                               today: .text(MeshEpochBounds.derivationDomain))
+                               today: .text(fernletHash.meshEpochIDV1.rawValue))
         ]
     }
 
@@ -706,7 +724,8 @@ struct ProximityNamespaceGoldenTests {
                 wrap, binding: binding, localFingerprint: "fp002",
                 localKeyAgreementPublicKey: recipient.publicKey.rawRepresentation,
                 staticAgreement: { try recipient.sharedSecretFromKeyAgreement(
-                    with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: $0)) }
+                    with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: $0)) },
+                in: .fernlet
             )
             #expect(opened == Self.sequence(from: 0x10), "the routed wrap opened to \(Self.hex(opened))")
         } catch {
@@ -827,8 +846,10 @@ struct ProximityNamespaceGoldenTests {
     /// bytes. A length-prefixed domain, or another label, moves both.
     @Test func theEpochIDsAreTheirKnownAnswers() throws {
         let meshID = try #require(UUID(uuidString: "1F1F1F1F-2E2E-4D4D-8C8C-0B0B0B0B0B0B"))
-        let first = try #require(MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000aa", meshID: meshID))
-        let second = try #require(MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000bb", meshID: meshID))
+        let first = try #require(MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000aa", meshID: meshID,
+                                                     in: .fernlet))
+        let second = try #require(MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000bb", meshID: meshID,
+                                                      in: .fernlet))
         let firstID = first.epochID.uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         let secondID = second.epochID.uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         #expect(firstID == "355c877a3834ff2b9b86b074fccaf2e7", "actual epoch id = \(firstID)")
@@ -1232,12 +1253,20 @@ struct ProximityNamespaceGoldenTests {
     //
     // Since step A0.2.4 a consumer that takes the namespace's labels is called here with `.fernlet`
     // spelled out (`in: .fernlet`), never through the test target's bindings: these cells pin values.
+    //
+    // Since step A0.2.6 the two authenticated-data builders whose labels it moved have a cell too:
+    // their bytes are observable, so each opens with its field's raw prefix. The other AEAD and salt
+    // consumers (the transport seal, the group-key wrap, the metadata door, the wrap's HKDF) keep
+    // their bytes inside the primitive; group 2's literal-built blobs pin those, by opening.
 
     /// The signature labels of `.fernlet`.
     private static var signatures: ProximityNamespace.Signature { ProximityNamespace.fernlet.family.purposes.signature }
 
     /// The hash labels of `.fernlet`.
     private static var hashes: ProximityNamespace.Hash { ProximityNamespace.fernlet.family.purposes.hash }
+
+    /// The AEAD labels of `.fernlet`.
+    private static var aeads: ProximityNamespace.AEAD { ProximityNamespace.fernlet.family.purposes.aead }
 
     /// The canonical envelope opens with `lp(identityEnvelopeV2)`.
     @Test func theIdentityEnvelopeTranscriptBeginsWithItsFieldsPrefix() {
@@ -1380,24 +1409,24 @@ struct ProximityNamespaceGoldenTests {
     /// A routed item's content hash is SHA-256 over `lp(meshRoutedContentV1) ‖ blob`.
     @Test func theRoutedContentHashIsTakenOverItsFieldsPrefix() {
         let blob = Data("golden routed blob".utf8)
-        Self.expectDigest(MeshRoutedContentDigest.contentHash(of: blob), over: blob, by: Self.hashes.meshRoutedContentV1,
-                          consumer: "MeshRoutedContentDigest.contentHash(of:)")
+        Self.expectDigest(MeshRoutedContentDigest.contentHash(of: blob, in: .fernlet), over: blob,
+                          by: Self.hashes.meshRoutedContentV1, consumer: "MeshRoutedContentDigest.contentHash(of:in:)")
     }
 
     /// The streaming content hasher is seeded with the same `lp(meshRoutedContentV1)`.
     @Test func theStreamedRoutedContentHashIsTakenOverItsFieldsPrefix() {
-        var hasher = MeshRoutedContentHasher()
+        var hasher = MeshRoutedContentHasher(purposes: .fernlet)
         hasher.update(Data("golden ".utf8))
         hasher.update(Data("routed blob".utf8))
         Self.expectDigest(hasher.finalized(), over: Data("golden routed blob".utf8), by: Self.hashes.meshRoutedContentV1,
-                          consumer: "MeshRoutedContentHasher")
+                          consumer: "MeshRoutedContentHasher(purposes:)")
     }
 
     /// A chunk's payload hash is SHA-256 over `lp(hash.meshRoutedChunkV1) ‖ payload`.
     @Test func theRoutedChunkHashIsTakenOverItsFieldsPrefix() {
         let payload = Data("golden chunk payload".utf8)
-        Self.expectDigest(MeshRoutedContentDigest.chunkHash(of: payload), over: payload, by: Self.hashes.meshRoutedChunkV1,
-                          consumer: "MeshRoutedContentDigest.chunkHash(of:)")
+        Self.expectDigest(MeshRoutedContentDigest.chunkHash(of: payload, in: .fernlet), over: payload,
+                          by: Self.hashes.meshRoutedChunkV1, consumer: "MeshRoutedContentDigest.chunkHash(of:in:)")
     }
 
     /// A chunk's id is cut from SHA-256 over `lp(meshRoutedChunkIDV1) ‖ item ‖ index`.
@@ -1406,8 +1435,9 @@ struct ProximityNamespaceGoldenTests {
         var tail = CanonicalByteWriter()
         tail.appendUUID(itemID)
         tail.appendUInt64(3)
-        Self.expectDigest(Self.uuidBytes(MeshRoutedContentDigest.chunkID(itemID: itemID, chunkIndex: 3)), over: tail.bytes,
-                          by: Self.hashes.meshRoutedChunkIDV1, consumer: "MeshRoutedContentDigest.chunkID(itemID:chunkIndex:)")
+        Self.expectDigest(Self.uuidBytes(MeshRoutedContentDigest.chunkID(itemID: itemID, chunkIndex: 3, in: .fernlet)),
+                          over: tail.bytes, by: Self.hashes.meshRoutedChunkIDV1,
+                          consumer: "MeshRoutedContentDigest.chunkID(itemID:chunkIndex:in:)")
     }
 
     /// A custody receipt's id is cut from SHA-256 over `lp(meshCustodyReceiptIDV1) ‖ item ‖ origin ‖ custodian`.
@@ -1417,8 +1447,8 @@ struct ProximityNamespaceGoldenTests {
         tail.appendUUID(receipt.itemID)
         tail.appendString(receipt.originFingerprint)
         tail.appendString(receipt.custodianFingerprint)
-        Self.expectDigest(Self.uuidBytes(receipt.receiptID), over: tail.bytes, by: Self.hashes.meshCustodyReceiptIDV1,
-                          consumer: "MeshCustodyReceipt.receiptID")
+        Self.expectDigest(Self.uuidBytes(receipt.receiptID(in: .fernlet)), over: tail.bytes,
+                          by: Self.hashes.meshCustodyReceiptIDV1, consumer: "MeshCustodyReceipt.receiptID(in:)")
     }
 
     /// A recipient receipt's id is cut from SHA-256 over `lp(meshRecipientReceiptIDV1) ‖ item ‖ origin ‖ recipient`.
@@ -1428,21 +1458,36 @@ struct ProximityNamespaceGoldenTests {
         tail.appendUUID(receipt.itemID)
         tail.appendString(receipt.originFingerprint)
         tail.appendString(receipt.recipientFingerprint)
-        Self.expectDigest(Self.uuidBytes(receipt.receiptID), over: tail.bytes, by: Self.hashes.meshRecipientReceiptIDV1,
-                          consumer: "MeshRecipientReceipt.receiptID")
+        Self.expectDigest(Self.uuidBytes(receipt.receiptID(in: .fernlet)), over: tail.bytes,
+                          by: Self.hashes.meshRecipientReceiptIDV1, consumer: "MeshRecipientReceipt.receiptID(in:)")
     }
 
     /// The epoch id is the one RAW hash prefix: the domain's bytes with no count, then the lowercase
     /// mesh id, the big-endian counter and the coordinator's fingerprint.
     @Test func theEpochIDIsTakenOverItsFieldsRawPrefix() throws {
         let meshID = MeshMembershipEventFixtures.meshID
-        let epoch = try #require(MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000aa", meshID: meshID))
-        var tail = Data(meshID.uuidString.lowercased().utf8)
-        tail.append(contentsOf: [0x00, 0x00, 0x00, 0x07])
-        tail.append(Data("00000000000000aa".utf8))
+        let epoch = try #require(MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000aa", meshID: meshID,
+                                                     in: .fernlet))
         #expect(Self.hashes.meshEpochIDV1.prefixBytes == Self.hashes.meshEpochIDV1.data, "the epoch domain is a raw prefix")
-        Self.expectDigest(Self.uuidBytes(epoch.epochID), over: tail, by: Self.hashes.meshEpochIDV1,
-                          consumer: "MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)")
+        Self.expectDigest(Self.uuidBytes(epoch.epochID), over: Self.epochTail(meshID: meshID, counter: 7, coordinator: "00000000000000aa"),
+                          by: Self.hashes.meshEpochIDV1, consumer: "MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:in:)")
+    }
+
+    /// The routed item seal's authenticated data opens with `aead.meshRoutedItemV1`, raw (a consumer
+    /// step A0.2.6 moved).
+    @Test func theRoutedItemSealAuthenticatedDataBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(MeshRoutedItemSealer.additionalData(binding: MeshRoutedManifestFixtures.binding,
+                                                              typeToken: MeshRoutedManifestFixtures.typeToken, in: .fernlet),
+                          by: Self.aeads.meshRoutedItemV1, consumer: "MeshRoutedItemSealer.additionalData(binding:typeToken:in:)")
+    }
+
+    /// The routed content-key wrap's authenticated data opens with `aead.meshRoutedContentKeyWrapV1`,
+    /// raw (a consumer step A0.2.6 moved).
+    @Test func theRoutedKeyWrapAuthenticatedDataBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(MeshRoutedContentKeyWrapper.additionalData(binding: MeshRoutedManifestFixtures.binding,
+                                                                     recipientFingerprint: "fp002", in: .fernlet),
+                          by: Self.aeads.meshRoutedContentKeyWrapV1,
+                          consumer: "MeshRoutedContentKeyWrapper.additionalData(binding:recipientFingerprint:in:)")
     }
 
     /// An identity envelope with every field set: the shape `CryptographicPurposeBoundaryTests`' framing
@@ -1991,6 +2036,229 @@ struct ProximityNamespaceGoldenTests {
         }
     }
 
+    // MARK: Group 11 — the hashes, seals, salts and the epoch read the namespace (A0.2.6)
+
+    /// Every routed digest and id is SHA-256 over the field prefix of the namespace it is handed: the
+    /// one-shot and streamed content hashes, the chunk hash, the chunk id (the static and the chunk's
+    /// own) and both receipt ids, each recomputed here from that namespace's field and the reader's
+    /// tail, under `.fernlet` and under another app's namespace — and no reader derives the same
+    /// bytes under both.
+    @Test func theRoutedDigestsAndIDsAreTakenOverTheNamespaceTheyAreHanded() {
+        let fernlet = Self.routedDigests(in: .fernlet)
+        let foreign = Self.routedDigests(in: ForeignAppNamespace.namespace().family.purposes)
+        #expect(fernlet.count == 7 && Set(fernlet.keys) == Set(foreign.keys), "\(fernlet.keys.sorted()) \(foreign.keys.sorted())")
+        // R2: bounded by the seven readers.
+        for (reader, value) in fernlet {
+            #expect(foreign[reader] != value, "\(reader) derived the same bytes under two namespaces")
+        }
+    }
+
+    /// The chunk doors re-derive a payload's hash under the labels they hold or are handed, and read
+    /// nothing else of the namespace for it. Fernlet's labels and a variant whose hash group alone is
+    /// another app's share every signature label, so one key's signature verifies under both: a chunk
+    /// hashed in one is accepted by a verifier holding that one and refused `chunkHashMismatch` by a
+    /// verifier holding the other, and the reassembler admits it, and completes its item, only under
+    /// the labels it is handed — both ways.
+    @Test func theChunkDoorsMeasureUnderTheLabelsTheyHoldOrAreHanded() throws {
+        let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x40))
+        let variant = Self.fernletPurposes(hash: ForeignAppNamespace.hash())
+        // R2: bounded by the two directions.
+        for (hashedIn, other) in [(ProximityNamespace.Purposes.fernlet, variant), (variant, ProximityNamespace.Purposes.fernlet)] {
+            let label = hashedIn.hash.meshRoutedChunkV1.rawValue
+            let chunk = try Self.signedChunk(by: key, hashedIn: hashedIn)
+            #expect(Self.chunkVerdict(chunk, signedBy: key, heldIn: hashedIn) == nil,
+                    "a verifier holding \(label) refused a chunk hashed under it")
+            #expect(Self.chunkVerdict(chunk, signedBy: key, heldIn: other) == .chunkHashMismatch,
+                    "a verifier holding another hash label accepted a chunk hashed under \(label)")
+            var parked = try #require(MeshChunkAssembly.forChunk(chunk))
+            var probe = parked
+            #expect(probe.admit(chunk, in: other) == .refused(.chunkHashMismatch), "parked under another label: \(label)")
+            #expect(parked.admit(chunk, in: hashedIn) == .admitted(received: 1, expected: Int(chunk.chunkCount)))
+            let item = Self.singleChunkItem(hashedIn: hashedIn)
+            var bound = try #require(MeshChunkAssembly.forManifest(item.manifest))
+            #expect(bound.admit(item.chunk, in: hashedIn) == .admitted(received: 1, expected: 1))
+            #expect(bound.completion(against: item.manifest, in: other) == .refused(.contentHashMismatch),
+                    "an item hashed under \(hashedIn.hash.meshRoutedContentV1.rawValue) completed under another label")
+            #expect(bound.completion(against: item.manifest, in: hashedIn) == .complete(blob: item.blob))
+        }
+    }
+
+    /// The chunker and the routed store measure an item under the namespace they are handed. An
+    /// origin of another app's namespace slices an item whose manifest hashes in that namespace and
+    /// stamps the chunk with that namespace's chunk hash, while an origin of `.fernlet` refuses the
+    /// same item `contentHashMismatch`; and the store stages that chunk, commits custody of the item
+    /// and hands its blob back only when handed that namespace's labels — refusing the chunk
+    /// `chunkHashMismatch`, the commit `contentHashMismatch` and the blob otherwise.
+    @Test func theChunkerAndTheRoutedStoreMeasureUnderTheNamespaceTheyAreHanded() throws {
+        let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        let foreignNamespace = ForeignAppNamespace.namespace()
+        let foreign = foreignNamespace.family.purposes
+        let origin = IdentityService(namespace: foreignNamespace, keychainService: services[0])
+        let fernletOrigin = IdentityService(namespace: .fernlet, keychainService: services[1])
+        try origin.ensureProvisioned()
+        try fernletOrigin.ensureProvisioned()
+        let blob = MeshChunkFixtures.blob(byteCount: 1_000)
+        let manifest = MeshRoutedManifestFixtures.manifest().replacing(
+            originFingerprint: origin.localFingerprint,
+            contentHash: MeshRoutedContentDigest.contentHash(of: blob, in: foreign), size: UInt64(blob.count))
+        let chunks = try MeshChunker.chunks(of: blob, for: manifest, identity: origin)
+        #expect(chunks.map(\.chunkHash) == [MeshRoutedContentDigest.chunkHash(of: blob, in: foreign)],
+                "the chunker hashed the slice under another namespace than its origin's")
+        #expect(throws: MeshChunkMintError.contentHashMismatch, "an origin of .fernlet measured a foreign item as its own") {
+            _ = try MeshChunker.chunks(of: blob, for: manifest.replacing(originFingerprint: fernletOrigin.localFingerprint),
+                                       identity: fernletOrigin)
+        }
+        let chunk = try #require(chunks.first)
+        Self.expectStoreMeasures(chunk, of: blob, manifest: manifest, hashedIn: foreign, notIn: .fernlet)
+    }
+
+    /// The routed item seal and the content-key wrap open only under the labels they were sealed
+    /// under, each read on its own. Over Fernlet's labels and two variants — one whose key-derivation
+    /// group, one whose AEAD group is another app's — a blob opens only where the AEAD labels match
+    /// (the seal reads no salt) and a wrap only where both the salt and the AEAD label do; every
+    /// other pairing is `openFailed`, and each door's authenticated data opens with the prefix of the
+    /// AEAD field it was sealed under.
+    @Test func theRoutedSealsOpenOnlyUnderTheLabelsTheyWereSealedUnder() throws {
+        let recipient = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: Self.sequence(from: 0x30))
+        let agreement: (Data) throws -> SharedSecret = {
+            try recipient.sharedSecretFromKeyAgreement(with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: $0))
+        }
+        let (binding, token) = (MeshRoutedManifestFixtures.binding, MeshRoutedManifestFixtures.typeToken)
+        let (contentKey, plaintext) = (Self.sequence(from: 0x10), Data("golden routed item".utf8))
+        let variants = Self.saltAndAEADVariants()
+        // R2: bounded by the three × three variant pairs.
+        for (sealedName, sealedIn) in variants {
+            let blob = try MeshRoutedItemSealer.seal(plaintext, contentKey: contentKey, binding: binding, typeToken: token,
+                                                     in: sealedIn)
+            let wrap = try MeshRoutedContentKeyWrapper.wrap(
+                contentKey: contentKey, recipientFingerprint: "fp002",
+                recipientKeyAgreementPublicKey: recipient.publicKey.rawRepresentation, binding: binding, in: sealedIn)
+            Self.expectFramed(MeshRoutedItemSealer.additionalData(binding: binding, typeToken: token, in: sealedIn),
+                              by: sealedIn.aead.meshRoutedItemV1, consumer: "the item seal's AAD under \(sealedName)")
+            Self.expectFramed(MeshRoutedContentKeyWrapper.additionalData(binding: binding, recipientFingerprint: "fp002",
+                                                                         in: sealedIn),
+                              by: sealedIn.aead.meshRoutedContentKeyWrapV1, consumer: "the key wrap's AAD under \(sealedName)")
+            for (openedName, openedIn) in variants {
+                let item = Result { try MeshRoutedItemSealer.open(blob, contentKey: contentKey, binding: binding,
+                                                                  typeToken: token, in: openedIn) }
+                let key = Result { try MeshRoutedContentKeyWrapper.unwrap(
+                    wrap, binding: binding, localFingerprint: "fp002",
+                    localKeyAgreementPublicKey: recipient.publicKey.rawRepresentation, staticAgreement: agreement,
+                    in: openedIn) }
+                #expect(Self.opened(item, expecting: plaintext, refusal: MeshRoutedItemSealError.openFailed)
+                            == (sealedIn.aead == openedIn.aead),
+                        "an item sealed under \(sealedName) answered \(item) under \(openedName)")
+                #expect(Self.opened(key, expecting: contentKey, refusal: MeshRoutedKeyWrapError.openFailed) == (sealedIn == openedIn),
+                        "a key wrapped under \(sealedName) answered \(key) under \(openedName)")
+            }
+        }
+    }
+
+    /// An identity's transport seal and group-key wrap open only for an identity holding the same
+    /// labels, the salt and the AEAD label each on its own: identities of Fernlet's labels and of the
+    /// two variants (another app's key-derivation group; another app's AEAD group) each seal a payload
+    /// and wrap a group key to all three, and only the recipient of the sender's own labels opens
+    /// either; every other recipient answers `openFailed`.
+    @Test func anIdentitySealsAndWrapsOnlyForAnIdentityOfItsOwnLabels() throws {
+        let variants = Self.saltAndAEADVariants()
+        let services = variants.map { _ in Self.isolatedIdentityService() }
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        var identities: [(name: String, identity: IdentityService)] = []
+        // R2: bounded by the three variants.
+        for (index, variant) in variants.enumerated() {
+            let identity = IdentityService(namespace: Self.fernletNamespace(with: variant.purposes), keychainService: services[index])
+            try identity.ensureProvisioned()
+            identities.append((variant.name, identity))
+        }
+        let (plaintext, groupKey) = (Data("golden transport".utf8), Self.sequence(from: 0xE0))
+        // R2: bounded by the three × three sender–recipient pairs.
+        for (senderName, sender) in identities {
+            for (recipientName, recipient) in identities {
+                let own = senderName == recipientName
+                let sealed = try sender.seal(plaintext, to: recipient.localKeyAgreementPublicKey)
+                let wrapped = try sender.encryptGroupKey(groupKey, for: recipient.localKeyAgreementPublicKey)
+                let opened = Result { try recipient.open(sealed, from: sender.localKeyAgreementPublicKey) }
+                let unwrapped = Result { try recipient.decryptGroupKey(wrapped) }
+                #expect(Self.opened(opened, expecting: plaintext, refusal: IdentityError.openFailed) == own,
+                        "a seal from \(senderName) answered \(opened) at \(recipientName)")
+                #expect(Self.opened(unwrapped, expecting: groupKey, refusal: IdentityError.openFailed) == own,
+                        "a group key wrapped by \(senderName) answered \(unwrapped) at \(recipientName)")
+            }
+        }
+    }
+
+    /// The manager's encrypted-metadata door authenticates under its host's namespace, not a fixed
+    /// label. A manager whose host supplies another app's namespace joins a mesh through that app's
+    /// admitter — its token checked and its group key unwrapped under that namespace — and is then
+    /// handed two wrappers sealed under the joined group key: one under that app's metadata label,
+    /// which opens and renames the mesh, and a control under Fernlet's, stamped later so it would win
+    /// the name if it opened. It does not.
+    @Test func theManagerOpensEncryptedMetadataUnderItsHostsNamespace() async throws {
+        let foreign = ForeignAppNamespace.namespace()
+        let host = ForeignNamespaceHost(namespace: foreign)
+        defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
+        let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(),
+                                         identity: IdentityService(namespace: foreign, keychainService: services[0]))
+        #expect(manager.namespace == foreign, "the manager keeps another namespace than its host's")
+        let coordinator = Self.unprovisionedCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator,
+                                  peer: PeerHandle(id: UUID(), displayHint: "Member", discoveryInfo: nil,
+                                                   advertisedFingerprint: nil),
+                                  fingerprint: "fp-member")
+        let admitter = IdentityService(namespace: foreign, keychainService: services[1])
+        try admitter.ensureProvisioned()
+        let groupKey = Self.sequence(from: 0x70)
+        let mesh = try Self.join(manager, on: coordinator, admitter: admitter, groupKey: groupKey, epoch: 5)
+        #expect(manager.currentGroupKey?.keyBytes == groupKey, "precondition: the join installed the group key")
+
+        try Self.deliverMetadata(Self.renamed(mesh, to: "Refused", secondsLater: 2),
+                                 label: Self.frozen("family.purposes.aead.meshEncryptedMetadataV2"), groupKey: groupKey,
+                                 nonce: Self.sequence(from: 0x5C, count: 12), epoch: 5, to: manager, on: coordinator)
+        try Self.deliverMetadata(Self.renamed(mesh, to: "Golden", secondsLater: 1),
+                                 label: foreign.family.purposes.aead.meshEncryptedMetadataV2.rawValue, groupKey: groupKey,
+                                 nonce: Self.sequence(from: 0x50, count: 12), epoch: 5, to: manager, on: coordinator)
+
+        await Self.waitUntil { manager.currentMesh?.name == "Golden" }
+        // Both handlers run as spawned tasks; let them drain so a late open of the control would show.
+        for _ in 0..<20 { await Task.yield() }
+        #expect(manager.currentMesh?.name == "Golden", """
+            a manager of another app's namespace did not open metadata sealed under that app's label, or \
+            opened the one sealed under Fernlet's: the mesh is named \(manager.currentMesh?.name ?? "nothing")
+            """)
+    }
+
+    /// Every epoch id is derived under the raw epoch domain of the namespace it is handed: `minted`,
+    /// `successor` and both branches of the rotation plan (a first epoch, and a successor of a head)
+    /// each yield an id that is SHA-256 over that namespace's `hash.meshEpochIDV1` then the lowercase
+    /// mesh id, the big-endian counter and the coordinator — and `.fernlet` and another app's
+    /// namespace derive different ids for one epoch.
+    @Test func everyEpochIDIsDerivedUnderTheNamespaceItIsHanded() throws {
+        let (meshID, coordinator) = (MeshMembershipEventFixtures.meshID, "00000000000000aa")
+        var minted: [UUID] = []
+        // R2: bounded by the two namespaces.
+        for purposes in [ProximityNamespace.Purposes.fernlet, ForeignAppNamespace.namespace().family.purposes] {
+            let domain = purposes.hash.meshEpochIDV1
+            let head = try #require(MeshEpochRef.minted(counter: 7, coordinatorFingerprint: coordinator, meshID: meshID, in: purposes))
+            let next = try #require(head.successor(coordinatorFingerprint: coordinator, meshID: meshID, in: purposes))
+            Self.expectDigest(Self.uuidBytes(head.epochID), over: Self.epochTail(meshID: meshID, counter: 7, coordinator: coordinator),
+                              by: domain, consumer: "MeshEpochRef.minted(...in:) under \(domain.rawValue)")
+            Self.expectDigest(Self.uuidBytes(next.epochID), over: Self.epochTail(meshID: meshID, counter: 8, coordinator: coordinator),
+                              by: domain, consumer: "MeshEpochRef.successor(...in:) under \(domain.rawValue)")
+            let first = MeshEpochRef.minted(counter: 1, coordinatorFingerprint: coordinator, meshID: meshID, in: purposes)
+            #expect(MeshRotationPolicy.plan(head: head, coordinatorFingerprint: coordinator, meshID: meshID,
+                                            presentedRoster: [coordinator], in: purposes) == .rotate(next),
+                    "the rotation plan under \(domain.rawValue) did not rotate to the successor derived under it")
+            #expect(first.map { MeshRotationPolicy.plan(head: nil, coordinatorFingerprint: coordinator, meshID: meshID,
+                                                        presentedRoster: [coordinator], in: purposes) == .rotate($0) } == true,
+                    "the first rotation under \(domain.rawValue) did not mint the epoch derived under it")
+            minted.append(head.epochID)
+        }
+        #expect(minted.count == 2 && minted[0] != minted[1], "two namespaces derived one epoch id")
+    }
+
     // MARK: Helpers
 
     /// Compares every named row of `group` with its frozen literal, byte for byte, and returns how
@@ -2294,7 +2562,9 @@ struct ProximityNamespaceGoldenTests {
     /// Each routed door's answer to its golden fixture record, re-addressed to `key`'s fingerprint and
     /// signed by `key` over the bytes `signer` frames for it, at a door holding `checker`: the
     /// rejection's frozen token, or `accepted`. The receipt and chunk doors hold no manifest, so only
-    /// the checks every record owes run.
+    /// the checks every record owes run. Since step A0.2.6 the chunk's own hash is taken in `signer`
+    /// too: a chunk door re-derives it under the labels it holds, so a chunk made in a namespace
+    /// carries that namespace's hash.
     private static func routedVerdicts(
         signedBy key: Curve25519.Signing.PrivateKey, in signer: ProximityNamespace.Purposes,
         checkedIn checker: ProximityNamespace.Purposes
@@ -2303,7 +2573,8 @@ struct ProximityNamespaceGoldenTests {
         let ledger = ledgerAdmitting(key.publicKey.rawRepresentation)
         let (meshID, deadline) = (MeshRoutedManifestFixtures.meshID, MeshRoutedManifestFixtures.hardDeadline)
         let manifest = MeshRoutedManifestFixtures.manifest().replacing(originFingerprint: me)
-        let chunk = MeshChunkFixtures.chunk().replacing(originFingerprint: me)
+        let chunk = MeshChunkFixtures.chunk().replacing(
+            originFingerprint: me, chunkHash: MeshRoutedContentDigest.chunkHash(of: MeshChunkFixtures.payload, in: signer))
         let custody = MeshCustodyReceiptFixtures.receipt().replacing(custodianFingerprint: me)
         let recipient = MeshRecipientReceiptFixtures.receipt().replacing(recipientFingerprint: me)
         let inventory = MeshRoutedInventoryFixtures.payload().replacing(senderFingerprint: me)
@@ -2345,6 +2616,173 @@ struct ProximityNamespaceGoldenTests {
         return exchange.review(signed)
     }
 
+    /// The seven routed digest and id readers' answers under `purposes`, keyed by reader, each expected
+    /// to be SHA-256 over that namespace's field prefix then the reader's own tail (written with the
+    /// production writer, as group 6's cells write it).
+    private static func routedDigests(in purposes: ProximityNamespace.Purposes) -> [String: Data] {
+        let hash = purposes.hash
+        let blob = Data("golden routed blob".utf8)
+        let (chunk, custody, recipient) = (MeshChunkFixtures.chunk(), MeshCustodyReceiptFixtures.receipt(),
+                                           MeshRecipientReceiptFixtures.receipt())
+        var streamed = MeshRoutedContentHasher(purposes: purposes)
+        streamed.update(blob.prefix(7))
+        streamed.update(blob.dropFirst(7))
+        let chunkTail = chunkIDTail(itemID: chunk.itemID, index: chunk.chunkIndex)
+        let answers: [(reader: String, value: Data, field: ProximityCryptographicPurpose, tail: Data)] = [
+            ("contentHash(of:in:)", MeshRoutedContentDigest.contentHash(of: blob, in: purposes), hash.meshRoutedContentV1, blob),
+            ("MeshRoutedContentHasher(purposes:)", streamed.finalized(), hash.meshRoutedContentV1, blob),
+            ("chunkHash(of:in:)", MeshRoutedContentDigest.chunkHash(of: chunk.payload, in: purposes), hash.meshRoutedChunkV1,
+             chunk.payload),
+            ("chunkID(itemID:chunkIndex:in:)",
+             uuidBytes(MeshRoutedContentDigest.chunkID(itemID: chunk.itemID, chunkIndex: chunk.chunkIndex, in: purposes)),
+             hash.meshRoutedChunkIDV1, chunkTail),
+            ("MeshChunk.chunkID(in:)", uuidBytes(chunk.chunkID(in: purposes)), hash.meshRoutedChunkIDV1, chunkTail),
+            ("MeshCustodyReceipt.receiptID(in:)", uuidBytes(custody.receiptID(in: purposes)), hash.meshCustodyReceiptIDV1,
+             receiptIDTail(itemID: custody.itemID, origin: custody.originFingerprint, signer: custody.custodianFingerprint)),
+            ("MeshRecipientReceipt.receiptID(in:)", uuidBytes(recipient.receiptID(in: purposes)), hash.meshRecipientReceiptIDV1,
+             receiptIDTail(itemID: recipient.itemID, origin: recipient.originFingerprint, signer: recipient.recipientFingerprint))
+        ]
+        // R2: bounded by the seven readers.
+        for answer in answers {
+            expectDigest(answer.value, over: answer.tail, by: answer.field, consumer: "\(answer.reader) under \(answer.field.rawValue)")
+        }
+        return Dictionary(answers.map { ($0.reader, $0.value) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// A chunk id's tail after its domain: the item's UUID, then the index as a `u64`.
+    private static func chunkIDTail(itemID: UUID, index: UInt32) -> Data {
+        var tail = CanonicalByteWriter()
+        tail.appendUUID(itemID)
+        tail.appendUInt64(UInt64(index))
+        return tail.bytes
+    }
+
+    /// A receipt id's tail after its domain: the item's UUID, then the origin and the signer, each
+    /// length-prefixed.
+    private static func receiptIDTail(itemID: UUID, origin: String, signer: String) -> Data {
+        var tail = CanonicalByteWriter()
+        tail.appendUUID(itemID)
+        tail.appendString(origin)
+        tail.appendString(signer)
+        return tail.bytes
+    }
+
+    /// An epoch id's tail after its raw domain: the lowercase mesh id, the counter as four big-endian
+    /// bytes and the coordinator's fingerprint — written here, not by the production derivation.
+    static func epochTail(meshID: UUID, counter: UInt32, coordinator: String) -> Data {
+        var tail = Data(meshID.uuidString.lowercased().utf8)
+        // R2: four iterations, one per byte of the counter.
+        for shift in stride(from: 24, through: 0, by: -8) {
+            tail.append(UInt8(truncatingIfNeeded: counter >> UInt32(shift)))
+        }
+        return tail + Data(coordinator.utf8)
+    }
+
+    /// Fernlet's labels with the named groups taken from another app's instead, so a cell can move
+    /// exactly one family of reads while every other read — the signatures above all — stays Fernlet's.
+    private static func fernletPurposes(
+        keyDerivation: ProximityNamespace.KeyDerivation = .fernlet,
+        aead: ProximityNamespace.AEAD = .fernlet,
+        hash: ProximityNamespace.Hash = .fernlet
+    ) -> ProximityNamespace.Purposes {
+        ProximityNamespace.Purposes(signature: .fernlet, keyDerivation: keyDerivation, aead: aead, hash: hash)
+    }
+
+    /// Fernlet's labels, then a variant whose key-derivation group and one whose AEAD group is the
+    /// foreign app's: any two of the three differ in the salts, the AEAD labels or both.
+    private static func saltAndAEADVariants() -> [(name: String, purposes: ProximityNamespace.Purposes)] {
+        [("Fernlet's labels", .fernlet),
+         ("another app's salts", fernletPurposes(keyDerivation: ForeignAppNamespace.keyDerivation())),
+         ("another app's AEAD labels", fernletPurposes(aead: ForeignAppNamespace.aead()))]
+    }
+
+    /// `.fernlet` with its labels replaced by `purposes`: the namespace an identity of a variant is
+    /// built from.
+    private static func fernletNamespace(with purposes: ProximityNamespace.Purposes) -> ProximityNamespace {
+        ProximityNamespace(
+            family: ProximityNamespace.Family(purposes: purposes, radios: .fernlet,
+                                              verifyQR: ProximityNamespace.fernlet.family.verifyQR),
+            installation: .fernletApp)
+    }
+
+    /// The fixture payload as the only chunk of its item (index 0 of 1, so a parked reassembler takes
+    /// its four bytes), addressed from `key`'s fingerprint, its payload hashed in `purposes` and its
+    /// transcript signed by `key` under `purposes`' chunk signature label.
+    private static func signedChunk(
+        by key: Curve25519.Signing.PrivateKey, hashedIn purposes: ProximityNamespace.Purposes
+    ) throws -> MeshChunk {
+        let base = MeshChunkFixtures.chunk(index: 0, count: 1, payload: MeshChunkFixtures.payload)
+        let unsigned = base.replacing(originFingerprint: IdentityService.fingerprint(of: key.publicKey.rawRepresentation),
+                                      chunkHash: MeshRoutedContentDigest.chunkHash(of: base.payload, in: purposes))
+        return unsigned.replacing(signature: try key.signature(for: canonicalBytes(for: unsigned, in: purposes)))
+    }
+
+    /// A manifest-less chunk door holding `purposes`, over a ledger admitting `key`: its verdict on
+    /// `chunk`, or nil when it accepts it.
+    private static func chunkVerdict(
+        _ chunk: MeshChunk, signedBy key: Curve25519.Signing.PrivateKey, heldIn purposes: ProximityNamespace.Purposes
+    ) -> MeshChunkRejection? {
+        MeshChunkVerifier(meshID: MeshRoutedManifestFixtures.meshID, hardDeadline: MeshRoutedManifestFixtures.hardDeadline,
+                          ledger: ledgerAdmitting(key.publicKey.rawRepresentation), manifest: nil, purposes: purposes)
+            .verify(chunk)
+    }
+
+    /// A one-chunk item hashed in `purposes`: a 1 000-byte blob, its chunk (index 0 of 1) and an
+    /// unsigned manifest for it. The reassembler verifies no signature: an accepted manifest and chunk
+    /// are its callers' precondition.
+    private static func singleChunkItem(
+        hashedIn purposes: ProximityNamespace.Purposes
+    ) -> (blob: Data, chunk: MeshChunk, manifest: MeshRoutedManifest) {
+        let blob = MeshChunkFixtures.blob(byteCount: 1_000)
+        let contentHash = MeshRoutedContentDigest.contentHash(of: blob, in: purposes)
+        let chunk = MeshChunkFixtures.chunk(index: 0, count: 1, payload: blob, contentHash: contentHash)
+            .replacing(chunkHash: MeshRoutedContentDigest.chunkHash(of: blob, in: purposes))
+        let manifest = MeshRoutedManifestFixtures.manifest().replacing(
+            itemID: chunk.itemID, originFingerprint: chunk.originFingerprint, contentHash: contentHash,
+            size: UInt64(blob.count))
+        return (blob, chunk, manifest)
+    }
+
+    /// On a fresh isolated routed store under a pinned install binding: admits `manifest`, then stages
+    /// `chunk`, commits custody of the item and reads its blob back, each first under `other` — which
+    /// must refuse — and then under `purposes`, the namespace the item was hashed in. The store
+    /// verifies no signature: an accepted manifest and chunk are its callers' precondition.
+    private static func expectStoreMeasures(
+        _ chunk: MeshChunk, of blob: Data, manifest: MeshRoutedManifest,
+        hashedIn purposes: ProximityNamespace.Purposes, notIn other: ProximityNamespace.Purposes
+    ) {
+        let scope = MeshRoutedStoreFixtures.scope()
+        defer { MeshRoutedStoreFixtures.tearDown(scope) }
+        let store = MeshRoutedStore(scope: scope)
+        let (key, now, custodian) = (MeshRoutedItemKey(manifest), MeshRoutedStoreFixtures.now, "fp-golden-custodian")
+        DeviceBindingID.$testOverride.withValue(.identifier(MeshRoutedStoreFixtures.installA)) {
+            #expect(store.admittingManifest(manifest, now: now).value != nil, "the store refused the item's manifest")
+            #expect(store.stagingChunk(chunk, now: now, in: other) == .completed(.refused(.chunkHashMismatch)))
+            #expect(store.stagingChunk(chunk, now: now, in: purposes) == .completed(.admitted(received: 1, expected: 1)))
+            #expect(store.committingCustody(item: key, custodian: custodian, now: now, in: other)
+                        == .completed(.refused(.contentHashMismatch)))
+            let committed = store.committingCustody(item: key, custodian: custodian, now: now, in: purposes)
+            guard case .completed(.committed(let witness)) = committed else {
+                Issue.record("the store did not commit custody under the item's own labels: \(committed)")
+                return
+            }
+            #expect(witness.contentHash == manifest.contentHash)
+            #expect(store.assembledBlob(item: key, expecting: manifest, in: other) == .completed(nil))
+            #expect(store.assembledBlob(item: key, expecting: manifest, in: purposes) == .completed(blob))
+        }
+    }
+
+    /// Whether a door opened to `expected` (`true`) or refused with exactly `refusal` (`false`). Any
+    /// other answer — other bytes, another error — is neither, so a cell comparing it fails.
+    private static func opened<Refusal: Error & Equatable>(
+        _ answer: Result<Data, any Error>, expecting expected: Data, refusal: Refusal
+    ) -> Bool? {
+        switch answer {
+        case .success(let bytes): return bytes == expected ? true : nil
+        case .failure(let error): return (error as? Refusal) == refusal ? false : nil
+        }
+    }
+
     /// Whether `role` is a signature role, of any framing.
     static func isSignatureRole(_ role: ProximityCryptographicPurpose.Role) -> Bool {
         guard case .signature = role else { return false }
@@ -2356,6 +2794,44 @@ struct ProximityNamespaceGoldenTests {
     /// production check it is compared with.
     static func isWritableSignatureRole(_ role: ProximityCryptographicPurpose.Role) -> Bool {
         role == .signature(.lengthPrefixed) || role == .signature(.rawPrefix)
+    }
+}
+
+// MARK: - A host of another app's namespace
+
+/// A `ProximityHost` that supplies a namespace other than Fernlet's, on a scratch sidecar root and
+/// seal-key services of its own: the one host here that a manager can be built over and read nothing
+/// of `.fernlet` from (plan step A0.2.6's metadata cell).
+@MainActor
+private final class ForeignNamespaceHost: ProximityHost {
+    let proximityNamespace: ProximityNamespace
+    let proximitySupportDirectory: URL
+    let meshSessionStorage: MeshSessionStorageScope
+    let meshRoutedStorage: MeshRoutedStorageScope
+    let proximityTrustVault = ProximityTrustVault()
+    var proximityDisplayName: String { "Golden" }
+    var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
+
+    /// A host of `namespace` on a fresh scratch root and fresh `.test.` seal-key services.
+    init(namespace: ProximityNamespace) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProximityNamespaceGoldenHost-\(UUID().uuidString)", isDirectory: true)
+        proximityNamespace = namespace
+        proximitySupportDirectory = root
+        meshSessionStorage = MeshSessionStorageScope(
+            directory: root, keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)")
+        meshRoutedStorage = MeshRoutedStorageScope(
+            directory: root, keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)")
+    }
+
+    func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
+    func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+
+    /// Removes the scratch root and both seal-key rows.
+    func tearDown() {
+        MeshSessionStore.wipeForDeleteAll(scope: meshSessionStorage)
+        MeshRoutedStore.wipeForDeleteAll(scope: meshRoutedStorage)
+        try? FileManager.default.removeItem(at: proximitySupportDirectory)
     }
 }
 
